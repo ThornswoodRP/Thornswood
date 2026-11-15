@@ -8,7 +8,7 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { feedLaunchers, getWithToken, makePass, makeTicket,
+module.exports = { errorPage, feedLaunchers, getWithToken, makePass, makeTicket,
   notAllowedPage, notFoundPage, passLoginKey, plainPage, readTicket,
   versionCompare, versionParts, wantsHtml };
 
@@ -184,6 +184,29 @@ function notFoundPage() {
     'That address does not exist on this site.',
     'If a link brought you here, say so in the Discord and it will be fixed.'
   ]);
+}
+
+/*
+  THE ONE PAGE FOR AN ERROR A BROWSER REACHES (#4435). Only the last 404
+  used to ask who was reading; a bad address, a picture taken away, an old
+  download link or a fault of the site's own showed a browser one bare line
+  and no way out. Every such answer now comes here, through errorAnswer in
+  serve.js, and gets the same page as an unknown address: a title, what
+  happened in a sentence, and the way back. lines says what happened when
+  the route knows better than its status; a 404 with none is notFoundPage.
+*/
+const ERROR_WORDS = {
+  400: ['That address could not be read', 'The address has a mistake in it, so the site could not tell which page you meant.'],
+  401: ['Sign in first', 'That is only shown to somebody signed in. Sign in on the site, then follow the link again.'],
+  403: ['Not for you', 'That is only shown to staff.'],
+  404: ['Not here', 'That address does not exist on this site.'],
+  500: ['Something went wrong', 'The site could not answer that. Try again in a minute, and if it keeps happening, say so in the Discord.'],
+  503: ['Try again in a minute', 'The site could not get that just now.']
+};
+function errorPage(status, lines) {
+  if (status === 404 && !(lines && lines.length)) return notFoundPage();
+  const words = ERROR_WORDS[status] || ERROR_WORDS[status >= 500 ? 500 : 404];
+  return plainPage(words[0], lines && lines.length ? lines : [words[1]]);
 }
 
 function notAllowedPage(me, st) {

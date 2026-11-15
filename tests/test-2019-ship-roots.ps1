@@ -63,7 +63,7 @@
     4. Setup-ShipMachine.ps1's Save-EngineBuild writes the record and refuses
        a folder with no build in it; Ship.ps1 runs Update-ShipRoot.ps1 for
        the channel's root before the version moves and before anything is
-       built, and stops when it refuses (tests\test-ship-dry-run.ps1 runs that
+       built, and stops when it refuses (scripts\tests\test-ship-dry-run.ps1 runs that
        Ship, N). Setup-ShipMachine.ps1 takes -SkyrimFrom and hands it to
        Update-ShipRoot.ps1, not with -Check.
 

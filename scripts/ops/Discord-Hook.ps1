@@ -4,7 +4,7 @@
   The Discord webhooks releases post through, kept in one place on the VPS
   instead of a file on each machine that ships.
 
-      .\scripts\ops\Discord-Hook.ps1 -Name dev             prints the dev updates webhook (scripts read it this way)
+      .\scripts\ops\Discord-Hook.ps1 -Name dev             prints the #staff-news webhook (scripts read it this way)
       .\scripts\ops\Discord-Hook.ps1 -Name news -Save       asks for the #news one, not shown, and stores it on the VPS
       .\scripts\ops\Discord-Hook.ps1 -Name dev -Check      says where it is found, never prints it
 
@@ -30,6 +30,7 @@
   A copy in bot\dev-webhook.txt or bot\news-webhook.txt on this machine is
   still read when the VPS cannot be reached, so a machine set up the old way keeps posting.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidateSet('dev', 'news')][string]$Name,

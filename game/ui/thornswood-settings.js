@@ -64,7 +64,7 @@
     { ini: 'HelpKey', def: 65, group: 'Panels and chat', label: 'Help',
       what: 'Opens the help panel: talking, people, living, work, land and getting help, with every key named as it is bound here. Help on the K, P and J panels opens it too, and its Settings opens this panel.' },
     { ini: 'SkillsKey', def: 37, group: 'Panels and chat', label: 'Profession, class and skill tree',
-      what: 'Your profession, your class and the skill tree. A Master looking at somebody they could take on as an apprentice sees this key named under the crosshair.' },
+      what: 'Your profession, your class and the skill tree. A Master looking at somebody they could take on as an apprentice sees this key named under the crosshair. Looking at anybody else, it writes a contract with them.' },
     { ini: 'PartyKey', def: 25, group: 'Panels and chat', label: 'Friends and party',
       what: 'Who your friends are, who is online, your party, and the bonus for working together.' },
     { ini: 'JournalKey', def: 36, group: 'Panels and chat', label: 'Journals',

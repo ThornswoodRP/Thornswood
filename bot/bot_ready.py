@@ -13,6 +13,8 @@ from bot_core import (UPPER_STAFF_IDS, WELCOME, _int_env, by_name, client, log,
     tree, warn_upper_staff_config)
 from bot_joins import watch_join_numbers
 from bot_holds import ensure_hold_panel
+from bot_pings import ensure_ping_panel
+from bot_rules_gate import ensure_rules_gate
 from bot_staff_channel import watch_trouble
 from bot_reports import watch_reports
 from bot_tickets import watch_closed_tickets
@@ -126,8 +128,8 @@ async def register_commands():
     WHY IT IS BEHIND A STAMP. This was three writes to Discord per reconnect,
     doing nothing new every time, and a sync is one of the calls Discord rate
     limits hardest. A reconnect is not a new set of commands; a deploy is. So
-    the names that were registered are written down beside the code, and this
-    runs when that list differs, when a server appears that is not in it, or
+    the names that were registered are written down in the data folder, and
+    this runs when that list differs, when a server appears that is not in it, or
     when FORCE_COMMAND_SYNC says to. A rate limited sync used to write a
     traceback on an evening that was already going badly.
     """
@@ -190,6 +192,8 @@ async def on_ready():
     for g in client.guilds:
         await ensure_panel(g)
         await ensure_hold_panel(g)
+        await ensure_rules_gate(g)
+        await ensure_ping_panel(g)
         await ensure_office_roles(g)
         await ensure_office_panel(g)
         await ensure_faction_panel(g)

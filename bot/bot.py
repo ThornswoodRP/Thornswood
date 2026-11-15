@@ -4,12 +4,15 @@ the server up once and exits.
 
 What it does:
 
-  Joins    draws a card and puts it in #welcome
-  Tickets  a panel in #tickets-and-applications, one private thread per
+  Joins    draws a card and puts it in JOIN_CHANNEL, #welcome-travelers on
+           the server Build-Discord.py makes
+  Tickets  a panel in each ticket desk (TICKET_DESKS: #get-help,
+           #report-someone, #apply-to-playtest, #apply-for-a-seat and
+           #apply-for-staff), one private thread per
            ticket, and a copy pushed to the site so the inbox has it whether
-           or not anybody was looking at Discord. #tickets is the staff only
-           channel closed tickets are written down in, and where a ticket
-           goes when its thread will not open
+           or not anybody was looking at Discord. #ticket-log is the council
+           only channel closed tickets are written down in, and where a
+           ticket goes when its thread will not open
   Services posts in the staff channel what the VPS watchdog says has died
            and when it is back, from its outbox, once each (issue #447)
   Reports  says each thing sent in on the site's public report page in the
@@ -31,7 +34,7 @@ What it does:
            The channels get there once, by hand, with
            python bot.py --setup-channels [--apply] (the testing channels
            section below)
-  Heartbeat writes heartbeat.json beside this file every minute, so the
+  Heartbeat writes heartbeat.json in its data folder every minute, so the
            watchdog can tell a bot that is running from one that is on
            Discord (issue #449)
   Uptime   pings an outside monitor every minute while it is on Discord, so
@@ -52,8 +55,10 @@ Everything it needs is in env:
   CREATOR_ROLES    comma separated role IDs or names, added to Apply:
                    Content Creator only
   UPPER_STAFF_ROLES comma separated role IDs only, who is pinged and added
-                   to Faction Leader tickets. Must include the Owner role
-                   ID and each department Lead ID (today Lead Gamemaster).
+                   to Faction Leader tickets. Must include the council's
+                   role IDs: Owner, Co-Owner and each lead, which
+                   Setup-Discord.ps1 -OnBox -Audit prints as the
+                   -UpperStaffRoles line.
                    Names are ignored and logged. Empty or unset means a
                    Faction Leader ticket is refused: nobody else is added,
                    and the applicant is told to try again later.
@@ -94,8 +99,9 @@ Everything it needs is in env:
   KNOWN_ISSUES_EVERY  seconds between GitHub reads, default 300, never under 60
   PUBLIC_LISTS_FILE   where the site's known issues and roadmap are written,
                       default the site's data/from-bot/lists.json on the VPS
-  HEARTBEAT_FILE   where the heartbeat goes, default heartbeat.json beside this
-                   file, which is where the watchdog reads it
+  HEARTBEAT_FILE   where the heartbeat goes, default heartbeat.json in the
+                   bot's data folder (bot_base.py), which is where the
+                   watchdog reads it
   HEARTBEAT_EVERY  seconds between heartbeats, default 60
   PING_URL         the outside monitor's ping address. A secret, set only by
                    Install-Bot.ps1 -SetPing and never written to the log. Not
@@ -147,6 +153,8 @@ import bot_staff_channel  # noqa: E402,F401
 import bot_reports  # noqa: E402,F401
 import bot_tickets  # noqa: E402,F401
 import bot_ticket_panels  # noqa: E402,F401
+import bot_rules_gate  # noqa: E402,F401
+import bot_pings  # noqa: E402,F401
 import bot_offices  # noqa: E402,F401
 import bot_factions  # noqa: E402,F401
 import bot_testing  # noqa: E402,F401

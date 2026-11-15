@@ -86,7 +86,14 @@ namespace Thornswood
             {
                 try { BuildFiles(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, this build's files", ex); }
             }
-            try { Made(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the files made from the game", ex); }
+            // Not while the own folder chosen at install is still to be made:
+            // Game is Profile\Payload then, which holds no Skyrim, so every
+            // file read as not makeable ("Skyrim.esm is not on this machine",
+            // #5937) when they are made in the folder by the first start in it.
+            if (!Paths.OwnFirst)
+            {
+                try { Made(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the files made from the game", ex); }
+            }
             if (OwnGame.Active)
             {
                 try { Built(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the animation and body files", ex); }

@@ -18,6 +18,15 @@ Patrick picked both recommendations on the report page on 26 Oct 2026:
 docs/DECIDED.md). The work each pick needs is filed on the board (the last
 section).
 
+## Contents
+
+- [Where things stand today, measured](#where-things-stand-today-measured)
+- [What was measured for this study](#what-was-measured-for-this-study)
+- [Voice: the options](#voice-the-options)
+- [Chat, emotes and the rest of the UI: the options](#chat-emotes-and-the-rest-of-the-ui-the-options)
+- [What is still to measure, and who takes it](#what-is-still-to-measure-and-who-takes-it)
+- [The work each pick needs](#the-work-each-pick-needs)
+
 ## Where things stand today, measured
 
 ### Voice

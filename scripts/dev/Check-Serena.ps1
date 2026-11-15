@@ -33,6 +33,7 @@
   Exit 0 when Serena starts from the installed program at the pinned version
   and answers inside -Within seconds, 1 otherwise, with the reason.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # The folder Claude Code is started in. Serena is run with

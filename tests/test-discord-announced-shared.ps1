@@ -118,7 +118,7 @@ $store = Join-Path $site 'feed-dev\announced.json'
 try {
     Set-Feed '1.2.2' 'The door answers on the first knock'
     $o = Run $A @('-DryRun')
-    Yes 'nothing recorded anywhere: a dry run from A says it would post' ($o -match 'would post to the dev updates channel')
+    Yes 'nothing recorded anywhere: a dry run from A says it would post' ($o -match 'would post to #staff-news')
     Yes '  and writes nothing into the store' (-not (Test-Path -LiteralPath $store))
 
     $o = Run $A @() -Serve
@@ -129,7 +129,7 @@ try {
     # The other checkout, with its own working folder gone too: only the store knows.
     Remove-Item -LiteralPath (Join-Path $local 'Thornswood\feed\announced-dev') -Recurse -Force -ErrorAction SilentlyContinue
     $o = Run $B @('-DryRun')
-    Yes 'a dry run from checkout B says already announced 1.2.2' ($o -match 'already announced 1\.2\.2 in the dev updates channel')
+    Yes 'a dry run from checkout B says already announced 1.2.2' ($o -match 'already announced 1\.2\.2 in #staff-news')
     $o = Run $B @()
     Yes '  and a real run from B posts nothing' ($script:posts -eq 1 -and $o -match 'already announced')
 

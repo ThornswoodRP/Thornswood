@@ -14,7 +14,7 @@ The real bot module is imported and the real on_member_join is run, with a
 stand-in server whose member count is set by hand, a stand-in welcome channel
 that keeps what is sent to it, and card.render swapped for something that
 writes down the number it was asked to draw. The record is pointed at a
-temporary folder so this cannot touch one beside the code.
+temporary folder so this cannot touch one in the bot's data folder.
 
 The background half runs the real card.render and the real make-join-card.py.
 
@@ -317,7 +317,7 @@ for ln in lines:
 # service/BotService.cs is the source of the Windows service the bot runs
 # under (issue #465), which replaced roll-log.ps1 here. It is a program, not
 # the record, and I4 below still refuses any write that names joins.json.
-allowed = ['$Root/$f', '$Root/assets/join-card.png',
+allowed = ['$Root/$f', '$Root/assets/join-card.png', '$Root/NoteRules.cs',
            '$Root/service/BotService.cs', '$far']
 # Since #1093 the code goes up into a stage folder first ($Root/$stageName/$rel,
 # stage, check, swap), each file under its key in $send. So that destination is

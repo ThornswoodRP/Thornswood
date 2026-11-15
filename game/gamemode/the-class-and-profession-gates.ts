@@ -66,26 +66,29 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    Guarded and silent. A needs block that is not loaded yet, or a hot reload
-    mid-tick, must not stop somebody's work being counted.
+    No catch around it (#4955). A needs block that is not loaded yet, or a
+    hot reload mid-tick, is the check below: the work is still counted and
+    there is nothing to charge it to. Everything worked() reaches either
+    catches its own engine call or is arithmetic, and notify and say catch
+    their own, so a throw from here is a bug in our own code, and it goes
+    up to the event's guard and the log rather than the work being counted
+    with its rest unpaid.
   */
-  try {
-    const needs = globalThis.__thornswoodNeeds;
-    if (needs && needs.worked) {
-      /*
-        AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
-        swing now rather than nudging a rate, so it can cross a band, and a
-        band crossing is the one thing worth interrupting somebody for. Every
-        swing before that says nothing, which is the same rule the seam and
-        the chopping block already follow.
-      */
-      const tiredLine = needs.worked(actorId);
-      if (tiredLine) {
-        try { notify(actorId, tiredLine); } catch (e) { }
-        try { say(actorId, tiredLine); } catch (e) { }
-      }
+  const needs = globalThis.__thornswoodNeeds;
+  if (needs && needs.worked) {
+    /*
+      AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
+      swing now rather than nudging a rate, so it can cross a band, and a
+      band crossing is the one thing worth interrupting somebody for. Every
+      swing before that says nothing, which is the same rule the seam and
+      the chopping block already follow.
+    */
+    const tiredLine = needs.worked(actorId, key);
+    if (tiredLine) {
+      notify(actorId, tiredLine);
+      say(actorId, tiredLine);
     }
-  } catch (e) { }
+  }
 
   /*
     And work done with your party standing next to you counts for more.
@@ -119,7 +122,25 @@ function creditWork(actorId, key, n) {
     }
   } catch (e) { }
 
+  /*
+    And an apprentice's work beside their master counts 1.5 times (#4562,
+    decided 22 Oct), in the half that master teaches. Banked the same way as
+    the party bonus and for the same reason, half a piece at a time per
+    character and half, so every second piece beside them is paid one more.
+    The character block says whether the master is there (masterBeside).
+  */
   const c = globalThis.__thornswoodCharacter;
+  if (c && c.masterBeside && c.BESIDE) {
+    let half = '';
+    try { half = c.masterBeside(actorId, key); }
+    catch (e) { log('could not tell whether the master of', actorId.toString(16), 'is beside them for', key + ':', e); }
+    if (half) {
+      const bank = actorId + ' ' + half;
+      MASTER_BANK[bank] = (MASTER_BANK[bank] || 0) + (c.BESIDE.times - 1) * pieces;
+      while (MASTER_BANK[bank] >= 1) { MASTER_BANK[bank] -= 1; extra++; }
+    }
+  }
+
   if (!c || !c.credit) { return null; }
   try {
     let line = c.credit(actorId, key);
@@ -140,6 +161,11 @@ function creditWork(actorId, key, n) {
 /* What each character is owed of the party bonus, in fractions of a piece.
    In memory: a party is a session, so its bonus is too. */
 const PARTY_BANK = {};
+
+/* What each apprentice is owed of working beside their master (#4562), per
+   character and half, in fractions of a piece. In memory, like the party's:
+   standing beside somebody is a session's. */
+const MASTER_BANK = {};
 
 /*
   A yield, counted for the hold it came out of (#3164). Each place that hands

@@ -80,7 +80,7 @@ public static class Program
         var gh = new GitHub(cfg.Api, cfg.Repo, new AppTokens(cfg.Api, cfg.Repo, cfg.AdminState, http, permissions: asks), http);
         var servers = cfg.Environments.Where(kv => kv.Value.Kind == EnvConfig.ServerKind).ToDictionary(kv => kv.Key, kv => new Server(kv.Value, http));
         var control = new WindowsAppControl();
-        var apps = cfg.Environments.Where(kv => kv.Value.Kind != EnvConfig.ServerKind).ToDictionary(kv => kv.Key, kv => new App(kv.Value, http, control));
+        var apps = cfg.Environments.Where(kv => kv.Value.Kind is not (EnvConfig.ServerKind or ContentBuild.Kind)).ToDictionary(kv => kv.Key, kv => new App(kv.Value, http, control));
         var voices = cfg.Environments.Where(kv => kv.Value.Kind == EnvConfig.ServerKind && kv.Value.Voice != null).ToDictionary(kv => kv.Key, kv => new App(kv.Value.Voice!, http, control));
         var agent = new Agent(cfg, gh, new WindowsVerifier(WindowsVerifier.BuiltInSigner), servers, Version, exe, Log) { Apps = apps, Voices = voices };
         // The steps after a dev Deployment go through the deploy gate, and only
@@ -91,6 +91,11 @@ public static class Program
         {
             agent.Gate = new GatePipe();
             agent.IssuesGh = new GitHub(cfg.Api, cfg.Repo, new AppTokens(cfg.Api, cfg.Repo, cfg.AdminState, http, permissions: AppTokens.IssuesWrite), http);
+            // The content build (#5191) puts what it built on a draft Release,
+            // with a token that may write Contents and nothing else, minted
+            // only when agent.json names it.
+            if (cfg.Environments.TryGetValue(ContentBuild.Kind, out var ce))
+                agent.Content = new ContentBuild(ce, new GitHub(cfg.Api, cfg.Repo, new AppTokens(cfg.Api, cfg.Repo, cfg.AdminState, http, permissions: AppTokens.ContentsWrite), http), agent.Gate, Path.Combine(cfg.Home, "work"));
         }
 
         switch (verb)

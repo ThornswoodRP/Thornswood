@@ -22,7 +22,8 @@ the page escapes its own output.
 The real bot module is imported and the real TicketModal.on_submit is run. Only
 what touches the world is replaced: the guild, its channels, threads and roles,
 the interaction, the push to the site, and the file of open tickets, which is
-pointed at a temporary folder so this cannot touch the one beside the code.
+pointed at a temporary folder so this cannot touch the bot's own, in its data
+folder.
 
 Read only. Never connects to anything.
 """

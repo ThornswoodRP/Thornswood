@@ -25,10 +25,7 @@
     4. Say-Staff.ps1 end to end, with a stand-in for ssh that runs the box
        half: queued, then checked, the text on standard input and never on
        the command line; and it refuses before connecting what the box would.
-       -OnTheBox (#3045), the staff-notice workflow's half: ssh to the box's
-       own sshd at 127.0.0.1 with only the notices key, the host key held to
-       the pins in a known_hosts of its own, both gone when it ends, and the
-       answer left as an annotation. With no ssh, through GitHub (#5187): it
+       With no ssh, through GitHub (#5187): it
        files an issue on the board titled "Staff notice from <sender>",
        labelled notice: staff, with the text on gh's standard input; -Check
        reads where the bot is from its comments and the labels; -Unsay puts
@@ -37,15 +34,14 @@
     5. Grant-BoxAccess.ps1: a notices key's line is taken only through the
        bridge and only runs say-staff.ps1 as its own name; -List reads that
        back; the box change stops with nothing changed when say-staff.ps1 is
-       not there; and -NoticesOnly goes only with -MakeKey. -ToEnvironment
-       makes the GitHub environment main's alone, or stops naming the other
-       branch it lets in, before the box is touched, and the key goes to gh
-       secret set on standard input.
-    6. staff-notice.yml is not here: it moved to the private ops repository
-       with the VPS runners (#4013), whose tests\test-box-workflows.ps1
-       holds its shape and runs its step, and Grant-BoxAccess.ps1 puts its
-       key there. Say-Staff.ps1 files on the board with the labels bot.py
-       reads.
+       not there; and -NoticesOnly goes only with -MakeKey. -ToEnvironment,
+       for the desk's deploy key alone since #5314, makes the GitHub
+       environment main's alone, or stops naming the other branch it lets
+       in, before the box is touched, and the key goes to gh secret set on
+       standard input.
+    6. Say-Staff.ps1 has no -OnTheBox half and no staff-notice.yml is here:
+       that workflow and its notices key went on 15 Nov 2026 (#5314). It
+       files on the board with the labels bot.py reads.
   Nothing connects anywhere and nothing outside the temp folder is touched.
 #>
 [CmdletBinding()]
@@ -349,83 +345,6 @@ process.exit(r.status === null ? 1 : r.status);
     $s = SayStaff @('-From', 'claude', '-Text', 'hello')
     Yes 'Say-Staff.ps1 says plainly when the box has no watchdog, exit 1' ($s.Code -eq 1 -and $s.Out -match 'watchdog is not installed')
 
-    # ---- 4b. -OnTheBox: the staff-notice workflow's half (#3045) ----------
-    # ssh-keyscan and ssh-keygen stand-ins beside the ssh one: the box shows
-    # one key, whose fingerprint is the one a scratch vps.json pins (or not).
-    # The first host key the repository's vps.json pins: -OnTheBox reads the
-    # pins from there alone, never from a machine's own override file.
-    $pin = [string]@((Get-Content -LiteralPath (P 'scripts', 'vps', 'vps.json') -Raw | ConvertFrom-Json).hostKeys)[0]
-    $fpFile = Join-Path $tmp 'fingerprint.txt'
-    $keyscanIn = Join-Path $tmp 'ssh-keyscan-stand-in.js'
-    $keygenIn = Join-Path $tmp 'ssh-keygen-stand-in.js'
-    [IO.File]::WriteAllText($keyscanIn, "process.stdout.write('127.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxhostkeystandin\n');`n", $enc)
-    [IO.File]::WriteAllText($keygenIn, @"
-const a = process.argv.slice(2);
-if (a.includes('-F')) { process.exit(1); }
-if (a.includes('-l')) { const fs = require('fs'); fs.writeSync(1, '256 ' + fs.readFileSync($(Js $fpFile), 'utf8').trim() + ' 127.0.0.1 (ED25519)\n'); process.exit(0); }
-process.exit(1);
-"@, $enc)
-    Put-StandIn $bin 'ssh-keyscan' $keyscanIn
-    Put-StandIn $bin 'ssh-keygen' $keygenIn
-    # The ssh stand-in also keeps what the key and known_hosts files held
-    # while it ran, since they are gone once Say-Staff.ps1 ends.
-    $seenKey = Join-Path $tmp 'seen-key'
-    $seenHosts = Join-Path $tmp 'seen-known-hosts'
-    $peek = @"
-const copy = (from, to) => { try { fs.copyFileSync(from, to); } catch (e) { fs.writeSync(2, e.message + '\n'); } };
-const ki = all.indexOf('-i');
-if (ki >= 0) { copy(all[ki + 1], $(Js $seenKey)); }
-const kh = all.find(a => /^UserKnownHostsFile=/i.test(a));
-if (kh) { copy(kh.substring(19), $(Js $seenHosts)); }
-
-"@
-    [IO.File]::WriteAllText($standIn, ($sshHead + $peek + $sshBody), $enc)
-    # A machine's own vps.json pinning something else, as an earlier job on
-    # the runner account could leave: -OnTheBox goes by the repository's.
-    $localVps = Join-Path $tmp 'local-vps.json'
-    [IO.File]::WriteAllText($localVps, '{"hostKeys":["SHA256:someothermachine00000000000000000000000000"],"user":"elsewhere"}', $enc)
-    $fakeKey = "a stand-in for the notices key, which is never read here`n"
-    function OnTheBox([string[]]$a, [string]$key) {
-        $path = $env:PATH
-        $env:PATH = $bin + [IO.Path]::PathSeparator + $path
-        $env:THORNSWOOD_VPS_LOCAL = $localVps
-        $env:GITHUB_ACTIONS = 'true'
-        if ($key) { $env:THORNSWOOD_NOTICE_KEY_B64 = $key } else { Remove-Item Env:THORNSWOOD_NOTICE_KEY_B64 -ErrorAction SilentlyContinue }
-        try { $out = @(& $shell -NoProfile -NonInteractive -File $say -OnTheBox @a 2>&1 | ForEach-Object { "$_" }) }
-        finally {
-            $env:PATH = $path
-            Remove-Item Env:THORNSWOOD_VPS_LOCAL, Env:GITHUB_ACTIONS, Env:THORNSWOOD_NOTICE_KEY_B64 -ErrorAction SilentlyContinue
-        }
-        return [pscustomobject]@{ Out = ($out -join "`n"); Code = $LASTEXITCODE }
-    }
-    Fresh
-    Remove-Item -LiteralPath $argsFile, $seenKey, $seenHosts -ErrorAction SilentlyContinue
-    [IO.File]::WriteAllText($fpFile, $pin)
-    $keyB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($fakeKey))
-    $s = OnTheBox @('-Text', 'From the workflow.') $keyB64
-    $rows = @(Rows)
-    $sent = @(if (Test-Path -LiteralPath $argsFile) { [IO.File]::ReadAllLines($argsFile) })
-    Yes '-OnTheBox: queued, exit 0, and the notice is in the outbox' ($s.Code -eq 0 -and $s.Out -match 'queued agent-' -and $rows.Count -eq 1 -and $rows[0].text -like '*From the workflow.')
-    Yes '  it goes to the box''s own sshd at 127.0.0.1 as vps.json''s user, with no ssh config and only the notices key, whatever this machine''s own vps file says' (
-        $sent -contains 'Administrator@127.0.0.1' -and ($sent -join ' ') -match '-F none -i \S+ -o IdentitiesOnly=yes' -and ($sent -join ' ') -notmatch 'ProxyCommand')
-    Yes '  the key it used is the one in THORNSWOOD_NOTICE_KEY_B64' ((Test-Path -LiteralPath $seenKey) -and [IO.File]::ReadAllText($seenKey) -eq $fakeKey)
-    $kh = @($sent | Where-Object { $_ -like 'UserKnownHostsFile=*' })
-    Yes '  host keys from a known_hosts of its own holding the pinned key, with StrictHostKeyChecking' (
-        $kh.Count -eq 1 -and $sent -contains 'StrictHostKeyChecking=yes' -and (Test-Path -LiteralPath $seenHosts) -and
-        ([IO.File]::ReadAllText($seenHosts)).Trim() -eq '127.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxhostkeystandin')
-    $keyAt = $sent[[array]::IndexOf($sent, '-i') + 1]
-    Yes '  and the key and known_hosts are gone when it ends' (-not (Test-Path -LiteralPath $keyAt) -and -not (Test-Path -LiteralPath (Split-Path -Parent $keyAt)))
-    Yes '  in a GitHub job it leaves the box''s answer as a Say-Staff notice annotation' ($s.Out -match '::notice title=Say-Staff::QUEUED agent-[a-z0-9-]+')
-
-    Remove-Item -LiteralPath $argsFile -ErrorAction SilentlyContinue
-    [IO.File]::WriteAllText($fpFile, 'SHA256:someothermachine00000000000000000000000000')
-    $s = OnTheBox @('-Text', 'hello') $keyB64
-    Yes '-OnTheBox: a sshd on 127.0.0.1 that shows no pinned key gets nothing, exit 1, with an error annotation' (
-        $s.Code -eq 1 -and $s.Out -match 'pins' -and $s.Out -match '::error title=Say-Staff::' -and -not (Test-Path -LiteralPath $argsFile))
-    [IO.File]::WriteAllText($fpFile, $pin)
-    $s = OnTheBox @('-Text', 'hello') ''
-    Yes '-OnTheBox with no key stops before connecting and names the environment secret' ($s.Code -eq 1 -and $s.Out -match 'NOTICE_KEY_B64 secret of the "notices" environment' -and -not (Test-Path -LiteralPath $argsFile))
-
     # ---- 4c. with no ssh: an issue on the board (#5187) -------------------
     # A path holding only a stand-in for gh, which answers as GitHub does and
     # writes down each call. The issue and its comments come from files.
@@ -571,7 +490,7 @@ function icacls { }
         Yes 'Grant-BoxAccess.ps1 -NoticesOnly without -MakeKey stops before anything is done' ($g -match '-NoticesOnly goes with -MakeKey')
     } else { Write-Host 'SKIP  Grant-BoxAccess.ps1 -NoticesOnly without -MakeKey: no ssh here, and it stops on that first' }
 
-    # ---- 5b. -ToEnvironment: the workflow's key on GitHub (#3045) ----------
+    # ---- 5b. -ToEnvironment: the desk's key on GitHub (#2841) -------------
     # Set-MainOnlyEnvironment against a stand-in gh, a function here, which
     # answers each GET from the case's table and writes down each call.
     foreach ($n in 'Invoke-GitHub', 'Set-MainOnlyEnvironment') {
@@ -599,43 +518,42 @@ function icacls { }
         $script:ghAnswers = $answers
         $script:ghCalls = @()
         $err = ''
-        try { Set-MainOnlyEnvironment 'notices' } catch { $err = $_.Exception.Message }
+        try { Set-MainOnlyEnvironment 'desk' } catch { $err = $_.Exception.Message }
         return [pscustomobject]@{ Err = $err; Calls = $script:ghCalls; Changes = @($script:ghCalls | Where-Object { $_ -notmatch '^api -X GET ' }) }
     }
-    $envPath = 'repos/ThornswoodRP/Thornswood/environments/notices'
+    $envPath = 'repos/ThornswoodRP/Thornswood/environments/desk'
     $c = EnvCase @{ ("GET " + $envPath) = @(1, 'gh: Not Found (HTTP 404)') }
     Yes '-ToEnvironment: no environment yet, so it is made for chosen branches and main is the one let in' (
         -not $c.Err -and $c.Changes.Count -eq 2 -and
         $c.Changes[0] -eq ('api -X PUT ' + $envPath + ' --input - <<{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}') -and
         $c.Changes[1] -eq ('api -X POST ' + $envPath + '/deployment-branch-policies --input - <<{"name":"main","type":"branch"}'))
-    $custom = '{"name":"notices","deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
+    $custom = '{"name":"desk","deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
     $c = EnvCase @{ ("GET " + $envPath) = @(0, $custom); ("GET " + $envPath + '/deployment-branch-policies?per_page=100') = @(0, '{"total_count":1,"branch_policies":[{"id":1,"name":"main","type":"branch"}]}') }
     Yes '  there already, for main only: nothing is changed' (-not $c.Err -and $c.Changes.Count -eq 0)
     $c = EnvCase @{ ("GET " + $envPath) = @(0, $custom); ("GET " + $envPath + '/deployment-branch-policies?per_page=100') = @(0, '{"total_count":2,"branch_policies":[{"id":1,"name":"main","type":"branch"},{"id":2,"name":"claude/*","type":"branch"}]}') }
     Yes '  there, and another branch let in too: it stops, naming it, and changes nothing' ($c.Err -match '^DIE .*branch claude/\*' -and $c.Changes.Count -eq 0)
-    $c = EnvCase @{ ("GET " + $envPath) = @(0, '{"name":"notices","deployment_branch_policy":null}') }
+    $c = EnvCase @{ ("GET " + $envPath) = @(0, '{"name":"desk","deployment_branch_policy":null}') }
     Yes '  there with every branch let in: it is narrowed to main' ($c.Err -eq '' -and $c.Changes.Count -eq 2 -and $c.Changes[1] -match '"name":"main"')
     $c = EnvCase @{ ("GET " + $envPath) = @(1, 'gh: Must have admin rights to Repository. (HTTP 403)') }
     Yes '  GitHub refusing the read stops it, changing nothing' ($c.Err -match '^DIE .*HTTP 403' -and $c.Changes.Count -eq 0)
     $grantText = [IO.File]::ReadAllText($grantPath)
-    # The same line sets the desk's DESK_KEY_B64 for -Deploy (#2841), so the
-    # name is a variable that is NOTICE_KEY_B64 for every other key.
-    Yes 'the key goes to gh secret set NOTICE_KEY_B64 for that environment on its standard input, and to no file' (
-        $grantText.Contains("`$SecretName = if (`$Deploy) { 'DESK_KEY_B64' } else { 'NOTICE_KEY_B64' }") -and
+    Yes 'the key goes to gh secret set DESK_KEY_B64 for that environment on its standard input, and to no file, for -Deploy alone' (
+        $grantText.Contains("`$SecretName = 'DESK_KEY_B64'") -and $grantText.Contains("if (`$ToEnvironment -and -not `$Deploy) { Die") -and
         $grantText -match [regex]::Escape('[Convert]::ToBase64String([IO.File]::ReadAllBytes($newKey)) | & gh secret set $SecretName --env $ToEnvironment --repo $GitHubRepo') -and
         $grantText.IndexOf('if ($ToEnvironment) {', $grantText.IndexOf('Proving the new key through the bridge')) -lt $grantText.IndexOf('notice-access.txt', $grantText.IndexOf('Proving the new key through the bridge')))
     Yes '  and the environment is settled before the box is touched' ($grantText.IndexOf('Set-MainOnlyEnvironment $ToEnvironment') -lt $grantText.IndexOf('Get-BoxChangeScript $Name'))
 
-    # ---- 6. staff-notice.yml is in the ops repository (#4013) --------------
-    Yes 'staff-notice.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath (P '.github', 'workflows', 'staff-notice.yml')))
+    # ---- 6. no staff-notice.yml and no -OnTheBox half (#5314) -------------
+    Yes 'staff-notice.yml is not in this repository' (-not (Test-Path -LiteralPath (P '.github', 'workflows', 'staff-notice.yml')))
     $sayText = [IO.File]::ReadAllText($say)
+    Yes '  and Say-Staff.ps1 has no -OnTheBox half, which only that workflow ran' ($sayText -notmatch '\$OnTheBox' -and $sayText -notmatch 'NOTICE_KEY_B64 secret')
     Yes '  Say-Staff.ps1 files on the board the bot reads, with the labels the bot reads' (
         $sayText.Contains("[string]`$NoticeRepo = 'ThornswoodRP/Thornswood'") -and $sayText.Contains("`$noticeLabel = 'notice: staff'") -and $sayText.Contains("`$takeBackLabel = 'notice: take back'"))
     . (Join-Path $PSScriptRoot 'BotFiles.ps1')
     $botText = Get-BotSource $repo
     Yes '  and they are the bot''s own' (
         $botText.Contains("os.environ.get('STAFF_NOTICE_LABEL', 'notice: staff')") -and $botText.Contains("os.environ.get('STAFF_TAKE_BACK_LABEL', 'notice: take back')"))
-    Yes '  and Grant-BoxAccess.ps1 -ToEnvironment puts the key in that repository''s environment' ($grantText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'"))
+    Yes '  and Grant-BoxAccess.ps1 -ToEnvironment puts the desk''s key in the ops repository''s environment' ($grantText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'"))
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

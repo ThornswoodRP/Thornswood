@@ -160,7 +160,7 @@
 # window, and the install and removal paths in Updater.cs. 173 are left,
 # below. Each is later work on its own path; converting one lowers its line.
 AutoJoin.cs 3
-Chars.cs 10
+Chars.cs 7
 Checks.cs 22
 ClientRuntime.cs 1
 CrashDump.cs 1
@@ -187,7 +187,6 @@ Roster.cs 3
 Shell.cs 6
 ShellChars.cs 2
 SkyMp.cs 3
-Stall.cs 1
 Steam.cs 1
 SteamUpdates.cs 5
 Swap.cs 1
@@ -234,7 +233,6 @@ scripts\dev\Check-Outside.ps1 6
 scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Start-Thornswood.ps1 3
 scripts\dev\Watch-Foreground.ps1 1
-scripts\mods\Align-LoadOrder.ps1 1
 scripts\mods\Check-CollectionRules.ps1 1
 scripts\mods\Check-Manifest.ps1 1
 scripts\mods\Fix-Icons.ps1 1

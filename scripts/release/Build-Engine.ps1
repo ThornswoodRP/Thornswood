@@ -62,6 +62,7 @@
   deliberate engine change (engine\README.md). It sends nothing anywhere and
   never touches the game folder; Sync-Client.ps1 copies the files in.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [switch]$Check,
@@ -146,7 +147,7 @@ function Enter-EngineSubstLock {
     $mx = New-Object Threading.Mutex($false, 'Local\ThornswoodEngineSubst')
     # An abandoned mutex is still handed to this run: WaitOne throws to say the
     # run that held it ended without letting go, and this run holds it now.
-    # Written with Write-Host, not Say, because tests\test-engine-drive-letter.ps1
+    # Written with Write-Host, not Say, because scripts\tests\test-engine-drive-letter.ps1
     # lifts these functions on their own.
     try { $null = $mx.WaitOne() } catch [Threading.AbandonedMutexException] {
         Write-Host '  note: the last run to hold the drive letter lock ended without letting it go; this run holds it now' -ForegroundColor DarkGray

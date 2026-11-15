@@ -343,7 +343,6 @@ namespace Thornswood
 
             // ------------------------------------------------- the files
             Head("Installing the mods");
-            Say("  Several thousand files, a few minutes.");
             DropOldPayload();
             List<string> files = PayloadFiles(payload);
             RecordIntoGame(files);
@@ -500,6 +499,10 @@ namespace Thornswood
         {
             long total = 0;
             foreach (string rel in files) total += new FileInfo(Path.Combine(payload, rel)).Length;
+            // What is about to be copied, counted in the package itself, so it
+            // is always this build's and never a figure typed in for an older
+            // one (#4538).
+            Say(string.Format(CultureInfo.InvariantCulture, "  {0:n0} files, {1:n1} MB", files.Count, total / 1048576.0));
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
@@ -632,22 +635,23 @@ namespace Thornswood
         /// Thornswood's own Skyrim folder, as the window's card left it. The
         /// launcher makes the folder itself (OwnGame.Make) once Vortex has
         /// deployed, so all this does is answer its question in advance and
-        /// name Vortex's folder. The same check as the launcher's
-        /// OwnGame.PointAt: a Skyrim, with Vortex's record in it. Anything
-        /// else is said and left out, never a stop, because the launcher's
-        /// own Settings button can still set it.
+        /// name Vortex's folder. The tick is always written, ticked or not:
+        /// an absent MakeOwnGame reads as ticked (Config.MakeOwnGame), so the
+        /// box left unticked has to say so. Vortex's folder gets the same
+        /// check as the launcher's OwnGame.PointAt: a Skyrim, with Vortex's
+        /// record in it. Anything else is said and left out, never a stop,
+        /// because the launcher's own Settings button can still set it.
         /// </summary>
         Dictionary<string, JsonNode> OwnFolderCard()
         {
             var own = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
             string vortex = choice.VortexGame ?? "";
-            if (!choice.MakeOwnGame && vortex.Length == 0) return own;
             Head("Thornswood's own Skyrim folder");
+            own["MakeOwnGame"] = JsonValue.Create(choice.MakeOwnGame);
             if (choice.MakeOwnGame)
-            {
-                own["MakeOwnGame"] = JsonValue.Create(true);
                 Say("  On. The launcher makes it by itself once Vortex has deployed the Thornswood collection.");
-            }
+            else
+                Say("  Off. The launcher asks before it makes it.");
             if (vortex.Length > 0)
             {
                 string vg = vortex.Trim().Trim('"').Trim().TrimEnd('\\');
@@ -867,7 +871,11 @@ namespace Thornswood
             if (choice.MakeOwnGame)
             {
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
-                Say("Skyrim folder by itself and restarts.");
+                Say("Skyrim folder by itself, then makes the rest from your game:");
+                Say("Thornswood-Last.esp, the plugin order, and the animation and body");
+                Say("files, which Pandora and BodySlide build in their own windows.");
+                Say("Then it takes a newer launcher if there is one and restarts once.");
+                Say("Nothing needs a press of Fix.");
             }
             if (ownFirst || madeOwn) Say("Nothing was written into your Steam copy of Skyrim.");
             if (madeOwn) Say("Thornswood's own folder was updated in place.");
