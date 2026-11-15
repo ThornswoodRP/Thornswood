@@ -30,8 +30,8 @@
        launcher's code to the size and sha256 of the plugin
        game\data\last-plugin.json names, and to the sources it counts. No
        repository holds the plugin since #2791 step 3.
-    5. It compiles at the build's C# version and at C# 5, which Windows
-       PowerShell 5.1's Add-Type compiles for scripts\release\Go.ps1.
+    5. It compiles at the build's C# version, with the driver. No script
+       loads LastPlugin.cs with Add-Type; the launcher alone runs it.
     6. By the source: the step kinds and the magic are last_recipe.py's;
        Play, Scan and Fix make it through MadeFromGame; Verify never fetches
        the made plugin from the server and counts it as ours in the order; the
@@ -45,7 +45,6 @@ param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
-. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')   # C# 5 against the .NET Framework, as Windows PowerShell 5.1's Add-Type
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
 if (-not $Scratch) { $Scratch = [IO.Path]::GetTempPath() }
 $App = Join-Path $Repo 'launcher\app'
@@ -201,17 +200,11 @@ namespace Thornswood
 }
 '@
     $sources = @((Join-Path $App 'LastPlugin.cs'), (Join-Path $App 'FromGameArchive.cs'))
-    # At the build's C# version with the .NET SDK, the program that runs below;
-    # and at C# 5 against the .NET Framework, as Windows PowerShell 5.1's
-    # Add-Type compiles them for Go.ps1, built only.
+    # At the build's C# version with the .NET SDK, the program that runs below.
     $exe = $null
     try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.LastPluginTest' -Source $driver -File $sources }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
     Yes "LastPlugin.cs, FromGameArchive.cs and the driver compile at C# $LauncherLangVersion, as the build does" ($null -ne $exe)
-    $five = $null
-    try { $five = Build-FrameworkCode -Exe -Main 'Thornswood.LastPluginTest' -Source $driver -File $sources }
-    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
-    Yes 'LastPlugin.cs, FromGameArchive.cs and the driver compile at C# 5, as Windows PowerShell 5.1''s Add-Type compiles' ($null -ne $five)
     if (-not $exe) { Done }
 
     $recipe = Join-Path $Repo 'game\data\last-plugin.recipe'

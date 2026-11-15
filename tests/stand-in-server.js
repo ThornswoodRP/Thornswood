@@ -781,7 +781,19 @@ function world(opts) {
     getActorCellOrWorld: function (a) { const r = store.get(a >>> 0); return r ? r.worldOrCellDesc : ''; },
     getActorName: function (a) { const r = store.get(a >>> 0); return r && r.appearance ? r.appearance.name : ''; },
     getNeighborsByPosition: function (cell, pos) {
-      return online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      /*
+        What WorldState::GetNeighborsByPosition hands back: the forms around
+        the position, the placed references of the cell with them (the fork's
+        LoadCellsTest asks an empty cell and gets its references), and the
+        people online there. A chest, a forge or a loom a harness placed with
+        w.ref is one of them (#4578). The NPCs of the placed cast are not
+        given here.
+      */
+      const out = online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      for (const [rid, r] of store) {
+        if (r && r.type !== 'NPC_' && r.worldOrCellDesc === cell && out.indexOf(rid) < 0) { out.push(rid); }
+      }
+      return out;
     },
     setRaceMenuOpen: function (a, open) { saw(a >>> 0, 'raceMenu', '', !!open); },
     sendCustomPacket: function (u, text) { saw(impl.getUserActor(u), 'packet', '', String(text)); },

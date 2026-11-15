@@ -34,7 +34,10 @@
        Fenna, at Master, mends a piece to 120%. Dagny, a Haberdasher of any
        rank, mends her clothes to 120% with a Sewing Kit. Corvin, a novice,
        mends his sword to 100%, and a repair that would not raise a piece is
-       refused with nothing used.
+       refused with nothing used. Each mends at the bench the piece is made
+       at, a forge or a loom, standing beside it (#4578). Dagny cannot mend
+       her sword at her loom: it is a smith's work. Corvin, across the city,
+       is told his sword is mended at a forge.
     E  The sharpening wheel and the armour table do not open, for anybody,
        and say a piece is mended with a kit.
     F  The server restarts: every condition is on its piece where it was.
@@ -69,6 +72,12 @@ w.record(TABLE_BASE, 'FURN');
 const id = w.idOf;
 const WHEEL = w.ref(0xff200050, { base: WHEEL_BASE, cell: CITY, pos: [2300, 0, 0] });
 const TABLE = w.ref(0xff200051, { base: TABLE_BASE, cell: CITY, pos: [2300, 200, 0] });
+// A forge and a loom among them (#4578): a piece is mended by its trade at the bench it is made at.
+const FORGE_BASE = 'bf9e1:Skyrim.esm', LOOM_BASE = '801:MoreCraftableEquipment.esp';   // by BENCH_BY_BASE
+w.record(FORGE_BASE, 'FURN');
+w.record(LOOM_BASE, 'FURN');
+w.ref(0xff200052, { base: FORGE_BASE, cell: CITY, pos: [2160, 150, 0] });
+w.ref(0xff200053, { base: LOOM_BASE, cell: CITY, pos: [2160, -150, 0] });
 
 /* A piece in the pack and on the body: the pack's entry flagged worn, and the equipment record naming it. */
 function wearing(list) { return list.map(function (x) { return Object.assign({ baseId: id(x[0]), count: 1, worn: true }, x[1] ? { name: x[1] } : {}); }); }
@@ -181,6 +190,20 @@ yes('D6 Corvin, a novice Edgewright, mends his sword from ' + corvinCond + '% to
 answer = say(CORVIN, '/repair mend ' + id(SWORD).toString(16) + ' 100 Iron Sword');
 yes('D7 a repair that would not raise it is refused, and nothing is used (' + answer + ')',
   answer === 'Your Iron Sword is at 100%. A repair by you would not raise it.' && w.count(CORVIN, id(WEAPON_KIT)) === 1);
+// Dagny's sword wore 1% blocking in B and 1% landing the hit above, so its
+// row is read off her pack, the way Corvin's is below.
+const dagnySword = Object.keys(held(DAGNY)).filter(function (k) { return /^Iron Sword \(\d+%\) worn$/.test(k); })[0] || '';
+const dagnyCond = Number((/\((\d+)%\)/.exec(dagnySword) || [])[1]);
+answer = say(DAGNY, '/repair mend ' + id(SWORD).toString(16) + ' ' + dagnyCond + ' Iron Sword');
+yes('D8 Dagny, a tailor at her loom, cannot mend her ' + dagnyCond + '% sword: it is a smith\'s work, at a forge (' + answer + ')',
+  dagnyCond === 98 && answer === 'Your Iron Sword is a smith\'s work. It is mended by a smith at a forge.' &&
+  has(DAGNY, 'Iron Sword (98%) worn') === 1);
+w.moveTo(CORVIN, CITY, [6000, 0, 0]);
+w.hit(DAGNY, CORVIN, SWORD, { damage: 1 });   // his sword lands one: it is 99% again
+w.run(300);
+answer = say(CORVIN, '/repair mend ' + id(SWORD).toString(16) + ' 99 Iron Sword');
+yes('D9 across the city from the forge, Corvin is told where his sword is mended, and keeps his kit (' + answer + ')',
+  answer === 'Your Iron Sword is mended at a forge. Stand at one and mend it there.' && w.count(CORVIN, id(WEAPON_KIT)) === 1);
 
 // ------------------------------------------------------------ E. the benches --
 const e1 = w.activate(WHEEL, BRENNA);

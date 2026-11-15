@@ -346,6 +346,10 @@ public sealed class EnvConfig
     /// 300 for main, 60 for dev; agent.json may lengthen it, never take it
     /// under 60.</summary>
     public int AnnounceSeconds { get; set; } = 60;
+    /// <summary>The box's game archive store (OnBox.ps1,
+    /// $ThornswoodGameArchiveStore): the string tables Thornswood-Last.esp
+    /// is made with on a server (#6175, ServerPlugins).</summary>
+    public string GameData { get; set; } = @"C:\Thornswood-GameData";
 
     /// <summary>Lays agent.json's fields for this environment over it. voice
     /// is the voice service a "voice" entry starts from (DefaultVoiceFor).</summary>
@@ -370,6 +374,7 @@ public sealed class EnvConfig
         Watch = S("watch", Watch);
         StartSeconds = I("startSeconds", StartSeconds);
         AnnounceSeconds = I("announceSeconds", AnnounceSeconds);
+        GameData = S("gameData", GameData);
         Service = S("service", Service);
         WaitSeconds = I("waitSeconds", WaitSeconds);
         LogDir = S("logDir", LogDir);
