@@ -3,7 +3,7 @@
    Runs test drivers only, never the launcher, a window or the game. #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-. (Join-Path $root 'tests/Launcher-Csc.ps1')
+. (Join-Path (Join-Path $root 'tests') 'Launcher-Csc.ps1')
 if (-not $OnWindows) { Write-Host 'SKIP: Windows exclusive-file diagnostic paths'; exit 0 }
 $app = Join-Path $root 'launcher/app'
 function Read-FaultBody([string]$file) {
