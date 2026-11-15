@@ -28,6 +28,12 @@
 //    unarmed hit on a person near it, both reliable; an NPC the server hands
 //    it (HostStart) is sent a move on its beat until HostStop; a trade ask is
 //    "/merchant <id>" for the nearest NPC, and the answers are counted;
+//    quest play opens the panel of the nearest NPC within the trade block's
+//    reach and stands there, picks the trade of a novice work it saw when it
+//    can take none, presses Take work with the commission's quote and Leave
+//    work with its token, as the panel's buttons send them, then steps back
+//    and walks on; its answers are counted against the merchant block's own
+//    lines, and the gate and Load-Box.ps1 let quest through;
 //  - the box's copy (New-LoadServer.js --from, against a stand-in for an
 //    installed server): its plugins by full path, its NPC switch and
 //    gameplay switches kept, nothing else of the server's settings, its own
@@ -47,8 +53,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS } = require(path.join(BOT, 'load-bots.js'));
-const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts } = require(path.join(BOT, 'Load-Test.js'));
+const { LoadBot, MOVE_MS, QUEST_REACH, QUEST_SAID, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
 const server = require(path.join(BOT, 'New-LoadServer.js'));
@@ -229,6 +235,82 @@ function playChecks() {
   addon.made[1].queue.push({ type: 'message', message: { t: 33, idx: 20, refrId: 0xff000123, transform: { pos: [1, 2, 3], worldOrCell: 0x3c } } });
   w.pump();
   yes('a bot that only walks keeps nobody\'s position', w.others.size === 0);
+}
+
+// Quest play (#4623, 15 Nov 2026): the trader panel's presses, against a
+// stand-in server that pushes the panel's view as the merchant block does.
+function questChecks() {
+  const bundle = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'merchant-trading-bundle.ts'), 'utf8');
+  const panel = fs.readFileSync(path.join(ROOT, 'game', 'ui', 'thornswood-merchant.js'), 'utf8');
+  // Each line as the bundle writes it, a single-quoted string literal.
+  const literal = (t) => "'" + t.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  const missing = Object.keys(QUEST_SAID).filter((t) => bundle.indexOf(literal(t)) < 0);
+  yes('every quest answer the bots count is a line the merchant block says', missing.length === 0 || console.log('      not said: ' + JSON.stringify(missing)));
+  yes('the panel view they read is the property the merchant block pushes', bundle.indexOf("var property = '" + MERCHANT_VIEW + "';") >= 0);
+  yes('they open the panel within the merchant block\'s own reach', new RegExp('var REACH = ' + QUEST_REACH + ';').test(bundle));
+  yes('the panel\'s buttons send the quest presses and Step back the way the bots do',
+    panel.indexOf("net('/merchant quest ' + el.getAttribute('data-action') + ' ' + questId +") >= 0 && panel.indexOf("net('/merchant close')") >= 0 &&
+    panel.indexOf("' @'+token") >= 0);
+  yes('quest is one of the plays Load-Test.js takes', PLAYS.indexOf('quest') >= 0);
+  const box = fs.readFileSync(path.join(BOT, 'Load-Box.ps1'), 'utf8');
+  const boxPattern = new RegExp(/ValidatePattern\('([^']+)'\)\]\s*\[string\]\$Play/.exec(box)[1]);
+  const gatePattern = new RegExp(JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'vps', 'gate', 'verbs.json'), 'utf8')).verbs['Load-Test'].params.Play);
+  yes('the gate and Load-Box.ps1 take -Play fight,host,trade,quest and refuse a play there is not',
+    boxPattern.test('fight,host,trade,quest') && gatePattern.test('fight,host,trade,quest') && gatePattern.test('quest') &&
+    !gatePattern.test('quest,dance') && !boxPattern.test('dance'));
+  yes('Load-Box.ps1 plays quest unless told otherwise', /\[string\]\$Play = 'fight,host,trade,quest'/.test(box));
+
+  const addon = fakeAddon();
+  const b = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'q' });
+  b.profileId = 1900000600; b.play = ['trade', 'quest'];
+  b.client = addon.createBotClient('127.0.0.1', 5000);
+  const c = addon.made[0];
+  const said = [];
+  b.state = 'connected'; b.step = 'moving'; b.character = { idx: 7 }; b.center = [0, 0, 0]; b.cell = 0x3c; b.radius = 300; b.angle = 0;
+  let now = Date.now();
+  b.lastMove = now; b.nextHit = now + 1e9; b.nextTrade = now + 1e9; b.nextQuest = now + 1e9;
+  b.ws = { send: (t) => said.push(JSON.parse(t).text) }; b.welcomed = true; b.passSentAt = now;
+  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1c18d, transform: { pos: [300, 300, 0], rot: [0, 0, 0], worldOrCell: 0x3c } } });
+  c.queue.push({ type: 'message', message: { t: 33, idx: 22, refrId: 0x100000000 + 0x1c18e, transform: { pos: [5000, 0, 0], rot: [0, 0, 0], worldOrCell: 0x3c } } });
+  b.pump();
+  const view = (quests) => c.queue.push({ type: 'message', message: { t: 7, idx: 7, propName: MERCHANT_VIEW, dataDump: JSON.stringify({ open: true, trader: 'Dagur', quests }) } });
+  const step = () => { now += 5000; b.nextQuest = now; b.advance(now); b.pump(); };
+  step();
+  yes('quest play opens the panel of the NPC within reach, over the chat socket', said[said.length - 1] === '/merchant 1c18d' && b.played.questPanelAsks === 1);
+  const stood = b.here().slice();
+  c.sent.length = 0;
+  b.lastMove = now; b.advance(now + MOVE_MS + 1); b.advance(now + 2 * MOVE_MS + 2);
+  const moves = c.sent.filter((x) => x.m.t === 2 && x.m.idx === 7);
+  yes('at an open panel it stands where it opened it, still on the 130 ms beat',
+    moves.length === 2 && moves.every((x) => x.m.data.speed === 0 && x.m.data.runMode === 'Standing' && JSON.stringify(x.m.data.pos) === JSON.stringify(stood)));
+  const locked = { id: 'q-winterhold-cook-novice-parcel', kind: 'commission', who: 'cook, hearthcook, novice', state: 'locked', canTake: false };
+  view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
+  b.pump();
+  yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
+  step();
+  yes('with nothing it can take, it picks the trade of the novice work it saw, as the K panel sends it', said[said.length - 1] === '/pick profession cook hearthcook' && b.played.questPicks === 1);
+  step();
+  yes('  and opens the panel again', said[said.length - 1] === '/merchant 1c18d' && b.played.questPanelAsks === 2);
+  const quote = 'ab'.repeat(32);
+  view([Object.assign({}, locked, { state: 'available', canTake: true, quoteToken: quote })]);
+  b.pump(); step();
+  yes('it presses Take work on the work it can take, with the commission\'s quote', said[said.length - 1] === '/merchant quest take q-winterhold-cook-novice-parcel @' + quote && b.played.questTakeAsks === 1);
+  view([Object.assign({}, locked, { state: 'open', canTake: false, canAbandon: true, token: 7 })]);
+  b.pump(); step();
+  yes('then Leave work on what it holds, with its token', said[said.length - 1] === '/merchant quest abandon q-winterhold-cook-novice-parcel @7' && b.played.questLeaveAsks === 1);
+  step();
+  yes('then steps back and walks on', said[said.length - 1] === '/merchant close' && b.atPanel === null && b.questPhase === 'idle' && b.nextQuest === now + 30000);
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You take the work.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You leave the work without payment.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'This trader does not handle that work.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Trading with Dagur in Winterhold. Purse 100.' }));
+  yes('quest answers are counted as quest answers, and a trade answer as a trade answer',
+    b.played.questTaken === 1 && b.played.questLeft === 1 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
+    !b.played.tradeOtherAnswer && b.played.tradeOpened === 1);
+  b.nextQuest = now; b.questPhase = 'idle'; b.atPanel = null; b.others.clear(); b.advance(now + 1);
+  yes('with no NPC within reach it says so and asks nothing', b.played.questNoTraderNear === 1 && b.played.questPanelAsks === 2);
+  b.questPhase = 'asked'; b.questView = null; b.nextQuest = now; b.advance(now + 2);
+  yes('a panel that never came is counted, and it steps back', b.played.questNoPanel === 1 && said[said.length - 1] === '/merchant close');
 }
 
 async function boxChecks() {
@@ -474,6 +556,7 @@ async function serverChecks() {
   await proxyChecks();
   botChecks();
   playChecks();
+  questChecks();
   mathChecks();
   await voiceChecks();
   await serverChecks();
