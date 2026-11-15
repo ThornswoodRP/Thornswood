@@ -150,9 +150,9 @@ function Read-VortexCollectionState([string]$St, [scriptblock]$Read) {
 function Import-VortexStateReader {
     if ('Thornswood.VortexProfileState' -as [type]) { return }
     $source = Join-Path $PSScriptRoot '..\..\launcher\app\VortexProfileState.cs'
-    if ($PSVersionTable.PSVersion.Major -le 5) {
-        Add-Type -LiteralPath $source -ReferencedAssemblies System.dll,System.Core.dll,System.Xml.dll
-    } else { Add-Type -LiteralPath $source }
+    # pwsh 7, where every script runs (#5356): its Add-Type has every
+    # assembly the file uses already (#5968).
+    Add-Type -LiteralPath $source
 }
 <#
   The legacy fallback: the revision out of the old folder name, or 0. Kept for

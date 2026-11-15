@@ -27,15 +27,13 @@
   in Generated.cs.
 #>
 
-# Compiles the launcher's three files once per session. Windows PowerShell 5.1
-# names the assemblies they use; PowerShell 7 has them all already.
+# Compiles the launcher's three files once per session, with the Add-Type of
+# pwsh 7, where every script runs (#5356), which has every assembly they use.
 function Import-GeneratedTypes {
     if ('Thornswood.GeneratedBuild' -as [type]) { return }
     $app = Join-Path $PSScriptRoot '..\..\launcher\app'
     $files = @('Generated.cs', 'GeneratedBuild.cs', 'CoveredBodies.cs' | ForEach-Object { (Resolve-Path -LiteralPath (Join-Path $app $_)).Path })
-    if ($PSVersionTable.PSVersion.Major -le 5) {
-        Add-Type -LiteralPath $files -ReferencedAssemblies System.dll, System.Core.dll, System.Xml.dll
-    } else { Add-Type -LiteralPath $files }
+    Add-Type -LiteralPath $files
 }
 Import-GeneratedTypes
 

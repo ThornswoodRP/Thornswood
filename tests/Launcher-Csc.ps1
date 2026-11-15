@@ -73,6 +73,19 @@
       $asm = Add-LauncherType -File (Join-Path $App 'Signature.cs') -Source $standIn
       $T = $asm.GetType('Thornswood.Signature')
 
+  Test-ScriptAddType -File <path>[, ...]: for the launcher files a script
+  loads with Add-Type itself (scripts\mods\LoadOrder.ps1 loads
+  VortexProfileState.cs, scripts\mods\Generated.ps1 loads Generated.cs,
+  GeneratedBuild.cs and CoveredBodies.cs, scripts\release\Go.ps1 loads the
+  FromGame*.cs files). Every script runs in pwsh 7 (#5356), so those files
+  are compiled the way its Add-Type compiles them: its own Roslyn, against
+  the .NET pwsh runs on and none of the project's packages. It does that in
+  a pwsh of its own, so nothing it loads meets what this PowerShell has
+  loaded, and throws with what the compiler said when the files do not
+  compile (#5968). Build-LauncherCode holds them to the build as well.
+
+      Test-ScriptAddType -File (Join-Path $App 'VortexProfileState.cs')
+
   WHERE THE BUILDS GO. Under out\harness\ in the repository, which git
   ignores, in a folder named by a hash of the project and every source, so
   the same code is built once and the next run of any harness reuses it. A
@@ -388,4 +401,17 @@ function Add-LauncherAssembly {
     $dll = Build-LauncherProject
     [ThornswoodHarness.BuildFolders]::Add((Split-Path -Parent $dll))
     [Reflection.Assembly]::LoadFrom($dll)
+}
+
+function Test-ScriptAddType {
+    param([Parameter(Mandatory)][string[]]$File)
+    $launcherFiles = @(foreach ($f in $File) {
+        if (-not (Test-Path -LiteralPath $f)) { throw ('Test-ScriptAddType: ' + $f + ' is not there.') }
+        "'" + ((Resolve-Path -LiteralPath $f).Path -replace "'", "''") + "'"
+    })
+    # The same call the scripts make, in the pwsh running this harness.
+    $launcherLine = '$ErrorActionPreference = ''Stop''; try { Add-Type -LiteralPath @(' + ($launcherFiles -join ', ') + '); exit 0 } catch { [Console]::Out.WriteLine($_.Exception.Message); exit 1 }'
+    $launcherPwsh = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $launcherSaid = & $launcherPwsh -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launcherLine))) 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw ('Test-ScriptAddType: the Add-Type of pwsh ' + $PSVersionTable.PSVersion + ' refused it:' + [Environment]::NewLine + $launcherSaid.Trim()) }
 }
