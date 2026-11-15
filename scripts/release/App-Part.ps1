@@ -105,6 +105,9 @@ switch ($Part) {
     . (Join-Path $PSScriptRoot '..\deploy\Bot-Code.ps1')
     foreach ($f in @(Get-ThornswoodBotCode $RepoDir) + @('staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json')) { Add-One $f ('bot/' + $f) }
     Add-One 'assets/join-card.png' 'bot/assets/join-card.png'
+    # The release note rules, the one copy, which the bot asks for a pull
+    # request's note through pwsh's Add-Type (bot_news.py, #6004).
+    Add-One 'NoteRules.cs' 'tools/ReleaseNotes/NoteRules.cs'
   }
   'voice' {
     Add-One 'voice-server.js' 'voice/voice-server.js'

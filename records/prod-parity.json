@@ -290,13 +290,13 @@
     },
     {
       "rule": "Thornswood Web 80",
-      "required": true,
-      "why": "Caddy, only from Cloudflare's ranges (Setup-Domain.ps1, Set-WebFirewall.ps1, #2995)"
+      "required": false,
+      "why": "Caddy, only from Cloudflare's ranges (Setup-Domain.ps1, Set-WebFirewall.ps1, #2995); off once the site comes through the tunnel (Set-WebFirewall.ps1 -Close, #5351), and on again before Install-Tunnel.ps1 -Back"
     },
     {
       "rule": "Thornswood Web 443",
-      "required": true,
-      "why": "Caddy, only from Cloudflare's ranges (Setup-Domain.ps1, Set-WebFirewall.ps1, #2995)"
+      "required": false,
+      "why": "Caddy, only from Cloudflare's ranges (Setup-Domain.ps1, Set-WebFirewall.ps1, #2995); off once the site comes through the tunnel (Set-WebFirewall.ps1 -Close, #5351), and on again before Install-Tunnel.ps1 -Back"
     },
     {
       "rule": "Thornswood Voice",

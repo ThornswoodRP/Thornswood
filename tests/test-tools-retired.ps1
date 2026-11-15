@@ -130,7 +130,8 @@ $codeHits = @()
 $codeRead = 0
 foreach ($f in $all) {
     if ($f -match $codeSkip) { continue }
-    if ($f -notmatch '^(scripts|tests|installer|bot|voice|site|\.github)/') { continue }
+    # Each product's own harnesses too, in its tests folder (#5341).
+    if ($f -notmatch '^(scripts|tests|installer|bot|voice|site|\.github|[^/]+/tests)/') { continue }
     if ($f -notmatch '\.(ps1|psm1|js|py|yml|yaml|cmd|bat)$') { continue }
     $full = Join-Path $Repo $f
     if (-not (Test-Path -LiteralPath $full)) { continue }

@@ -11,6 +11,26 @@ the file, a colon, and a name it declares or its own words, never a line
 number (#1075, #2416). Search the file for what follows the colon.
 `tests\test-1075-script-citations.js` fails when a cited name goes away.
 
+## Contents
+
+- [Why it is one file](#why-it-is-one-file)
+- [Where its source is](#where-its-source-is)
+- [How the blocks find each other](#how-the-blocks-find-each-other)
+- [The map](#the-map)
+- [Startup and settings](#startup-and-settings)
+- [Character creation](#character-creation)
+- [The door](#the-door)
+- [Professions, benches and BENCH_ACCESS](#professions-benches-and-bench_access)
+- [Spells, tomes and staff spells](#spells-tomes-and-staff-spells)
+- [Property, offices, rent and gold](#property-offices-rent-and-gold)
+- [Needs](#needs)
+- [Chat and commands](#chat-and-commands)
+- [How it talks to the plugins](#how-it-talks-to-the-plugins)
+- [Where its data lives on the VPS](#where-its-data-lives-on-the-vps)
+- [Generated tables](#generated-tables)
+- [Deploying it](#deploying-it)
+- [Tests that read it](#tests-that-read-it)
+
 ## Why it is one file
 
 `requireTemp()` in skymp5-server copies the file to a temp folder and requires

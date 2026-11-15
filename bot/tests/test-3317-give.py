@@ -136,7 +136,7 @@ class Guild(object):
         self.onboarding_enabled = onboarding
 
     async def welcome_screen(self):
-        # A Welcome Screen with no channels on it (#start-here, 13 Nov).
+        # A Welcome Screen with no channels on it (#start-here, 12 Nov).
         return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
 
     async def onboarding(self):

@@ -65,7 +65,7 @@ yes('S4 the line is set before any code runs (it sits with the other inlined dat
 // only the merchant install's own copy, and first steps read the file from
 // beside the gamemode, so on a server it found no Cook. It is in STAFF_DATA now.
 const CARRIED_ELSEWHERE = {
-  'guild-sites.json': 'MERCHANT_GUILD_SITES, written by Build-MerchantGamemode.js'
+  'guild-sites.json': 'MERCHANT_GUILD_SITES, written by Build-MerchantTables.js'
 };
 const reads = new Set();
 gm.replace(/'data',\s*'([^']+\.json)'/g, function (m, name) { reads.add(name); return m; });

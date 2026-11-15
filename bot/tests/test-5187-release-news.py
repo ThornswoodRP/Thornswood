@@ -9,7 +9,7 @@ news_post_parts, news_once).
 It holds:
   - the files are read in the agent's shape; no folder is no news, a file
     that does not read is left out;
-  - a dev release (dev, site or the bot) goes to the dev updates channel and
+  - a dev release (dev, site or the bot) goes to #staff-news and
     a main one to #news, each tag once however many places it reached;
   - the notes merge-release.yml writes when nothing people would notice
     changed, empty notes, and a release deployed over a day ago are written
@@ -20,6 +20,10 @@ It holds:
     and gold for main, no Claude Code footer, long notes cut at a line;
   - a Main Server change (only the bot or the site) is posted in #news once,
     labelled Main Server, read from the pull requests the Release carries;
+  - its note is read by tools/ReleaseNotes/NoteRules.cs, the one copy of the
+    rule, through pwsh's Add-Type, so "release note:" in any case counts as
+    the check reads it, and nothing in bot/ reads the line itself (#6004);
+    the bot is sent NoteRules.cs with its code;
   - a post that fails is tried again next pass and the releases after it in
     that channel wait; the other channel goes on;
   - the record is saved after each one and keeps the newest 200 a channel;
@@ -36,6 +40,7 @@ sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
 import asyncio
 import json
+import re
 import shutil
 import tempfile
 import time
@@ -111,7 +116,7 @@ finally:
 state, w = {}, World()
 done = run(state, w, [doc('dev', 'build-1', at=NOW - 30), doc('site', 'build-1', at=NOW - 20),
                       doc('discord', 'build-1', at=NOW - 10)])
-yes('a release that reached dev, the site and the bot is one post, in the dev updates channel',
+yes('a release that reached dev, the site and the bot is one post, in #staff-news',
     done == [('dev', 'build-1', 'post')] and len(w.posts) == 1 and w.posts[0][0] == 'dev')
 yes('it is written down with its message', state['said']['dev']['build-1']['message'] == 501 and w.saves == 1)
 run(state, w, [doc('dev', 'build-1')])
@@ -200,12 +205,38 @@ yes('  the build changes touched the game server, the launcher, voice and Discor
     info['areas'] == ['game server', 'launcher', 'voice', 'Discord'])
 yes('  the change that touched only the bot, the site, docs and tests is a Main Server change, with its note',
     info['live'] == [(5934, ('React to the rules to get in', ['- Reacting gives Member.']), ['site', 'Discord'])])
+if shutil.which('pwsh'):
+    notes = bot.pr_release_notes([
+        'release note: Lower case counts\n- As the check reads it.',
+        '<!-- Release note: hidden -->\n**Release note:** Bold counts',
+        'Release note: none',
+        'No line here.'])
+    yes('the note is PrNote.Read\'s: any case, outside comments, none and no line are nothing (#6004)',
+        notes == [('Lower case counts', ['- As the check reads it.']), ('Bold counts', []), None, None])
+else:
+    print('SKIP  no pwsh here to compile tools/ReleaseNotes/NoteRules.cs with')
+yes('  and with no bodies the rules are not asked', bot.pr_release_notes([]) == [])
+def _text(path):
+    with open(path, encoding='utf-8') as fh:
+        return fh.read()
+
+
+_bot_dir = os.path.join(HERE)
+_readers = [f for f in os.listdir(_bot_dir) if f.endswith('.py')
+            and re.search(r'Release note:\(', _text(os.path.join(_bot_dir, f)))]
+yes('  nothing in bot/ reads the line itself (got %r)' % (_readers,), _readers == [])
+_root = os.path.dirname(HERE)
+_install = _text(os.path.join(_root, 'scripts', 'deploy', 'Install-Bot.ps1'))
+_part = _text(os.path.join(_root, 'scripts', 'release', 'App-Part.ps1'))
+yes('  NoteRules.cs goes to the box beside the bot, by Install-Bot.ps1 and in the bot\'s Release part',
+    "$send['NoteRules.cs'] = (Join-Path $Repo 'tools\\ReleaseNotes\\NoteRules.cs')" in _install
+    and "Add-One 'NoteRules.cs' 'tools/ReleaseNotes/NoteRules.cs'" in _part)
 yes('  a tag that is not a build Release is not read', bot.release_about('main-build-1.3.20', get=fake_get) is None)
 yes('a Main Server change is only the bot or the site, with docs and tests beside',
     bot.is_main_server_change(['bot/bot.py', 'docs/x.md']) and bot.is_main_server_change(['site/lib/x.js'])
     and not bot.is_main_server_change(['bot/bot.py', 'scripts/x.ps1'])
     and not bot.is_main_server_change(['docs/x.md', 'tests/y.js']) and not bot.is_main_server_change([]))
-ms = json.load(open(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
+ms = json.loads(_text(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
 yes('  the same paths Collect-ReleaseNotes.ps1 reads',
     sorted(ms['live']) == sorted(p for p, a in bot.AREAS if a in bot.LIVE_AREAS)
     and tuple(ms['neutral']) == bot.NEUTRAL)
@@ -273,10 +304,10 @@ yes('the record keeps the newest 200 a channel', len(state['said']['dev']) == bo
 src = harness_bot.source()
 yes('the loop is started with the others', 'asyncio.create_task(watch_release_news())' in src)
 yes('dev news goes to the id in dev-channel.txt',
-    bot.DEV_NEWS_ID == int(open(os.path.join(HERE, 'dev-channel.txt')).read().strip()))
+    bot.DEV_NEWS_ID == int(_text(os.path.join(HERE, 'dev-channel.txt')).strip()))
 # #news was named by no file until 9 Nov, so no main release was ever posted.
 yes('main news goes to the id in news-channel.txt, which is there',
-    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(open(os.path.join(HERE, 'news-channel.txt')).read().strip()))
+    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(_text(os.path.join(HERE, 'news-channel.txt')).strip()))
 yes('the folder is the one the agent writes', bot.NEWS_DIR == r'C:\Thornswood-Deploys\for-bot'
     or os.environ.get('THORNSWOOD_NEWS_DIR'))
 

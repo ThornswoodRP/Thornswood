@@ -47,6 +47,20 @@ anything outside the harnesses opened the checkout while it ran, and when a
 file changes in place in a folder it listed, because a Windows listing
 gives every entry's size and times.
 
+## Contents
+
+- [The answer first](#the-answer-first)
+- [1. What is proved, and on what premises](#1-what-is-proved-and-on-what-premises)
+- [2. The map: its format and where it lives](#2-the-map-its-format-and-where-it-lives)
+- [3. How the map is made and kept true](#3-how-the-map-is-made-and-kept-true)
+- [4. Forcing rules: a change to any of these runs the whole gate](#4-forcing-rules-a-change-to-any-of-these-runs-the-whole-gate)
+- [5. Who always runs, and why (measured, 556 gate harnesses)](#5-who-always-runs-and-why-measured-556-gate-harnesses)
+- [6. Measured savings over the last 40 merges](#6-measured-savings-over-the-last-40-merges)
+- [7. Risks](#7-risks)
+- [8. Wiring, as first sketched for the Linux map (superseded by section 10)](#8-wiring-as-first-sketched-for-the-linux-map-superseded-by-section-10)
+- [9. What waits on a decision or a measurement](#9-what-waits-on-a-decision-or-a-measurement)
+- [10. How it is wired (option A, 22 Oct 2026)](#10-how-it-is-wired-option-a-22-oct-2026)
+
 ## The answer first
 
 1. **It is provably safe only on Linux.** strace sees every path a harness

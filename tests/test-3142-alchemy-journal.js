@@ -187,7 +187,7 @@ yes('J5 an ingredient whose record is gone stays on the page, with effects null,
       /if \(!creating\(\) && alchemyView\(\)\) sections\.push\('alchemy'\);/.test(SK) &&
       SK.indexOf("sections.push('alchemy')") > SK.indexOf("sections.push('body')"));
   yes('U4 nothing on it is sent: no Confirm and no rows',
-      /section !== 'body' && section !== 'alchemy'(?: && section !== 'college')?\);/.test(SK) && /if \(section === 'alchemy'\) return 0;/.test(SK) &&
+      /section !== 'body' && section !== 'alchemy'(?: && section !== 'college')?(?: && section !== 'contracts')?\);/.test(SK) && /if \(section === 'alchemy'\) return 0;/.test(SK) &&
       /else if \(section === 'alchemy'\) drawAlchemy\(\);/.test(SK));
 
   // The draw itself, over a stand-in page.

@@ -274,7 +274,10 @@ def gh(url):
     path = url.split('?')[0]
     if path.endswith('/repos/' + bot.KNOWN_REPO):
         return {'full_name': bot.KNOWN_REPO}
-    if path.endswith('/comments') or path.endswith('/timeline'):
+    if path.endswith('/comments'):      # the post's words come from this comment
+        return [{'body': 'Known issue: %s\nWhat happens: it sinks.' % ISSUE['title'],
+                 'created_at': ISSUE['updated_at']}]
+    if path.endswith('/timeline'):
         return []
     if '/issues/' in path:
         return ISSUE

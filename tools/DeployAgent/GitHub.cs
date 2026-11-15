@@ -46,6 +46,9 @@ public sealed class RunApproval
 
 public sealed class Release
 {
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("upload_url")] public string UploadUrl { get; set; } = "";
+    [JsonPropertyName("created_at")] public DateTimeOffset CreatedAt { get; set; }
     [JsonPropertyName("tag_name")] public string TagName { get; set; } = "";
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("body")] public string Body { get; set; } = "";
@@ -196,6 +199,47 @@ public sealed class GitHub(string api, string repo, ITokenSource tokens, HttpCli
 
     sealed class Ref { [JsonPropertyName("ref")] public string Name { get; set; } = ""; }
 
+    /// <summary>Every draft Release whose tag starts with prefix (#5191: the
+    /// content builds). A draft has no tag, so the tag lookup never finds one
+    /// and only the list does, and only for a token that may write Contents.
+    /// Pages of 100 until a short one.</summary>
+    public async Task<List<Release>> Drafts(string prefix, CancellationToken ct)
+    {
+        var all = new List<Release>();
+        for (var page = 1; page <= 50; page++)
+        {
+            var one = await Call<List<Release>>(HttpMethod.Get, $"{RepoPath}/releases?per_page=100&page={page}", null, ct);
+            all.AddRange(one.Where(r => r.Draft && r.TagName.StartsWith(prefix, StringComparison.Ordinal)));
+            if (one.Count < 100) break;
+        }
+        return all;
+    }
+
+    /// <summary>Makes a draft Release: never published, so it has no tag and
+    /// no reader but a writer of this repository sees it.</summary>
+    public Task<Release> CreateDraft(string tag, string commit, string name, string body, CancellationToken ct) =>
+        Call<Release>(HttpMethod.Post, $"{RepoPath}/releases",
+            new Dictionary<string, object> { ["tag_name"] = tag, ["target_commitish"] = commit, ["name"] = name, ["body"] = body, ["draft"] = true }, ct);
+
+    public Task DeleteRelease(long id, CancellationToken ct) =>
+        Call<bool>(HttpMethod.Delete, $"{RepoPath}/releases/{id}", null, ct);
+
+    /// <summary>Puts one file on a Release, at the upload address GitHub gave
+    /// with it (its {?name,label} template cut off).</summary>
+    public async Task Upload(Release r, string name, string path, CancellationToken ct)
+    {
+        var at = r.UploadUrl;
+        var brace = at.IndexOf('{');
+        if (brace >= 0) at = at[..brace];
+        if (at == "") throw new InvalidDataException($"the Release {r.TagName} has no upload address");
+        using var req = await Request(HttpMethod.Post, at + "?name=" + Uri.EscapeDataString(name), "application/vnd.github+json", ct);
+        await using var file = File.OpenRead(path);
+        req.Content = new StreamContent(file);
+        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var res = await http.SendAsync(req, ct);
+        if (!res.IsSuccessStatusCode) throw new GitHubException("POST", new Uri(at).AbsolutePath, (int)res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+    }
+
     /// <summary>Saves one asset to a file, refusing more bytes than the asset
     /// says it has. GitHub answers with a redirect to its file store, and
     /// HttpClient drops the Authorization header when a redirect leaves the
@@ -251,6 +295,13 @@ public sealed class AppTokens(string api, string repo, string stateDir, HttpClie
     /// token so an App without Issues write costs only the filing.</summary>
     public static readonly IReadOnlyDictionary<string, string> IssuesWrite =
         new SortedDictionary<string, string> { ["issues"] = "write" };
+
+    /// <summary>What putting a content build on a draft Release asks (#5191):
+    /// Contents to write, and nothing else, minted apart from the service's
+    /// own token and only when the agent looks after the content build.
+    /// Patrick's B on q-5191-box-build-upload (12 Nov 2026).</summary>
+    public static readonly IReadOnlyDictionary<string, string> ContentsWrite =
+        new SortedDictionary<string, string> { ["contents"] = "write" };
 
     readonly IReadOnlyDictionary<string, string> asks = permissions ?? Permissions;
 

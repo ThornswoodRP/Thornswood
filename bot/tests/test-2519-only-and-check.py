@@ -77,6 +77,12 @@ spec = importlib.util.spec_from_file_location(
     'build_discord_2519', os.path.join(HERE, 'Build-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
+
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
 discord = B.discord
 
 
@@ -193,7 +199,7 @@ class Guild(object):
 
 
     async def welcome_screen(self):
-        # A Welcome Screen with no channels on it (#start-here, 13 Nov).
+        # A Welcome Screen with no channels on it (#start-here, 12 Nov).
         return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
 
     async def onboarding(self):

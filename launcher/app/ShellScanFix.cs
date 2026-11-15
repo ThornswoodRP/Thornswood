@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 
 namespace Thornswood
@@ -51,13 +52,16 @@ namespace Thornswood
         /// also walks the game folder's record for lost files and reads the
         /// shortcuts (Upkeep.Look). The update lines are the update check's
         /// own answer, the same one the card above Play goes by, so the two
-        /// cannot disagree about whether an update is waiting.
+        /// cannot disagree about whether an update is waiting. Starts
+        /// RunScanAsync (Begin).
         /// </summary>
-        static void RunScan(bool pressed)
+        static void RunScan(bool pressed) { Begin(RunScanAsync(pressed)); }
+
+        static async Task RunScanAsync(bool pressed)
         {
             if (fixing) return;
             List<Issue> plugins = null;
-            Waiting(delegate
+            await OffThread(delegate
             {
                 plugins = Verify.Run(cfg);
                 Upkeep.Look(cfg, pressed);
@@ -346,7 +350,10 @@ namespace Thornswood
         /// <param name="afterUpdate">True when an update has just gone in or failed (Install now, the automatic update, the first start of a new launcher): the log says so, and FixRest never takes that same update a second time (#3201).</param>
         /// <param name="afterVortex">True when Vortex has just finished the collection revision the card opened (FixAfterVortex, #5200): the log says so, and FixRest leaves a waiting update on the card, where UpdateBySelf already decided about it.</param>
         /// <param name="afterMake">True on the first start in Thornswood's own folder after it was made (OwnGameAtStart, #5937): the log says so, and Fix runs as a press of it would, so the install's last steps (Thornswood-Last.esp, the plugin order, the animation and body files) need no press.</param>
-        static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)
+        static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false) { Begin(RunFixAsync(afterUpdate, afterVortex, afterMake)); }
+
+        /// <summary>Fix, awaited: RunFix's parameters, and what each means is on RunFix.</summary>
+        static async Task RunFixAsync(bool afterUpdate, bool afterVortex, bool afterMake)
         {
             if (fixing) return;
             // Nothing is written into a folder while it is being made or
@@ -362,7 +369,7 @@ namespace Thornswood
             if (playing) { Log("Quit the game first. Skyrim writes the plugin list back when it exits, which would undo the fix."); return; }
             // A Skyrim left behind with no window is closed; one on screen is
             // asked about, because it is somebody's session.
-            if (!ClearStuckGame(true)) return;
+            if (!await ClearStuckGame(true)) return;
             if (Checks.GameRunning())
             {
                 Log("Close Skyrim first. It writes the plugin list back when it exits, which would undo the fix.");
@@ -381,7 +388,7 @@ namespace Thornswood
             List<Issue> plugins = null, rest = null;
             try
             {
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     plugins = Verify.Run(cfg);
                     rest = Upkeep.Look(cfg, true);
@@ -410,9 +417,9 @@ namespace Thornswood
             // own files are judged on the folder as Vortex has it now. Fix
             // carries on whether it succeeds or not, and the scan after says.
             if (Has(rest, IssueKind.Behind) &&
-                StartOwnGame(false, true, delegate { FixRest(afterUpdate, afterVortex); }, delegate { FixRest(afterUpdate, afterVortex); }))
+                StartOwnGame(false, true, delegate { Begin(FixRest(afterUpdate, afterVortex)); }, delegate { Begin(FixRest(afterUpdate, afterVortex)); }))
                 return;
-            FixRest(afterUpdate, afterVortex);
+            await FixRest(afterUpdate, afterVortex);
         }
 
         /// <summary>
@@ -421,14 +428,14 @@ namespace Thornswood
         /// check's last answer (pendingLauncher), as the card above Play is.
         /// <paramref name="afterUpdate"/> and <paramref name="afterVortex"/> are RunFix's.
         /// </summary>
-        static void FixRest(bool afterUpdate, bool afterVortex)
+        static async Task FixRest(bool afterUpdate, bool afterVortex)
         {
             var said = new List<string>();
             Action<string> say = delegate(string m) { lock (said) said.Add(m); };
             List<Issue> found = null;
             try
             {
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     found = new List<Issue>(Verify.Run(cfg));
                     found.AddRange(Upkeep.Look(cfg, true));
@@ -439,7 +446,7 @@ namespace Thornswood
             foreach (string m in said) Log(m);
 
             // Scan again: this is the answer, not what Fix did.
-            List<Issue> plugins = Rescan();
+            List<Issue> plugins = await Rescan();
 
             // The shortcuts still not right after Ensure: Windows' own pictures,
             // which only an Explorer restart clears. Asked first, because the
@@ -453,10 +460,10 @@ namespace Thornswood
                 if (yes)
                 {
                     string repaired = null;
-                    try { Waiting(delegate { repaired = Icons.Repair(); }); }
+                    try { await OffThread(delegate { repaired = Icons.Repair(); }); }
                     catch (Exception ex) { repaired = "Could not refresh the icon (" + ex.Message.TrimEnd('.') + ")."; }
                     Log(repaired);
-                    plugins = Rescan();
+                    plugins = await Rescan();
                 }
             }
 
@@ -518,11 +525,7 @@ namespace Thornswood
                 {
                     Log((afterUpdate && updateTried != null ? "A newer update went out while that one was going in. Fix is taking it now, last." : "Fix is taking the update now, last.") +
                         " The launcher restarts into the new one when it is in.");
-                    RunUpdate(delegate(bool wentIn)
-                    {
-                        RunScan(true);
-                        if (Has(Upkeep.LastIssues, IssueKind.Skyrim)) RunDowngrade();
-                    });
+                    RunUpdate(delegate(bool wentIn) { Begin(ScanAfterFixUpdate()); });
                     return;
                 }
                 if (Upkeep.LastIssues != null && !leftOnCard)
@@ -532,13 +535,25 @@ namespace Thornswood
             if (Has(Upkeep.LastIssues, IssueKind.Skyrim)) RunDowngrade();
         }
 
+        /// <summary>
+        /// After the update Fix took last failed (one that went in restarts
+        /// the launcher): a full scan, and the Downgrade when Skyrim is still
+        /// on another build. The scan is awaited, so the Downgrade is judged
+        /// on its answer.
+        /// </summary>
+        static async Task ScanAfterFixUpdate()
+        {
+            await RunScanAsync(true);
+            if (Has(Upkeep.LastIssues, IssueKind.Skyrim)) RunDowngrade();
+        }
+
         /// <summary>Verify and Upkeep again. Returns Verify's list; Upkeep's is Upkeep.LastIssues.</summary>
-        static List<Issue> Rescan()
+        static async Task<List<Issue>> Rescan()
         {
             List<Issue> plugins = null;
             try
             {
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     plugins = Verify.Run(cfg);
                     Upkeep.Look(cfg, true);

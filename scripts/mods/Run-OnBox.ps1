@@ -64,6 +64,14 @@
                   never lists (own_plugins.py). The builders that take a
                   plugin list read the load order the server runs, not
                   whichever profile a PC last had
+  With -Collection (Build-ContentOnBox.ps1, #5191) the run is built from
+  the commit's record instead of the server: data\ takes the plugins of the
+  collection's store at the record's revision (CollectionStore.ps1, the
+  folder -Collection names) over the server's, and plugins.txt is the load
+  order the commit records, moved to that revision (ContentPaths.ps1,
+  Get-ThornswoodContentOrder). The server's folder then gives only what no
+  collection installs, the game's own masters among them. A build for a
+  revision no server runs yet reads that revision's plugins in its order.
   '{data}' in an argument is the data folder, '{plugins}' the plugin list and
   '{repo}' the repository folder, all on the box. THORNSWOOD_DATA names the
   data folder too, for the tools that read it. The tool runs at below normal
@@ -102,7 +110,12 @@ param(
     # repository path, as well as this checkout. The deploy gate's
     # Rebuild-ContentTables verb sets it to the run's out folder, so what the
     # box wrote goes back to the session that asked (Rebuild-OnBox.ps1).
-    [string]$Out = ''
+    [string]$Out = '',
+
+    # The box's store of the collection's plugins at the revision
+    # records\collection-plugins.json names (CollectionStore.ps1): the run is
+    # then built from the commit's record, the header says how.
+    [string]$Collection = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -137,6 +150,14 @@ $serverRoot = $(if ($Server -eq 'main') { 'C:\Thornswood-Server' } else { 'C:\Th
 $content = Get-ThornswoodContentPaths -Repo $repo -Tool $tool
 $paths = $content.Paths
 $watch = $content.Watch
+$order = @()
+if ($Collection) {
+    $recordOrder = Get-ThornswoodContentOrder -Repo $repo
+    $order = $recordOrder.Names
+    Say ('the load order this commit records, at collection ' + $recordOrder.Slug + ' revision ' + $recordOrder.Revision + ': ' + $order.Count + ' plugins' +
+        $(if ($recordOrder.Added.Count) { ', with ' + ($recordOrder.Added -join ', ') + ' added' } else { '' }) +
+        $(if ($recordOrder.Dropped.Count) { ', without ' + ($recordOrder.Dropped -join ', ') } else { '' })) 'DarkGray'
+}
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
@@ -153,13 +174,13 @@ try {
     $runFar = $box.Far
     foreach ($l in $box.Said) { Say ('box  ' + $l) 'DarkGray' }
     if (-not $box.Made) { throw ('could not make ' + $run + ' on the box. What ssh said is above.') }
-    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch
+    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection
     # The run's own script goes into its folder, so it goes with the folder.
     $farFile = Join-Path $local 'run.ps1'
     [IO.File]::WriteAllText($farFile, $farRun, (New-Object Text.UTF8Encoding($true)))
     Send-ThornswoodArtifactFile $artifact.Zip $target $ssh ($runFar + '/tools.zip')
     Send-ThornswoodArtifactFile $farFile $target $ssh ($runFar + '/run.ps1')
-    Say ("running $tool on the box, against the $Server server's plugins") 'Cyan'
+    Say ("running $tool on the box, against the $Server server's plugins" + $(if ($Collection) { ' with the collection''s store over them, in the order this commit records' } else { '' })) 'Cyan'
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { $lines = @(Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Bypass -Script ("& '" + $run + "\run.ps1'") | Where-Object { $_ -is [string] } | ForEach-Object { $_.Trim() }) } finally { $ErrorActionPreference = $eap }
