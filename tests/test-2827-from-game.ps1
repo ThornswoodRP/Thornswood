@@ -31,8 +31,10 @@
     5. The recipes that ship come to the files that shipped: their sha256 and
        sizes are the ones on record for those files (a1dd4595..., 47cfe0f2...,
        09d8ae92...).
-    6. The same files compile at C# 5, which is what Windows PowerShell 5.1's
-       Add-Type compiles, because scripts\release\Go.ps1 runs them there.
+    6. The same files are every launcher\app\FromGame*.cs, the ones
+       scripts\release\Go.ps1 loads with Add-Type, and that Add-Type takes
+       them in pwsh 7, where Go.ps1 runs (tests\Launcher-Csc.ps1
+       Test-ScriptAddType, #5968).
     7. By the source: the three, then the collection's six menus, are
        FromGame.Files, Ship-Rules.ps1 $ShipMadeFromGame then
        $ShipMadeFromMods, and OwnGameKinds.cs MadeInGame alike; no release list
@@ -48,15 +50,14 @@
 
   Reads the repository; writes only its own folder under the scratch folder
   and its builds under out\harness. Needs Python (the fixture is plain
-  Python) and the .NET SDK the launcher builds with, which also builds the C#
-  5 copy against the .NET Framework (tests\Framework-Csc.ps1), so all of it
-  runs on every machine.
+  Python) and the .NET SDK the launcher builds with, so all of it runs on
+  every machine.
 #>
 [CmdletBinding()]
 param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')  # the .NET SDK the launcher builds with, and C# 5 against the .NET Framework (#498, #4823)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')  # the .NET SDK the launcher builds with (#498, #4823), and Test-ScriptAddType (#5968)
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
 if (-not $Scratch) { $Scratch = [IO.Path]::GetTempPath() }
 $App = Join-Path $Repo 'launcher\app'
@@ -289,16 +290,19 @@ namespace Thornswood
     $sources = @($real | ForEach-Object { (Resolve-Path -LiteralPath $_).Path }) +
         @((Join-Path $Fixture 'FixtureMenu.cs'), (Join-Path $Fixture 'FixtureBoard.cs'))
     # At the build's C# version with the .NET SDK, the program that runs below;
-    # and at C# 5 against the .NET Framework, as Windows PowerShell 5.1's
-    # Add-Type compiles them for Go.ps1, built only.
+    # and as Go.ps1's own Add-Type compiles every FromGame*.cs, in pwsh 7.
     $exe = $null
     try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.FromGameTest' -Source $driver -File $sources }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
     Yes "the launcher's FromGame files, the fixture's recipes and the driver compile at C# $LauncherLangVersion, as the build does" ($null -ne $exe)
-    $five = $null
-    try { $five = Build-FrameworkCode -Exe -Main 'Thornswood.FromGameTest' -Source $driver -File $sources }
+    $goLoads = @(Get-ChildItem -LiteralPath $App -Filter 'FromGame*.cs' -File | ForEach-Object { $_.Name } | Sort-Object)
+    Yes 'the files here are every FromGame*.cs, the ones Go.ps1 loads' (($goLoads -join ',') -eq (@($real | ForEach-Object { [IO.Path]::GetFileName($_) } | Sort-Object) -join ','))
+    $goText = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Go.ps1'))
+    Yes '  and Go.ps1 loads them so, with Add-Type in pwsh 7' ($goText.Contains("-Filter 'FromGame*.cs'") -and $goText.Contains('Add-Type -Path $fromGameCs') -and $goText -match '(?m)^#Requires -Version 7')
+    $added = $false
+    try { Test-ScriptAddType -File $real; $added = $true }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
-    Yes 'and at C# 5 against the .NET Framework, as Windows PowerShell 5.1''s Add-Type compiles them for Go.ps1' ($null -ne $five)
+    Yes ('  and the Add-Type of pwsh ' + $PSVersionTable.PSVersion + ' compiles them, as Go.ps1 does') $added
     if (-not $exe) { Done }
 
     $zdir = Join-Path $work 'zlib'
