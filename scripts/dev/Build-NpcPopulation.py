@@ -16,7 +16,7 @@ import pathlib
 import re
 import struct
 from MerchantRoster import apply_roster, BOOK_HOLDS, ROLES
-import gamemode_source
+import gamemode_tables
 import own_plugins
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -490,8 +490,11 @@ def main():
         json.dump(payload, output, ensure_ascii=False, separators=(',', ':'))
         output.write('\n')
     print(json.dumps(payload['summary']))
+    # The table the gamemode reads is written with the catalogue every time,
+    # so the two never part (#5191): it was once only under --write-runtime,
+    # and a chain run left the runtime catalogue behind npc-population.json.
+    write_runtime(payload)
     if args.write_runtime:
-        write_runtime(payload)
         write_catalogues(payload)
 
 
@@ -509,13 +512,10 @@ def write_runtime(payload):
                   (1 if r.get('swims') else 0) | (2 if r.get('ambush') else 0), r['species']] +
                  ([r['displayName']] if 'displayName' in r else [])
                  for r in payload['npcs'] if r['keep']]}
-    target = str(HERE.parent.parent / 'game/gamemode')
-    source = gamemode_source.read(target)
-    begin = source.index('// NPC POPULATION DATA BEGIN')
-    end = source.index('// NPC POPULATION DATA END')
-    block = '// NPC POPULATION DATA BEGIN\nconst NPC_POPULATION_DATA = ' + json.dumps(
-        compact, ensure_ascii=False, separators=(',', ':')) + ';\n'
-    gamemode_source.write(target, source[:begin] + block + source[end:])
+    # The gamemode reads it as table('NPC_POPULATION_DATA') where it runs (#5191,
+    # stage 4): game/gamemode/npc-population-data.ts carries the call, not
+    # the catalogue, so a population rebuild changes no gamemode source.
+    gamemode_tables.write('NPC_POPULATION_DATA', compact)
 
 
 # docs/HUNTING-SPOTS.csv is every retained animal with what its body gives.

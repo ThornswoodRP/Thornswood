@@ -36,7 +36,8 @@
 //    lines, and the gate and Load-Box.ps1 let quest through;
 //  - the box's copy (New-LoadServer.js --from, against a stand-in for an
 //    installed server): its plugins by full path, its NPC switch and
-//    gameplay switches kept, nothing else of the server's settings, its own
+//    gameplay switches kept, its merchant ledger and hold price lists
+//    copied, nothing else of the server's settings, its own
 //    ports and pass key, and its refusals of the server's own port and a
 //    plugin that is not there; and Load-Test.js stops for anybody on a
 //    watched server, or one that does not answer.
@@ -342,6 +343,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.json'), '{"version":1}');
     fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.initialized'), '1');
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
+    const BOOKS = JSON.stringify({ books: [{ id: 'b1' }, { id: 'b2' }], ledgers: { winterhold: { b1: {}, b2: {} }, whiterun: { b1: {} }, riften: {} } });
+    fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -357,7 +360,15 @@ async function boxChecks() {
       fs.readFileSync(path.join(out, 'data', 'scripts', 'MarkerScript.pex'), 'utf8') === 'pex' && !fs.lstatSync(path.join(out, 'data', 'scripts')).isSymbolicLink());
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
-      !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() && fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'door.json,merchant-ledger.initialized,merchant-ledger.json');
+      !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() &&
+      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('  and a copy of the hold price lists the traders quote every commission from, counted by hold and naming nobody (#6180)',
+      fs.readFileSync(path.join(out, 'private', 'books.json'), 'utf8') === BOOKS && r.prices.lists === 3 && r.prices.holds.join(',') === 'whiterun 1,winterhold 2' &&
+      !fs.lstatSync(path.join(out, 'private', 'books.json')).isSymbolicLink());
+    fs.unlinkSync(path.join(inst, 'private', 'books.json'));
+    const bare = server.fromInstalled({ from: inst, out: path.join(tmp, 'c8'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
+    yes('  a server nobody has submitted a price list to gives a copy with none, and says so', bare.prices.lists === 0 && !fs.existsSync(path.join(tmp, 'c8', 'private', 'books.json')));
+    fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);

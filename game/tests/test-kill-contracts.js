@@ -6,7 +6,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const compact={keep:population.npcs.filter(r=>r.keep).map(r=>[r.ref,r.base,r.world||r.cell,r.pos,r.leash,
   r.returnMinutes,r.role,r.habitat,r.tier,r.cap,r.populationBucket,0,r.species])};
 const mode=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../game/gamemode.js'),'utf8');
-const runtime=JSON.parse(/const NPC_POPULATION_DATA = ([^\r\n]+);/.exec(mode)[1]);
+const runtime=require('../../tests/gamemode-tables.js').inGamemode(mode,'NPC_POPULATION_DATA');
 function world() {
   const states=new Map(),ids=new Map();
   population.npcs.filter(r=>r.keep).forEach((r,i)=>{

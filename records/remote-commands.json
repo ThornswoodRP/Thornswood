@@ -221,6 +221,15 @@
                       "reason":  "reload block; replaces gamemode.js and the stamp in the server folder, stops nothing"
                   },
                   {
+                      "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote \"Remove-Item -LiteralPath \u0027$stageWin\u0027 -Recurse -Force -EA SilentlyContinue\" | Out-Null",
+                      "does":  "takes away an -OrderOnly stage when the dev server already runs that order (#6166)",
+                      "class":  "stage",
+                      "reason":  "writes or checks a stage folder or file"
+                  },
+                  {
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",

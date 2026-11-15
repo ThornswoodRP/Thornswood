@@ -20,7 +20,8 @@
        C:\Thornswood-Server, dev is C:\Thornswood-Server-Dev) in a folder of
        its own under the account's temp folder (New-LoadServer.js --from):
        the server's program and gamemode.js and the plugins its loadOrder
-       names, read and never written, with its own port, its own voice
+       names, read and never written, copies of its merchant ledger and the
+       hold price lists the traders quote from, its own port, its own voice
        service on 127.0.0.1, an empty world and a pass key made for the run;
     3. runs Load-Test.js on it, which also stops before each step if
        anybody joins either server, and at 60% of the box's CPU, because the

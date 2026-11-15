@@ -53,7 +53,8 @@ build** (the engine).
 | --- | --- |
 | Dev gamemode | Applied by the agent: a merge that changes `game/gamemode.js` makes a signed Release and a Deployment, and the agent reloads the dev server's gamemode with nobody dropped. The gate's `Deploy-Release` verb puts in any such Release by its tag. |
 | Dev engine (the server build) | Applied by the agent (#5219): every Release carries the server build its commit records, and when dev runs another one the agent stops dev, swaps in the build and the gamemode together and starts it under a hold. So a merged engine pin reaches dev with no Publish-Server and no Deploy-DevGamemode. See "A new server build" below. |
-| Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection-plugins.json`, `records/collection-dropped.json`, `game/data/last-plugin.json` or `.recipe`, `game/content/Thornswood-Content.esp`), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows`, the tested move a person runs with Box-Run. See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
+| Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection-plugins.json`, `records/collection-dropped.json` or `game/data/last-plugin.json`; our own plugins, Thornswood-Content.esp and Thornswood-Last.esp, are the Release's and go in with it, #6175), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the Deployment's commit>`, the tested move a person runs with Box-Run, which sends nothing of the gamemode (#6166). See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
+| Server plugins | Applied with every server Deployment (#6175): the Release's game files carry `Thornswood-Content.esp` and `Thornswood-Last.recipe` from the box's content build, and when the server's `plugins\Thornswood-Content.esp` or `plugins\Thornswood-Last.esp` is not that Release's, the agent puts in the Release's content plugin and the Last plugin it makes from the Release's recipe, out of the server's other plugins and the string tables of `C:\Thornswood-GameData` (the launcher's own `LastPlugin.cs`, compiled in), by a stop, swap and start that keeps the server build when the Release records the one the server runs. A recipe the server's plugins cannot make stops the Deployment before anything is touched. Before this, on 15 Nov 2026, main took build-1.3.69's box-built tables over its committed plugins, and every launcher on it refused Play. |
 | Main | Applied by the agent once `Install-DeployAgent -Main` has run (#5181): the same Release dev ran, after Patrick approves its promotion on GitHub. See "Main" below. |
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
@@ -87,15 +88,23 @@ last moved dev's order to. When the Deployment's commit is another one, it
 asks GitHub to compare the two. When the compare names one of the files the
 order is made from, or GitHub cannot say in full (no record yet, a compare
 over 300 files, a commit GitHub does not know), it runs
-`Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows`: the order from
-`game/data/last-plugin.json`, the collection's plugins from the box's store
-of the revision `records/collection-plugins.json` names, each held to its
-sha256, and a drop only where `records/collection-dropped.json` allows it.
-When that ends with anything but 0, the Deployment fails with the gamemode
-in and says the plugins are not, and the record is not moved, so the next
-Deployment moves them again. The gate runs main as it is then, so when main
-has moved past the Deployment the agent records the commit the gate said it
-ran, and dev has that commit's order and gamemode until its own Deployment.
+`Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the
+Deployment's commit>`: the order from `game/data/last-plugin.json`, the
+collection's plugins from the box's store of the revision
+`records/collection-plugins.json` names, each held to its sha256, and a drop
+only where `records/collection-dropped.json` allows it. `-OrderOnly` sends
+no gamemode.js, stamp or tables, none of our own plugins (it neither sends
+Thornswood-Content.esp nor makes Thornswood-Last.esp) and writes no deploy
+record, so the Release's stay as the agent put them in; a moved order is a restart, and an
+order already in stops nothing. The gate runs main as it is then, so `-At`
+holds main's records of the order to the Deployment's: when any file the
+order is made from differs between the two, it says `NOT THIS COMMIT'S
+ORDER`, sends nothing, and the Deployment fails saying the plugins are not
+this Release's. When the move ends with anything but 0, the Deployment fails
+with the gamemode in and says the plugins are not. Either way the record is
+not moved, so the next Deployment moves them. Until #6166 (15 Nov 2026) the
+step ran the whole dev deploy at main's tip, which put main's gamemode and
+the committed tables over the Release's.
 
 **The parity check.** After the status is set, the agent asks the gate for
 `Check-ProdParity`, reads each `REVIEW` row and opens an issue labelled

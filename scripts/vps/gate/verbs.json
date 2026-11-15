@@ -114,7 +114,9 @@
         "Wait": "^[0-9]{1,4}$",
         "PutBack": "switch",
         "Restart": "switch",
-        "ShipFollows": "switch"
+        "ShipFollows": "switch",
+        "OrderOnly": "switch",
+        "At": "^[0-9a-f]{40}$"
       }
     },
     "Deploy-Docs": {

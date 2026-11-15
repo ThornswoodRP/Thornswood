@@ -14,9 +14,9 @@
 
   in the market stalls block. The stalls of game\data\market-stalls.json go
   into the gamemode's MARKET_STALL_TABLE table (game\gamemode-tables, #5191),
-  which the gamemode reads where it runs, and the same stalls into the front plugin
-  (game\plugins\thornswood-front.js, between its own MARKET STALL SPOTS
-  markers) as STALL_SPOTS, which puts the lock key's line up at a stall:
+  which the gamemode reads where it runs, and the same stalls into the front
+  plugin's client table STALL_SPOTS (game\plugins\thornswood-table-stall-spots.js,
+  ClientTables.js), which puts the lock key's line up at a stall:
   [id, world or cell id, its file, x, y, z, reach].
 
   The markers are never moved by this script: a file without exactly one
@@ -26,9 +26,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const gamemodeSource = require('./gamemode-source.js');
 const TABLES = require('./GamemodeTables.js');
+const CLIENT = require('./ClientTables.js');
 const root = path.join(__dirname, '../..');
 const modePath = path.join(root, 'game/gamemode');
-const frontPath = path.join(root, 'game/plugins/thornswood-front.js');
 const tablePath = path.join(root, 'game/data/market-stalls.json');
 const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
 const tablesDir = opts['--tables'] || TABLES.DIR;
@@ -59,23 +59,20 @@ const stallTable = JSON.stringify(rows.map(function (r) {
   return { id: r.id, hold: r.hold, place: r.place, world: r.world, pos: r.pos, reach: r.reach };
 }));
 
-const oldFront = fs.readFileSync(frontPath, 'utf8').replace(/\r\n/g, '\n');
+// [id, world or cell id, its file, x, y, z, reach]
 const spots = rows.map(function (r) {
   const w = r.world.split(':');
-  return '    [' + JSON.stringify(r.id) + ', 0x' + w[0].toLowerCase() + ', ' + JSON.stringify(w[1]) + ', ' +
-    r.pos.join(', ') + ', ' + r.reach + ']';
+  return [r.id, parseInt(w[0], 16), w[1]].concat(r.pos, [r.reach]);
 });
-const front = between(oldFront, 'MARKET STALL SPOTS',
-  '  // Built by scripts\\dev\\Build-MarketStallsGamemode.js out of game\\data\\market-stalls.json. Do not hand edit.\n' +
-  '  const STALL_SPOTS = [' + (spots.length ? '\n' + spots.join(',\n') + '\n  ' : '') + '];\n  ', 'thornswood-front.js');
+const BY = 'scripts/dev/Build-MarketStallsGamemode.js';
 
 if (opts['--check']) {
-  if (mode !== oldMode || front !== oldFront || !TABLES.isCurrent('MARKET_STALL_TABLE', stallTable, tablesDir)) {
+  if (mode !== oldMode || !CLIENT.isCurrent('STALL_SPOTS', spots, BY) || !TABLES.isCurrent('MARKET_STALL_TABLE', stallTable, tablesDir)) {
     throw new Error('The market stall bundle or a stall table is stale. Run scripts/dev/Build-MarketStallsGamemode.js.');
   }
   console.log('PASS the market stall bundle, the MARKET_STALL_TABLE table and the front plugin\'s STALL_SPOTS match game/market-stalls.js and game/data/market-stalls.json');
 } else {
   gamemodeSource.write(modePath, mode);
-  fs.writeFileSync(frontPath, front);
+  CLIENT.write('STALL_SPOTS', spots, BY);
   TABLES.write('MARKET_STALL_TABLE', stallTable, tablesDir);
 }

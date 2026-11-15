@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const source=fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8'),ctx={};
+const source=require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8')),ctx={};
 vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('// NPC POPULATION POLICY BEGIN'),source.indexOf('// NPC POPULATION POLICY END')),ctx);
 for(const title of ['Coach Driver','Ferry Operator','Ship Captain']) {
  const calls=[],api={makeProperty(){},setNpcPlacementExclusions(){},getIdFromDesc:d=>({'1:Skyrim.esm':1,'a:Skyrim.esm':10,'3c:Skyrim.esm':60}[d]),
