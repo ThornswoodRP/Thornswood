@@ -99,8 +99,8 @@
 
 .PARAMETER Notes
   What customers read about this release: the launcher's News tab, the site
-  and #news for a main release, the dev launcher's News tab and the dev
-  updates channel for a dev release. Mandatory, and the only option taken by
+  and #news for a main release, the dev launcher's News tab and
+  #staff-news for a dev release. Mandatory, and the only option taken by
   position, so it can come first without its name. The first line is the
   title, a line starting with a dash becomes a bullet, and the rest becomes
   the body. The server's warning before the restart carries the title only.
