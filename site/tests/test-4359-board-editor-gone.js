@@ -24,7 +24,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -53,44 +52,15 @@ function scratch() {
   fs.writeFileSync(path.join(dir, 'data', 'linked.json'), JSON.stringify({ [ADMIN_D]: { id: ADMIN_D, name: 'Aela', profiles: [1001] } }));
   return { dir, secret };
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/* Waits for this run's site to say it is listening on its port (#1727). */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const mm = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (mm && Number(mm[1]) === port) end(null);
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error('the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(s) {
-  const port = await freePort();
+  let port = 0;
   const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  try { await listening(srv, port); }
+  try { await siteFiles.listening(srv).then((r) => (port = r.port, r)); }
   catch (e) {
     // A site that never said it was listening may still be running.
     if (srv.exitCode === null && srv.signalCode === null) {

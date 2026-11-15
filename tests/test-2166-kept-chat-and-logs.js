@@ -28,7 +28,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const crypto = require('crypto');
 const cp = require('child_process');
 const siteFiles = require('./site-files');
@@ -53,12 +52,6 @@ function grab(src, name) {
     else if (src[i] === '}') { d--; if (d === 0) return src.slice(at, i + 1); }
   }
   return '';
-}
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
 }
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const scratch = [];
@@ -109,10 +102,10 @@ async function keptChatOnASite() {
     line(777003, start + 60000, 'said in a session nobody kept')
   ].join('\n') + '\n');
 
-  const port = await freePort();
+  let port = 0;
   const srv = cp.spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'),
                                           THORNSWOOD_DEV_CHAT_DIR: path.join(dir, 'chat-dev') })
   });
@@ -126,7 +119,7 @@ async function keptChatOnASite() {
        all written by then however busy the machine is (#4082). The minute
        only bounds a site that never comes up. */
     for (let i = 0; i < 1200 && !up; i++) {
-      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { up = true; break; }
+      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { port = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }

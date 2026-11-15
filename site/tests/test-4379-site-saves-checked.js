@@ -43,7 +43,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -189,12 +188,6 @@ function ticket(id, name) {
 const OWNER = () => cookieFor(OWNER_ID, 'Owner');
 const TESTER_Q = () => '?ticket=' + encodeURIComponent(ticket(TESTER_ID, 'Tester'));
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 let PORT = 0;
@@ -250,11 +243,11 @@ const roster = () => ({ key: BOT_KEY, server: 'main',
   who: { '5001': { name: 'Hilde', race: 'Nord', female: true, trade: '', town: 'Whiterun', where: '', at: Date.now() } } });
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['-r', path.join(dir, 'stub.js'), '-r', path.join(dir, 'refuse.js'), 'server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'),
@@ -271,7 +264,7 @@ const roster = () => ({ key: BOT_KEY, server: 'main',
   try {
     let up = false;
     for (let i = 0; i < 200 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
+      if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }

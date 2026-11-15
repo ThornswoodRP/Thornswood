@@ -26,7 +26,6 @@ const REPO_DIR = require('path').join(__dirname, '..', '..');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const siteFiles = require('../../tests/site-files');
@@ -37,45 +36,6 @@ function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what); }
 }
-function freePort() {
-  return new Promise((resolve) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
-  });
-}
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } };
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-forbot-'));
@@ -84,17 +44,15 @@ const FOR_BOT = path.join(DATA, 'for-bot');
 const KEY = crypto.randomBytes(16).toString('hex');
 
 async function start() {
-  const PORT = await freePort();
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   let said = '';
   srv.stdout.on('data', (d) => { said += d; });
   srv.stderr.on('data', (d) => { said += d; });
-  const base = 'http://127.0.0.1:' + PORT;
-  let up = false;
-  try { await listening(srv, PORT); up = true; } catch (e) { said = e.message; }
+  let base = '', up = false;
+  try { base = 'http://127.0.0.1:' + (await siteFiles.listening(srv)).port; up = true; } catch (e) { said = e.message; }
   return { srv, base, up, said: () => said };
 }
 // A site that already stopped has no exit to wait for.

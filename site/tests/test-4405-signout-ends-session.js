@@ -28,7 +28,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -67,12 +66,6 @@ function signIn(id, name, made) {
 }
 
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 let PORT = 0;
 function ask(method, where, cookie) {
   return new Promise((done) => {
@@ -102,17 +95,17 @@ const reachesHub = async (cookie) => {
 };
 
 async function start() {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
                                           THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', (d) => { out += d; });
   for (let i = 0; i < 1200; i++) {
-    if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) return { srv, out: () => out };
+    if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { PORT = siteFiles.saidPort(out); return { srv, out: () => out }; }
     if (srv.exitCode !== null) break;
     await wait(50);
   }
