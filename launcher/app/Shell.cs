@@ -170,12 +170,18 @@ namespace Thornswood
         static Button[] navButtons;
         static Control[] pages;
 
+        // What Velo.LeaveCurrentFolder said, for launcher.log (#6129).
+        static string leftCurrentFolder;
+
         [STAThread]
         static void Main(string[] args)
         {
             // Velopack first (#4825): when it runs the exe about an install, an
             // update or an uninstall, this answers and the process ends here.
             Velo.Start(args, Uninstall.FromVelopack);
+            // Out of the folder an update moves aside, before anything is
+            // started from here (#6129). Said in launcher.log once it is open.
+            leftCurrentFolder = Velo.LeaveCurrentFolder();
 
             // PerMonitorV2 is in the application manifest (#463), and Avalonia
             // rescales on WM_DPICHANGED by itself; WindowFit keeps the window
@@ -236,11 +242,7 @@ namespace Thornswood
                         try { Paths.Init(Velo.InstallRoot); }
                         catch (Exception initEx) { Swallow.Note("Shell.Main, paths", initEx); }
                     }
-                    Action<string> log = delegate (string line)
-                    {
-                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
-                        catch (Exception logEx) { Swallow.Note("Shell.Main, log", logEx); }
-                    };
+                    Action<string> log = delegate (string line) { LauncherLog.Line(line); };
                     log("COULD NOT START: " + ex.ToString());
                     // The update check is otherwise asked from the window, so a
                     // launcher that cannot open its window asks here, unless the
@@ -264,6 +266,7 @@ namespace Thornswood
             // The very last thing: an update downloaded and checked while the
             // launcher ran goes in now that the window has closed, everything
             // it put back is back and the lock is let go (Velo.ExitApply).
+            HandOverUpdate(Velo.StagedVersion);
             Velo.ExitApply();
         }
 
@@ -326,6 +329,7 @@ namespace Thornswood
             LogOnly("Launcher start: the window was on screen " + window.ToString("F1", inv) + " s after the launcher started" +
                     (startScanSeconds >= 0 ? ", " + startScanSeconds.ToString("F1", inv) + " s of it the mod check" : "") +
                     ", on launcher " + Updater.Version + ".");
+            if (leftCurrentFolder != null) LogOnly(leftCurrentFolder);
         }
 
         static void Run(string[] args)
@@ -592,6 +596,7 @@ namespace Thornswood
             win.ContentRendered += delegate
             {
                 try { LogStartTime(); } catch (Exception ex) { Swallow.Note("Shell.Run, saying how long the start took", ex); }
+                try { SayHandedUpdate(); } catch (Exception ex) { Swallow.Note("Shell.Run, the update the last launcher handed over", ex); }
                 if (Velo.Restarted)
                     ThreadPool.QueueUserWorkItem(delegate
                     {
@@ -640,7 +645,7 @@ namespace Thornswood
             Dispatcher.UIThread.UnhandledException += delegate (object faultSender, DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
-                try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); } catch (Exception ex) { Swallow.Note("Shell.Run, append", ex); }
+                LauncherLog.Text(fault.Exception.ToString() + Environment.NewLine);
                 // The launcher is native code with no symbols on the customer's
                 // machine, so each frame is also written as its method and its
                 // offset into the exe. The pdb the native build writes, kept on
@@ -665,7 +670,7 @@ namespace Thornswood
                         at.Append(ip != 0 && image != 0 ? " +0x" + (ip - image).ToString("x8") : " (no native offset)");
                         at.AppendLine();
                     }
-                    File.AppendAllText(Paths.LogFile, at.ToString());
+                    LauncherLog.Text(at.ToString());
                 }
                 catch (Exception atEx) { Swallow.Note("Shell.UnhandledException, native offsets", atEx); }
                 fault.Handled = true;
@@ -1085,8 +1090,7 @@ namespace Thornswood
         {
             lastLogged = m;
             txtStatus.Text = m;
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch (Exception ex) { Swallow.Note("Shell.Log, append", ex); }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1096,8 +1100,7 @@ namespace Thornswood
         /// </summary>
         static void LogOnly(string m)
         {
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch { /* the log is the only place this line could have gone */ }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -2540,7 +2543,24 @@ namespace Thornswood
                 // Not while Skyrim is being closed. Play or the update that
                 // asked for it carries on once it is gone, window or no window.
                 // The launcher ending itself (Quit) is not asked either.
-                if (!quitting && waitDepth > 0) { e.Cancel = true; Log("Wait for Skyrim to finish closing."); return; }
+                // What is running is said as it is: the line used to blame
+                // Skyrim for every wait, the scan after an update among them
+                // (#6129). An update that has to close the launcher closes it
+                // the moment the last wait ends (LetWindowGo); before, its
+                // close was dropped here and the launcher sat on Updating.
+                if (!quitting && waitDepth > 0)
+                {
+                    e.Cancel = true;
+                    string doing = stallDoing;
+                    if (Velo.Staged)
+                    {
+                        closeWhenWaitsEnd = true;
+                        Log("The update goes in as soon as the launcher has finished " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ".");
+                    }
+                    else
+                        Log("Wait for the launcher to finish " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ", then close it.");
+                    return;
+                }
                 if (!quitting && playing)
                 {
                     bool r = Ask.YesNo(

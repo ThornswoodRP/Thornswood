@@ -71,8 +71,13 @@ try {
     Yes '  each with a name, a reason, and required true or false' (@($entries | Where-Object { -not ([string]$_.rule).Trim() -or -not ([string]$_.why).Trim() -or $_.required -isnot [bool] }).Count -eq 0)
     Yes '  and no name twice' (@($names | Sort-Object -Unique).Count -eq $names.Count)
     $required = @($entries | Where-Object { $_.required } | ForEach-Object { [string]$_.rule })
-    foreach ($n in 'Thornswood game (UDP)', 'Thornswood game (TCP)', 'Thornswood resources (TCP)', 'Thornswood Dev game (UDP)', 'Thornswood Dev game (TCP)', 'Thornswood Dev resources (TCP)', 'Thornswood Web 80', 'Thornswood Web 443') {
+    foreach ($n in 'Thornswood game (UDP)', 'Thornswood game (TCP)', 'Thornswood resources (TCP)', 'Thornswood Dev game (UDP)', 'Thornswood Dev game (TCP)', 'Thornswood Dev resources (TCP)') {
         Yes "  '$n' is on it, required" ($required -contains $n)
+    }
+    # Set-WebFirewall.ps1 -Close turns these two off once the tunnel carries
+    # the site (#5351), so they are kept but not required.
+    foreach ($n in 'Thornswood Web 80', 'Thornswood Web 443') {
+        Yes "  '$n' is on it, not required" ($names -contains $n -and $required -notcontains $n)
     }
     foreach ($n in 'Allow WinRM HTTPS', 'SkyMP game UDP 7777', 'SkyMP web TCP 3000', 'CoreNet-Teredo-In', 'CoreNet-IPHTTPS-In', 'CoreNet-IPv6-In', 'DeliveryOptimization-TCP-In') {
         Yes "  '$n' is not on it, so it goes off" ($names -notcontains $n)

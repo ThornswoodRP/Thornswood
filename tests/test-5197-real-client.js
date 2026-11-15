@@ -235,6 +235,17 @@ function game(opts) {
   });
   yes('the runner presses the launcher\'s Play by its name in MainWindow.axaml',
       /AutomationIdProperty, 'BtnPlay'/.test(RUNNER) && /x:Name="BtnPlay"/.test(read(path.join('launcher', 'app', 'MainWindow.axaml'))));
+  // A launcher from the setup is a Velopack install in %LOCALAPPDATA%\Thornswood,
+  // not <install>\Launcher (15 Nov: the run stopped on "Not there" on One).
+  const place = read(path.join('launcher', 'app', 'InstallPlace.cs')) || '';
+  yes('the runner finds a Velopack launcher by the record the launcher writes',
+      /"install-root\.txt"/.test(place) && /'install-root\.txt'/.test(RUNNER) &&
+      /Join-Path \$veloHome 'current\\Thornswood\.exe'/.test(RUNNER) && /& \$where MachineData/.test(RUNNER));
+  yes('the runner takes the one install, not the old -DevBuild folder',
+      /\$Root = & \$where Install\b/.test(RUNNER) && !/InstallDev/.test(RUNNER));
+  const cfg = read(path.join('launcher', 'app', 'Config.cs')) || '';
+  yes('the runner refuses an install that is not on the dev channel, read as the launcher keeps it',
+      /public string UpdateBranch\b/.test(cfg) && /\$cfg\.UpdateBranch/.test(RUNNER) && /if \(\$branch -ne 'dev'\) \{\s*throw/.test(RUNNER));
 }
 
 console.log('');

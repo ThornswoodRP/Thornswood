@@ -116,7 +116,7 @@ Yes ('every file a builder of the chain reads, uses or writes goes up (' + $need
     $need.Count -gt 0 -and $left.Count -eq 0)
 Yes '  game\gamemode.js among them' ($paths -contains 'game/gamemode.js')
 Yes '  and the K panel''s book Build-SpellTable.ps1 reads, which until #3425 stopped the box run at the spell table' ($paths -contains 'game/ui/thornswood-skills.js')
-Yes '  and the game scripts Build-MerchantGamemode.js embeds' (($paths -contains 'game/merchant-trading.js') -and ($paths -contains 'game/quest-eligibility.js'))
+Yes '  and the game scripts Build-MerchantTables.js checks its tables with' (($paths -contains 'game/merchant-commissions.js') -and ($paths -contains 'game/quest-eligibility.js'))
 $writes = @($chain.steps | ForEach-Object { @($_.writes) } | Where-Object { $_ } | Sort-Object -Unique)
 $unwatched = @($writes | Where-Object { $n = [string]$_; -not @($watch | Where-Object { $n -eq $_ -or $n.StartsWith($_ + '/') }).Count })
 Yes ('every file a builder of the chain writes comes back (' + $writes.Count + ')' + $(if ($unwatched.Count) { ': not ' + ($unwatched -join ', ') } else { '' })) (

@@ -26,9 +26,9 @@ const { execFileSync, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const TEMP = process.env.THORNSWOOD_TEMP || os.tmpdir();
@@ -74,24 +74,6 @@ function stub() {
   https.get = function (a, b, c) { const r = fake(a, b, c); r.end(); return r; };
 }
 
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
-// Waits for the site's own "[thornswood-docs] listening on ...:port" line
-// rather than polling the port (#1727).
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const end = (e) => { clearTimeout(late); srv.stdout.removeListener('data', said); srv.stderr.removeListener('data', err); srv.removeListener('close', gone); if (e) { bad(e); } else { ok(); } };
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(); } };
-    const err = (d) => { out += d; };
-    const gone = (c) => end(new Error('site stopped (exit ' + c + ') before it was listening:\n' + out));
-    const late = setTimeout(() => end(new Error('site not listening in 15 s:\n' + out)), 15000);
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', err);
-    srv.on('close', gone);
-  });
-}
 let PORT = 0;
 function ask(method, where, headers, body) {
   return new Promise((done) => {
@@ -151,15 +133,15 @@ const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
     // The stand-in lives outside the checkout, so it is no part of what is measured.
     fs.writeFileSync(path.join(aside, 'stub.js'), '(' + stub.toString() + ')();\n');
 
-    PORT = await freePort();
+    PORT = 0;
     srv = spawn(process.execPath, ['-r', path.join(aside, 'stub.js'), 'server.js'], {
       cwd: SITE, stdio: ['ignore', 'pipe', 'pipe'],
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
         THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(aside, 'chat') })
     });
     srv.stdout.on('data', (d) => { said += d; });
     srv.stderr.on('data', (d) => { said += d; });
-    await listening(srv, PORT);
+    await siteFiles.listening(srv).then((r) => (PORT = r.port, r));
 
     // ------------------------------------------------------ 1. a report --
     let r = await ask('POST', '/api/report/game', { 'x-thornswood-key': KEY, 'content-type': 'application/json' },

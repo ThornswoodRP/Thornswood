@@ -5,7 +5,9 @@
   scripts\mods\content-tables.json and the builders themselves (#5191). One
   copy, for Run-OnBox.ps1 (what it sends and what it brings back) and
   Build-ContentOnBox.ps1 (what a build's inputs are, and what it keeps).
-  Defines functions and nothing else.
+  Defines functions and nothing else. Also the key a build is kept by,
+  for Build-ContentOnBox.ps1 and the merge release that takes the build
+  (scripts\release\Get-ContentBuild.ps1).
 #>
 
 <#
@@ -161,4 +163,31 @@ function Get-ThornswoodContentOrder {
         Slug     = [string]$plugins.collection
         Revision = [int]$plugins.revision
     }
+}
+
+<#
+  The key a content build is kept by (#5191): the sha256 of "server <name>"
+  and every input file's mode, blob id and path in -Commit, in ordinal
+  order, one a line, -Paths being Get-ThornswoodContentPaths's. The same commit
+  gives the same key wherever it is read, a box checkout or GitHub's runner.
+  Returns { Key; Files }, or throws when git cannot list the inputs.
+#>
+function Get-ThornswoodContentKey {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$Commit,
+        [Parameter(Mandatory = $true)][ValidateSet('dev', 'main')][string]$Server,
+        [Parameter(Mandatory = $true)][string[]]$Paths
+    )
+    $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $out = @(& git -C $Repo ls-tree -r --full-tree $Commit -- @Paths 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
+    if ($LASTEXITCODE -ne 0) { throw ('the inputs could not be listed: ' + ($out -join ' ')) }
+    # Ordinal: Sort-Object follows the culture, and Windows' and Linux's
+    # cultures order a hyphen apart differently, so the box and GitHub's
+    # runner would give one commit two keys.
+    $lines = [string[]]@($out)
+    [Array]::Sort($lines, [StringComparer]::Ordinal)
+    $text = "server $Server`n" + ($lines -join "`n") + "`n"
+    $key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()
+    return [pscustomobject]@{ Key = $key; Files = $out.Count }
 }

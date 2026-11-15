@@ -467,6 +467,30 @@ if (social && trade) {
     w4.soc.addFriend(M, N);
     yes('U4 a friend added again starts with nothing shared',
         w4.soc.sharedWithMe(N).length === 0);
+
+    // Two journals made in the same millisecond that draw the same number
+    // are still two journals. The world's clock stands still, so every
+    // journal here is made in one millisecond; the draw is held to one value.
+    const w5 = world();
+    const R = w5.person(0xff000001, 'Bjorn', 101, 'town:X.esm', [0, 0, 0]);
+    const draw = Math.random;
+    let jA, jB, jC;
+    try {
+      Math.random = function () { return 0.5; };
+      jA = w5.soc.newJournal(R, 'First').journal;
+      jB = w5.soc.newJournal(R, 'Second').journal;
+      jC = w5.soc.newJournal(R, 'Third').journal;
+    } finally { Math.random = draw; }
+    yes('J1 journals made in the same millisecond with the same draw have ids of their own',
+        jA.id !== jB.id && jB.id !== jC.id && jA.id !== jC.id);
+    w5.soc.writePage(R, jB.id, '', 'Only here', 'in the second');
+    const mine = w5.soc.stateOf(R);
+    yes('J2 and a page written to the second goes to the second, not the first',
+        w5.soc.findJournal(mine, jA.id).pages.length === 0 &&
+        w5.soc.findJournal(mine, jB.id).pages.length === 1);
+    yes('J3 and dropping the third leaves the other two',
+        w5.soc.dropJournal(R, jC.id) && w5.soc.stateOf(R).journals.length === 2 &&
+        !w5.soc.findJournal(w5.soc.stateOf(R), jC.id));
   }
 
   // ---------------------------------------------------------------- trading

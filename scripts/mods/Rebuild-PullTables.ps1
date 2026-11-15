@@ -41,7 +41,7 @@
   held to the same head.
 
   -Gh and -BoxRun are what it runs for gh and Box-Run.ps1;
-  tests\test-4322-pull-tables.ps1 hands it stand-ins.
+  scripts\tests\test-4322-pull-tables.ps1 hands it stand-ins.
 
   Exit 0 when the tables are on the branch (or already were), 1 when it
   stopped, with a line starting STOP that says why and what was left as it was.

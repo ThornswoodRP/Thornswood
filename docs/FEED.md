@@ -16,6 +16,20 @@ fallback and the home of the release baseline, is retired. This page is every
 field in it, who writes each one, who reads it, and what goes wrong when it is
 wrong.
 
+## Contents
+
+- [Where it is and how a launcher reads it](#where-it-is-and-how-a-launcher-reads-it)
+- [A real entry, trimmed](#a-real-entry-trimmed)
+- [Top-level fields](#top-level-fields)
+- [How a launcher decides what is new](#how-a-launcher-decides-what-is-new)
+- [Syncing to the release record (#1050)](#syncing-to-the-release-record-1050)
+- [When the packs can go](#when-the-packs-can-go)
+- [version.json in two (#1050)](#versionjson-in-two-1050)
+- [Checks on every download](#checks-on-every-download)
+- [Main and dev](#main-and-dev)
+- [Putting a channel back (#442)](#putting-a-channel-back-442)
+- [What looks wrong in the feeds today](#what-looks-wrong-in-the-feeds-today)
+
 ## Where it is and how a launcher reads it
 
 ### Host cutover (#649) - live URL shape

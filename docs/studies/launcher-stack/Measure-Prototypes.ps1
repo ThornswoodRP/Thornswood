@@ -35,7 +35,9 @@
   on the issue.
 
 .PARAMETER Work
-  Where the toolchains, builds and results go. Removed by -Clean.
+  Where the toolchains, builds and results go. Removed by -Clean. By default
+  the 3209-launcher-stack folder in the checkout's temp folder
+  (scripts\release\Get-ScratchDir.ps1).
 
 .PARAMETER Only
   Build and measure only these prototypes (names as in the table of
@@ -56,7 +58,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Work = 'C:\ThornswoodTemps&Worktrees\temp\3209-launcher-stack',
+    [string]$Work = '',
     [string[]]$Only,
     [int]$Runs = 5,
     [switch]$MeasureOnly,
@@ -69,6 +71,7 @@ $ProgressPreference = 'SilentlyContinue'
 $Study = $PSScriptRoot
 $Proto = Join-Path $Study 'prototypes'
 $Repo = (Resolve-Path (Join-Path $Study '..\..\..')).Path
+if (-not $Work) { $Work = & (Join-Path $Repo 'scripts\release\Get-ScratchDir.ps1') '3209-launcher-stack' }
 $Tools = Join-Path $Work 'tools'
 $Out = Join-Path $Work 'out'
 $Art = Join-Path $Repo 'launcher\art\thornswood-art-1536.png'
@@ -83,8 +86,9 @@ $WebViewData = @(
     (Join-Path $env:TEMP 'proto-wpf-net10-webview2-webview')
 )
 
-# Remove-Item stalls on a path with an ampersand in it, and the work folder
-# sits under C:\ThornswoodTemps&Worktrees, so folders and files are removed
+# Remove-Item stalls on a path with an ampersand in it, and -Work can sit
+# under one (it did on 27 Oct, under C:\ThornswoodTemps&Worktrees, the
+# shipping machine's temps folder before #2900), so folders and files are removed
 # through .NET instead. .NET refuses a read-only file (the .NET SDK's
 # hostfxr.dll, Flutter's .gitignore: the -Clean of 27 Oct stopped on them), so
 # every attribute is cleared first.
@@ -109,8 +113,8 @@ if ($Clean) {
 
 # cmd.exe splits a command line at an ampersand, and npm's npx.cmd, Flutter's
 # flutter.bat and the batch steps of Flutter's Visual Studio build all go
-# through cmd, so under C:\ThornswoodTemps&Worktrees Electron and Flutter
-# stopped on 27 Oct with '"C:\ThornswoodTemps"' is not recognized. The folder
+# through cmd, so with -Work under C:\ThornswoodTemps&Worktrees Electron and
+# Flutter stopped on 27 Oct with '"C:\ThornswoodTemps"' is not recognized. A folder
 # whose name has the ampersand gets a drive letter of its own (subst, for this
 # sign in only), every path below goes through it, and it is taken away at the
 # end.

@@ -873,10 +873,16 @@ PLAN = [
  # What every staff member shares, and the council's own two channels.
  ('Staff', [
    # The staff #news, renamed so it is not taken for the public #news in
-   # Information, which carries the key and the release webhook.
-   dict(kind='announce', name='staff-announcements', mode='staffread',
-        topic='Announcements for every staff member. The council posts here.',
-        was=(('Staff', 'news'),)),
+   # Information, which carries the key and the release webhook. It was
+   # #staff-announcements from #3317 until Patrick named it #staff-news on
+   # 15 Nov 2026, so the staff pair matches the public one: #staff-news
+   # beside #news (releases: a dev release here by the id in
+   # dev-channel.txt, a main one in #news), #staff-updates beside #updates
+   # (restarts: a dev one in #staff-updates, a live one in #updates).
+   dict(kind='announce', name='staff-news', mode='staffread',
+        topic='Every dev release, and announcements for every staff member. '
+              'The council posts here.',
+        was=(('Staff', 'news'), ('Staff', 'staff-announcements'))),
    dict(kind='text',  name='council-decisions', mode='staffread',
         topic='Every council decision, with its date. The council posts here.'),
    # Where staff status updates go (Patrick, 11 Oct), and where the bot says
@@ -1082,7 +1088,7 @@ KEEP = (
     # Their names from before #3317, and the channels #3317 renamed them to.
     # #tickets, the old closed ticket log, is not here any more: Patrick's
     # page card q-3317-ticket-split deletes it (RETIRED).
-    'ticket-log', 'staff-announcements', 'playtester voice',
+    'ticket-log', 'staff-announcements', 'staff-news', 'playtester voice',
     'news', 'help voice', 'support', 'council', 'council-decisions',
 ) + tuple(
     # The in-world roles (#2551, Patrick, 15 Oct: the office roles go in the
@@ -1305,6 +1311,28 @@ def _also(guild, roles, out, extra, talk):
         if r is not None:
             out[r] = talk
     return out
+
+
+# The modes whose readers are roles by name, not a hold's, a faction's or
+# a staff space's own, which the Member line has no need of.
+_PLAIN_MODES = ('membersread', 'open', 'pathfind', 'staffbump', 'testersread')
+
+
+def _seen_by(role):
+    """The channels of PLAN that somebody holding only this role sees, named
+       from the modes, so the audit's line about who sees what follows the
+       plan instead of saying an old order. None is somebody with no role."""
+    names = []
+    for _, chans in PLAN:
+        for ch in chans:
+            mode = ch.get('mode')
+            if mode in ('read', 'public'):
+                names.append('#' + ch['name'])
+            elif role is not None and mode in _PLAIN_MODES:
+                readers, talkers, _ = mode_audience(mode)
+                if role in readers or role in talkers:
+                    names.append('#' + ch['name'])
+    return ', '.join(names) or 'nothing'
 
 
 # Who each mode lets in, by role name: (readers, talkers, posters). A reader
@@ -3231,7 +3259,23 @@ def layout():
     w('Roles never deleted: every Jarl, Citizen and office role, and every '
       'faction\'s Leader, member and Officer role.')
     w('')
-    return '\n'.join(L)
+    return '\n'.join(_with_contents(L))
+
+
+def _with_contents(L):
+    """The page with a Contents linking each ## heading, put before the
+       first one. Every doc over 300 lines carries one
+       (tests/test-4336-long-docs-contents.js), and this page is written
+       here, so it is made here from the headings the page has."""
+    heads = [x[3:] for x in L if x.startswith('## ')]
+    if not heads:
+        return L
+    first = L.index('## ' + heads[0])
+    toc = ['## Contents', '']
+    for h in heads:
+        slug = re.sub(r'[^a-z0-9 -]', '', h.lower()).replace(' ', '-')
+        toc.append('- [%s](#%s)' % (h, slug))
+    return L[:first] + toc + [''] + L[first:]
 
 
 async def audit(guild):
@@ -3359,13 +3403,13 @@ async def audit(guild):
         only = [m for m in member.members
                 if (tester is None or tester not in m.roles)
                 and not any(x.name in staff_held for x in m.roles)]
-        line('Member and neither Playtester nor staff, so Start Here and '
-             'Information only: %d (%s)'
-             % (len(only), ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
+        line('Member and neither Playtester nor staff, so %s only: %d (%s)'
+             % (_seen_by('Member'), len(only),
+                ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
     nobody = [m for m in guild.members
               if not getattr(m, 'bot', False)
               and not [x for x in m.roles if x != guild.default_role]]
-    line('no role at all, so Start Here only: %d' % len(nobody))
+    line('no role at all, so %s only: %d' % (_seen_by(None), len(nobody)))
     for m, cat, held in doubles(guild.members):
         off('%s holds %s, two ranks of %s' % (_who(m), ' and '.join(held), cat))
     for m, staff, seats in seat_clashes(guild.members):

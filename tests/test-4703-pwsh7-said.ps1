@@ -90,7 +90,8 @@ foreach ($v in $verbs.verbs.PSObject.Properties) {
 }
 Yes ('the gate names its verb scripts (' + $gate.Count + ')') ($gate.Count -gt 20)
 
-$scripts = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1')
+# Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+$scripts = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
 Yes ('there are scripts to read (' + $scripts.Count + ')') ($scripts.Count -gt 300)
 
 $bad = 0

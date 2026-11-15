@@ -164,7 +164,8 @@ try {
         'scripts/vps/Remote.ps1'              = 'runs what it is given; its help names a Windows service as an example'
         'scripts/deploy/Install-DeployAgent.ps1' = 'stops only the deploy agent''s own service, which the watchdog does not watch; it names the site''s task and the bot''s service only to see whether they are set up (the agent holds them itself when it swaps, App.cs)'
     }
-    $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | ForEach-Object { $_.FullName })
+    # Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+    $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' } | ForEach-Object { $_.FullName })
     $stoppers = @()
     foreach ($file in $files) {
         $rel = $file.Substring($repo.Length + 1).Replace('\', '/')
