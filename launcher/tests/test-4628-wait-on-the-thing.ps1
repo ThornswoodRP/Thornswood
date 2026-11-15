@@ -283,7 +283,7 @@ Yes '4. Checks.cs has StuckReport' ($report.Length -gt 0)
 $m = [regex]::Match($checks, 'static readonly TimeSpan EndedToGo = TimeSpan\.FromSeconds\((\d+)\);')
 Yes ('4d. CloseGame waits at least 22 s for an ended game to go (' + $m.Groups[1].Value + ' s)') ($m.Success -and [int]$m.Groups[1].Value -ge 22)
 Yes '4d. CloseGame records the end Windows took and the refusal it gave' (
-    $close.Contains('ended[id] = DateTime.Now') -and $close.Contains('refused[id] = ex.Message'))
+    $close.Contains('ended[id] = DateTime.Now') -and $close.Contains('refused[id] = Failure.Why('))
 
 $reportDriver = @'
 using System;

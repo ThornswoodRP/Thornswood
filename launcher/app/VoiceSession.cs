@@ -565,7 +565,7 @@ namespace Thornswood
             catch (Exception e)
             {
                 if (ws != s) return;
-                Quiet("the voice server did not answer (" + Failure.Why("VoiceSession, connecting", e, "the voice server") + ")");
+                Quiet("the voice server did not answer (" + Failure.Plain(e, "the voice server") + ")");
                 ws = null;
                 Lost();
                 return;
@@ -590,7 +590,10 @@ namespace Thornswood
                     if (ws == s) Message(text);
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + Failure.Why("VoiceSession, reading", e, "the voice server") + ")"); }
+            // A socket the server closed or never opened is looked for again
+            // (Lost); its reason is the debug line, not a swallowed
+            // exception on every reconnect (Failure.Plain).
+            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + Failure.Plain(e, "the voice server") + ")"); }
             if (ws != s) return;
             ws = null;
             Close(s);
@@ -612,7 +615,7 @@ namespace Thornswood
                         await s.Ws.SendAsync(Encoding.UTF8.GetBytes(m), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + Failure.Why("VoiceSession, writing", e, "the voice server") + ")"); }
+            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + Failure.Plain(e, "the voice server") + ")"); }
         }
 
         void Opened(Sock s)

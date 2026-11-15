@@ -52,6 +52,20 @@ namespace Thornswood
             return Words(ex, what, false).TrimEnd('.');
         }
 
+        /// <summary>
+        /// The reason alone, as Why says it, without writing the exception to
+        /// launcher.log. Only for a catch whose failure is an outcome the code
+        /// expects and already writes itself: a voice socket the server
+        /// closed, which is looked for again, or Online.AskPort, which writes
+        /// once per change and notes the exception then (#4350). Noting those
+        /// on every ask or every reconnect would fill the log with the same
+        /// exception. Anything else uses Why or Say.
+        /// </summary>
+        public static string Plain(Exception ex, string what)
+        {
+            return Words(ex, what, false).TrimEnd('.');
+        }
+
         static string Words(Exception ex, string what, bool next)
         {
             ex = Inner(ex);
