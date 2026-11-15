@@ -497,9 +497,11 @@ namespace $ns
         Yes 'Note does not throw before the log path is set' ($null -eq $threw)
 
         $threw = $null
-        $missing = Join-Path $tmp 'no-such-folder\launcher.log'
+        $missing = Join-Path (Join-Path $tmp 'no-such-folder') 'launcher.log'
         try { $door::SetLog($missing); $door::Fail('folder missing', 'x') } catch { $threw = $_ }
-        Yes 'Note creates a missing log folder and records the diagnostic' ($null -eq $threw -and (Test-Path -LiteralPath $missing))
+        Yes 'Note does not throw when the log folder is missing' ($null -eq $threw)
+        Yes 'and does not make the folder' (-not (Test-Path -LiteralPath (Split-Path -Parent $missing)))
+        Yes 'and keeps the record in memory with the reason the write was refused' ($door::Refused().Contains('Swallowed in folder missing') -and $door::Refused().Contains('launcher.log refused: DirectoryNotFoundException'))
 
         if ($OnWindows) {
             $threw = $null
