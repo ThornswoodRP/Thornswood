@@ -45,13 +45,29 @@ namespace Thornswood.Tests
 
         static int Main()
         {
+            string[] argv = Environment.GetCommandLineArgs();
+
+            // launcher\tests\test-4409-setup-look.ps1: the install window in a
+            // contrast theme and at Windows' text sizes, and nothing else. Its
+            // text is shaped by Skia with this machine's fonts, as the launcher
+            // draws it: headless drawing's stand-in makes every letter about as
+            // wide as the text is high, so whether text fits would be measured
+            // on text nobody sees.
+            if (argv.Length > 1 && argv[1] == "setup-look")
+            {
+                AppBuilder.Configure<App>()
+                    .UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+                return SetupLook.Run();
+            }
+
             AppBuilder.Configure<App>()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
                 .SetupWithoutStarting();
 
             // launcher\tests\test-4459-setup-keys.ps1: the install window
             // worked from the keyboard, and nothing else.
-            string[] argv = Environment.GetCommandLineArgs();
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
 
             MainWindow win = null;
