@@ -1634,14 +1634,14 @@ public sealed partial class AgentTests : IDisposable
     public async Task TheFirstDevDeploymentMovesTheLoadOrderAndFilesEachParityRowOnce()
     {
         var (a, gh, s, cfg, gate) = MakeAfter(null);
-        gate.Answers[Agent.LoadOrderLine] = new GateRun(0, ["gate run x: Deploy-DevGamemode", "main at " + Commit, "the dev server runs the new order"]);
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(0, ["gate run x: Deploy-DevGamemode", "main at " + Commit, "the dev server runs the new order"]);
         gate.Answers["Check-ProdParity"] = new GateRun(0, ["main at " + Commit, Review1, Review2, "40 rows, 2 to review"]);
         gh.Issues.Add(new JsonObject { ["title"] = "Parity: firewall Thornswood Dev UDP differs on the box", ["state"] = "open", ["labels"] = new JsonArray("parity") });
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,success");
         Assert.EndsWith("load order moved", (string)gh.Last(id)!["description"]!);
-        Assert.Equal([Agent.LoadOrderLine, "Check-ProdParity"], gate.Asked);
+        Assert.Equal([Agent.LoadOrderLineAt(Commit), "Check-ProdParity"], gate.Asked);
         Assert.Empty(gh.Compared);
         Assert.Equal(Commit, MovedTo(cfg));
         var filed = Assert.Single(gh.Issues.Skip(1));
@@ -1659,7 +1659,8 @@ public sealed partial class AgentTests : IDisposable
     public async Task ADeploymentThatChangesNothingTheOrderIsMadeFromLeavesItAlone()
     {
         var (a, gh, s, cfg, gate) = MakeAfter(Before);
-        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md"];
+        // Our own plugins are the Release's (#6175), not the order's.
+        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md", "game/content/Thornswood-Content.esp", "game/data/last-plugin.recipe"];
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,success");
@@ -1671,20 +1672,58 @@ public sealed partial class AgentTests : IDisposable
 
     [Theory]
     [InlineData("records/collection-plugins.json")]
-    [InlineData("game/content/Thornswood-Content.esp")]
+    [InlineData("game/data/last-plugin.json")]
     [InlineData(null)]
     public async Task ARecordChangeMovesTheOrderAndAMoveThatFailsFailsTheDeploymentAndIsTriedByTheNext(string? changed)
     {
         var (a, gh, s, cfg, gate) = MakeAfter(Before);
         gh.Changed = changed == null ? null : ["game/gamemode.js", changed];
-        gate.Answers[Agent.LoadOrderLine] = new GateRun(1, ["main at " + Commit, "the store is not whole and Nexus did not answer"]);
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(1, ["main at " + Commit, "the store is not whole and Nexus did not answer"]);
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,failure");
         Assert.Contains("the plugins are not", (string)gh.Last(id)!["description"]!);
         Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
-        Assert.Equal([Agent.LoadOrderLine], gate.Asked);
+        Assert.StartsWith("the plugins are not in", (string)gh.Last(id)!["description"]!);
+        Assert.Equal([Agent.LoadOrderLineAt(Commit)], gate.Asked);
         // Not moved, so the next Deployment compares from the last move again.
+        Assert.Equal(Before, MovedTo(cfg));
+    }
+
+    [Fact]
+    public void TheLoadOrderStepSendsOnlyTheOrderFromTheDeploymentsCommit()
+    {
+        // #6166: the step ran main as it was and sent main's gamemode and
+        // committed tables over the Release's. It now names the order only,
+        // and the commit it must be.
+        Assert.Contains(" -OrderOnly", Agent.LoadOrderLine);
+        Assert.Equal(Agent.LoadOrderLine + " -At " + Commit, Agent.LoadOrderLineAt(Commit));
+    }
+
+    [Fact]
+    public async Task WhenTheGateRanMainPastTheReleaseTheOrderIsKeptAsTheReleasesCommit()
+    {
+        var (a, gh, s, cfg, gate) = MakeAfter(Before);
+        gh.Changed = ["records/collection-plugins.json"];
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(0, ["main at " + Before.Replace('f', 'e'), "the dev server runs the new order"]);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.Equal(Commit, MovedTo(cfg));
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
+    }
+
+    [Fact]
+    public async Task WhenMainMovedTheOrderPastTheReleaseNothingIsMovedAndTheNextDeploymentMovesIt()
+    {
+        var (a, gh, s, cfg, gate) = MakeAfter(Before);
+        gh.Changed = ["records/collection-plugins.json"];
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(3, ["NOT THIS COMMIT'S ORDER: main's records/collection-plugins.json is not 0123456's"]);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.StartsWith("the plugins are not this Release's", (string)gh.Last(id)!["description"]!);
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
         Assert.Equal(Before, MovedTo(cfg));
     }
 

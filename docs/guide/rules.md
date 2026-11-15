@@ -85,7 +85,7 @@ document quoting a note as it went out) goes in
 longer matches anything is itself a hit. Release notes are not files, so
 the release note rules, `tools\ReleaseNotes\NoteRules.cs`, check them when
 Ship or Rollback-Feed runs, before anything is built. The same build step runs `tests\test-check-words.ps1`
-and `tests\test-note-rules.ps1`, which plant a break of every rule and fail
+and `scripts\tests\test-note-rules.ps1`, which plant a break of every rule and fail
 if either check lets one through. Secrets are checked by
 `scripts\dev\Check-Secrets.ps1` in the same build. It reads the files of
 `engine\skymp` too whenever the fork is checked out, and says so when it is

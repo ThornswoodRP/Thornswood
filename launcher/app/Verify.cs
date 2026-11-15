@@ -229,6 +229,7 @@ namespace Thornswood
             foreach (string p in want)
             {
                 if (haveSet.Contains(p)) continue;
+                if (NotMadeYet(p, issues)) continue;
                 bool onDisk = true;
                 try { onDisk = File.Exists(Path.Combine(dataDir, p)); } catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is on disk", ex); }
                 Issue off = onDisk
@@ -389,6 +390,7 @@ namespace Thornswood
                 {
                     if (!File.Exists(Path.Combine(data, p)))
                     {
+                        if (NotMadeYet(p, issues)) continue;
                         var gone = Issue.Of(IssueKind.Plugins, p + " is in the list but the file is not in Data.",
                                             "Fix puts it back from Vortex's copy, or fetches the server's when it is ours.", VortexDeploys, true);
                         gone.FileMissing = true;
@@ -896,6 +898,30 @@ namespace Thornswood
         }
 
         /// <summary>True when the game gives the plugin no normal index: not in Data, an .esl, or flagged light.</summary>
+        /// <summary>
+        /// Thornswood-Last.esp, when the list names it and Data does not have
+        /// it yet, is made here from the release's recipe (#2791, LastPlugin)
+        /// and never comes from Vortex or the server: Play and Fix make it
+        /// (MadeFromGame), and Upkeep's line about the files made from the game
+        /// says what stops it when it cannot be. So it is one issue that says
+        /// that, never "not installed" (which Play answered with "Fix will not
+        /// help", #6181) and never counted as a missing mod.
+        /// </summary>
+        static bool NotMadeYet(string p, List<Issue> issues)
+        {
+            if (!LastPlugin.Makes(Paths.Game, p)) return false;
+            try { if (File.Exists(Path.Combine(Path.Combine(Paths.Game, "Data"), p))) return false; }
+            catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is made", ex); return false; }
+            foreach (Issue had in issues) if (had.Plugin == p && had.Kind == IssueKind.MadeFromGame) return true;
+            var i = Issue.Of(IssueKind.MadeFromGame,
+                p + " is made on this computer from your own plugins and has not been made yet.",
+                "Fix makes it from your game's own files.",
+                "When Fix cannot make it, the line about the files Thornswood makes from your game says which of your plugins stops it.", true);
+            i.Plugin = p;
+            issues.Add(i);
+            return true;
+        }
+
         static bool LightOrMissing(string name)
         {
             return !InData(name) || Checks.TakesNoPlace(name);

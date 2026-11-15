@@ -27,7 +27,19 @@
   checkout, so every part built after it carries the box's build. Prints
   TOOK <key> FROM <commit>. Stops, writing nothing, on any difference.
 
-  A test hands -ReleasesFile (the list of Releases) and -AssetDir (the two
+  NEWEST. The newest build a merge release on main took, from the artifact
+  content-<server> it keeps (-Keep; merge-release.yml, "Keep what was
+  taken"), whatever its key: what a harness or a developer's checkout reads
+  now that the tables are not committed. Held and written the same way as
+  TAKE, to the server but not to a key. Needs Actions read only, which every
+  pull request's token has.
+
+      pwsh scripts/release/Get-ContentBuild.ps1 -Newest
+
+  -Keep <folder> keeps the two files TAKE took there, for the artifact.
+
+  A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
+  two files) for -Newest, -ReleasesFile (the list of Releases) and -AssetDir (the two
   files) for GitHub, and -DeploymentFile, where -Ask writes what it would
   send.
 #>
@@ -37,13 +49,17 @@ param(
     [ValidateSet('dev', 'main')][string]$Server = 'dev',
     [switch]$Take,
     [switch]$Ask,
+    [switch]$Newest,
+    [string]$Keep = '',
     [string]$Repo = '',
     [string]$Commit = 'HEAD',
     [string]$GitHubRepo = $env:GITHUB_REPOSITORY,
     [string]$Output = $env:GITHUB_OUTPUT,
     [string]$ReleasesFile = '',
     [string]$AssetDir = '',
-    [string]$DeploymentFile = ''
+    [string]$DeploymentFile = '',
+    [string]$ArtifactsFile = '',
+    [string]$ArtifactDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,10 +68,93 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here 'MergeRelease.ps1')
 . (Join-Path $Here '..\mods\ContentPaths.ps1')
 if (-not $Repo) { $Repo = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath }
+if (-not $GitHubRepo) { $GitHubRepo = 'ThornswoodRP/Thornswood' }
 
 function Stop-Take([string]$Why) { Write-Host ('::error::' + $Why); Write-Host ('STOP. ' + $Why); exit 1 }
 function Say-Output([string]$Line) { if ($Output) { Add-Content -LiteralPath $Output -Value $Line } }
 function Get-Sha256Bytes([byte[]]$B) { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($B)).ToLowerInvariant() }
+
+# Holds content-build.json (to the server, and to the key when one is given)
+# and every file in content.zip to the sha256 it names, none more and none
+# fewer, each at a repository path; then writes each over this checkout.
+# Writes nothing unless everything held. -Keep keeps the two files it took.
+function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
+    try { $rec = [IO.File]::ReadAllText((Join-Path $Work 'content-build.json')) | ConvertFrom-Json -AsHashtable } catch { Stop-Take "content-build.json in $From does not read: $($_.Exception.Message)" }
+    if ([string]$rec.server -cne $Server) { Stop-Take "content-build.json in $From is for the $($rec.server) server, not $Server" }
+    if ($Key -and [string]$rec.key -cne $Key) { Stop-Take "content-build.json in $From is for $($rec.server) $($rec.key), not $Server $Key" }
+    if ([string]$rec.key -cnotmatch '^[0-9a-f]{64}$') { Stop-Take "content-build.json in $From names no key" }
+    if ([string]$rec.commit -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "content-build.json in $From names no commit" }
+    $want = $rec.files
+    if (-not ($want -is [Collections.IDictionary]) -or -not $want.Count) { Stop-Take "content-build.json in $From names no files" }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $z = [IO.Compression.ZipFile]::OpenRead((Join-Path $Work 'content.zip'))
+    $got = [ordered]@{}
+    try {
+        foreach ($e in $z.Entries) {
+            $n = $e.FullName
+            if ($n.EndsWith('/')) { continue }
+            if ($n.StartsWith('/') -or $n.Contains('\') -or $n.Contains(':') -or @($n.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count) { Stop-Take "content.zip in $From holds $n, which is not a repository path" }
+            if (-not $want.Contains($n)) { Stop-Take "content.zip in $From holds $n, which content-build.json does not name" }
+            $s = $e.Open(); $m = New-Object IO.MemoryStream
+            try { $s.CopyTo($m) } finally { $s.Dispose() }
+            $b = $m.ToArray()
+            if ((Get-Sha256Bytes $b) -cne [string]$want[$n]) { Stop-Take "$n in content.zip in $From is not the sha256 content-build.json names" }
+            $got[$n] = $b
+        }
+    } finally { $z.Dispose() }
+    $lack = @($want.Keys | Where-Object { -not $got.Contains($_) })
+    if ($lack.Count) { Stop-Take ("content.zip in $From lacks " + ($lack -join ', ')) }
+
+    # Held whole, then written: nothing is written unless everything held.
+    foreach ($n in $got.Keys) {
+        $to = Join-Path $Repo $n
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+        [IO.File]::WriteAllBytes($to, $got[$n])
+    }
+    if ($Keep) {
+        New-Item -ItemType Directory -Force -Path $Keep | Out-Null
+        foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $Work $n) -Destination (Join-Path $Keep $n) -Force }
+    }
+    Write-Host "TOOK $($rec.key) FROM $($rec.commit): $($got.Count) files over this checkout"
+    if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The content plugin and tables are the box's build $(([string]$rec.key).Substring(0, 12)) of $($rec.commit) ($($got.Count) files), from $From." }
+}
+
+# ---- the newest build main took, for a harness or a developer's checkout ----
+if ($Newest) {
+    if ($Take -or $Ask) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take and -Ask' }
+    $work = Join-Path ([IO.Path]::GetTempPath()) ('content-newest-' + [Guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Path $work | Out-Null
+    try {
+        if ($ArtifactDir) { foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $ArtifactDir $n) -Destination (Join-Path $work $n) }; $from = "the folder $ArtifactDir" }
+        else {
+            # The merge release keeps what it took as the artifact
+            # content-<server>, kept 90 days; newest first, from main only.
+            $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
+            if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
+            $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
+            if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
+            $a = $list[0]
+            $zip = Join-Path $work 'artifact.zip'
+            # GitHub answers with a redirect to its file store, and
+            # Invoke-WebRequest drops the token when it leaves the host. A
+            # developer's checkout has no GH_TOKEN; gh's own sign-in serves.
+            $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { (gh auth token) -join '' }
+            try { Invoke-WebRequest -Uri "https://api.github.com/repos/$GitHubRepo/actions/artifacts/$($a.id)/zip" -OutFile $zip -Headers @{ Authorization = "Bearer $tok"; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null }
+            catch { Stop-Take "GitHub did not give artifact $($a.id): $($_.Exception.Message)" }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $work 'a'))
+            foreach ($n in 'content.zip', 'content-build.json') {
+                $at = Join-Path (Join-Path $work 'a') $n
+                if (-not (Test-Path -LiteralPath $at)) { Stop-Take "artifact $($a.id) has no $n" }
+                Move-Item -LiteralPath $at -Destination (Join-Path $work $n)
+            }
+            $from = "artifact $($a.id) of run $($a.workflow_run.id)"
+        }
+        Use-ContentFiles $work '' $from
+    } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+    exit 0
+}
 
 $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
 if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "there is no commit $Commit in $Repo" }
@@ -122,38 +221,6 @@ try {
         }
         if ((Get-Item -LiteralPath $to).Length -ne [long]$a.size) { Stop-Take "$($a.name) on $tag is not the $($a.size) bytes the Release says" }
     }
-    try { $rec = [IO.File]::ReadAllText((Join-Path $work 'content-build.json')) | ConvertFrom-Json -AsHashtable } catch { Stop-Take "content-build.json on $tag does not read: $($_.Exception.Message)" }
-    if ([string]$rec.key -cne $key -or [string]$rec.server -cne $Server) { Stop-Take "content-build.json on $tag is for $($rec.server) $($rec.key), not $Server $key" }
-    if ([string]$rec.commit -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "content-build.json on $tag names no commit" }
-    $want = $rec.files
-    if (-not ($want -is [Collections.IDictionary]) -or -not $want.Count) { Stop-Take "content-build.json on $tag names no files" }
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $z = [IO.Compression.ZipFile]::OpenRead((Join-Path $work 'content.zip'))
-    $got = [ordered]@{}
-    try {
-        foreach ($e in $z.Entries) {
-            $n = $e.FullName
-            if ($n.EndsWith('/')) { continue }
-            if ($n.StartsWith('/') -or $n.Contains('\') -or $n.Contains(':') -or @($n.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count) { Stop-Take "content.zip on $tag holds $n, which is not a repository path" }
-            if (-not $want.Contains($n)) { Stop-Take "content.zip on $tag holds $n, which content-build.json does not name" }
-            $s = $e.Open(); $m = New-Object IO.MemoryStream
-            try { $s.CopyTo($m) } finally { $s.Dispose() }
-            $b = $m.ToArray()
-            if ((Get-Sha256Bytes $b) -cne [string]$want[$n]) { Stop-Take "$n in content.zip on $tag is not the sha256 content-build.json names" }
-            $got[$n] = $b
-        }
-    } finally { $z.Dispose() }
-    $lack = @($want.Keys | Where-Object { -not $got.Contains($_) })
-    if ($lack.Count) { Stop-Take ("content.zip on $tag lacks " + ($lack -join ', ')) }
-
-    # Held whole, then written: nothing is written unless everything held.
-    foreach ($n in $got.Keys) {
-        $to = Join-Path $Repo $n
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
-        [IO.File]::WriteAllBytes($to, $got[$n])
-    }
-    Write-Host "TOOK $key FROM $($rec.commit): $($got.Count) files over this checkout"
-    if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The content plugin and tables are the box's build $($key.Substring(0, 12)) of $($rec.commit) ($($got.Count) files), from the draft $tag." }
+    Use-ContentFiles $work $key "the draft $tag"
 } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 exit 0

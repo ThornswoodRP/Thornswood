@@ -120,7 +120,10 @@ if (tracked) {
   const BYTES = ['records/client-licences/** -text', 'records/front-licences/** -text', 'game/data/last-plugin.recipe -text !eol'];
   // #5291: a script sh runs, no builder's output; test-5291-pre-push.ps1
   // holds that it is stored LF.
-  const NOT_BUILT = ['.githooks/** text eol=lf'];
+  // #6195: the gamemode and its source are no step's output now, but
+  // Build-Gamemode.js --check and the two bundle builders compare them byte
+  // for byte with what they write LF, so a CRLF checkout would fail them.
+  const NOT_BUILT = ['.githooks/** text eol=lf', 'game/gamemode.js text eol=lf', 'game/gamemode/** text eol=lf'];
   const stray = [];
   for (const l of lines) {
     if (BYTES.indexOf(l) >= 0 || NOT_BUILT.indexOf(l) >= 0) { continue; }

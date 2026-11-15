@@ -211,6 +211,22 @@ namespace Thornswood
                     }
                 }
 
+                // The main menu with no Bethesda logo, the notice board's
+                // meshes and the mods' menus with no gold values are made from
+                // this machine's own game, never shipped (#2827, #3113,
+                // MadeFromGame). Only what is missing or changed is
+                // written; a game that cannot make them still plays, and the
+                // line says why. Before the plugin list is judged (#6181):
+                // Thornswood-Last.esp is one of them and the server's list
+                // names it, so judging first refused a game that had not made
+                // it yet as "a mod the server needs is not installed", and
+                // Play never reached the step that makes it.
+                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
+                catch (Exception ex)
+                {
+                    Log("The files made from your game could not be written (" + Failure.Why("Shell.Play, the files made from the game", ex) + ").");
+                }
+
                 // Checked again here, not just at startup, because the player's
                 // own mods folder and the plugin list can both change in between.
                 int blockers = 0, absent = 0;
@@ -369,18 +385,6 @@ namespace Thornswood
                     DrawStatus();
                     Ask.Tell(notBuilt + "\n\nThe launcher log on the Diagnostics page has each step it took.", "Thornswood", Ask.Icon.Warning);
                     return;
-                }
-
-                // The main menu with no Bethesda logo, the notice board's
-                // meshes and the mods' menus with no gold values are made from
-                // this machine's own game, never shipped (#2827, #3113,
-                // MadeFromGame). Only what is missing or changed is
-                // written; a game that cannot make them still plays, and the
-                // line says why.
-                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
-                catch (Exception ex)
-                {
-                    Log("The files made from your game could not be written (" + Failure.Why("Shell.Play, the files made from the game", ex) + ").");
                 }
 
                 if (!await EnsureServer()) return;

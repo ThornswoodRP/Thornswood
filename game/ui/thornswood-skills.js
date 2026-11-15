@@ -400,8 +400,9 @@
     },
     /*
       The profession guides (#3165): a page per profession, which is
-      Patrick's answer A on the issue. The facts are GUIDES below, built out
-      of the server's own tables; the sentences are GUIDE_TEXT.
+      Patrick's answer A on the issue. The facts are the guides file
+      (guidesNow below), built out of the server's own tables; the sentences
+      are GUIDE_TEXT.
     */
     guides: {
       title: 'Profession guides',
@@ -516,10 +517,13 @@
     scripts/dev/Build-ProfessionGuides.js out of game/data/recipes.json (the
     rows the recipe book counts), game/data/mine-buildings.json,
     game/data/hunts.json and the gamemode's BENCH_ACCESS, MANEUVERS and
-    tuning. It rides in this file rather than on the panel the server sends,
-    because it is the same for everybody and the panel is sent on every
-    write; what is a person's own on the page, their profession and rank, is
-    read from that panel as everything else here is.
+    tuning. They are a file of their own, game/ui/thornswood-profession-guides.js,
+    a step of the content chain (#6193), which the front injects with the
+    other overlays and which puts them on window.ThornswoodTables. They ride
+    in the page rather than on the panel the server sends, because they are
+    the same for everybody and the panel is sent on every write; what is a
+    person's own on the page, their profession and rank, is read from that
+    panel as everything else here is.
 
       ladder:   { per: { advanced, expert, master }, rest: { <rank>: n },
                   craftRest, party (a percent), perSpell, perRank, toolUses }
@@ -530,13 +534,14 @@
                      materials: [ [ name, recipes, class, rank, bench, [ from ],
                                     [ where ], more places ] ] } }
 
-    Run the script after any of those change; game/tests/test-3165-profession-guides.js
-    runs it with --check and fails while this block is stale.
+    Read when a page is drawn, so the order the two files come in does not
+    matter; while that file is not in, the page says so.
+    game/tests/test-3165-profession-guides.js holds the two together.
   */
-  // ==== PROFESSION_GUIDES ====
-  /* Built by scripts/dev/Build-ProfessionGuides.js out of game/data and game/gamemode.js. Do not hand edit. */
-  var GUIDES = {"ladder":{"per":{"advanced":100,"expert":250,"master":600},"rest":{"novice":1.5,"advanced":1.2,"expert":0.9,"master":0.6},"craftRest":15,"party":15,"perSpell":5,"perRank":10,"toolUses":50},"professions":{"warrior":{"halves":{"bulwark":{"count":0,"families":[],"first":[],"race":0,"benches":[],"maneuvers":[["Set","novice",15,45],["Plant","advanced",20,60],["Cover","expert",25,90],["Wall","master",40,180]]},"berserker":{"count":0,"families":[],"first":[],"race":0,"benches":[],"maneuvers":[["Rush","novice",15,30],["Heavy","advanced",20,45],["Break","expert",25,60],["Wreck","master",40,120]]}},"materials":[]},"mage":{"halves":{},"materials":[]},"alchemist":{"halves":{"blightbrewer":{"count":0,"families":[],"first":[],"race":0,"benches":[["Alchemy lab","novice"]]},"physicker":{"count":12,"families":[["Other food and drink",3,3,3,1],["Other goods",1,1,0,0]],"first":["Potion of Minor Healing","Poultice"],"race":0,"benches":[["Alchemy lab","novice"]]}},"materials":[["Blue Mountain Flower",4,"gatherer","advanced","",[],[],0],["Eye of Sabre Cat",3,"hunter","novice","",[],["Sabre Cat","Vale Sabre Cat","Animal Gladiator"],1],["Mudcrab Chitin",3,"hunter","novice","",[],["Mudcrab"],0],["Swamp Fungal Pod",3,"gatherer","advanced","",[],[],0],["Wheat",3,"farmer","advanced","",[],[],0],["Blisterwort",2,"gatherer","expert","",[],[],0],["Snowberries",2,"gatherer","advanced","",[],[],0],["White Cap",2,"gatherer","novice","",[],[],0],["Creep Cluster",1,"gatherer","novice","",[],[],0],["Fire Salts",1,"miner","expert","",[],[],0]]},"cook":{"halves":{"hearthcook":{"count":64,"families":[["Other food and drink",7,9,0,0],["Stews",5,2,4,1],["Meat dishes",7,3,0,1],["Soups",4,2,3,0],["Bread",0,4,0,0],["Vegetable dishes",3,1,0,0],["Cheese",0,3,0,0],["Fish dishes",2,0,0,0],["Chowders",1,0,0,0],["Crab dishes",1,0,0,0],["Ingredients",0,0,0,1]],"first":["First Planting Mead","Beef Stew","Cabbage Soup","Cooked Beef"],"race":0,"benches":[["Cookpot","novice"],["Grain mill","novice"],["Oven","novice"]]},"confectioner":{"count":12,"families":[["Desserts",1,10,1,0]],"first":["Apple Dumpling"],"race":0,"benches":[["Oven","novice"]]}},"materials":[["Salt Pile",46,"miner","novice","",[],[],0],["Butter",23,"farmer","novice","",[],[],0],["Sack of Flour",19,"farmer","advanced","Grain mill",["Wheat"],[],0],["Garlic",16,"gatherer","novice","",[],[],0],["Frost Mirriam",12,"gatherer","novice","",[],[],0],["Lavender",8,"gatherer","novice","",[],[],0],["Chicken's Egg",7,"farmer","novice","",[],[],0],["Juniper Berries",7,"gatherer","novice","",[],[],0],["Snowberries",7,"gatherer","advanced","",[],[],0],["Elves Ear",6,"gatherer","expert","",[],[],0]]},"smith":{"halves":{"platewright":{"count":244,"families":[["Body armour",21,51,11,7],["Helmets",9,21,8,5],["Gauntlets",12,18,6,5],["Armoured boots",8,16,6,5],["Shields",2,9,3,2],["Ingots",11,0,0,0],["Other armour and clothing",2,1,0,0],["Leather",2,0,0,0],["Hats and hoods",0,1,0,0],["Other goods",1,0,0,0],["Robes and body wear",0,1,0,0]],"first":["Fur Armor","Corundum Ingot","Ancient Nord Gauntlets","Fur Helmet"],"race":13,"benches":[["Forge","novice"],["Smelter","novice"],["Tanning rack","novice"],["Skyforge","advanced"]]},"edgewright":{"count":83,"families":[["Swords",1,7,3,2],["War axes",2,6,3,2],["Battleaxes",1,5,2,2],["Greatswords",1,5,2,2],["Maces",2,4,2,2],["Daggers",1,4,2,2],["Warhammers",1,4,2,2],["Other goods",8,0,0,0],["Other weapons",1,0,0,0]],"first":["Alembic","Iron War Axe","Iron Battleaxe","Iron Dagger"],"race":1,"benches":[["Forge","novice"],["Skyforge","advanced"]]}},"materials":[["Leather Strips",284,"hunter","novice","Tanning rack",["Leather"],[],0],["Iron Ingot",174,"miner","novice","Smelter",["Iron Ore"],["Raven Rock Mine","Halted Stream Camp","Fort Fellhammer Mines"],43],["Steel Ingot",134,"miner","advanced","Smelter",["Corundum Ore","Iron Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Leather",80,"hunter","novice","Tanning rack",[],[],0],["Corundum Ingot",41,"miner","advanced","Smelter",["Corundum Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Refined Moonstone",30,"miner","expert","Smelter",["Moonstone Ore"],["Soljund's Sinkhole","Mzulft","Mzulft Boilery"],11],["Quicksilver Ingot",25,"miner","advanced","Smelter",["Quicksilver Ore"],["Quicksilver Mine","Blind Cliff Bastion","Altar of Thrond Cave"],10],["Ebony Ingot",21,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1],["Orichalcum Ingot",17,"miner","advanced","Smelter",["Orichalcum Ore"],["Bilegulch Mine","Dushnikh Mine","Mor Khazgur Mine"],5],["Netch Leather",16,"hunter","advanced","",[],["Betty Netch","Bull Netch"],0]]},"enchanter":{"halves":{"bladebinder":{"count":13,"families":[["Staves",3,6,4,0]],"first":["Staff of Flames"],"race":0,"benches":[["Arcane enchanter","novice"],["Staff enchanter","novice"]]},"wardweaver":{"count":0,"families":[],"first":[],"race":0,"benches":[["Arcane enchanter","novice"]]}},"materials":[["Heart Stone",13,"miner","master","",[],["Coldcinder Cave","Broken Tusk Mine","Fort Frostmoth"],1],["Unenchanted Destruction Staff",10,"","","",[],[],0],["Unenchanted Restoration Staff",2,"","","",[],[],0],["Unenchanted Conjuration Staff",1,"","","",[],[],0]]},"tailor":{"halves":{"liverywright":{"count":82,"families":[["Robes and body wear",38,0,5,3],["Hats and hoods",15,0,0,1],["Other armour and clothing",0,10,0,0],["Shoes and light boots",7,0,0,0],["Gloves",3,0,0,0]],"first":["Black Robes","Black Cowl","Boots"],"race":2,"benches":[["Forge","novice"],["Loom","novice"],["Tanning rack","advanced"]]},"haberdasher":{"count":171,"families":[["Robes and body wear",43,2,0,3],["Shoes and light boots",31,1,1,6],["Hats and hoods",23,6,1,2],["Other armour and clothing",2,12,6,0],["Other goods",13,4,0,0],["Gloves",6,1,2,6]],"first":["Belted Tunic","Chef's Hat","Boots","Bandage"],"race":23,"benches":[["Forge","novice"],["Loom","novice"],["Tanning rack","novice"]]}},"materials":[["Thread",164,"gatherer","novice","Loom",["Tundra Cotton"],[],0],["Leather",104,"hunter","novice","Tanning rack",[],[],0],["Leather Strips",60,"hunter","novice","Tanning rack",["Leather"],[],0],["Linen Wrap",39,"","","",[],[],0],["Troll Fat",32,"hunter","advanced","",[],["Frost Troll","Troll","Snow Troll"],2],["Fur Plate",19,"hunter","novice","Tanning rack",[],[],0],["Gold Ingot",7,"miner","expert","Smelter",["Gold Ore"],["Kolskeggr Mine","Frossel","Darkshade"],14],["Common Soul Gem",5,"","","",[],[],0],["Dwarven Metal Ingot",4,"","","",[],[],0],["Ebony Ingot",4,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1]]},"woodworker":{"halves":{"charburner":{"count":5,"families":[["Other goods",2,1,1,1]],"first":["Poor Charcoal"],"race":0,"benches":[["Charcoal kiln","novice"]]},"woodwright":{"count":45,"families":[["Other goods",15,0,1,1],["Arrows and bolts",3,5,3,2],["Bows",0,3,5,2],["Other weapons",3,0,0,0],["Greatswords",0,2,0,0]],"first":["Bar Stool","Drum","Dwarven Arrow"],"race":3,"benches":[["Charcoal kiln","novice"],["Forge","novice"],["Woodworking bench","novice"],["Dawnguard bench","advanced"],["Skyforge","advanced"]]}},"materials":[["Firewood",37,"woodworker","novice","",[],[],0],["Leather Strips",13,"hunter","novice","Tanning rack",["Leather"],[],0],["Iron Ingot",10,"miner","novice","Smelter",["Iron Ore"],["Raven Rock Mine","Halted Stream Camp","Fort Fellhammer Mines"],43],["Steel Ingot",10,"miner","advanced","Smelter",["Corundum Ore","Iron Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Tundra Cotton",6,"gatherer","novice","",[],[],0],["Dwarven Metal Ingot",4,"","","",[],[],0],["Refined Moonstone",4,"miner","expert","Smelter",["Moonstone Ore"],["Soljund's Sinkhole","Mzulft","Mzulft Boilery"],11],["Quicksilver Ingot",3,"miner","advanced","Smelter",["Quicksilver Ore"],["Quicksilver Mine","Blind Cliff Bastion","Altar of Thrond Cave"],10],["Chaurus Chitin",2,"hunter","expert","",[],["Chaurus","Frozen Chaurus","Chaurus Hunter"],3],["Ebony Ingot",2,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1]]}}};
-  // ==== end PROFESSION_GUIDES ====
+  function guidesNow() {
+    var t = window.ThornswoodTables;
+    return (t && typeof t.PROFESSION_GUIDES === 'object' && t.PROFESSION_GUIDES) || null;
+  }
 
   /*
     The page's own sentences around those facts, one set per profession:
@@ -3108,7 +3113,7 @@
     A: what it makes, where the materials come from, how it ranks up. The
     tabs across the top are the eight professions; the page opens on your
     own, or while creating on the one marked, and a tab press reads another.
-    Nothing on it is picked or sent. The facts are GUIDES, the sentences
+    Nothing on it is picked or sent. The facts are guidesNow(), the sentences
     GUIDE_TEXT, and a person's own rank is the panel's, as everywhere here.
   */
   function guideRows() { return DATA.profession ? DATA.profession.rows : []; }
@@ -3124,9 +3129,10 @@
     if (creating() && p && p.row && guideHas(p.row)) return p.row;
     return '';
   }
-  // A ladder number in a sentence: {perSpell} and the like, out of GUIDES.ladder.
+  // A ladder number in a sentence: {perSpell} and the like, out of the guides' ladder.
   function guideFill(text) {
-    var ladder = (typeof GUIDES === 'object' && GUIDES && GUIDES.ladder) || {};
+    var g = guidesNow();
+    var ladder = (g && g.ladder) || {};
     return String(text || '').replace(/\{(\w+)\}/g, function (all, k) { return ladder[k] !== undefined ? String(ladder[k]) : all; });
   }
   function guideList(names) {
@@ -3175,7 +3181,7 @@
   }
 
   function drawGuides() {
-    var g = (typeof GUIDES === 'object' && GUIDES) ? GUIDES : null;
+    var g = guidesNow();
     var at = guideProf();
     var tabs = el('div', 'halves eight');
     guideRows().forEach(function (r) {

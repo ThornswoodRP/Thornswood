@@ -66,26 +66,29 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    Guarded and silent. A needs block that is not loaded yet, or a hot reload
-    mid-tick, must not stop somebody's work being counted.
+    No catch around it (#4955). A needs block that is not loaded yet, or a
+    hot reload mid-tick, is the check below: the work is still counted and
+    there is nothing to charge it to. Everything worked() reaches either
+    catches its own engine call or is arithmetic, and notify and say catch
+    their own, so a throw from here is a bug in our own code, and it goes
+    up to the event's guard and the log rather than the work being counted
+    with its rest unpaid.
   */
-  try {
-    const needs = globalThis.__thornswoodNeeds;
-    if (needs && needs.worked) {
-      /*
-        AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
-        swing now rather than nudging a rate, so it can cross a band, and a
-        band crossing is the one thing worth interrupting somebody for. Every
-        swing before that says nothing, which is the same rule the seam and
-        the chopping block already follow.
-      */
-      const tiredLine = needs.worked(actorId);
-      if (tiredLine) {
-        try { notify(actorId, tiredLine); } catch (e) { }
-        try { say(actorId, tiredLine); } catch (e) { }
-      }
+  const needs = globalThis.__thornswoodNeeds;
+  if (needs && needs.worked) {
+    /*
+      AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
+      swing now rather than nudging a rate, so it can cross a band, and a
+      band crossing is the one thing worth interrupting somebody for. Every
+      swing before that says nothing, which is the same rule the seam and
+      the chopping block already follow.
+    */
+    const tiredLine = needs.worked(actorId, key);
+    if (tiredLine) {
+      notify(actorId, tiredLine);
+      say(actorId, tiredLine);
     }
-  } catch (e) { }
+  }
 
   /*
     And work done with your party standing next to you counts for more.

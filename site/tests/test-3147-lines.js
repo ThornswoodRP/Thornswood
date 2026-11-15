@@ -28,7 +28,7 @@
 // Nothing leaves this machine. The site copy and its files are in a scratch
 // folder under the system's temp folder.
 const fs = require('fs'), path = require('path'), os = require('os');
-const net = require('net'), http = require('http');
+const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const siteFiles = require('../../tests/site-files');
 const ROOT = path.join(__dirname, '..', '..');
@@ -205,13 +205,6 @@ else {
 }
 
 // --------------------------------------------------- a copy of the site --
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', function () { const p = s.address().port; s.close(function () { ok(p); }); });
-  });
-}
 function ask(port, route) {
   return new Promise(function (ok) {
     const req = http.request({ host: '127.0.0.1', port: port, method: 'GET', path: route, agent: false }, function (res) {
@@ -240,19 +233,20 @@ function copyTree(from, to) {
     copyTree(path.join(APP, 'public'), path.join(dir, 'public'));
     copyTree(path.join(APP, 'data', 'site'), path.join(dir, 'data', 'site'));
     fs.copyFileSync(path.join(APP, 'config.example.json'), path.join(dir, 'config.json'));
-    const port = await freePort();
+    let port = 0;
     child = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                             THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
     });
     child.stdout.on('data', function (d) { out += d; });
     child.stderr.on('data', function (d) { out += d; });
     child.on('exit', function () { exited = true; });
     const end = Date.now() + 10000;
-    while (Date.now() < end && out.indexOf('listening on ') < 0 && !exited) await new Promise((ok) => setTimeout(ok, 20));
-    yes('a copy of the site comes up', out.indexOf('listening on ') >= 0 && !exited);
-    if (exited || out.indexOf('listening on ') < 0) { console.log(out.split('\n').slice(-12).join('\n')); return; }
+    while (Date.now() < end && !siteFiles.saidPort(out) && !exited) await new Promise((ok) => setTimeout(ok, 20));
+    yes('a copy of the site comes up', siteFiles.saidPort(out) > 0 && !exited);
+    if (exited || !siteFiles.saidPort(out)) { console.log(out.split('\n').slice(-12).join('\n')); return; }
+    port = siteFiles.saidPort(out);
 
     const front = await ask(port, '/');
     const q = /<blockquote class="chron" id="loreLine">([\s\S]*?)<cite>([\s\S]*?)<\/cite><\/blockquote>/.exec(front.body);

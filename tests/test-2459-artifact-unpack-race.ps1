@@ -31,7 +31,7 @@
 
   Since #2888 a run unpacks into a folder of its own that is never renamed,
   and what is named is the small <zip basename>.folder file that says which
-  folder is the artifact's; tests\test-2888-artifact-folder-name.ps1 holds
+  folder is the artifact's; scripts\tests\test-2888-artifact-folder-name.ps1 holds
   that no folder is ever what gets named.
 
   Read only apart from files under its own temp folder.

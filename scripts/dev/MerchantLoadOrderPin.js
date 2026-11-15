@@ -6,7 +6,7 @@
 // sha256 of that order. It used to be the sha256 of the whole order, own
 // plugins' bytes included, so every rebuild of Thornswood-Content.esp or
 // Thornswood-Last.esp that reached the catalogue made all three documents
-// invalid and Build-MerchantGamemode.js stopped, though none of the
+// invalid and the merchant build (Build-MerchantTables.js now) stopped, though none of the
 // evidence was read from them: on 21 Oct the catalogue still named a Content
 // plugin from before #2993, and re-costing smith recipes in Last.esp (#613)
 // stopped the merchant build. Own plugins are held to their files where the

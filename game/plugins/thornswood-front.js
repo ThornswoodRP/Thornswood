@@ -94,7 +94,7 @@
 
   const UI_PATH = 'Data/Platform/UI/index.html';
   const OVERLAYS = ['thornswood-chat.js', 'thornswood-emotes.js', 'thornswood-voice.js',
-                    'thornswood-skills.js', 'thornswood-party.js',
+                    'thornswood-profession-guides.js', 'thornswood-skills.js', 'thornswood-party.js',
                     'thornswood-journal.js', 'thornswood-board.js', 'thornswood-trade.js', 'thornswood-merchant.js',
                     'thornswood-repair.js', 'thornswood-treat.js', 'thornswood-maneuvers.js', 'thornswood-ride.js',
                     'thornswood-help.js', 'thornswood-settings.js', 'thornswood-afk.js', 'thornswood-box.js', 'thornswood-ship.js',
@@ -309,7 +309,29 @@
   function say(text) {
     log(text);
   }
+
   T.say = say;
+
+  // ------------------------------------------------------ client tables ----
+  // The tables this plugin reads that the content build writes out of the
+  // load order (#5191): PLACED_WATERS, STALL_SPOTS and NO_BOUNTY_FACTIONS.
+  // Each is a plugin of its own, Data/Platform/Plugins/thornswood-table-*.js
+  // (scripts/dev/ClientTables.js), which puts its rows on
+  // globalThis.Thornswood.clientTables (T here) as Skyrim Platform loads it.
+  // Read when a table is used, not when this file loads, since Skyrim
+  // Platform loads the plugins in an order nobody here chooses. One that is
+  // not there is said in the log, once, and reads as no rows.
+  const clientTableSaid = {};
+  function clientTable(name) {
+    const all = T.clientTables;
+    const rows = all ? all[name] : undefined;
+    if (Array.isArray(rows)) { return rows; }
+    if (!clientTableSaid[name]) {
+      clientTableSaid[name] = true;
+      say('client table ' + name + ' is not there: its plugin thornswood-table-' + name.toLowerCase().replace(/_/g, '-') + '.js did not load (#5191)');
+    }
+    return [];
+  }
 
   /**
    * A line in the corner of the screen, for the handful of things a person
@@ -4505,11 +4527,11 @@
     is above the feet, and every placed water in the cell, which the cell walk
     keeps with the fires (activator 24 is one of its four types). Each row is
     [plugin, local id, x1, y1, x2, y2]: an ACTI with a WNAM and its OBND
-    footprint. scripts\dev\Build-WaterTable.js writes the line below from the
-    load order; do not edit it by hand. The footprint is taken unrotated and
+    footprint, in the client table PLACED_WATERS, which
+    scripts\dev\Build-WaterTable.js writes from the load order (clientTable,
+    below). The footprint is taken unrotated and
     unscaled, which is exact for the square WaterNNN planes Bethesda places.
   */
-  const PLACED_WATERS = [["Skyrim.esm",1074089,-512,-512,512,512],["Skyrim.esm",1075745,-512,-512,512,512],["Skyrim.esm",1075749,-512,-512,512,512],["Skyrim.esm",1076822,-1024,-1024,1024,1024],["Skyrim.esm",1081285,-512,-512,512,512],["Skyrim.esm",1084157,-1024,-1024,1024,1024],["Skyrim.esm",1084161,-512,-1024,512,1024],["Skyrim.esm",1092911,-512,-512,512,512],["Skyrim.esm",1100481,-512,-512,512,512],["Skyrim.esm",1100484,-512,-512,512,512],["Skyrim.esm",1100487,-512,-512,512,512],["Skyrim.esm",1100489,-512,-512,512,512],["Skyrim.esm",1100491,-512,-512,512,512],["Skyrim.esm",1100493,-512,-512,512,512],["Skyrim.esm",1105428,-256,-764,238,582],["Skyrim.esm",1105429,-256,-764,238,582],["Skyrim.esm",1108346,-2524,-2009,781,1292],["Skyrim.esm",1108347,-2499,-2833,845,511],["Skyrim.esm",1108349,-730,-1068,737,399],["Dawnguard.esm",72882,-512,-512,512,512],["Water for ENB (Shades of Skyrim).esp",1199413,-512,-512,512,512],["Water for ENB (Shades of Skyrim).esp",1220156,-512,-512,512,512],["Water for ENB (Shades of Skyrim).esp",1220159,-512,-512,512,512],["Dawnguard.esm",84869,-512,-512,512,512],["Skyrim.esm",87080,-512,-512,512,512],["Skyrim.esm",90254,-461,-1246,401,1163],["Skyrim.esm",95913,-461,-1246,401,1163],["Skyrim.esm",95915,-1057,-360,771,1348],["Skyrim.esm",95918,-1057,-360,771,1348],["Dragonborn.esm",104986,-512,-512,512,512],["Dawnguard.esm",105623,-512,-512,512,512],["Dawnguard.esm",106658,-512,-512,512,512],["Dawnguard.esm",7191,-512,-512,512,512],["Dragonborn.esm",121793,-512,-512,512,512],["Dragonborn.esm",126667,-512,-512,512,512],["Dragonborn.esm",155877,-2048,-2048,2048,2048],["SkyrimSewers.esp",161631,-512,-1024,512,1024],["Dawnguard.esm",10545,-512,-512,512,512],["Dragonborn.esm",175592,-455,-455,455,455],["Dragonborn.esm",175594,-394,-394,394,394],["Dragonborn.esm",179924,-512,-512,512,512],["Dragonborn.esm",210968,-512,-1024,512,1024],["Dragonborn.esm",226073,-512,-512,512,512],["Skyrim.esm",230449,-1116,-176,575,1471],["Dragonborn.esm",236396,-154,-152,148,199],["Skyrim.esm",240771,-512,-512,512,512],["Dragonborn.esm",250615,-197,-218,197,176],["Skyrim.esm",269133,-631,-1675,564,364],["Dawnguard.esm",17078,-121,-117,117,118],["Dawnguard.esm",17086,-120,-120,119,120],["Skyrim.esm",333178,-63,-24,63,23],["Dawnguard.esm",20882,-512,-512,512,512],["Skyrim.esm",337728,-896,-928,928,896],["Dawnguard.esm",24847,-512,-512,512,512],["Skyrim.esm",404064,-512,-512,512,512],["Dawnguard.esm",27540,-512,-1024,512,1024],["Skyrim.esm",463813,-512,-512,512,512],["Skyrim.esm",478953,-512,-512,512,512],["Skyrim.esm",501175,-3253,-1149,0,605],["Skyrim.esm",501208,-1787,-1149,1466,605],["Skyrim.esm",501237,-1116,-176,575,1471],["Skyrim.esm",517671,-512,-512,512,512],["Water for ENB.esm",2048,-1057,-360,771,1348],["Water for ENB.esm",2049,-1057,-360,771,1348],["Water for ENB.esm",2050,-1057,-360,771,1348],["Water for ENB.esm",2051,-1057,-360,771,1348],["Water for ENB.esm",2052,-1057,-360,771,1348],["Water for ENB.esm",2053,-512,-512,512,512],["Water for ENB.esm",2054,-886,-1845,810,2163],["Water for ENB.esm",2055,-344,-1177,335,116],["Water for ENB.esm",2056,-344,-1177,335,116],["Water for ENB.esm",2057,-107,-1054,134,1],["Water for ENB.esm",2058,-344,-1177,335,135],["Water for ENB.esm",2059,-344,-1177,335,116],["Water for ENB.esm",2061,-170,-225,188,230],["Water for ENB.esm",2062,-119,-179,134,168],["Water for ENB.esm",2063,-141,-189,141,199],["Water for ENB.esm",2064,-512,-512,512,512],["Water for ENB.esm",2066,-512,-512,512,512],["Water for ENB.esm",2096,-767,-26,1481,1247],["Water for ENB.esm",2098,-512,-512,512,512],["Skyrim.esm",543981,-2521,-2042,3041,808],["Skyrim.esm",548809,-1125,-1173,1173,1125],["Skyrim.esm",548812,-724,-724,724,724],["Skyrim.esm",548866,-76,-721,154,552],["Skyrim.esm",548870,-154,-721,87,560],["Skyrim.esm",593202,-450,-274,450,274],["Skyrim.esm",598311,-120,-120,119,120],["Skyrim.esm",619134,-154,-152,148,199],["Skyrim.esm",773926,-2048,-2048,2048,2048],["Skyrim.esm",793924,-512,-512,512,512],["Skyrim.esm",837555,-512,-512,512,512],["Skyrim.esm",837557,-1024,-1024,1024,1024],["Skyrim.esm",837558,-512,-1024,512,1024],["Skyrim.esm",837560,-512,-512,512,512],["Skyrim.esm",837561,-1024,-1024,1024,1024],["Skyrim.esm",837562,-512,-1024,512,1024],["Dawnguard.esm",52593,-512,-1024,512,1024],["Skyrim.esm",858612,-512,-512,512,512],["Skyrim.esm",934358,-512,-512,512,512],["Skyrim.esm",946557,-512,-512,512,512],["Skyrim.esm",1000818,-512,-512,512,512],["Skyrim.esm",1036492,-256,-256,255,256],["Skyrim.esm",1036493,-256,-256,255,256],["Skyrim.esm",1036503,-176,-166,171,215],["Skyrim.esm",1036508,-154,-152,148,199],["Skyrim.esm",1040529,-154,-152,148,199]];
   // FireFXShader, 0001b212 in Skyrim.esm, read out of the EFSH records. This
   // is the engine's own "this thing is burning", the one fire damage uses.
   const FIRE_SHADER = 0x1b212;
@@ -4638,6 +4660,7 @@
    */
   function resolveWaterIds() {
     waterBox = {};
+    const PLACED_WATERS = clientTable('PLACED_WATERS');
     for (let i = 0; i < PLACED_WATERS.length; i++) {
       const row = PLACED_WATERS[i];
       try {
@@ -6003,61 +6026,6 @@
     checks again that they stand there, and its panel does the rest
     (game/ui/thornswood-stall.js).
   */
-  // MARKET STALL SPOTS BEGIN
-  // Built by scripts\dev\Build-MarketStallsGamemode.js out of game\data\market-stalls.json. Do not hand edit.
-  const STALL_SPOTS = [
-    ["falkreath-e0b1", 0x3c, "Skyrim.esm", -54113, -34305, -3633, 335],
-    ["falkreath-e0b2", 0x3c, "Skyrim.esm", -54413, -34602, -3620, 335],
-    ["markarth-473a0", 0x16d71, "Skyrim.esm", -174050, 5729, -3363, 183],
-    ["markarth-473a1", 0x16d71, "Skyrim.esm", -174136, 6065, -3328, 183],
-    ["markarth-7de", 0x3c, "Skyrim.esm", -168656, 6632, -4331, 183],
-    ["morthal-bc995", 0x3c, "Skyrim.esm", -85314, 57199, -11567, 254],
-    ["morthal-bc996", 0x3c, "Skyrim.esm", -85377, 57518, -11568, 254],
-    ["riften-1b1f7a", 0x16bb4, "Skyrim.esm", 176485, -98728, 11211, 260],
-    ["riften-1b1f7c", 0x16bb4, "Skyrim.esm", 176213, -99094, 11207, 202],
-    ["riften-1dd1", 0x16bb4, "Skyrim.esm", 172370, -96376, 11128, 202],
-    ["riften-1dd2", 0x16bb4, "Skyrim.esm", 172370, -96231, 11128, 202],
-    ["riften-cc524", 0x16bb4, "Skyrim.esm", 173755, -96726, 11104, 252],
-    ["riften-cc52d", 0x16bb4, "Skyrim.esm", 173079, -97352, 11104, 309],
-    ["riften-cc52e", 0x16bb4, "Skyrim.esm", 173779, -97306, 11104, 257],
-    ["solitude-1aa3b", 0x3c, "Skyrim.esm", -59552, 100648, -13958, 224],
-    ["solitude-2a11", 0x37edf, "Skyrim.esm", -61093, 105827, -8410, 224],
-    ["solitude-2a1b", 0x37edf, "Skyrim.esm", -61315, 105933, -8418, 209],
-    ["solitude-2a49", 0x37edf, "Skyrim.esm", -60786, 105792, -8410, 224],
-    ["solitude-357d", 0x37edf, "Skyrim.esm", -59225, 107632, -8021, 224],
-    ["solitude-46f5", 0x37edf, "Skyrim.esm", -60730, 104169, -8307, 224],
-    ["solitude-4725", 0x37edf, "Skyrim.esm", -61764, 104094, -8307, 224],
-    ["solitude-50c6a", 0x37edf, "Skyrim.esm", -61161, 104924, -8335, 224],
-    ["solitude-5133", 0x3c, "Skyrim.esm", -58740, 101161, -13959, 224],
-    ["solitude-64b8c", 0x37edf, "Skyrim.esm", -61200, 104536, -8334, 224],
-    ["solitude-64b8d", 0x37edf, "Skyrim.esm", -61605, 104462, -8333, 224],
-    ["whiterun-1908f", 0x1a26f, "Skyrim.esm", 21453, -7327, -3587, 254],
-    ["whiterun-5b2e4", 0x1a26f, "Skyrim.esm", 25242, -7425, -3393, 254],
-    ["whiterun-5bee6", 0x1a26f, "Skyrim.esm", 25156, -7089, -3400, 314],
-    ["whiterun-6b0b6", 0x1a26f, "Skyrim.esm", 24382, -7187, -3399, 335],
-    ["whiterun-b7f00", 0x3c, "Skyrim.esm", 12937, -10803, -4726, 238],
-    ["whiterun-fe7f", 0x1a26f, "Skyrim.esm", 24312, -6755, -3422, 270],
-    ["windhelm-383a6", 0x1691d, "Skyrim.esm", 130794, 36455, -12272, 236],
-    ["windhelm-38403", 0x1691d, "Skyrim.esm", 130808, 35750, -12276, 236],
-    ["windhelm-38404", 0x1691d, "Skyrim.esm", 130560, 36224, -12272, 236],
-    ["windhelm-80c33", 0x3c, "Skyrim.esm", 135265, 30774, -12565, 202],
-    ["windhelm-8b01e", 0x1691d, "Skyrim.esm", 134225, 39412, -12049, 236],
-    ["windhelm-8b0a", 0x1691d, "Skyrim.esm", 129842, 36459, -12272, 236],
-    ["windhelm-8b0fb", 0x3c, "Skyrim.esm", 135301, 30408, -12581, 177],
-    ["windhelm-8b6c", 0x1691d, "Skyrim.esm", 130415, 35648, -12272, 236],
-    ["windhelm-a48fc", 0x1691d, "Skyrim.esm", 137951, 38182, -12643, 208],
-    ["windhelm-b4bb", 0x1691d, "Skyrim.esm", 137721, 38748, -12660, 219],
-    ["windhelm-f3c74", 0x1691d, "Skyrim.esm", 131041, 35666, -12272, 219],
-    ["windhelm-f3c75", 0x1691d, "Skyrim.esm", 130560, 36016, -12272, 219],
-    ["winterhold-76d1", 0x3c, "Skyrim.esm", 114289, 104184, -9405, 202],
-    ["winterhold-76d3", 0x3c, "Skyrim.esm", 114562, 104038, -9392, 183],
-    ["winterhold-76e1", 0x3c, "Skyrim.esm", 114011, 103748, -9225, 202],
-    ["winterhold-76e2", 0x3c, "Skyrim.esm", 113403, 100147, -8954, 183],
-    ["winterhold-76e4", 0x3c, "Skyrim.esm", 113628, 100266, -9020, 202],
-    ["winterhold-76e5", 0x3c, "Skyrim.esm", 112678, 100814, -8953, 202],
-    ["winterhold-76e6", 0x3c, "Skyrim.esm", 112650, 100647, -8944, 202]
-  ];
-  // MARKET STALL SPOTS END
   let stallWorlds = null;  // null not resolved yet, else { stall id: runtime world or cell id }
   const PLOT_ASK_MS = 10000;     // asked again this often while one crop is looked at
   const PLOT_LINE_MS = 30000;    // an answer older than this is not drawn
@@ -6163,6 +6131,7 @@
 
   /** The id of the stall somebody is standing at, by STALL_SPOTS, or ''. */
   function stallAt() {
+    const STALL_SPOTS = clientTable('STALL_SPOTS');
     if (!STALL_SPOTS.length) { return ''; }
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
@@ -7816,100 +7785,12 @@
     log says how many took all six, so the line is a measurement and not a
     hope.
   */
-  // ==== NO_BOUNTY_FACTIONS, generated ====
-  // One row a faction: its form id in its plugin, the plugin, its editor id.
-  // Generated by scripts\dev\Build-CrimeTable.py; do not hand edit.
-  const NO_BOUNTY_FACTIONS = [
-    [0x5211, "HearthFires.esm", "BYOHHousecarlFalkreathCrimeFaction"],
-    [0x5212, "HearthFires.esm", "BYOHHousecarlHjaalmarchCrimeFaction"],
-    [0x5213, "HearthFires.esm", "BYOHHousecarlPaleCrimeFaction"],
-    [0x48362, "Skyrim.esm", "CompanionsFaction"],
-    [0x10b1fc, "Skyrim.esm", "CrimeFactionCidhnaMine"],
-    [0x267e3, "Skyrim.esm", "CrimeFactionEastmarch"],
-    [0x28170, "Skyrim.esm", "CrimeFactionFalkreath"],
-    [0x10f72b, "Skyrim.esm", "CrimeFactionGreybeard"],
-    [0x29db0, "Skyrim.esm", "CrimeFactionHaafingar"],
-    [0x2816d, "Skyrim.esm", "CrimeFactionHjaalmarch"],
-    [0x28848, "Skyrim.esm", "CrimeFactionImperial"],
-    [0x10cee9, "Skyrim.esm", "CrimeFactionKhajiitCaravans"],
-    [0x2b036, "Skyrim.esm", "CrimeFactionNull"],
-    [0x28713, "Skyrim.esm", "CrimeFactionOrcs"],
-    [0x2816e, "Skyrim.esm", "CrimeFactionPale"],
-    [0x2816c, "Skyrim.esm", "CrimeFactionReach"],
-    [0x2816b, "Skyrim.esm", "CrimeFactionRift"],
-    [0x28849, "Skyrim.esm", "CrimeFactionSons"],
-    [0x10a794, "Skyrim.esm", "CrimeFactionThievesGuild"],
-    [0x267ea, "Skyrim.esm", "CrimeFactionWhiterun"],
-    [0x2816f, "Skyrim.esm", "CrimeFactionWinterhold"],
-    [0xed167, "Skyrim.esm", "DA06YamarzCrimeFaction"],
-    [0x8942f, "Skyrim.esm", "DA11CannibalFaction"],
-    [0x1bdb3, "Skyrim.esm", "DarkBrotherhoodFaction"],
-    [0x10fe28, "Skyrim.esm", "DB09TowerFaction"],
-    [0xe7c27, "Skyrim.esm", "DBCrimeFactionMaro"],
-    [0xedddf, "Skyrim.esm", "DBRecuringContact10CrimeFaction"],
-    [0xeddde, "Skyrim.esm", "DBRecuringContact1CrimeFaction"],
-    [0xedddd, "Skyrim.esm", "DBRecuringContact2CrimeFaction"],
-    [0xedddc, "Skyrim.esm", "DBRecuringContact3CrimeFaction"],
-    [0xedddb, "Skyrim.esm", "DBRecuringContact4CrimeFaction"],
-    [0xeddda, "Skyrim.esm", "DBRecuringContact5CrimeFaction"],
-    [0xeddd9, "Skyrim.esm", "DBRecuringContact6CrimeFaction"],
-    [0xeddd8, "Skyrim.esm", "DBRecuringContact7CrimeFaction"],
-    [0xeddd7, "Skyrim.esm", "DBRecuringContact8CrimeFaction"],
-    [0xeddd6, "Skyrim.esm", "DBRecuringContact9CrimeFaction"],
-    [0xe7b9d, "Skyrim.esm", "DBRecuringTarget10CrimeFaction"],
-    [0xe7b9e, "Skyrim.esm", "DBRecuringTarget1CrimeFaction"],
-    [0xe7b9f, "Skyrim.esm", "DBRecuringTarget2CrimeFaction"],
-    [0xe7ba0, "Skyrim.esm", "DBRecuringTarget3CrimeFaction"],
-    [0xe7ba1, "Skyrim.esm", "DBRecuringTarget4CrimeFaction"],
-    [0xe7ba2, "Skyrim.esm", "DBRecuringTarget5CrimeFaction"],
-    [0xe7ba3, "Skyrim.esm", "DBRecuringTarget6CrimeFaction"],
-    [0xe7ba4, "Skyrim.esm", "DBRecuringTarget7CrimeFaction"],
-    [0xe7ba5, "Skyrim.esm", "DBRecuringTarget8CrimeFaction"],
-    [0xe7ba6, "Skyrim.esm", "DBRecuringTarget9CrimeFaction"],
-    [0x14b5b, "Dawnguard.esm", "DLC1MothPriestCrimeFaction"],
-    [0x137ba, "Dawnguard.esm", "DLC1SeranaCrimeFaction"],
-    [0x17f71, "Dawnguard.esm", "DLC1VampireCrimeFaction"],
-    [0x145c3, "Dawnguard.esm", "DLC1WE01AttackPlayerFaction"],
-    [0x18279, "Dragonborn.esm", "DLC2CrimeRavenRockFaction"],
-    [0x1dc61, "Dragonborn.esm", "DLC2dunFrostmoonWerewolvesFaction"],
-    [0x38562, "Dragonborn.esm", "DLC2HirelingTeldrynCrimeFaction"],
-    [0x31786, "Dragonborn.esm", "DLC2SkaalDialogueFaction"],
-    [0x27291, "Dragonborn.esm", "DLC2SkaalShamanFaction"],
-    [0x18f9a, "Dragonborn.esm", "DLC2SkaalVillageCitizenFaction"],
-    [0x2173a, "Dragonborn.esm", "DLC2SV02ThalmorCrimeFaction"],
-    [0x17ebd, "Dragonborn.esm", "DLC2TameDragonFaction"],
-    [0x3d126, "Dragonborn.esm", "DLC2ThirskNordCrimeFaction"],
-    [0x108232, "Skyrim.esm", "dunPOIWitchAniseCrimeFaction"],
-    [0x103aec, "Skyrim.esm", "HirelingBelrandCrimeFaction"],
-    [0x103366, "Skyrim.esm", "HirelingErikCrimeFaction"],
-    [0x103367, "Skyrim.esm", "HirelingJenassaCrimeFaction"],
-    [0x103368, "Skyrim.esm", "HirelingMarcurioCrimeFaction"],
-    [0x103369, "Skyrim.esm", "HirelingStenvarCrimeFaction"],
-    [0x10336a, "Skyrim.esm", "HirelingVorstagCrimeFaction"],
-    [0x10336b, "Skyrim.esm", "HousecarlMarkarthCrimeFaction"],
-    [0x10336c, "Skyrim.esm", "HousecarlRiftenCrimeFaction"],
-    [0x10336d, "Skyrim.esm", "HousecarlSolitudeCrimeFaction"],
-    [0x10336e, "Skyrim.esm", "HousecarlWhiterunCrimeFaction"],
-    [0x10336f, "Skyrim.esm", "HousecarlWindhelmCrimeFaction"],
-    [0x622e6, "Skyrim.esm", "KarthwastenSilverFishGuards"],
-    [0x88ee4, "Skyrim.esm", "MS07BanditFaction"],
-    [0x13cab, "Populated Cities Towns Villages Legendary.esp", "ssssDawnstarMercenaryMixHIRELING"],
-    [0x13cac, "Populated Cities Towns Villages Legendary.esp", "ssssFalkreathMercenaryMixHIRELING"],
-    [0x13cad, "Populated Cities Towns Villages Legendary.esp", "ssssMarkarthMercenaryMixHIRELING"],
-    [0x13cae, "Populated Cities Towns Villages Legendary.esp", "ssssMorthalMercenaryMixHIRELING"],
-    [0x13caf, "Populated Cities Towns Villages Legendary.esp", "ssssRiftenMercenaryMixHIRELING"],
-    [0x13cb0, "Populated Cities Towns Villages Legendary.esp", "ssssSolitudeMercenaryMixHIRELING"],
-    [0x13cb1, "Populated Cities Towns Villages Legendary.esp", "ssssWhiterunMercenaryMixHIRELING"],
-    [0x13cb2, "Populated Cities Towns Villages Legendary.esp", "ssssWindhelmMercenaryMixHIRELING"],
-    [0x13cb3, "Populated Cities Towns Villages Legendary.esp", "ssssWinterholdMageMercenaryMixHIRELING"],
-    [0x522b6, "Skyrim.esm", "WIGenericCrimeFaction"],
-  ];
-  // ==== end NO_BOUNTY_FACTIONS ====
   // Murder, assault, stealing, trespass, pickpocket and werewolf, as the FACT
   // record and SKSE's SetFactionFlag number them.
   const IGNORE_CRIMES = [0x80, 0x100, 0x200, 0x400, 0x2000, 0x10000];
 
   function noBounty() {
+    const NO_BOUNTY_FACTIONS = clientTable('NO_BOUNTY_FACTIONS');
     const took = [], absent = [], refused = [];
     for (let i = 0; i < NO_BOUNTY_FACTIONS.length; i++) {
       const row = NO_BOUNTY_FACTIONS[i];

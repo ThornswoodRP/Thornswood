@@ -899,8 +899,15 @@
     // once, and a command offered again under its id runs once (commandsRun).
     // tests/test-2135-journal-press.js counts it. So there is no time window
     // here: the 2 s one #2037 added guessed at a repeat nothing makes.
+    // The id is unique among this person's journals. Two made in the same
+    // millisecond drew the same number about once in a thousand, and then
+    // every write, share and drop meant for the second went to the first:
+    // the gate's test-social failed on it in the merge queue on 15 Nov.
+    var base = 'j' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36);
+    var id = base;
+    for (var n = 2; findJournal(s, id); n++) { id = base + 'x' + n.toString(36); }
     var j = {
-      id: 'j' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36),
+      id: id,
       title: String(title || 'Journal').slice(0, 60),
       pages: [], shared: {}, at: Date.now()
     };

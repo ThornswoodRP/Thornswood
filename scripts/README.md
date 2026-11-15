@@ -25,7 +25,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 
 | Script | What it is for |
 | --- | --- |
-| [bot/Load-Box.ps1](bot/Load-Box.ps1) | #4623. The load test with the collection's world: its NPCs, the gamemode's NPC runtime, merchants and quests, and bots that fight, host the NPCs near them and ask the guild traders to trade. |
+| [bot/Load-Box.ps1](bot/Load-Box.ps1) | #4623. The load test with the collection's world: its NPCs, the gamemode's NPC runtime, merchants and quests, and bots that fight, host the NPCs near them, ask the guild traders to trade and take and leave their work (load-bots.js, quest). |
 | [deploy/Artifact.ps1](deploy/Artifact.ps1) | What a deploy sends, built from a commit rather than copied off a working tree, and what the box keeps to say which commit each part runs. |
 | [deploy/Bot-Code.ps1](deploy/Bot-Code.ps1) | The Discord bot's code as one list (#5357): what Install-Bot.ps1 sends and parse checks on the box, and what App-Part.ps1 puts in the bot's part of a Release for the deploy agent. |
 | [deploy/Check-GitHubSettings.ps1](deploy/Check-GitHubSettings.ps1) | Reads GitHub's Actions settings, environments, secrets and variables for this repository and names every way they differ from records\github-settings.json on main. |
@@ -290,7 +290,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Write-EnginePinText.ps1](release/Write-EnginePinText.ps1) | Writes the engine pin's lines in THIRD-PARTY.md and site\data\site\credits.md from the records, or with -Check says which ones differ from them. |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
-| [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in the PowerShell 5.1 that ships with Windows Server 2022. |
+| [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |
 | [vps/Bot-Service.ps1](vps/Bot-Service.ps1) | Runs the Thornswood bot as a Windows service under its own account, and stops and starts it by name (issue #465). |
 | [vps/Box-Run.ps1](vps/Box-Run.ps1) | Runs one verb of the deploy gate on the box (#2841), from any session gh is signed in on, a cloud thread included, with no key to the box. |
 | [vps/BoxFirewall.ps1](vps/BoxFirewall.ps1) | Where the box keeps its firewall rules, and how a change to them takes effect (#3896). |
@@ -334,7 +334,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [vps/Rehearse-OnBox.ps1](vps/Rehearse-OnBox.ps1) | The monthly restore rehearsal (#5020, #5175), run on the box from the cloud through the deploy gate's Rehearse-Restore verb, with a bot loading the character (#5196) where a person used to load it on One. |
 | [vps/Remote.ps1](vps/Remote.ps1) | Runs a bit of PowerShell on the VPS, properly. |
 | [vps/Remove-HandMadeTasks.ps1](vps/Remove-HandMadeTasks.ps1) | Takes the two SYSTEM tasks somebody made by hand on the box, and the folders they run from, off the box (issue #3288). |
-| [vps/Renew-BoxKey.ps1](vps/Renew-BoxKey.ps1) | Gives one of the two keys a workflow of the ops repository holds a new key pair, on the box, and puts the new private half straight into that workflow's GitHub environment (#2862, Patrick's A on the report page's q-retire-box-keys, 31 Oct 2026: box keys are renewed from the cloud, never made new, and never from One). |
+| [vps/Renew-BoxKey.ps1](vps/Renew-BoxKey.ps1) | Gives the desk key, the one key a workflow of the ops repository holds, a new key pair, on the box, and puts the new private half straight into box-run.yml's GitHub environment (#2862, Patrick's A on the report page's q-retire-box-keys, 31 Oct 2026: box keys are renewed from the cloud, never made new, and never from One). |
 | [vps/Request-Restart.ps1](vps/Request-Restart.ps1) | Tells the live server to warn everybody and then clear them out, without needing to be standing in the world to type /restart. |
 | [vps/Restart-Server.ps1](vps/Restart-Server.ps1) | Restarts a Thornswood service on the VPS. Nothing is copied and nothing is built: this only stops it and starts it again. |
 | [vps/RestartNotice.ps1](vps/RestartNotice.ps1) | The restart notice the Discord bot posts (#5784), written on the box by the scripts that stop a game server by hand: Request-Restart.ps1 (and so Deploy-Server.ps1 and Deploy-DevGamemode.ps1, which warn through it), Swap.ps1's swap block and Restart-Server.ps1. |
