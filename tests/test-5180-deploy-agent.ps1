@@ -269,18 +269,24 @@ $h = @{}; $want = ''
     $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value
     # The rules read verbs.json the way the broker does, which is not strict.
     function Ask([string]$line) { Set-StrictMode -Off; Test-ThornswoodGateRequest -Line $line -Verbs $verbs }
-    $req = Ask $lo
-    Yes "the agent's load order line is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
-    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50)'))
+    # The agent names the Deployment's commit with -At (#6166).
+    $loAt = $lo + ' -At 0123456789abcdef0123456789abcdef01234567'
+    $req = Ask $loAt
+    Yes "the agent's load order line, with -At and a commit, is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
+    Yes '  and it sends only the order (-OrderOnly), at the commit the agent names' ($lo.Contains(' -OrderOnly') -and $agentCs.Contains('LoadOrderLine + " -At " + commit') -and $agentCs.Contains('var line = LoadOrderLineAt(commit);'))
+    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(line, TimeSpan.FromMinutes(50)'))
+    Yes '  and the gate refuses an -At that is not a whole commit' (-not (Ask ($lo + ' -At main')).Ok)
     $req = Ask 'Check-ProdParity'
     Yes 'the gate takes the parity line the agent sends, Check-ProdParity' ($req.Ok -and $agentCs.Contains('Gate!.Run("Check-ProdParity"'))
     $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))
     Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
     $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
-    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json', 'game/data/last-plugin.recipe', 'game/content/Thornswood-Content.esp') {
+    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json') {
         $win = $f.Replace('/', '\')
         Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and ($dg.Contains($f) -or $dg.Contains($win) -or $dg.Contains("'" + (Split-Path -Leaf $win) + "'")))
     }
+    $lop = [regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value
+    Yes '  and not when our own plugins change: they are the Release''s (#6175)' ($lop -ne '' -and -not $lop.Contains('Thornswood-Content.esp') -and -not $lop.Contains('last-plugin.recipe'))
     $prog = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\Program.cs'))
     Yes 'only the service takes the gate steps, never a deploy by tag inside a gate verb' ($prog -match '(?s)if \(verb == "service"\)\s*\{\s*agent\.Gate = new GatePipe\(\);')
 

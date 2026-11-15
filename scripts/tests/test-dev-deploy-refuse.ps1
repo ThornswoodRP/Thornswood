@@ -129,7 +129,7 @@ try {
             $code -eq 1 -and $said -match 'SETTINGS UNREADABLE on the stage' -and [IO.File]::ReadAllText($p) -eq $bad -and
             -not @(Get-ChildItem $tmp -Filter 'server-settings.json.before-*').Count)
     }
-    $after = $text.IndexOf('"@ | ForEach-Object { "  $_" }', $open)
+    $after = $text.IndexOf('"@ | ForEach-Object { Write-Host "  $_"; "$_".Trim() }', $open)
     $stop = $text.IndexOf('if ($LASTEXITCODE -ne 0) { throw "the staged settings could not be edited on the dev box', $after)
     $hash = $text.IndexOf('Get-FileHash -LiteralPath', $after)
     Yes '  and the deploy throws on that exit code before the stage is hashed or checked' ($after -gt 0 -and $stop -gt $after -and $hash -gt $stop)

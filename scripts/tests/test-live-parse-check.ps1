@@ -178,10 +178,11 @@ Yes "Deploy-DevGamemode refuses before anything reaches the box (the first is $f
 $dCheck = @($dAst.FindAll({ param($x) $x -is [System.Management.Automation.Language.CommandAst] -and $x.GetCommandName() -eq 'node' }, $true))
 Yes '  and checks the file before anything reaches the box too' ($dCheck.Count -eq 1 -and $firstFar.Count -eq 1 -and $dCheck[0].Extent.EndOffset -lt $firstFar[0].Extent.StartOffset)
 Yes '  and checks the copy it sends, the artifact''s' ($dCheck.Count -eq 1 -and $dCheck[0].Extent.StartOffset -gt ($dAst.Extent.Text.IndexOf('$Gamemode = Join-Path $artifact.Folder')))
-# A put-back sends no gamemode, so it asks for no node, as Deploy-Server's.
-$guard = @($dAst.FindAll({ param($x) $x -is [System.Management.Automation.Language.IfStatementAst] -and $x.Clauses[0].Item1.Extent.Text -eq '-not $PutBack' }, $true) |
+# A put-back sends no gamemode, so it asks for no node, as Deploy-Server's;
+# nor does -OrderOnly, which sends only the order and plugins (#6166).
+$guard = @($dAst.FindAll({ param($x) $x -is [System.Management.Automation.Language.IfStatementAst] -and $x.Clauses[0].Item1.Extent.Text -eq '-not $PutBack -and -not $OrderOnly' }, $true) |
            Where-Object { $dIf.Count -eq 1 -and $_.Extent.StartOffset -lt $dIf[0].Extent.StartOffset -and $_.Extent.EndOffset -gt $dIf[0].Extent.EndOffset })
-Yes '  and a put-back, which sends no gamemode, does not ask for node' ($guard.Count -ge 1)
+Yes '  and a put-back or -OrderOnly, which send no gamemode, does not ask for node' ($guard.Count -ge 1)
 
 # ---- node --check really fails on a broken file -------------------------------
 if (Get-Command node -ErrorAction SilentlyContinue) {
