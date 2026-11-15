@@ -792,16 +792,23 @@ namespace Thornswood
                 Say(Bad + " check" + (Bad == 1 ? "" : "s") + " failed. Send staff a screenshot of this window in the Discord.");
                 return;
             }
-            if (Later > 0) Say("Installed. " + Later + " thing" + (Later == 1 ? "" : "s") + " still to come from the collection, which is the next step.");
-            else Say("Installed.");
+            Say("Installed.");
             Say("");
-            Say("Make a character named after yourself, save once, then connect.");
-            Say("");
-            Say("The launcher opens on the collection if your mods are not in yet.");
-            Say("Install it in Vortex and switch to the profile it makes. Without");
-            Say("that you have a launcher and no mods.");
+            // The same steps in the same order as the launcher, the help page
+            // and the join page (#4496): the launcher holds the collection
+            // card until Downgrade is done, so a wrong build is its own first
+            // step, never "the collection is next".
+            bool downgrade = !checks[0].Value;   // "Game 1.6.1170", read above
+            int step = 1;
+            Say("Next, in the launcher:");
+            if (downgrade)
+                Say("  " + step++ + ". Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.");
+            Say("  " + step++ + ". Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.");
+            Say("  " + step++ + ". Press Connect Discord at the bottom of the left sidebar.");
+            Say("  " + step + ". Press Play.");
             if (choice.MakeOwnGame)
             {
+                Say("");
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
                 Say("Skyrim folder by itself, then makes the rest from your game:");
                 Say("Thornswood-Last.esp, the plugin order, and the animation and body");
