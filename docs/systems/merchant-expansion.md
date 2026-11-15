@@ -4,6 +4,14 @@ Patrick's requirements of 12 October 2026 replace the earlier unrestricted
 trader count and locked quest lineup. This is the implementation contract;
 it does not describe a completed release.
 
+## Contents
+
+- [Roster and tables](#roster-and-tables)
+- [Item catalogue and runtime admission](#item-catalogue-and-runtime-admission)
+- [Quests](#quests)
+- [Existing accepted work](#existing-accepted-work)
+- [Build order and checks](#build-order-and-checks)
+
 ## Roster and tables
 
 Patrick clarified during alpha testing that current merchant purses, stock

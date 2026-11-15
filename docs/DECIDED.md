@@ -9,6 +9,19 @@ changed; it is not filed as if the question were open.
 A decision that changes moves here the day it changes, with the new date and
 link, and the old line goes.
 
+## Contents
+
+- [The world is run by people](#the-world-is-run-by-people)
+- [Items and coin](#items-and-coin)
+- [Buttons, not commands](#buttons-not-commands)
+- [Voice and the in-game UI](#voice-and-the-in-game-ui)
+- [The box](#the-box)
+- [Work and crafting](#work-and-crafting)
+- [The site](#the-site)
+- [How work moves](#how-work-moves)
+- [The plan of 31 Oct](#the-plan-of-31-oct)
+- [Kept, after being asked](#kept-after-being-asked)
+
 ## The world is run by people
 
 - **Guards are people, never NPCs.** The Jarl of each hold names that hold's

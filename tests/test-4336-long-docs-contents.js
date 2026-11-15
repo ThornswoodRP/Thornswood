@@ -15,8 +15,8 @@
   byte for byte, so it is not edited by hand here. Its contents come from
   the builder (#6103).
 
-  A page that fails says the Contents it should have, ready to paste.
-  Read only.
+  A page that fails names each heading its Contents lacks, as the link to
+  paste. Read only.
 */
 const fs = require('fs');
 const path = require('path');
@@ -97,13 +97,7 @@ for (const r of files) {
   const ok1 = !!c && c.line < firstSection;
   const ok2 = !!c && missing.length === 0;
   yes(r + ' (' + lines.length + ' lines) has a ## Contents before its first section', ok1);
-  yes(r + ': its Contents links every ## heading' + (missing.length ? ' (' + missing.length + ' missing)' : ''), ok2);
-  if (!ok1 || !ok2) {
-    console.log('      it should read:');
-    console.log('      ## Contents');
-    console.log('');
-    want.forEach((h) => console.log('      - [' + h.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') + '](#' + h.anchor + ')'));
-  }
+  yes(r + ': its Contents links every ## heading' + (missing.length ? ', missing ' + missing.map((h) => '[' + h.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') + '](#' + h.anchor + ')').join(' ; ') : ''), ok2);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

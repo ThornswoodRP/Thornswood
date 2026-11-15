@@ -23,6 +23,18 @@ runner against local. Provenance here means "this signed file came from this com
 this runner and these records", recorded and signed, not "anyone can rebuild
 the same bytes".
 
+## Contents
+
+- [1. Where things stand today (measured 11 Oct 2026)](#1-where-things-stand-today-measured-11-oct-2026)
+- [2. Artifact types and how each is signed](#2-artifact-types-and-how-each-is-signed)
+- [3. Owners, custody, rotation, recovery, revocation](#3-owners-custody-rotation-recovery-revocation)
+- [4. Verification points](#4-verification-points)
+- [5. Migration and enforcement](#5-migration-and-enforcement)
+- [6. Tags, drafts, replacement and failed signatures](#6-tags-drafts-replacement-and-failed-signatures)
+- [7. The pilot](#7-the-pilot)
+- [8. Decisions (Patrick)](#8-decisions-patrick)
+- [9. Doing nothing, set beside the change](#9-doing-nothing-set-beside-the-change)
+
 ## 1. Where things stand today (measured 11 Oct 2026)
 
 | Layer | What it is | Where |

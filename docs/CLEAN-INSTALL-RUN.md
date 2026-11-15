@@ -10,6 +10,21 @@ every row, this is a plan and not a record, and the right assumption is that
 something in it is wrong. The run is how to find out which part. It is held to
 the same standard as `RESTORING.md` in the ops repo.
 
+## Contents
+
+- [Why](#why)
+- [The shape being tested](#the-shape-being-tested)
+- [Who does what](#who-does-what)
+- [Before the run](#before-the-run)
+- [How to fill in a row](#how-to-fill-in-a-row)
+- [The run](#the-run)
+- [Questions asked](#questions-asked)
+- [Commands](#commands)
+- [What the build should show, by row](#what-the-build-should-show-by-row)
+- [What the code predicts](#what-the-code-predicts)
+- [After the run](#after-the-run)
+- [Shrinking the list next time](#shrinking-the-list-next-time)
+
 ## Why
 
 Nobody has installed Thornswood on a clean machine and written down what
