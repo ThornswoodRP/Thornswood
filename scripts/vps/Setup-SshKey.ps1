@@ -67,6 +67,13 @@ function Done([int]$code) { Write-Host ''; if (-not $NoPause) { [void](Read-Host
 function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; Done 1 }
 
 $target = "$VpsUser@$VpsHost"
+# The PowerShell 7 release -NewBox puts on a new box before anything else
+# runs there, and the SHA-256 of its x64 msi from the release's
+# hashes.sha256 (#5356). Bootstrap-VPS.ps1 holds the same pair, and
+# tests\test-5356-new-box-pwsh.ps1 holds them equal: bump both together.
+$PwshVersion = '7.6.10'
+$PwshSha256 = '7d8daea48b450d4d62fcd1ac4d6faa7ac2db5e11aba5061ee81b7496adca8c07'
+$PwshUrl = "https://github.com/PowerShell/PowerShell/releases/download/v$PwshVersion/PowerShell-$PwshVersion-win-x64.msi"
 if (-not $KeyPath) { $KeyPath = Join-Path (Join-Path $HOME '.ssh') 'thornswood_ed25519' }
 $tokenPath = Get-ThornswoodBridgeTokenPath
 
@@ -186,12 +193,23 @@ Restart-Service sshd
 'installed ' + `$have.Count + ' key(s)'
 "@
     $b64 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-    # The Windows PowerShell a new Windows Server comes with: this is the
-    # first thing done on a new box, before Bootstrap-VPS.ps1 puts PowerShell
-    # 7 there, so it is the only PowerShell the box has yet. Everything after
-    # it runs in pwsh (#5356).
-    Invoke-ThornswoodNative { & ssh -o StrictHostKeyChecking=yes $target "powershell -NoProfile -EncodedCommand $b64" }
-    if ($LASTEXITCODE -ne 0) { Die "that did not go through (ssh exited with $LASTEXITCODE). Nothing was changed here. Permission denied means this box takes no password: the VNC console is the way in." }
+    # PowerShell 7 first, then the key in it (#5356). A new Windows Server
+    # has only Windows PowerShell, and everything on the box runs in pwsh, so
+    # this first login puts the one pinned release there before anything
+    # else runs: with what Windows Server itself has (cmd, curl.exe, certutil
+    # and msiexec), held to the SHA-256 PowerShell publishes for it, and the
+    # file is deleted whether it matched or not. A box that has it already
+    # skips that. pwsh is started by its full path, since this sshd took its
+    # PATH before the install; the key script restarts sshd, so every later
+    # login finds pwsh on PATH, Bootstrap-VPS.ps1's included.
+    $msi = '"%TEMP%\thornswood-pwsh.msi"'
+    $pwshExe = '"%ProgramFiles%\PowerShell\7\pwsh.exe"'
+    $line = 'if not exist ' + $pwshExe + ' (curl.exe -fsSL -o ' + $msi + ' ' + $PwshUrl +
+            ' && certutil -hashfile ' + $msi + ' SHA256 | findstr /i /x ' + $PwshSha256 +
+            ' >nul && start "" /wait msiexec /i ' + $msi + ' /quiet /norestart & del ' + $msi + ') & ' +
+            $pwshExe + ' -NoProfile -EncodedCommand ' + $b64
+    Invoke-ThornswoodNative { & ssh -o StrictHostKeyChecking=yes $target $line }
+    if ($LASTEXITCODE -ne 0) { Die "that did not go through (ssh exited with $LASTEXITCODE). Nothing was changed here. Permission denied means this box takes no password: the VNC console is the way in. Not recognized means PowerShell $PwshVersion did not install: the box could not fetch it, or it did not match its SHA-256, and nothing else was done." }
     try { $null = Set-ThornswoodBridgeSsh -Address $VpsHost -User $VpsUser -KeyPath $KeyPath -Direct } catch { Die $_.Exception.Message }
     Say "  ssh to $VpsHost goes straight to port 22 for now (.ssh\config)" 'Green'
     Start-Sleep -Seconds 2

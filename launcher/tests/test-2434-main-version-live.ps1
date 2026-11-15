@@ -136,7 +136,7 @@ function Run {
     $mv = Get-Content -LiteralPath (Join-Path $Src 'MainVersion.cs') -Raw
     Yes 'MainLauncherVersion reads the newest Release with main''s feed through ChannelSource, then MainVersionOf' ($mv -match '(?s)public static string MainLauncherVersion\(Config cfg\).*?new ChannelSource\("main", 1\);.*?GetReleaseFeed\(.*?"main"\).*?return MainVersionOf\(')
     $vu = Get-Content -LiteralPath (Join-Path $Src 'VeloUpdate.cs') -Raw
-    Yes '  and the update check still reads the newest and the ten before it' ($vu -match 'new ChannelSource\(channel, 11\)' -and $vu -match '\.Take\(take\)')
+    Yes '  and the update check reads the newest and the MaxDeltas before it (#5608)' ($vu -match 'new ChannelSource\(channel, MaxDeltas \+ 1\)' -and $vu -match '\.Take\(take\)')
     $sn = Get-Content -LiteralPath (Join-Path $Src 'ShellNews.cs') -Raw
     Yes 'the header names nothing of the feed''s frozen numbers' ($sn -match '(?s)static string DevHeadText\(\)\s*\{.*?Updater\.Version.*?\n        \}' -and $sn -notmatch 'pendingDoc\.mainVersion' -and $sn -notmatch 'pendingDoc\.launcherVersion')
     Yes 'BuildNews asks main only on a dev build, and only while the News page is the one shown' ($sn -match '(?s)if \(cfg\.IsDev\)\s*\{.*?if \(pages != null && pages\[PageNews\]\.IsVisible\) ReadMainVersion\(\);')

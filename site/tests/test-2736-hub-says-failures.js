@@ -41,7 +41,7 @@ function slice(from, to) {
 }
 
 const REFRESH = slice('function refresh() {', 'function chrome() {');
-const GALLERY = slice('function loadGalleryStaff() {', '/* -------------------------------------------------------------- report -- */');
+const GALLERY = slice('function loadGalleryStaff(after) {', '/* -------------------------------------------------------------- report -- */');
 yes('refresh and loadGalleryStaff are in hub.js', REFRESH.length > 0 && GALLERY.length > 0);
 yes('no empty catch is left in either', !/catch\s*\(\s*function\s*\(\s*\)\s*\{\s*\}\s*\)/.test(REFRESH + GALLERY));
 

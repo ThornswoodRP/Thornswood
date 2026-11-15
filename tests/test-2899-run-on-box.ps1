@@ -98,23 +98,17 @@ Yes 'an argument with a double quote in it is refused' ($r.Code -ne 0 -and $r.Te
 # ---- 1b. the artifact carries what the chain's builders touch -----------
 # Until #2962 it held scripts, game\content, game\data, records and
 # layout.json only, so a builder that writes into game\gamemode.js stopped on
-# the box. Until #3100 it carried only what the Python builders touch. The
-# lines that make $paths are lifted out of Run-OnBox.ps1 by the parser and
-# run here with its $Here, for the whole chain's tool.
-$ast = [Management.Automation.Language.Parser]::ParseFile($runOnBox, [ref]$null, [ref]$null)
-$top = @($ast.EndBlock.Statements)
-$from = @($top | Where-Object { $_.Extent.Text -like '$paths = @(*' })
-$upTo = @($top | Where-Object { $_.Extent.Text -like 'while ($load.Count)*' })
-Yes 'Run-OnBox.ps1 makes $paths once and adds the chain''s files and what its builders load to it once' ($from.Count -eq 1 -and $upTo.Count -eq 1)
-$Here = Join-Path $Repo 'scripts\mods'
-$tool = 'scripts/mods/Rebuild-ContentTables.ps1'
-$paths = $null
-foreach ($st in $top) {
-    if ($st.Extent.StartOffset -lt $from[0].Extent.StartOffset -or $st.Extent.StartOffset -gt $upTo[0].Extent.StartOffset) { continue }
-    . ([scriptblock]::Create($st.Extent.Text))
-}
-$Here = $PSScriptRoot
-if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+# the box. Until #3100 it carried only what the Python builders touch.
+# Since #5191 the list is ContentPaths.ps1's, which Build-ContentOnBox.ps1
+# reads too, run here for the whole chain's tool.
+$runText = [IO.File]::ReadAllText($runOnBox)
+Yes 'Run-OnBox.ps1 takes what goes up and what comes back from ContentPaths.ps1' (
+    $runText.Contains(". (Join-Path `$Here 'ContentPaths.ps1')") -and $runText.Contains('$content = Get-ThornswoodContentPaths -Repo $repo -Tool $tool') -and
+    $runText.Contains('$paths = $content.Paths') -and $runText.Contains('$watch = $content.Watch'))
+. (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
+$content = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Rebuild-ContentTables.ps1'
+$paths = $content.Paths
+$watch = $content.Watch
 $chain = Get-Content -LiteralPath (Join-Path $Repo 'scripts\mods\content-tables.json') -Raw | ConvertFrom-Json
 $need = @($chain.steps | ForEach-Object { @($_.reads) + @($_.readsBack) + @($_.uses) + @($_.writes) } | Where-Object { $_ } | Sort-Object -Unique)
 $left = @($need | Where-Object { $n = [string]$_; -not @($paths | Where-Object { $n -eq $_ -or $n.StartsWith($_ + '/') }).Count })
@@ -122,7 +116,7 @@ Yes ('every file a builder of the chain reads, uses or writes goes up (' + $need
     $need.Count -gt 0 -and $left.Count -eq 0)
 Yes '  game\gamemode.js among them' ($paths -contains 'game/gamemode.js')
 Yes '  and the K panel''s book Build-SpellTable.ps1 reads, which until #3425 stopped the box run at the spell table' ($paths -contains 'game/ui/thornswood-skills.js')
-Yes '  and the game scripts Build-MerchantGamemode.js embeds' (($paths -contains 'game/merchant-trading.js') -and ($paths -contains 'game/quest-eligibility.js'))
+Yes '  and the game scripts Build-MerchantTables.js checks its tables with' (($paths -contains 'game/merchant-commissions.js') -and ($paths -contains 'game/quest-eligibility.js'))
 $writes = @($chain.steps | ForEach-Object { @($_.writes) } | Where-Object { $_ } | Sort-Object -Unique)
 $unwatched = @($writes | Where-Object { $n = [string]$_; -not @($watch | Where-Object { $n -eq $_ -or $n.StartsWith($_ + '/') }).Count })
 Yes ('every file a builder of the chain writes comes back (' + $writes.Count + ')' + $(if ($unwatched.Count) { ': not ' + ($unwatched -join ', ') } else { '' })) (
@@ -206,6 +200,17 @@ Yes 'and records\skyrim-files.json holds the size and sha1 of every one of them'
 $farSet = Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\Thornswood-Server-Dev' -Tool 'scripts/dev/Build-NpcPopulation.py' -Arguments @('--settings', '{settings}')
 Yes '{settings} makes a server-settings.json of the loadOrder alone, each plugin in the run''s data folder, and only when an argument names it' (
     $farSet.Contains('if ($False -or $True) {') -and $farSet.Contains('loadOrder = [string[]]$inData') -and $farSet.Contains(".Replace('{settings}', `$orderSettings)") -and $far.Contains('if ($False -or $False) {'))
+# From the record (#5191): the order and the collection's store, not the server's.
+$farRec = Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\Thornswood-Server-Dev' -Tool 'scripts/mods/Rebuild-ContentTables.ps1' -Arguments @('-Data', '{data}', '-PluginsTxt', '{plugins}') -Order @('Skyrim.esm', "KS_Hairdo's_Lite_NoNPCs.esp") -Collection 'C:\Thornswood-Deploys\collection\abc-8'
+$errs = $null
+[void][Management.Automation.Language.Parser]::ParseInput($farRec, [ref]$null, [ref]$errs)
+Yes 'from the record, the run lays the collection''s store over the server''s plugins and lists the order it is given, and its text parses' (
+    (-not $errs -or $errs.Count -eq 0) -and $farRec.Contains("`$collection = 'C:\Thornswood-Deploys\collection\abc-8'") -and
+    $farRec.Contains("`$names = @('Skyrim.esm', 'KS_Hairdo''s_Lite_NoNPCs.esp')") -and $farRec.Contains('if ($True) {') -and $far.Contains("`$collection = ''"))
+$m = ''; $m2 = ''
+try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @('A.esp')) } catch { $m = $_.Exception.Message }
+try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @("A.esp'; Remove-Item C:\ -Recurse; '.esp", 'x\..\y.esp') -Collection 'C:\c') } catch { $m2 = $_.Exception.Message }
+Yes 'an order without the store, or a name that is not a plugin''s, is refused' ($m -match 'go together' -and $m2 -match 'is not a plugin name')
 $errs = $null
 [void][Management.Automation.Language.Parser]::ParseInput($keep, [ref]$null, [ref]$errs)
 Yes 'the keeper''s text parses' (-not $errs -or $errs.Count -eq 0)
@@ -452,6 +457,38 @@ exit 0
             (@($lines | Where-Object { $_ -like 'CHANGED *' }) -join ',') -eq 'CHANGED docs/systems/cut-items.json,CHANGED tests/fixtures/watched.json' -and ($lines -contains 'EXIT 0'))
         $gone = Stop-Keeper $runKeeper
         Yes 'and its keeper removes its folder' (($gone -contains ('GONE ' + $run2)) -and -not (Test-Path -LiteralPath $run2))
+
+        # From the record (#5191): the collection's store over the server's
+        # plugins, and the order given, not the server's.
+        $coll = Join-Path $work 'collection-abc-8'
+        New-Item -ItemType Directory -Force -Path $coll | Out-Null
+        [IO.File]::WriteAllText((Join-Path $coll 'store.json'), '{}')
+        [IO.File]::WriteAllText((Join-Path $coll 'Mod A.esp'), 'store copy')
+        [IO.File]::WriteAllText((Join-Path $coll 'Mod B.esp'), 'new in revision 8')
+        [IO.File]::WriteAllText((Join-Path $coll 'Thornswood-Content.esp'), 'the collection''s copy of ours')
+        $run3 = Join-Path $work 'thornswood-onbox-ca9876543210'
+        $runKeeper = Start-Keeper $run3
+        [IO.Compression.ZipFile]::CreateFromDirectory($src2, (Join-Path $run3 'tools.zip'))
+        $text = Get-ThornswoodOnBoxScript -Run $run3 -ServerRoot $server -Tool 'scripts/mods/t.ps1' -Arguments @('-Data', '{data}', '-PluginsTxt', '{plugins}') -ArchiveStore $store -Order @('Skyrim.esm', 'Mod A.esp', 'Thornswood-Content.esp', 'Mod B.esp') -Collection $coll
+        [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
+        Write-Host '  the far side said:'
+        foreach ($l in $lines) { Write-Host ('    ' + $l) }
+        $data3 = Join-Path $run3 'data'
+        Yes 'from the record, the tool gets the order it is given, with the store''s plugins over the server''s and ours from the commit' (
+            ($lines -contains 'PLUGINS *Mod A.esp|*Thornswood-Content.esp|*Mod B.esp') -and ($lines -contains 'EXIT 0') -and
+            [IO.File]::ReadAllText((Join-Path $data3 'Mod A.esp')) -eq 'store copy' -and [IO.File]::ReadAllText((Join-Path $data3 'Mod B.esp')) -eq 'new in revision 8' -and
+            [IO.File]::ReadAllText((Join-Path $data3 'Thornswood-Content.esp')) -eq 'repo copy')
+        $gone = Stop-Keeper $runKeeper
+        $run4 = Join-Path $work 'thornswood-onbox-da9876543210'
+        $runKeeper = Start-Keeper $run4
+        [IO.Compression.ZipFile]::CreateFromDirectory($src2, (Join-Path $run4 'tools.zip'))
+        $text = Get-ThornswoodOnBoxScript -Run $run4 -ServerRoot $server -Tool 'scripts/mods/t.ps1' -Arguments @('-Data', '{data}', '-PluginsTxt', '{plugins}') -ArchiveStore $store -Order @('Skyrim.esm', 'Mod C.esp') -Collection $coll
+        [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
+        Yes 'and a plugin of the order in neither stops the run before the tool' (
+            @($lines | Where-Object { $_ -match '^STOP\. 1 plugin\(s\) of the load order this commit records are in neither .* Mod C\.esp$' }).Count -eq 1 -and -not ($lines -match '^EXIT '))
+        $gone = Stop-Keeper $runKeeper
     } finally {
         if ($runKeeper -and -not $runKeeper.P.HasExited) { $runKeeper.P.Kill() }
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

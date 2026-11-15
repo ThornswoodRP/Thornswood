@@ -8,8 +8,9 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { noteRules, readDoc, writeDoc };
+module.exports = { docVersion, noteRules, readDoc, writeDoc };
 
+const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 const { DATA, FOR_BOT, LISTS } = require('./base');
@@ -31,7 +32,33 @@ const jsonFile = (p, fallback) => {
     return fallback;
   }
 };
-const putJson = (p, o) => putFile(p, () => JSON.stringify(o, null, 2));
+const putJson = (p, o) => {
+  // A store that is there and will not read is never written over (#4447):
+  // the caller read it through jsonFile as its empty fallback, so the write
+  // would be that plus one row, and every row it held would be gone. The
+  // five held files say so through heldNow in putFile; every other store
+  // says so here, each time a write is refused, because each refusal is a
+  // ticket, report or note that was not kept. A missing file is the normal
+  // empty one and is written.
+  if (!heldShape(p)) {
+    const why = unreadable(p);
+    if (why) {
+      console.error('[thornswood-docs] ' + p + ' ' + why + ', so it was not written: it is left as it is to repair from the backup');
+      return false;
+    }
+  }
+  return putFile(p, () => JSON.stringify(o, null, 2));
+};
+// Why a JSON store that is there cannot be used, or '' when it reads or is
+// not there at all. The error's code and never its message, which can carry
+// a piece of the file.
+const unreadable = (p) => {
+  let text;
+  try { text = fs.readFileSync(p, 'utf8'); }
+  catch (e) { return (e && e.code === 'ENOENT') ? '' : 'cannot be read (' + ((e && e.code) || 'unknown') + ')'; }
+  try { JSON.parse(text.replace(/^\uFEFF/, '')); return ''; }
+  catch (e) { return 'will not parse'; }
+};
 const putFile = (p, text) => {
   // Same-folder temp + rename so a crash mid-write cannot leave truncated
   // JSON that jsonFile would then quietly replace with the empty fallback
@@ -74,6 +101,13 @@ function readDoc(n) {
   const p = docPath(n);
   if (!p) return null;
   try { return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; }
+}
+
+/* Which copy of a page this is (#4418): the hub is sent it with the page, and
+   sends it back with a save, so a save made from a copy somebody has saved
+   over since is refused rather than written over theirs. */
+function docVersion(text) {
+  return crypto.createHash('sha256').update(String(text == null ? '' : text), 'utf8').digest('hex');
 }
 
 function writeDoc(n, text) {

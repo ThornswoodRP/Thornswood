@@ -124,7 +124,7 @@ namespace Thornswood
                     st = new Standing();
                     st.Ok = false;
                     st.Why = "offline";
-                    st.Message = "Could not reach thornswood.net: " + ex.Message;
+                    st.Message = "Could not reach thornswood.net: " + Failure.Say("Door, checking in", ex, "thornswood.net");
                 }
 
                 Dispatcher.UIThread.Post(delegate
@@ -208,7 +208,7 @@ namespace Thornswood
 
             if (st.Why == "link")
             {
-                body += "\n\nPress Connect Discord on the Play page, then try again.";
+                body += "\n\nPress Connect Discord at the bottom of the left sidebar, above Settings, then try again.";
                 Ask.Tell(body, title, Ask.Icon.Info);
                 if (connect != null) connect();
                 return;

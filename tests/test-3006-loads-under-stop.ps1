@@ -12,7 +12,7 @@
   an error PowerShell prints and walks past, and so is every call to a
   function that file would have defined: Assert-FreshCheckout was "not
   recognized" and the Ship went on with no freshness check at all.
-  tests\test-ship-dry-run.ps1 did exactly that on every run, because its
+  scripts\tests\test-ship-dry-run.ps1 did exactly that on every run, because its
   scratch tree had no Fresh-Checkout.ps1, and passed. About fifty other
   scripts (the deploys, Publish-Server, Publish-Update, Package-Thornswood,
   Publish-Installer, the box scripts loading Vps.ps1) had the same order,
@@ -198,8 +198,10 @@ try {
 }
 
 # ---- every script here ---------------------------------------------------------------
-Write-Host ''; Write-Host 'Every script in scripts\, tests\ and installer\'
-$files = @(foreach ($d in 'scripts', 'tests', 'installer') {
+Write-Host ''; Write-Host 'Every script in scripts\, tests\, installer\ and each product''s tests folder'
+# And every product's own tests folder (game\tests, launcher\tests, #5341).
+$beside = @(Get-ChildItem -LiteralPath $Repo -Directory | Where-Object { $_.Name -notin @('tests', 'node_modules', 'worktrees', 'temp', 'local') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'tests') -PathType Container) } | ForEach-Object { Join-Path $_.Name 'tests' })
+$files = @(foreach ($d in @('scripts', 'tests', 'installer') + $beside) {
     $dir = Join-Path $Repo $d
     if (Test-Path -LiteralPath $dir) {
         Get-ChildItem -LiteralPath $dir -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]node_modules[\\/]' }

@@ -8,7 +8,7 @@ WHY THIS EXISTS. The watchdog on the VPS knew one thing about the bot: that a
 python process with Thornswood-Bot in its command line was alive. A bot stuck
 logging in, hung, or cut off from Discord for good is still that process, so
 the one outage the bot is there to tell staff about, itself, looked fine. Now
-the bot writes heartbeat.json beside itself every minute, and BeatProblem in
+the bot writes heartbeat.json in its data folder every minute, and BeatProblem in
 scripts\\vps\\Watch-Services.ps1 reads it. This checks the bot half: what the
 file says before it connects, while it is connected, after it drops and when
 it comes back, that it is written whole or not at all, that a folder it
@@ -18,7 +18,7 @@ bot writes. tests\\test-bot-heartbeat.ps1 checks the watchdog half.
 
 The real bot module is imported and its real functions and event handlers are
 run. The heartbeat file is pointed at a temporary folder, so this cannot touch
-the one beside the code.
+the bot's own, in its data folder.
 
 Read only. Never connects to anything.
 """

@@ -473,7 +473,7 @@ namespace Thornswood
 
             string before;
             try { before = Bytes.GetString(File.ReadAllBytes(manifest)); }
-            catch (Exception ex) { return "Could not read " + manifest + ": " + ex.Message + " Nothing was changed. " + How; }
+            catch (Exception ex) { return "Could not read " + manifest + ": " + Failure.Why("SteamUpdates, reading " + manifest, ex, manifest) + ". Nothing was changed. " + How; }
 
             string after = Held(before);
             if (after == null || Value(after) != OnLaunchOnly)
@@ -485,7 +485,7 @@ namespace Thornswood
                 // On 1 already and only read only: the mark comes off and not
                 // a byte of the file changes (issue #493).
                 try { File.SetAttributes(manifest, File.GetAttributes(manifest) & ~FileAttributes.ReadOnly); }
-                catch (Exception ex) { return "Steam's Updates setting for Skyrim is already \"" + Setting(OnLaunchOnly) + "\", but the read-only mark on " + manifest + " could not be taken off: " + ex.Message + " " + Writable(manifest); }
+                catch (Exception ex) { return "Steam's Updates setting for Skyrim is already \"" + Setting(OnLaunchOnly) + "\", but the read-only mark on " + manifest + " could not be taken off: " + Failure.Why("SteamUpdates, the read-only mark", ex, manifest) + ". " + Writable(manifest); }
                 return "Steam's Updates setting for Skyrim is already \"" + Setting(OnLaunchOnly) + "\". " + manifest +
                        " is no longer marked read only, so Steam can save Skyrim's state in it again. Nothing else in it changed.";
             }
@@ -518,7 +518,7 @@ namespace Thornswood
                 {
                     // The manifest is left writable, and nothing else changed.
                 }
-                return "Could not change " + manifest + ": " + ex.Message + " It is as it was. " + How;
+                return "Could not change " + manifest + ": " + Failure.Why("SteamUpdates, changing " + manifest, ex, manifest) + ". It is as it was. " + How;
             }
             // Left writable, not marked read only again (issue #493): the
             // setting just written is what holds the version, and Steam has to

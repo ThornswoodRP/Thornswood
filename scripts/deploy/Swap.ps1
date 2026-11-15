@@ -356,6 +356,7 @@ function PutBack {
 if (-not $port) {
   'the staged settings name no port, so nothing was stopped'
   if (-not $KeepStage) { Remove-Item -LiteralPath $stageDir -Recurse -Force -EA SilentlyContinue }
+  Set-ThornswoodRestartNotice -Root $Root -State off
   'SWAP REFUSED'
   exit 1
 }
@@ -369,6 +370,7 @@ catch { $turnWhy = $_.Exception.Message }
 if ($turnWhy) {
   $turnWhy + ', so nothing was stopped'
   if (-not $KeepStage) { Remove-Item -LiteralPath $stageDir -Recurse -Force -EA SilentlyContinue }
+  Set-ThornswoodRestartNotice -Root $Root -State off
   'SWAP REFUSED'
   exit 1
 }
@@ -385,6 +387,8 @@ if ($notGone.Count -or (Held)) {
   else { 'UDP ' + $port + ' is still held by pid ' + ($heldBy -join ', ') + ' after the stop, so nothing was swapped' }
   if (-not $KeepStage) { Remove-Item -LiteralPath $stageDir -Recurse -Force -EA SilentlyContinue }
   Clear-ThornswoodHold -Target $Task
+  # Stopped and not started again: the watchdog starts it once the hold is gone.
+  Set-ThornswoodRestartNotice -Root $Root -State down
   'SWAP REFUSED'
   exit 1
 }
@@ -454,6 +458,8 @@ if ($moved) {
       }
     }
     Clear-ThornswoodHold -Target $Task
+    # Said in Discord (#5784, RestartNotice.ps1) when a restart was said to be coming.
+    Set-ThornswoodRestartNotice -Root $Root -State back
     'SWAP OK'
     exit 0
   }
@@ -468,9 +474,13 @@ if ($moved) {
 PutBack
 TaskShape
 Start-ScheduledTask -TaskName $Task -EA SilentlyContinue
-if (Answering) { 'the previous files are back and the server is answering on ' + $resPort + ' again' }
+if (Answering) {
+  'the previous files are back and the server is answering on ' + $resPort + ' again'
+  Set-ThornswoodRestartNotice -Root $Root -State back
+}
 else {
   'THE PREVIOUS FILES ARE BACK AND THE SERVER STILL IS NOT ANSWERING on ' + $resPort
+  Set-ThornswoodRestartNotice -Root $Root -State down
   if ($answerWhy) { 'the last try at ' + $resPort + ' said: ' + $answerWhy }
   if ($blindWhy) { $blindWhy }
 }
@@ -543,6 +553,11 @@ $swapBlock = $ThornswoodHoldText + $swapBlock
 # well: in front of the game server swap only, the one whose folders it reads.
 $ThornswoodServerFolderTurnText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'ServerFolderTurn.ps1')) + "`r`n"
 $swapBlock = $ThornswoodServerFolderTurnText + $swapBlock
+# And the restart notice (#5784): a restart said in Discord before the stop
+# (Request-Restart.ps1) is said to be over, or called off, by the swap that
+# made it. In front of the game server swap only.
+. (Join-Path $PSScriptRoot '..\vps\RestartNotice.ps1')
+$swapBlock = $ThornswoodRestartNoticeText + "`r`n" + $swapBlock
 
 # ==== put-back pick ====
 #

@@ -221,9 +221,13 @@ Pack $false $true
 Yes 'a pack whose baseline never carried it still names it in delete.txt' ($removed -contains $rel)
 Yes 'and a copy still on the shipping machine does not go into the pack' ((-not $now.ContainsKey($rel)) -and ($changed -notcontains $rel))
 
-$upd = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Updater.cs'))
-Yes 'Updater deletes each delete.txt line from the game folder and remembers it as removed' (
-    $upd.Contains('ar.GetEntry("delete.txt")') -and $upd.Contains('File.Delete(target)') -and $upd.Contains('removed.Add(rel);'))
+# Since #5608 the packs are gone and an update is the launcher's package: its
+# game-files.json carries the record's :gone: list, delete.txt's lines among
+# them (scripts\release\Build-GameFiles.ps1, WHAT IS GONE), and the sync takes
+# each out of the game folder.
+$upd = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Sync.cs'))
+Yes 'the update deletes each file the release says is gone from the game folder and remembers it as removed' (
+    $upd.Contains('File.Delete(full);') -and $upd.Contains('removed.Add(rel);'))
 Yes 'and hands that list to Keep.Forget, so Keep does not put the file back at the next Play' ($upd.Contains('Keep.Forget(removed);'))
 
 # ---- 4. the launcher's own folder does not bring it back -------------------------
@@ -392,7 +396,10 @@ namespace $ns
 }
 "@
 $compiled = $true
-try { $null = Add-LauncherType -Source $cs }
+# ReadUiGoneRecord says a caught exception through Failure (#4633): the real
+# one, in this namespace, beside the stand-in Swallow above.
+$failureCs = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Failure.cs')).Replace('namespace Thornswood', 'namespace ' + $ns)
+try { $null = Add-LauncherType -Source $cs, $failureCs }
 catch { $compiled = $false; Write-Host ('      ' + $_.Exception.Message) }
 Yes 'OwnGame''s Skip and Foreign and Keep''s Seed and Forget compile as lifted, with the .NET SDK the launcher builds with' $compiled
 if (-not $compiled) { Done }
@@ -578,7 +585,7 @@ namespace $emptyNs {
 }
 "@
     $emptyExe = $null
-    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
+    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $failureCs.Replace("namespace $ns", "namespace $emptyNs"), $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
     catch { Write-Host ('      ' + $_.Exception.Message.Trim()) }
     Yes 'the lifted OwnGame with an empty ui-gone.json embedded builds with the .NET SDK the launcher builds with' ($null -ne $emptyExe)
     $emptySaid = ''
@@ -629,7 +636,7 @@ try {
     Put (Join-Path $packs '20260917-1647.files') ($record -join "`r`n") (Utc 2026 9 18 4 34 32)
     Put (Join-Path $packs '20260920-1902.files') ($record -join "`r`n") (Utc 2026 9 21 3 5 50)
 
-    # The pack, as Updater.Install and Keep.Forget take it.
+    # The update's gone list, as WriteSync and Keep.Forget take it.
     $gone = New-Object 'System.Collections.Generic.List[string]'
     foreach ($line in $delete) {
         $r = $line.Replace('/', '\')

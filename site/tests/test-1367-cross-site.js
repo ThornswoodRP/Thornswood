@@ -43,7 +43,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -117,47 +116,22 @@ function scratch(name, discord) {
     [ADMIN_D]: { id: ADMIN_D, name: 'Aela', profiles: [1001] },
     [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
   }));
+  // Make the site's clock one second ahead of this process. A replacement
+  // sign in must follow the site's recorded sign out, not a guess from the
+  // harness clock. This makes that ordering error repeat on every OS.
+  fs.writeFileSync(path.join(dir, 'clock.cjs'),
+    'const now = Date.now; Date.now = () => now() + 1000;\n');
   return { dir, secret, password };
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/* Waits for this run's site to say it is listening on its port (#1727). */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const mm = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (mm && Number(mm[1]) === port) end(null);
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(s) {
-  const port = await freePort();
-  const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
+  let port = 0;
+  const srv = spawn(process.execPath, ['--require', path.join(s.dir, 'clock.cjs'), path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  await listening(srv, port);
+  await siteFiles.listening(srv).then((r) => (port = r.port, r));
   return { port, srv };
 }
 /* Exactly the headers given, and nothing a browser would add on its own. */
@@ -180,8 +154,8 @@ function request(port, method, where, headers, body) {
     r.end();
   });
 }
-function cookieFor(secret, id, name) {
-  const at = String(Date.now());
+function cookieFor(secret, id, name, made) {
+  const at = String(made === undefined ? Date.now() : made);
   const sig = crypto.createHmac('sha256', secret).update(id + '|' + name + '|' + at).digest('hex').slice(0, 32);
   return 'twa=' + encodeURIComponent(id + '|' + name + '|' + at + '|' + sig);
 }
@@ -277,10 +251,12 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     yes('a ban from the hub, Origin this site, lands', r.status === 200 && r.j.ok === true && !!read(A.dir, 'data/bans.json', {})[BJORN_D]);
     r = await request(port, 'POST', '/api/staff/pk', Object.assign({ cookie: admin, origin: OWN.toUpperCase().replace('HTTP', 'http') }, json), { id: BJORN_D, profileId: 2002, why: 'from the hub' });
     yes('a PK from the hub lands, the host in any case', r.status === 200 && r.j.ok === true && !!read(A.dir, 'data/pk.json', {})['2002']);
-    r = await request(port, 'PUT', '/api/doc/tests', { cookie: admin, origin: OWN }, 'written from the hub');
+    // With the copy it was made from (#4418), as the hub's editor sends it.
+    const keptWas = crypto.createHash('sha256').update('kept\n', 'utf8').digest('hex');
+    r = await request(port, 'PUT', '/api/doc/tests', { cookie: admin, origin: OWN, 'x-thornswood-doc-was': keptWas }, 'written from the hub');
     yes('a page written from the hub lands', r.status === 200 && text(A.dir, 'data/tests.md') === 'written from the hub');
-    r = await request(port, 'PUT', '/api/results', Object.assign({ cookie: admin, referer: OWN + '/hub' }, json), { marked: true });
-    yes('an old browser that sends only Referer, this site\'s page, still writes', r.status === 200 && read(A.dir, 'data/results.json', {}).marked === true);
+    r = await request(port, 'PUT', '/api/results', Object.assign({ cookie: admin, referer: OWN + '/hub' }, json), { id: 'marked', status: 'pass' });
+    yes('an old browser that sends only Referer, this site\'s page, still writes', r.status === 200 && (read(A.dir, 'data/results.json', {}).marked || {}).status === 'pass');
     r = await request(port, 'DELETE', '/api/upload/kept.txt', { cookie: admin, origin: OWN });
     yes('a delete from the hub lands', r.status === 200 && !fs.existsSync(path.join(A.dir, 'uploads', 'kept.txt')));
     r = await request(port, 'POST', '/api/staff/note', Object.assign({ cookie: admin, origin: 'https://127.0.0.1:' + port,
@@ -292,6 +268,19 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     r = await request(port, 'POST', '/api/logout', { cookie: admin, origin: OWN });
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
+    // Signing out ends that sign in on the site too (#4405). The checks
+    // below need a new sign in, strictly after the site's recorded sign out.
+    // Date.now() + 1 in this process did not establish that order (#5834):
+    // another process can report a later clock value. Read the site record
+    // instead, with no sleep, retry or change to authentication.
+    const signOutKey = crypto.createHmac('sha256', A.secret).update('signout|' + ADMIN_D).digest('hex').slice(0, 32);
+    const endedAt = Number(read(A.dir, 'data/signouts.json', {})[signOutKey]);
+    if (!Number.isFinite(endedAt) || endedAt <= 0) throw new Error('the site did not record the sign out');
+    const madeAgain = endedAt + 1;
+    console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
+    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    yes('the ended sign in is still refused (' + r.status + ')', r.status === 401);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
@@ -314,14 +303,14 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
       '/api/upload', '/api/gallery/approve', '/api/gallery/approved', '/api/report', '/api/logout', '/api/login'];
     let changed = [];
     for (const g of GETS) {
-      const rr = await request(port, 'GET', g + '?id=' + BJORN_D + '&why=x', { cookie: admin, origin: 'https://evil.example' });
+      const rr = await request(port, 'GET', g + '?id=' + BJORN_D + '&why=x', { cookie: again, origin: 'https://evil.example' });
       if ((rr.status === 200 && rr.j.ok) || rr.headers['set-cookie']) changed.push(g + ' ' + rr.status);
     }
     yes('a GET to any write route, signed in, from another site, does nothing' + (changed.length ? ' (' + changed.join(', ') + ')' : ''),
         changed.length === 0 && snap() === mid);
-    r = await request(port, 'GET', '/api/all', { cookie: admin, origin: 'https://evil.example' });
+    r = await request(port, 'GET', '/api/all', { cookie: again, origin: 'https://evil.example' });
     yes('a GET is not held to where it came from (reads are the browser\'s same origin rule to guard)', r.status === 200 && !!r.j.me);
-    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    r = await request(port, 'HEAD', '/api/hello', { cookie: again, origin: 'https://evil.example' });
     yes('a HEAD is a GET (' + r.status + ')', r.status === 200);
     a.srv.kill(); a = null;
 
@@ -337,8 +326,8 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     const member = String(r.headers['set-cookie'][0]).split(';')[0];
     r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: 'https://evil.example' }, { forged: 1 });
     yes('the member cookie from another site cannot write the test marks', refused(r) && read(B.dir, 'data/results.json', null) === null);
-    r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: BOWN }, { marked: 1 });
-    yes('from the hub it can', r.status === 200 && read(B.dir, 'data/results.json', {}).marked === 1);
+    r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: BOWN }, { id: 'marked', status: 'fail' });
+    yes('from the hub it can', r.status === 200 && (read(B.dir, 'data/results.json', {}).marked || {}).status === 'fail');
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   } finally {

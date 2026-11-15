@@ -33,7 +33,7 @@ const SHELL = read('Shell.cs');
 // Since #3201 the bar's button and Settings' share one handler, in ShellUpdate.cs.
 const UPDATE = read('ShellUpdate.cs');
 const PAGES = read('Pages.cs');
-const PACKS = read('ShellPacks.cs');
+const PACKS = read('ShellCollection.cs');
 const XAML = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', 'MainWindow.axaml'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -100,8 +100,9 @@ const guard = SHELL.slice(SHELL.lastIndexOf('if (updateBar != null', noteAt), no
 yes('the note stays off while an update or the collection card owns the bar',
     guard.indexOf('!collectionBarUp') >= 0 && guard.indexOf('!updatePending') >= 0);
 
-// Play's own gate is unchanged: the note is not in it.
-const gate = /btnPlay\.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working && feedNotice\.Hold == null;/;
+// Play's own gate is unchanged but for the old update feed's hold, which
+// went with the feed (#5608): the note is not in it.
+const gate = /btnPlay\.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working;/;
 yes('Play is enabled by exactly the same test as before', gate.test(SHELL));
 
 // ---- the bar's button --------------------------------------------------------

@@ -22,8 +22,8 @@
        many shares the matrix has, keeps one share's failure from cancelling
        the other, and gives it a budget inside the job's minutes;
     5. -Only (#2970) runs the harnesses named, split by commas or spaces, and
-       no others, refuses a name that is no harness before anything runs,
-       and is red when a named one fails;
+       no others, in the order given, refuses a name that is no harness
+       before anything runs, and is red when a named one fails;
     6. harnesses.yml starts only by dispatch, reads the repository and
        nothing more, runs on GitHub's runner, and hands the names to -Only
        through the environment, never pasted into a script it runs;
@@ -43,6 +43,14 @@
        line it ends with and the summary say so and why; on the box, on
        GitHub's runner and off a runner it keeps 300 s, and so does every
        harness the list does not name.
+   10. no pwsh it starts rewrites PowerShell's shared start-up profile
+       (#5752): it sets DOTNET_MultiCoreJitNoProfileGather=1 before any
+       harness starts, and a pwsh started with that reads the profile but
+       leaves it as it was, while one started without it writes it as it
+       exits (off Windows, where XDG_CACHE_HOME puts the profile in a
+       scratch folder; Windows' pwsh keeps it under the account's own
+       LOCALAPPDATA whatever the process is given, so there that half says
+       SKIP).
 
   Writes only into a scratch folder under TEMP, which it removes.
 #>
@@ -168,6 +176,10 @@ try {
         $r = Run $a @('-Only', 'test-b.js, voice/tests/test-v.js test-f.ps1')
         Yes ("-Only runs the named harnesses and no others (" + ((@(Ran $r.Said) | Sort-Object) -join ', ') + ")") (((@(Ran $r.Said) | Sort-Object) -join ',') -eq ((@('test-b.js', 'test-f.ps1', 'voice/tests/test-v.js') | Sort-Object) -join ','))
         Yes "  split by commas or spaces, and green when they pass (exit $($r.Code))" ($r.Code -eq 0 -and $r.Said -match 'every harness passed')
+        # In the order given (12 Nov 2026): Run-Gate.ps1 hands a share's
+        # names longest first, and one at a time each ends before the next.
+        $r = Run $a @('-Only', 'test-e.js test-a.js voice/tests/test-v.js test-c.js')
+        Yes ("  and starts them in the order given, not by name (" + ((Ran $r.Said) -join ', ') + ")") ($r.Code -eq 0 -and ((Ran $r.Said) -join ',') -eq 'test-e.js,test-a.js,voice/tests/test-v.js,test-c.js')
         $r = Run $a @('-Only', 'test-b.js test-nope.js')
         Yes "  a name that is no harness is refused and nothing runs (exit $($r.Code))" ($r.Code -eq 2 -and -not (Ran $r.Said).Count -and $r.Said -match 'no such harness here, so nothing was run: test-nope\.js')
         $r = Run $a @('-Only', 'not-a-harness.js')
@@ -295,6 +307,36 @@ try {
     Yes ('the heavy harnesses are one list in Nightly-Harnesses.ps1 ($OFF_BOX_CLOCK), naming test-2914-nexus-scripts.ps1 at 600 s (' + (@($named | ForEach-Object { $_.Name + ' ' + $_.Secs }) -join ', ') + ')') ($list.Success -and @($named | Where-Object { $_.Name -eq 'test-2914-nexus-scripts.ps1' -and $_.Secs -eq 600 }).Count -eq 1)
     Yes '  every name on it is a harness here, and no clock on it is past 600 s' ($named.Count -and -not @($named | Where-Object { -not (Test-Path -LiteralPath (Join-Path $repo ('tests\' + $_.Name))) -or $_.Secs -gt 600 -or $_.Secs -le 300 }).Count)
     Yes '  and the box is told from One by the runner name, as Run-Gate.ps1 does' ($src -match "\[string\]\`$env:RUNNER_NAME -like 'thornswood-pr-\*'" -and [IO.File]::ReadAllText((Join-Path $repo 'scripts\dev\Run-Gate.ps1')) -match "\[string\]\`$env:RUNNER_NAME -like 'thornswood-pr-\*'")
+
+    # 10. The start-up profile (#5752).
+    $src = [IO.File]::ReadAllText($script)
+    $setAt = $src.IndexOf("`$env:DOTNET_MultiCoreJitNoProfileGather = '1'")
+    $firstStart = $src.IndexOf('function Start-One')
+    Yes 'Nightly-Harnesses.ps1 sets DOTNET_MultiCoreJitNoProfileGather=1 for the run, before anything starts a harness (#5752)' ($setAt -gt 0 -and $firstStart -gt $setAt)
+    if ($onWindows) {
+        Write-Host "SKIP  a pwsh started with it leaves the start-up profile as it was: Windows' pwsh keeps it under the account's LOCALAPPDATA whatever the process is given"
+    } else {
+        $pwshExe = (Get-Process -Id $PID).Path
+        $profileAfter = {
+            param([string]$cache, [string]$gather)
+            $psi = [Diagnostics.ProcessStartInfo]::new($pwshExe)
+            foreach ($a in @('-NoProfile', '-NonInteractive', '-Command', '[System.Net.Dns]::GetHostName() | Out-Null')) { $psi.ArgumentList.Add($a) }
+            $psi.UseShellExecute = $false
+            $psi.Environment['XDG_CACHE_HOME'] = $cache
+            if ($gather) { $psi.Environment['DOTNET_MultiCoreJitNoProfileGather'] = $gather } else { $null = $psi.Environment.Remove('DOTNET_MultiCoreJitNoProfileGather') }
+            $p = [Diagnostics.Process]::Start($psi); $p.WaitForExit()
+            $f = Join-Path $cache 'powershell/StartupProfileData-NonInteractive'
+            if (Test-Path -LiteralPath $f) { [IO.File]::ReadAllBytes($f) } else { ,@() }
+        }
+        $without = Join-Path $work 'cache-without'; $with = Join-Path $work 'cache-with'
+        $wrote = @(& $profileAfter $without '')
+        Yes '  a pwsh started without it writes the start-up profile as it exits (what the setting stops)' ($wrote.Count -gt 64)
+        $seed = Join-Path $with 'powershell'
+        $null = New-Item -ItemType Directory -Force -Path $seed
+        [IO.File]::WriteAllBytes((Join-Path $seed 'StartupProfileData-NonInteractive'), [byte[]]$wrote)
+        $left = @(& $profileAfter $with '1')
+        Yes ('  a pwsh started with it leaves the profile it read as it was ({0} bytes before, {1} after)' -f $wrote.Count, $left.Count) ($left.Count -eq $wrote.Count -and [Convert]::ToBase64String([byte[]]$left) -eq [Convert]::ToBase64String([byte[]]$wrote))
+    }
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -24,7 +24,8 @@
 // download_link and its downloadLink in GraphQL, and serves the files behind
 // them at /cdn/..., refusing a CDN request that carries the key. What it
 // serves is set through /_control: serve maps a file id to a local file and
-// the name its Content-Disposition gives, corrupt names file ids whose bytes
+// the name its Content-Disposition gives (a version made from an upload
+// serves that upload's bytes when serve does not name it, #4980), corrupt names file ids whose bytes
 // it changes on the way out, premium false answers download-link with the
 // 403 Nexus gives a free account, and addRevision adds a revision with the
 // local collection archive its download serves.
@@ -83,6 +84,10 @@ const files = {
       file_name: 'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil.zip' }] },
   'file-hair': { id: 'file-hair', name: 'KS Hairdos Lite SE NoNPCs', mod: '1932', versions: [
     { id: 'ver-8662', game_scoped_id: '8662', name: 'KS Hairdos Lite SE NoNPCs', version: '1.3', category: 'optional', uploaded_at: '2016-11-17T08:37:45Z', is_primary: false, position: '1' }] },
+  // The test collection's hashed mod, which -Remove takes out: only its v1
+  // file record is read, for its file name on Nexus (#4191).
+  'file-hashed': { id: 'file-hashed', name: 'Hashed', mod: '1111', versions: [
+    { id: 'ver-2222', game_scoped_id: '2222', name: 'Hashed', version: '2.0', category: 'main', uploaded_at: '2026-01-01T00:00:00Z', is_primary: true, position: '1' }] },
 };
 let nextFileId = 812345;
 const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', latest: 2, draft: null,
@@ -144,7 +149,7 @@ function api(req, res, url, body, json) {
   }
   if (req.method === 'GET' && (m = p.match(/^\/v3\/games\/skyrimspecialedition\/mod-file-versions\/(\d+)\/download-link$/))) {
     if (!control.premium) return problem(res, 403, 'Download links require Premium, or a valid key and expires.');
-    if (!control.serve[m[1]]) return problem(res, 404, 'No mod file version ' + m[1]);
+    if (!control.serve[m[1]] && !uploadedFile(m[1])) return problem(res, 404, 'No mod file version ' + m[1]);
     const base = 'http://127.0.0.1:' + server.address().port;
     return send(res, 200, { data: { links: [
       { name: 'Nexus Global Content Delivery Network', short_name: 'Nexus CDN', url: base + '/cdn/file/' + m[1] + '?md5=x&expires=4102444800' },
@@ -214,7 +219,7 @@ function api(req, res, url, body, json) {
     if (['main', 'optional', 'miscellaneous'].indexOf(json.file_category) < 0) return problem(res, 422, 'file_category');
     u.claimed = true;
     if (json.archive_existing_file === true) for (const v of f.versions) if (['main', 'update', 'optional', 'miscellaneous'].indexOf(v.category) >= 0) v.category = 'archived';
-    const v = { id: 'ver-' + nextFileId, game_scoped_id: String(nextFileId), name: json.name, version: json.version, category: json.file_category, uploaded_at: '2026-10-20T20:00:00Z', is_primary: json.primary_mod_manager_download === true, position: String(f.versions.length + 1) };
+    const v = { id: 'ver-' + nextFileId, game_scoped_id: String(nextFileId), name: json.name, version: json.version, category: json.file_category, uploaded_at: '2026-10-20T20:00:00Z', is_primary: json.primary_mod_manager_download === true, position: String(f.versions.length + 1), upload: u.id };
     nextFileId++;
     f.versions.push(v);
     return send(res, 201, { data: { file: { id: f.id, game_scoped_id: v.game_scoped_id, name: f.name, file_category: v.category }, version: { id: v.id, position: v.position } } });
@@ -342,17 +347,24 @@ function storage(req, res, url, body) {
 }
 
 // The CDN behind the download links: signed already, so it takes no key.
+// A version made from an upload serves the bytes that upload carried, as
+// Nexus does (#4980), unless serve names something else for its file id.
+function uploadedFile(id) {
+  const hit = findVersion(v => v.game_scoped_id === id && v.upload);
+  const u = hit ? uploads[hit.v.upload] : null;
+  return u && u.bytes ? { bytes: u.bytes, name: u.filename } : null;
+}
 function cdn(req, res, url) {
   const p = url.pathname;
   let m, item = null;
   if (req.headers.apikey !== undefined) { violations.push('the key went to the CDN: ' + req.method + ' ' + p); return problem(res, 400, 'apikey sent to the CDN'); }
-  if (req.method === 'GET' && (m = p.match(/^\/cdn\/file\/(\d+)$/))) item = control.serve[m[1]] ? Object.assign({ id: m[1] }, control.serve[m[1]]) : null;
+  if (req.method === 'GET' && (m = p.match(/^\/cdn\/file\/(\d+)$/))) item = control.serve[m[1]] ? Object.assign({ id: m[1] }, control.serve[m[1]]) : (uploadedFile(m[1]) ? Object.assign({ id: m[1] }, uploadedFile(m[1])) : null);
   else if (req.method === 'GET' && (m = p.match(/^\/cdn\/collection\/(\d+)$/))) {
     const n = Object.keys(collection.revisions).find(k => collection.revisions[k].id === m[1]);
     if (n && collection.revisions[n].archive) item = { path: collection.revisions[n].archive, name: path.basename(collection.revisions[n].archive) };
   }
   if (!item) return problem(res, 404, 'Nothing at ' + p);
-  let bytes = fs.readFileSync(item.path);
+  let bytes = item.bytes ? Buffer.from(item.bytes) : fs.readFileSync(item.path);
   if (item.id && control.corrupt.indexOf(item.id) >= 0) { bytes = Buffer.from(bytes); bytes[0] = bytes[0] ^ 0xFF; }
   res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Content-Disposition': 'attachment; filename="' + item.name + '"' });
   return res.end(bytes);

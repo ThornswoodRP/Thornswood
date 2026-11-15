@@ -106,7 +106,7 @@ function Get-ThornswoodVpsUser {
 # the screen with no redirection. A real failure is still a failure: ssh and
 # scp exit non-zero (255 when they cannot connect), and the caller reads
 # $LASTEXITCODE as before. Keep the block to the one native call, so nothing
-# else in a script is softened. tests\test-ssh-stderr.ps1 runs a stand-in ssh
+# else in a script is softened. scripts\tests\test-ssh-stderr.ps1 runs a stand-in ssh
 # that prints the warning, under both PowerShells.
 #
 # A plain function on purpose: an advanced one (with [Parameter]) refuses

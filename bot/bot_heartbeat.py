@@ -19,8 +19,9 @@ from bot_core import _int_env, client, log
 # python process with Thornswood-Bot in its command line was alive. A bot
 # stuck logging in, hung, or cut off from Discord and never getting back is
 # still that process, so the one outage the bot exists to tell staff about,
-# itself, looked fine. So this writes heartbeat.json beside this file every
-# HEARTBEAT_EVERY seconds: its pid, when it started, when it wrote it,
+# itself, looked fine. So this writes heartbeat.json in the bot's data
+# folder (bot_base.py) every HEARTBEAT_EVERY seconds: its pid, when it
+# started, when it wrote it,
 # whether it is connected to Discord, when it last was, and when it last
 # handled something Discord sent it and what. The watchdog reads it
 # (BeatProblem in scripts\vps\Watch-Services.ps1) and treats ten quiet

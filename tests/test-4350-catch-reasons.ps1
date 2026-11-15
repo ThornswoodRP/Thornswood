@@ -134,20 +134,14 @@ try {
         $r.Code -eq 1 -and $r.Out -match ('Verify\.cs has ' + ($was + 1) + ' silent catches and the baseline allows ' + $was))
 
     # ---- 3. the three paths say why -----------------------------------------
-    # None of the nine catches on them is counted: Http.cs and ShellUpdate.cs
-    # have none, and Updater.cs's one is Parts, which reads a version string.
+    # None of the catches on them is counted: Http.cs, ShellUpdate.cs and,
+    # since #5608, Updater.cs have none.
     $r = Run-Check $AppDir $none
     Yes 'Http.cs has no catch that drops its reason' ($r.Out -notmatch 'NEW\s+Http\.cs')
     Yes 'ShellUpdate.cs has none' ($r.Out -notmatch 'NEW\s+ShellUpdate\.cs')
     Yes 'Online.cs has none' ($r.Out -notmatch 'NEW\s+Online\.cs')
-    $upd = [IO.File]::ReadAllLines((Join-Path $AppDir 'Updater.cs'))
-    $m = [regex]::Match($r.Out, 'NEW\s+Updater\.cs has (\d+) .*lines ([\d, ]+)\.')
-    $inParts = $false
-    if ($m.Success -and $m.Groups[1].Value -eq '1') {
-        $at = [int]$m.Groups[2].Value
-        for ($j = $at - 1; $j -ge 0; $j--) { if ($upd[$j] -match '^\s{8}\S.*\(') { $inParts = ($upd[$j] -match '\bstatic int\[\] Parts\(string v\)'); break } }
-    }
-    Yes 'Updater.cs has one left, in Parts, off the install and removal paths' $inParts
+    # Parts, the one Updater.cs kept, went with the update feed (#5608).
+    Yes 'Updater.cs has none' ($r.Out -notmatch 'NEW\s+Updater\.cs')
 
     $http = [IO.File]::ReadAllText((Join-Path $AppDir 'Http.cs'))
     Yes 'Http.GetOrNull hands back why' ($http -match 'public static byte\[\] GetOrNull\(string url, int waitMs, int readMs, out string why\)')
@@ -164,19 +158,23 @@ try {
     Yes 'and when it does not parse' ($man -match 'Swallow\.Note\("Verify\.Manifest, reading')
 
     $onl = [IO.File]::ReadAllText((Join-Path $AppDir 'Online.cs'))
-    Yes 'Online.AskPort takes the reason and says it' ($onl -match 'GetOrNull\(url, 2500, Http\.DefaultReadMs, out why\)' -and $onl -match 'SayWhenItChanges\(resourcePort, url, why\)' -and $onl -match 'Swallow\.Say\("Online\.AskPort"')
-    # AskPort runs every ten seconds. Its catch hands the reason to
-    # SayWhenItChanges, which writes once per change; a Swallow.Note there
-    # would write a line on every ask while the same exception repeats.
+    Yes 'Online.AskPort takes the reason and says it' ($onl -match 'GetOrNull\(url, 2500, Http\.DefaultReadMs, out why\)' -and $onl -match 'SayWhenItChanges\(resourcePort, url, why, error\)' -and $onl -match 'Swallow\.Say\("Online\.AskPort"')
+    # AskPort runs every ten seconds. Its catch hands the reason and the
+    # exception to SayWhenItChanges, which writes once per change; a
+    # Swallow.Note or a Failure.Why there (which notes) would write a line on
+    # every ask while the same exception repeats (#4633).
     $at = $onl.IndexOf('static Count AskPort(')
     $end = if ($at -ge 0) { $onl.IndexOf('SayWhenItChanges(resourcePort', $at) } else { -1 }
     $ask = if ($at -ge 0 -and $end -gt $at) { $onl.Substring($at, $end - $at) } else { '' }
     $catch = [regex]::Match($ask, 'catch\s*\(Exception ex\)\s*\{[^}]*\}')
     Yes 'AskPort''s catch keeps the reason for SayWhenItChanges and writes no line of its own' (
-        $catch.Success -and $catch.Value -match 'why = ex\.GetType\(\)\.Name' -and $catch.Value -notmatch 'Swallow\.')
+        $catch.Success -and $catch.Value -match 'why = Failure\.Plain\(ex' -and $catch.Value -match 'error = ex' -and $catch.Value -notmatch 'Swallow\.|Failure\.(Why|Say)\(')
+    $says = $onl.Substring([Math]::Max(0, $onl.IndexOf('static void SayWhenItChanges(')))
+    Yes 'SayWhenItChanges writes the exception once, after it knows the reason changed' (
+        $says -match '(?s)lastWhy\[port\] = why;.*?if \(error != null\) Swallow\.Note\("Online\.AskPort", error\);')
 
     $sw = [IO.File]::ReadAllText((Join-Path $AppDir 'Swallow.cs'))
-    Yes 'Swallow.Say writes to the log and never throws' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'File\.AppendAllText')
+    Yes 'Swallow.Say uses the one diagnostic writer' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'LauncherLog\.Line')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

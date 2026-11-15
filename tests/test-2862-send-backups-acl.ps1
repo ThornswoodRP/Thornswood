@@ -18,6 +18,13 @@
       ([IO.DirectoryInfo] or [IO.FileInfo]), which is what the method takes;
     - Send-Backups.ps1 locks its folder that way, and -Install says the drop
       key after the lock and before it asks the VM anything;
+    - -Status checks the drop key against its .pub, says its lock, and logs
+      in with the send's own options and an empty batch, saying what sftp
+      said (the VM refused the key on 11 Nov 2026 and logged no reason);
+    - the drop key is made with no passphrase (-N '', not -N '""', which
+      PowerShell 7 hands over as two quote marks), every read of it says
+      -P '' so nothing waits for a passphrase, and -Install takes the old
+      quote marks off the key it already made;
     - -Install turns on the Task Scheduler's Operational log before it
       registers the task, since the task starts on the nightly's "task
       completed" event there and Windows Server ships that log off;
@@ -36,10 +43,16 @@ function Rel([string]$p) { $p.Substring($Repo.Length + 1) }
 
 # The harnesses are left out: tests\ and a product's own tests folder,
 # launcher\tests\ (#5341), which name the very things they look for.
+# The scripts read are the ones git tracks, named by git rather than found by
+# walking the working tree (#5634): a walk went down into temp\, where
+# another harness in the same share makes and removes its scratch, and a
+# folder gone between being listed and being read stopped this one. git
+# names no scratch, nothing untracked and no file inside the engine fork.
 $harnesses = '^([^\\/]+[\\/])?tests[\\/]'
-$skip = '[\\/](\.git|node_modules|temp|worktrees|engine)[\\/]'
-$files = @(Get-ChildItem -LiteralPath $Repo -Recurse -File -Include *.ps1, *.psm1 |
-    Where-Object { (Rel $_.FullName) -notmatch $harnesses -and $_.FullName -notmatch $skip })
+$tracked = @(& git -C $Repo ls-files -- '*.ps1' '*.psm1')
+if ($LASTEXITCODE -ne 0) { throw "git ls-files in $Repo said $LASTEXITCODE, so the scripts to read are not known" }
+$files = @($tracked | Where-Object { $_ -notmatch $harnesses } |
+    ForEach-Object { Get-Item -LiteralPath (Join-Path $Repo $_) })
 Yes "there are scripts to read ($($files.Count))" ($files.Count -gt 50)
 
 # ---- no item ACL method, in code or in text sent to the box ---------------------------
@@ -95,6 +108,31 @@ Yes 'Send-Backups -Install turns on the Task Scheduler''s Operational log, and c
 Yes 'the task''s trigger and -Status ask the log one query, in that log' (
     $send.Contains('$q = $Ended') -and $send.Contains('Get-WinEvent -FilterXml ([xml]$Ended)') -and
     $send.Contains("`$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'"))
+# The task runs with nobody at it. Restore-Backup.ps1 waits for Enter at its
+# end unless it is given -NoPause, and on 11 Nov 2026 the send's first check
+# waited there until Windows ended the task two hours later.
+$calls = @([regex]::Matches(($send -replace '(?s)<#.*?#>', ''), '& pwsh [^\r\n]*') | ForEach-Object { $_.Value })
+Yes ('every pwsh the send starts is told nobody is there: -NonInteractive, and -NoPause for Restore-Backup' + $(if (-not $calls.Count) { ' (none found)' })) (
+    $calls.Count -ge 1 -and @($calls | Where-Object { $_ -notmatch ' -NonInteractive ' -or ($_ -match '\$restore' -and $_ -notmatch ' -NoPause( |$)') }).Count -eq 0)
+Yes '-Status says what Windows wrote about the send task''s own runs, from that log' (
+    $send.Contains("[@Name='TaskName']='\`$TaskName'") -and $send.Contains('Get-WinEvent -FilterXml ([xml]$own)'))
+# On 11 Nov 2026 the VM refused the box's key with nothing in its own log
+# to say why, so -Status logs in the way the send does and says what sftp
+# said, with an empty batch that sends nothing.
+Yes '-Status checks the key pair and its lock, and logs in with the send''s own options and an empty batch' (
+    $send.Contains('& $sftp -b $batch @Login ') -and $send.Contains('-v -b $empty @Login ') -and
+    $send.Contains("[IO.File]::WriteAllText(`$empty, '')") -and $send.Contains("-y -P '' -f `$Key") -and $send.Contains('Get-Acl -LiteralPath $Key') -and
+    ([regex]::Matches($send, '-o IdentitiesOnly|''IdentitiesOnly=yes''')).Count -eq 1)
+# PowerShell 7 hands a native program the text it is given: -N '""' locked
+# the drop key with two quote marks, the task could not sign with it, and the
+# VM refused every file on 11 Nov 2026. No script passes '""' to ssh-keygen,
+# and every ssh-keygen -y says its passphrase, so none waits for one.
+$quoted = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Include *.ps1, *.psm1 | Where-Object {
+    (Get-Content -LiteralPath $_.FullName -Raw) -match 'keygen[^\r\n]*-N ''""''' })
+Yes ('no script makes a key with -N ''""'' (two quote marks as its passphrase)' + $(if ($quoted.Count) { ': ' + ($quoted.Name -join ', ') })) (
+    $quoted.Count -eq 0 -and $send.Contains("-t ed25519 -N '' -C 'thornswood-box-drops-backups'"))
+Yes 'Send-Backups reads the drop key with -P '''' so it never waits for a passphrase, and -Install takes the old quote marks off the same key' (
+    $send.Contains("-y -P '' -f `$Key") -and -not ($send -match '-y -f \$Key') -and $send.Contains("-p -q -P '`"`"' -N '' -f `$Key"))
 
 # ---- the call, for real -----------------------------------------------------------
 if (-not $OnWindows) {
