@@ -88,7 +88,7 @@ function Stop-Game {
 # backslash, so C:\Thornswood is not taken for C:\Thornswood-DevBuild. A game
 # whose path cannot be read belongs to another Windows account. Until 12 Oct
 # every one of those counted, so on the VPS, where the four build runners are
-# four accounts, one runner's stand-in Skyrim (tests\test-2233-inuse-image.ps1
+# four accounts, one runner's stand-in Skyrim (scripts\tests\test-2233-inuse-image.ps1
 # runs a copy of ping.exe named SkyrimSE.exe) stopped Install-Thornswood.ps1 in
 # another runner's tests\test-build-vs-install.ps1 (#2410). Which folder such a
 # process runs from is told from the folder's side, as Build-Generated.ps1 does

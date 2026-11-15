@@ -125,12 +125,12 @@ function harness(start, precise) {
   // where it does not; both read the pretend clock, Date.now in whole ms.
   const perf = precise ? { now: function () { return clock.t; } } : undefined;
   const date = { now: function () { return 1700000000000 + Math.floor(clock.t); } };
-  const fn = new Function('sp', 'log', 'FIRE_BASES', 'FIRE_FILES', 'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'PLACED_WATERS', 'WADE_DEEP',
+  const fn = new Function('sp', 'log', 'FIRE_BASES', 'FIRE_FILES', 'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'clientTable', 'WADE_DEEP',
     walk + fires +
     '\nreturn { distance: fireDistance, tick: fireWalkTick,' +
     ' walking: function () { return !!fireWalk; },' +
     ' walked: function () { return fireWalked; }, hits: function () { return fireHits; } };');
-  const api = fn(sp, log, BASES, ['Skyrim.esm'], 300, 90, perf, date, [], 70);
+  const api = fn(sp, log, BASES, ['Skyrim.esm'], 300, 90, perf, date, function () { return []; }, 70);
   api.logs = logs;
   api.me = me;
   api.where = where;

@@ -106,9 +106,24 @@ function ConvertTo-NexusRunParams($Req, $Verbs) {
     $packs = @($OwnParams | Where-Object { $own.ContainsKey($_) })
     if ($packs.Count -and $packs.Count -ne 3) { throw '-PackRoot, -Pack and -PackName go together: the folder, the files in it, and the zip''s name. Nothing was run.' }
     if ($Req.Verb -eq 'Send-NexusFile' -and -not $packs.Count) { throw 'Send-NexusFile uploads an archive zipped from files of main: give -PackRoot, -Pack and -PackName. An archive built anywhere else is uploaded from One. Nothing was run.' }
-    $fileIds = if ($params.Contains('FileId')) { @($params['FileId']).Count } else { 0 }
-    if ($params.Contains('Mod') -and $Req.Verb -eq 'New-NexusRevision' -and @($params['Mod']).Count -ne $fileIds) {
-        throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.'
+    if ($Req.Verb -eq 'New-NexusRevision') {
+        # New-NexusRevision refuses these itself, but on the runner, after every
+        # -FileId and -Add archive is downloaded with the key (#4325). Held here,
+        # before the workflow starts, as the script holds them and in its
+        # order: -Publish and -Discard take a draft that is already there, so
+        # they take none of the changes; then -Mod and -FileId pair, whichever
+        # is given.
+        $count = { param($n) if ($params.Contains($n)) { @($params[$n]).Count } else { 0 } }
+        $changes = @('Mod', 'FileId', 'DropPatch', 'Add', 'Rule', 'Remove')
+        if ($params.Contains('Publish')) {
+            $with = @(@('Discard') + $changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Publish publishes a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ($params.Contains('Discard')) {
+            $with = @($changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Discard throws away a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ((& $count 'Mod') -ne (& $count 'FileId')) { throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.' }
     }
     return [pscustomobject]@{ Params = $params; Own = $own }
 }

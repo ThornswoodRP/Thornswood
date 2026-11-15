@@ -6,6 +6,24 @@ to turn it into a release. The collection contains 115 mod packages:
 113 from revision 1, four removed, six added. Main and Dev keep their own
 feeds, server ports, release records and generated game folders.
 
+## Contents
+
+- [1. Select the published collection](#1-select-the-published-collection)
+- [2. Keep the removals and exclusions](#2-keep-the-removals-and-exclusions)
+- [3. Retain the covered body installer choices](#3-retain-the-covered-body-installer-choices)
+- [4. Keep Estate and Runtime at the published versions](#4-keep-estate-and-runtime-at-the-published-versions)
+- [5. Preserve the rebuilt Content base](#5-preserve-the-rebuilt-content-base)
+- [6. Keep the collection's plugin rules](#6-keep-the-collections-plugin-rules)
+- [7. Check the six added packages](#7-check-the-six-added-packages)
+- [8. Refresh a separate own folder](#8-refresh-a-separate-own-folder)
+- [9. Build behaviors and bodies in each channel's own folder](#9-build-behaviors-and-bodies-in-each-channels-own-folder)
+- [10. Check the complete release inputs](#10-check-the-complete-release-inputs)
+- [11. Publish and validate Dev first](#11-publish-and-validate-dev-first)
+- [12. Publish Main and its installer](#12-publish-main-and-its-installer)
+- [13. Deploy the site, docs and supporting services](#13-deploy-the-site-docs-and-supporting-services)
+- [14. Verify channel separation](#14-verify-channel-separation)
+- [15. Keep the historical loose-file audit](#15-keep-the-historical-loose-file-audit)
+
 ## 1. Select the published collection
 
 Install revision 2 in Vortex's **Thornswood** profile. Leave **Skip plugin rules**

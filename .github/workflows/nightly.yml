@@ -426,6 +426,10 @@ jobs:
     if: ${{ !cancelled() && needs.harnesses.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Each failed test, with its FAIL lines and the command that runs it
+    # alone, for the board's failure comment (#4178).
+    outputs:
+      failed: ${{ steps.merge.outputs.failed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -437,12 +441,23 @@ jobs:
           pattern: harness-report-*
           path: ${{ runner.temp }}/harness-reports
       - name: Merge the shares' reports into one
+        id: merge
         shell: pwsh
         run: |
           $in = Join-Path $env:RUNNER_TEMP 'harness-reports'
           New-Item -ItemType Directory -Path $in -Force | Out-Null
-          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses'
-          exit $LASTEXITCODE
+          $failed = Join-Path $env:RUNNER_TEMP 'harness-failed.md'
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses' -Failed $failed
+          $code = $LASTEXITCODE
+          # The list goes on as this job's output "failed" whether or not
+          # every share's report came: a share that left none is named in
+          # it. A failed test's lines are its own words, so the output ends
+          # at a delimiter made new for this run, which no line can hold.
+          $end = 'FAILED_' + [Guid]::NewGuid().ToString('N')
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('failed<<' + $end)
+          if (Test-Path -LiteralPath $failed) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ([IO.File]::ReadAllText($failed)) }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $end
+          exit $code
       - name: Keep the merged report with the run
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
@@ -556,10 +571,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NIGHTLY_FAILED: ${{ needs.harness-report.outputs.failed }}
         run: |
           # One "Nightly checks failed" issue, never two: added to when one is
           # open (every page read, the oldest kept, any duplicate closed
           # pointing to it), opened when none is. Issues #905 and #1120.
+          # The comment lists each failed test, its FAIL lines and the
+          # command that runs it alone, from the harness report (#4178).
           Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
           .\scripts\dev\Nightly-Issue.ps1 -Result failure
 

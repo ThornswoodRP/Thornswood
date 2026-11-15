@@ -276,7 +276,10 @@ function finish() {
 
   // ---------------------------------------------------- somebody leaves
   await inWorld(s, [101, 102, 104]);
-  await until(() => on(d) === '101,102,104');
+  // The service sends each page its roster on its own, so wait for both
+  // pages checked below, not only the fourth's (#6211: the queue saw the
+  // fourth's new roster arrive while the first's was still on its way).
+  await until(() => on(d) === '101,102,104' && on(a) === '101,102,104');
   yes('when somebody leaves the world, the fourth takes the place', on(d) === '101,102,104' && on(a) === '101,102,104',
       on(d) + ' / ' + on(a));
   yes('and the one who left is sent an empty roster, so their page lets go', c.roster && c.roster.length === 0,

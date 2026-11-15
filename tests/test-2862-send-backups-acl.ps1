@@ -43,10 +43,16 @@ function Rel([string]$p) { $p.Substring($Repo.Length + 1) }
 
 # The harnesses are left out: tests\ and a product's own tests folder,
 # launcher\tests\ (#5341), which name the very things they look for.
+# The scripts read are the ones git tracks, named by git rather than found by
+# walking the working tree (#5634): a walk went down into temp\, where
+# another harness in the same share makes and removes its scratch, and a
+# folder gone between being listed and being read stopped this one. git
+# names no scratch, nothing untracked and no file inside the engine fork.
 $harnesses = '^([^\\/]+[\\/])?tests[\\/]'
-$skip = '[\\/](\.git|node_modules|temp|worktrees|engine)[\\/]'
-$files = @(Get-ChildItem -LiteralPath $Repo -Recurse -File -Include *.ps1, *.psm1 |
-    Where-Object { (Rel $_.FullName) -notmatch $harnesses -and $_.FullName -notmatch $skip })
+$tracked = @(& git -C $Repo ls-files -- '*.ps1' '*.psm1')
+if ($LASTEXITCODE -ne 0) { throw "git ls-files in $Repo said $LASTEXITCODE, so the scripts to read are not known" }
+$files = @($tracked | Where-Object { $_ -notmatch $harnesses } |
+    ForEach-Object { Get-Item -LiteralPath (Join-Path $Repo $_) })
 Yes "there are scripts to read ($($files.Count))" ($files.Count -gt 50)
 
 # ---- no item ACL method, in code or in text sent to the box ---------------------------

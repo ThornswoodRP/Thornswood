@@ -3,16 +3,18 @@
 //
 // #4623. Lays out the load test's server on GitHub's runner, from three
 // things and nothing else:
-//   the engine   the server build records\server-build.json names, as the
-//                signed build-<date>.<run> Release carries it for the deploy
-//                agent (the server-<commit>-<hash>.zip, unpacked, as the
-//                workflow downloads it), every file the record names held to
-//                its sha256, so the server measured is the one dev runs. The
-//                fork's own artifact of the commit is not used: after the
-//                history rewrite the fork built that commit again (run
-//                41340857541), and a rebuild is never the same bytes
-//                (engine\README.md), so its scam_native.node is not the one
-//                the record holds;
+//   the engine   the server build records\server-build.json names: the
+//                fork's own build of the pin, as Get-EngineArtifact.ps1
+//                takes it and holds every file to the record, the same build
+//                merge-release.yml makes the build Release's server zip from
+//                (the workflow unpacks that zip, server-build.json and all). Every
+//                file the record names is held to its sha256 again here. A
+//                rebuild is never the same bytes (engine\README.md), and
+//                after the history rewrite the fork built one commit twice
+//                (run 41340857541); EngineArtifact.ps1 takes only the build
+//                whose files are the record's. Until #6153 this took the
+//                build Release instead, which a pin merge left behind until
+//                the next dev release;
 //   the game     game\gamemode.js, its tables (game\gamemode-tables, which
 //                the gamemode reads as it loads since #5280) and
 //                game\content\Thornswood-Content.esp from this checkout;
@@ -220,8 +222,8 @@ async function build(o) {
 // (its NPCs, the gamemode's NPC runtime, merchants and quests) is laid out on
 // the box, from a server installed there, and never leaves it. From that
 // server, read and never written: its program (dist_back, scam_native.node,
-// package.json), its gamemode.js and gamemode-tables, its Papyrus scripts and its
-// merchant ledger (copied), the plugins its loadOrder names (by their
+// package.json), its gamemode.js and gamemode-tables, its Papyrus scripts, its
+// merchant ledger and its hold price lists (copied), the plugins its loadOrder names (by their
 // full paths, not copied), whether the engine keeps NPCs alive (npcEnabled,
 // npcSettings) and which NPCs it lets in (npcAllowCrimeFaction,
 // npcAllowEssential), and the gameplay switches below. Nothing else of its settings
@@ -234,11 +236,33 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
   'thornswoodBodyReset', 'thornswoodLoadOrderRefuse'];
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
+// The hold price lists the factions and businesses submitted at the drop
+// boxes, kept in the books file (staff-spells.ts). A guild trader quotes its
+// buys, sells and the pay of every commission from them, and with no list
+// there is no quote, by design (docs/systems/merchants-guild.md). The copy
+// once left this file out, so every commission on it said "No submitted buy
+// price" whatever dev held, and the crowd could take no work (#6180).
+const PRICE_BOOKS = 'books.json';
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
   if (typeof v === 'string') { return v.length <= 200 && !/[:\\/]/.test(v); }
   return false;
+}
+
+// How many hold price lists the books file holds, and at which holds, for
+// the run's own line: counts and hold names only, never a book, a person or
+// a price. The gamemode verifies the file as it loads it; this only reads.
+function priceLists(file) {
+  const doc = readJson(file);
+  const ledgers = (doc && doc.ledgers && typeof doc.ledgers === 'object') ? doc.ledgers : {};
+  let lists = 0;
+  const holds = [];
+  for (const hold of Object.keys(ledgers).sort()) {
+    const n = Object.keys(ledgers[hold] || {}).length;
+    if (n) { lists += n; holds.push(hold + ' ' + n); }
+  }
+  return { lists, holds };
 }
 
 function fromInstalled(o) {
@@ -328,11 +352,18 @@ function fromInstalled(o) {
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
   for (const name of LEDGER) { fs.copyFileSync(path.join(theirPrivate, name), path.join(out, 'private', name)); }
+  // The price lists, copied like the ledger, so the copy's traders quote
+  // what the server's quote. A server nobody has submitted a list to has no
+  // file, and the copy has none either.
+  const books = path.join(theirPrivate, PRICE_BOOKS);
+  const prices = fs.existsSync(books) ? priceLists(books) : { lists: 0, holds: [] };
+  if (fs.existsSync(books)) { fs.copyFileSync(books, path.join(out, 'private', PRICE_BOOKS)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
     ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
-    ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : ''));
-  return { out, engine, settings };
+    ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : '') +
+    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list'));
+  return { out, engine, settings, prices };
 }
 
 async function main() {

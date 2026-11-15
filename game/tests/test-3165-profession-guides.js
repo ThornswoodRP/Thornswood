@@ -4,8 +4,11 @@
 // "a page per profession on the K panel"): what it makes, where its
 // materials come from, how it ranks up.
 //
-//   A  the block in game/ui/thornswood-skills.js is what
-//      scripts/dev/Build-ProfessionGuides.js writes today (--check)
+//   A  game/ui/thornswood-profession-guides.js is what
+//      scripts/dev/Build-ProfessionGuides.js writes today (--check), a step
+//      of the content chain (#6193); the front injects it with the other
+//      overlays, and the K panel holds no copy of the facts and reads them
+//      with guidesNow() when it draws a page
 //   B  the block agrees with what the server runs: each half's count is the
 //      recipe book's rows for that half in RECIPES_BY_ID, the ladder is the
 //      gamemode's tuning, the benches are BENCH_ACCESS, the maneuvers are
@@ -43,11 +46,19 @@ function done() {
 // ------------------------------------------------------- A. the builder --
 const built = cp.spawnSync(process.execPath, [path.join(REPO, 'scripts', 'dev', 'Build-ProfessionGuides.js'), '--check'], { encoding: 'utf8' });
 yes('A1 Build-ProfessionGuides.js --check passes (' + (built.stdout + built.stderr).trim() + ')', built.status === 0);
-const m = /\n {2}var GUIDES = (\{.*\});\n/.exec(ui);
-let G = null;
-try { G = JSON.parse(m[1]); } catch (e) { G = null; }
-yes('A2 the K panel carries one GUIDES line between the PROFESSION_GUIDES markers, and it parses',
-    !!G && ui.split('// ==== PROFESSION_GUIDES ====').length === 2 && ui.split('// ==== end PROFESSION_GUIDES ====').length === 2);
+const GB = require(path.join(REPO, 'scripts', 'dev', 'Build-ProfessionGuides.js'));
+const guidesFile = read('game', 'ui', 'thornswood-profession-guides.js');
+const G = GB.read();
+yes('A2 the guides file is LF, one line of facts on window.ThornswoodTables, and it parses',
+    !!G && fs.readFileSync(GB.OUT, 'utf8').indexOf(CR) < 0 && guidesFile.split('\n' + GB.PREFIX).length === 2);
+const chain = JSON.parse(read('scripts', 'mods', 'content-tables.json'));
+yes('A3 a step of the content chain writes it',
+    chain.steps.some(function (s) { return s.tool === 'scripts/dev/Build-ProfessionGuides.js' &&
+      (s.writes || []).indexOf('game/ui/thornswood-profession-guides.js') >= 0; }));
+const front = read('game', 'plugins', 'thornswood-front.js');
+yes('A4 the front injects it with the overlays, and the K panel holds no copy and reads it with guidesNow()',
+    /'thornswood-profession-guides\.js', 'thornswood-skills\.js'/.test(front) && !/var GUIDES = /.test(ui) &&
+    ui.indexOf('PROFESSION_GUIDES ====') < 0 && /function guidesNow\(\) \{/.test(ui) && !/typeof GUIDES/.test(ui));
 if (!G) { done(); }
 
 // ------------------------------------------------- B. against the server --
@@ -167,7 +178,9 @@ const win = { innerWidth: 1920, innerHeight: 1080, addEventListener: function ()
 const box = { window: win, document: docu, setTimeout: function () { }, Date: Date, JSON: JSON, console: console };
 vm.createContext(box);
 let ran = true;
-try { vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
+// The guides file first, as the front injects it, then the panel.
+try { vm.runInContext(guidesFile, box, { filename: 'thornswood-profession-guides.js' });
+      vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
 const api = win.thornswoodSkills;
 yes('C0 the K panel runs in a stand-in document', ran && !!api);
 if (!api) { done(); }

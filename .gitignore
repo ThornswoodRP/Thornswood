@@ -61,7 +61,7 @@ bot/heartbeat.json.tmp
 bot/roots.pem
 bot/roots.pem.tmp
 
-# The dev build's own news webhook, for the dev updates channel. Same rule as
+# The dev build's own news webhook, for #staff-news. Same rule as
 # news-webhook.txt above: anyone holding the URL can post as the bot.
 bot/dev-webhook.txt
 

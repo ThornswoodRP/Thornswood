@@ -14,7 +14,7 @@ namespace Thornswood
     /// site refuses anything else and keeps nothing, so the launcher asks the
     /// same before a byte is read or sent.
     ///
-    /// Nothing from Avalonia or the network, so tests\test-4575-gallery-alt.ps1
+    /// Nothing from Avalonia or the network, so launcher\tests\test-4575-gallery-alt.ps1
     /// can compile this on its own.
     /// </summary>
     static class GalleryAlt

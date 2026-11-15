@@ -57,6 +57,7 @@
 $script:CollectionRecordHere = $PSScriptRoot
 if (-not $script:CollectionRecordHere) { $script:CollectionRecordHere = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $script:CollectionRecordHere '..\mods\PluginRuleLoops.ps1')
+. (Join-Path $script:CollectionRecordHere '..\mods\ContentPaths.ps1')     # Get-ThornswoodServerOrder
 . (Join-Path $script:CollectionRecordHere 'NexusModPlan.ps1')   # Get-NexusChoicesProblems
 
 # The game's own plugins, which no collection installs: the five base
@@ -300,18 +301,12 @@ function Get-CollectionRecordServerOrderProblems($R, [string[]]$Order) {
     $out = New-Object Collections.Generic.List[string]
     $byKey = @{}
     foreach ($p in @($R.plugins)) { $byKey[([string]$p.name).ToLowerInvariant()] = $p }
-    $list = New-Object Collections.Generic.List[string]
+    # In the order the game loads them, the plugins the order does not load
+    # yet on the end: the one rule for that order, ContentPaths.ps1's, which
+    # the box's content build moves a new revision's order by (#5191).
+    $list = @(Get-ThornswoodServerOrder $R $Order)
     $loads = @{}
-    foreach ($n in @($Order)) { $k = ([string]$n).ToLowerInvariant(); if (-not $loads.ContainsKey($k)) { $loads[$k] = $true; $list.Add([string]$n) } }
-    foreach ($p in @($R.plugins)) {
-        $k = ([string]$p.name).ToLowerInvariant()
-        if ($p.enabled -ne $false -and -not $loads.ContainsKey($k)) { $loads[$k] = $true; $list.Add([string]$p.name) }
-    }
-    # In the order the game loads them: every master before every plugin that
-    # is not one, each kind in the order above, as Get-CollectionRecordServerFull
-    # gives it, so a new master goes on the end of the masters.
-    $isMaster = { param($n) $k = $n.ToLowerInvariant(); if ($byKey.ContainsKey($k)) { [bool]$byKey[$k].master } else { $n -match '\.(esm|esl)$' } }
-    $list = @(@($list | Where-Object { & $isMaster $_ }) + @($list | Where-Object { -not (& $isMaster $_) }))
+    foreach ($n in $list) { $loads[$n.ToLowerInvariant()] = $true }
     $next = @{}
     $named = @{}
     foreach ($p in @($R.plugins)) {

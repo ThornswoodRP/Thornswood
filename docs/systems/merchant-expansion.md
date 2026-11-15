@@ -4,6 +4,14 @@ Patrick's requirements of 12 October 2026 replace the earlier unrestricted
 trader count and locked quest lineup. This is the implementation contract;
 it does not describe a completed release.
 
+## Contents
+
+- [Roster and tables](#roster-and-tables)
+- [Item catalogue and runtime admission](#item-catalogue-and-runtime-admission)
+- [Quests](#quests)
+- [Existing accepted work](#existing-accepted-work)
+- [Build order and checks](#build-order-and-checks)
+
 ## Roster and tables
 
 Patrick clarified during alpha testing that current merchant purses, stock
@@ -330,8 +338,8 @@ Local checks include `node game/tests/test-merchant-trading.js`,
 `node game/tests/test-merchant-settlement.js`,
 `node game/tests/test-merchant-pending-preflight.js`,
 `node game/tests/test-merchant-conservation.js`,
-`node game/tests/test-merchant-deployment.js` and
-`node scripts/dev/Build-MerchantGamemode.js --check`.
+`node game/tests/test-merchant-deployment.js`, `node scripts/dev/Build-MerchantTables.js --check`
+and `node scripts/dev/Build-MerchantGamemode.js --check`.
 These source changes include no game playtests or operational steps. Changes
 merge only after the required exact-head Launcher builds gate, and no change
 is described as live before its release.
