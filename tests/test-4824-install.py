@@ -446,8 +446,15 @@ else:
               '  [next] Script Extender  the collection installs this' in r['lines']
               and '  [next] Address library  the collection installs this' in r['lines'] and r['later'] == 3)
         check('the multiplayer client and the load order are checked', '  [ok]   Multiplayer' in r['lines'] and '  [ok]   Load order' in r['lines'])
-        check('it ends with the script\'s words', 'Installed. 3 things still to come from the collection, which is the next step.' in r['lines']
-              and 'Make a character named after yourself, save once, then connect.' in r['lines'])
+        check('it ends with the launcher\'s steps in the launcher\'s order, Downgrade first for a wrong build (#4496)',
+              r['lines'][-9:-1] == ['Installed.', '', 'Next, in the launcher:',
+                                    '  1. Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.',
+                                    '  2. Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.',
+                                    '  3. Press Connect Discord at the bottom of the left sidebar.',
+                                    '  4. Press Play.', '']
+              and r['lines'][-1] == 'Opening Thornswood now.')
+        check('the closing lines no longer call the collection the next step, or ask for a save',
+              not any('which is the next step' in l or 'save once' in l for l in r['lines']))
         check('the bar ends full', r['last'] == 1)
         check('each step is headed as the script headed it',
               all(h in r['lines'] for h in ['Finding Skyrim', 'The base game', 'Installing the mods', 'Settings', 'Checking']))
