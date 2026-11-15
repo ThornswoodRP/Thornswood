@@ -1312,18 +1312,52 @@ namespace Thornswood
             // Six seconds to save and go, for a game that was asked.
             if (asked) WaitForExits(ps, AskedToClose);
 
-            foreach (Process p in ps) { try { if (!p.HasExited) p.Kill(); } catch (Exception ex) { Swallow.Note("Checks.CloseGame, kill", ex); } }
+            foreach (Process p in ps)
+            {
+                int id = -1;
+                try
+                {
+                    id = p.Id;
+                    if (p.HasExited) continue;
+                    p.Kill();
+                    lock (ended) { ended[id] = DateTime.Now; refused.Remove(id); }
+                }
+                catch (Exception ex)
+                {
+                    // What Windows answered, kept for StuckReport: only a
+                    // refusal here is Windows not letting the launcher end it.
+                    if (id >= 0) lock (refused) { refused[id] = ex.Message; }
+                    Swallow.Note("Checks.CloseGame, kill", ex);
+                }
+            }
 
-            // Ended, it goes as soon as Windows has torn it down. One that
-            // does not within three seconds is held by something (a crash
-            // report being written), which StuckReport names.
+            // Ended, it goes as soon as Windows has torn it down, and a
+            // stuck game is slow to tear down (EndedToGo). The wait is on its
+            // exit, so a game that goes sooner costs no more than that.
             WaitForExits(ps, EndedToGo);
             Release(ps);
             return count;
         }
 
         static readonly TimeSpan AskedToClose = TimeSpan.FromSeconds(6);
-        static readonly TimeSpan EndedToGo = TimeSpan.FromSeconds(3);
+
+        // How long an ended game may take to go before StuckReport says it
+        // has not. It was three seconds, and that told Patrick on 15 Nov 2026
+        // that Windows would not let the launcher end Skyrim when it had: the
+        // game, stopped at the character page at 3440x1440 with the full mod
+        // list, was ended at 11:13:33 and Windows had it gone by 11:13:55,
+        // 22 seconds later, while the box said to use Task Manager. A minute
+        // is nearly three times what that took; one still there after it is
+        // held in Windows itself (a driver call it is stuck in, or a crash
+        // report being written), which StuckReport says.
+        static readonly TimeSpan EndedToGo = TimeSpan.FromSeconds(60);
+
+        // What happened when CloseGame ended each process, by process id:
+        // when Windows took the end, and what it said when it would not. A
+        // process id is only reused once its process has gone, and StuckReport
+        // reads these only for processes still running.
+        static readonly Dictionary<int, DateTime> ended = new Dictionary<int, DateTime>();
+        static readonly Dictionary<int, string> refused = new Dictionary<int, string>();
 
         /// <summary>Waits on each process's own exit, all of them within one deadline.</summary>
         static void WaitForExits(List<Process> ps, TimeSpan within)
@@ -1349,9 +1383,24 @@ namespace Thornswood
             List<Process> ps = GameProcesses();
             if (ps.Count == 0) { Release(ps); return ""; }
             var names = new List<string>();
+            var refusedSaid = new List<string>();
+            DateTime endedAt = DateTime.MinValue;
             foreach (Process p in ps)
             {
-                try { names.Add(p.ProcessName + ".exe (process " + p.Id + ")"); } catch (Exception ex) { Swallow.Note("Checks.StuckReport, name", ex); }
+                try
+                {
+                    int id = p.Id;
+                    string name = p.ProcessName + ".exe (process " + id + ")";
+                    names.Add(name);
+                    lock (refused)
+                    {
+                        string why;
+                        if (refused.TryGetValue(id, out why)) refusedSaid.Add(name + ": " + why);
+                        DateTime at;
+                        if (ended.TryGetValue(id, out at) && at > endedAt) endedAt = at;
+                    }
+                }
+                catch (Exception ex) { Swallow.Note("Checks.StuckReport, name", ex); }
             }
             Release(ps);
 
@@ -1371,10 +1420,16 @@ namespace Thornswood
             }
 
             string said = "Still running: " + string.Join(", ", names.ToArray()) + ".";
+            // Said as it happened: a refusal only when Windows refused, with
+            // its own words, and an end Windows took but has not finished only
+            // as that (#6124: the old line said Windows refused every time the
+            // game had not gone within three seconds).
             if (reporting)
                 said += " Windows is still writing a crash report for it, and it cannot be ended until that finishes. That usually takes a few minutes.";
-            else
-                said += " Windows would not let the launcher end it. In Task Manager, open the Details tab, end it there, and try again. If it will not end there either, restart the PC.";
+            else if (refusedSaid.Count > 0)
+                said += " Windows would not let the launcher end it (" + string.Join("; ", refusedSaid.ToArray()) + "). In Task Manager, open the Details tab, end it there, and try again. If it will not end there either, restart the PC.";
+            else if (endedAt != DateTime.MinValue)
+                said += " The launcher ended it at " + endedAt.ToString("h:mm:ss tt") + " and Windows has still not finished taking it down a minute later. Something in Windows itself is holding it, so restart the PC.";
             return said;
         }
 

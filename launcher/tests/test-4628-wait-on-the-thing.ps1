@@ -35,6 +35,19 @@
     3. Teeth: a CloseGame that looks again every 250 ms after ending the
        game fails 1c, and a MoveAside that moves again without closing the
        game first fails 2b.
+    4. #6124. StuckReport says what happened, given a real process still
+       running (pwsh, sleeping) and what CloseGame recorded about it:
+         a. not ended by the launcher: it names it and says nothing about
+            Windows refusing;
+         b. ended, still going: it says when it was ended and that Windows
+            has not finished, and not that Windows refused;
+         c. refused: it says Windows would not let the launcher end it, with
+            Windows' own words;
+         d. CloseGame waits at least the 22 seconds the stuck game of 15 Nov
+            took to go after it was ended, and records the end and the
+            refusal it gets.
+       Teeth: the old StuckReport, which said Windows refused whenever the
+       game was still there, fails 4a and 4b.
 
   Read only apart from the builds under out\harness, which git ignores.
 #>
@@ -260,6 +273,100 @@ if ($move.Length -gt 0) {
     Yes '3. the MoveAside that does not close the game differs from the shipped one' ($blind -ne $move)
     $lines = Run-Built ($moveDriver.Replace('__MOVE__', $blind + "`r`n`r`n" + $held)) '3. a MoveAside that moves again without closing the game'
     Yes '3. and it fails 2b' (@($lines | Where-Object { $_ -like 'FAIL  2b. *' }).Count -eq 1)
+}
+
+# ---- 4. StuckReport says what happened (#6124) ---------------------------------
+$report = Body $checks 'public static string StuckReport()'
+Yes '4. Checks.cs has StuckReport' ($report.Length -gt 0)
+$m = [regex]::Match($checks, 'static readonly TimeSpan EndedToGo = TimeSpan\.FromSeconds\((\d+)\);')
+Yes ('4d. CloseGame waits at least 22 s for an ended game to go (' + $m.Groups[1].Value + ' s)') ($m.Success -and [int]$m.Groups[1].Value -ge 22)
+Yes '4d. CloseGame records the end Windows took and the refusal it gave' (
+    $close.Contains('ended[id] = DateTime.Now') -and $close.Contains('refused[id] = ex.Message'))
+
+$reportDriver = @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+
+namespace Thornswood
+{
+    static class Swallow { public static void Note(string where, Exception e) { } }
+
+    static class Checks
+    {
+        static int child;
+        static List<Process> GameProcesses()
+        {
+            var ps = new List<Process>();
+            try { ps.Add(Process.GetProcessById(child)); } catch (ArgumentException) { return ps; }
+            return ps;
+        }
+        static void Release(List<Process> ps) { foreach (Process p in ps) p.Dispose(); }
+        static readonly Dictionary<int, DateTime> ended = new Dictionary<int, DateTime>();
+        static readonly Dictionary<int, string> refused = new Dictionary<int, string>();
+
+__REPORT__
+
+        static int pass, fail;
+        static void Yes(string what, bool ok)
+        {
+            if (ok) { pass++; Console.WriteLine("PASS  " + what); }
+            else { fail++; Console.WriteLine("FAIL  " + what); }
+        }
+
+        static int Main()
+        {
+            var psi = new ProcessStartInfo("pwsh", "-NoProfile -NonInteractive -Command Start-Sleep -Seconds 120");
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            Process held = Process.Start(psi);
+            child = held.Id;
+            try
+            {
+                string said = StuckReport();
+                Yes("4a. not ended by the launcher, it names the process (" + said + ")", said.Contains("(process " + child + ")"));
+                Yes("4a. and does not say Windows refused", !said.Contains("would not let"));
+
+                ended[child] = DateTime.Now;
+                said = StuckReport();
+                Yes("4b. ended and still going, it says the launcher ended it and Windows has not finished (" + said + ")",
+                    said.Contains("The launcher ended it at") && said.Contains("has still not finished"));
+                Yes("4b. and does not say Windows refused", !said.Contains("would not let"));
+
+                refused[child] = "Access is denied.";
+                said = StuckReport();
+                Yes("4c. refused, it says Windows would not let the launcher end it, in Windows' words (" + said + ")",
+                    said.Contains("would not let the launcher end it") && said.Contains("Access is denied."));
+            }
+            finally { try { if (!held.HasExited) held.Kill(); } catch (InvalidOperationException) { } }
+            Console.WriteLine(pass + " passed, " + fail + " failed");
+            return fail == 0 ? 0 : 1;
+        }
+    }
+}
+'@
+
+if ($report.Length -gt 0) {
+    Count-Lines (Run-Built ($reportDriver.Replace('__REPORT__', $report)) '4. StuckReport, lifted,')
+
+    # Teeth: the StuckReport before #6124, which said Windows refused
+    # whenever the game was still there.
+    $old = @'
+        public static string StuckReport()
+        {
+            List<Process> ps = GameProcesses();
+            if (ps.Count == 0) { Release(ps); return ""; }
+            var names = new List<string>();
+            foreach (Process p in ps)
+            {
+                try { names.Add(p.ProcessName + ".exe (process " + p.Id + ")"); } catch (Exception ex) { Swallow.Note("Checks.StuckReport, name", ex); }
+            }
+            Release(ps);
+            return "Still running: " + string.Join(", ", names.ToArray()) + ". Windows would not let the launcher end it. In Task Manager, open the Details tab, end it there, and try again. If it will not end there either, restart the PC.";
+        }
+'@
+    $lines = Run-Built ($reportDriver.Replace('__REPORT__', $old)) '4. the StuckReport before #6124'
+    Yes '4. and it fails 4a and 4b' (@($lines | Where-Object { $_ -like 'FAIL  4a. *' -or $_ -like 'FAIL  4b. *' }).Count -ge 2)
 }
 
 Done
