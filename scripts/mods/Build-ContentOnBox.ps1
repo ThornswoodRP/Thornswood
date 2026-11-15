@@ -57,6 +57,28 @@
   WHAT COMES BACK. Every file of the build into -Out, the gate's out folder
   for the run, at its repository path, and build.json beside them; and the
   lines BUILT <key> or REUSED <key>, and FROM <commit>.
+
+  THE STATIONS, WHEN THE ORDER MOVES (-Stations, #6192). Where the content
+  plugin's stations stand is a measurement, game\data\station-sites.json,
+  which a pull request commits with the docs page that names each site
+  (docs\systems\station-placement.md). Build-StationSites.py measures over
+  the load order last-plugin.json names, the woodworking benches and the
+  harvests, which this chain writes after the plugin, and the benches are
+  measured with the plugin's stations in the way, so neither can come first
+  in a build: the sites are measured on purpose, as a step a person asks
+  for, and every build places them from the committed table. When the order
+  moves, test-2553-station-sites.js says the table was measured against
+  another order, and
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Build-Content -Stations'
+
+  lays the newest build of this server kept here over the checkout (the
+  tables of the order it builds against), measures the stations over the
+  record's plugins, then builds the plugin from the new table and runs the
+  chain over it, as a build does, so every table is checked against them.
+  Nothing is kept: every file comes back in -Out, station-sites.json among
+  them, for that pull request, and the line MEASURED <key> says which build
+  it measured over.
 #>
 [CmdletBinding()]
 param(
@@ -80,7 +102,11 @@ param(
 
     # The store of the collection's plugins at the record's revision. A test
     # gives a folder of its own; on the box it is CollectionStore.ps1's.
-    [string]$Store = ''
+    [string]$Store = '',
+
+    # Measure the stations over the newest build kept here, then build over
+    # them and keep nothing (THE STATIONS, above).
+    [switch]$Stations
 )
 
 $ErrorActionPreference = 'Stop'
@@ -119,11 +145,11 @@ New-Item -ItemType Directory -Force -Path $home_ | Out-Null
 $done = Join-Path $home_ $key
 
 # A finished build is used again only when every file is what it names.
-function Test-Build([string]$Dir) {
+function Test-Build([string]$Dir, [string]$Key = $key) {
     $rec = Join-Path $Dir 'build.json'
     if (-not (Test-Path -LiteralPath $rec -PathType Leaf)) { return $null }
     try { $b = [IO.File]::ReadAllText($rec) | ConvertFrom-Json } catch { return $null }
-    if ($b.key -cne $key -or $b.server -cne $Server) { return $null }
+    if ($b.key -cne $Key -or $b.server -cne $Server) { return $null }
     foreach ($f in $b.files.PSObject.Properties) {
         $p = Join-Path (Join-Path $Dir 'files') $f.Name
         if (-not (Test-Path -LiteralPath $p -PathType Leaf) -or (Get-Sha256 $p) -cne $f.Value) { return $null }
@@ -131,7 +157,7 @@ function Test-Build([string]$Dir) {
     return $b
 }
 
-$built = Test-Build $done
+$built = if ($Stations) { $null } else { Test-Build $done }
 if ($built) {
     # Used again, so it is the newest to keep.
     (Get-Item -LiteralPath $done).LastWriteTimeUtc = [DateTime]::UtcNow
@@ -139,7 +165,7 @@ if ($built) {
     Write-Host ("FROM $($built.commit)")
     Write-Host ("the build of $($built.commit) on $($built.built) has the same inputs; $(@($built.files.PSObject.Properties).Count) files")
 } else {
-    if (Test-Path -LiteralPath $done) {
+    if (-not $Stations -and (Test-Path -LiteralPath $done)) {
         Write-Host "the build kept as $key is not whole or not what its build.json says, so it is built again" -ForegroundColor Yellow
         Remove-Item -LiteralPath $done -Recurse -Force
     }
@@ -168,6 +194,22 @@ if ($built) {
         & $Runner $Tool @Words -Server $Server -Collection $Store
         if ($LASTEXITCODE -ne 0) { Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $LASTEXITCODE. $Then") }
         Save-Step (Split-Path -Leaf $Tool)
+    }
+    if ($Stations) {
+        # The newest whole build of this server, whatever its key: the tables
+        # of the order it builds against, which the stations are measured over.
+        $from = @(Get-ChildItem -LiteralPath $home_ -Directory | Where-Object { $_.Name -match '^[0-9a-f]{64}$' } |
+                Sort-Object LastWriteTimeUtc -Descending | ForEach-Object { $b = Test-Build $_.FullName $_.Name; if ($b) { [pscustomobject]@{ Dir = $_.FullName; Build = $b } } } |
+                Select-Object -First 1)
+        if (-not $from.Count) { Stop-Build "no whole build of the $Server server is kept here, so there are no tables of its order to measure the stations over. Run Build-Content first. Nothing was measured." }
+        foreach ($f in $from[0].Build.files.PSObject.Properties) {
+            $to = Join-Path $repo $f.Name
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+            Copy-Item -LiteralPath (Join-Path (Join-Path $from[0].Dir 'files') $f.Name) -Destination $to -Force
+        }
+        Save-Step ('the build ' + $from[0].Build.key)
+        Write-Host ("the stations are measured over the build $($from[0].Build.key) of $($from[0].Build.commit), $(@($from[0].Build.files.PSObject.Properties).Count) files")
+        Invoke-Step 'scripts/dev/Build-StationSites.py' @('--data', '{data}') 'The plugin was not built and nothing was measured.'
     }
     Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
     $moves = @()
@@ -200,6 +242,21 @@ if ($built) {
             Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to
             $files[$f] = Get-Sha256 $to
         }
+    }
+    if ($Stations) {
+        # Kept nowhere: the measurement goes back for a pull request.
+        if ($Out) {
+            foreach ($f in @($files.Keys) + @('game/data/station-sites.json')) {
+                $to = Join-Path $Out $f
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+                Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to -Force
+            }
+        }
+        Remove-Item -LiteralPath $part -Recurse -Force
+        Write-Host ("MEASURED $($from[0].Build.key)")
+        Write-Host ("FROM $commit")
+        Write-Host ("$($files.Count + 1) files, station-sites.json among them; nothing was kept")
+        exit 0
     }
     $record = [ordered]@{
         issue  = 5191
