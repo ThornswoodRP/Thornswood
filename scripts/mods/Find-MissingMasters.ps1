@@ -7,6 +7,16 @@
 
   Only the first 8 KB of each file is read. MAST fields always live in the TES4
   record, which is the first record in the file.
+
+  A MASTER IN DATA IS NOT A LOADED MASTER (#4257). Switching a plugin off in
+  Vortex takes its line out of plugins.txt and leaves its file in Data, so
+  until 15 Nov an enabled plugin whose master had just been switched off
+  passed here with "every dependency present" and failed at load. A master
+  counts as loaded only when plugins.txt switches it on or the game loads it
+  with no line: the five base masters (LoadOrder.ps1's, which test-load-order
+  holds to the launcher's) and the plugins Skyrim.ccc beside Data names. A
+  master in Data that is neither is reported against each enabled plugin
+  that needs it, as switched off.
 #>
 #Requires -Version 7
 param(
@@ -14,6 +24,8 @@ param(
     [string]$Plugins = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Profile\Default\plugins.txt'),
     [switch]$NoPause
 )
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'LoadOrder.ps1')   # $script:LoadOrderMasters, the five the game loads with no line
 
 <#
   A CHECK THAT FINDS NOTHING MUST NOT SAY EVERYTHING IS FINE.
@@ -50,6 +62,17 @@ if (Test-Path $pl) {
         ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
 }
 
+# What the game loads: what plugins.txt switches on, the five base masters,
+# and what Skyrim.ccc in the game folder names.
+$loaded = @{}
+foreach ($n in $enabled.Keys) { $loaded[$n] = $true }
+foreach ($m in $script:LoadOrderMasters) { $loaded[$m.ToLower()] = $true }
+$ccc = Join-Path (Split-Path -Parent $Data) 'Skyrim.ccc'
+if (Test-Path -LiteralPath $ccc) {
+    Get-Content -LiteralPath $ccc | ForEach-Object { "$_".Trim() } | Where-Object { $_ } |
+        ForEach-Object { $loaded[$_.ToLower()] = $true }
+}
+
 $problems = @()
 foreach ($f in (Get-ChildItem -LiteralPath $Data -File |
                 Where-Object { $_.Extension -in '.esp','.esm','.esl' } | Sort-Object Name)) {
@@ -71,12 +94,17 @@ foreach ($f in (Get-ChildItem -LiteralPath $Data -File |
         }
     }
 
+    $on = $enabled.ContainsKey($f.Name.ToLower())
     foreach ($m in ($masters | Select-Object -Unique)) {
-        if (-not $present.ContainsKey($m.ToLower())) {
+        $why = $null
+        if (-not $present.ContainsKey($m.ToLower())) { $why = 'not in Data' }
+        elseif ($on -and -not $loaded.ContainsKey($m.ToLower())) { $why = 'switched off' }
+        if ($why) {
             $problems += [pscustomobject]@{
                 Plugin  = $f.Name
                 Missing = $m
-                State   = if ($enabled.ContainsKey($f.Name.ToLower())) { 'ENABLED' } else { 'disabled' }
+                State   = if ($on) { 'ENABLED' } else { 'disabled' }
+                Why     = $why
             }
         }
     }
@@ -101,6 +129,9 @@ if (-not $problems) {
     $problems | Sort-Object State, Plugin | Format-Table -AutoSize
     if ($live) {
         Write-Host ("{0} ENABLED plugin(s) have a missing master. That crashes at load." -f $live.Count) -ForegroundColor Red
+        if (@($live | Where-Object Why -eq 'switched off').Count) {
+            Write-Host '  A master marked switched off is in Data, but plugins.txt does not switch it on: switch it on in Vortex, or switch off the plugin that needs it.' -ForegroundColor Yellow
+        }
     } else {
         Write-Host "all affected plugins are already disabled. nothing will crash." -ForegroundColor Yellow
     }
