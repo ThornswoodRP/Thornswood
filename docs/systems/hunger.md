@@ -28,7 +28,7 @@ to fine. The steps in between on the way up are quiet.
 An ordinary meal is 15. A drink is not hunger. Ale costs hunger: 6 on
 the first, and more with each one. See [Drink](drink.md).
 
-Raw, burnt, cooked and a feast change the 15. See [Food](food.md).
+Raw, burnt, spoiled, cooked and a feast change the 15. See [Food](food.md).
 Anything the food table does not know is 15, so a pie nobody classified
 is a small meal rather than nothing.
 
@@ -49,8 +49,10 @@ table is on [Exhaustion](exhaustion.md), Logging out. See
 
 The clock, the four bands, the 15, the ale cost and the logout table
 are in the server. So are the cold multipliers, and a meal at 90 or above
-starts food sickness instead of raising the meter. Food states are not on
-the meal.
+starts food sickness instead of raising the meter. So is the state of
+the meal: raw is 8, a burnt meal 8, spoiled food 0, cooked 25 and a
+feast 40, by the food's group and the way the cook came out. See
+[Food](food.md), Where this is.
 
 A bed counts only when the server saw the person press it and they are
 still beside it. Lying down tells the server by itself, and nobody

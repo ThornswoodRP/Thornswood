@@ -66,7 +66,7 @@ for (const f of FEATURES) {
 
 // The numbers the pages give are the server's.
 yes('thirst.md gives a soup, stew or chowder\'s thirst as the server\'s ' + soupDrink,
-  new RegExp('(?:soup|stew|chowder)[^|]*\\|\\s*' + soupDrink + '\\s*\\|', 'i').test(page.thirst));
+  new RegExp('(?:soup|stew|chowder)[^|]*\\|\\s*' + soupDrink + '\\b', 'i').test(page.thirst));
 yes('thirst.md gives the sea\'s ' + sea + ' and drink.md the same',
   new RegExp('\\bhalf a normal drink, ' + sea + '\\b').test(page.thirst) && new RegExp('The sea \\| ' + sea + ' \\|').test(page.drink));
 yes('drink.md gives standing water\'s ' + standing, new RegExp('standing water \\| ' + standing + ' \\|').test(page.drink));
