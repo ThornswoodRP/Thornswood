@@ -1010,6 +1010,11 @@
       var alchemyPage = null;
       try { alchemyPage = (AJ && AJ.page) ? AJ.page(actorId) : null; } catch (eAlch) { alchemyPage = null; }
       if (alchemyPage) { view.alchemy = alchemyPage; }
+      // The Contracts page (#4561): this person's own, and all of them for staff, or nothing at all.
+      var CT = g.__thornswoodContracts;
+      var contractsPage = null;
+      try { contractsPage = (CT && CT.pageFor) ? CT.pageFor(actorId) : null; } catch (eContracts) { contractsPage = null; }
+      if (contractsPage) { view.contracts = contractsPage; }
     }
     var sig = drawn(view);
     var sending = !!redraw || lastDrawn[actorId] !== sig;

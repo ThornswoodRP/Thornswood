@@ -461,6 +461,15 @@
   */
   let HAIR_DYE_KEY = SKILLS_KEY;
   /*
+    "Write a contract" on the look prompt (#4561). K again: it opens the K
+    panel on Contracts with the person under the crosshair and a box to write
+    one with them, and anything they wrote you waiting to sign. It reads
+    "Read their contract" while the server's near list says they wrote you
+    one (ct). Take on and Dye their hair win the key when they apply;
+    Contracts on K is there either way. See contractPress.
+  */
+  let CONTRACT_KEY = SKILLS_KEY;
+  /*
     "Tend their wounds" on the look prompt (#1383). THE LOCK KEY, X, and not
     a new one: every letter is already Skyrim's or ours. The two never meet:
     the lock key answers only with a door, a crop or a forge under the
@@ -547,6 +556,7 @@
   let SLEEP_NAME = keyName(SLEEP_KEY);
   let APPRENTICE_NAME = keyName(APPRENTICE_KEY);
   let HAIR_DYE_NAME = keyName(HAIR_DYE_KEY);
+  let CONTRACT_NAME = keyName(CONTRACT_KEY);
   let LOCK_NAME = keyName(LOCK_KEY);
   let MANEUVER_NAME = keyName(MANEUVER_KEY);
   let HELP_NAME = keyName(HELP_KEY);
@@ -579,6 +589,7 @@
     SLEEP_KEY = MOLD_KEY;
     APPRENTICE_KEY = SKILLS_KEY;
     HAIR_DYE_KEY = SKILLS_KEY;
+    CONTRACT_KEY = SKILLS_KEY;
     TREAT_KEY = LOCK_KEY;
     TREAT_SELF_KEY = TRADE_KEY;
     PRESERVE_KEY = FRIEND_KEY;
@@ -597,6 +608,7 @@
     SLEEP_NAME = keyName(SLEEP_KEY);
     APPRENTICE_NAME = keyName(APPRENTICE_KEY);
     HAIR_DYE_NAME = keyName(HAIR_DYE_KEY);
+    CONTRACT_NAME = keyName(CONTRACT_KEY);
     LOCK_NAME = keyName(LOCK_KEY);
     MANEUVER_NAME = keyName(MANEUVER_KEY);
     HELP_NAME = keyName(HELP_KEY);
@@ -5308,6 +5320,10 @@
       // Only while you carry a hair dye, and the key is not Take on's: the
       // near list's hd (#2675). See hairDyePress.
       (row.hd && !(Array.isArray(row.a) && row.a.length) ? keyRow(HAIR_DYE_NAME, 'Dye their hair', false) : '') +
+      // K on anybody else writes a contract with them, or reads the one
+      // they wrote you: the near list's ct (#4561). See contractPress.
+      (!(Array.isArray(row.a) && row.a.length) && !row.hd
+        ? keyRow(CONTRACT_NAME, row.ct ? 'Read their contract' : 'Write a contract', !!row.ct) : '') +
       // Only while they have a wound somebody could tend: the near list's t
       // (#1383). See treatPress.
       (row.t ? keyRow(TREAT_NAME, 'Tend their wounds', false) : '');
@@ -5573,6 +5589,31 @@
     T.js('try{if(window.thornswoodSkills&&window.thornswoodSkills.dyeFor){' +
          'window.thornswoodSkills.dyeFor(' + JSON.stringify(who) + ');}}catch(e){}');
     say('dye their hair: ' + lookingAt);
+    return true;
+  }
+
+  /*
+    Write a contract with the person under the crosshair, or read the one
+    they wrote you (#4561). Only while the prompt offers it: somebody there,
+    and neither Take on nor Dye their hair has the key. Nothing is sent from
+    here: the K panel opens on Contracts with that person, and its Sign and
+    give button sends the line, so the terms are written before anything
+    goes. The server asks every rule again when it arrives, the reach among
+    them. Answers whether it was used, so K falls through to opening or
+    closing the panel when it was not.
+  */
+  function contractPress() {
+    if (!lookingAt) { return false; }
+    if (claims.chat) { return false; }
+    if (T.hasFocus('skills')) { return false; }
+    if (busyMenuOpenNow()) { return false; }
+    const near = nearList();
+    const row = (near && Object.prototype.hasOwnProperty.call(near, lookingAt)) ? near[lookingAt] : null;
+    if (!row || (Array.isArray(row.a) && row.a.length) || row.hd) { return false; }
+    const who = { id: lookingAt, name: String(row.n || '') };
+    T.js('try{if(window.thornswoodSkills&&window.thornswoodSkills.contractWith){' +
+         'window.thornswoodSkills.contractWith(' + JSON.stringify(who) + ');}}catch(e){}');
+    say('contract with: ' + lookingAt);
     return true;
   }
 
@@ -8955,6 +8996,8 @@
     if (e.code === APPRENTICE_KEY && apprenticePress()) { return; }
     // K on a person while you carry a hair dye opens K's Hair dye on them (#2675).
     if (e.code === HAIR_DYE_KEY && hairDyePress()) { return; }
+    // K on anybody else opens K's Contracts on them (#4561).
+    if (e.code === CONTRACT_KEY && contractPress()) { return; }
     if (e.code === SKILLS_KEY) {
       if (claims.chat) { return; }
       const busyNow = busyMenuOpen();

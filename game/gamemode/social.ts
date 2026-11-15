@@ -325,6 +325,9 @@
     var ch = g.__thornswoodCharacter;
     // And whether it offers "Dye their hair" (#2675): you carry a dye.
     var dyes = g.__thornswoodHairDye;
+    // And whether K reads a contract they wrote you (#4561). See waitingFrom
+    // in the contracts block.
+    var contracts = g.__thornswoodContracts;
     for (var a = 0; a < at.length; a++) {
       var me = at[a];
       var s = read(me.id) || fresh();
@@ -363,6 +366,8 @@
           try { dyeing = (dyes && dyes.carries && dyes.carries(me.id)) ? 1 : 0; } catch (eDy) { dyeing = 0; }
         }
         if (dyeing) { w[them.id.toString(16)].hd = 1; }
+        // ct: they wrote you a contract you have not signed, and the prompt's K reads it (#4561).
+        if (contracts && contracts.waitingFrom && contracts.waitingFrom(me.pid, them.pid)) { w[them.id.toString(16)].ct = 1; }
       }
       var sig = JSON.stringify(w) + (s.namesAll ? ':all' : '');
       if (nearWas[me.id] === sig) { continue; }
