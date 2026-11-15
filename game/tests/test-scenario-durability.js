@@ -190,9 +190,14 @@ yes('D6 Corvin, a novice Edgewright, mends his sword from ' + corvinCond + '% to
 answer = say(CORVIN, '/repair mend ' + id(SWORD).toString(16) + ' 100 Iron Sword');
 yes('D7 a repair that would not raise it is refused, and nothing is used (' + answer + ')',
   answer === 'Your Iron Sword is at 100%. A repair by you would not raise it.' && w.count(CORVIN, id(WEAPON_KIT)) === 1);
-answer = say(DAGNY, '/repair mend ' + id(SWORD).toString(16) + ' 99 Iron Sword');
-yes('D8 Dagny, a tailor at her loom, cannot mend her sword: it is a smith\'s work, at a forge (' + answer + ')',
-  answer === 'Your Iron Sword is a smith\'s work. It is mended by a smith at a forge.' && has(DAGNY, 'Iron Sword (99%) worn') === 1);
+// Dagny's sword wore 1% blocking in B and 1% landing the hit above, so its
+// row is read off her pack, the way Corvin's is below.
+const dagnySword = Object.keys(held(DAGNY)).filter(function (k) { return /^Iron Sword \(\d+%\) worn$/.test(k); })[0] || '';
+const dagnyCond = Number((/\((\d+)%\)/.exec(dagnySword) || [])[1]);
+answer = say(DAGNY, '/repair mend ' + id(SWORD).toString(16) + ' ' + dagnyCond + ' Iron Sword');
+yes('D8 Dagny, a tailor at her loom, cannot mend her ' + dagnyCond + '% sword: it is a smith\'s work, at a forge (' + answer + ')',
+  dagnyCond === 98 && answer === 'Your Iron Sword is a smith\'s work. It is mended by a smith at a forge.' &&
+  has(DAGNY, 'Iron Sword (98%) worn') === 1);
 w.moveTo(CORVIN, CITY, [6000, 0, 0]);
 w.hit(DAGNY, CORVIN, SWORD, { damage: 1 });   // his sword lands one: it is 99% again
 w.run(300);
