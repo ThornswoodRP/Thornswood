@@ -633,8 +633,9 @@ namespace Thornswood
             catch (InstallStop stop)
             {
                 Line("");
-                Line("STOP. " + stop.Message);
-                why = stop.Message;
+                string stopped = Failure.Say("InstallWindow, the install stopped", stop);
+                Line("STOP. " + stopped);
+                why = stopped;
             }
             catch (Exception e)
             {
@@ -642,9 +643,10 @@ namespace Thornswood
                 // an exception left to escape it ends the launcher with no
                 // word. So it is said like a stop, in full in the log.
                 Line("");
-                Line("STOP. " + e.Message);
+                string failed = Failure.Say("InstallWindow, the install", e);
+                Line("STOP. " + failed);
                 Log(e.ToString());
-                why = e.Message;
+                why = failed;
             }
             finally
             {

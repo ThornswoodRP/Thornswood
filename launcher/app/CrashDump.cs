@@ -422,8 +422,7 @@ namespace Thornswood
                     }
                     catch (Exception ex)
                     {
-                        Swallow.Note("CrashDump.AfterSession, move", ex);
-                        line += " The snapshot could not be moved to " + keptIn + " (" + ex.Message + "), so it is still beside the crash log.";
+                        line += " The snapshot could not be moved to " + keptIn + " (" + Failure.Why("CrashDump.AfterSession, move", ex) + "), so it is still beside the crash log.";
                         to = dmp;
                     }
                 }
