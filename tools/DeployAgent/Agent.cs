@@ -95,7 +95,10 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             var optional = new List<string> { "server" };
             if (Voices.ContainsKey(env)) optional.Add(AppKinds.Voice);
             if (after != null) optional.Add(AfterDeploy.Part);
-            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: [.. optional], later: IsServerZip); }
+            // The game part for the server's own plugins (#6175): its list
+            // now, game.zip below, when the list names the content plugin.
+            optional.Add(ServerPlugins.Part);
+            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: [.. optional], later: n => IsServerZip(n) || n == ServerPlugins.GameZip); }
             catch (Exception e) when (e is InvalidDataException or IOException or HttpRequestException) { return new Outcome("failure", "not applied: " + e.Message); }
             var m = f.Manifest;
             // The name, not the owner: the repositories move to an
@@ -105,7 +108,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 return new Outcome("failure", $"not applied: the Release was built from {m.Repo}, not {cfg.Repo}");
             if (expectCommit != "" && m.Commit != expectCommit)
                 return new Outcome("failure", $"not applied: the Release is commit {Short(m.Commit)} and the Deployment is {Short(expectCommit)}");
-            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && k != AfterDeploy.Part && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
+            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && k != AfterDeploy.Part && k != ServerPlugins.Part && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
             if (others.Count > 0) logf($"the Release also carries {string.Join(", ", others)}, which this agent does not apply yet; left alone");
             if (m.Parts.TryGetValue(AfterDeploy.Part, out var afterPart))
             {
@@ -146,6 +149,45 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                     swapRecord = record;
                 }
             }
+            // The server's own plugins, the Release's (#6175): the content
+            // plugin out of its game files, and the Last plugin made here
+            // from its recipe. Either one not the server's puts both in by
+            // a stop, swap and start, with the server build kept when the
+            // Release records the one it runs.
+            Dictionary<string, string>? plugins = null;
+            if (m.Parts.TryGetValue(ServerPlugins.Part, out var gamePart) && f.Files.TryGetValue(ServerPlugins.GameFiles, out var listPath))
+            {
+                try
+                {
+                    var list = File.ReadAllBytes(listPath);
+                    if (ServerPlugins.Lists(list))
+                    {
+                        var gz = gamePart.Where(x => x.Name == ServerPlugins.GameZip).ToList();
+                        if (gz.Count != 1) return new Outcome("failure", $"not applied: the Release's game part carries {gz.Count} {ServerPlugins.GameZip}, not one");
+                        var gzPath = await ReleaseFetch.FetchFile(gh, rel, gz[0], f.Dir, ct);
+                        var want = ServerPlugins.Read(gzPath, list);
+                        var differ = ServerPlugins.Differ(srv.Env.Root, want);
+                        if (differ.Count == 0) logf($"plugins: {ServerPlugins.Content} and {ServerPlugins.Last} are already this Release's");
+                        else
+                        {
+                            logf($"plugins: {string.Join(" and ", differ)} on {env} {(differ.Count == 1 ? "is" : "are")} not this Release's, so the Release's go in with a restart");
+                            plugins = ServerPlugins.Stage(srv.Env.Root, Path.Combine(f.Dir, "plugins-stage"), want, srv.Env.GameData, logf);
+                        }
+                    }
+                    else logf("plugins: the Release's game files carry no content plugin, so the server's are left alone");
+                }
+                catch (Exception e) when (e is InvalidDataException or IOException or JsonException or UnauthorizedAccessException or HttpRequestException)
+                {
+                    return new Outcome("failure", "not applied: the Release's plugins: " + e.Message);
+                }
+            }
+            if (plugins != null && swapZip == null)
+            {
+                // The same build stays: its record is the one the folder runs.
+                var runningRec = Path.Combine(srv.Env.Root, "server-build.json");
+                if (!File.Exists(runningRec)) return new Outcome("failure", "not applied: the server has no server-build.json, and the Release carries no server build to give it");
+                swapRecord = Files.ReadShared(runningRec);
+            }
             if (pass)
             {
                 logf(swapZip == null ? "the bot pass first, on a throwaway copy of the server with this gamemode (#5196)"
@@ -172,8 +214,8 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 if (vo.State != "success") return vo with { Summary = "voice: " + vo.Summary + "; the gamemode was not touched" };
                 voiceIn = "; voice runs it too";
             }
-            var outc = swapZip != null && swapRecord != null
-                ? await srv.ApplyServerBuild(swapZip, swapRecord, f.Files, who, logf, ct)
+            var outc = swapRecord != null && (swapZip != null || plugins != null)
+                ? await srv.ApplyServerBuild(swapZip, swapRecord, f.Files, who, logf, ct, plugins: plugins)
                 : await srv.ApplyGamemode(f.Files, who, logf, ct);
             if (outc.State != "success") return voiceIn == "" ? outc : outc with { Summary = outc.Summary + $"; voice already runs {rel.TagName}" };
             var gm = Path.Combine(srv.Env.Root, "gamemode.js");
