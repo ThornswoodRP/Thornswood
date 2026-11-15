@@ -12,7 +12,9 @@
        plain meshes as optional;
     2. the summary no longer says the whole loose total can be optional;
     3. a folder it cannot read stops it, naming the folder, instead of being
-       counted as nothing.
+       counted as nothing;
+    4. its last line says what the report is for and names no Claude, who
+       no longer runs this work (#6010).
   Everything it writes is under its own temp folder, which it removes.
 #>
 [CmdletBinding()]
@@ -71,6 +73,8 @@ try {
     Yes 'the loose total is still every loose file (1,659 bytes)' ((& $has 'looseTotal') -and $rep.looseTotal -eq 1659)
     Yes 'the summary says how much loose has to stay' ($r.Out -match 'loose files the game itself needs')
     Yes 'the summary no longer calls the whole loose total optional' ($r.Out -notmatch 'ALL of this can be optional')
+    Yes 'the last line names no Claude, who no longer runs this (#6010)' ($r.Out -notmatch 'Claude')
+    Yes '  and says what the report is for: the only parts that could be an optional download' ($r.Out -match 'Written to local\\mod-audit\.json' -and $r.Out -match 'the only parts of this build that could be an optional download')
 
     if (-not $OnWindows) {
         $script:locked = Join-Path $T 'build\Game\Data\textures\locked'
