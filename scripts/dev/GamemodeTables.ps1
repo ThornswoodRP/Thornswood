@@ -12,7 +12,7 @@
   The file is laid out one entry to a line down to the second level and
   compact below that, so two changes to different rows are two lines git
   merges, written LF and UTF-8 with no BOM. The same rule is GamemodeTables.js
-  and gamemode_tables.py; tests\test-5191-gamemode-tables.js holds the three
+  and gamemode_tables.py; game\tests\test-5191-gamemode-tables.js holds the three
   to each other.
 
       . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')

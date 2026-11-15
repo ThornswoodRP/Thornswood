@@ -31,9 +31,11 @@ still say something.
   block whose banner has three slashes).
 - **One module already works this way.** `game\merchant-trading.js`,
   `merchant-settlement.js`, `quest-transactions.js` and `kill-contracts.js` are
-  ordinary files that `scripts\dev\Build-MerchantGamemode.js` wraps, with their
-  catalogues, into the `// MERCHANT TRADING BUNDLE BEGIN` region; `--check`
-  fails when the region is not what the sources make.
+  ordinary files that `scripts\dev\Build-MerchantGamemode.js` wraps into the
+  `// MERCHANT TRADING BUNDLE BEGIN` region; `--check` fails when the region is
+  not what the sources make. Their catalogues are gamemode tables that
+  `scripts\dev\Build-MerchantTables.js` writes, a step of the content chain
+  (#6195).
 
 Who edits it (12 Oct, 1,053 merged pull requests since 25 Sep): 188 changed
 `gamemode.js`, from every lane; 37 of the 46 sections touched were touched from
@@ -268,8 +270,7 @@ the tables left the file for `game\gamemode-tables` (#5191):
   `gamemode_source.py`, which calls `Build-Gamemode.js --read` and `--write`.
   Writing it back refuses a joined source that renames, drops, adds or breaks
   a part, writes only the parts that changed and builds the file. A builder
-  given a plain file edits that file as before; `tests\gamemode-scratch.js`
-  gives a harness a source folder of its own instead.
+  given a plain file edits that file as before.
 - **The record.** `tests\test-2181-gamemode-source.js` holds all of this.
 
 Left, each its own issue: type checking the parts with `tsc` (#5346; no

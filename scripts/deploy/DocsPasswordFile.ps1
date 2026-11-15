@@ -19,7 +19,7 @@
   before anything is written: a password file anybody else can read is not
   one to use, and falling back to the prompt would hide that it is wrong.
 
-  The checks run in Windows PowerShell 5.1 on the box. tests\test-docs-pwfile.ps1
+  The checks run in Windows PowerShell 5.1 on the box. scripts\tests\test-docs-pwfile.ps1
   runs the same text on scratch files here.
 #>
 

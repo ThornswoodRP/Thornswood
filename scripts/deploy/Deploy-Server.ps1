@@ -304,7 +304,7 @@ function Get-StageDirectories([string]$stageRoot, [string[]]$relativePaths) {
 }
 
 # ==== thornswood live deploy warning ====
-# Shared with tests\test-deploy-gamemode-warning.ps1 and the OnlineNow harness.
+# Shared with scripts\tests\test-deploy-gamemode-warning.ps1 and the OnlineNow harness.
 # Deploy-Gamemode.ps1 builds locally and never stops the live server; this is
 # the live half of issue #520. The names come from private\online-names.json,
 # which the gamemode keeps beside online.json but outside the served folder.

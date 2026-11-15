@@ -555,7 +555,7 @@
       var got = moved === t.a ? t.a : t.b, not = other(t, got);
       var line = 'The trade went only half through: ' + nameOf(got) + '\'s pack was written and ' +
                  nameOf(not) + '\'s was not. Tell staff, it is in the server log.';
-      try { say(t.a, line); say(t.b, line); } catch (e3) { }
+      tellEach([t.a, t.b], line);
       tlog('HALF A TRADE:', nameOf(got), 'was written and', nameOf(not), 'was not, trading', whatA, 'for', whatB);
       close(t, '');
       return line;
@@ -612,7 +612,7 @@
       // One pack took its write and the other did not (saleById, below).
       var half = 'The sale went only half through: ' + nameOf(sold) + '\'s pack was written and ' +
                  nameOf(other(t, sold)) + '\'s was not. Tell staff, it is in the server log.';
-      try { say(seller, half); say(worker, half); } catch (e3) { }
+      tellEach([seller, worker], half);
       tlog('HALF A SALE:', nameOf(sold), 'was written and', nameOf(other(t, sold)), 'was not');
       close(t, '');
       return half;
@@ -743,6 +743,26 @@
     if (a && b) { return true; }
     if (!a && !b) { return false; }
     return a ? firstActor : secondActor;
+  }
+
+  /*
+    Telling both people a trade or sale went only half through, each on
+    their own (#4520). say (small-helpers) catches its own reads (mp.get,
+    which reaches ScampServer::Get in the fork and throws for a form it does
+    not hold) and posts the line to the voice service, whose failures arrive
+    later as the request's error event. But http.request throws at once on
+    a port that is not a whole number (ERR_SOCKET_BAD_PORT), and voicePort
+    lets a thornswoodVoicePort such as 7778.5 through (#5817). So one person
+    not being told never stops the other from being told, and whoever was
+    not told is in the server log with the line and the error, for staff.
+  */
+  function tellEach(ids, line) {
+    for (var i = 0; i < ids.length; i++) {
+      try { say(ids[i], line); }
+      catch (e) {
+        tlog('NOT TOLD:', nameOf(ids[i]), 'was not told "' + line + '":', String((e && e.message) || e));
+      }
+    }
   }
 
   function describe(items, goldN) {

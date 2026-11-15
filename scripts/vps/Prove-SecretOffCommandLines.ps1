@@ -54,7 +54,7 @@
   left waiting on standard input, powershell.exe ends when the script does, at
   the stop or at the time limit, and ssh with it.
 
-  The harness is tests\test-prove-secret.ps1: it runs this against a fake ssh,
+  The harness is scripts\tests\test-prove-secret.ps1: it runs this against a fake ssh,
   once the way Send-Secret sends (NOT FOUND) and once the old way, the value
   base64'd into the command line (FOUND), and runs the watcher in Windows
   PowerShell 5.1 with its standard input held open, as on the VPS.

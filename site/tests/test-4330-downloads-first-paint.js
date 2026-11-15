@@ -30,7 +30,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const net = require('net');
 const http = require('http');
 const vm = require('vm');
 const { spawn } = require('child_process');
@@ -49,35 +48,6 @@ function yes(what, cond) {
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-4330-'));
 let srv = null;
 
-function freePort() {
-  return new Promise((ok, bad) => {
-    const s = net.createServer();
-    s.once('error', bad);
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-// Waits for this run's own "listening on ...:port" line (#1727).
-function listening(child, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) end(null);
-    };
-    const gone = (code) => end(new Error('the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      child.stdout.removeListener('data', said);
-      child.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    child.stdout.on('data', said);
-    child.stderr.on('data', (d) => { out += d; });
-    child.on('close', gone);
-  });
-}
 function ask(port, route, cookie) {
   return new Promise((ok, bad) => {
     const headers = { accept: 'text/html' };
@@ -123,13 +93,13 @@ async function siteChecks() {
     'Thornswood-Tools.exe': { label: 'Tools', version: '2026-11-09 16:31', sha256: H }
   }));
 
-  const port = await freePort();
+  let port = 0;
   srv = spawn(process.execPath, [path.join(work, 'server.js')], {
     cwd: work, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_DOCS_PORT: String(port),
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_CHAT_DIR: path.join(work, 'chat') })
   });
-  await listening(srv, port);
+  await siteFiles.listening(srv).then((r) => (port = r.port, r));
 
   const bare = await ask(port, '/downloads');
   const gateBody = pagebody(bare.body);

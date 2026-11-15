@@ -149,5 +149,5 @@ changes:
     node scripts/dev/Build-SpoilNames.js
 
 The panel is game/ui/thornswood-preserve.js. The key and the line are
-in game/plugins/thornswood-front.js. tests/test-3163-spoilage.js
+in game/plugins/thornswood-front.js. game/tests/test-3163-spoilage.js
 checks all of it.

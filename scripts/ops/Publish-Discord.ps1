@@ -60,7 +60,7 @@
   dev feed (%LOCALAPPDATA%\Thornswood\feed\dev, Feed-Store.ps1) rather than
   the live one, and it posts through
   bot\dev-webhook.txt, which Set-DevNews.ps1 writes and which points
-  at the dev updates channel. Nothing about a dev release reaches #news, the
+  at #staff-news. Nothing about a dev release reaches #news, the
   website or the main launcher: the site's News page reads the build Releases
   main has reached (#5801), and a dev publish only ever writes the dev feed.
 
@@ -78,9 +78,10 @@
   feed (until #5801; Publish-News.ps1 before #5187); tests\test-public-news.ps1
   holds the list.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
-  # The dev build's release, into the dev updates channel. See the note above.
+  # The dev build's release, into #staff-news. See the note above.
   [switch]$Dev,
   # Print the post and send nothing.
   [switch]$DryRun,
@@ -237,7 +238,7 @@ try { $Webhook = [string](& (Join-Path $Here 'Discord-Hook.ps1') -Name $hookName
 if (-not $Webhook) {
   if (-not $Quiet) {
     if ($Dev) {
-      Write-Host '  no dev webhook set up, the dev updates channel was not told' -ForegroundColor DarkGray
+      Write-Host '  no dev webhook set up, #staff-news was not told' -ForegroundColor DarkGray
       Write-Host '  .\scripts\ops\Set-DevNews.ps1 points it at that channel' -ForegroundColor DarkGray
     } else {
       Write-Host '  no Discord webhook set up, skipping' -ForegroundColor DarkGray
@@ -247,7 +248,7 @@ if (-not $Webhook) {
 }
 
 if ($GamemodeDeploy -and -not $Note) { throw '-GamemodeDeploy needs -Note.' }
-if ($GamemodeDeploy -and -not $Dev) { throw '-GamemodeDeploy is only for the dev updates channel.' }
+if ($GamemodeDeploy -and -not $Dev) { throw '-GamemodeDeploy is only for #staff-news.' }
 
 $logo = "$Site/logo.png"
 # Who the post is from. Said once, used in three places.
@@ -434,7 +435,7 @@ if (-not $GamemodeDeploy) {
   if ($said.ContainsKey($stateKey) -and (Prop $said[$stateKey] 'stamp') -eq $stamp -and -not $Force) {
     if (-not $Quiet) {
       Write-Host ('  already announced ' + (Prop $v 'launcherVersion') + ' in ' +
-                  $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+                  $(if ($Dev) { '#staff-news' } else { '#news' }) +
                   ', nothing posted') -ForegroundColor DarkGray
       Write-Host '  -Force says it again anyway' -ForegroundColor DarkGray
     }
@@ -491,7 +492,7 @@ $payload = @{
 
 if ($DryRun) {
   Write-Host ''
-  Write-Host "  would post to $(if ($Dev) { 'the dev updates channel' } else { '#news' }): $title" -ForegroundColor Yellow
+  Write-Host "  would post to $(if ($Dev) { '#staff-news' } else { '#news' }): $title" -ForegroundColor Yellow
   Write-Host '  ---' -ForegroundColor DarkGray
   foreach ($e in $embeds) {
     ($e.description -split "`n") | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }

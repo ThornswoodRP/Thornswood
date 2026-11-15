@@ -61,6 +61,7 @@
     "hair-dye.ts",
     "injury-and-disease.ts",
     "social.ts",
+    "contracts.ts",
     "trade.ts",
     "mod-settings.ts",
     "asking-staff.ts",

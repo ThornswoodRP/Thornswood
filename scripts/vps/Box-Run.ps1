@@ -106,7 +106,7 @@ if ($OnTheBox) {
         Write-ThornswoodPrivateFile -Path $keyFile -Text ($keyText.Replace("`r`n", "`n").TrimEnd() + "`n")
         $keyText = $null
         # The box's own sshd, its host keys held to the checkout's vps.json
-        # pins in a known_hosts of this run's own, as staff-notice.yml does.
+        # pins in a known_hosts of this run's own.
         $pinned = Get-ThornswoodVpsCommitted
         $knownHosts = Join-Path $work 'known_hosts'
         try { $null = Add-ThornswoodKnownHost -Address '127.0.0.1' -KnownHosts $knownHosts -Pinned @($pinned.hostKeys) }
@@ -142,7 +142,7 @@ if ($OnTheBox) {
                     }
                     $parts.Remove($name)
                 }
-                elseif ($l -match '^@REFUSED (.*)$') { $r.Refused = $Matches[1] }
+                elseif ($l -match '^@REFUSED (.*)$') { $r.Refused = $Matches[1]; [IO.File]::AppendAllText($out, 'gate: REFUSED ' + $Matches[1] + "`n", $utf8) }
                 elseif ($l -match '^@END (-?[0-9]+)$') { $r.Code = [int]$Matches[1] }
                 elseif ($l -and $l -notmatch 'post-quantum|store now, decrypt later|openssh\.com/pq\.html') { [IO.File]::AppendAllText($out, 'ssh: ' + $l + "`n", $utf8) }
             }
@@ -209,6 +209,8 @@ if ($OnTheBox) {
         }
 
         # The seal, to the session that asked, or nothing leaves the runner.
+        # Why the run stopped goes in it too, so the output always says it.
+        if ($refused) { [IO.File]::AppendAllText($out, 'box-run: REFUSED ' + $refused + "`n", $utf8) }
         if ($recipient) {
             $to = if ($env:BOX_RUN_SEALED) { $env:BOX_RUN_SEALED } else { Join-Path $base 'box-run.sealed' }
             $n = Save-ThornswoodSealed (Join-Path $work 'out') $recipient $to

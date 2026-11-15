@@ -32,7 +32,7 @@
   The token needs actions: read (an artifact's download needs a token even
   on a public repository). -Fetch reads it from GATE_MAP_TOKEN and takes it
   out of the environment before anything else, so it is never typed or on a
-  command line (#4079, tests\test-secrets-off-command-lines.ps1). Run-Gate.ps1
+  command line (#4079, scripts\tests\test-secrets-off-command-lines.ps1). Run-Gate.ps1
   takes it out of the step's environment before any harness starts and sets
   it only around this call. tests\test-4009-gate-map.ps1 holds this.
 

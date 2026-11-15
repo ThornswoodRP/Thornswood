@@ -111,7 +111,7 @@ Note "---- nightly backup $stamp ----"
 # The server folders' turn, which the server installs and deploys take too
 # (#3247). A copy of scripts\deploy\ServerFolderTurn.ps1 below its header:
 # this script runs on its own on the box, from the task Install-Backup.ps1
-# makes. tests\test-3247-server-folder-turn.ps1 fails when the two differ.
+# makes. scripts\tests\test-3247-server-folder-turn.ps1 fails when the two differ.
 # ---- ServerFolderTurn.ps1 (copy) ----
 
 # The server folders' turn (#3247). The nightly backup reads each game

@@ -70,7 +70,7 @@
   record's label, because every job asking for it would then wait for a
   runner that never comes. A record that names a label every VPS runner
   carries, lists no runners, or names a label another record names, stops
-  it. tests\test-3107-admin.js runs the service's rules; #2161 (one runner
+  it. scripts\tests\test-3107-admin.js runs the service's rules; #2161 (one runner
   at a time): a runner outside the build list runs only the light jobs, so
   to prove one, add its number to the record in the same pull request that
   moves the rollout to it.

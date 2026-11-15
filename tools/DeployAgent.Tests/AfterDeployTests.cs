@@ -84,7 +84,7 @@ public sealed partial class AgentTests
     /// <summary>The lines the gate was asked for that are steps after a
     /// deploy: a dev Deployment also moves the load order and runs the
     /// parity check through it (Agent.LoadOrder, Agent.Parity).</summary>
-    static List<string> StepLines(FakeGate g) => g.Asked.Where(l => l != Agent.LoadOrderLine && l != "Check-ProdParity").ToList();
+    static List<string> StepLines(FakeGate g) => g.Asked.Where(l => !l.StartsWith(Agent.LoadOrderLine, StringComparison.Ordinal) && l != "Check-ProdParity").ToList();
 
     JsonObject Published(FakeServer s, long id) => JsonNode.Parse(s.Read(Path.Combine("data", $"deploy-{id}.after.json")))!.AsObject();
 

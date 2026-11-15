@@ -3,8 +3,9 @@ using Xunit;
 
 namespace Thornswood.ReleaseNotes.Tests;
 
-/// <summary>The C# rules give every case in tests/fixtures/note-rules-cases.json the
-/// answer scripts/release/Note-Rules.ps1 gave it.</summary>
+/// <summary>The rules give every case in tests/fixtures/note-rules-cases.json its
+/// answer. The answers are the ones the PowerShell copy of the rules gave, which
+/// went with #5354 once the release scripts loaded these.</summary>
 public class NoteRulesTests
 {
     static readonly JsonElement Cases = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "note-rules-cases.json"))).RootElement;

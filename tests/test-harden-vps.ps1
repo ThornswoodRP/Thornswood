@@ -47,7 +47,7 @@
   ever copied to the box (#3035); -WhatIf runs the box read only; a real run
   ends with key login proven, the rollback cancelled, password login refused
   and the port closed, and says FAIL when the port still answers.
-  tests\test-3035-file-script.ps1 runs the sent form itself, in a process of
+  scripts\tests\test-3035-file-script.ps1 runs the sent form itself, in a process of
   its own.
 #>
 [CmdletBinding()]

@@ -56,7 +56,7 @@
   normal priority, and the old priority tasks taken off. -Status, -Remove and
   -Lock take -OffBox too. -DryRunTo <file> writes the scripts it would run to
   that file and runs none of them, with a stand-in for every gh call, so
-  tests\test-runner-offbox.ps1 can read them without touching an ACL, a
+  scripts\tests\test-runner-offbox.ps1 can read them without touching an ACL, a
   service, an account or GitHub.
 
   NETWORK ONLY (-NetworkOnly, issue #2161). Patrick decided on 11 October 2026
@@ -255,7 +255,7 @@
   the write back.
   Off the box (-OffBox) nothing gives a pull request runner write there, so
   Dumps is shut to it like every other C:\Thornswood* folder.
-  tests\test-runner-lock.ps1 holds it.
+  scripts\tests\test-runner-lock.ps1 holds it.
 
   NO PRIORITY TASK (#1969). Until 5 October each install registered a task,
   Thornswood Runner Priority (Thornswood Runner N Priority from the second
@@ -608,7 +608,7 @@ function Lock-RunnerRoot([string]$root, [string]$acct) {
 # which of them it could have read until now: one with a rule letting it or
 # Users, Everyone or Authenticated Users in, and no deny for it. An account
 # may be given as *<SID>, the way icacls takes one. $parent is C:\ except in
-# tests\test-runner-lock.ps1, which runs both of these on scratch folders.
+# scripts\tests\test-runner-lock.ps1, which runs both of these on scratch folders.
 # $filter is 'Thornswood-*' on the VPS and 'Thornswood*' off it (-OffBox), where
 # the worktrees and the play build have no hyphen. $also is -AlsoDeny.
 # $leave names the folders under $parent that Lock-VpsFolders.ps1 gives the
@@ -717,7 +717,7 @@ function Show-LeftFolders([string]$parent = 'C:\', [string[]]$leave = @()) {
 # taken off once Windows has let go of its registry, and said LEFT while it
 # has not; a folder of that name no profile owns goes too. Each line it says
 # that starts LEFT names one still there and why. Test-RunnerSidAlive is its
-# own function so tests\test-runner-lock.ps1 can stand in for it off Windows.
+# own function so scripts\tests\test-runner-lock.ps1 can stand in for it off Windows.
 function Test-RunnerSidAlive([string]$sid) {
   if (Get-LocalUser -SID $sid -EA SilentlyContinue) { return $true }
   try { $null = (New-Object Security.Principal.SecurityIdentifier($sid)).Translate([Security.Principal.NTAccount]); $true } catch { $false }
@@ -803,7 +803,7 @@ function Remove-RunnerWatchers([string]$prefix = 'Thornswood Runner') {
 # ------------------------------------------------- the off-box guards --
 # The header's WHAT A PULL REQUEST JOB MAY REACH. $rangeLib runs here, on the
 # machine that runs this script, and turns the address lists GitHub publishes
-# into the ranges to block; tests\test-runner-offbox.ps1 lifts it out and
+# into the ranges to block; scripts\tests\test-runner-offbox.ps1 lifts it out and
 # checks its arithmetic. $guardLib runs where the runner is.
 $rangeLib = @'
 function ConvertTo-RunnerRange([string]$cidr) {
@@ -915,7 +915,7 @@ function Test-RunnerReach([object[]]$rules) {
 }
 # The folders outside C:\Thornswood* it is shut out of. $users, $programData
 # and $drives are C:\Users, C:\ProgramData and the other drives except in
-# tests\test-runner-offbox.ps1, which gives scratch folders.
+# scripts\tests\test-runner-offbox.ps1, which gives scratch folders.
 # $Own is the runner drive (New-RunnerDrive.ps1) when the runner's folder is
 # on it: that drive's root is locked by New-RunnerDrive.ps1 and each folder
 # on it by Lock-RunnerRoot, so its root is not denied, which would leave the
@@ -1681,7 +1681,7 @@ Head 'GitHub'
 # outside this script, so GitHub is asked every 3 seconds until it says so,
 # for a minute at most. Until #2357 this was a fixed 10 second wait and one
 # ask, and the wait ran in every -DryRunTo too, where the stand-in answers at
-# once: nine of them in tests\test-runner-offbox.ps1, 90 of its 100 seconds
+# once: nine of them in scripts\tests\test-runner-offbox.ps1, 90 of its 100 seconds
 # in the nightly.
 $askUntil = (Get-Date).AddSeconds(60)
 while ($true) {

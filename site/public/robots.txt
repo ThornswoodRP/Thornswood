@@ -1,21 +1,21 @@
 # Thornswood. The public pages are meant to be found. Nothing behind them is.
+# The member pages are the PAGES table in site/lib/public.js and /index.html,
+# the hub page they all serve; site/tests/test-site-discovery.js holds this
+# list to them both ways (#4472).
 User-agent: *
 Allow: /
 Disallow: /hub
+Disallow: /index.html
+Disallow: /uploads
+Disallow: /linked
+Disallow: /sessions
+Disallow: /inbox
+Disallow: /economy
 Disallow: /api/
 Disallow: /auth/
 Disallow: /up/
 Disallow: /file/
 Disallow: /feed/
 Disallow: /feed-dev/
-Disallow: /uploads
-Disallow: /inbox
-Disallow: /linked
-Disallow: /patrick
-Disallow: /active
-Disallow: /archive
-Disallow: /testthese
-Disallow: /suggestions
-Disallow: /link
 Disallow: /.well-known/
 Sitemap: https://thornswood.net/sitemap.xml

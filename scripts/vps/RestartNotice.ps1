@@ -6,8 +6,8 @@
   Deploy-Server.ps1 and Deploy-DevGamemode.ps1, which warn through it),
   Swap.ps1's swap block and Restart-Server.ps1. The deploy agent writes the
   same file from tools\DeployAgent\RestartNotice.cs; bot\bot_restarts.py
-  reads it and posts each restart in #updates (the dev server's in the dev
-  updates channel) before it happens, and once more when it is over.
+  reads it and posts each restart in #updates (the dev server's in
+  #staff-updates) before it happens, and once more when it is over.
 
   The file is C:\Thornswood-Deploys\for-bot\restart-<environment>.json,
   beside the release news: environment (main for C:\Thornswood-Server, dev
