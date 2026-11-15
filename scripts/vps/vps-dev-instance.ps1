@@ -52,7 +52,7 @@ $ErrorActionPreference = 'Stop'
 function Say($m) { Write-Output $m }
 # The account the dev tasks run as and what they may reach (#2578). A copy of
 # scripts\deploy\ServiceAccount.ps1, held to it by
-# tests\test-2578-service-principals.ps1, since this file runs alone on the box.
+# scripts\tests\test-2578-service-principals.ps1, since this file runs alone on the box.
 # ---- ServiceAccount.ps1 (copy) ----
 function New-ThornswoodServicePrincipal {
     param([switch]$AsSystem)

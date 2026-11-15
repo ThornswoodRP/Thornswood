@@ -61,8 +61,9 @@ $ssh = @('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes')
 # company at slot 6, server Water for ENB.esm against Expressive Facegen
 # Morphs.esl, two lines after saying you had every plugin the server wants. It
 # then advised redeploying a server that was already correct, which is worse
-# than having no check at all. The server drops light plugins on purpose:
-# Game.getModCount gives them no index, so they hold no place in the order.
+# than having no check at all. Light plugins hold no place in the full order:
+# Game.getModCount gives them no index. A server that loads them lists them
+# apart, and they are compared with that light list (#4128).
 . (Join-Path $PSScriptRoot 'LoadOrder.ps1')
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -147,7 +148,18 @@ foreach (`$f in (Get-ChildItem -LiteralPath `$data -Recurse -Filter 'manifest.js
     `$k = @(`$m.mods).Count
     'FILE ' + `$f.FullName
     '  loadOrder ' + `$n + '   mods ' + `$k + '   written ' + `$f.LastWriteTime
-    if (-not `$seen) { foreach (`$p in `$m.loadOrder) { 'LO ' + `$p }; `$seen = `$true }
+    if (-not `$seen) {
+      foreach (`$p in `$m.loadOrder) { 'LO ' + `$p }
+      # The client walks mods against its full plugins and, when the manifest
+      # has one, light against its light plugins (#4128, #1715): each list is
+      # handed back for its own comparison.
+      foreach (`$x in @(`$m.mods)) { if ("`$(`$x.filename)" -match '\.(esp|esm|esl)`$') { 'FULL ' + `$x.filename } }
+      if (`$m.PSObject.Properties['light']) {
+        'HASLIGHT'
+        foreach (`$x in @(`$m.light)) { if ("`$(`$x.filename)" -match '\.(esp|esm|esl)`$') { 'LIGHT ' + `$x.filename } }
+      }
+      `$seen = `$true
+    }
     else { '  same list as above, not counted twice' }
   } catch { 'FILE ' + `$f.FullName + '  UNREADABLE: ' + `$_.Exception.Message }
 }
@@ -157,8 +169,14 @@ $lines = @($out | ForEach-Object { "$_" })
 $serverOrder = @()
 # Each finding below adds one, and any at all is exit 1 at the end (#4760).
 $bad = 0
+$serverFull = @()
+$serverLight = @()
+$serverHasLight = $false
 foreach ($l in $lines) {
   if ($l -match '^\s*LO (.+)$') { $serverOrder += $Matches[1].Trim() }
+  elseif ($l -match '^\s*FULL (.+)$') { $serverFull += $Matches[1].Trim() }
+  elseif ($l -match '^\s*LIGHT (.+)$') { $serverLight += $Matches[1].Trim() }
+  elseif ($l -match '^\s*HASLIGHT\s*$') { $serverHasLight = $true }
   else {
     Say "  $l"
     if ($l -match '  UNREADABLE: ') { $bad++ }
@@ -169,6 +187,13 @@ if ($serverOrder.Count -eq 0) {
   Write-Host ''
   Say '  The server has not written a manifest. It writes one at startup, so it' 'Yellow'
   Say '  either has not been started since the last deploy, or it failed early.' 'Yellow'
+  # What to do next (#4803), the same step docs\IT-IS-DOWN.md in the ops
+  # repository gives: the server says why in its log, and nothing tries again.
+  Say '  Its log says why, on the line that starts' 'Yellow'
+  Say '  "[thornswood] the load order manifest was NOT published". Put that cause' 'Yellow'
+  Say '  right, then restart it. Restart-Server.ps1 refuses while people are in' 'Yellow'
+  Say '  the world unless it is given -Now:' 'Yellow'
+  Say ("    .\scripts\vps\Restart-Server.ps1 -Service {0}" -f $(if ($Dev) { 'dev' } else { 'game' })) 'Yellow'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 1
 }
@@ -188,7 +213,8 @@ if (-not (Test-Path -LiteralPath $plug)) {
 
   # The game's own order: the five masters, then every plugin Skyrim.ccc
   # names that is in Data in that file's order, then the enabled lines. Light
-  # plugins are skipped throughout, because the server gives them no index.
+  # plugins take no place in it, because the game gives them no index; they
+  # are compared below with the server's light list, when it has one.
   # The Skyrim.ccc half is not decoration: on 19 September two Creation Club
   # masters the list never mentions put every plugin after Dragonborn.esm two
   # places off, and any check that reads plugins.txt alone passes that.
@@ -208,18 +234,59 @@ if (-not (Test-Path -LiteralPath $plug)) {
   # around it would nest that array inside another.
   $mineFull = Get-LoadOrderGame $enabled $isLightOrMissing $ccc $exists
   $dropped  = ($enabled.Count + 5) - $mineFull.Count
+  # Light plugins (#4128). A server that loads them writes them in a light
+  # list of their own, and its whole order (LO) is the full plugins then the
+  # light ones, so comparing that with the full plugins alone told a correct
+  # client it lacked every light plugin, Thornswood-Last.esp among them. The
+  # client's own check walks mods against its full plugins and the light list
+  # against its light ones, so this does the same: the game's light order,
+  # by the one rule in LoadOrder.ps1, against the manifest's light list. A
+  # manifest with no light list is a server that loads none, and then the
+  # client's light plugins are compared with nothing, as its check does.
+  $isLight   = { param($n) Test-LoadOrderLight (Join-Path $data $n) }
+  $mineLight = [string[]]@()
+  if ($serverHasLight) { $mineLight = Get-LoadOrderLight $enabled $isLight $ccc $exists }
 
-  Say ("  server wants  {0} plugins" -f $serverOrder.Count)
-  Say ("  you have      {0} that take a place in the order (five Bethesda masters included)" -f $mineFull.Count)
-  Say ("  {0} enabled lines carry no index and are left out of both lists, because they are light" -f $dropped) 'DarkGray'
+  if ($serverHasLight) {
+    Say ("  server wants  {0} plugins and {1} light plugins" -f $serverFull.Count, $serverLight.Count)
+    Say ("  you have      {0} that take a place in the order (five Bethesda masters included), and {1} light plugins" -f $mineFull.Count, $mineLight.Count)
+    Say '  each list is compared with its own: full with full, light with light' 'DarkGray'
+  } else {
+    Say ("  server wants  {0} plugins" -f $serverFull.Count)
+    Say ("  you have      {0} that take a place in the order (five Bethesda masters included)" -f $mineFull.Count)
+    Say ("  {0} enabled lines are light or not in Data, and this server's manifest has no light list, so it loads none: they are left out" -f $dropped) 'DarkGray'
+  }
   Write-Host ''
 
-  $extra   = @($mineFull | Where-Object { $serverOrder -notcontains $_ })
-  $missing = @($serverOrder | Where-Object { $mineFull -notcontains $_ })
+  $extra   = @($mineFull | Where-Object { $serverFull -notcontains $_ }) + @($mineLight | Where-Object { $serverLight -notcontains $_ })
+  $missing = @($serverFull | Where-Object { $mineFull -notcontains $_ }) + @($serverLight | Where-Object { $mineLight -notcontains $_ })
 
   if ($missing.Count) {
     Say ("  {0} the server wants that you DO NOT have:" -f $missing.Count) 'Red'
     $missing | ForEach-Object { Say "    $_" 'Red' }
+    # What to do next (#4803). On the live server, Fix: it takes Thornswood's
+    # own plugins from the latest release (#3386) and copies back a collection
+    # plugin Vortex has deployed or staged (OwnGame.RestoreMissingPlugins).
+    # Vortex alone has another author's plugin it holds no copy of. On the dev
+    # server never Fix, for the reason the order's dev advice below gives.
+    Write-Host ''
+    if ($Dev) {
+      Say '  The DEV server follows the build. If the build should have these, a' 'Yellow'
+      Say '  collection plugin comes from Vortex: open Vortex' 'Yellow'
+      Say '  with the Thornswood profile active, install or update the Thornswood' 'Yellow'
+      Say '  collection, and press Deploy.' 'Yellow'
+      Say '  One of Thornswood''s own comes with the next dev release. If the build' 'Yellow'
+      Say '  should not have them, bring the dev server up to it (Patrick runs it):' 'Yellow'
+      Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+    } else {
+      Say '  Press Fix in the launcher, then Scan. Fix takes Thornswood''s own plugins from the latest release' 'Yellow'
+      Say '  and copies back a collection plugin Vortex has deployed or staged.' 'Yellow'
+      Say '  A collection plugin Vortex has no copy of comes only from Vortex: open Vortex' 'Yellow'
+      Say '  with the Thornswood profile active, install the Thornswood collection if it' 'Yellow'
+      Say '  is not, and press Deploy. Then press Scan in the launcher and run this again.' 'Yellow'
+      Say '  If Fix says the release does not have the copy the server runs, the next' 'Yellow'
+      Say '  update brings it: take it when it is waiting.' 'Yellow'
+    }
   } else {
     Say '  you have every plugin the server wants' 'Green'
   }
@@ -231,21 +298,36 @@ if (-not (Test-Path -LiteralPath $plug)) {
     Say '  Each of these takes a place in your order that it does not take in' 'DarkGray'
     Say '  the server''s, so everything after it sits one place off. The first' 'DarkGray'
     Say '  mismatched position below says where that starts.' 'DarkGray'
+    # What to do next (#4803). Fix switches off a plugin this build's own list
+    # does not enable (Verify's "not part of this build"); one the list does
+    # enable is a build and a server of two releases, which Fix cannot settle.
+    Write-Host ''
+    if ($Dev) {
+      Say '  The DEV server follows the build: bring it up to the build (Patrick runs it):' 'Yellow'
+      Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+    } else {
+      Say '  One you switched on yourself, which this build''s plugin list does not' 'Yellow'
+      Say '  enable: press Fix in the launcher. Fix switches it off from that list.' 'Yellow'
+      Say '  One this build''s list does enable means this build and the server are of' 'Yellow'
+      Say '  two releases: take the update when one is waiting. When none is, put this' 'Yellow'
+      Say '  output on the board as an issue. Do not redeploy the server to make this' 'Yellow'
+      Say '  match: the world keys every saved form on its position in that list.' 'Yellow'
+    }
   } else {
     Say '  you have nothing the server does not list' 'Green'
   }
 
   Write-Host ''
-  $firstBad = Get-LoadOrderFirstMismatch $mineFull $serverOrder
+  $firstBad = Get-LoadOrderFirstMismatch $mineFull $serverFull
   if ($missing.Count -or $extra.Count -or $firstBad -ge 0) { $bad++ }
   if ($firstBad -lt 0) {
     Say '  POSITION BY POSITION: identical.' 'Green'
-  } elseif ($firstBad -ge $serverOrder.Count -or $firstBad -ge $mineFull.Count) {
+  } elseif ($firstBad -ge $serverFull.Count -or $firstBad -ge $mineFull.Count) {
     Say ("  POSITION BY POSITION: the first {0} match, then one list runs out." -f $firstBad) 'Yellow'
     Say '  The shorter list is missing plugins the other has. They are named above.' 'Yellow'
   } else {
     Say ("  POSITION BY POSITION: they part company at slot {0}." -f ($firstBad + 1)) 'Red'
-    Say ("    server: " + $serverOrder[$firstBad]) 'Red'
+    Say ("    server: " + $serverFull[$firstBad]) 'Red'
     Say ("    you:    " + $mineFull[$firstBad]) 'Red'
     Write-Host ''
     # Not advice to redeploy. Until 17 September this ended by telling you to
@@ -272,12 +354,63 @@ if (-not (Test-Path -LiteralPath $plug)) {
       Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
     } else {
       Say '  This machine follows the server, not the other way round. Press Fix' 'Yellow'
-      Say '  in the launcher: it puts the server''s order into this build''s plugin' 'Yellow'
-      Say '  list and downloads nothing.' 'Yellow'
+      Say '  in the launcher, then Scan.' 'Yellow'
+      Say '  Fix puts the server''s order into this build''s plugin list. Plugins named' 'Yellow'
+      Say '  above as missing come first, the way that step says.' 'Yellow'
       Say '  Do not redeploy the server to make this match. The world keys every' 'Yellow'
       Say '  saved form on its position in that list, so moving it re-keys them.' 'Yellow'
     }
   }
+
+  # The light plugins in light order, against the server's light list
+  # (#4128). Only when the manifest has one: a server with none loads none.
+  if ($serverHasLight) {
+    Write-Host ''
+    $firstLight = Get-LoadOrderFirstMismatch $mineLight $serverLight
+    if ($firstLight -ge 0) { $bad++ }
+    if ($firstLight -lt 0) {
+      Say '  LIGHT PLUGINS, IN ORDER: identical.' 'Green'
+    } elseif ($firstLight -ge $serverLight.Count -or $firstLight -ge $mineLight.Count) {
+      Say ("  LIGHT PLUGINS, IN ORDER: the first {0} match, then one list runs out." -f $firstLight) 'Yellow'
+      Say '  The shorter list is missing light plugins the other has. They are named above.' 'Yellow'
+    } else {
+      Say ("  LIGHT PLUGINS, IN ORDER: they part company at light slot {0}." -f ($firstLight + 1)) 'Red'
+      Say ("    server: " + $serverLight[$firstLight]) 'Red'
+      Say ("    you:    " + $mineLight[$firstLight]) 'Red'
+      Write-Host ''
+      # The manifest's whole order is the one the launcher puts a plugin list
+      # into when there is a light list (game\gamemode\server-manifest.ts), so
+      # Fix settles light order the way it settles the full one.
+      if ($Dev) {
+        Say '  The DEV server follows the build. Do NOT press Fix in the dev launcher.' 'Red'
+        Say '  Bring the dev server up to the build instead (Patrick runs it):' 'Yellow'
+        Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+      } else {
+        Say '  Press Fix in the launcher, then Scan. Fix puts the server''s whole order,' 'Yellow'
+        Say '  light plugins included, into this build''s plugin list.' 'Yellow'
+        Say '  Do not redeploy the server to make this match.' 'Yellow'
+      }
+    }
+  }
+}
+
+# What to do next for the two results that stand in for the comparison or
+# put it in doubt (#4803), said once the comparison has printed.
+if (-not (Test-Path -LiteralPath $plug)) {
+  Write-Host ''
+  Say '  Thornswood-Setup.exe lays this build''s plugin list down there when it' 'Yellow'
+  Say '  installs. If that is not the Thornswood install, give -Client the folder' 'Yellow'
+  Say '  it is in. If it is, its setup did not finish: run Thornswood-Setup.exe' 'Yellow'
+  Say '  again, the one from the Downloads page.' 'Yellow'
+}
+if (@($lines | Where-Object { $_ -match '  UNREADABLE: ' }).Count) {
+  Write-Host ''
+  Say '  A copy of the manifest above is UNREADABLE, so what a client is handed may' 'Yellow'
+  Say '  not be the list compared here. The server writes both copies at startup.' 'Yellow'
+  Say '  Its log says whether that failed, on the line that starts' 'Yellow'
+  Say '  "[thornswood] the load order manifest was NOT published". Put that right,' 'Yellow'
+  Say '  then restart it so it writes both again:' 'Yellow'
+  Say ("    .\scripts\vps\Restart-Server.ps1 -Service {0}" -f $(if ($Dev) { 'dev' } else { 'game' })) 'Yellow'
 }
 
 if ($Full) {

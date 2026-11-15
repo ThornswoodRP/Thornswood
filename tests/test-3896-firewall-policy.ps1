@@ -94,7 +94,8 @@ try {
     Write-Host 'the copies'
     $open = '# ---- BoxFirewall.ps1 (copy) ----'
     $close = '# ---- end BoxFirewall.ps1 ----'
-    $scripts = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Filter '*.ps1')
+    # Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+    $scripts = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
     $carriers = @()
     foreach ($f in $scripts) {
         $t = Lf ([IO.File]::ReadAllText($f.FullName))

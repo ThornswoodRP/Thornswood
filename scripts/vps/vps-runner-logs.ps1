@@ -4,7 +4,7 @@
   Runs ON the VPS, once a day, as the scheduled task that
   Keep-RunnerLogs.ps1 -Install puts there (C:\Thornswood-Watch\runner-logs.ps1).
   Not meant to be run from this machine, except by
-  tests\test-3184-runner-logs.ps1, which runs it against scratch folders.
+  scripts\tests\test-3184-runner-logs.ps1, which runs it against scratch folders.
 
   WHY THIS EXISTS (#3184). actions/runner writes a Runner_*.log every time a
   runner starts and a Worker_*.log for every job into its _diag folder, and

@@ -34,7 +34,7 @@
     - anything not named as above
   -WhatIf lists and adds up, and removes nothing.
 
-  tests\test-clear-world-copies.ps1 runs it against scratch folders.
+  scripts\tests\test-clear-world-copies.ps1 runs it against scratch folders.
 #>
 param(
     [switch]$WhatIf,

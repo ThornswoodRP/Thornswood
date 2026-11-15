@@ -265,7 +265,7 @@ try {
   const road = w.disk().cargo.holds['cart-1'].sailing;
   yes('W6 the loader drives it off, the driver on the journey, the road\'s minutes the least it takes (' + w.view(ACT.a).note + ')',
       !!road && road.driver.actor === ACT.a && road.at === 1000000 && road.arriveAt === 1000000 + 30 * MIN && /Riften stables/.test(w.view(ACT.a).note));
-  yes('W7 the driver shows as driving, for Raid cart on P', w.tc.driving(ACT.a) === true && w.tc.driving(ACT.b) === false);
+  yes('W7 the driver shows as driving, for Raid cart on P', w.tc.driving(ACT.a, PID[ACT.a]) === true && w.tc.driving(ACT.b, PID[ACT.b]) === false);
 
   // The raid.
   w.at(ACT.b, [5000, 0, 0]); w.at(ACT.a, [5300, 0, 0]);
@@ -302,7 +302,7 @@ try {
   w.press(ACT.a, CRATE.riften);
   w.say(ACT.a, '/cart pullin cart-1');
   yes('W18 once the road is done its driver pulls it in', w.disk().cargo.holds['cart-1'].sailing === null && w.disk().cargo.holds['cart-1'].port === 'riften' &&
-      w.tc.driving(ACT.a) === false && /The cart is in/.test(w.view(ACT.a).note));
+      w.tc.driving(ACT.a, PID[ACT.a]) === false && /The cart is in/.test(w.view(ACT.a).note));
   w.at(ACT.b, [50020, 0, 0]);
   w.press(ACT.b, CRATE.riften);
   w.say(ACT.b, '/cart collect cart-1 1 7');
@@ -367,7 +367,7 @@ try {
       /officeButton\('Cart stops and roads', '\/cart staff'\)/.test(skills) && /carts: staff && !!\(g\.__thornswoodTradeCarts && g\.__thornswoodTradeCarts\.command\)/.test(gm));
   const party = fs.readFileSync(path.join(REPO, 'game', 'ui', 'thornswood-party.js'), 'utf8');
   yes('R5 Raid cart beside somebody driving one, under Near you on P', /nr\.cart \? '<button data-do="raid"/.test(party) &&
-      /verb === 'raid'\) \{ net\('\/cart raid ' \+ who\)/.test(party) && /cartsNear\.driving\(parseInt\(hex, 16\)\)/.test(gm));
+      /verb === 'raid'\) \{ net\('\/cart raid ' \+ who\)/.test(party) && /cartsNear\.driving\(parseInt\(hex, 16\), np\)/.test(gm));
   const panel = fs.readFileSync(path.join(REPO, 'game', 'ui', 'thornswood-ship.js'), 'utf8');
   yes('R6 the panel sends a cart\'s lines under /cart, and draws a stop and a raid', /data\.word === '\/cart' \? '\/cart' : '\/ship'/.test(panel) &&
       /function drawStop\(\)/.test(panel) && /function drawRaid\(\)/.test(panel) && /net\(word\(\) \+ ' close'\)/.test(panel));

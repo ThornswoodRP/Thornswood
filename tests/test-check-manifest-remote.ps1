@@ -21,12 +21,16 @@ $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-manifest-' + [Guid]::NewGuid().To
 $Fake = Join-Path $T 'repo'; $Drive = Join-Path $T 'vpsC'; $Client = Join-Path $T 'client'; $Log = Join-Path $T 'remote.log'
 function W([string]$p, [string]$t) { [void][IO.Directory]::CreateDirectory((Split-Path -Parent $p)); [IO.File]::WriteAllText($p, $t, (New-Object Text.UTF8Encoding($false))) }
 $base = 'Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'
-function Server([string]$rel, [string[]]$order, [string]$dataDir = '') {
+function Server([string]$rel, [string[]]$order, [string]$dataDir = '', [string[]]$light = $null) {
     $root = Join-Path $Drive $rel
     $settings = if ($dataDir) { '{"dataDir":"' + $dataDir + '"}' } else { '{}' }
     W (Join-Path $root 'server-settings.json') $settings
     if ($order) {
-        $doc = (@{ loadOrder = $order; mods = @($order | ForEach-Object { @{ filename = $_ } }) } | ConvertTo-Json -Depth 4)
+        # A server that loads light plugins (#1715) writes them apart, in light
+        # order, and its whole order is the full plugins then the light ones.
+        $h = @{ loadOrder = @($order) + @($light | Where-Object { $_ }); mods = @($order | ForEach-Object { @{ filename = $_ } }) }
+        if ($null -ne $light) { $h.light = @($light | ForEach-Object { @{ filename = $_ } }) }
+        $doc = ($h | ConvertTo-Json -Depth 4)
         $d = if ($dataDir) { $dataDir } else { 'data' }
         W (Join-Path $root "$d\manifest.json") $doc
         W (Join-Path $root "$d\client\manifest.json") $doc
@@ -106,6 +110,58 @@ function Invoke-ThornswoodRemote {
     $r = Run @()
     Yes 'a server that has written no manifest: exit 1, saying it has not started' ($r.Code -eq 1 -and $r.Out -match 'has not written a manifest')
 
+    # What to do next, for each result (#4803). Each one says the step, not
+    # only the finding, and Fix is said as what Fix does: it copies back a
+    # collection plugin Vortex has deployed or staged, takes Thornswood's own
+    # from the latest release, and puts the server's order into the list.
+    $deployed = 'copies back a collection plugin Vortex has deployed or staged'
+    $ours = 'takes Thornswood''s own plugins from the latest release'
+    Reset
+    Server 'Thornswood-Server' @()
+    Server 'Thornswood-Server-Dev' @()
+    $r = Run @()
+    Yes 'next: no manifest names the line in the server''s log that says why, and the live restart' ($r.Out -match 'the load order manifest was NOT published' -and $r.Out -match 'Restart-Server\.ps1 -Service game')
+    $r = Run @('-Dev')
+    Yes 'next:   and with -Dev, the dev restart' ($r.Out -match 'the load order manifest was NOT published' -and $r.Out -match 'Restart-Server\.ps1 -Service dev')
+
+    Reset
+    Server 'Thornswood-Server' (@($order) + @('C.esp'))
+    $r = Run @()
+    Yes 'next: a plugin the server wants that you lack says Fix takes ours from the latest release and copies back what Vortex has' ($r.Out -match 'Press Fix' -and $r.Out -match $ours -and $r.Out -match $deployed)
+    Yes 'next:   and one Vortex has no copy of: Vortex, with the Thornswood profile active, Deploy' ($r.Out -match 'with the Thornswood profile active' -and $r.Out -match 'press Deploy')
+    Server 'Thornswood-Server-Dev' (@($order) + @('C.esp'))
+    $r = Run @('-Dev')
+    Yes 'next:   with -Dev: Vortex for a collection plugin, or the dev server brought up to the build' ($r.Out -match 'with the Thornswood profile active' -and $r.Out -match 'Deploy-DevGamemode\.ps1 -LoadOrder')
+
+    Reset
+    Server 'Thornswood-Server' (@($base) + @('A.esp'))
+    Server 'Thornswood-Server-Dev' (@($base) + @('A.esp'))
+    $r = Run @()
+    Yes 'next: a plugin you have that the server does not list: Fix switches off one this build does not enable, an update brings the rest' ($r.Out -match 'Fix switches it off' -and $r.Out -match 'take the update')
+    Yes 'next:   and never a redeploy of the live server' ($r.Out -match 'Do not redeploy')
+    $r = Run @('-Dev')
+    Yes 'next:   with -Dev: the dev server brought up to the build' ($r.Out -match 'Deploy-DevGamemode\.ps1 -LoadOrder')
+
+    Reset
+    Server 'Thornswood-Server' (@($base) + @('B.esp', 'A.esp'))
+    $r = Run @()
+    Yes 'next: an order that parts company says what Fix does, not that it downloads nothing' ($r.Out -notmatch 'downloads nothing' -and $r.Out -match 'Fix puts the server''s order into this build''s plugin list')
+
+    Reset
+    Server 'Thornswood-Server' $order
+    $plugFile = Join-Path $Client 'Profile\LocalAppData\plugins.txt'
+    $plugKept = [IO.File]::ReadAllText($plugFile)
+    [IO.File]::Delete($plugFile)
+    $r = Run @()
+    W $plugFile $plugKept
+    Yes 'next: no plugins.txt says -Client names the wrong folder or Thornswood-Setup.exe did not finish' ($r.Out -match 'No plugins\.txt at' -and $r.Out -match '-Client' -and $r.Out -match 'Thornswood-Setup\.exe')
+
+    Reset
+    Server 'Thornswood-Server' $order
+    W (Join-Path $Drive 'Thornswood-Server\data\client\manifest.json') '{ not json'
+    $r = Run @()
+    Yes 'next: an UNREADABLE copy names the line in the server''s log and the restart' ($r.Out -match 'UNREADABLE' -and $r.Out -match 'the load order manifest was NOT published' -and $r.Out -match 'Restart-Server\.ps1 -Service game')
+
     # 6. The server order differs in the middle.
     Reset
     Server 'Thornswood-Server' (@($base) + @('B.esp', 'A.esp'))
@@ -141,6 +197,42 @@ function Invoke-ThornswoodRemote {
 
     $head = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\Check-Manifest.ps1'))
     Yes 'its header says when it exits 0 and when 1' ($head -match '(?s)^<#.*Exit 0 when.*Exit 1\s+when.*#>')
+
+    # 8. Light plugins (#4128). A server that loads them names them in its
+    # light list, and in its whole order after the full plugins. The client's
+    # check walks the full plugins against mods and the light ones against
+    # light, so this compares each with each: a correct client with
+    # Thornswood-Last.esp light, last, is told nothing is missing.
+    foreach ($l in 'Small.esp', 'Thornswood-Last.esp') {
+        $h = [byte[]]::new(24); [Text.Encoding]::ASCII.GetBytes('TES4').CopyTo($h, 0); [BitConverter]::GetBytes([uint32]0x200).CopyTo($h, 8)
+        W (Join-Path $Client "Game\Data\$l") ''; [IO.File]::WriteAllBytes((Join-Path $Client "Game\Data\$l"), $h)
+    }
+    $light = 'Small.esp', 'Thornswood-Last.esp'
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n*Thornswood-Last.esp`r`n"
+    Reset
+    Server 'Thornswood-Server' $order '' $light
+    $r = Run @()
+    Yes 'light: a correct client with Thornswood-Last.esp light is told it has every plugin the server wants' ($r.Out -match 'you have every plugin the server wants' -and $r.Out -notmatch 'DO NOT have')
+    Yes '  and nothing the server does not list' ($r.Out -match 'you have nothing the server does not list')
+    Yes '  and the full plugins match position by position' ($r.Out -match 'POSITION BY POSITION: identical')
+    Yes '  and the light plugins match in order too' ($r.Out -match 'LIGHT PLUGINS, IN ORDER: identical')
+    Yes '  and it counts each list on its own' ($r.Out -match 'server wants\s+7 plugins and 2 light plugins' -and $r.Out -match 'you have\s+7 .* and 2 light')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n"
+    $r = Run @()
+    Yes 'light: a client without Thornswood-Last.esp is told the server wants it' ($r.Out -match 'DO NOT have' -and $r.Out -match '(?m)^\s+Thornswood-Last\.esp\s*$')
+    Yes '  and its full plugins still match' ($r.Out -match 'POSITION BY POSITION: identical')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Thornswood-Last.esp`r`n*Small.esp`r`n"
+    $r = Run @()
+    Yes 'light: light plugins in another order are named where they part' ($r.Out -match 'LIGHT PLUGINS, IN ORDER: they part company at light slot 1' -and $r.Out -match 'server: Small\.esp' -and $r.Out -match 'you:\s+Thornswood-Last\.esp')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n*Thornswood-Last.esp`r`n"
+    Reset
+    Server 'Thornswood-Server' $order
+    $r = Run @()
+    Yes 'light: a server with no light list loads none, so a client''s light plugins are left out, not called extra' ($r.Out -match 'you have nothing the server does not list' -and $r.Out -match 'POSITION BY POSITION: identical' -and $r.Out -notmatch 'LIGHT PLUGINS, IN ORDER')
+    W $plugFile $plugKept
 }
 finally { Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host ''

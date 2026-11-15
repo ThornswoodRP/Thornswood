@@ -135,7 +135,7 @@ node tests\test-site-local.js
 .\scripts\dev\Check-Words.ps1
 ```
 
-Use the file in `tests\` whose name matches the area you touched. Pages, docs, and the launcher's window that a person will read go through `Check-Words.ps1`.
+Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Pages, docs, and the launcher's window that a person will read go through `Check-Words.ps1`.
 
 #### When the pull request will not open
 

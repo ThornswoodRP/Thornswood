@@ -633,7 +633,11 @@ return module.exports;
       routes: function () { return copy(reg.routes); },
       aboard: function (id) { return reg.ships.aboard(reg.state, id); },
       // Whether this character is driving a cart, for Raid cart under Near you on P.
-      driving: function (actorId) { return !!TRADE_CARTS.cartOfDriver(reg.state, H.partyOf(actorId)); },
+      // The P panel asks it for every pair near each other each pass, with the
+      // profile id the near list holds, so it reads nothing of the engine (#5431).
+      driving: function (actorId, profileId) {
+        return !!TRADE_CARTS.cartOfDriver(reg.state, { actor: Number(actorId) >>> 0, profile: Number(profileId) || 0 });
+      },
       open: act('open'), load: act('load'), depart: act('depart'), pullIn: act('pullIn'),
       begin: act('begin'), finish: act('finish'), undo: act('undo'),
       activated: activated, command: command
