@@ -39,8 +39,8 @@
 
   DISCORD (#5784). notice and restart stop the server, so they are said in
   Discord too, before the countdown starts in the game: the box writes the
-  restart notice (RestartNotice.ps1) that the bot posts in #updates, or the
-  dev updates channel for the dev server's data folder, with the time it
+  restart notice (RestartNotice.ps1) that the bot posts in #updates, or
+  #staff-updates for the dev server's data folder, with the time it
   goes down. When it cannot be written nothing is dropped in the game either
   and this exits 1, which Deploy-Server and Deploy-DevGamemode read as a
   warning that did not go out. -Cancel calls the notice off. update is a

@@ -63,6 +63,66 @@ function Read-Log {
     try { return (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
 }
 
+# What the launcher has on screen: each top-level window of its process,
+# shown or hidden, with its class and title, and for a Windows message box
+# (class #32770, Ask.cs) the words in it. A launcher that stays up without
+# its window line is waiting on something, and its log cannot say what
+# (#5748); this does. Printed on every run, so a passing run shows it works.
+if (-not ('LauncherStarts.OnScreen' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace LauncherStarts
+{
+    public static class OnScreen
+    {
+        delegate bool EnumProc(IntPtr h, IntPtr l);
+        [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
+        [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc f, IntPtr l);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+
+        static string Text(IntPtr h) { var s = new StringBuilder(4096); GetWindowText(h, s, s.Capacity); return s.ToString().Replace("\r", " ").Replace("\n", " "); }
+        static string Class(IntPtr h) { var s = new StringBuilder(256); GetClassName(h, s, s.Capacity); return s.ToString(); }
+
+        public static string[] Of(int processId)
+        {
+            var lines = new List<string>();
+            EnumWindows(delegate (IntPtr h, IntPtr l)
+            {
+                uint pid;
+                GetWindowThreadProcessId(h, out pid);
+                if (pid != (uint)processId) return true;
+                string cls = Class(h);
+                string line = (IsWindowVisible(h) ? "shown  " : "hidden ") + "[" + cls + "] " + Text(h);
+                if (cls == "#32770")
+                    EnumChildWindows(h, delegate (IntPtr c, IntPtr l2)
+                    {
+                        string t = Text(c);
+                        if (t.Length > 0) line += " | " + t;
+                        return true;
+                    }, IntPtr.Zero);
+                lines.Add(line);
+                return true;
+            }, IntPtr.Zero);
+            return lines.ToArray();
+        }
+    }
+}
+'@
+}
+function Write-OnScreen([System.Diagnostics.Process]$p, [string]$when) {
+    $shown = @([LauncherStarts.OnScreen]::Of($p.Id))
+    Write-Host "---- the launcher's windows $when ($($shown.Count)) ----"
+    foreach ($w in $shown) { Write-Host "  $w" }
+    return $shown
+}
+
 $failed = $null
 $proc = $null
 try {
@@ -80,6 +140,10 @@ try {
     if (-not $failed -and -not $window) { $failed = "the launcher did not say its window was on screen within $WindowSeconds s" }
     if (-not $failed) {
         Write-Host "PASS  the window was on screen"
+        $shown = @(Write-OnScreen $proc 'once its window was up')
+        if (@($shown | Where-Object { $_ -like 'shown *' }).Count -eq 0) { $failed = 'the launcher said its window was on screen, but Windows lists no shown window of its process' }
+    }
+    if (-not $failed) {
         $until = (Get-Date).AddSeconds($StaySeconds)
         while ((Get-Date) -lt $until) {
             if ((Read-Log) -match 'COULD NOT START') { $failed = 'the launcher wrote COULD NOT START after its window was up'; break }
@@ -89,6 +153,9 @@ try {
         if (-not $failed) { Write-Host "PASS  it stayed up for $StaySeconds s with no COULD NOT START" }
     }
 } finally {
+    if ($failed -and $proc -and -not $proc.HasExited) {
+        try { $null = Write-OnScreen $proc 'when it failed' } catch { Write-Host "  could not list its windows: $($_.Exception.Message)" }
+    }
     if ($proc -and -not $proc.HasExited) {
         $null = $proc.CloseMainWindow()
         if (-not $proc.WaitForExit(10000)) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue; $null = $proc.WaitForExit(10000) }

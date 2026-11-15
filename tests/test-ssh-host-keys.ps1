@@ -63,7 +63,8 @@ function Rel([string]$p) { return $p.Substring($repo.Length + 1) }
 
 $files = @()
 foreach ($d in @((Join-Path $repo 'scripts'))) {
-    if (Test-Path -LiteralPath $d) { $files += @(Get-ChildItem -LiteralPath $d -Filter *.ps1 -File -Recurse) }
+    # Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+    if (Test-Path -LiteralPath $d) { $files += @(Get-ChildItem -LiteralPath $d -Filter *.ps1 -File -Recurse | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' }) }
 }
 
 # ---- 1 and 2: the PowerShell scripts -------------------------------------------

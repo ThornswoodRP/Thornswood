@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Thornswood
 {
@@ -15,62 +16,42 @@ namespace Thornswood
     // back profile 1's body, inventory and face, whatever Skyrim's own menu
     // says. That is why New Game never produced a new character.
     //
-    // Until 20 September the launcher chose the id. Play opened a bar with two
-    // slots, each slot owned an id, and a slot's button wrote that id into the
-    // client settings before the game started; an empty slot took an id nobody
-    // had used and a trade and town dialog ran first. All of that is gone.
-    // Play means Play: the person picks their character at the game's own
-    // main menu, which our plugin draws from a file this class writes
+    // The person picks their character at the game's own main menu, which our
+    // plugin draws from a file this class writes
     // (Data\Platform\thornswood-characters.json) and answers with one line in
     // Data\Platform\thornswood-choice.txt, which Shell polls while the game
     // runs. The client settings carry chooseAtMenu = true and the id played
     // last, so the client waits at the menu rather than connecting as anybody.
     //
-    // What stays here is the list itself, profiles.txt: one row per id this
-    // install has played, plus one spare row on slot 0 holding the id the
-    // menu's New character will use, minted under the Discord account the
-    // install is linked to. Ids are never reused inside one install.
+    // THE LIST IS THE SITE'S, KEPT UNDER THE DISCORD ACCOUNT (#5938). Which
+    // ids are this person's characters, each one's slot, when it was last
+    // played and for how long, the ids they deleted, and the spare the menu's
+    // New character uses: until 12 November all of it lived only in
+    // Profile\Characters\profiles.txt and retired.txt, so a reinstall or
+    // another PC started an empty list, minted a new id, and left every
+    // character on the server with nothing that knew its number. Patrick,
+    // 12 Nov: "chacrthers, saves, and settings should all be cloud saved by
+    // the server and linked to your discord and not all be saved locally".
+    // Now the site keeps it on the account's row (site\lib\characters.js) and
+    // answers POST /api/play/characters with it; this class asks at every
+    // Play and after every pick, forget and finished session, holds the last
+    // answer in memory for the menu, and writes no list of its own. The site
+    // also mints the spare, against every account's ids rather than one
+    // install's, buries the dead, brings back a PK undone and tidies the
+    // slots, so none of that is decided here either.
     //
-    // The save folder is still redirected, to one folder for the whole install
-    // rather than one per slot. SkyrimPlatform writes its own .ess as it works
-    // and there is no reason for them to land among somebody's own saves.
+    // The save folder is still redirected, to one folder for the whole
+    // install. SkyrimPlatform writes its own .ess as it works and there is no
+    // reason for them to land among somebody's own saves; nothing in them is
+    // anybody's (Scrub).
     static class Chars
     {
         public static string Home { get { return Path.Combine(Paths.ProfileDir, "Characters"); } }
 
-        // One saves folder for the whole install, where a folder per slot was
-        // until 20 September. Nothing on this disk decides who the character
-        // is (SkyMP loads the character the server holds), so there is
-        // nothing to keep apart.
+        // One saves folder for the whole install, for SkyrimPlatform's
+        // scaffolding saves. Nothing on this disk decides who the character
+        // is (SkyMP loads the character the server holds).
         static string SavesDir { get { return Path.Combine(Home, "saves"); } }
-
-        // One line per character, and one for the spare:
-        //
-        //     slot  profileId  lastPlayedTicks  playedSeconds  trade  town  discordId
-        //
-        // Deliberately not JSON. The launcher's only serializer is the data
-        // contract one, which cannot round trip a shape it was not told about in
-        // advance, and this file has to survive being read by a version that
-        // adds a field. Everything past the first two is optional on the way in,
-        // so a file written before a field existed still reads.
-        //
-        // A dash stands for an empty trade or town. Space separated fields and
-        // empty strings do not mix. Nothing reads the trade or the town any
-        // more (the launcher stopped asking on 20 September); they are carried
-        // so a file written before that still reads and writes back the same.
-        //
-        // Slot 0 is the spare: an id minted and written down before the game
-        // starts, never played, so the site's allowed list can carry it before
-        // anybody picks New character at the menu. Any other slot number is a
-        // character. New rows take the next free number; there is no longer a
-        // limit of two.
-        //
-        // The last field is the Discord account the row's id was minted under,
-        // a dash when nobody knows (every row written before 24 September).
-        // Only the spare's is read; see EnsureSpare for why. An older launcher
-        // reads the first six fields and writes the seventh back as nothing,
-        // which this one takes as not known and mints a fresh spare for.
-        static string ProfileFile { get { return Path.Combine(Home, "profiles.txt"); } }
 
         // The two files the plugin and the launcher pass between them at the
         // main menu. Both in Data\Platform, the one folder each end finds
@@ -89,106 +70,121 @@ namespace Thornswood
         {
             get { return Path.Combine(Paths.Game, "Data\\Platform\\thornswood-forget.txt"); }
         }
-        // Ids this install has forgotten, so they are never minted again: a
-        // returning id would hand back the character that was deleted.
-        static string RetiredFile { get { return Path.Combine(Home, "retired.txt"); } }
 
-        // Read used to fill this from the newest save's header as well. That
-        // went with the per slot folders on 20 September: one shared folder
-        // has no save that belongs to any one character, and under SkyMP the
-        // header was scaffolding anyway (see Scrub).
-        public class Who
-        {
-            public int Slot;
-            public bool Empty = true;
-            public int ProfileId;
-            public DateTime LastPlayed;
-            // Seconds this character has actually been in the game, added up
-            // by the launcher across every session. Skyrim keeps its own figure
-            // but it is inside the save, and under SkyMP the character is on
-            // the server, so there is often no save here to read it out of.
-            public long PlaySeconds;
-        }
-
-        // ------------------------------------------------------- profile ids
+        // ------------------------------------------------------- the list
 
         class Row
         {
             public int Slot;
             public int Id;
+            // Local time, as the menu's dates and Roster.Gone take it;
+            // MinValue for never.
             public DateTime Played;
             public long Seconds;
-            public string Trade = "";
-            public string Town = "";
-            // The Discord id this row's id was minted under, "" when not known.
-            public string Owner = "";
         }
 
+        /// <summary>
+        /// The slot the site gives a character staff have killed for good
+        /// (#1010): out of the numbered slots, shown dead, never played.
+        /// </summary>
+        const int DeadSlot = -1;
+
+        // The site's last answer for this account, and the spare in it.
+        static List<Row> held = new List<Row>();
+        static int spareId;
+        // How many slots the menu draws: two, or three for a Patreon tier or
+        // a Gamemaster (the site's slotsFor). 0 until the site has answered.
+        static int slotCount;
+        static readonly object heldGate = new object();
+
+        /// <summary>A copy of the last answer's characters, safe to walk off the lock.</summary>
         static List<Row> Rows()
         {
-            var l = new List<Row>();
-            try
+            lock (heldGate) { return new List<Row>(held); }
+        }
+
+        /// <summary>
+        /// One call to /api/play/characters: op is "" for the list, or
+        /// "chose", "played" or "forget" with the character. On an answer the
+        /// list held here is replaced with the site's, and the lines it said
+        /// (the dead, the revived, the slots tidied) come back in said.
+        /// Throws with the site's own words, or what the request ran into, when
+        /// there is no list: a menu drawn without the account's characters
+        /// would offer only New character. A refusal of the op itself (a
+        /// character that is not this account's) still carries the list,
+        /// which is kept, and is thrown after.
+        /// </summary>
+        static void Ask(string op, int profileId, long seconds, out string said)
+        {
+            said = null;
+            if (!Discord.Linked)
+                throw new Exception("Connect Discord first: your characters are kept with your Discord account.");
+            var json = new StringBuilder();
+            json.Append("{\"ticket\":\"").Append(Discord.Escape(Discord.Ticket)).Append('"');
+            if (op.Length > 0) json.Append(",\"op\":\"").Append(op).Append('"');
+            if (profileId > 0) json.Append(",\"profileId\":").Append(profileId);
+            if (seconds > 0) json.Append(",\"seconds\":").Append(seconds);
+            json.Append('}');
+
+            string reply;
+            int code = Discord.PostJson(Discord.Site + "/api/play/characters", json.ToString(), out reply);
+            JsonObject o = null;
+            try { o = string.IsNullOrEmpty(reply) ? null : JsonNode.Parse(reply) as JsonObject; }
+            catch (Exception ex) { Swallow.Note("Chars.Ask, reading the answer", ex); }
+            if (code == 0)
+                throw new Exception("thornswood.net is not answering, so your characters could not be fetched" +
+                                    (string.IsNullOrEmpty(Discord.LastFailure) ? "" : " (" + Discord.LastFailure + ")") + ".");
+            JsonArray list = o != null ? o["chars"] as JsonArray : null;
+            if (code != 200 || list == null)
             {
-                if (!File.Exists(ProfileFile)) return l;
-                foreach (string line in File.ReadAllLines(ProfileFile))
-                {
-                    string[] p = line.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (p.Length < 2) continue;
-                    var r = new Row();
-                    if (!int.TryParse(p[0], out r.Slot)) continue;
-                    if (!int.TryParse(p[1], out r.Id)) continue;
-                    long ticks;
-                    if (p.Length > 2 && long.TryParse(p[2], out ticks))
-                    {
-                        try { r.Played = new DateTime(ticks); } catch (Exception ex) { Swallow.Note("Chars.Rows, datetime", ex); }
-                    }
-                    long secs;
-                    if (p.Length > 3 && long.TryParse(p[3], out secs) && secs >= 0) r.Seconds = secs;
-                    if (p.Length > 4 && p[4] != "-") r.Trade = p[4];
-                    if (p.Length > 5 && p[5] != "-") r.Town = p[5];
-                    if (p.Length > 6 && p[6] != "-") r.Owner = p[6];
-                    l.Add(r);
-                }
+                string message = o != null && o["message"] != null ? (string)o["message"] : "";
+                throw new Exception(message.Length > 0 ? message
+                    : "thornswood.net answered " + code + " when asked for your characters.");
             }
-            catch (Exception ex) { Swallow.Note("Chars.Rows", ex); }
-            return l;
-        }
 
-        static void Save(List<Row> rows)
-        {
-            try
+            var rows = new List<Row>();
+            foreach (JsonNode n in list)
             {
-                Directory.CreateDirectory(Home);
-                var sb = new StringBuilder();
-                foreach (Row r in rows)
-                {
-                    sb.AppendLine(r.Slot + " " + r.Id + " " + r.Played.Ticks + " " + r.Seconds +
-                                  " " + Dash(r.Trade) + " " + Dash(r.Town) + " " + Dash(r.Owner));
-                }
-                // Whole or not at all (#3128): Relist reads this file on a
-                // pool thread while the game runs, and a read in the middle
-                // of a plain write sees half a list.
-                string next = ProfileFile + ".new";
-                File.WriteAllText(next, sb.ToString());
-                if (File.Exists(ProfileFile)) File.Replace(next, ProfileFile, null);
-                else File.Move(next, ProfileFile);
+                var c = n as JsonObject;
+                if (c == null) continue;
+                var r = new Row();
+                r.Id = Int(c["id"]);
+                r.Slot = Int(c["slot"]);
+                long ms = Long(c["played"]);
+                r.Played = ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime : DateTime.MinValue;
+                r.Seconds = Long(c["seconds"]);
+                if (r.Id > 0 && r.Slot != 0) rows.Add(r);
             }
-            catch (Exception ex) { Swallow.Note("Chars.Save, write", ex); }
+            lock (heldGate)
+            {
+                held = rows;
+                spareId = Int(o["spare"]);
+                slotCount = Int(o["slots"]);
+            }
+            var lines = o["said"] as JsonArray;
+            if (lines != null && lines.Count > 0)
+            {
+                var all = new List<string>();
+                foreach (JsonNode l in lines) if (l != null) all.Add((string)l);
+                said = string.Join(" ", all.ToArray());
+            }
+            if (o["ok"] != null && !(bool)o["ok"])
+            {
+                string message = o["message"] != null ? (string)o["message"] : "refused";
+                throw new Exception("thornswood.net did not take that: " + message + ".");
+            }
         }
 
-        static string Dash(string s)
+        static int Int(JsonNode n)
         {
-            if (string.IsNullOrEmpty(s)) return "-";
-            // Whitespace would split into two fields and shift everything after
-            // it. No gamemode key has any, but this file is also written by hand
-            // when somebody is poking at it.
-            return s.Replace(' ', '_');
+            try { return n == null ? 0 : (int)n.GetValue<long>(); }
+            catch { return 0; }
         }
 
-        static Row Find(List<Row> rows, int slot)
+        static long Long(JsonNode n)
         {
-            foreach (Row r in rows) if (r.Slot == slot) return r;
-            return null;
+            try { return n == null ? 0 : n.GetValue<long>(); }
+            catch { return 0; }
         }
 
         static Row FindId(List<Row> rows, int profileId)
@@ -197,111 +193,7 @@ namespace Thornswood
             return null;
         }
 
-        /// <summary>
-        /// The lowest free slot number, 1 on an empty list. The number is the
-        /// slot the menu draws the character in, fixed, and a forgotten
-        /// character's number is free again. "Highest plus one" climbed past
-        /// the allowance: on 20 September the menu read 1 empty, 2 empty, 3,
-        /// 4, 5 for an account with three slots and three characters.
-        /// </summary>
-        static int NextSlot(List<Row> rows)
-        {
-            int n = 1;
-            while (Find(rows, n) != null) n++;
-            return n;
-        }
-
-        /// <summary>
-        /// One tidy before the list is written for the menu: a row numbered
-        /// above the allowance moves down into a free number at or below it,
-        /// highest number first (Slots.Tidy is the rule), and the file is
-        /// saved when anything moved. Rows at or below the allowance never
-        /// move, so the menu's fixed slots stay where the person left them.
-        /// Every row with a number takes part, played or not, because
-        /// NextSlot counts them all as holding one and a move must not land
-        /// on a number another row holds. Returns a line for the log naming
-        /// what moved, or null when nothing did.
-        /// </summary>
-        static string TidySlots(List<Row> rows, int allowance)
-        {
-            var numbered = new List<Row>();
-            foreach (Row r in rows) if (r.Slot > 0) numbered.Add(r);
-            var before = new int[numbered.Count];
-            for (int i = 0; i < numbered.Count; i++) before[i] = numbered[i].Slot;
-            int[] after = Slots.Tidy(before, allowance);
-            var moved = new List<string>();
-            for (int i = 0; i < numbered.Count; i++)
-            {
-                if (after[i] == before[i]) continue;
-                numbered[i].Slot = after[i];
-                moved.Add("profile " + numbered[i].Id + " from slot " + before[i] + " to slot " + after[i]);
-            }
-            if (moved.Count == 0) return null;
-            Save(rows);
-            return "Slots tidied for an allowance of " + allowance + ": " +
-                   string.Join(", ", moved.ToArray()) + ".";
-        }
-
-        /// <summary>
-        /// The slot number of a character staff have killed for good (#1010).
-        /// Patrick, 28 September: the character "can never be played or
-        /// selected again" and the account can make a new one. So its row
-        /// leaves the numbered slots, which frees its number for New
-        /// character, and is kept (never minted again, shown on the menu as
-        /// dead, forgettable with the bin) rather than deleted.
-        /// </summary>
-        const int DeadSlot = -1;
-
-        /// <summary>
-        /// Every row the site says is dead for good moves to DeadSlot, and the
-        /// file is saved when any did. Returns a line for the log naming them,
-        /// or null. Roster.Refresh has run first.
-        /// </summary>
-        static string BuryDead(List<Row> rows)
-        {
-            var moved = new List<string>();
-            foreach (Row r in rows)
-            {
-                if (r.Slot <= 0 || r.Id <= 0) continue;
-                bool isDead = false;
-                try { isDead = Roster.Dead(r.Id); } catch { isDead = false; }
-                if (!isDead) continue;
-                moved.Add("profile " + r.Id + " from slot " + r.Slot);
-                r.Slot = DeadSlot;
-            }
-            if (moved.Count == 0) return null;
-            Save(rows);
-            return "Staff have killed " + (moved.Count == 1 ? "a character" : moved.Count + " characters") +
-                   " for good, so the slot is free for a new one: " + string.Join(", ", moved.ToArray()) + ".";
-        }
-
-        /// <summary>
-        /// Every row in DeadSlot whose PK an admin undid (#1010, Patrick,
-        /// 29 September) goes back into the lowest free slot, and the file is
-        /// saved when any did. The site undoes a PK only while the account has
-        /// a free slot, and TidySlots brings the row under the allowance after
-        /// this. Only ids the site names as revived move, so a site that did
-        /// not answer brings nobody back. Returns a line for the log, or null.
-        /// </summary>
-        static string RaiseRevived(List<Row> rows)
-        {
-            var moved = new List<string>();
-            foreach (Row r in rows)
-            {
-                if (r.Slot != DeadSlot || r.Id <= 0) continue;
-                bool back = false;
-                try { back = Roster.Revived(r.Id); } catch { back = false; }
-                if (!back) continue;
-                r.Slot = NextSlot(rows);
-                moved.Add("profile " + r.Id + " to slot " + r.Slot);
-            }
-            if (moved.Count == 0) return null;
-            Save(rows);
-            return "An admin undid the PK of " + (moved.Count == 1 ? "a character" : moved.Count + " characters") +
-                   ", so it can be played again: " + string.Join(", ", moved.ToArray()) + ".";
-        }
-
-        /// <summary>The rows staff have killed for good that were played here.</summary>
+        /// <summary>The rows staff have killed for good.</summary>
         static List<Row> DeadRows(List<Row> rows)
         {
             var l = new List<Row>();
@@ -309,156 +201,12 @@ namespace Thornswood
             return l;
         }
 
-        /// <summary>
-        /// The rows that are characters, in slot order. Slot 0 is the spare
-        /// and a row nobody has played is not a character either; the old
-        /// two slot picker treated it as an empty slot for the same reason.
-        /// </summary>
+        /// <summary>The rows that are characters, in slot order.</summary>
         static List<Row> Characters(List<Row> rows)
         {
             var l = new List<Row>();
-            foreach (Row r in rows)
-            {
-                if (r.Slot <= 0 || r.Id <= 0 || r.Played == DateTime.MinValue) continue;
-                l.Add(r);
-            }
+            foreach (Row r in rows) if (r.Slot > 0 && r.Id > 0) l.Add(r);
             l.Sort(delegate (Row a, Row b) { return a.Slot.CompareTo(b.Slot); });
-            return l;
-        }
-
-        /// <summary>
-        /// An id the server has never seen, and nobody else's launcher will
-        /// ever pick either.
-        ///
-        /// This used to count: the highest id in this machine's own list, plus
-        /// one. Every launcher did exactly the same from exactly the same
-        /// starting point, so everybody's second character was profile 2 and
-        /// their third was profile 3. The server stores one character per
-        /// profile id, so two people on two different machines both connected
-        /// as profile 2 and both loaded the same character:
-        ///
-        ///     Connecting a user 1 with ip 203.0.113.10  -> 1 logged as 2
-        ///     Connecting a user 2 with ip 203.0.113.20  -> 2 logged as 2
-        ///     Loading character ff000000                (the same one, twice)
-        ///
-        /// Which also meant creation never ran for either of them: the server
-        /// found a character that already existed and quite correctly left it
-        /// alone. Months of "the trade menu never appears" was this.
-        ///
-        /// So the id is random over the whole positive range instead. With five
-        /// people and a handful of characters each, a collision is not worth
-        /// the arithmetic to describe. Ids are still never reused inside one
-        /// install, because a returning id would hand back a deleted character.
-        /// </summary>
-        static int NextProfileId()
-        {
-            var taken = new List<int>();
-            foreach (Row r in Rows()) taken.Add(r.Id);
-            foreach (int r in Retired()) taken.Add(r);
-
-            var bytes = new byte[4];
-            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-            {
-                for (int attempt = 0; attempt < 64; attempt++)
-                {
-                    rng.GetBytes(bytes);
-                    long v = BitConverter.ToInt32(bytes, 0) & 0x7FFFFFFF;
-                    int id = (int)(1000 + (v % 2000000000L));
-                    if (!taken.Contains(id)) return id;
-                }
-            }
-
-            // Sixty-four collisions in a row does not happen, but returning
-            // something that might already be in use is worse than anything,
-            // so walk up from the highest rather than guess again.
-            int high = 1000;
-            foreach (int t in taken) if (t > high) high = t;
-            return high + 1;
-        }
-
-        /// <summary>
-        /// The id the menu's New character will use, minted and written down
-        /// before the game starts so the site's allowed list can carry it.
-        /// Lives on slot 0, unplayed, which Read and the json both treat as no
-        /// character. Saves the file only when it had to mint one, and reads
-        /// the list back off disk for that so the new id is checked against
-        /// everything already written.
-        ///
-        /// A spare belongs to the Discord account it was minted under, and
-        /// one minted under any other account is retired and a fresh one made.
-        /// Found reviewing To Do List entry 142 on 24 September. The site's
-        /// check in files an id under the first account that checks in with
-        /// it and moves it only once that account has left the Discord,
-        /// because it cannot tell somebody's own id from one they learned off
-        /// the voice service. Shell checks the spare in at every Play
-        /// (KnownIds), so account A already holds it. Unlink and Connect
-        /// Discord, or Reconnect, to account B left that spare in place, and
-        /// B's first New character was made on it: filed under A for as long
-        /// as A stays in the Discord, voice refused it as not B's, the menu
-        /// card got no name,
-        /// and it was let through the game's door on A's standing. Every
-        /// launch runs Prepare before the check ins, so B's spare is minted
-        /// under B before the site hears of it.
-        ///
-        /// A spare with no account written down (every list before this) is
-        /// retired as well, once, because an install relinked before now holds
-        /// exactly that. It costs an id nobody played. When the account is not
-        /// known, the ticket missing or unreadable, the spare is left alone:
-        /// there is nothing to compare it with.
-        /// </summary>
-        static int EnsureSpare(List<Row> rows)
-        {
-            string who = "";
-            try { who = Discord.AccountId ?? ""; } catch { who = ""; }
-
-            Row sp = Find(rows, 0);
-            if (sp != null && sp.Id > 0)
-            {
-                if (who.Length == 0 || sp.Owner == who) return sp.Id;
-                Retire(sp.Id);
-            }
-            if (sp == null)
-            {
-                sp = new Row();
-                sp.Slot = 0;
-                rows.Add(sp);
-            }
-            sp.Id = NextProfileId();
-            sp.Played = DateTime.MinValue;
-            sp.Seconds = 0;
-            sp.Owner = who;
-            Save(rows);
-            return sp.Id;
-        }
-
-        /// <summary>
-        /// Writes an id down as never to be minted again on this install: a
-        /// returning id would hand back whatever the server holds under it.
-        /// </summary>
-        static void Retire(int profileId)
-        {
-            if (profileId <= 0) return;
-            try
-            {
-                Directory.CreateDirectory(Home);
-                File.AppendAllText(RetiredFile, profileId + Environment.NewLine);
-            }
-            catch (Exception ex) { Swallow.Note("Chars.Retire, write", ex); }
-        }
-
-        static List<int> Retired()
-        {
-            var l = new List<int>();
-            try
-            {
-                if (!File.Exists(RetiredFile)) return l;
-                foreach (string line in File.ReadAllLines(RetiredFile))
-                {
-                    int id;
-                    if (int.TryParse(line.Trim(), out id) && id > 0) l.Add(id);
-                }
-            }
-            catch (Exception ex) { Swallow.Note("Chars.Retired", ex); }
             return l;
         }
 
@@ -484,21 +232,15 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Forget a character: its row goes, its id is written down as retired
-        /// so it is never minted again, and the character itself stays on the
-        /// server exactly as the old launcher's Delete left it. The spare is
-        /// never forgotten this way; it was never a character.
+        /// Forget a character: the site takes it off the account and never
+        /// mints or lets it be picked again; the character itself stays on the
+        /// server. Throws with the site's words when it could not.
         /// </summary>
         public static void Forget(int profileId)
         {
             if (profileId <= 0) return;
-            List<Row> rows = Rows();
-            Row r = FindId(rows, profileId);
-            // A dead character (DeadSlot) can be forgotten too; the spare never.
-            if (r == null || (r.Slot <= 0 && r.Slot != DeadSlot)) return;
-            rows.Remove(r);
-            Save(rows);
-            Retire(profileId);
+            string said;
+            Ask("forget", profileId, 0, out said);
         }
 
         /// <summary>The id played most recently, or 0 when nothing has been.</summary>
@@ -515,65 +257,35 @@ namespace Thornswood
 
         /// <summary>
         /// Every id the site should hear about before the game starts: the
-        /// characters in slot order, then the spare. Discord.Join goes out once
-        /// for each, so the server's door knows all of them before the menu
-        /// has been answered.
+        /// characters in slot order, then the spare. The site already holds
+        /// them all for the account; Discord.Join still goes out for each so
+        /// the door's list is fresh before the menu has been answered.
         /// </summary>
         public static List<int> KnownIds()
         {
             var l = new List<int>();
-            List<Row> rows = Rows();
-            foreach (Row r in Characters(rows)) l.Add(r.Id);
-            Row sp = Find(rows, 0);
-            if (sp != null && sp.Id > 0 && !l.Contains(sp.Id)) l.Add(sp.Id);
+            foreach (Row r in Characters(Rows())) l.Add(r.Id);
+            int sp = SpareId();
+            if (sp > 0 && !l.Contains(sp)) l.Add(sp);
             return l;
         }
 
-        public static Who Read(int slot)
-        {
-            var w = new Who();
-            w.Slot = slot;
-
-            Row row = Find(Rows(), slot);
-            if (row == null) return w;
-            w.ProfileId = row.Id;
-            w.LastPlayed = row.Played;
-            w.PlaySeconds = row.Seconds;
-            // A row that has been played has a character on the server even
-            // when there is no save file here to read, which is the normal
-            // case after a fresh install or on somebody else's machine. Slot 0
-            // is the spare and has never been played by definition.
-            if (slot > 0 && row.Played != DateTime.MinValue) w.Empty = false;
-            return w;
-        }
-
         /// <summary>
-        /// Add a finished session to a character's total.
+        /// Add a finished stretch of play to a character's total, on the site.
         ///
-        /// Counted here rather than read out of the save, because under SkyMP
-        /// the character lives on the server and there is frequently no save on
-        /// this machine at all. Anything under a minute is dropped: a launch
-        /// that crashed on the way in is not play time, and the crash log folder
-        /// says there have been a few of those.
-        ///
-        /// By profile id since 20 September, because the id is what the menu
-        /// hands back; the slot number is only this file's own line number.
+        /// Counted by the launcher rather than read out of a save, because
+        /// under SkyMP there is no save of the character here at all. Anything
+        /// under a minute, or over a day, the site does not count (a launch
+        /// that crashed on the way in, a clock change). By profile id, because
+        /// the id is what the menu hands back. Call it off the window's thread.
         /// </summary>
         public static void AddPlaytime(int profileId, TimeSpan span)
         {
             if (profileId <= 0) return;
             long secs = (long)span.TotalSeconds;
-            if (secs < 60) return;
-            // A session longer than a day is a clock change or a launcher left
-            // open over a reboot, not somebody playing.
-            if (secs > 86400) return;
-
-            List<Row> rows = Rows();
-            Row r = FindId(rows, profileId);
-            if (r == null) return;
-            r.Seconds += secs;
-            r.Played = DateTime.Now;
-            Save(rows);
+            if (secs < 60 || secs > 86400) return;
+            string said;
+            Ask("played", profileId, secs, out said);
         }
 
         /// <summary>"3h 12m", or empty when nobody has played long enough to count.</summary>
@@ -612,32 +324,20 @@ namespace Thornswood
 
         /// <summary>
         /// The plugin says who was picked at the menu. Shell calls this once
-        /// for each new id it sees in the choice file while the game runs.
+        /// for each new id it sees in the choice file while the game runs, off
+        /// the window's thread.
         ///
-        /// The spare becomes a played row on the next free slot and a fresh
-        /// spare is minted behind it, so the next New character gets an id the
-        /// server has never seen. A known id has its date moved. An id this
-        /// file has never heard of is written down as a new row, because the
-        /// person is playing it and the next json has to list it.
+        /// The site does the rest: the spare becomes a character on the
+        /// lowest free slot and the next spare is minted behind it, so the next
+        /// New character gets an id the server has never seen; one of the
+        /// account's own has its date moved; anything else is not theirs and
+        /// is refused. Throws with what the site said.
         /// </summary>
         public static void Chose(int profileId)
         {
             if (profileId <= 0) return;
-            List<Row> rows = Rows();
-            Row r = FindId(rows, profileId);
-            // A character staff killed for good is never picked again (#1010).
-            if (r != null && r.Slot == DeadSlot) return;
-            if (r == null)
-            {
-                r = new Row();
-                r.Id = profileId;
-                rows.Add(r);
-            }
-            bool fromSpare = r.Slot <= 0;
-            if (fromSpare) r.Slot = NextSlot(rows);
-            r.Played = DateTime.Now;
-            Save(rows);
-            if (fromSpare) EnsureSpare(rows);
+            string said;
+            Ask("chose", profileId, 0, out said);
         }
 
         /// <summary>
@@ -649,23 +349,23 @@ namespace Thornswood
         ///       {"profileId":0,"slot":1,"name":"","race":"","trade":"","town":"",
         ///        "where":"","played":"","seconds":0,"lastPlayed":""}]}
         ///
-        /// The characters are this file's rows in slot order, and the page
+        /// The characters are the site's list in slot order, and the page
         /// draws each in the slot its number says, fixed, with an empty card
-        /// for every number under the allowance nobody holds (TidySlots has
-        /// run by now, so a number above the allowance means there was no
-        /// room under it). The name, race, trade, town and where come from
+        /// for every number under the allowance nobody holds (the site has
+        /// tidied the slots, so a number above the allowance means there was
+        /// no room under it). The name, race, trade, town and where come from
         /// the server's roster when it has the character and are empty when
         /// it does not; the played text, the seconds and the date are the
-        /// launcher's own, and slots is how many the menu draws (the site's
+        /// site's count for the account, and slots is how many the menu draws (the site's
         /// answer: two, or three for a Patreon tier or a Gamemaster). Throws
         /// when the file cannot be written, because a menu drawn from a stale
         /// list offers last session's spare and misses whoever was made since.
         /// </summary>
         static void WriteCharacters(Config cfg, List<Row> rows, int last, int spare, int slots)
         {
-            // The roster was refreshed by Prepare, before the dead were moved
-            // out of their slots (BuryDead), so the names are as fresh as the
-            // server can make them.
+            // The roster was refreshed by Prepare, before the site was asked
+            // for the list, so the names are as fresh as the server can make
+            // them.
             string listed = CharactersJson(rows, last, spare, slots);
             try
             {
@@ -815,14 +515,10 @@ namespace Thornswood
         public static void Relist(Config cfg)
         {
             try { Roster.Refresh(cfg); } catch (Exception ex) { Swallow.Note("Chars.Relist, roster", ex); }
-            int slots = 2;
-            try { if (Door.Last != null && Door.Last.Slots > 0) slots = Door.Last.Slots; }
-            catch (Exception ex) { Swallow.Note("Chars.Relist, Door.Last.Slots", ex); }
             lock (listGate)
             {
                 List<Row> rows = Rows();
-                Row sp = Find(rows, 0);
-                try { WriteList(CharactersJson(rows, LastPlayedId(rows), sp != null ? sp.Id : 0, slots)); }
+                try { WriteList(CharactersJson(rows, LastPlayedId(rows), SpareId(), Slots())); }
                 catch (Exception ex) { Swallow.Note("Chars.Relist, write", ex); }
             }
         }
@@ -830,8 +526,13 @@ namespace Thornswood
         /// <summary>The id New character uses now, or 0 when there is none yet.</summary>
         public static int SpareId()
         {
-            Row sp = Find(Rows(), 0);
-            return sp != null ? sp.Id : 0;
+            lock (heldGate) { return spareId; }
+        }
+
+        /// <summary>How many slots the menu draws: the site's answer, two before it has given one.</summary>
+        static int Slots()
+        {
+            lock (heldGate) { return slotCount > 0 ? slotCount : 2; }
         }
 
         /// <summary>ISO 8601 in UTC, or empty for a date that was never set.</summary>
@@ -840,8 +541,8 @@ namespace Thornswood
             if (t == DateTime.MinValue) return "";
             try
             {
-                // Ticks in profiles.txt came from DateTime.Now and lost their
-                // kind on the way through the file, so they are local time.
+                // Ask turns the site's time into local time, the kind
+                // Roster.Gone takes too.
                 return DateTime.SpecifyKind(t, DateTimeKind.Local).ToUniversalTime()
                                .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
             }
@@ -882,9 +583,11 @@ namespace Thornswood
         ///
         /// Returns a line for the log when the save folder could not be
         /// pointed and the plain one is in use instead, otherwise null. Throws
-        /// when the client settings or the character list could not be
-        /// written, and Play stops on that: a settings file still saying
-        /// connect as the last id would walk past the menu as that character.
+        /// when the site could not hand over the account's characters, or the
+        /// client settings or the character list could not be written, and
+        /// Play stops on that: a menu without the account's characters offers
+        /// only New character, and a settings file still saying connect as the
+        /// last id would walk past the menu as that character.
         ///
         /// The save folder half used to throw too, and Play stopped, with one
         /// line in the log and no reason (a tester on 1.1.36: "Could not point
@@ -894,6 +597,21 @@ namespace Thornswood
         /// </summary>
         public static string Prepare(Config cfg)
         {
+            // The account's characters from the site first, before anything
+            // here is touched: without them the menu would offer only New
+            // character, so Play stops on the site's own words instead (#5938).
+            // The roster before that, so the names are as fresh as the server
+            // can make them; its own two and a half second timeout, and a
+            // server that does not answer costs the names and nothing else.
+            try { Roster.Refresh(cfg); } catch (Exception ex) { Swallow.Note("Chars.Prepare, roster", ex); }
+            string fetched;
+            try { Ask("", 0, 0, out fetched); }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message.TrimEnd('.') + ". Your characters are kept with your Discord account on " +
+                                    "thornswood.net, so the game was not started without them.");
+            }
+
             Directory.CreateDirectory(Home);
             Directory.CreateDirectory(SavesDir);
 
@@ -964,38 +682,7 @@ namespace Thornswood
             // offer first. SetChooseAtMenu reads the file back and throws when
             // it does not say what was written, which is what stops Play.
             List<Row> rows = Rows();
-
-            // The roster first, so the names are as fresh as the server can
-            // make them and a character staff killed for good (#1010) leaves
-            // its slot before the id played last is chosen or the slots are
-            // tidied. Its own two and a half second timeout, and a server that
-            // does not answer costs the names and nothing else.
-            try { Roster.Refresh(cfg); } catch (Exception ex) { Swallow.Note("Chars.Prepare, roster", ex); }
-            string buried = null;
-            try { buried = BuryDead(rows); } catch (Exception ex) { Swallow.Note("Chars.Prepare, dead", ex); }
-            // And one an admin brought back from a PK made by mistake goes back
-            // into a free slot, before the slots are tidied (#1010).
-            string raised = null;
-            try { raised = RaiseRevived(rows); } catch (Exception ex) { Swallow.Note("Chars.Prepare, revived", ex); }
-
-            Row oldSpare = Find(rows, 0);
-            int spareBefore = oldSpare != null ? oldSpare.Id : 0;
-            string ownerBefore = oldSpare != null ? oldSpare.Owner : "";
-            int spare = EnsureSpare(rows);
-            // A line for the log when the spare was replaced, so launcher.log
-            // says whose it was and a relinked install can be read afterwards.
-            string reminted = null;
-            if (spareBefore > 0 && spare != spareBefore)
-            {
-                string now = "";
-                try { now = Discord.AccountId ?? ""; } catch { now = ""; }
-                reminted = "New character's id " + spareBefore +
-                           (ownerBefore.Length == 0
-                               ? " was made before the launcher wrote down which Discord account it was for"
-                               : " was made under Discord " + ownerBefore) +
-                           ", and this copy is linked to Discord " + now +
-                           ", so it was retired and New character uses " + spare + " instead.";
-            }
+            int spare = SpareId();
             int last = LastPlayedId(rows);
             int point = last > 0 ? last : spare;
             AutoJoin.SetChooseAtMenu(point);
@@ -1009,28 +696,8 @@ namespace Thornswood
             // Shell hands voice the chosen id again once the menu answers.
             Voice.Reconfigure(point);
 
-            // How many slots the menu draws: the site's answer from the door
-            // check a moment ago, two when it said nothing.
-            int slots = 2;
-            bool answered = false;
-            try
-            {
-                if (Door.Last != null && Door.Last.Slots > 0) { slots = Door.Last.Slots; answered = true; }
-            }
-            catch (Exception ex) { Swallow.Note("Chars.Prepare, Door.Last.Slots", ex); }
-
-            // A character numbered above that allowance comes down into a
-            // free number under it before the list goes out, so the menu
-            // does not draw it past the fixed slots when there is room. Only
-            // on the site's own answer: the two the launcher falls back on
-            // when the site said nothing is a guess, and a three slot
-            // account's third character must not be moved on a guess during
-            // an outage. The menu still draws it, after the fixed slots.
-            string tidied = null;
-            if (answered)
-            {
-                try { tidied = TidySlots(rows, slots); } catch { tidied = null; }
-            }
+            // How many slots the menu draws: the site's answer with the list.
+            int slots = Slots();
             WriteCharacters(cfg, rows, last, spare, slots);
 
             // A choice or a forget left over from the last session would be
@@ -1039,12 +706,10 @@ namespace Thornswood
             try { if (File.Exists(ForgetFile)) File.Delete(ForgetFile); } catch (Exception ex) { Swallow.Note("Chars.Prepare, delete leftover forget", ex); }
 
             if (setAside != null) note = (note == null ? "" : note + " ") + setAside;
-            // Shell logs the note; its Log is its own, so the tidy's line
-            // rides along here rather than being written from this class.
-            if (tidied != null) note = (note == null ? "" : note + " ") + tidied;
-            if (buried != null) note = (note == null ? "" : note + " ") + buried;
-            if (raised != null) note = (note == null ? "" : note + " ") + raised;
-            if (reminted != null) note = (note == null ? "" : note + " ") + reminted;
+            // Shell logs the note; its Log is its own, so what the site said
+            // about the list (the dead, a PK undone, the slots tidied) rides
+            // along here rather than being written from this class.
+            if (fetched != null) note = (note == null ? "" : note + " ") + fetched;
             return note;
         }
 

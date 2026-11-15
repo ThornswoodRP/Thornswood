@@ -3,8 +3,9 @@
 // All beds are sleepable (#839).
 //
 // Vanilla Owned beds refuse Sleep/Wait. Under SkyMP that ownership has no
-// host, so the front clears it on a bed press and re-activates, and when
-// somebody lies down it tells the server /rest bed for exhaustion recovery,
+// host, so the front clears it when a bed loads (#4583: at the press was a
+// frame too late), and when somebody lies down it tells the server /rest bed
+// for exhaustion recovery,
 // and /rest sit at any other furniture, which the server sorts (#1603).
 //
 //   node game/tests/test-beds-sleepable.js
@@ -30,8 +31,9 @@ yes('front lists bed keywords', /FurnitureBedDouble/.test(front) && /FurnitureBe
 yes('front has isBedRef', /function isBedRef\(ref\)/.test(front));
 yes('front has clearBedOwnership', /function clearBedOwnership\(ref\)/.test(front));
 yes('front clears actor and faction owners', /setActorOwner\(null\)/.test(front) && /setFactionOwner\(null\)/.test(front));
-yes('front handles furniture type 40 on activate', /type === 40/.test(front) && /Clear Owned so Sleep\/Wait works/.test(front));
-yes('front re-activates after clearing owned beds', /cleared ownership on/.test(front) && /activate\(pc, false\)/.test(front));
+yes('front clears a bed\'s owner when it loads, not at the press (#4583)',
+    /sp\.on\('objectLoaded', guard\('bed owner'/.test(front) && /if \(type === 40\) \{ return; \}/.test(front));
+yes('front never presses a bed a second time (#4583)', !/cleared ownership on/.test(front));
 yes('front watches furnitureEnter: a bed is /rest bed, any other furniture /rest sit (#1603)',
     /furnitureEnter/.test(front) && /tellServer\(bed \? '\/rest bed' : '\/rest sit'\)/.test(front));
 yes('front watches furnitureExit to stop rest', /furnitureExit/.test(front) && /tellServer\('\/rest up'\)/.test(front));

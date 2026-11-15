@@ -1,6 +1,5 @@
 param([string]$Scratch)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')  # C# 5 against the .NET Framework, through the .NET SDK the launcher builds with (#498, #4823)
 $repo=Split-Path -Parent $PSScriptRoot
 if(-not $Scratch){$Scratch=Join-Path ([IO.Path]::GetTempPath()) ('thornswood-vortex-state-'+[guid]::NewGuid().ToString('N'))}
 New-Item -ItemType Directory -Path $Scratch -Force | Out-Null
@@ -44,14 +43,7 @@ try {
     $locked=Join-Path $Scratch 'compressed\Vortex\state.v2\MANIFEST-000002'
     $handle=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try{Check 'compressed' $null 'Thornswood' $true}finally{$handle.Dispose()}
-    # Compile the same helper at C# 5 against the .NET Framework as well:
-    # scripts\mods\LoadOrder.ps1 loads this file with Add-Type, which in
-    # Windows PowerShell is the .NET Framework compiler and stops at C# 5
-    # (docs/guide/settled-design.md). The .NET SDK the launcher builds
-    # with fetches the Framework's reference assemblies on any machine, so
-    # this runs everywhere (#4823). Build-FrameworkCode throws with what the
-    # compiler said when it refuses the file.
-    $null=Build-FrameworkCode -File ([IO.Path]::Combine($repo,'launcher','app','VortexProfileState.cs')) -Reference System.Xml
-    Write-Host 'PASS framework compilation: VortexProfileState.cs at C# 5 against the .NET Framework'
-    Write-Host ($count.ToString()+' profile cases and framework compilation passed')
+    # The cases above loaded VortexProfileState.cs through LoadOrder.ps1's
+    # own Add-Type in this pwsh, as Deploy-Gamemode and Ship load it (#5968).
+    Write-Host ($count.ToString()+' profile cases passed, with the file loaded by LoadOrder.ps1''s Add-Type')
 } finally {$env:APPDATA=$oldAppData}

@@ -99,8 +99,8 @@
 
 .PARAMETER Notes
   What customers read about this release: the launcher's News tab, the site
-  and #news for a main release, the dev launcher's News tab and the dev
-  updates channel for a dev release. Mandatory, and the only option taken by
+  and #news for a main release, the dev launcher's News tab and
+  #staff-news for a dev release. Mandatory, and the only option taken by
   position, so it can come first without its name. The first line is the
   title, a line starting with a dash becomes a bullet, and the rest becomes
   the body. The server's warning before the restart carries the title only.
@@ -1127,7 +1127,7 @@ if ($published -ne 0 -and $published -ne 2) {
 if ($published -eq 2) {
     Head 'Done'
     Say 'Nothing was released. The build already matches the last release.' 'Yellow'
-    Say ('  No news entry was added, ' + $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+    Say ('  No news entry was added, ' + $(if ($Dev) { '#staff-news' } else { '#news' }) +
          ' was not posted to, and no server was told.') 'Yellow'
     $devMarks = $global:ThornswoodDevMarks
     if (-not $Dev) {
@@ -1254,7 +1254,7 @@ if (-not $DryRun) {
 # was set up, the script worked, and #news sat empty through every release.
 # It exits quietly on its own if no webhook is configured, so there is nothing
 # to guard here.
-# A dev release goes to the dev updates channel and nowhere else. Not #news,
+# A dev release goes to #staff-news and nowhere else. Not #news,
 # not the website (which reads main's feed only), and not the main
 # launcher, which reads main's feed. The dev launcher's News tab gets it from
 # the dev feed, as it always did; this is so the people testing it are told
@@ -1273,7 +1273,7 @@ if (-not $DryRun) {
         }
     } else {
         Say ('  Publish-Discord.ps1 is missing, ' +
-             $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+             $(if ($Dev) { '#staff-news' } else { '#news' }) +
              ' was not told.') 'Yellow'
     }
 }
@@ -1404,7 +1404,7 @@ Head 'Done'
 # do not know it. Said here because this is the screen that gets looked at.
 if ($global:ThornswoodDiscordResult -eq 'failed') {
     Say ('The release went out, but ' +
-         $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+         $(if ($Dev) { '#staff-news' } else { '#news' }) +
          ' was NOT told.') 'Yellow'
     Say ('  .\scripts\ops\Publish-Discord.ps1' + $(if ($Dev) { ' -Dev' } else { '' }) +
          '   posts it on its own') 'Yellow'

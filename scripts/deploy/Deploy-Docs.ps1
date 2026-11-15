@@ -787,7 +787,7 @@ if (-not `$node) { 'NODE NOT FOUND ON THIS MACHINE'; return }
 # site and for Caddy, while the build runners, the bot and lsass ran Normal,
 # 2 and 5. Low I/O priority is what held the game server's reads back
 # (#1931, Install-ThornswoodServer.ps1). 4 gives I/O priority 2 and memory
-# priority 5 as well. tests\test-service-task-priority.ps1 measures all three.
+# priority 5 as well. scripts\tests\test-service-task-priority.ps1 measures all three.
 `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries ``
       -DontStopIfGoingOnBatteries -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1) ``
       -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -Priority 4

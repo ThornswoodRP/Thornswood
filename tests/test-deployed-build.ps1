@@ -31,13 +31,22 @@ function Invoke-ThornswoodArtifactRemote([string]$Target, [string[]]$SshArgs, [s
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-deployed-build-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $node = $null
-function Wait-OwnLine($proc, $err, [string]$mark, [int]$port, [string]$what) {
+# The child is started on port 0, so the system hands it a free port as it
+# listens, and it says which on its output (#6136). A port taken from the
+# system and let go before the child bound it could be taken by another run
+# in between (#1727, #1755). Nothing asks the port anything until the child
+# itself has said it is listening, and $port gets the port it said. A child
+# that closes its output first has stopped. $err is the task already
+# draining the child's errors. Answers '' once the line has come, otherwise
+# why it did not.
+function Wait-OwnLine($proc, $err, [string]$mark, [ref]$port, [string]$what) {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     $seen = New-Object 'System.Collections.Generic.List[string]'
+    $line = '^' + [regex]::Escape($mark) + ' listening on \S+:(\d+)$'
     while ($true) {
         $left = [int][Math]::Max(0, ($deadline - [DateTime]::UtcNow).TotalMilliseconds)
         $read = $proc.StandardOutput.ReadLineAsync()
-        if (-not $read.Wait($left)) { return ('{0} did not say it was listening on port {1} within 20 seconds' -f $what, $port) }
+        if (-not $read.Wait($left)) { return ('{0} did not say it was listening within 20 seconds: {1}' -f $what, ($seen -join ' ')) }
         $got = $read.Result
         if ($null -eq $got) {
             [void]$proc.WaitForExit(5000)
@@ -45,13 +54,12 @@ function Wait-OwnLine($proc, $err, [string]$mark, [int]$port, [string]$what) {
             if ($err.Wait(5000)) { $said = ([string]$err.Result).Trim() }
             $code = '?'
             if ($proc.HasExited) { $code = $proc.ExitCode }
-            if ($said -match 'EADDRINUSE') {
-                return ('something else already holds port {0}, so {1} stopped (exit {2}) before it was listening' -f $port, $what, $code)
-            }
             return ('{0} stopped (exit {1}) before it was listening: {2} {3}' -f $what, $code, ($seen -join ' '), $said)
         }
         $seen.Add($got)
-        if ($got.StartsWith($mark + ' listening on ') -and $got.EndsWith(':' + $port)) {
+        $m = [regex]::Match($got, $line)
+        if ($m.Success -and [int]$m.Groups[1].Value -gt 0) {
+            $port.Value = [int]$m.Groups[1].Value
             # Drained from here on, so a chatty child never blocks on a full pipe.
             $null = $proc.StandardOutput.ReadToEndAsync()
             return ''
@@ -186,17 +194,17 @@ try {
   Get-ChildItem -LiteralPath (Join-Path $app 'public') -File | Where-Object { $_.Name -eq 'home.html' -or $_.Name -like 'marked-*.js' } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $docs 'public') }
   Copy-Item -LiteralPath (Join-Path $app 'data\site\credits.md') -Destination (Join-Path $docs 'data\site')
-  $l = New-Object Net.Sockets.TcpListener ([Net.IPAddress]::Loopback, 0); $l.Start(); $port = $l.LocalEndpoint.Port; $l.Stop()
+  $port = 0
   $psi = New-Object Diagnostics.ProcessStartInfo
   $psi.FileName = (Get-Command node).Source; $psi.Arguments = 'server.js'; $psi.WorkingDirectory = $docs
   $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-  $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = "$port"
+  $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = '0'
   $psi.EnvironmentVariables['THORNSWOOD_GITHUB_API'] = 'http://127.0.0.1:1'
   $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
   $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $docs 'chat')
   $node = [Diagnostics.Process]::Start($psi)
   $err = $node.StandardError.ReadToEndAsync()
-  $said = Wait-OwnLine $node $err '[thornswood-docs]' $port 'the site'
+  $said = Wait-OwnLine $node $err '[thornswood-docs]' ([ref]$port) 'the site'
   Yes 'the site says it is listening on its port' ($said -eq '')
   function Credits { if ($said -ne '') { return $null }; try { return (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$port/credits" -TimeoutSec 10).Content } catch { return $null } }
   $body = Credits

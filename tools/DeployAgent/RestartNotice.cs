@@ -7,7 +7,7 @@ namespace Thornswood.DeployAgent;
 /// server (#5784): the restart's id, its state, when the server goes down and
 /// why, in &lt;store&gt;\for-bot\restart-&lt;environment&gt;.json, the folder
 /// the release news uses (News.cs). The bot posts each id's "coming" in
-/// #updates (dev's in the dev updates channel) and its "back" or "down" when
+/// #updates (dev's in #staff-updates) and its "back" or "down" when
 /// that follows; bot\bot_restarts.py reads it.
 ///
 /// Until 11 Nov 2026 nothing that restarted a game server said so in

@@ -116,7 +116,7 @@ if ($Show) {
 # here uses: the command line when the script fits, otherwise scp to a copy
 # its run deletes before it runs (#3027, #3059), and the far side's exit
 # code handed back. Why a long script cannot go on the command line is in its
-# header; tests\test-remote-big-script.ps1 sends a 10 KB script through it.
+# header; scripts\tests\test-remote-big-script.ps1 sends a 10 KB script through it.
 #
 # With a secret, Send-Secret.ps1 sends it: the value on standard input, the
 # script the same way as without one.
@@ -129,10 +129,8 @@ if ($PSBoundParameters.ContainsKey('Secret')) {
     exit $LASTEXITCODE
 }
 
-# Everything runs in PowerShell 7 on the box, as its own tasks do (#5356),
-# except Bootstrap-VPS.ps1: it is what puts PowerShell 7 on a new box, so it
-# runs in the Windows PowerShell Windows Server comes with, the only one there
-# until it has run.
-$newBox = ($PSCmdlet.ParameterSetName -eq 'File') -and ((Split-Path -Leaf $File) -eq 'Bootstrap-VPS.ps1')
-Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full -NewBox:$newBox
+# Everything runs in PowerShell 7 on the box, as its own tasks do, a new
+# box's Bootstrap-VPS.ps1 included: Setup-SshKey.ps1 -NewBox puts pwsh there
+# before anything else runs (#5356).
+Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full
 exit $LASTEXITCODE

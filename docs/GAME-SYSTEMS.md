@@ -12,6 +12,16 @@ them.
 The item lists sit in [systems/lists](systems/lists/README.md). They are
 generated from the recipe, harvest, ore and hunt tables.
 
+## Contents
+
+- [Buttons, not commands](#buttons-not-commands)
+- [A person arrives](#a-person-arrives)
+- [The body](#the-body)
+- [Work](#work)
+- [Law, magic, and who is standing there](#law-magic-and-who-is-standing-there)
+- [Holds, coin and the road](#holds-coin-and-the-road)
+- [Where a number comes from](#where-a-number-comes-from)
+
 ## Buttons, not commands
 
 Decided by Patrick on 4 Oct: "can we stop with the commands, I want
@@ -278,6 +288,10 @@ it is rare.
 [Notice boards](systems/noticeboards.md). One board a hold. 20 gold for a
 notice, 30 for a job. A letter costs the board fee plus 15 for the
 courier, paid by the sender. The newest ten show.
+
+[Contracts](systems/contracts.md). Two people write their own terms and
+both sign. The signed contract is kept, and only the two of them and staff
+can read it. Nothing moves with it: people keep the terms.
 
 [Merchant's Guild](systems/merchants-guild.md). The merchant NPCs of a hold.
 People cannot join it. Traders start with 250 and buy and
