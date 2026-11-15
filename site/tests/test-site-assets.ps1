@@ -78,24 +78,22 @@ function Write-Feed([string]$path, $doc) {
     [IO.File]::WriteAllText($path, ($doc | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
 }
 function Read-Feed([string]$path) { return ((Get-Content -LiteralPath $path -Raw) -replace ('^' + [char]0xFEFF), '') | ConvertFrom-Json }
-function Free-Port {
-    $l = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
-    $l.Start(); $p = $l.LocalEndpoint.Port; $l.Stop(); return $p
-}
-# The port came from the system and was let go, so another run beside this one
-# can take it before the child binds it, the fault #1727 fixed in the .js
-# harnesses (#1755). Nothing asks the port anything until the child itself has
-# said on its output that it is listening there. A child that closes its output
-# first has stopped, and EADDRINUSE on its errors means something else holds
-# the port. $err is the task already draining the child's errors. Answers ''
-# once the line has come, otherwise why it did not.
-function Wait-OwnLine($proc, $err, [string]$mark, [int]$port, [string]$what) {
+# The child is started on port 0, so the system hands it a free port as it
+# listens, and it says which on its output (#6136). A port taken from the
+# system and let go before the child bound it could be taken by another run
+# in between (#1727, #1755). Nothing asks the port anything until the child
+# itself has said it is listening, and $port gets the port it said. A child
+# that closes its output first has stopped. $err is the task already
+# draining the child's errors. Answers '' once the line has come, otherwise
+# why it did not.
+function Wait-OwnLine($proc, $err, [string]$mark, [ref]$port, [string]$what) {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     $seen = New-Object 'System.Collections.Generic.List[string]'
+    $line = '^' + [regex]::Escape($mark) + ' listening on \S+:(\d+)$'
     while ($true) {
         $left = [int][Math]::Max(0, ($deadline - [DateTime]::UtcNow).TotalMilliseconds)
         $read = $proc.StandardOutput.ReadLineAsync()
-        if (-not $read.Wait($left)) { return ('{0} did not say it was listening on port {1} within 20 seconds' -f $what, $port) }
+        if (-not $read.Wait($left)) { return ('{0} did not say it was listening within 20 seconds: {1}' -f $what, ($seen -join ' ')) }
         $got = $read.Result
         if ($null -eq $got) {
             [void]$proc.WaitForExit(5000)
@@ -103,13 +101,12 @@ function Wait-OwnLine($proc, $err, [string]$mark, [int]$port, [string]$what) {
             if ($err.Wait(5000)) { $said = ([string]$err.Result).Trim() }
             $code = '?'
             if ($proc.HasExited) { $code = $proc.ExitCode }
-            if ($said -match 'EADDRINUSE') {
-                return ('something else already holds port {0}, so {1} stopped (exit {2}) before it was listening' -f $port, $what, $code)
-            }
             return ('{0} stopped (exit {1}) before it was listening: {2} {3}' -f $what, $code, ($seen -join ' '), $said)
         }
         $seen.Add($got)
-        if ($got.StartsWith($mark + ' listening on ') -and $got.EndsWith(':' + $port)) {
+        $m = [regex]::Match($got, $line)
+        if ($m.Success -and [int]$m.Groups[1].Value -gt 0) {
+            $port.Value = [int]$m.Groups[1].Value
             # Drained from here on, so a chatty child never blocks on a full pipe.
             $null = $proc.StandardOutput.ReadToEndAsync()
             return ''
@@ -191,7 +188,7 @@ $procs = @()
 try {
     Copy-SiteProgram -To $siteDir -App (Join-Path $repo 'site')
     $secret = ShaOf ([Text.Encoding]::UTF8.GetBytes([Guid]::NewGuid().ToString()))
-    $sitePort = Free-Port
+    $sitePort = 0
     # The game check knocks on port 1 (#1816). The system never hands that port
     # out for a listen on 0 and no harness listens on a fixed port
     # (test-1703-test-ports.js), so no run beside this one can take it and make
@@ -205,8 +202,8 @@ try {
     $ghJs = Join-Path $work 'gh\gh.js'
     [IO.File]::WriteAllText($ghJs, @'
 const http = require('http'), fs = require('fs'), path = require('path');
-const dir = process.argv[2], port = Number(process.argv[3]), log = process.argv[4];
-http.createServer((req, res) => {
+const dir = process.argv[2], log = process.argv[3];
+const server = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
   fs.appendFileSync(log, req.method + ' ' + u + ' ' + (req.headers.accept || '') + '\n');
   let m = u.match(/^\/dl\/([\w.-]+)$/);
@@ -229,9 +226,10 @@ http.createServer((req, res) => {
     }
   }
   res.writeHead(404); res.end('no');
-}).listen(port, '127.0.0.1', () => console.log('[github] listening on 127.0.0.1:' + port));
+});
+server.listen(0, '127.0.0.1', () => console.log('[github] listening on 127.0.0.1:' + server.address().port));
 '@, (New-Object Text.UTF8Encoding($false)))
-    $ghPort = Free-Port
+    $ghPort = 0
     $ghLog = Join-Path $work 'gh\requests.txt'
     [IO.File]::WriteAllText($ghLog, '')
 
@@ -253,18 +251,18 @@ http.createServer((req, res) => {
         return $p
     }
     $script:errOf = @{}
-    $siteProc = Start-Node $siteDir @('server.js') @{ THORNSWOOD_DOCS_PORT = [string]$sitePort; THORNSWOOD_GITHUB_API = 'http://127.0.0.1:1'; THORNSWOOD_DOCS_LOCAL = '1'; THORNSWOOD_CHAT_DIR = (Join-Path $siteDir 'chat') }
+    $siteProc = Start-Node $siteDir @('server.js') @{ THORNSWOOD_DOCS_PORT = '0'; THORNSWOOD_GITHUB_API = 'http://127.0.0.1:1'; THORNSWOOD_DOCS_LOCAL = '1'; THORNSWOOD_CHAT_DIR = (Join-Path $siteDir 'chat') }
     $procs += $siteProc
-    $ghProc = Start-Node (Split-Path -Parent $ghJs) @($ghJs, $ghDir, [string]$ghPort, $ghLog) @{}
+    $ghProc = Start-Node (Split-Path -Parent $ghJs) @($ghJs, $ghDir, $ghLog) @{}
     $procs += $ghProc
-    $site = "http://127.0.0.1:$sitePort"
-    $ghBase = "http://127.0.0.1:$ghPort"
-    $why = Wait-OwnLine $siteProc $script:errOf[$siteProc.Id] '[thornswood-docs]' $sitePort 'the site'
+    $why = Wait-OwnLine $siteProc $script:errOf[$siteProc.Id] '[thornswood-docs]' ([ref]$sitePort) 'the site'
     Yes 'a scratch copy of the site starts' ($why -eq '')
     if ($why) { Write-Host "      $why" }
-    $why = Wait-OwnLine $ghProc $script:errOf[$ghProc.Id] '[github]' $ghPort 'the GitHub stand-in'
+    $why = Wait-OwnLine $ghProc $script:errOf[$ghProc.Id] '[github]' ([ref]$ghPort) 'the GitHub stand-in'
     Yes 'and so does the GitHub stand-in' ($why -eq '')
     if ($why) { Write-Host "      $why" }
+    $site = "http://127.0.0.1:$sitePort"
+    $ghBase = "http://127.0.0.1:$ghPort"
 
     # ---------------------------------------------------------- the feeds --
     # main: the launcher by the api shape, a pack already on the site, a pack by

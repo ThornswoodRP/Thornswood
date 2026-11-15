@@ -30,7 +30,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const vm = require('vm');
 const crypto = require('crypto');
@@ -99,9 +98,6 @@ function stub() {
 }
 fs.writeFileSync(path.join(dir, 'stub.js'), '(' + stub.toString() + ')();\n');
 
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
 let PORT = 0;
 function ask(where, headers) {
   return new Promise((done) => {
@@ -136,17 +132,6 @@ function begunLongAgo(back) {
   return { state: raw + '.' + sign(raw), cookie: 'twst_' + attempt.slice(0, 8) + '=' + attempt };
 }
 
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const end = (e) => { clearTimeout(late); srv.stdout.removeListener('data', said); srv.removeListener('close', gone); if (e) { bad(e); } else { ok(); } };
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(); } };
-    const gone = (c) => end(new Error('site stopped ' + c + ' before it was listening:\n' + out));
-    const late = setTimeout(() => end(new Error('site did not say it was listening on ' + port + ':\n' + out)), 15000);
-    srv.stdout.on('data', said);
-    srv.on('close', gone);
-  });
-}
 
 /* ------------------------------------------- B. the pages, stood in for -- */
 function anything(name) {
@@ -240,15 +225,15 @@ async function hubAt(pathname, word) {
 }
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['-r', path.join(dir, 'stub.js'), 'server.js'], {
-    cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', TS_STUB_LOG: OUTBOUND })
+    cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', TS_STUB_LOG: OUTBOUND })
   });
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', (d) => { out += d; });
   try {
-    await listening(srv, PORT);
+    await siteFiles.listening(srv).then((r) => (PORT = r.port, r));
 
     console.log('A. WHERE A FAILURE ENDS');
     let r = await cancelAt(await begin('/gallery'));

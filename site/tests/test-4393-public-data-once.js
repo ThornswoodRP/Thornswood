@@ -23,7 +23,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const vm = require('vm');
 const crypto = require('crypto');
@@ -120,12 +119,6 @@ async function asksOn(pathname) {
   return { asked, threw };
 }
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 function get(port, where, headers) {
   return new Promise((done) => {
     http.get({ host: '127.0.0.1', port: port, path: where, headers: headers || {}, agent: false }, (res) => {
@@ -158,16 +151,17 @@ function get(port, where, headers) {
       botKey: crypto.randomBytes(16).toString('hex'), admins: [], secret: crypto.randomBytes(32).toString('hex'),
       gameCheckPort: 1, onlineFile: path.join(dir, 'online.json')
     }));
-    const port = await freePort();
+    let port = 0;
     let out = '';
     srv = spawn(process.execPath, ['server.js'], {
-      cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1',
+      cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_DOCS_LOCAL: '1',
         THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
     });
     srv.stdout.on('data', (d) => { out += d; });
     srv.stderr.on('data', (d) => { out += d; });
-    for (let i = 0; i < 200 && out.indexOf('listening on ') < 0 && srv.exitCode === null; i++) await new Promise((ok) => setTimeout(ok, 50));
-    yes('a copy of the site starts', out.indexOf('listening on ') >= 0, out);
+    for (let i = 0; i < 200 && !siteFiles.saidPort(out) && srv.exitCode === null; i++) await new Promise((ok) => setTimeout(ok, 50));
+    yes('a copy of the site starts', siteFiles.saidPort(out) > 0, out);
+    port = siteFiles.saidPort(out);
 
     const WHERE = '/api/public?galleryLimit=24';
     const first = await get(port, WHERE);

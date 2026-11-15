@@ -39,7 +39,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const vm = require('vm');
 const crypto = require('crypto');
@@ -178,12 +177,6 @@ function ticket(id, name) {
 const TESTER = () => cookieFor(TESTER_ID, 'Tester');
 const TESTER_Q = () => '?ticket=' + encodeURIComponent(ticket(TESTER_ID, 'Tester'));
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 let PORT = 0;
@@ -272,11 +265,11 @@ const answered = (ok, json) => Promise.resolve({ ok: ok, status: ok ? 200 : 404,
   yes('P5 no public page of the site calls alert()', !/\balert\(/.test(HOME));
 
   /* ---- the site ---------------------------------------------------------- */
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['-r', path.join(dir, 'stub.js'), '-r', path.join(dir, 'refuse.js'), 'server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'),
@@ -293,7 +286,7 @@ const answered = (ok, json) => Promise.resolve({ ok: ok, status: ok ? 200 : 404,
   try {
     let up = false;
     for (let i = 0; i < 200 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
+      if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }

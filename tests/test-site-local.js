@@ -52,7 +52,6 @@ const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in test
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -347,16 +346,6 @@ async function until(cond, ms) {
   while (Date.now() < end) { if (cond()) { return true; } await wait(20); }
   return cond();
 }
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', function () {
-      const p = s.address().port;
-      s.close(function () { ok(p); });
-    });
-  });
-}
 const made = [];
 function copy(tag, withConfig, patch) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-site-' + tag + '-'));
@@ -377,22 +366,22 @@ function copy(tag, withConfig, patch) {
   return dir;
 }
 async function start(dir) {
-  const port = await freePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(port),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat')
     })
   });
-  const run = { child: child, port: port, out: '', exited: false };
+  const run = { child: child, port: 0, out: '', exited: false };
   child.stdout.on('data', function (d) { run.out += d; });
   child.stderr.on('data', function (d) { run.out += d; });
   child.on('exit', function () { run.exited = true; });
-  run.up = await until(function () { return run.out.indexOf('listening on ') >= 0 || run.exited; }, 10000) &&
+  run.up = await until(function () { return siteFiles.saidPort(run.out) > 0 || run.exited; }, 10000) &&
            !run.exited;
+  run.port = siteFiles.saidPort(run.out);
   return run;
 }
 function stop(run) {
