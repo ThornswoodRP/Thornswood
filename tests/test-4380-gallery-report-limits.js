@@ -28,7 +28,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -127,14 +126,8 @@ function ticket(id, name) {
 }
 const as = (id, name) => '/api/gallery/report?ticket=' + encodeURIComponent(ticket(id, name));
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
-
+// The port the site's copy says it got: it starts on port 0 and the harness
+// reads the port off its own listening line (siteFiles.listening, #6136).
 let PORT = 0;
 let lane = 0;
 // Each from its own address, so a limit by connection could not be what
@@ -165,11 +158,10 @@ const rows = () => { try { return JSON.parse(fs.readFileSync(REPORTS, 'utf8')); 
 const said = (r) => r.status + ' ' + r.text.slice(0, 300);
 
 (async () => {
-  PORT = await freePort();
   const srv = spawn(process.execPath, ['-r', path.join(dir, 'stub.js'), 'server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'),
@@ -181,13 +173,7 @@ const said = (r) => r.status + ' ' + r.text.slice(0, 300);
   srv.stderr.on('data', (d) => { out += d; });
 
   try {
-    let up = false;
-    for (let i = 0; i < 200 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
-      if (srv.exitCode !== null) break;
-      await wait(50);
-    }
-    if (!up) throw new Error('the scratch site never came up:\n' + out);
+    PORT = (await siteFiles.listening(srv)).port;
 
     // ---- A ------------------------------------------------------------------
     let r = await ask(as(BJORN, 'Bjorn'), { name: 'a-shot.png', why: 'not from the game' });
