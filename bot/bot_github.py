@@ -83,6 +83,11 @@ GITHUB_API = os.environ.get('GITHUB_API', 'https://api.github.com').rstrip('/')
 TASK_MARK = re.compile(r'^\s*test task\s*:\s*(.*)$', re.I)
 KNOWN_MARK = re.compile(r'^\s*known issue\s*:\s*(.*)$', re.I)
 TASK_SERVER = re.compile(r'^\s*server\s*:\s*(dev|main)\s*$', re.I)
+# A check of a test task that was made and passed, by the real game run on
+# One or by hand (#5197): "Checked: passed" as a comment's first line, newer
+# than the test task, takes that test task's post down. "Checked: failed"
+# leaves it up; what failed is a finding of its own.
+CHECK_MARK = re.compile(r'^\s*checked\s*:\s*passed\b', re.I)
 # The one tag a test task from the board carries: testers test on main.
 TASK_TAG = 'Main'
 # The form of the posts each record was made with. 2: test tasks tagged Main
@@ -326,6 +331,25 @@ def github_token_kind(token=None):
 def github_issue(number, get=None):
     get = get or _github_get
     return get('%s/repos/%s/issues/%d' % (GITHUB_API, KNOWN_REPO, int(number)))
+
+
+def issue_deleted(number, get=None):
+    """True when GitHub has no issue #number any more: it was deleted (410)
+       or is not there (404). False when it reads. Any other failure raises,
+       so a pass that cannot read changes nothing.
+
+       A deleted issue is in no list GitHub gives, closed or changed, so a
+       post kept from one is never read again by the passes that walk those
+       lists. Six #dev-test-tasks posts stood for issues deleted weeks before
+       (12 Nov 2026, #5197): known-issues.json still named #385, #410,
+       #1267, #2907, #3022 and #3080, and GitHub answered 410 for each."""
+    try:
+        github_issue(number, get)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 410):
+            return True
+        raise
+    return False
 
 
 def finding_gone(number, get=None):

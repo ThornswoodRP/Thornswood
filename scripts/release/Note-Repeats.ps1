@@ -9,7 +9,7 @@
   duplicate lines from previous launcher and server build updates and not
   only what is new". Measured that morning:
 
-    - The dev updates channel was told "Immersive Armors recipes ask for the
+    - The #staff-news was told "Immersive Armors recipes ask for the
       right things" and its two lines twice: at 9:45 AM by
       Deploy-DevGamemode -Note, and at 9:50 AM by the dev Ship that carried
       the same change to the launcher, with the same note. The run notes in
@@ -160,7 +160,7 @@ function Get-ChannelPosts([string]$Channel, [string]$SiteDir, [string]$SiteUrl =
         if ($got['announced.json'] -and (Test-Path -LiteralPath $f)) {
             $raw = ([IO.File]::ReadAllText($f) -replace "^$([char]0xFEFF)", '') | ConvertFrom-Json
             $p = $raw.PSObject.Properties['posts-' + $key]
-            $where = if ($key -eq 'dev') { 'the dev updates channel' } else { '#news' }
+            $where = if ($key -eq 'dev') { '#staff-news' } else { '#news' }
             if ($null -ne $p) {
                 foreach ($x in @($p.Value)) {
                     if ($null -eq $x) { continue }

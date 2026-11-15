@@ -37,7 +37,7 @@
 //     node Load-Test.js --root <server folder> --out <result.json>
 //         [--steps 10,20,40,60,80,100] [--settle 20] [--hold 60] [--workers 3]
 //         [--shape crowd] [--summary <markdown file>]
-//         [--play fight,host,trade] [--busy 0.6] [--watch <online.json url>,...]
+//         [--play fight,host,trade,quest] [--busy 0.6] [--watch <online.json url>,...]
 //
 // --play is what the bots do besides walking (load-bots.js). --busy is the
 // share of the machine's CPU a step stops at (0.9 on a runner of its own; the
@@ -111,11 +111,11 @@ function startVoice(root, port, site, sampler, sampleFile, log) {
 }
 
 // The server process's private bytes and working set, from outside it, in
-// bytes: Windows only (Get-Process); elsewhere null, and the working set the
-// sampler reads stands alone.
+// bytes: Windows only (Get-Process, in the pwsh 7 every script runs in,
+// #5356); elsewhere null, and the working set the sampler reads stands alone.
 function processMemory(pid) {
   if (process.platform !== 'win32' || !pid) { return null; }
-  const out = childProcess.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  const out = childProcess.execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
     '$p = Get-Process -Id ' + Number(pid) + '; "$($p.PrivateMemorySize64) $($p.WorkingSet64) $($p.PeakWorkingSet64)"'],
   { encoding: 'utf8', windowsHide: true, timeout: 30000 });
   const n = String(out).trim().split(/\s+/).map(Number);
@@ -282,8 +282,9 @@ function child(file, argv, log) {
 }
 
 // What the bots do besides walking (load-bots.js --play): fight, host the
-// NPCs the server hands them, and open the guild traders near them.
-const PLAYS = ['fight', 'host', 'trade'];
+// NPCs the server hands them, open the guild traders near them, and take and
+// leave the traders' work.
+const PLAYS = ['fight', 'host', 'trade', 'quest'];
 
 // The play counts the bots reported over the window, added up.
 function playCounts(reports) {

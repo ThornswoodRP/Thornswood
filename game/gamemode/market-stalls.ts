@@ -6,8 +6,9 @@
   docs/systems/stalls.md.
 
   The book is game/market-stalls.js, bundled just below as MARKET_STALLS_BOOK
-  (scripts/dev/Build-MarketStallsGamemode.js writes it, and the stall table
-  after it; tests/test-3160-market-stalls.js fails when either is stale).
+  (scripts/dev/Build-MarketStallsGamemode.js writes it, and
+  Build-MarketStallTables.js the stall table after it;
+  tests/test-3160-market-stalls.js fails when either is stale).
   This block is the world's side of it: the register on disk, the packs and
   purses a sale moves, who stands where, the panel, and the hold's drop box
   that takes what was on a stall whose keeping ended.

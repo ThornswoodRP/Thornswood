@@ -1,23 +1,26 @@
 <#
   Renew-BoxKey.ps1
 
-  Gives one of the two keys a workflow of the ops repository holds a new key
-  pair, on the box, and puts the new private half straight into that
-  workflow's GitHub environment (#2862, Patrick's A on the report page's
+  Gives the desk key, the one key a workflow of the ops repository holds, a
+  new key pair, on the box, and puts the new private half straight into
+  box-run.yml's GitHub environment (#2862, Patrick's A on the report page's
   q-retire-box-keys, 31 Oct 2026: box keys are renewed from the cloud, never
   made new, and never from One). The deploy gate's verb Renew-BoxKey runs it,
   as SYSTEM, so a cloud session renews a key with
 
       pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which desk      the desk key: box-run.yml's DESK_KEY_B64
-      pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which notices   the notices key: staff-notice.yml's NOTICE_KEY_B64
 
   Until now only Grant-BoxAccess.ps1 -MakeKey -ToEnvironment on One did it.
+  The notices key, staff-notice.yml's NOTICE_KEY_B64, was the other until
+  15 Nov 2026: a cloud thread files a staff notice as an issue the bot says
+  (#5187). This verb's -Retire read the key's line off the box and its
+  secret gone from GitHub (gate run of 15 Nov 2026, 12:58 PM), and #5314
+  took the kind and -Retire away.
 
-  RENEW ONLY. Each -Which is one key the box already holds, fixed here: its
-  name, the file its line is in, the environment and secret it goes into.
-  The new line takes the old line's options word for word (from="127.0.0.1",
-  restrict, and the forced command: the deploy gate for desk, say-staff.ps1
-  as claude for notices), but for the forced command's program, which is
+  RENEW ONLY. -Which desk is the one key, fixed here: its name, the file its
+  line is in, the environment and secret it goes into. The new line takes
+  the old line's options word for word (from="127.0.0.1", restrict, and the
+  deploy gate as its forced command), but for the forced command's program, which is
   pwsh since #5356 where an older line named powershell.exe. The run stops,
   changing nothing, when there is no such line or its options are not
   those. No new name, person, file or
@@ -35,15 +38,15 @@
     2. a new ed25519 pair, and its line put on BESIDE the old one.
     3. a new login with it, from this box to its own sshd on 127.0.0.1, its
        host key held to scripts\vps\vps.json's pins. The forced command has
-       to answer as itself and must not run the command asked for: say-staff
-       says READY to an empty input; the gate's Gate.ps1 says the broker did
+       to answer as itself and must not run the command asked for: the
+       gate's Gate.ps1 says the broker did
        not answer, because the broker is busy running this very verb (or
        GATE READY, were it free). sshd refusing the key ends it here.
     4. the new private half into the secret, with gh and that token.
     5. only then the old line comes off, and the file is read back.
   A failure before 5 puts the key file back byte for byte, so the old key
   works as before and the secret is unchanged (a failure in 4 means GitHub
-  refused it). The next box-run.yml or staff-notice.yml run is the proof
+  refused it). The next box-run.yml run is the proof
   that the secret holds the new key; before it, nothing else holds it.
 
   It stops when the put back of a Grant-BoxAccess.ps1 run is still armed
@@ -54,7 +57,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('desk', 'notices')][string]$Which,
+    [Parameter(Mandatory = $true)][ValidateSet('desk')][string]$Which,
     [string]$AdminState = 'C:\Thornswood-Admin\state',
     [switch]$NoPause
 )
@@ -70,19 +73,17 @@ function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
 function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; exit 1 }
 
-# Each key this can renew, and all it can renew. Where it goes on GitHub is
+# The key this can renew, and all it can renew. Where it goes on GitHub is
 # fixed here, never said by the caller.
 $GitHubRepo = 'ThornswoodRP/Thornswood-Ops'
 $Kinds = @{
-    desk    = @{ Name = 'desk'; Environment = 'desk'; Secret = 'DESK_KEY_B64'; User = 'thornswood-deploy'; Gate = $true;
+    desk    = @{ Name = 'desk'; Environment = 'desk'; Secret = 'DESK_KEY_B64'; User = 'thornswood-deploy';
                  Proved = '^(@REFUSED the gate broker did not answer|\| GATE READY)' }
-    notices = @{ Name = 'claude'; Environment = 'notices'; Secret = 'NOTICE_KEY_B64'; User = ''; Gate = $false;
-                 Proved = '^READY$' }
 }
 $K = $Kinds[$Which]
 $PutBack = 'Thornswood box access put back'
 
-if ($env:THORNSWOOD_GATE -ne '1') { Die 'this runs on the box through the deploy gate: pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which desk (or notices). Nothing was changed.' }
+if ($env:THORNSWOOD_GATE -ne '1') { Die 'this runs on the box through the deploy gate: pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which desk. Nothing was changed.' }
 if (Get-ScheduledTask -TaskName $PutBack -ErrorAction SilentlyContinue) { Die "the put back of a Grant-BoxAccess.ps1 run is still armed ('$PutBack'), and it would put an older key file back over this change. Run this again once it has run or been cancelled. Nothing was changed." }
 # The OpenSSH client the gate itself found (Install-Gate.ps1), and its ssh-keygen beside it.
 $ssh = @(@((Get-Command ssh.exe -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })) + @((Join-Path $env:SystemRoot 'System32\OpenSSH\ssh.exe')) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }) | Select-Object -First 1
@@ -93,16 +94,10 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'gh is not on the
 
 # ------------------------------------------------------------ the old line --
 $pinned = Get-ThornswoodVpsCommitted
-if ($K.Gate) {
-    $gu = Get-LocalUser -Name $K.User -ErrorAction SilentlyContinue
-    $pl = if ($gu) { 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $gu.SID.Value } else { '' }
-    if (-not $pl -or -not (Test-Path -LiteralPath $pl)) { Die ('there is no account ' + $K.User + ' with a profile on the box. Nothing was changed.') }
-    $KeysFile = Join-Path (Get-ItemProperty -LiteralPath $pl).ProfileImagePath '.ssh\authorized_keys'
-} else {
-    $KeysFile = 'C:\ProgramData\ssh\administrators_authorized_keys'
-    $K.User = [string]$pinned.user
-    if (-not $K.User) { $K.User = 'Administrator' }
-}
+$gu = Get-LocalUser -Name $K.User -ErrorAction SilentlyContinue
+$pl = if ($gu) { 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $gu.SID.Value } else { '' }
+if (-not $pl -or -not (Test-Path -LiteralPath $pl)) { Die ('there is no account ' + $K.User + ' with a profile on the box. Nothing was changed.') }
+$KeysFile = Join-Path (Get-ItemProperty -LiteralPath $pl).ProfileImagePath '.ssh\authorized_keys'
 if (-not (Test-Path -LiteralPath $KeysFile)) { Die "$KeysFile is not there, so there is no key to renew. Nothing was changed." }
 $tag = ' thornswood-' + $K.Name
 $have = @([IO.File]::ReadAllLines($KeysFile) | Where-Object { $_.Trim() })
@@ -124,7 +119,7 @@ $opts = [string]$opts[0]
 # made before then starts Windows PowerShell, and its renewed line starts
 # pwsh with the same arguments. The login below proves pwsh runs it.
 $opts = $opts -replace '(^|,)command="powershell\.exe ', '$1command="pwsh '
-$wantCommand = if ($K.Gate) { 'command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"' } else { 'command="[^"]*\\say-staff\.ps1 -From ' + $K.Name + '"' }
+$wantCommand = 'command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"'
 foreach ($need in '(^|,)from="127\.0\.0\.1"(,|$)', '(^|,)restrict(,|$)', ('(^|,)' + $wantCommand + '(,|$)')) {
     if ($opts -notmatch $need) { Die ("the line for thornswood-" + $K.Name + " lacks what it must hold (from=""127.0.0.1"", restrict and its forced command), so a key renewed from it could do more than the old one. Nothing was changed.") }
 }
@@ -195,7 +190,7 @@ try {
         $proof | Select-Object -Last 5 | ForEach-Object { Say "  $_" 'DarkGray' }
         Die 'sshd did not take the new key and run its forced command (the lines above say what it said). The key file is put back as it was; nothing else changed.'
     }
-    Say ('  sshd took it and ran ' + $(if ($K.Gate) { 'the gate''s Gate.ps1' } else { 'say-staff.ps1' }) + ' and nothing else') 'Green'
+    Say '  sshd took it and ran the gate''s Gate.ps1 and nothing else' 'Green'
 
     # ---------------------------------------------------------- the secret --
     Head "The new key into $($K.Secret)"
@@ -215,7 +210,7 @@ try {
     if ($now.Count -ne 1 -or $now[0] -ne $newLine) { Die ("$KeysFile does not read back with the new line alone for thornswood-" + $K.Name + '. The secret holds the new key; Grant-BoxAccess.ps1 -List shows what is there.') }
     Say ('  ' + $old.Count + ' old line(s) off; thornswood-' + $K.Name + " is $newPrint alone") 'Green'
     Say ''
-    Say ("  The next $(if ($K.Gate) { 'box-run.yml' } else { 'staff-notice.yml' }) run uses the new key, and is the proof the secret holds it.") 'White'
+    Say '  The next box-run.yml run uses the new key, and is the proof the secret holds it.' 'White'
 }
 finally {
     if ($changed -and -not $done) { [IO.File]::WriteAllBytes($KeysFile, $before) }

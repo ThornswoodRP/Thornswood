@@ -1,6 +1,6 @@
 /*
   thread-clock.c: the CPU time of the calling thread, to the cycle, for the
-  NPC native acceptance run (tests/test-npc-shared-native.js, issue #2032).
+  NPC native acceptance run (game/tests/test-npc-shared-native.js, issue #2032).
 
   Node's process.threadCpuUsage reads GetThreadTimes, which Windows charges
   by the clock interrupt, in steps of 15.6 ms, so a callback reading 47 ms
