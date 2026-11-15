@@ -2903,12 +2903,22 @@
     clearBedsIn(e.cell);
   }));
 
-  guard('bed owners at start', () => {
+  /*
+    ON THE FIRST FRAME, NOT AS THE PLUGIN LOADS. Skyrim Platform answers a
+    game call made while a plugin file is still being run with "can't be
+    called in this context": game calls belong to the game's own thread,
+    which runs the update handlers. So this walk used to throw on every PC
+    at every start ("bed owners at start threw: Error:
+    'ObjectReference.getParentCell' can't be called in this context", two
+    PCs on 15 Nov 2026) and the beds already in the person's cell kept
+    their owners. sp.once runs it once, on the first update.
+  */
+  sp.once('update', guard('bed owners at start', () => {
     const pc = sp.Game.getPlayer();
     if (!pc) { return; }
     const cleared = clearBedsIn(pc.getParentCell());
     if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
-  })();
+  }));
 
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared

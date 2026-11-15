@@ -89,7 +89,7 @@ function copy(v) { return v === undefined ? undefined : JSON.parse(JSON.stringif
 // The rates and the time-away row are read out of the needs block, not copied.
 const drainM = /drain: \{ food: ([0-9.]+) \* 100 \/ ([0-9.]+), drink: ([0-9.]+) \* 100 \/ ([0-9.]+), rest:/.exec(gm);
 const upM = /\n\s+up: +\{ drain: ([0-9.]+), floor: ([0-9.]+), rest: 0, food: 0, drink: 0 \}/.exec(gm);
-const profM = /notify\(actorId, 'Your profession: ' \+ prof\.name/.test(gm);
+const profM = /const line = 'Your profession: ' \+ prof\.name[\s\S]{0,160}notify\(actorId, line\);\s+say\(actorId, line\);/.test(gm);
 yes('P0 the needs block\'s clock and its time away on your feet, and the login\'s profession line, are where ' +
     'this reads them', !!drainM && !!upM && profM);
 if (!drainM || !upM || !profM) { done(); }
@@ -162,10 +162,7 @@ function makeMp() {
     },
     makeProperty: function () { }, makeEventSource: function () { },
     getNeighborsByPosition: function () { return online.slice(); },
-    callPapyrusFunction: function (kind, cls, fn, self, args) {
-      if (cls === 'Debug' && fn === 'Notification') { saw(0, 'notify', String(args && args[0]), null); }
-      return undefined;
-    },
+    callPapyrusFunction: function () { return undefined; },
     getDescFromId: function (id) { return (id >>> 0).toString(16) + ':Skyrim.esm'; },
     getIdFromDesc: function (d) { const m = /^([0-9a-f]+):Skyrim\.esm$/i.exec(String(d)); return m ? parseInt(m[1], 16) : 0; },
     sendCustomPacket: function () { },
@@ -195,9 +192,19 @@ function makeMp() {
 
 function fakeRequire(name) {
   if (name === 'http' || name === 'https') {
-    const r = { on: function () { return r; }, setTimeout: function () { return r; }, destroy: function () { },
-                write: function () { }, end: function () { } };
-    return { request: function () { return r; }, get: function () { return r; },
+    // A line said in chat is a POST /say to the voice service (say(),
+    // #6221): its text is what the person sees.
+    function req(opts) {
+      const r = { on: function () { return r; }, setTimeout: function () { return r; }, destroy: function () { },
+                  write: function () { },
+                  end: function (body) {
+                    if (opts && opts.path === '/say' && body) {
+                      try { saw(0, 'said', String(JSON.parse(body).text), null); } catch (e) { }
+                    }
+                  } };
+      return r;
+    }
+    return { request: req, get: function () { return req(null); },
              createServer: function () { return { listen: function () { }, on: function () { } }; } };
   }
   if (name === 'child_process') { return { exec: function () { }, spawn: function () { return { on: function () { } }; } }; }
@@ -310,7 +317,7 @@ function awayDrain(v, took, floor) {
   return v <= floor ? v : after;
 }
 function near(a, b) { return typeof a === 'number' && Math.abs(a - b) < 1e-9; }
-function said(text) { return did.filter(function (d) { return d[1] === 'notify' && d[2].indexOf(text) === 0; }).length; }
+function said(text) { return did.filter(function (d) { return d[1] === 'said' && d[2].indexOf(text) === 0; }).length; }
 
 function check(way, before, claims, back, away) {
   const after = store.get(ME);
