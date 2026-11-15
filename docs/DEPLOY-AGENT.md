@@ -23,6 +23,26 @@ It does two jobs with the same code:
   waiting behind it (#5190). The update check waits until no environment is
   part way through one, so a restart never cuts an apply short.
 
+## Contents
+
+- [What this first slice does, and what it does not](#what-this-first-slice-does-and-what-it-does-not)
+- [After a dev Deployment](#after-a-dev-deployment)
+- [Deploying a Release by its tag, and rolling back](#deploying-a-release-by-its-tag-and-rolling-back)
+- [How a change reaches dev](#how-a-change-reaches-dev)
+- [Steps after a deploy](#steps-after-a-deploy)
+- [A new server build](#a-new-server-build)
+- [The bot pass before each dev Deployment](#the-bot-pass-before-each-dev-deployment)
+- [The site, the Discord bot and voice](#the-site-the-discord-bot-and-voice)
+- [The content build](#the-content-build)
+- [Release news](#release-news)
+- [Restart notices](#restart-notices)
+- [Why "Dev"](#why-dev)
+- [Main](#main)
+- [What it holds and what it can do](#what-it-holds-and-what-it-can-do)
+- [How it updates itself](#how-it-updates-itself)
+- [Putting it on the box](#putting-it-on-the-box)
+- [Tests](#tests)
+
 ## What this first slice does, and what it does not
 
 It looks after the **dev server**, and **the live server** once main is

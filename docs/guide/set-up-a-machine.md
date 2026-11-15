@@ -6,6 +6,12 @@ Do this once on a new Windows PC. Stay in order. On every PC is the steps. Setti
 
 Use your own GitHub account. Patrick adds that account as a collaborator on the private repository before a clone will work. Say so in Discord and wait for that. Before your first change, read `LICENSE` at the root of the repository and say in #staff-updates that you agree to its contributor terms. You agree once, and it covers anything you contributed before. Use your own clone. The clone on the shipping machine is for the Ship that builds from it. Your clone can live at `C:\Dev\Thornswood`, or any empty folder you own.
 
+## Contents
+
+- [On every PC](#on-every-pc)
+- [Setting up a machine](#setting-up-a-machine)
+- [Shipping from another machine](#shipping-from-another-machine)
+
 ## On every PC
 
 ### Install the tools

@@ -30,6 +30,36 @@ rebuild records a new commit, this file and
 `site\data\site\credits.md` have to change in the same pull request,
 or the build check goes red.
 
+## Contents
+
+- [How it reaches people](#how-it-reaches-people)
+- [.NET, Avalonia, SkiaSharp and Velopack, inside the launcher](#net-avalonia-skiasharp-and-velopack-inside-the-launcher)
+- [Concentus, SharpSRTP and BouncyCastle, inside the launcher](#concentus-sharpsrtp-and-bouncycastle-inside-the-launcher)
+- [NLayer, inside the launcher](#nlayer-inside-the-launcher)
+- [The voice's HRTF panner and its impulse responses, inside the launcher](#the-voices-hrtf-panner-and-its-impulse-responses-inside-the-launcher)
+- [zlib 1.3, translated into C# inside the launcher](#zlib-13-translated-into-c-inside-the-launcher)
+- [The SkyMP client runtime, built from the fork](#the-skymp-client-runtime-built-from-the-fork)
+- [From upstream SkyMP, not built here](#from-upstream-skymp-not-built-here)
+- [SkyMP's interface, built from the fork](#skymps-interface-built-from-the-fork)
+- [Thornswood's own sprite font](#thornswoods-own-sprite-font)
+- [Thornswood Client Runtime, Thornswood's mod on Nexus Mods](#thornswood-client-runtime-thornswoods-mod-on-nexus-mods)
+- [Thornswood Content, Thornswood's other mod on Nexus Mods](#thornswood-content-thornswoods-other-mod-on-nexus-mods)
+- [Shipped today with no licence this file can name](#shipped-today-with-no-licence-this-file-can-name)
+- [Built here from other people's work: behaviors and bodies](#built-here-from-other-peoples-work-behaviors-and-bodies)
+- [Bethesda's own files, made on each machine](#bethesdas-own-files-made-on-each-machine)
+- [The collection's menus, with no gold values](#the-collections-menus-with-no-gold-values)
+- [Made for Thornswood by somebody else](#made-for-thornswood-by-somebody-else)
+- [On the site](#on-the-site)
+- [Not shipped by Thornswood](#not-shipped-by-thornswood)
+- [texconv, Microsoft's texture converter, used to build and not shipped](#texconv-microsofts-texture-converter-used-to-build-and-not-shipped)
+- [Bethesda's master files, downloaded by the fork's build to test it and not shipped](#bethesdas-master-files-downloaded-by-the-forks-build-to-test-it-and-not-shipped)
+- [Kept in the repository, not shipped](#kept-in-the-repository-not-shipped)
+- [On our servers](#on-our-servers)
+- [The Discord bot, on the VPS](#the-discord-bot-on-the-vps)
+- [Where the source is](#where-the-source-is)
+- [What is still missing](#what-is-still-missing)
+- Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe

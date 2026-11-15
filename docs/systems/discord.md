@@ -6,6 +6,14 @@ change the plan and run that, and `bot/tests/test-3317-layout.py` fails when
 the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live
 server differs from this page. Issue #3317 is where it was set out.
 
+## Contents
+
+- [The staff council](#the-staff-council)
+- [Roles, top of the list first](#roles-top-of-the-list-first)
+- [Who a mode lets in](#who-a-mode-lets-in)
+- [Categories and channels, in order](#categories-and-channels-in-order)
+- [Retired](#retired)
+
 ## The staff council
 
 Each staff category has a lead, and the leads are the council: they

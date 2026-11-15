@@ -4,6 +4,24 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 Each letter stands on its own: what the thing is, then the commands. The pages from Set up a machine to Release to main are the path. These letters are what you open when you already know the name.
 
+## Contents
+
+- [A. GitHub](#a-github)
+- [B. Git](#b-git)
+- [C. PowerShell](#c-powershell)
+- [D. Visual Studio Code](#d-visual-studio-code)
+- [E. VPS](#e-vps)
+- [F. Website](#f-website)
+- [G. Main Build](#g-main-build)
+- [H. Dev Build](#h-dev-build)
+- [I. Bot](#i-bot)
+- [J. Node](#j-node)
+- [K. Vortex](#k-vortex)
+- [L. Pandora](#l-pandora)
+- [M. Creation Kit](#m-creation-kit)
+- [N. The repository map](#n-the-repository-map)
+- [O. Others](#o-others)
+
 ## A. GitHub
 
 GitHub is the website copy of the repository, at https://github.com/ThornswoodRP/Thornswood. Your PC and GitHub each hold the history. `origin` is the name Git uses for the GitHub copy.

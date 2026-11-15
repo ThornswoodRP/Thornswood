@@ -2,6 +2,13 @@
 
 Part of the [Developer Guide](../../Developer-Guide.md), the index of every page and section.
 
+## Contents
+
+- [Everything we need to do goes on the board](#everything-we-need-to-do-goes-on-the-board)
+- [How an issue and a comment are written](#how-an-issue-and-a-comment-are-written)
+- [Test tasks and known issues](#test-tasks-and-known-issues)
+- [What is not a reason to skip an issue](#what-is-not-a-reason-to-skip-an-issue)
+
 ## Everything we need to do goes on the board
 
 The one record of outstanding work is the Thornswood To Do board, a board of

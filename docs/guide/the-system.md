@@ -4,6 +4,13 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 How the pieces fit together. The pages from Set up a machine to Release to main are the path. The letters in [The tools, A to O](tools.md) are the tools.
 
+## Contents
+
+- [What Thornswood is](#what-thornswood-is)
+- [The pieces](#the-pieces)
+- [One Skyrim of its own](#one-skyrim-of-its-own)
+- [Where things are written down](#where-things-are-written-down)
+
 ## What Thornswood is
 
 Thornswood is a modded co-op Skyrim roleplay server on SkyMP, the server
@@ -71,6 +78,8 @@ SkyrimPlatform DLLs, the CEF host and `TESModPlatform.pex`, were all another
 launcher's builds, copied across from the Steam copy on every rebuild and then
 patched by text. None of them had come from Vortex and none had come from
 here.
+
+### The game folder
 
 **The folder.** The launcher makes `<Root>\Game` itself (`launcher\app\OwnGame.cs`,
 Settings, Maintenance, "Thornswood's own Skyrim folder"). With the Thornswood
@@ -170,6 +179,8 @@ the Vortex profile's lists as of the folder's last update, and are the
 reference load order a release carries (`Get-ShipLoadOrderDir`). Ship checks
 the client in `<Root>\Game` against `records\client-build.json`.
 
+### Behavior files and bodies
+
 **The behavior files and the bodies, built on each computer.** The behavior
 files (the animations for the mod list, Nemesis' output until 29 September)
 and the bodies BodySlide builds are other people's work: Precision's and True
@@ -230,6 +241,8 @@ files: never packed, never in the installer and never listed as removed, so
 no update deletes what an install built. Ship's "Animation and body files"
 step runs `Build-Generated.ps1 -DryRun` on the ship root and stops both
 channels when the collection installed there could not build them.
+
+### Ship roots, the Skyrim build and the dev channel
 
 **The folder a release is built from (issue #2019).** Each channel's ship root
 (`Where.ps1 ShipRoot` and `ShipRootDev`, recorded by `Setup-ShipMachine.ps1

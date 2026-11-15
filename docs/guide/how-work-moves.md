@@ -2,6 +2,11 @@
 
 Part of the [Developer Guide](../../Developer-Guide.md), the index of every page and section.
 
+## Contents
+
+- [How work moves](#how-work-moves)
+- [How work moves, the long form](#how-work-moves-the-long-form)
+
 ## How work moves
 
 The short form of the rules. The same decisions, with the dates they were made, are in [How work moves, the long form](#how-work-moves-the-long-form).

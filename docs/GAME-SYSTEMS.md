@@ -12,6 +12,16 @@ them.
 The item lists sit in [systems/lists](systems/lists/README.md). They are
 generated from the recipe, harvest, ore and hunt tables.
 
+## Contents
+
+- [Buttons, not commands](#buttons-not-commands)
+- [A person arrives](#a-person-arrives)
+- [The body](#the-body)
+- [Work](#work)
+- [Law, magic, and who is standing there](#law-magic-and-who-is-standing-there)
+- [Holds, coin and the road](#holds-coin-and-the-road)
+- [Where a number comes from](#where-a-number-comes-from)
+
 ## Buttons, not commands
 
 Decided by Patrick on 4 Oct: "can we stop with the commands, I want

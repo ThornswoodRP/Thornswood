@@ -19,6 +19,22 @@ counts, and the item list sit.
 | [Tailor](professions/tailor.md) | [Liverywright](professions/tailor/liverywright.md), [Haberdasher](professions/tailor/haberdasher.md) |
 | [Woodworker](professions/woodworker.md) | [Charburner](professions/woodworker/charburner.md), [Woodwright](professions/woodworker/woodwright.md) |
 
+## Contents
+
+- [The ladder](#the-ladder)
+- [How a recipe gets its rank](#how-a-recipe-gets-its-rank)
+- [What the server allows](#what-the-server-allows)
+- [Crude, fine and masterwork](#crude-fine-and-masterwork)
+- [Apprentices](#apprentices)
+- [Benches, in one picture](#benches-in-one-picture)
+- [The tool of each trade](#the-tool-of-each-trade)
+- [The book on K](#the-book-on-k)
+- [The guides on K](#the-guides-on-k)
+- [Everything has a maker](#everything-has-a-maker)
+- [Names that are not a profession](#names-that-are-not-a-profession)
+- [Staff](#staff)
+- [Where this is](#where-this-is)
+
 ## The ladder
 
 Four ranks: novice, advanced, expert, master. Everyone starts at novice.
