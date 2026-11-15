@@ -242,7 +242,9 @@ function playChecks() {
 function questChecks() {
   const bundle = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'merchant-trading-bundle.ts'), 'utf8');
   const panel = fs.readFileSync(path.join(ROOT, 'game', 'ui', 'thornswood-merchant.js'), 'utf8');
-  const missing = Object.keys(QUEST_SAID).filter((t) => bundle.indexOf("'" + t.replace(/'/g, "\\'") + "'") < 0);
+  // Each line as the bundle writes it, a single-quoted string literal.
+  const literal = (t) => "'" + t.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  const missing = Object.keys(QUEST_SAID).filter((t) => bundle.indexOf(literal(t)) < 0);
   yes('every quest answer the bots count is a line the merchant block says', missing.length === 0 || console.log('      not said: ' + JSON.stringify(missing)));
   yes('the panel view they read is the property the merchant block pushes', bundle.indexOf("var property = '" + MERCHANT_VIEW + "';") >= 0);
   yes('they open the panel within the merchant block\'s own reach', new RegExp('var REACH = ' + QUEST_REACH + ';').test(bundle));
