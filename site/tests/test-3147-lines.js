@@ -267,7 +267,15 @@ function copyTree(from, to) {
     const gone = await ask(port, '/');
     yes('with no lines.md the front page still comes, its quote empty and hidden',
         gone.status === 200 && gone.body.indexOf(EMPTY) >= 0);
-    yes('and the site says why in its log', /could not read data\/site\/lines\.md/.test(out));
+    // The site logs this line before it answers, but the answer comes on a
+    // socket and the line on the stderr pipe, and nothing orders the two here,
+    // so on a busy machine the answer is read first (#4154). Wait for the line
+    // itself, to the same deadline as "listening on" above.
+    const why = /could not read data\/site\/lines\.md/;
+    const until = Date.now() + 10000;
+    while (Date.now() < until && !why.test(out) && !exited) await new Promise((ok) => setTimeout(ok, 20));
+    yes('and the site says why in its log', why.test(out));
+    if (!why.test(out)) console.log('      in ten seconds the site logged:\n' + out.split('\n').slice(-12).join('\n'));
   } finally {
     if (child && !exited) {
       await new Promise(function (ok) { child.once('exit', ok); try { child.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
