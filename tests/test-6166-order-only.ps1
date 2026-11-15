@@ -41,8 +41,9 @@ function Yes([string]$what, [bool]$ok) {
 }
 
 $devPath = Join-Path $Repo 'scripts/deploy/Deploy-DevGamemode.ps1'
-$dev = [IO.File]::ReadAllText($devPath)
-$agentCs = [IO.File]::ReadAllText((Join-Path $Repo 'tools/DeployAgent/Agent.cs'))
+# A Windows checkout ends lines with CRLF; the checks below read LF.
+$dev = [IO.File]::ReadAllText($devPath).Replace("`r`n", "`n")
+$agentCs = [IO.File]::ReadAllText((Join-Path $Repo 'tools/DeployAgent/Agent.cs')).Replace("`r`n", "`n")
 
 # ---- the same files in the script and the agent ---------------------------
 $block = [regex]::Match($dev, '(?s)# ==== thornswood dev order at ====(.*?)# ==== end thornswood dev order at ====').Groups[1].Value
@@ -129,7 +130,7 @@ Yes '  and refuses an -At that is short, a branch, or not hex' (-not (Ask 'Deplo
 Yes '-OrderOnly builds no artifact, so nothing is held to main''s server build' ($dev.Contains('if (-not $PutBack -and -not $OrderOnly) {' + "`n" + '$alsoSends'))
 Yes '  makes no build stamp' ($dev -match '(?s)if \(-not \$OrderOnly\) \{\s*\$buildStamp = Save-ThornswoodBuildStamp')
 Yes '  sends no gamemode.js or stamp' ($dev -match "(?s)if \(-not \`$OrderOnly\) \{\s*\`$send\['gamemode.js'\] = \`$Gamemode.*?\`$send\['thornswood-build.json'\] = \`$stampFile\s*\}")
-Yes '  sends no tables, so the swap leaves the Release''s folder alone' ($dev -match '(?s)if \(-not \$OrderOnly\) \{\s*\$tableFiles = @\(Get-ThornswoodTableFiles' -and ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Swap.ps1'))).Contains('A deploy' + "`n" + '# that sends no table leaves the folder at the root alone.'))
+Yes '  sends no tables, so the swap leaves the Release''s folder alone' ($dev -match '(?s)if \(-not \$OrderOnly\) \{\s*\$tableFiles = @\(Get-ThornswoodTableFiles' -and ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Swap.ps1'))).Replace("`r`n", "`n").Contains('A deploy' + "`n" + '# that sends no table leaves the folder at the root alone.'))
 Yes '  never reloads: a moved order is a restart, the swap' ($dev.Contains('if (-not $PutBack -and -not $Restart -and -not $OrderOnly) {'))
 Yes '  writes no deploy record over the Release''s' ($dev -match '(?s)elseif \(-not \$OrderOnly\) \{\s*Save-SwapPreviousRecord')
 Yes '  and stops nothing when the settings are already right and no plugin goes up or is made' (
