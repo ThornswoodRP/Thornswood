@@ -30,6 +30,8 @@
     - with -OrderOnly the script builds no artifact or stamp, sends no
       gamemode.js, stamp or tables, never reloads, writes no deploy record,
       and stops nothing when the order is already in
+    - with -OrderOnly it sends no plugin of ours and makes no Last plugin:
+      those are the Release's, which the agent puts in (#6175)
     - the agent sends that line with the Deployment's commit and reads the
       answer
 #>
@@ -50,7 +52,7 @@ $block = [regex]::Match($dev, '(?s)# ==== thornswood dev order at ====(.*?)# ===
 Yes 'Deploy-DevGamemode.ps1 has the -At block between its markers' ($block -ne '')
 $inScript = @([regex]::Match($block, '(?s)\$ThornswoodOrderInputs = @\((.*?)\)').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match "'([^']+)'") { $Matches[1] } })
 $inAgent = @([regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match '"([^"]+)"') { $Matches[1] } })
-Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 5 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
+Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 3 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
 
 # ---- the -At block, run in a clone made as the gate makes its own ---------
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('test-6166-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -139,6 +141,11 @@ Yes '  and stops nothing when the settings are already right and no plugin goes 
   $dev.Contains("'thornswoodVoicePort is already `$VoicePort, both equipment checks are already off, and the load order is already right'") -and
   $dev.Contains('if ($settingsSame -and -not $sendPlugins.Count -and -not $makeLast) {') -and
   $dev.IndexOf("ORDER ALREADY IN") -lt $dev.IndexOf("Loading the new gamemode in the running dev server"))
+
+Yes '  and sends no plugin of ours and makes no Last: they are the Release''s, which the agent puts in (#6175)' (
+  $dev -match '(?s)foreach \(\$n in \$pluginNames\) \{\s*(#[^\n]*\n\s*)*if \(\$OrderOnly -and \(Test-ThornswoodRepoPlugin \$n\)\) \{\s*if \(-not \$thereSize\.ContainsKey\(\$n\)\) \{ throw [^\n]*\}\s*continue\s*\}\s*if \(\$lastWant -and \$n -ieq \$lastName\) \{' -and
+  ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/RepoPlugins.ps1'))).Contains("`$ThornswoodRepoPlugins = @('Thornswood-Content.esp', 'Thornswood-Last.esp')"))
+Yes '  so the order files are the order''s alone, not our plugin or its recipe' (-not ($inScript -contains 'game/content/Thornswood-Content.esp') -and -not ($inScript -contains 'game/data/last-plugin.recipe'))
 
 # ---- the agent --------------------------------------------------------------
 $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value

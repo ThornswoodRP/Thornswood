@@ -235,12 +235,16 @@
 
       Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the Release's commit>
 
-  -OrderOnly sends the order and the plugins and nothing of the gamemode:
-  no gamemode.js, no stamp, no tables, so the Release's stay as they are.
+  -OrderOnly sends the order and the collection's plugins and nothing of
+  the gamemode: no gamemode.js, no stamp, no tables, so the Release's stay
+  as they are. Nor our own plugins: Thornswood-Content.esp and
+  Thornswood-Last.esp are the Release's, which the agent puts in (#6175),
+  so this neither sends the committed content plugin nor makes Last from
+  the committed recipe, and stops if the server lacks either.
   The gate runs main as it is, which can be past the Release, so -At names
-  the Release's commit, and the order and plugins main records are used
-  only when every file they are made from (the agent's LoadOrderPaths) is
-  the same at that commit. When one is not, main has moved the order past
+  the Release's commit, and the order main records is used only when
+  every file it is made from (the agent's LoadOrderPaths: the collection's
+  record and drops, and last-plugin.json) is the same at that commit. When one is not, main has moved the order past
   that Release: this says NOT THIS COMMIT'S ORDER, ends with 3 and touches
   nothing, and the Deployment of main's newer commit moves it. Until 15 Nov
   2026 the agent ran the whole deploy here at main's tip: it put main's
@@ -380,9 +384,7 @@ if ($OrderOnly -and -not $PSBoundParameters.ContainsKey('Why')) { $Why = 'a load
 $ThornswoodOrderInputs = @(
   'records/collection-plugins.json',
   'records/collection-dropped.json',
-  'game/data/last-plugin.json',
-  'game/data/last-plugin.recipe',
-  'game/content/Thornswood-Content.esp'
+  'game/data/last-plugin.json'
 )
 if ($At) {
   $atRepo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -717,6 +719,15 @@ if ($LoadOrder) {
   }
 
   foreach ($n in $pluginNames) {
+    # -OrderOnly (#6166, #6175): our own plugins, Thornswood-Content.esp and
+    # Thornswood-Last.esp, are the Release's, which the deploy agent puts on
+    # the server from the Release's game part. This moves the order and the
+    # collection's plugins only, so it neither sends nor makes either: the
+    # committed copies would undo the Release's on every move.
+    if ($OrderOnly -and (Test-ThornswoodRepoPlugin $n)) {
+      if (-not $thereSize.ContainsKey($n)) { throw "the load order names $n, which the deploy agent puts in from the Release, and the dev server does not have it. Nothing was sent and the dev server was not touched." }
+      continue
+    }
     if ($lastWant -and $n -ieq $lastName) {
       $boxLast = Get-ThornswoodServerPlugin $boxContent $n
       if (-not (Test-ThornswoodContentSame $boxLast $lastWant.Bytes $lastWant.Sha)) {

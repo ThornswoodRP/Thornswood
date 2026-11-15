@@ -1659,7 +1659,8 @@ public sealed partial class AgentTests : IDisposable
     public async Task ADeploymentThatChangesNothingTheOrderIsMadeFromLeavesItAlone()
     {
         var (a, gh, s, cfg, gate) = MakeAfter(Before);
-        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md"];
+        // Our own plugins are the Release's (#6175), not the order's.
+        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md", "game/content/Thornswood-Content.esp", "game/data/last-plugin.recipe"];
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,success");
@@ -1671,7 +1672,7 @@ public sealed partial class AgentTests : IDisposable
 
     [Theory]
     [InlineData("records/collection-plugins.json")]
-    [InlineData("game/content/Thornswood-Content.esp")]
+    [InlineData("game/data/last-plugin.json")]
     [InlineData(null)]
     public async Task ARecordChangeMovesTheOrderAndAMoveThatFailsFailsTheDeploymentAndIsTriedByTheNext(string? changed)
     {
