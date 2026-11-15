@@ -32,7 +32,7 @@
     7. -Pick N (build.yml's job "pick", #5183) runs nothing and writes a
        plan: on a pull request what its change reaches, on main the whole
        gate, split by the map's seconds, longest first to the least loaded
-       share, or by place with no map; each share given the plan in
+       share and longest first within it, or by place with no map; each share given the plan in
        GATE_PLAN runs its part, fetching nothing, and one given a plan it
        cannot trust runs nothing and fails. #5292: it makes no more shares
        than there are harnesses to run, and none (shares=[]) for a change
@@ -328,7 +328,9 @@ exit 0
 
     # By the seconds each took when traced: test-a.js 10, test-b.js 1 and
     # test-c.js 5 make test-a.js one share and the other two the other, where
-    # place in the list would give test-a.js and test-c.js together.
+    # place in the list would give test-a.js and test-c.js together. Each
+    # share keeps them longest first, so test-c.js starts before test-b.js
+    # (Nightly-Harnesses.ps1 -Only starts them in the order given).
     $timed = Join-Path $scratch 'timed'
     $null = New-Item -ItemType Directory -Path $timed
     Copy-Item -Path (Join-Path $handed '*') -Destination $timed
@@ -341,9 +343,9 @@ exit 0
     $r = Invoke-Gate 'push' 'github-hosted' -extra @('-Pick', '2')
     $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
     Yes ('the pick on main is the whole gate, split by seconds (' + $r.Plan + ')') ($r.Code -eq 0 -and $p -and $p.whole -and $r.Outputs -match '(?m)^whole=true\s*$' -and
-        (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-b.js test-c.js' -and $r.Text -match 'Split by the seconds each took' -and $r.Text -match 'Share 1 of 2: 1 harnesses about 10 s')
+        (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-c.js test-b.js' -and $r.Text -match 'Split by the seconds each took' -and $r.Text -match 'Share 1 of 2: 1 harnesses about 10 s')
     $r = Invoke-Gate 'push' 'github-hosted' -extra @('-Shard', '2', '-Of', '2') -plan $r.Plan
-    Yes '  and a share of it says whole and runs its part' ($r.Asked -and $r.Asked.Only -eq 'test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'Share 2 of 2 of the whole gate: 2 of its 3 harnesses')
+    Yes '  and a share of it says whole and runs its part, longest first' ($r.Asked -and $r.Asked.Only -eq 'test-c.js test-b.js' -and $r.Whole -and $r.Text -match 'Share 2 of 2 of the whole gate: 2 of its 3 harnesses')
     $env:STUB_MAP = ''
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
     $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }

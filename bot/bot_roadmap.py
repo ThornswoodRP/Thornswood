@@ -86,7 +86,7 @@ def roadmap_lanes_of(issue):
 def roadmap_of(issue, comments):
     """(title, words, problems) for the issue's roadmap row, from its last
        "Roadmap:" comment. problems is empty when it may go on the site."""
-    got = _marked(issue, comments, ROADMAP_MARK, room=None)
+    got = _marked(issue, comments, ROADMAP_MARK)
     if got is None:
         return None, None, ['Roadmap: the issue has a roadmap label and no '
                             'comment whose first line starts "Roadmap:", '

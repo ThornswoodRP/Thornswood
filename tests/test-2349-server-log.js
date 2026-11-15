@@ -122,9 +122,9 @@ try {
   if (process.platform === 'win32') {
     const held = log + '.20250101000000000';
     fs.writeFileSync(held, allOld);
-    const hold = cp.spawn('powershell.exe', ['-NoProfile', '-Command',
+    const hold = cp.spawn('pwsh', ['-NoProfile', '-Command',
       "$f = [IO.File]::Open('" + held.replace(/'/g, "''") + "', 'Open', 'Read', 'Read'); 'held'; Start-Sleep -Seconds 20"], { stdio: ['ignore', 'pipe', 'ignore'] });
-    // The sweep runs once Windows PowerShell says it holds the file, never on
+    // The sweep runs once pwsh says it holds the file, never on
     // a clock: on a busy runner its start alone took over 15 seconds, and a
     // sweep before the hold deleted the file (gate run 41502686958).
     let saidHeld = '';
@@ -134,7 +134,7 @@ try {
     });
     waitHeld.then((isHeld) => {
       if (!isHeld) {
-        yes('a rolled file another program holds is named with the error, and left for the next pass (Windows PowerShell ended without holding it)', false);
+        yes('a rolled file another program holds is named with the error, and left for the next pass (pwsh ended without holding it)', false);
         fs.rmSync(held, { force: true });
         runPart();
         return;

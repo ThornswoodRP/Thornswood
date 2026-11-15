@@ -58,8 +58,9 @@
   // (#3386): this port is plain http, so the launcher's Fix takes them from
   // the signed release over https, by the sha256 its record gives them.
   // The names are the plugins scripts\release\Ship-Rules.ps1 calls ours
-  // ($ShipOursFiles), and tests\test-1180-own-plugins.js holds the two lists
-  // to each other, so a plugin the repo makes goes into both in one change.
+  // ($ShipOursFiles), and launcher\tests\test-1180-own-plugins.js holds the
+  // two lists to each other, so a plugin the repo makes goes into both in one
+  // change.
   var OURS = { 'thornswood-content.esp': 1, 'thornswood-last.esp': 1 };
 
   // Returns '' once the manifest is published, otherwise why it was not.
@@ -132,7 +133,7 @@
   // calls manifestGen.generateManifest, which writes data/manifest.json with
   // writeFileSync, and only after it returns does setupGamemode load this file
   // (skymp5-server/ts/index.ts at the commit records\server-build.json names;
-  // tests\test-1885-manifest-order.js reads it there). A start whose
+  // game\tests\test-1885-manifest-order.js reads it there). A start whose
   // generateManifest throws never loads the gamemode at all. So the file is
   // complete when this runs, and a publish that fails here fails for a reason
   // no wait mends: the file unreadable, no mods in it, the api folder not

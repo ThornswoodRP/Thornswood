@@ -99,7 +99,7 @@
        in assemblyIdentity, stamped on every build, so the identity Windows
        reads is the number the launcher reports and can never sit at the
        placeholder. The native publish carries the assembly's manifest into
-       the exe. tests\test-app-manifest.ps1 reads it back. -->
+       the exe. launcher\tests\test-app-manifest.ps1 reads it back. -->
   <Target Name="ThornswoodManifest" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ThornswoodVersionFour>$(Version)</ThornswoodVersionFour>

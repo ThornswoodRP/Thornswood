@@ -79,7 +79,7 @@ const FORCE = [
 // What makes a Linux trace no promise about the Windows run. A code file the
 // harness read that asks which system it is on, or reaches for something
 // only Windows has, can take another path there.
-const PLATFORM = /\$IsWindows|\$IsLinux|\$IsMacOS|\$OnWindows|\$env:OS\b|Windows_NT|PSEdition|PSVersionTable|OSVersion|RuntimeInformation|process\.platform|os\.platform\(|os\.type\(|['"]win32['"]|sys\.platform|os\.name\b|platform\.system|powershell\.exe|cmd\.exe|Get-WindowsPowerShell|Get-WindowsPath|\$env:(SystemRoot|WINDIR|windir|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)|process\.env\.(SystemRoot|WINDIR|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)/;
+const PLATFORM = /\$IsWindows|\$IsLinux|\$IsMacOS|\$OnWindows|\$env:OS\b|Windows_NT|PSEdition|PSVersionTable|OSVersion|RuntimeInformation|process\.platform|os\.platform\(|os\.type\(|['"]win32['"]|sys\.platform|os\.name\b|platform\.system|powershell\.exe|cmd\.exe|Get-WindowsPath|\$env:(SystemRoot|WINDIR|windir|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)|process\.env\.(SystemRoot|WINDIR|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)/;
 const CODE = /\.(ps1|psm1|psd1|js|cjs|mjs|py|cmd|bat|sh)$/i;
 // Which program runs a code file. "python3.12" and "pwsh.exe" count as
 // python and pwsh.

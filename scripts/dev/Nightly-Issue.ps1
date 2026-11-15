@@ -9,7 +9,10 @@
       .\scripts\dev\Nightly-Issue.ps1 -Result success
 
   failure  the open "Nightly checks failed" issue gets a comment with the
-           date and the run; with none open, one is opened.
+           date and the run, and after it each failed test with its FAIL
+           lines and the command that runs it alone (#4178), as
+           Merge-HarnessReports.ps1 -Failed wrote them and nightly.yml hands
+           them on in NIGHTLY_FAILED; with none open, one is opened.
   success  every open "Nightly checks failed" issue is closed, with a
            comment naming the green run, so nobody closes it by hand.
 
@@ -32,7 +35,10 @@
 [CmdletBinding()]
 param(
     [ValidateSet('failure', 'success', '')]
-    [string]$Result = ''
+    [string]$Result = '',
+    # The failed tests, as Merge-HarnessReports.ps1 -Failed wrote them; the
+    # harness report job's output, in env.
+    [string]$Failed = $env:NIGHTLY_FAILED
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,7 +85,7 @@ function Close-NightlyIssue([int]$Number, [string]$Why) {
 
 # What the step does. Returns one line saying what it did.
 function Update-NightlyIssue {
-    param([ValidateSet('failure', 'success')][string]$Result, [string]$Run, [string]$Day)
+    param([ValidateSet('failure', 'success')][string]$Result, [string]$Run, [string]$Day, [string]$Failed = '')
     $open = @(Get-NightlyIssues)
     $said = @()
 
@@ -95,6 +101,9 @@ function Update-NightlyIssue {
 
     if ($Result -eq 'failure') {
         $line = "The nightly checks failed on ${Day}: $Run. The failed step says which check; the last lines of each harness job name every harness that failed or did not get to run."
+        if ($Failed -and $Failed.Trim()) {
+            $line += "`n`nThe tests that failed, each with its FAIL lines and the command that runs it alone from the repository's root:`n`n" + $Failed.Trim()
+        }
         if ($open.Count) {
             [void](Invoke-NightlyApi 'POST' "issues/$($open[0].number)/comments" @{ body = $line })
             $said += "added to #$($open[0].number)"
@@ -117,5 +126,5 @@ if ($Result) {
         if (-not [Environment]::GetEnvironmentVariable($n)) { throw "$n is not set. The nightly workflow sets it." }
     }
     $day = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-    Write-Host (Update-NightlyIssue -Result $Result -Run $env:RUN -Day $day)
+    Write-Host (Update-NightlyIssue -Result $Result -Run $env:RUN -Day $day -Failed $Failed)
 }

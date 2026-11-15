@@ -155,7 +155,7 @@ function strip(src) {
   return out.split('\n');
 }
 
-const MODS = '(?:(?:public|private|internal|protected|static|override|virtual|sealed|extern|abstract|unsafe|new)\\s+)+';
+const MODS = '(?:(?:public|private|internal|protected|static|override|virtual|sealed|extern|abstract|unsafe|new|async)\\s+)+';
 function declRx(name) { return new RegExp('^\\s*' + MODS + '[\\w<>\\[\\],.?]+\\s+' + esc(name) + '\\s*\\('); }
 // A method declared at class depth: eight spaces in, the way every file here
 // is laid out (namespace, class, member).
@@ -361,11 +361,12 @@ const disorder = outOfOrder(refs);
 disorder.forEach(function (m) { console.log('      ' + m); });
 yes('the steps the page lists inside each method are in the order the code runs them', disorder.length === 0);
 
-// Proof the order check has teeth: the steps the page walks inside Play(),
-// read backwards, have to be caught.
+// Proof the order check has teeth: the steps the page walks inside Play
+// (PlayAsync since #4582, the awaited body Play() starts), read backwards,
+// have to be caught.
 {
   const inPlay = refs.filter(function (r) {
-    return r.now !== undefined && r.heading === '### Pressing it' && /\|\d+:Play$/.test(r.member || '');
+    return r.now !== undefined && r.heading === '### Pressing it' && /\|\d+:PlayAsync$/.test(r.member || '');
   });
   yes('the page walks at least ten steps inside Play(), ' + inPlay.length + ' of them', inPlay.length >= 10);
   yes('and the same steps listed backwards would be caught as out of order',

@@ -910,8 +910,12 @@
     var them = takePerson(words);
     var reason = (them.rest || []).join(' ').trim();
 
+    // Never lifted by the person it is on (#4932): a silenced person's slash
+    // commands still reach here and a frozen one can still type, so naming
+    // yourself is refused the way /silence and /freeze refuse it.
     if (word === '/unsilence') {
       if (!them.pid) { tell(pid, them.why); return true; }
+      if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.silenced[them.pid]) { tell(pid, them.name + ' is not silenced.'); return true; }
       delete state.silenced[them.pid];
       pushSilenced();
@@ -922,6 +926,7 @@
     }
     if (word === '/unfreeze') {
       if (!them.pid) { tell(pid, them.why); return true; }
+      if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.frozen[them.pid]) { tell(pid, them.name + ' is not frozen.'); return true; }
       delete state.frozen[them.pid];
       tell(them.pid, 'Staff have let you go. You can move again.');

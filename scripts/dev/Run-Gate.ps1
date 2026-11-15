@@ -245,7 +245,17 @@ function Select-Affected {
 # or, with each harness's seconds from the map, the longest first, each to
 # the share with the least so far (ties to the lowest share), so the shares
 # end close together; a harness the map has no seconds for counts as the
-# median. Each share's names in name order, and the loads in $script:Loads.
+# median. The loads go in $script:Loads.
+#
+# LONGEST FIRST IN EACH SHARE TOO (12 Nov 2026). Each share keeps its names
+# in the order they were dealt, longest first, and Nightly-Harnesses.ps1
+# -Only starts them in the order given. Until then each share was put in
+# name order, and the longest started whenever its name came up: in run
+# 43305303114, Linux share 3 of 4 started test-2821-launcher-compiler.ps1
+# (148.6 s) about 40 s in and test-scenario-spoilage.js (94.8 s) about 150 s
+# in, so the share took 257 s for about 160 s of its longest harness and
+# the rest beside it, and every check waited for it. With no seconds the
+# order is the list's.
 function Split-Shares([string[]]$list, [int]$count) {
     $parts = New-Object 'System.Collections.Generic.List[string][]' $count
     for ($k = 0; $k -lt $count; $k++) { $parts[$k] = New-Object 'System.Collections.Generic.List[string]' }
@@ -266,7 +276,7 @@ function Split-Shares([string[]]$list, [int]$count) {
     }
     $script:Loads = $load
     $out = New-Object 'object[]' $count
-    for ($k = 0; $k -lt $count; $k++) { $out[$k] = [string[]]@($parts[$k] | Sort-Object) }
+    for ($k = 0; $k -lt $count; $k++) { $out[$k] = [string[]]@($parts[$k]) }
     return ,$out
 }
 

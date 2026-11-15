@@ -6,7 +6,7 @@ Patrick, 16 Oct 2026, A on #2553: Thornswood measures its own spots for the char
 
 - `scripts/dev/Build-StationSites.py` reads the collection's plugins in the load order of `game/data/last-plugin.json` and measures each spot. It writes `game/data/station-sites.json`: every site's anchor, its point and angle, the ground under it, the nearest solid thing, the cell it stands in and why the plugin's copy of that cell changes nothing, and every site left out with why.
 - `scripts/mods/Add-ContentRecords.py` writes one placement for each row of that table, its base, point and turn and nothing else, under the form id the row gives (from `0x05015500`, which no version of the plugin ever used).
-- `tests/test-2553-station-sites.js` holds the table to its rules, and on a machine with the game reads the plugins again. `tests/test-2553-salvaged-gone.js` holds the plugin to the table and proves nothing salvaged is left.
+- `game/tests/test-2553-station-sites.js` holds the table to its rules, and on a machine with the game reads the plugins again. `game/tests/test-2553-salvaged-gone.js` holds the plugin to the table and proves nothing salvaged is left.
 
 ## The rule for each kind
 
@@ -176,7 +176,7 @@ The server stands the benches, once, when it starts, beside a fixed forge read o
 - `scripts/dev/Build-WoodworkingBenches.py` reads each forge's winning record over the whole load order in `game/data/last-plugin.json`, and works out the bench's point, height and angle from an offset in that forge's own frame. It stops on a site whose spot is not clear: the bench and the place its woodworker stands must lie on the town's navmesh, on ground flat to 16 units and within 60 of the forge's own height, touch no furniture, container, door, item or small static, and keep 30 units from the nearest of them.
 - `game/data/woodworking-benches.json` is what it measured at each spot: the forge and every plugin that touches it, the point and angle, the ground under the bench, the nearest solid thing and why the spot was chosen.
 - The gamemode's `WOODWORKING_BENCHES` block is that table; `standBenches()` in the property block stands them at start.
-- `tests/test-516-woodworking-benches.js` holds all of it together, and on a machine with the game reads the plugins again.
+- `game/tests/test-516-woodworking-benches.js` holds all of it together, and on a machine with the game reads the plugins again.
 
 | Town | Forge | Bench from the forge | Nearest solid thing |
 | --- | --- | --- | --- |
