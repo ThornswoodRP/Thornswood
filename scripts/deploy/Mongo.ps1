@@ -64,11 +64,15 @@ function Read-ThornswoodMongoRecord {
         $names[[string]$r.$k.user] = $true
     }
     if (-not [string]$r.backup.task) { throw 'the record names no backup task' }
-    # The rehearsal's world is a database of its own, never a server's (#6237).
-    if ([string]$r.rehearsal.user -notmatch '^[a-z]+$') { throw 'the record''s rehearsal user is not lower case letters' }
-    if ($names.ContainsKey([string]$r.rehearsal.user)) { throw 'the rehearsal signs in as another program''s user' }
-    if ([string]$r.rehearsal.database -ne 'thornswood-rehearsal') { throw 'the rehearsal''s database is not thornswood-rehearsal' }
-    if (@($r.servers | Where-Object { [string]$_.database -eq [string]$r.rehearsal.database }).Count) { throw 'a server keeps its world in the rehearsal''s database' }
+    # The rehearsal's world and the load test's are databases of their own,
+    # never a server's, and emptied after each run (#6237).
+    foreach ($k in 'rehearsal', 'load') {
+        if ([string]$r.$k.user -notmatch '^[a-z]+$') { throw "the record's $k user is not lower case letters" }
+        if ($names.ContainsKey([string]$r.$k.user)) { throw "the $k signs in as another program's user" }
+        $names[[string]$r.$k.user] = $true
+        if ([string]$r.$k.database -ne ('thornswood-' + $k)) { throw "the $k's database is not thornswood-$k" }
+        if (@($r.servers | Where-Object { [string]$_.database -eq [string]$r.$k.database }).Count) { throw "a server keeps its world in the $k's database" }
+    }
     return $r
 }
 
@@ -113,10 +117,13 @@ function Get-ThornswoodMongoUsers {
     # backup reads every database for mongodump; it changes nothing.
     $out += [pscustomobject]@{ User = [string]$Record.backup.user; Db = 'admin'; Task = [string]$Record.backup.task
         Roles = @(@{ role = 'backup'; db = 'admin' }); File = ($access + '\' + [string]$Record.backup.user + '.uri') }
-    # The restore rehearsal's: its own database and nothing else, read by
-    # SYSTEM and Administrators only (no task), as the gate runs it.
-    $out += [pscustomobject]@{ User = [string]$Record.rehearsal.user; Db = [string]$Record.rehearsal.database; Task = ''
-        Roles = @(@{ role = 'readWrite'; db = [string]$Record.rehearsal.database }); File = ($access + '\' + [string]$Record.rehearsal.user + '.uri') }
+    # The restore rehearsal's and the load test's: each its own database and
+    # nothing else, read by SYSTEM and Administrators only (no task), as the
+    # gate runs them.
+    foreach ($k in 'rehearsal', 'load') {
+        $out += [pscustomobject]@{ User = [string]$Record.$k.user; Db = [string]$Record.$k.database; Task = ''
+            Roles = @(@{ role = 'readWrite'; db = [string]$Record.$k.database }); File = ($access + '\' + [string]$Record.$k.user + '.uri') }
+    }
     return $out
 }
 

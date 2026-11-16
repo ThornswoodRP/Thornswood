@@ -50,8 +50,10 @@
 // count    {op, uri, db}: COUNT|<forms>|<characters>, a character being a
 //          form with profileId above 0 that is not deleted (#5168).
 // empty    {op, uri, db}: drops the world's collection, for the restore
-//          rehearsal's database only (thornswood-rehearsal), which holds a
-//          copy of everybody's characters only while a rehearsal runs.
+//          rehearsal's database (thornswood-rehearsal), which holds a copy
+//          of everybody's characters only while a rehearsal runs, and the
+//          load test's (thornswood-load), its bots' characters; never a
+//          server's.
 //          Prints EMPTIED|<forms it held>.
 //
 // The indexes the engine makes (formDesc_unique and profileId) are made here
@@ -269,7 +271,7 @@ function countWorld(plan) {
 }
 
 function emptyWorld(plan) {
-  if (plan.db !== 'thornswood-rehearsal') fail('only the rehearsal\'s world is ever emptied, not ' + plan.db);
+  if (plan.db !== 'thornswood-rehearsal' && plan.db !== 'thornswood-load') fail('only the rehearsal\'s and the load test\'s worlds are ever emptied, not ' + plan.db);
   const db = connect(plan.uri, plan.db);
   const coll = db.getCollection(kCollection);
   const had = coll.countDocuments({});

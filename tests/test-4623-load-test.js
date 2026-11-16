@@ -381,7 +381,20 @@ async function boxChecks() {
     yes('the server\'s program and gamemode are copied, its gamemode tables too, and not its world', fs.existsSync(path.join(out, 'dist_back', 'skymp5-server.js')) && fs.existsSync(path.join(out, 'gamemode.js')) &&
       fs.existsSync(path.join(out, 'gamemode-tables', 'ADMIN_ITEMS.json')) &&
       !fs.existsSync(path.join(out, 'world')) && /^[0-9a-f]{64}$/.test(r.engine));
+    yes('a copy with no world database named keeps its world in a folder of its own (#6237)', st.databaseDriver === undefined && st.databaseName === undefined);
+    const uriFile = path.join(tmp, 'load.uri');
+    fs.writeFileSync(uriFile, 'mongodb://127.0.0.1:27017/');
+    server.fromInstalled({ from: inst, out: path.join(tmp, 'cm'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-load', 'world-uri': uriFile });
+    const sm = JSON.parse(fs.readFileSync(path.join(tmp, 'cm', 'server-settings.json'), 'utf8'));
+    yes('  and with the load test\'s database named keeps it there, signed in with its connection file (#6237)',
+      sm.databaseDriver === 'mongodb' && sm.databaseName === 'thornswood-load' && sm.databaseUriFile === path.resolve(uriFile));
     let err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'cd'), port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-dev', 'world-uri': uriFile }); } catch (e) { err = e.message; }
+    yes('  a server\'s own database is refused, and nothing is laid out', /never a server's/.test(err) && !fs.existsSync(path.join(tmp, 'cd')));
+    err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'cu'), port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-load', 'world-uri': path.join(tmp, 'none.uri') }); } catch (e) { err = e.message; }
+    yes('  and so is a connection file that is not there', /names no connection file/.test(err) && !fs.existsSync(path.join(tmp, 'cu')));
+    err = '';
     try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c2'), port: '7787', 'voice-port': '7799' }); } catch (e) { err = e.message; }
     yes('the server\'s own port is refused', /port 7787 is one .* uses/.test(err) && !fs.existsSync(path.join(tmp, 'c2')));
     err = '';

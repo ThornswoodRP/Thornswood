@@ -274,7 +274,7 @@ finally {
       . (Join-Path $Here '..\deploy\World.ps1')
       $rw = Get-ThornswoodWorld $Root
       if ($rw.Driver -eq 'mongodb') {
-        $e = Clear-ThornswoodRehearsalWorld $rw
+        $e = Clear-ThornswoodScratchWorld $rw
         if ($e -like 'STOP|*') { $result = 1; Say ('  ' + $e.Substring(5) + '. It holds the restored world; empty it.') }
         else { Say ('  ' + $rw.Db + ' emptied, ' + ($e -split '\|')[1] + ' form(s)') }
       }

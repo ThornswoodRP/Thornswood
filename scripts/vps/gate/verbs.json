@@ -381,6 +381,7 @@
     "Load-Test": {
       "script": "scripts/bot/Load-Box.ps1",
       "reads": [
+        "records/mongodb.json",
         "scripts/bot/Bot-Pass.js",
         "scripts/bot/Load-Test.js",
         "scripts/bot/New-LoadServer.js",
@@ -390,6 +391,8 @@
         "scripts/bot/load-proxy.js",
         "scripts/bot/load-sampler.js",
         "scripts/bot/relay.js",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/vps/world.js"
       ],
       "timeoutMinutes": 45,

@@ -27,6 +27,7 @@
     { "name": "dev", "task": "Thornswood Dev Server", "database": "thornswood-dev", "user": "dev" }
   ],
   "backup": { "task": "Thornswood Backup", "user": "backup" },
+  "load": { "database": "thornswood-load", "user": "load", "why": "The load test's copy of a server whose world is in MongoDB (Load-Box.ps1) keeps its bots' characters here, never in a server's own database, so the test measures saves the way the server makes them. Emptied before and after each run. Only SYSTEM and Administrators read its file: the load test runs from the deploy gate." },
   "rehearsal": { "database": "thornswood-rehearsal", "user": "rehearsal", "why": "The monthly restore rehearsal (Rehearse-OnBox.ps1) puts a backup's world here, never into a server's own database, starts a server on it and empties it again. Only SYSTEM and Administrators read its file: the rehearsal runs from the deploy gate." },
   "admin": { "user": "twadmin" }
 }

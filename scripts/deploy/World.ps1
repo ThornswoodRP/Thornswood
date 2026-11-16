@@ -129,9 +129,9 @@ function Restore-ThornswoodWorld($World, [string]$Forms) {
   if (-not $done.Count) { return ('STOP|' + $Forms + ' was not put into ' + $World.Db + ': ' + (($out | Where-Object { $_ }) -join ' ')) }
   return ('WORLDSAVED|mongodb|' + (($done[0] -split '\|', 2)[1]))
 }
-# The restore rehearsal's world emptied when it ends (world.js refuses any
-# other): EMPTIED|<forms it held>, or STOP|<why>.
-function Clear-ThornswoodRehearsalWorld($World) {
+# The restore rehearsal's world or the load test's, emptied (world.js
+# refuses any other): EMPTIED|<forms it held>, or STOP|<why>.
+function Clear-ThornswoodScratchWorld($World) {
   $out = @(Invoke-ThornswoodWorldJs @{ op = 'empty'; uri = $World.UriFile; db = $World.Db })
   $done = @($out | Where-Object { $_ -like 'EMPTIED|*' })
   if (-not $done.Count) { return ('STOP|' + $World.Db + ' was not emptied: ' + (($out | Where-Object { $_ }) -join ' ')) }
