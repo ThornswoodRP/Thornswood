@@ -534,12 +534,17 @@ class LoadBot extends Bot {
       }
       if (m.t === MSG.CreateActor && !m.isMe && this.play.length) {
         const tr = m.transform || {};
-        if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0 }); }
-        if (!(m.props && m.props.isHostedByOther)) { this.askHost(Number(m.refrId) || 0); }
+        // An actor, as the engine sends one (PartOne.cpp, the stream-in): it
+        // always carries its equipment, which no other form does. The game asks
+        // to host actors only (formView.ts tryHostIfNeed); an ask for anything
+        // else throws out of the server's tick (#6349).
+        const actor = m.equipment !== undefined;
+        if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0, actor }); }
+        if (actor && !(m.props && m.props.isHostedByOther)) { this.askHost(Number(m.refrId) || 0); }
       }
       if (m.t === MSG.UpdateProperty && m.propName === 'isHostedByOther' && m.dataDump === 'false') {
         const o = this.others.get(m.idx);
-        if (o) { this.askHost(o.refrId); }
+        if (o && o.actor) { this.askHost(o.refrId); }
       }
       if (m.t === MSG.UpdateMovement && this.play.length && m.data && Array.isArray(m.data.pos)) {
         const o = this.others.get(m.idx);
