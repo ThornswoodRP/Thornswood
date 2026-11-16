@@ -637,6 +637,15 @@ issue where the card did.
   and its branch wisp/6178-social-share goes with it.**
   (dec_J9Bj_6xJZC_s3jM1XZcuMg) 15 Nov 2026,
   [#6249](https://github.com/ThornswoodRP/Thornswood/issues/6249#issuecomment-6904011724).
+- **#6021 stays on main though it merged without a card: nexus-run may run
+  on mains that carry 7f6c3c9.** (dec_V793hiHd-tibBsi-sG-q3A) 15 Nov 2026,
+  [#4278](https://github.com/ThornswoodRP/Thornswood/issues/4278#issuecomment-6903984293).
+- **#5923 stays on main though it merged without a card, at c06b648 (main
+  0d90160).** (dec_yJY5git3U_VKkb5oCfvk_A) 15 Nov 2026,
+  [#5900](https://github.com/ThornswoodRP/Thornswood/issues/5900#issuecomment-6904053504).
+- **#6289 stays on main though it merged without a card, at a1c581f (main
+  6003a79).** (dec_tCuyl3TgeEnVhRYGn8W6qA) 15 Nov 2026,
+  [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191#issuecomment-6906732791).
 
 ### Languages and code
 
