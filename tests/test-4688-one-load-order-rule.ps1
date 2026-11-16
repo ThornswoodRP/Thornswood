@@ -106,6 +106,15 @@ function New-Plugin([string]$dir, [string]$name, [uint32]$flags, [string[]]$mast
 
 $masters5 = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm')
 
+# Whether a script's text builds the order it writes by the rule: it
+# dot-sources ServerOrder.ps1 and calls Get-ThornswoodServerOrder, each on a
+# line that is code rather than a comment.
+function Test-BuildsByRule([string]$text) {
+    $dots = [regex]::IsMatch($text, "(?m)^\s*\.\s+\(Join-Path\s[^#\r\n]*'[^'\r\n]*ServerOrder\.ps1'\)")
+    $calls = [regex]::IsMatch($text, '(?m)^[^#\r\n]*\bGet-ThornswoodServerOrder\s')
+    return ($dots -and $calls)
+}
+
 try {
     # ---- 1. the copies are gone ---------------------------------------------------
     Write-Host 'the copies'
@@ -176,8 +185,43 @@ try {
     Yes 'the search finds Deploy-Gamemode.ps1 writing it' ($found.Contains('scripts/deploy/Deploy-Gamemode.ps1'))
     foreach ($f in $found.Keys) {
         if ($writers.Contains($f)) { Yes ("  $f writes one: " + $writers[$f]) $true }
+        elseif (Test-BuildsByRule ([IO.File]::ReadAllText((Join-Path $Repo $f)))) { Yes ("  $f writes one: built by the rule, ServerOrder.ps1's Get-ThornswoodServerOrder") $true }
         else { Yes ("  $f writes a server loadOrder at line " + $found[$f] + ' and is not the rule or a carrier of its order') $false }
     }
+
+    # A script that builds the order it writes by the rule itself needs no
+    # name above: it dot-sources ServerOrder.ps1 and calls
+    # Get-ThornswoodServerOrder in code, not in a comment (#6313).
+    $dot = ". (Join-Path `$Repo 'scripts\deploy\ServerOrder.ps1')"
+    $call = '$o = Get-ThornswoodServerOrder $names @() $info $prior'
+    $write = '$s.loadOrder = $o.Order'
+    Yes 'a script that writes an order it built with Get-ThornswoodServerOrder is the rule' (Test-BuildsByRule (($dot, $call, $write) -join "`n"))
+    Yes '  one that only names the rule in a comment is not' (-not (Test-BuildsByRule (($dot, ('# ' + $call), $write) -join "`n")))
+    Yes '  nor one that calls it without dot-sourcing ServerOrder.ps1' (-not (Test-BuildsByRule (($call, $write) -join "`n")))
+    Yes '  nor a .js file, which cannot run it' (-not (Test-BuildsByRule (("// $dot", $write) -join "`n")))
+
+    # The load order change a restore rehearsal makes (#6237), by the rule:
+    # the plugin it moves is taken out of the order the server runs and the
+    # rule puts it back as a new plugin, on the end of its kind, so every
+    # full plugin after it is a slot earlier and the light order is kept.
+    . (Join-Path $Repo 'scripts\deploy\ServerOrder.ps1')
+    $rd = Join-Path $T 'rehearsal\data'
+    foreach ($m in 'Skyrim.esm', 'Update.esm') { New-Plugin $rd $m 0x1 }
+    New-Plugin $rd 'Fish.esm' 0x1
+    New-Plugin $rd 'Moves.esp' 0x0 @('Skyrim.esm')
+    New-Plugin $rd 'Beards.esl' 0x201
+    New-Plugin $rd 'Sword.esp' 0x0
+    New-Plugin $rd 'Last.esp' 0x0 @('Sword.esp')
+    $running = @('Skyrim.esm', 'Update.esm', 'Fish.esm', 'Moves.esp', 'Beards.esl', 'Sword.esp', 'Last.esp')
+    $kinds = @{}
+    foreach ($n in $running) { $kinds[$n] = Get-ThornswoodPluginKind (Join-Path $rd $n) }
+    Yes 'Get-ThornswoodPluginKind reads a light plugin and a master from the header' ($kinds['Beards.esl'].Light -and -not $kinds['Moves.esp'].Light -and $kinds['Fish.esm'].Master -and -not $kinds['Moves.esp'].Master)
+    $o = Get-ThornswoodServerOrder $running @() $kinds @($running | Where-Object { $_ -ne 'Moves.esp' })
+    Same 'Moves.esp taken out and put back goes on the end of the full plugins' $o.Full @('Skyrim.esm', 'Update.esm', 'Fish.esm', 'Sword.esp', 'Last.esp', 'Moves.esp')
+    Same '  the light order is kept' $o.Light @('Beards.esl')
+    Same '  it is the one plugin added, and none is removed' (@($o.AddedFull) + @('|') + @($o.Removed)) @('Moves.esp', '|')
+    $m = Get-ThornswoodServerOrder $running @() $kinds @($running | Where-Object { $_ -ne 'Fish.esm' })
+    Same '  a master taken out and put back is a new full master, which the game would load first, so it cannot go on the end' $m.NewFullMasters @('Fish.esm')
 
     # ---- 3. Deploy-Gamemode.ps1 -OrderOnly ------------------------------------------
     Write-Host ''
