@@ -37,6 +37,12 @@
        cannot trust runs nothing and fails. #5292: it makes no more shares
        than there are harnesses to run, and none (shares=[]) for a change
        that reaches none.
+    8. -Pick N -Content (merge-release.yml, #5191) picks the harnesses a new
+       content build can affect, by the map; with CONTENT_SAME=no (the
+       newest build is of other inputs) the pick leaves out each content
+       check that reads an input changed since the build's commit, or that
+       the map cannot clear and names what the build writes, and says why;
+       with no commit to measure from it stops.
 
   Writes only its scratch folder, in the system's temp folder, and deletes it.
 #>
@@ -58,7 +64,7 @@ function Gzip([string]$text) {
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('run-gate-' + [Guid]::NewGuid().ToString('N'))
 $keepEnv = @{}
-foreach ($n in 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP', 'GITHUB_EVENT_NAME', 'GITHUB_REF', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_OUTPUT', 'STUB_RECORD', 'STUB_CODE', 'STUB_MAP', 'STUB_TOKEN', 'GATE_MAP_TOKEN', 'GATE_PLAN', 'RUNNER_NAME', 'COMPUTERNAME') {
+foreach ($n in 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP', 'GITHUB_EVENT_NAME', 'GITHUB_REF', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_OUTPUT', 'STUB_RECORD', 'STUB_CODE', 'STUB_MAP', 'STUB_TOKEN', 'GATE_MAP_TOKEN', 'GATE_PLAN', 'RUNNER_NAME', 'COMPUTERNAME', 'CONTENT_SAME', 'CONTENT_COMMIT') {
     $keepEnv[$n] = [Environment]::GetEnvironmentVariable($n)
 }
 $here = Get-Location
@@ -350,6 +356,53 @@ exit 0
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
     $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
     Yes ('with no map the pick is the whole gate by place in the list, saying why (' + $r.Plan + ')') ($r.Code -eq 0 -and $p -and $p.whole -and (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js test-c.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-b.js' -and $r.Text -match 'The whole gate runs: main''s nightly gate map could not be fetched' -and $r.Text -match 'Split by place in the list')
+
+    # ---- 8. the content checks (#5191, stage 4). b.txt stands for what
+    # the content build writes and d.txt for one of its inputs; test-b reads
+    # both, test-c always runs and names b.txt in its text.
+    $mods = Join-Path (Join-Path $sr 'scripts') 'mods'
+    $null = New-Item -ItemType Directory -Force -Path $mods, (Join-Path $sr 'tests')
+    Set-Content -LiteralPath (Join-Path $mods 'ContentPaths.ps1') -Value "function Get-ThornswoodContentPaths { param([string]`$Repo, [string]`$Tool) [pscustomobject]@{ Paths = @('d.txt'); Writes = @('b.txt') } }"
+    Set-Content -LiteralPath (Join-Path (Join-Path $sr 'tests') 'test-c.js') -Value "// reads b.txt"
+    $cm = Join-Path $scratch 'content-map'
+    $null = New-Item -ItemType Directory -Path $cm
+    $ctraces = @(
+        '{"harness":"test-a.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"execs":["node.exe"],"paths":{"a.txt":"read"}}',
+        '{"harness":"test-b.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"execs":["node.exe"],"paths":{"b.txt":"read","d.txt":"read"}}',
+        '{"harness":"test-c.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"always":"another process (git.exe) opened .git in the checkout while it ran","execs":["node.exe"],"paths":{}}'
+    ) -join "`n"
+    [IO.File]::WriteAllBytes((Join-Path $scratch 'content.traces.jsonl.gz'), (Gzip $ctraces))
+    $null = & node (Join-Path $dev 'Affected-Harnesses.js') build (Join-Path $scratch 'content.traces.jsonl.gz') (Join-Path $cm ($key + '.map.json')) $base
+    Copy-Item -LiteralPath (Join-Path $handed ($key + '.tree.gz')), (Join-Path $handed 'latest.json') -Destination $cm
+    $env:STUB_MAP = $cm
+    $r = Invoke-Gate 'push' 'github-hosted' -extra @('-Pick', '2', '-Content')
+    $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
+    $all = @(); if ($p) { foreach ($q in @($p.shares)) { $all += @($q) } }
+    Yes ('-Content picks the harnesses a new build can affect, by the map, and those it cannot clear (' + ($all -join ' ') + ')') ($r.Code -eq 0 -and (($all | Sort-Object) -join ' ') -eq 'test-b.js test-c.js' -and -not $p.whole -and $r.Text -match 'The content checks: 2 of the gate''s 3')
+    # A pull request that changes the input d.txt and a.txt, over a build
+    # of $base: test-b holds the old b.txt to the new d.txt and test-c names
+    # b.txt, so neither says anything of the change; test-a runs.
+    $null = GitOk -C $sr remote add origin $sr
+    Set-Content -LiteralPath (Join-Path $sr 'a.txt') -Value 'a, changed'
+    Set-Content -LiteralPath (Join-Path $sr 'd.txt') -Value 'd, changed'
+    $null = GitOk -C $sr commit -q -am 'change a and an input'
+    $env:CONTENT_SAME = 'no'; $env:CONTENT_COMMIT = $base
+    $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
+    $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
+    $all = @(); if ($p) { foreach ($q in @($p.shares)) { $all += @($q) } }
+    Yes ('with the newest build of other inputs, the pick leaves out the content checks that read a changed input (' + ($all -join ' ') + ')') ($r.Code -eq 0 -and ($all -join ' ') -eq 'test-a.js' -and -not $p.whole -and
+        $r.Text -match 'test-b\.js: reads b\.txt, and reads d\.txt' -and $r.Text -match 'test-c\.js: the map cannot clear it .*names b\.txt' -and $r.Text -match '2 content checks do not run here')
+    $env:CONTENT_SAME = 'yes'
+    $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
+    $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
+    $all = @(); if ($p) { foreach ($q in @($p.shares)) { $all += @($q) } }
+    Yes '  with the build of its own inputs it leaves none out' ($r.Code -eq 0 -and (($all | Sort-Object) -join ' ') -eq 'test-a.js test-b.js test-c.js' -and $r.Text -notmatch 'do not run here')
+    $env:CONTENT_SAME = 'no'; $env:CONTENT_COMMIT = ''
+    $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
+    Yes '  and with no telling which commit the build is of, the pick stops and says so' ($r.Code -eq 1 -and $r.Text -match 'CONTENT_COMMIT names no commit' -and -not $r.Plan)
+    $env:CONTENT_SAME = ''; $env:CONTENT_COMMIT = ''
+    $null = GitOk -C $sr reset -q --hard $base
+    Remove-Item -LiteralPath (Join-Path $sr 'tests'), $mods -Recurse -Force
 
     # ---- this build's share of the cores (#3860): the machine's cores over
     # the builds it runs at once. One's five builds took the box's count

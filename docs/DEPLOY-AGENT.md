@@ -497,6 +497,18 @@ The draft is written with a token of its own that asks only for **Contents:
 write**, minted only where `agent.json` names `content`. The installer names
 it where the gate's task is set up.
 
+Once the merge release finds the build, it runs the **content checks** over
+it before anything carries it (#5191, stage 4): every gate harness main's
+nightly map says a new build can affect (`Run-Gate.ps1 -Pick -Content`), in
+shares on Windows and Linux. A red one stops the release, and the build is
+kept as the artifact `content-dev` only after they pass. Every other run of
+the harnesses (a pull request's gate, the nightly, the named harnesses, the
+gate map's trace, a developer's clone) lays that artifact over its checkout
+first (`Get-ContentBuild.ps1 -Newest`). A pull request whose content inputs
+are not that build's leaves out the content checks that read an input it
+changed, since they would hold its new sources to the old tables; the merge
+release runs them.
+
 ## Release news
 
 Once a Deployment's success is on GitHub, the agent reads its Release again

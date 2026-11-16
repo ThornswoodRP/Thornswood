@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 8
 
 By rank: novice 18, advanced 35, expert 16, master 14.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (18 names). Alembic. Hammer. Iron Battleaxe. Iron Dagger. Iron Greatsword. Iron Mace. Iron Sword. Iron War Axe. Iron Warhammer. Key. Key Mold. Pickaxe. Riekling Bone Club. Rune Knife. Shears. Shovel. Weapon Kit. Woodcutter's Axe.
+
+**Advanced** (35 names). Dwarven Battleaxe. Dwarven Dagger. Dwarven Greatsword. Dwarven Mace. Dwarven Sword. Dwarven War Axe. Dwarven Warhammer. Forsworn Axe. Forsworn Sword. Nordic Battleaxe. Nordic Dagger. Nordic Greatsword. Nordic Mace. Nordic Sword. Nordic War Axe. Nordic Warhammer. Orcish Battleaxe. Orcish Dagger. Orcish Greatsword. Orcish Mace. Orcish Sword. Orcish War Axe. Orcish Warhammer. Silver Battleaxe. Silver Greatsword. Silver Sword. Silver War Axe. Steel Battleaxe. Steel Dagger. Steel Greatsword. Steel Mace. Steel Sword. Steel War Axe. Steel Warhammer. Wolf Sword.
+
+**Expert** (16 names). Elven Battleaxe. Elven Dagger. Elven Greatsword. Elven Mace. Elven Sword. Elven War Axe. Elven Warhammer. Falmer Sword. Falmer War Axe. Glass Battleaxe. Glass Dagger. Glass Greatsword. Glass Mace. Glass Sword. Glass War Axe. Glass Warhammer.
+
+**Master** (14 names). Ebony Battleaxe. Ebony Dagger. Ebony Greatsword. Ebony Mace. Ebony Sword. Ebony War Axe. Ebony Warhammer. Stalhrim Battleaxe. Stalhrim Dagger. Stalhrim Greatsword. Stalhrim Mace. Stalhrim Sword. Stalhrim War Axe. Stalhrim Warhammer.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Iron Battleaxe | 1 | novice | Battleaxes | SmithingForge | 4 Iron Ingot, 2 Leather Strips |  | yes | `da76e:Skyrim.esm` |
