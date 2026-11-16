@@ -41,6 +41,7 @@ param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')        # $OnWindows (#2957)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 if (-not $Repo) { $Repo = Split-Path -Parent (Split-Path -Parent $Here) }
@@ -133,8 +134,8 @@ $null = New-Item -ItemType Directory -Force -Path $T
 # The AppData the check reads, off Windows: empty, so there is no plugin list.
 $local = Join-Path $T 'LocalAppData'
 $null = New-Item -ItemType Directory -Force -Path $local
-$pcList = if ($IsWindows) { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Skyrim Special Edition\plugins.txt' } else { '' }
-$pcHasList = $IsWindows -and (Test-Path -LiteralPath $pcList)
+$pcList = if ($OnWindows) { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Skyrim Special Edition\plugins.txt' } else { '' }
+$pcHasList = $OnWindows -and (Test-Path -LiteralPath $pcList)
 
 # A pretend Steam copy, a package and a Root with its terms on file. $made
 # puts the folder the launcher made there already.
@@ -196,7 +197,7 @@ else {
 
 Write-Host ''
 Write-Host '4. the own folder already made, with its plugin list'
-if ($IsWindows) { Skip '4. the list there passes the check' 'Windows answers its own AppData whatever the environment says' }
+if ($OnWindows) { Skip '4. the list there passes the check' 'Windows answers its own AppData whatever the environment says' }
 else {
     Put (Under $local 'Skyrim Special Edition\plugins.txt') "*Thornswood-Content.esp`r`n"
     $r = Install (Fixture 'made-with-list' $true) $true
