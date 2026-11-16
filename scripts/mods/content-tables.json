@@ -41,7 +41,7 @@
     "reads": [], "writes": ["game/gamemode-tables/ADMIN_ITEMS.json", "game/gamemode-tables/ADMIN_ACTORS.json"] },
   { "tool": "scripts/dev/Build-RecipeTable.ps1", "data": "-Data", "plugins": "-PluginsTxt",
     "reads": ["game/data/harvests.json", "game/data/hunts.json", "game/data/ores.json", "game/data/races.json"],
-    "readsBack": ["docs/systems/cut-items.json"],
+    "readsBack": ["docs/systems/cut-items.json", "game/data/recost.json"],
     "writes": ["game/data/recipes.json", "game/gamemode-tables/RECIPES_BY_ID.json", "game/gamemode-tables/STAFF_SPELLS.json"] },
   { "tool": "scripts/dev/Build-Recost.py", "data": null, "plugins": null,
     "reads": ["game/data/recipes.json"], "writes": ["game/data/recost.json", "game/gamemode-tables/RECIPES_SET_IN_GAME.json"] },
