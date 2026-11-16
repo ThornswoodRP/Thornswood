@@ -97,6 +97,20 @@
   has to be there), so a release that moves the revision can run that check
   with nothing of One's.
 
+  -Modlist, with -Record, also writes the revision as a Wabbajack modlist,
+  thornswood.wabbajack in the record's folder (#6244): every mod's files in
+  a portable Mod Organizer 2 instance, each named by the archive it comes from
+  and its path in it, MO2 itself from its GitHub release (records\mo2.json
+  pins the version, the address and the sha256), and the MO2 profile with the
+  plugin order the record holds. WabbajackModlist.cs says the format. The
+  mods go in MO2's priority by the collection's mod rules, so a file two mods
+  share is the one the rules deploy last, as in files.txt; a dinput mod's
+  Data files are its own like any mod's, and what goes beside the game
+  (skse64_loader.exe) goes under Root in its folder, as Root Builder lays it
+  out. The same record writes the same bytes,
+  and the modlist's sha256 is printed. This is how the launcher installs
+  without Vortex: each Release carries the modlist and its hash.
+
   Needs PowerShell 7 (NexusLayout.cs reads JSON with System.Text.Json), 7-Zip
   (off Windows, 7-Zip's own build, which Get-SevenZip.ps1 fetches, because
   Ubuntu's cannot unpack the collection's RAR archives),
@@ -120,6 +134,14 @@
 .PARAMETER KeepPlugins
   With -Record: keeps the plugins the layout places in <Record>\plugins,
   and what SkyUI's menu check reads in <Record>\menus.
+
+.PARAMETER Modlist
+  With -Record: writes thornswood.wabbajack beside the record, the revision
+  as a Wabbajack modlist that installs a portable Mod Organizer 2 (#6244).
+
+.PARAMETER Mo2Record
+  The record that pins Mod Organizer 2 for -Modlist. records\mo2.json unless
+  said otherwise.
 
 .PARAMETER Slug
   The collection. 7essxf unless said otherwise.
@@ -145,6 +167,8 @@ param(
   [string]$Game,
   [string]$Record,
   [switch]$KeepPlugins,
+  [switch]$Modlist,
+  [string]$Mo2Record,
   [string]$Slug = '7essxf',
   [string]$GameDomain = 'skyrimspecialedition',
   [string]$Cache,
@@ -252,11 +276,12 @@ if ($WhatIf) { Say '  -WhatIf: downloads and works it all out, and changes nothi
 # ------------------------------------------------------------ refused up front ---
 if ($Game -and $Record) { Die 'Give -Game to lay the revision out, or -Record to write only its record, not both.' }
 if ($KeepPlugins -and -not $Record) { Die '-KeepPlugins keeps the plugins beside a record, so it goes with -Record. With -Game every file is laid out already.' }
+if ($Modlist -and -not $Record) { Die '-Modlist writes the modlist beside a record, so it goes with -Record.' }
 if ($KeepPlugins -and -not (Get-Command node -ErrorAction SilentlyContinue)) { Die '-KeepPlugins keeps the archives SkyUI''s menu check reads, and node says which those are (scripts\mods\Check-SkyUIMenus.js). node is not on this machine.' }
 if ($Record) {
   $Record = [IO.Path]::GetFullPath($Record).TrimEnd([IO.Path]::DirectorySeparatorChar)
   if ($WhatIf) { Die '-Record already changes nothing but its own folder; leave -WhatIf off.' }
-  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'plugins', 'menus') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
+  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
   if (Test-Path -LiteralPath (Join-Path $Record 'plugins')) {
     if (-not (Test-Path -LiteralPath (Join-Path $Record 'plugins') -PathType Container) -or @(Get-ChildItem -LiteralPath (Join-Path $Record 'plugins') -Force | Where-Object { $_.PSIsContainer -or $_.Name -notmatch '\.(esp|esm|esl)$' }).Count) { Die ('-Record ' + $Record + ' has a plugins entry that holds more than plugins. Give it a folder of its own.') }
   }
@@ -292,7 +317,13 @@ if (Test-Under $Cache $Game) { Die ('The cache ' + $Cache + ' is inside -Game.')
 if (Test-Under $Cache $Record) { Die ('The cache ' + $Cache + ' is inside -Record.') }
 $skyrimRecord = Join-Path (Join-Path $Repo 'records') 'skyrim-files.json'
 if (-not (Test-Path -LiteralPath $skyrimRecord)) { Die ('records\skyrim-files.json is not in this checkout (' + $skyrimRecord + '), and it is what a FOMOD''s questions about the game are answered from.') }
-Step { Add-Type -LiteralPath (Join-Path $Here 'NexusLayout.cs') } | Out-Null
+Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs')) } | Out-Null
+if ($Modlist) {
+  if (-not $Mo2Record) { $Mo2Record = Join-Path (Join-Path $Repo 'records') 'mo2.json' }
+  $mo2 = Step { Get-Content -Raw -LiteralPath $Mo2Record | ConvertFrom-Json }
+  foreach ($k in 'version', 'url', 'name', 'size', 'sha256') { if (-not $mo2.$k) { Die ($Mo2Record + ' has no ' + $k + ', so Mod Organizer 2 is not pinned.') } }
+  if ([string]$mo2.url -notmatch '^https://github\.com/ModOrganizer2/modorganizer/releases/download/') { Die ($Mo2Record + ' gives ' + $mo2.url + ', which is not a Mod Organizer 2 release on GitHub.') }
+}
 
 $world = New-Object Thornswood.Layout.Fomod+World
 $sky = Step { Get-Content -Raw -LiteralPath $skyrimRecord | ConvertFrom-Json }
@@ -396,7 +427,7 @@ foreach ($e in $col.Entries) {
   $got = Step { Receive-NexusPresigned $url $dir $what ([string]$e.FileId + '.archive') }
   if ($got.Size -ne $e.Size -or $got.Md5Hex -ne $e.Md5) {
     [IO.File]::Delete($got.Path)
-    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there.')
+    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there. Run it again to tell which: if the second download is the same ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', Nexus now serves other bytes as file ' + $e.FileId + ' and the revision is made again in Vortex on One; if it is the revision''s, the first broke on the way and the run carries on.')
   }
   # Measured on 20 Oct: the CDN sends no Content-Disposition for some files
   # (Crafting Categories for SkyUI, file 493920). Then the archive is named
@@ -433,6 +464,9 @@ if (Test-Path -LiteralPath $Cache -PathType Container) {
   }
 }
 if ($gone.Count) { Say ('  taken out of the cache, as no file of this revision: file id ' + ($gone -join ', file id ')) 'DarkGray' }
+# -Modlist names every archive by its xxHash64, as Wabbajack does.
+$script:ArchXx = @{}
+if ($Modlist) { foreach ($e in $col.Entries) { $script:ArchXx[$e.Index] = [Thornswood.Layout.XxHash64]::OfFile($archives[$e.Index]) } }
 # A RAR archive needs a 7-Zip that unpacks RAR. Ubuntu's does not: measured
 # 21 Oct (#2969), its 7zip package has no RAR codec ("Unsupported Method" on
 # Skyrim Sewers) and its 7zip-rar codec crashes on every RAR (exit 139). So
@@ -462,6 +496,8 @@ $script:PluginHeads = @{}
 $script:Kept = @{}
 # And what SkyUI's menu check reads, the same way (#4069).
 $script:KeptMenus = @{}
+# And with -Modlist what the modlist names each file by (#6244).
+$script:WjFiles = @{}
 $script:MenuCheck = Join-Path $PSScriptRoot '..\mods\Check-SkyUIMenus.js'
 function Test-MenuInputRel([string]$Rel) {
   return ($Rel -match '^(?i)Scripts\\ski_main\.pex$' -or $Rel -match '^(?i)Interface\\.+\.swf$' -or $Rel -match '^(?i)[^\\]+\.bsa$')
@@ -510,7 +546,7 @@ foreach ($e in $col.Entries) {
     }
     $out = Join-Path $pd ([Thornswood.Layout.WinPath]::FileName($p.Key))
     Step { [Thornswood.Layout.NexusLayout]::BsdiffApply($staged.Full, $blocks[0], $blocks[1], $blocks[2], $head[2], $out) }
-    $staged.Full = $out; $staged.Patched = $p.Key
+    $staged.Origin = $staged.Full; $staged.Full = $out; $staged.Patched = $p.Key
     Say ('  ' + $e.Name + ': patched ' + $p.Key + ' (CRC-32 ' + $crc + ' -> ' + [Thornswood.Layout.NexusLayout]::Crc32Of($out) + ')') 'DarkGray'
   }
   foreach ($w in $plan.Warnings) { Say ('  ' + $e.Name + ': the installer says ' + $w) 'Yellow' }
@@ -519,6 +555,18 @@ foreach ($e in $col.Entries) {
   if ($Record) {
     foreach ($s in $plan.Files.Values) { $script:Facts[$s.Full] = [pscustomobject]@{ Size = (Get-Item -LiteralPath $s.Full).Length; Sha256 = [Thornswood.Layout.NexusLayout]::Sha256Of($s.Full) } }
     foreach ($s in $plan.Files.Values) { if ($s.Full -match '\.(esp|esm|esl)$') { $script:PluginHeads[$s.Full] = [pscustomobject]@{ Header = (Read-PluginRuleHeader $s.Full) } } }
+    # -Modlist: each file by its xxHash64 and its path in the archive, and a
+    # patched one's delta from the archive's copy, before the copy goes.
+    if ($Modlist) {
+      $wj = New-Object System.Collections.Generic.List[object]
+      foreach ($s in $plan.Files.Values) {
+        if ([Thornswood.Layout.NexusLayout]::Blacklist.IsMatch($s.Rel)) { continue }
+        $one = [pscustomobject]@{ Rel = $s.Rel; Source = $s.Source; Size = $script:Facts[$s.Full].Size; Xx = [Thornswood.Layout.XxHash64]::OfFile($s.Full); FromXx = [uint64]0; Delta = $null }
+        if ($s.Patched) { $one.FromXx = [Thornswood.Layout.XxHash64]::OfFile($s.Origin); $one.Delta = [Thornswood.Layout.OctoDelta]::Make($s.Origin, $s.Full) }
+        $wj.Add($one)
+      }
+      $script:WjFiles[$e.Index] = $wj
+    }
     if ($KeepPlugins -and $e.Type -ne 'dinput') {
       foreach ($s in $plan.Files.Values) {
         if ($s.Rel -notmatch '^[^\\]+\.(esp|esm|esl)$') { continue }
@@ -557,7 +605,7 @@ Head 'Deploying, as Vortex would'
 $edges = [Thornswood.Layout.NexusLayout]::Edges($col)
 $cycle = $null
 $before = [Thornswood.Layout.NexusLayout]::Before($edges, [ref]$cycle)
-if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy.') }
+if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy. Take one of those rules out in Vortex on One, and lay out the revision that publishes.') }
 $claims = @{}
 foreach ($plan in $plans) {
   $e = $plan.Entry
@@ -589,7 +637,7 @@ foreach ($key in $claims.Keys) {
   }
   $placed.Add([pscustomobject]@{ Rel = $win.Rel; Full = $win.Staged.Full; Entry = $win.Entry; Over = @($c | Where-Object { $_ -ne $win } | ForEach-Object { $_.Entry }); Size = 0; Sha256 = '' })
 }
-if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ")) }
+if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ") + "`nGive each pair a mod rule in Vortex on One, one of the two loading after the other, and lay out the revision that publishes.") }
 Say ('  ' + $placed.Count + ' files; ' + $won + ' copies lost to a mod the rules deploy later')
 
 # Plugins: the collection's list first, in its order (gamebryo.tsx, the
@@ -607,7 +655,7 @@ foreach ($p in $col.Plugins) {
   if (-not $present.ContainsKey($k)) { $missingPlugins += $p.Name; continue }
   $order.Add([pscustomobject]@{ Name = $p.Name; Enabled = $p.Enabled })
 }
-if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '.') }
+if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '. Put in the mod that has them, or take them off the plugin list, in Vortex on One, and lay out the revision that publishes.') }
 $unlisted = @($present.Keys | Where-Object { -not $seen.ContainsKey($_) } | Sort-Object | ForEach-Object { $present[$_] })
 foreach ($n in $unlisted) { $order.Add([pscustomobject]@{ Name = $n; Enabled = $false }) }
 # The rules are held over the plugins the game loads, the enabled ones. A
@@ -748,6 +796,107 @@ if ($Record) {
       if ($got -ne $x.Sha256) { Die ($x.Rel + ' kept in ' + $md + ' has sha256 ' + $got + ', and files.txt names ' + $x.Sha256 + ' for it.') }
       $menuCount++
     }
+  }
+  if ($Modlist) {
+    Head 'The modlist'
+    $wjPath = Join-Path $Record 'thornswood.wabbajack'
+    $ml = New-Object Thornswood.Layout.Modlist
+    $ml.Name = 'Thornswood'; $ml.Author = 'Thornswood'; $ml.Website = 'https://thornswood.net'
+    $ml.Description = 'The mods the Thornswood servers run: collection ' + $Slug + ', revision ' + $Revision + ', in a portable Mod Organizer 2.'
+    $ml.Version = [string]$Revision + '.0.0.0'
+    # Mod Organizer 2 itself, from its own release on GitHub, held to the pin.
+    $mo2Dir = Join-Path $Cache 'mo2'
+    New-Item -ItemType Directory -Force -Path $mo2Dir | Out-Null
+    $mo2File = Join-Path $mo2Dir ([string]$mo2.name)
+    $mo2Ok = { param($f) (Test-Path -LiteralPath $f -PathType Leaf) -and (Get-Item -LiteralPath $f).Length -eq [long]$mo2.size -and [Thornswood.Layout.NexusLayout]::Sha256Of($f) -eq ([string]$mo2.sha256).ToLowerInvariant() }
+    if (-not (& $mo2Ok $mo2File)) {
+      if (Test-Path -LiteralPath $mo2File) { Say ('  ' + $mo2File + ' is not the pinned Mod Organizer 2, so it is replaced') 'Yellow'; [IO.File]::Delete($mo2File) }
+      Say ('  downloading Mod Organizer ' + $mo2.version + ' from ' + $mo2.url) 'DarkGray'
+      $part = $mo2File + '.part'
+      $http = New-Object Net.Http.HttpClient
+      try {
+        $resp = $http.GetAsync([string]$mo2.url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if (-not $resp.IsSuccessStatusCode) { Die ('GitHub answered ' + [int]$resp.StatusCode + ' for ' + $mo2.url + '.') }
+        $in = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult(); $outF = [IO.File]::Create($part)
+        try { $in.CopyTo($outF) } finally { $outF.Dispose(); $in.Dispose() }
+      } finally { $http.Dispose() }
+      [IO.File]::Move($part, $mo2File, $true)
+      if (-not (& $mo2Ok $mo2File)) { [IO.File]::Delete($mo2File); Die ('The download of ' + $mo2.url + ' is not the Mod Organizer 2 ' + $Mo2Record + ' pins (' + $mo2.size + ' bytes, sha256 ' + $mo2.sha256 + '). It was deleted.') }
+    }
+    $mo2Xx = [Thornswood.Layout.XxHash64]::OfFile($mo2File)
+    $ml.AddHttpArchive([string]$mo2.name, [long]$mo2.size, $mo2Xx, [string]$mo2.url)
+    $mo2Un = Join-Path $script:Work 'mo2'
+    Step { Expand-Archive7 $mo2File $mo2Un 'Mod Organizer 2' }
+    $mo2Count = 0
+    foreach ($f in [IO.Directory]::EnumerateFiles($mo2Un, '*', [IO.SearchOption]::AllDirectories)) {
+      $rel = [IO.Path]::GetRelativePath($mo2Un, $f).Replace([IO.Path]::DirectorySeparatorChar, '\')
+      $ml.FromArchive($mo2Xx, $rel, [Thornswood.Layout.XxHash64]::OfFile($f), (Get-Item -LiteralPath $f).Length, $rel)
+      $mo2Count++
+    }
+    Remove-Tree $mo2Un
+    Say ('  Mod Organizer ' + $mo2.version + ': ' + $mo2Count + ' files')
+    # Each mod's folder, named for the mod as MO2 allows, once.
+    $folders = @{}; $taken = @{}
+    foreach ($plan in $plans) {
+      $e = $plan.Entry
+      $nm = (($e.Name -replace '[<>:"/\\|?*\x00-\x1f]', '') -replace '[. ]+$', '').Trim()
+      if (-not $nm) { $nm = 'Mod ' + $e.FileId }
+      if ($taken.ContainsKey($nm.ToLowerInvariant())) { $nm = $nm + ' (' + $e.FileId + ')' }
+      $taken[$nm.ToLowerInvariant()] = $true
+      $folders[$e.Index] = $nm
+    }
+    # MO2's priority: a mod comes after every mod the rules deploy before it,
+    # otherwise in the collection's order, so the one the rules deploy last
+    # wins a shared file, as files.txt has it.
+    $prio = New-Object System.Collections.Generic.List[int]
+    $done = New-Object 'System.Collections.Generic.HashSet[int]'
+    while ($prio.Count -lt $plans.Count) {
+      $next = -1
+      foreach ($plan in $plans) {
+        $i = $plan.Entry.Index
+        if ($done.Contains($i)) { continue }
+        $ready = $true
+        foreach ($b in $before[$i]) { if (-not $done.Contains($b)) { $ready = $false; break } }
+        if ($ready) { $next = $i; break }
+      }
+      if ($next -lt 0) { Die 'The mod rules give no order for the modlist, though the deployment found one.' }
+      [void]$done.Add($next); $prio.Add($next)
+    }
+    $byIndex = @{}; foreach ($plan in $plans) { $byIndex[$plan.Entry.Index] = $plan }
+    $fileCount = 0; $patchCount = 0
+    foreach ($i in $prio) {
+      $e = $byIndex[$i].Entry
+      $ax = $script:ArchXx[$i]
+      $ml.AddNexusArchive([IO.Path]::GetFileName($archives[$i]), $e.Size, $ax, $GameDomain, $e.ModId, $e.FileId, $e.Name, $e.Version)
+      $base = 'mods\' + $folders[$i] + '\'
+      foreach ($w in $script:WjFiles[$i]) {
+        # A dinput mod's Rel is from the game folder: its Data files are the
+        # mod's own, as for any mod, and the rest goes under Root.
+        $to = if ($e.Type -ne 'dinput') { $base + $w.Rel } elseif ($w.Rel -match '^(?i)Data\\(.+)$') { $base + $Matches[1] } else { $base + 'Root\' + $w.Rel }
+        if ($w.Delta) { $ml.PatchedFromArchive($ax, $w.Source, $w.FromXx, $w.Delta, $w.Xx, $w.Size, $to); $patchCount++ }
+        else { $ml.FromArchive($ax, $w.Source, $w.Xx, $w.Size, $to) }
+        $fileCount++
+      }
+      $meta = "[General]`r`ngameName=SkyrimSE`r`nmodid=" + $e.ModId + "`r`nversion=" + $e.Version + "`r`ninstallationFile=" + [IO.Path]::GetFileName($archives[$i]) + "`r`nrepository=Nexus`r`n`r`n[installedFiles]`r`n1\modid=" + $e.ModId + "`r`n1\fileid=" + $e.FileId + "`r`nsize=1`r`n"
+      $ml.Inline($utf8.GetBytes($meta), 'mods\' + $folders[$i] + '\meta.ini', $false)
+    }
+    # The profile: MO2 lists the highest priority first.
+    $prof = 'profiles\Thornswood\'
+    $mlTxt = @('# This file was automatically generated by Mod Organizer.') + @(for ($k = $prio.Count - 1; $k -ge 0; $k--) { '+' + $folders[$prio[$k]] })
+    $ml.Inline($utf8.GetBytes(($mlTxt -join "`r`n") + "`r`n"), $prof + 'modlist.txt', $false)
+    $plTxt = @('# This file was automatically generated by Mod Organizer.') + @($order | ForEach-Object { $(if ($_.Enabled) { '*' } else { '' }) + $_.Name })
+    $ml.Inline($utf8.GetBytes(($plTxt -join "`r`n") + "`r`n"), $prof + 'plugins.txt', $false)
+    $loTxt = @('# This file was automatically generated by Mod Organizer.') + @($order | ForEach-Object { $_.Name })
+    $ml.Inline($utf8.GetBytes(($loTxt -join "`r`n") + "`r`n"), $prof + 'loadorder.txt', $false)
+    $ml.Inline($utf8.GetBytes("[General]`r`nLocalSaves=false`r`nLocalSettings=false`r`nAutomaticArchiveInvalidation=false`r`n"), $prof + 'settings.ini', $false)
+    # The instance, with the game and MO2's own folder put in at install.
+    $ini = "[General]`r`ngameName=Skyrim Special Edition`r`nselected_profile=@ByteArray(Thornswood)`r`ngamePath=@ByteArray({--||GAME_PATH_MAGIC_DOUBLE_BACK||--})`r`nversion=" + $mo2.version + "`r`nfirst_start=false`r`n`r`n[Settings]`r`ndownload_directory={--||MO2_PATH_MAGIC_FORWARD||--}/downloads`r`nmod_directory={--||MO2_PATH_MAGIC_FORWARD||--}/mods`r`nprofiles_directory={--||MO2_PATH_MAGIC_FORWARD||--}/profiles`r`noverwrite_directory={--||MO2_PATH_MAGIC_FORWARD||--}/overwrite`r`n"
+    $ml.Inline($utf8.GetBytes($ini), 'ModOrganizer.ini', $true)
+    $ml.Inline($utf8.GetBytes(''), 'portable.txt', $false)
+    Step { $ml.Save($wjPath) }
+    $wjSha = [Thornswood.Layout.NexusLayout]::Sha256Of($wjPath)
+    Say ('  ' + $ml.ArchiveCount + ' archives, ' + $ml.DirectiveCount + ' files (' + $fileCount + ' from the mods, ' + $patchCount + ' patched, ' + $mo2Count + ' of MO2)') 'Green'
+    Say ('  ' + $wjPath + ', ' + (Get-Item -LiteralPath $wjPath).Length + ' bytes, sha256 ' + $wjSha)
   }
   Remove-Tree $script:Work; $script:Work = ''
   Head 'Done'

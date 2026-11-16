@@ -639,6 +639,11 @@ tr.adder .plus{color:var(--faint);font-size:16px;line-height:38px}
 }
 .formfoot-center.formfoot { justify-content: center; }
 
+/* ------------------------------------------------ gold and trades (#6270) -- */
+table.ledger .faint{font-size:12px;color:var(--dim);margin-left:4px}
+table.ledger tr.flagged td{background:var(--raised)}
+table.ledger tr.flagged strong{font-weight:700}
+.bar .check{display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:14px}
 /* ----------------------------------------------- the hold economy (#3164) -- */
 table.econ th.num,table.econ td.num{text-align:right}
 table.econ .share{font-size:12px;color:var(--dim);margin-left:4px}

@@ -681,6 +681,30 @@ function gh {
 }
 $l = Read-ThornswoodSealedLog 'o/r' 1
 Yes 'the session reads the sealed bytes back from the log' ($l.Bytes -and [Convert]::ToBase64String($l.Bytes) -eq [Convert]::ToBase64String($sealed))
+# A skipped job listed first has no log (GitHub answers 404), and is passed
+# over, not read (16 Nov 2026, run 43791090690).
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return @('6 skipped', '7 success') }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$l = Read-ThornswoodSealedLog 'o/r' 1
+Yes '  past a skipped job listed before the one that ran, whose log GitHub does not keep' ($l.Bytes -and [Convert]::ToBase64String($l.Bytes) -eq [Convert]::ToBase64String($sealed))
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return @('6 success', '7 success') }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$l = Read-ThornswoodSealedLog 'o/r' 1
+Yes '  but a job that ran and whose log cannot be read still stops the read' (-not $l.Bytes -and $l.Why -match 'the log of job 6 could not be read')
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return '7' }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
 $keyPath = Join-Path $tmp 'run.key'
 [IO.File]::WriteAllText($keyPath, [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey()))
 $saved = Join-Path $tmp 'save'

@@ -79,10 +79,12 @@ THE RULE, every number of it a knob below
 
 WHY IT IS STABLE
 
-  Once Thornswood-Last.esp carries the new counts, a recipes.json built from
-  that load order reads them, and those rows would read as usual. So a row
-  already in recost.json keeps the ORIGINAL inputs it was first measured
-  with, for its own cost and for its group's median, every run. A row that
+  Build-RecipeTable.ps1 reads this file back and gives each row here the new
+  counts, as Thornswood-Last.esp carries them (#5191: it is built before that
+  plugin and never reads it), and the chain runs it again when this changes
+  the file. Those rows would then read as usual. So a row already in
+  recost.json keeps the ORIGINAL inputs it was first measured with, for its
+  own cost and for its group's median, every run. A row that
   leaves the load order leaves the file. A row that newly falls outside the
   band joins it.
 

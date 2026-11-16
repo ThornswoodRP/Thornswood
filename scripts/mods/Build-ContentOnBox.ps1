@@ -33,12 +33,18 @@
   Get-ThornswoodContentOrder). The first build on the box, 12 Nov, read the
   dev server's folder and order, which are revision 7's, so it stopped at
   Build-BuildingHolds.py naming revision 8's Improved Eyes Skyrim.esp: no
-  machine but One's Vortex game could move the recorded order (#5648). When
-  the order moves, the catalogue is built from it first, as content-tables.json's
-  notInChain says it is when the collection's order moves:
-  scripts\dev\Build-NpcPopulation.py, then scripts\dev\Build-ResourceLocations.py
-  (game\data\resource-locations.json; the docs' CSV lists it also writes are
-  not brought back). The chain then reads that order.
+  machine but One's Vortex game could move the recorded order (#5648).
+
+  ORDER. The order is records\load-order.json's, which the pull request that
+  moves the records to a new revision moves too (Set-LoadOrder.ps1). Until
+  16 Nov 2026 it was game\data\npc-population.json's, a table this build
+  writes, so a build read its order back from the build before it. So the
+  catalogue is built from the order first in every build, as
+  content-tables.json's notInChain says it is when the collection's order
+  moves: scripts\dev\Build-NpcPopulation.py, then
+  scripts\dev\Build-ResourceLocations.py (game\data\resource-locations.json;
+  the docs' CSV lists it also writes are not brought back). The chain then
+  reads that order.
 
   WHAT A BUILD IS KEPT BY. Its inputs: the server it was built against and
   every file Run-OnBox.ps1 sends for the chain (ContentPaths.ps1), by the
@@ -79,6 +85,21 @@
   Nothing is kept: every file comes back in -Out, station-sites.json among
   them, for that pull request, and the line MEASURED <key> says which build
   it measured over.
+
+  WITHOUT THE LAST PLUGIN (-WithoutLast, #5191). Patrick's B on
+  q-5191-last-plugin-loop (15 Nov 2026): the steps of the chain before
+  Build-LastPlugin.py stop reading Thornswood-Last.esp, which is made from
+  their own tables, and each takes what the Last plugin changes from the data
+  that decides it. To know which tables that moves,
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Build-Content -WithoutLast'
+
+  builds the commit as a build does, with Rebuild-ContentTables.ps1
+  -WithoutLast, and holds every file to the build of the same key kept here,
+  which has to be there first (run Build-Content). Nothing is kept: every
+  file comes back in -Out with without-last.json beside them, which names
+  each file that differs, and the lines DIFFERS <path> say the same, then
+  WITHOUT-LAST <key> and FROM <commit>.
 #>
 [CmdletBinding()]
 param(
@@ -106,7 +127,12 @@ param(
 
     # Measure the stations over the newest build kept here, then build over
     # them and keep nothing (THE STATIONS, above).
-    [switch]$Stations
+    [switch]$Stations,
+
+    # Build with the steps before Build-LastPlugin.py reading no Last plugin,
+    # say which files differ from the build kept for the key, and keep
+    # nothing (WITHOUT THE LAST PLUGIN, above).
+    [switch]$WithoutLast
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,7 +183,13 @@ function Test-Build([string]$Dir, [string]$Key = $key) {
     return $b
 }
 
-$built = if ($Stations) { $null } else { Test-Build $done }
+if ($Stations -and $WithoutLast) { Stop-Build '-Stations and -WithoutLast are two measurements; run one at a time. Nothing was built.' }
+$normal = $null
+if ($WithoutLast) {
+    $normal = Test-Build $done
+    if (-not $normal) { Stop-Build "no whole build of this commit's inputs ($key) is kept for the $Server server, so there is nothing to hold a build without the Last plugin to. Run Build-Content first. Nothing was built." }
+}
+$built = if ($Stations -or $WithoutLast) { $null } else { Test-Build $done }
 if ($built) {
     # Used again, so it is the newest to keep.
     (Get-Item -LiteralPath $done).LastWriteTimeUtc = [DateTime]::UtcNow
@@ -165,7 +197,7 @@ if ($built) {
     Write-Host ("FROM $($built.commit)")
     Write-Host ("the build of $($built.commit) on $($built.built) has the same inputs; $(@($built.files.PSObject.Properties).Count) files")
 } else {
-    if (-not $Stations -and (Test-Path -LiteralPath $done)) {
+    if (-not $Stations -and -not $WithoutLast -and (Test-Path -LiteralPath $done)) {
         Write-Host "the build kept as $key is not whole or not what its build.json says, so it is built again" -ForegroundColor Yellow
         Remove-Item -LiteralPath $done -Recurse -Force
     }
@@ -186,7 +218,7 @@ if ($built) {
         }
     } catch { Stop-Build ('the record''s plugins are not on the box: ' + $_.Exception.Message + ' Nothing was built.') }
     Write-Host ("the load order: collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +
-        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' the catalogue records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as the catalogue records it' }) +
+        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' records\load-order.json records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as records\load-order.json records it' }) +
         "; the collection's plugins from $Store")
     # Quoted, so each goes to the runner as one of the tool's words and never
     # as a parameter of its own.
@@ -212,15 +244,16 @@ if ($built) {
         Invoke-Step 'scripts/dev/Build-StationSites.py' @('--data', '{data}') 'The plugin was not built and nothing was measured.'
     }
     Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
-    $moves = @()
-    if ($order.Moved) {
-        # The catalogue first, in the order it moves to; the chain holds its
-        # plugin list to the catalogue's order (Rebuild-ContentTables.ps1).
-        Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The order did not move, the chain did not run and nothing was kept.'
-        Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
-        $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
-    }
-    Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' @('-Data', '{data}', '-PluginsTxt', '{plugins}') 'Nothing was kept.'
+    # The catalogue first, in the build's order; the chain holds its plugin
+    # list to the catalogue's order (Rebuild-ContentTables.ps1). Every build,
+    # since the order is records\load-order.json's and not the last build's
+    # catalogue (ORDER, above).
+    Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The chain did not run and nothing was kept.'
+    Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
+    $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
+    $chainWords = @('-Data', '{data}', '-PluginsTxt', '{plugins}')
+    if ($WithoutLast) { $chainWords += '-WithoutLast' }
+    Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' $chainWords 'Nothing was kept.'
 
     # The build: the plugin and every file the chain writes, a folder it
     # writes taken whole.
@@ -256,6 +289,37 @@ if ($built) {
         Write-Host ("MEASURED $($from[0].Build.key)")
         Write-Host ("FROM $commit")
         Write-Host ("$($files.Count + 1) files, station-sites.json among them; nothing was kept")
+        exit 0
+    }
+    if ($WithoutLast) {
+        # Kept nowhere: what differs from the build kept for the key goes back.
+        $was = @{}
+        foreach ($f in $normal.files.PSObject.Properties) { $was[$f.Name] = [string]$f.Value }
+        $differs = @(@($files.Keys) + @($was.Keys) | Sort-Object -Unique | Where-Object { -not $files.Contains($_) -or -not $was.ContainsKey($_) -or $files[$_] -cne $was[$_] })
+        if ($Out) {
+            foreach ($f in $files.Keys) {
+                $to = Join-Path $Out $f
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+                Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to -Force
+            }
+            $note = [ordered]@{
+                issue   = 5191
+                what    = 'A build with the steps before Build-LastPlugin.py reading no Thornswood-Last.esp (Build-ContentOnBox.ps1 -WithoutLast), held to the build kept for the same key.'
+                server  = $Server
+                key     = $key
+                commit  = $commit
+                against = $normal.commit
+                files   = $files.Count
+                differs = $differs
+            }
+            New-Item -ItemType Directory -Force -Path $Out | Out-Null
+            [IO.File]::WriteAllText((Join-Path $Out 'without-last.json'), ($note | ConvertTo-Json -Depth 4) + "`n", (New-Object Text.UTF8Encoding($false)))
+        }
+        Remove-Item -LiteralPath $part -Recurse -Force
+        foreach ($d in $differs) { Write-Host ("DIFFERS $d") }
+        Write-Host ("WITHOUT-LAST $key")
+        Write-Host ("FROM $commit")
+        Write-Host ("$($differs.Count) of $($files.Count) files differ from the build of $($normal.commit) kept for the key; nothing was kept")
         exit 0
     }
     $record = [ordered]@{

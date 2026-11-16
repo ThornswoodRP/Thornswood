@@ -56,4 +56,4 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: The launcher writes Profile\launcher.log in the folder you installed Thornswood to. Drag the file in here, or paste the last lines.
+      description: In the folder you installed Thornswood to, the launcher writes Profile\launcher.log, and the install writes Profile\setup-log.txt. Drag the one for what crashed in here, or paste its last lines.
