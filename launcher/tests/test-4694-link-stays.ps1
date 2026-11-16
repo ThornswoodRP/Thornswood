@@ -202,9 +202,12 @@ $FF = $asmFailed.GetType("$nsFailed.Fix")
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-4694-' + [guid]::NewGuid().ToString('N'))
 $ours = [Text.Encoding]::ASCII.GetBytes('THORNSWOOD-RELEASE-COPY')
 # A staged plugin in Vortex's staging and its deployed name in Data, one file.
+# Its name is made up: a harness that names a plugin the content build writes
+# is held back as a content check while that build is behind main, and this
+# one reads no build at all.
 function Stage([string]$case, [type]$own) {
-    $staged = Join-Path $work "$case\staging\SomeMod\Thornswood-Content.esp"
-    $dest = Join-Path $work "$case\Data\Thornswood-Content.esp"
+    $staged = Join-Path $work "$case\staging\SomeMod\Ours-4694.esp"
+    $dest = Join-Path $work "$case\Data\Ours-4694.esp"
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $staged))
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $dest))
     [IO.File]::WriteAllText($staged, 'VORTEX-STAGED-COPY')
@@ -214,7 +217,7 @@ function Stage([string]$case, [type]$own) {
 function Run([type]$fix, [string]$dest, [ref]$said) {
     $lines = New-Object 'System.Collections.Generic.List[string]'
     $item = [Activator]::CreateInstance($fix.Assembly.GetType($fix.Namespace + '.Item'))
-    $item.Plugin = 'Thornswood-Content.esp'
+    $item.Plugin = 'Ours-4694.esp'
     $say = [Action[string]] { param($m) $lines.Add($m) }.GetNewClosure()
     $ok = $fix::Write($dest, $ours, $item, $say)
     $said.Value = ($lines -join ' | ')
@@ -256,7 +259,7 @@ try {
     Yes 'b. the name still has its link, so the delete really was refused' ($G::Links($b[0]) -eq 2)
     Yes 'b. a refused delete: the plugin is not written' (-not $ok)
     Yes "b. Vortex's staged copy keeps its bytes" ([IO.File]::ReadAllText($b[0]) -eq 'VORTEX-STAGED-COPY')
-    Yes 'b. and Fix says the plugin could not be written' ($said -match 'Thornswood-Content\.esp could not be written \(why ')
+    Yes 'b. and Fix says the plugin could not be written' ($said -match 'Ours-4694\.esp could not be written \(why ')
 
     # c. How many names the file has cannot be read.
     $c = Stage 'c' $GF
@@ -264,7 +267,7 @@ try {
     $ok = Run $FF $c[1] ([ref]$said)
     Yes 'c. a link count that cannot be read: the plugin is not written' (-not $ok)
     Yes "c. Vortex's staged copy keeps its bytes" ([IO.File]::ReadAllText($c[0]) -eq 'VORTEX-STAGED-COPY')
-    Yes 'c. and Fix says the plugin could not be written' ($said -match 'Thornswood-Content\.esp could not be written \(why ')
+    Yes 'c. and Fix says the plugin could not be written' ($said -match 'Ours-4694\.esp could not be written \(why ')
 }
 finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 Done
