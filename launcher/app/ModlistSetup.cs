@@ -18,6 +18,8 @@
 //   6. the install itself into the Mod Organizer 2 instance
 //      (ModlistInstall.Install), and then the record of what goes into the
 //      game folder (Deployment), which OwnGame reads in place of Vortex's.
+//      A mod's settings file the person changed since the last whole install
+//      is kept as they left it (Wrote, ModlistInstall.Changed).
 // A run stopped part way keeps what it got: the archives in downloads and
 // the files already written, each still the modlist's, so the next run goes
 // on from there.
@@ -107,21 +109,54 @@ namespace Thornswood
             // The record of what goes into the game folder comes off before a
             // file of a changed modlist is written, so a folder made while the
             // install is part way never takes a mix of two revisions, and goes
-            // back once every file is in.
+            // back once every file is in. It is set aside rather than deleted
+            // (LastRecordName): it is also what the last whole install wrote,
+            // which says which settings files the person has changed since
+            // (Wrote), a run cut short and pressed again included.
             List<string> record = Deployment(m, Sha256Of(modlist));
             string recordFile = Path.Combine(mods, OwnGame.ModsRecordName);
+            string lastFile = Path.Combine(mods, LastRecordName);
             bool same = File.Exists(recordFile) && File.ReadAllLines(recordFile).SequenceEqual(record);
-            if (!same && File.Exists(recordFile)) File.Delete(recordFile);
+            if (!same && File.Exists(recordFile)) File.Move(recordFile, lastFile, true);
+            Dictionary<string, ulong> wrote = Wrote(File.Exists(recordFile) ? recordFile : lastFile);
 
             say("Putting in Mod Organizer 2 and the mods");
-            int written = ModlistInstall.Install(m, downloads, mods, game, SevenZip.With(sevenZip), say);
+            int written = ModlistInstall.Install(m, downloads, mods, game, SevenZip.With(sevenZip), say, wrote);
             if (!same)
             {
                 string part = recordFile + ".part";
                 File.WriteAllLines(part, record, new UTF8Encoding(false));
                 File.Move(part, recordFile, true);
             }
+            if (File.Exists(lastFile)) File.Delete(lastFile);
             return written;
+        }
+
+        /// <summary>
+        /// The record of the last whole install while a changed modlist goes
+        /// in, beside the instance's record. OwnGame never reads it.
+        /// </summary>
+        public const string LastRecordName = "thornswood-deployment-last.txt";
+
+        /// <summary>
+        /// Each file a record lists, by its path in the instance
+        /// (mods\&lt;mod&gt;\&lt;path&gt;), to the xxHash64 the install that
+        /// wrote the record left there. Empty when there is no record. A line
+        /// that cannot be read gives nothing, so that file takes the
+        /// modlist's copy.
+        /// </summary>
+        static Dictionary<string, ulong> Wrote(string file)
+        {
+            var wrote = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
+            if (!File.Exists(file)) return wrote;
+            foreach (string line in File.ReadLines(file).Skip(1))
+            {
+                string[] p = line.Split('|');
+                ulong h;
+                if (p.Length == 5 && ulong.TryParse(p[3], System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out h))
+                    wrote["mods\\" + p[1] + "\\" + p[2]] = h;
+            }
+            return wrote;
         }
 
         /// <summary>The profile the modlist's instance has on, whose modlist.txt gives the mods' order.</summary>
@@ -147,11 +182,8 @@ namespace Thornswood
             ModlistFile order = m.Files.FirstOrDefault(f => f.Kind == "InlineFile" && string.Equals(f.To, orderAt, StringComparison.OrdinalIgnoreCase));
             if (order == null) throw new ModlistStop("The modlist has no " + orderAt + ", so the order of its mods is not known and nothing was installed.");
             var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (string line in new UTF8Encoding(false).GetString(m.Data(order.DataId)).Split('\n'))
-            {
-                string l = line.Trim('\r', ' ', '\uFEFF');
+            foreach (string l in new UTF8Encoding(false).GetString(m.Data(order.DataId)).Split('\n').Select(line => line.Trim('\r', ' ', '\uFEFF')))
                 if (l.Length > 1 && l[0] == '+' && !rank.ContainsKey(l.Substring(1))) rank[l.Substring(1)] = rank.Count;
-            }
             var won = new Dictionary<string, KeyValuePair<int, string>>(StringComparer.OrdinalIgnoreCase);
             foreach (ModlistFile f in m.Files)
             {

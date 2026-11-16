@@ -361,6 +361,36 @@ namespace Thornswood
             return File.Exists(full) && new FileInfo(full).Length == f.Size && XxHash64.OfFile(full) == f.Hash;
         }
 
+        /// <summary>
+        /// A settings file in a mod, which a person may change in Mod
+        /// Organizer 2 to suit their PC: an .ini or a .toml in a mod's folder.
+        /// The mod's meta.ini is Mod Organizer 2's own, not one of these.
+        /// </summary>
+        public static bool Editable(string to)
+        {
+            string[] p = to.Split('\\');
+            if (p.Length < 3 || !string.Equals(p[0], "mods", StringComparison.OrdinalIgnoreCase)) return false;
+            if (p.Length == 3 && string.Equals(p[2], "meta.ini", StringComparison.OrdinalIgnoreCase)) return false;
+            string ext = Path.GetExtension(to);
+            return string.Equals(ext, ".ini", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".toml", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Whether the person changed this settings file since the last whole
+        /// install wrote it, so a new copy must not replace it: it is there,
+        /// and it is neither the copy that install wrote (<paramref name="wrote"/>,
+        /// by its path in the instance) nor the modlist's. Not when the last
+        /// copy is not known, which is a first install, or a file another mod
+        /// overrides and the game never reads.
+        /// </summary>
+        static bool Changed(string full, ModlistFile f, IReadOnlyDictionary<string, ulong> wrote)
+        {
+            ulong last;
+            if (wrote == null || !Editable(f.To) || !wrote.TryGetValue(f.To, out last) || !File.Exists(full)) return false;
+            ulong now = XxHash64.OfFile(full);
+            return now != last && now != f.Hash;
+        }
+
         /// <summary>The magic strings a RemappedInlineFile carries, put in for this install.</summary>
         public static string Remap(string text, string game, string mo2, string downloads)
         {
@@ -380,11 +410,15 @@ namespace Thornswood
         /// Stops before writing anything when an archive is missing. A file
         /// already there with the modlist's size and hash is left as it is, so a
         /// run again finishes one that was cut short. Every file written is
-        /// held to the modlist's hash first, through a .part beside it. Last,
-        /// a file in one of the modlist's mod folders that it does not name
-        /// is taken out (Tidy).
+        /// held to the modlist's hash first, through a .part beside it. A
+        /// settings file the person changed since the last whole install wrote
+        /// it (<paramref name="wrote"/>, each file's xxHash64 then, by its path
+        /// in the instance) is kept as they left it (Changed); one still as
+        /// that install wrote it takes the modlist's copy. Last, a file in one
+        /// of the modlist's mod folders that it does not name is taken out
+        /// (Tidy).
         /// </summary>
-        public static int Install(CollectionModlist m, string downloads, string target, string game, Unpack unpack, Action<string> say)
+        public static int Install(CollectionModlist m, string downloads, string target, string game, Unpack unpack, Action<string> say, IReadOnlyDictionary<string, ulong> wrote)
         {
             List<ModlistArchive> missing = Missing(m, downloads);
             if (missing.Count > 0)
@@ -396,6 +430,7 @@ namespace Thornswood
             Directory.CreateDirectory(target);
             string work = Path.Combine(target, ".unpack");
             int written = 0;
+            var kept = new List<string>();
 
             var byArchive = new Dictionary<ulong, List<ModlistFile>>();
             foreach (ModlistFile f in m.Files.Where(d => d.Kind == "FromArchive" || d.Kind == "PatchedFromArchive"))
@@ -409,7 +444,14 @@ namespace Thornswood
             {
                 List<ModlistFile> files;
                 if (!byArchive.TryGetValue(a.Hash, out files)) continue;
-                var todo = files.FindAll(delegate (ModlistFile f) { return !Already(Under(target, f.To), f); });
+                var todo = new List<ModlistFile>();
+                foreach (ModlistFile f in files)
+                {
+                    string full = Under(target, f.To);
+                    if (Already(full, f)) continue;
+                    if (Changed(full, f, wrote)) kept.Add(f.To);
+                    else todo.Add(f);
+                }
                 if (todo.Count == 0) continue;
                 if (Directory.Exists(work)) Directory.Delete(work, true);
                 Directory.CreateDirectory(work);
@@ -453,9 +495,14 @@ namespace Thornswood
                 if (f.Kind == "RemappedInlineFile") b = new UTF8Encoding(false).GetBytes(Remap(new UTF8Encoding(false).GetString(b), game, target, downloads));
                 else if (Already(dest, f)) continue;
                 if (File.Exists(dest) && File.ReadAllBytes(dest).AsSpan().SequenceEqual(b)) continue;
+                if (f.Kind == "InlineFile" && Changed(dest, f, wrote)) { kept.Add(f.To); continue; }
                 Put(dest, delegate (string part) { File.WriteAllBytes(part, b); });
                 written++;
             }
+            if (kept.Count > 0 && say != null)
+                say("Kept " + kept.Count + " settings file" + (kept.Count == 1 ? "" : "s") + " you changed in the mods as you left " + (kept.Count == 1 ? "it" : "them") + ": " +
+                    string.Join(", ", kept.Take(5)) + (kept.Count > 5 ? " and " + (kept.Count - 5) + " more" : "") +
+                    ". Delete one to take the modlist's copy at the next install");
             Tidy(m, target, say);
             return written;
         }

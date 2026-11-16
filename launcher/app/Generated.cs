@@ -173,10 +173,8 @@ namespace Thornswood
                 List<ModsDeployed> all = ModsDeployed.Read(mo2);
                 var exe = all.FindAll(delegate(ModsDeployed f) { return f.Rel.Equals("Data\\Pandora Behaviour Engine+.exe", StringComparison.OrdinalIgnoreCase); });
                 if (exe.Count != 1) throw new GeneratedStop("Mod Organizer 2's record (" + mo2 + ") does not name one mod for Pandora Behaviour Engine+.exe.");
-                var ofMod = new List<string>();
-                foreach (ModsDeployed f in all)
-                    if (f.Mod == exe[0].Mod && f.Rel.StartsWith("Data\\", StringComparison.OrdinalIgnoreCase)) ofMod.Add(f.Rel.Substring(5));
-                return ofMod;
+                return all.FindAll(delegate(ModsDeployed f) { return f.Mod == exe[0].Mod && f.Rel.StartsWith("Data\\", StringComparison.OrdinalIgnoreCase); })
+                          .ConvertAll(delegate(ModsDeployed f) { return f.Rel.Substring(5); });
             }
             // The source may itself be a Thornswood folder rather than the one
             // Vortex deploys into: the dev release folder and the main install

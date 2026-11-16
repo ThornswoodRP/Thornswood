@@ -36,6 +36,11 @@
     T  an install takes out of the modlist's mod folders what the modlist no
        longer names there (an earlier revision's file, a .part), and leaves
        other mod folders and the profile alone;
+    K  a settings file (.ini, .toml) in a mod that the person changed since the
+       last whole install wrote it is kept as they left it, from an archive
+       or inline, and said; one still as that install wrote it, any other
+       file changed, and every file when the last copy is not known, take
+       the modlist's; a deleted one comes back; a mod's meta.ini is not one;
     D  the record of what goes into the game folder (ModlistSetup.Deployment):
        a mod's files under Data and its Root folder's beside the game, the mod
        higher in the profile's modlist.txt winning a shared path, a switched
@@ -134,7 +139,7 @@ try {
     $game = Join-Path $T 'Game'
     $mo2 = Join-Path $T 'Mods'
     $said = New-Object Collections.Generic.List[string]
-    $n = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, [Action[string]]{ param($s) $said.Add($s) })
+    $n = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, [Action[string]]{ param($s) $said.Add($s) }, $null)
     function At([string]$rel) { return (Join-Path $mo2 ($rel -replace '\\', [IO.Path]::DirectorySeparatorChar)) }
     function Same([string]$rel, [byte[]]$want) { $f = At $rel; return ((Test-Path -LiteralPath $f -PathType Leaf) -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($f), $want)) }
     Yes "I2 it writes all five files ($n)" ($n -eq 5)
@@ -148,11 +153,11 @@ try {
     Yes 'I7 it says each archive it installed from by its mod and file on Nexus' ($said.Count -eq 2 -and ($said -join '|').Contains('Mod One (mod 100, file 1000): 2 files'))
     Yes 'I8 and leaves no unpack folder or .part file behind' (-not (Test-Path -LiteralPath (Join-Path $mo2 '.unpack')) -and @(Get-ChildItem -LiteralPath $mo2 -Recurse -Filter '*.part').Count -eq 0)
 
-    $n2 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) throw 'unpacked again' }, $null)
+    $n2 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) throw 'unpacked again' }, $null, $null)
     Yes "I9 a run again writes nothing and unpacks nothing ($n2)" ($n2 -eq 0)
     [IO.File]::WriteAllBytes((At 'mods\Mod One\Meshes\One.nif'), [byte[]](1, 2, 3))
     [IO.File]::WriteAllText((At 'ModOrganizer.ini'), 'edited')
-    $n3 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, $null)
+    $n3 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, $null, $null)
     Yes "I10 and puts back a file that was changed, and the remapped file ($n3)" ($n3 -eq 2 -and (Same 'mods\Mod One\Meshes\One.nif' $mesh) -and ([IO.File]::ReadAllText((At 'ModOrganizer.ini')) -eq $iniText))
 
     # ------------------------------------------------------------------ T ----
@@ -165,11 +170,67 @@ try {
     [IO.File]::WriteAllText((At 'mods\Mine\Mine.esp'), 'mine')
     [IO.File]::WriteAllText((At 'profiles\Thornswood\extra.txt'), 'kept')
     $said.Clear()
-    $n4 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) throw 'unpacked again' }, [Action[string]]{ param($s) $said.Add($s) })
+    $n4 = [Thornswood.ModlistInstall]::Install($m, $dl, $mo2, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) throw 'unpacked again' }, [Action[string]]{ param($s) $said.Add($s) }, $null)
     Yes "T1 a file in one of the modlist's mod folders that it does not name is taken out, a .part too, and says how many ($n4, $($said -join '|'))" ($n4 -eq 0 -and -not (Test-Path -LiteralPath (At 'mods\Mod One\Meshes\Old.nif')) -and -not (Test-Path -LiteralPath (At 'mods\Mod Two\Two.esp.part')) -and ($said -join '|').Contains('3 files the modlist no longer has'))
     Yes 'T2 a folder left empty goes with it' (-not (Test-Path -LiteralPath (At 'mods\Mod One\Stale')))
     Yes 'T3 a mod folder the modlist does not name, and the profile, are left as they are' ((Test-Path -LiteralPath (At 'mods\Mine\Mine.esp')) -and (Test-Path -LiteralPath (At 'profiles\Thornswood\extra.txt')))
     Yes 'T4 and every file the modlist names is still there' ((Same 'mods\Mod One\Meshes\One.nif' $mesh) -and (Same 'mods\Mod One\Textures\One.dds' $tex) -and (Same 'mods\Mod Two\Two.esp' $espNew))
+
+    # ------------------------------------------------------------------ K ----
+    # Two revisions of a mod with settings files. The person changes some
+    # after the first install; the second keeps what they changed.
+    $k1 = @{ kept = (Bytes "[A]`r`nx=1`r`n"); taken = (Bytes "[B]`r`ny=1`r`n"); esp = (Bytes 'K plugin 1'); inl = (Bytes "a = 1`n") }
+    $k2 = @{ kept = (Bytes "[A]`r`nx=2`r`n"); taken = (Bytes "[B]`r`ny=2`r`n"); esp = (Bytes 'K plugin 2'); inl = (Bytes "a = 2`n") }
+    function New-K([hashtable]$v, [string]$name) {
+        $zip = Join-Path $dl "$name.zip"
+        New-Zip $zip @{ 'Kept.ini' = $v.kept; 'Taken.ini' = $v.taken; 'K.esp' = $v.esp }
+        $hz = [Thornswood.XxHash64]::OfFile($zip)
+        $wk = New-Object Thornswood.Layout.Modlist
+        $wk.Name = 'Thornswood'; $wk.Version = '8.0.0.0'
+        $wk.AddNexusArchive("$name.zip", (Get-Item $zip).Length, $hz, 'skyrimspecialedition', 300, 3000, 'Mod K', '1.0')
+        $wk.FromArchive($hz, 'Kept.ini', (HashOf $v.kept), $v.kept.Length, 'mods\Mod K\SKSE\Plugins\Kept.ini')
+        $wk.FromArchive($hz, 'Taken.ini', (HashOf $v.taken), $v.taken.Length, 'mods\Mod K\SKSE\Plugins\Taken.ini')
+        $wk.FromArchive($hz, 'K.esp', (HashOf $v.esp), $v.esp.Length, 'mods\Mod K\K.esp')
+        $wk.Inline($v.inl, 'mods\Mod K\SKSE\Plugins\K.toml', $false)
+        $wk.Inline((Bytes "[General]`r`nversion=$name`r`n"), 'mods\Mod K\meta.ini', $false)
+        $out = Join-Path $T "$name.wabbajack"
+        $wk.Save($out)
+        return [Thornswood.CollectionModlist]::Read($out)
+    }
+    function Wrote([hashtable]$v) {
+        $d = New-Object 'Collections.Generic.Dictionary[string,uint64]' ([StringComparer]::OrdinalIgnoreCase)
+        $d['mods\Mod K\SKSE\Plugins\Kept.ini'] = (HashOf $v.kept); $d['mods\Mod K\SKSE\Plugins\Taken.ini'] = (HashOf $v.taken)
+        $d['mods\Mod K\K.esp'] = (HashOf $v.esp); $d['mods\Mod K\SKSE\Plugins\K.toml'] = (HashOf $v.inl)
+        return $d
+    }
+    $unzip = [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }
+    $mk1 = New-K $k1 'K-1'; $mk2 = New-K $k2 'K-2'
+    $mk = Join-Path $T 'Mods-k'
+    function KAt([string]$rel) { return (Join-Path $mk ($rel -replace '\\', [IO.Path]::DirectorySeparatorChar)) }
+    function KSame([string]$rel, [byte[]]$want) { $f = KAt $rel; return ((Test-Path -LiteralPath $f -PathType Leaf) -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($f), $want)) }
+    [void][Thornswood.ModlistInstall]::Install($mk1, $dl, $mk, $game, $unzip, $null, $null)
+    $mine = Bytes "[A]`r`nx=1`r`nmine=1`r`n"; $mineT = Bytes "a = 1`nmine = 1`n"; $mineE = Bytes 'my plugin'; $mineM = Bytes "[General]`r`nnotes=mine`r`n"
+    [IO.File]::WriteAllBytes((KAt 'mods\Mod K\SKSE\Plugins\Kept.ini'), $mine)
+    [IO.File]::WriteAllBytes((KAt 'mods\Mod K\SKSE\Plugins\K.toml'), $mineT)
+    [IO.File]::WriteAllBytes((KAt 'mods\Mod K\K.esp'), $mineE)
+    [IO.File]::WriteAllBytes((KAt 'mods\Mod K\meta.ini'), $mineM)
+    $said.Clear()
+    $nk = [Thornswood.ModlistInstall]::Install($mk2, $dl, $mk, $game, $unzip, [Action[string]]{ param($s) $said.Add($s) }, (Wrote $k1))
+    Yes "K1 a settings file the person changed since the last install is kept, from an archive and inline ($nk)" ((KSame 'mods\Mod K\SKSE\Plugins\Kept.ini' $mine) -and (KSame 'mods\Mod K\SKSE\Plugins\K.toml' $mineT))
+    Yes 'K2 one still as the last install wrote it takes the new copy' (KSame 'mods\Mod K\SKSE\Plugins\Taken.ini' $k2.taken)
+    Yes 'K3 a plugin the person changed, and the mod''s meta.ini, take the modlist''s copy' ((KSame 'mods\Mod K\K.esp' $k2.esp) -and (KSame 'mods\Mod K\meta.ini' (Bytes "[General]`r`nversion=K-2`r`n")) -and $nk -eq 3)
+    $kSaid = ($said | Where-Object { $_.StartsWith('Kept ') }) -join '|'
+    Yes 'K4 and it says which it kept, and that deleting one takes the modlist''s copy' ($kSaid.Contains('Kept 2 settings files you changed') -and $kSaid.Contains('mods\Mod K\SKSE\Plugins\Kept.ini') -and $kSaid.Contains('Delete one')) $kSaid
+    $nk = [Thornswood.ModlistInstall]::Install($mk2, $dl, $mk, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) throw 'unpacked again' }, $null, (Wrote $k2))
+    Yes "K5 run again with the record that install wrote, they are still kept and nothing is unpacked ($nk)" ($nk -eq 0 -and (KSame 'mods\Mod K\SKSE\Plugins\Kept.ini' $mine) -and (KSame 'mods\Mod K\SKSE\Plugins\K.toml' $mineT))
+    Remove-Item -LiteralPath (KAt 'mods\Mod K\SKSE\Plugins\Kept.ini')
+    [void][Thornswood.ModlistInstall]::Install($mk2, $dl, $mk, $game, $unzip, $null, (Wrote $k2))
+    Yes 'K6 a kept one the person deletes comes back as the modlist''s' (KSame 'mods\Mod K\SKSE\Plugins\Kept.ini' $k2.kept)
+    [void][Thornswood.ModlistInstall]::Install($mk2, $dl, $mk, $game, $unzip, $null, $null)
+    Yes 'K7 with no last copy known, a changed one takes the modlist''s' (KSame 'mods\Mod K\SKSE\Plugins\K.toml' $k2.inl)
+    $editable = @('mods\A\x.ini', 'mods\A\SKSE\Plugins\y.TOML', 'mods\A\Root\z.ini') | Where-Object { [Thornswood.ModlistInstall]::Editable($_) }
+    $not = @('mods\A\meta.ini', 'mods\A\x.esp', 'ModOrganizer.ini', 'profiles\Thornswood\Skyrim.ini') | Where-Object { [Thornswood.ModlistInstall]::Editable($_) }
+    Yes 'K8 a settings file is an .ini or .toml in a mod''s folder; meta.ini, plugins and files outside the mods are not' ($editable.Count -eq 3 -and $not.Count -eq 0) (($editable + $not) -join ', ')
 
     # ------------------------------------------------------------------ D ----
     # The record of what goes into the game folder (ModlistSetup.Deployment).
@@ -218,7 +279,7 @@ try {
     New-Item -ItemType Directory -Path $dl2 -Force | Out-Null
     Copy-Item -LiteralPath $a1 -Destination $dl2
     $fresh = Join-Path $T 'Mods-fresh'
-    $why = Stop-Of { [Thornswood.ModlistInstall]::Install($m, $dl2, $fresh, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, $null) }
+    $why = Stop-Of { [Thornswood.ModlistInstall]::Install($m, $dl2, $fresh, $game, [Thornswood.ModlistInstall+Unpack]{ param($a, $i) [Thornswood.ModlistInstall]::UnpackZip($a, $i) }, $null, $null) }
     Yes 'I11 an archive not in downloads stops the install before anything is written, naming its mod and file' ($why.Contains('Mod Two (mod 200, file 2000)') -and -not (Test-Path -LiteralPath $fresh)) $why
     [IO.File]::WriteAllBytes((Join-Path $dl2 'Mod Two-200-2-0.zip'), [byte[]][IO.File]::ReadAllBytes($a1))
     $miss = [Thornswood.ModlistInstall]::Missing($m, $dl2)
