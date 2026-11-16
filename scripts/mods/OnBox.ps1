@@ -87,6 +87,28 @@ catch { 'STOP. the run''s folder could not be held through its lock, so nothing 
 "@
 }
 
+# Why a tool ended with an exit other than 0, from what the run said (#6351):
+# the last STOP line the tool printed between the run's '-------- <tool>
+# --------' and '-------- end --------' lines, else the last line it printed
+# at all, which for a Python tool that died is its error's own line (the run
+# prints the tool's output, then its errors). '' when it printed nothing. On
+# 16 Nov 2026 Add-ContentRecords.py died on a file the box's checkout no longer
+# had, and the content build's status said only "ended with exit 1".
+function Get-ThornswoodToolReason([string[]]$Lines) {
+    $in = $false
+    $said = New-Object 'Collections.Generic.List[string]'
+    foreach ($l in @($Lines)) {
+        $t = ([string]$l).Trim()
+        if ($t -ceq '-------- end --------') { $in = $false; continue }
+        if ($t -cmatch '^-------- .+ --------$') { $in = $true; $said.Clear(); continue }
+        if ($in -and $t) { $said.Add($t) }
+    }
+    $stop = @($said | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+    if ($stop) { return $stop.Substring(6) }
+    if ($said.Count) { return $said[$said.Count - 1] }
+    return ''
+}
+
 # -Run is the run's own folder on the box, holding tools.zip; -ServerRoot the
 # game server whose plugins folder is copied; -Tool the repository path of
 # the tool, a .py run by Python, a .js by node or a .ps1 by PowerShell 7
@@ -121,8 +143,18 @@ function Get-ThornswoodOnBoxScript {
         # every file a step of the content chain writes outside these (#3425).
         [string[]]$Watch = @('game', 'records', 'docs/systems'),
         [string[]]$Order = @(),
-        [string]$Collection = ''
+        [string]$Collection = '',
+        # The plugins this repository makes in game\content. The server's copy
+        # of each is left out of the run's Data folder whether or not the
+        # commit holds one yet: nothing generated is committed (#5191), so the
+        # first step of a content build, which makes the plugin, runs from a
+        # commit with no game\content at all (#6351).
+        [string[]]$Own = @('Thornswood-Content.esp')
     )
+    foreach ($n in $Own) {
+        if ($n -notmatch '^[^\\/:*?"<>|'' \r\n][^\\/:*?"<>|''\r\n]*\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
+    }
+    $ownText = (@($Own | ForEach-Object { "'" + $_.ToLowerInvariant() + "'" }) -join ', ')
     if ([bool]$Order.Count -ne [bool]$Collection) { throw '-Order and -Collection go together: the record''s order is run with the record''s plugins.' }
     foreach ($n in $Order) {
         if ($n -notmatch '^[^\\/:*?"<>|\r\n]+\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
@@ -142,6 +174,10 @@ function Get-ThornswoodOnBoxScript {
     return @"
 `$ErrorActionPreference = 'Stop'
 `$ProgressPreference = 'SilentlyContinue'
+# An error nothing below catches says what it was on a STOP line, which
+# Run-OnBox.ps1 hands on, instead of ending the run with no EXIT and no
+# reason (#6351).
+trap { 'STOP. ' + `$_.Exception.Message + ' (run.ps1 line ' + `$_.InvocationInfo.ScriptLineNumber + ')'; exit 2 }
 $(Get-ThornswoodOnBoxHoldScript -Run $Run)
 `$repo = Join-Path `$run 'repo'
 `$data = Join-Path `$run 'data'
@@ -150,7 +186,12 @@ if (-not (Test-Path -LiteralPath `$plugins)) { 'STOP. there is no ' + `$plugins 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path `$run 'tools.zip'), `$repo)
 New-Item -ItemType Directory -Force -Path `$data | Out-Null
-`$ours = @(Get-ChildItem -LiteralPath (Join-Path `$repo 'game\content') -File | ForEach-Object { `$_.Name.ToLowerInvariant() })
+`$ownDir = Join-Path `$repo 'game\content'
+`$ownHere = @(if (Test-Path -LiteralPath `$ownDir -PathType Container) { Get-ChildItem -LiteralPath `$ownDir -File })
+`$ours = @(@($ownText) + @(`$ownHere | ForEach-Object { `$_.Name.ToLowerInvariant() }))
+# Ours the commit does not hold yet: the step that makes them is this one or
+# one after it, so they are in no order this run is given (#6351).
+`$unmade = @(@($ownText) | Where-Object { `$n = `$_; -not @(`$ownHere | Where-Object { `$_.Name.ToLowerInvariant() -eq `$n }).Count })
 foreach (`$f in @(Get-ChildItem -LiteralPath `$plugins -File)) {
   if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 }
@@ -162,7 +203,7 @@ if (`$collection) {
     if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data -Force; `$laid++ }
   }
 }
-foreach (`$f in @(Get-ChildItem -LiteralPath (Join-Path `$repo 'game\content') -File)) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
+foreach (`$f in `$ownHere) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 if (`$collection) { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with the ' + `$laid + ' of the collection''s store at ' + `$collection + ' over them and this commit''s own in place of the server''s' }
 else { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with this commit''s own in place of the server''s' }
 `$store = '$ArchiveStore'
@@ -195,7 +236,8 @@ if (`$linkedStrings) { 'strings   ' + `$linkedStrings + ' loose string table(s) 
 `$orderFrom = '$ServerRoot\server-settings.json'
 if (`$$fromRecord) {
   `$orderFrom = 'the load order this commit records'
-  `$names = @($orderText)
+  `$names = @(@($orderText) | Where-Object { `$unmade -notcontains `$_.ToLowerInvariant() })
+  if (`$unmade.Count) { 'unmade    ' + (`$unmade -join ', ') + ': not in this commit yet, so left out of ' + `$orderFrom }
   `$missing = @(`$names | Where-Object { -not (Test-Path -LiteralPath (Join-Path `$data `$_) -PathType Leaf) })
   if (`$missing.Count) { 'STOP. ' + `$missing.Count + ' plugin(s) of ' + `$orderFrom + ' are in neither ' + `$plugins + ' nor ' + `$collection + ': ' + (`$missing -join ', '); exit 2 }
 } elseif (`$$wantsPlugins -or `$$wantsSettings) {
@@ -246,7 +288,12 @@ if (-not `$python -or -not (Test-Path -LiteralPath `$python)) { 'STOP. py -3 nam
 # above put there is the server's, made from whichever recipe it last
 # deployed. When this commit's recipe does not make it here (a plugin it
 # reads is another copy, the content plugin of a pull request), the server's
-# stays and the line says so; Build-LastPlugin.py makes this commit's.
+# stays and the line says so; Build-LastPlugin.py makes this commit's. It is
+# for a tool that reads the plugin a build made, as Build-StationSites.py
+# measures over the build it lays: the content chain's steps before
+# Build-LastPlugin.py are not given it in their order (Rebuild-ContentTables.ps1,
+# #5191), and that step writes the plugin it makes over this one, for the
+# steps after it.
 `$lastRecipe = Join-Path `$repo 'game\data\last-plugin.recipe'
 if (Test-Path -LiteralPath `$lastRecipe) {
   `$lastSaid = @(& `$python (Join-Path `$repo 'scripts\mods\Make-LastPlugin.py') --data `$data --recipe `$lastRecipe 2>&1 | ForEach-Object { "`$_".Trim() } | Where-Object { `$_ })

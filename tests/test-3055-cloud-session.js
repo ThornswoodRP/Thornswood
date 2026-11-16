@@ -20,7 +20,11 @@
      and says so in one line; with no CLAUDE_ENV_FILE it says the identity
      was not set and goes on. --register writes no identity. #5291: it
      sets the clone's core.hooksPath to .githooks, so the pre-push checks
-     run before every push, and says so; --register sets nothing.
+     run before every push, and says so; --register sets nothing. #5191:
+     it lays the newest content build over the clone
+     (Get-ContentBuild.ps1 -Newest) and says which key in one line; a lay
+     that fails says so and the session still starts; --register lays
+     nothing.
   D  --register adds the hook once to the settings it is pointed at and keeps
      every other key; off Linux it refuses and writes nothing.
   E  scripts/dev/cloud-environment-setup.sh, the text of the environment's
@@ -30,8 +34,8 @@
      session with no clone gets through it with exit 0, one with the clone
      runs the register line, and one whose clone lacks the script stops.
 
-  B to E run the script with bash and a stand-in python3.12 that only writes
-  down how it was called, so nothing is installed. They need a Linux bash: on
+  B to E run the script with bash and a stand-in python3.12 and pwsh that
+  only write down how they were called, so nothing is installed or laid. They need a Linux bash: on
   Windows `bash` can be WSL's or Git's, and the script never runs there, so
   they say SKIP. E runs a copy of the setup script with its clone line
   pointed at a temp folder and every installer on PATH a stand-in, so it
@@ -116,23 +120,37 @@ else {
     return cp.spawnSync('bash', [SCRIPT].concat(args || []), { env: e, encoding: 'utf8' });
   }
   function called() { return fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8') : ''; }
+  // #5191: the lay, which would fetch a build and write over this clone.
+  const layCalls = path.join(tmp, 'lay.txt');
+  function standLay(code) {
+    const p = path.join(bin, 'pwsh');
+    fs.writeFileSync(p, '#!/bin/sh\necho "$*" >> \'' + layCalls + '\'\n' +
+      (code ? 'echo "STOP. stand-in lay said no"\n' : 'echo "TOOK abc FROM def: 1 files over this checkout"\necho "SAME KEY: this checkout is the build\'s"\n') +
+      'exit ' + code + '\n');
+    fs.chmodSync(p, 0o755);
+  }
+  function laid() { return fs.existsSync(layCalls) ? fs.readFileSync(layCalls, 'utf8') : ''; }
 
   try {
     stand(0);
+    standLay(0);
     // B
     let r = run([], { CLAUDE_CODE_REMOTE: null });
     yes('B1 with CLAUDE_CODE_REMOTE unset it exits 0 and says nothing',
       r.status === 0 && r.stdout === '' && r.stderr === '');
     r = run([], { CLAUDE_CODE_REMOTE: 'false' });
     yes('B2 with CLAUDE_CODE_REMOTE false it exits 0 and says nothing', r.status === 0 && r.stdout === '' && r.stderr === '');
-    yes('B3 and no Python was asked either time', called() === '');
+    yes('B3 and no Python was asked either time, and no build laid', called() === '' && laid() === '');
 
     // C
     const envFile = path.join(tmp, 'session.env');
     r = run([], { CLAUDE_CODE_REMOTE: 'true', CLAUDE_ENV_FILE: envFile });
     const line = called().trim();
-    yes('C1 in a cloud session it exits 0 (' + r.status + ') with one line each for the identity, the pre-push checks and the libraries',
-      r.status === 0 && r.stdout.trim().split('\n').length === 3 && r.stderr === '');
+    yes('C1 in a cloud session it exits 0 (' + r.status + ') with one line each for the identity, the pre-push checks, the content build and the libraries',
+      r.status === 0 && r.stdout.trim().split('\n').length === 4 && r.stderr === '');
+    yes('C8 #5191: it lays the newest content build over the clone, and says which key (' + laid().trim() + ')',
+      laid().trim() === '-NoProfile -File scripts/release/Get-ContentBuild.ps1 -Newest' &&
+      r.stdout.indexOf('The newest content build is laid over this clone (SAME KEY).') >= 0);
     let hooks = '';
     try { hooks = cp.execFileSync('git', ['--git-dir', fakeGit, 'config', 'core.hooksPath'], { encoding: 'utf8' }).trim(); }
     catch (e) { hooks = 'not set'; }
@@ -168,6 +186,12 @@ else {
     yes('C3 when pip fails it exits 1 and passes on pip\'s words',
       r.status === 1 && r.stderr.indexOf('stand-in pip said no') >= 0 && r.stderr.indexOf('bot/requirements.txt') >= 0);
     stand(0);
+    fs.unlinkSync(calls);
+    standLay(1);
+    r = run([], { CLAUDE_CODE_REMOTE: 'true', CLAUDE_ENV_FILE: envFile });
+    yes('C9 a lay that fails says so with its words, and the session still gets its libraries and exit 0',
+      r.status === 0 && r.stderr.indexOf('stand-in lay said no') >= 0 && r.stderr.indexOf('could not lay the content build') >= 0 && /--require-hashes/.test(called()));
+    standLay(0);
 
     // D
     const cfg = path.join(tmp, 'cfg');
@@ -177,12 +201,14 @@ else {
     const uname = cp.spawnSync('uname', ['-s'], { encoding: 'utf8' }).stdout.trim();
     const regEnv = path.join(tmp, 'register.env');
     cp.spawnSync('git', ['--git-dir', fakeGit, 'config', '--unset', 'core.hooksPath']);
+    if (fs.existsSync(layCalls)) { fs.unlinkSync(layCalls); }
     r = run(['--register'], { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_REMOTE: null, CLAUDE_ENV_FILE: regEnv });
     if (uname === 'Linux') {
       r = run(['--register'], { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_REMOTE: null, CLAUDE_ENV_FILE: regEnv });
       yes('D6 #5231: --register, at image build, writes no git identity', !fs.existsSync(regEnv));
       const regHooks = cp.spawnSync('git', ['--git-dir', fakeGit, 'config', 'core.hooksPath'], { encoding: 'utf8' });
       yes('D7 #5291: and sets no hooks folder, which is the session\'s clone\'s to set', regHooks.status === 1 && regHooks.stdout === '');
+      yes('D8 #5191: and lays no content build, which is the session\'s clone\'s to take', laid() === '');
       const s = JSON.parse(fs.readFileSync(settings, 'utf8'));
       const start = ((s.hooks || {}).SessionStart || []);
       const cmds = [].concat.apply([], start.map(function (g) { return (g.hooks || []).map(function (h) { return h.command; }); }));

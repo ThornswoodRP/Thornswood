@@ -60,7 +60,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { LoadBot, MOVE_MS, REPEAT_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
 const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
@@ -251,6 +251,35 @@ function moveRuleChecks() {
   h.b.lastMove = now; now += MOVE_MS + 1; h.b.advance(now);
   yes('  and one handed to it again after HostStop starts again with a move', h.c.sent.filter((x) => x.m.t === 2 && x.m.idx === 21).length === 3);
 
+  const r = walker('change');
+  const prop = { t: 22, idx: 21, propName: 'isOpen', dataDump: 'true' };
+  r.b.noteRepeat(prop, now); r.b.noteRepeat(Object.assign({}, prop), now + 5);
+  yes('a message that comes again, the same, within REPEAT_MS is counted as a copy', r.b.repeats === 1);
+  r.b.noteRepeat(Object.assign({}, prop, { dataDump: 'false' }), now + 6);
+  r.b.noteRepeat(Object.assign({}, prop), now + 10 + REPEAT_MS);
+  yes('  and one that differs, or comes later, is not', r.b.repeats === 1);
+  r.c.queue.push({ type: 'message', message: { t: 2, idx: 21, data: { pos: [0, 0, 0] } } });
+  r.c.queue.push({ type: 'message', message: { t: 2, idx: 21, data: { pos: [0, 0, 0] } } });
+  r.b.pump();
+  yes('  and moves are never counted, since each is its own', r.b.repeats === 1);
+
+  const k = walker('change');
+  k.b.play = ['host'];
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 31, refrId: 0x100000000 + 0x1981f, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {}, equipment: { inv: { entries: [] } } } });
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 32, refrId: 0xff000010, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: { isHostedByOther: true }, equipment: { inv: { entries: [] } } } });
+  // A chest, which the engine sends with no equipment (#6349).
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 33, refrId: 0x6134a, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {}, baseId: 0xc5209 } });
+  k.b.pump();
+  const asks = () => k.c.sent.filter((x) => x.m.t === 14);
+  yes('under --play host, an actor nobody hosts is asked for once, reliably; one somebody hosts is not',
+    asks().length === 1 && asks()[0].m.remoteId === 0x100000000 + 0x1981f && asks()[0].reliable === true);
+  k.c.queue.push({ type: 'message', message: { t: 7, idx: 32, propName: 'isHostedByOther', dataDump: 'false' } });
+  k.b.pump();
+  yes('  and one the server frees is asked for when it says so', asks().length === 2 && asks()[1].m.remoteId === 0xff000010);
+  k.c.queue.push({ type: 'message', message: { t: 7, idx: 33, propName: 'isHostedByOther', dataDump: 'false' } });
+  k.b.pump();
+  yes('  and a form that is no actor is never asked for, as the game never asks (#6349)', asks().length === 2 && asks().every((x) => x.m.remoteId !== 0x6134a));
+
   const o = walker('beat');
   o.b.stand = 1;
   for (let i = 0; i < 4; i++) { o.b.lastMove = now; now += MOVE_MS + 1; o.b.advance(now); }
@@ -277,7 +306,7 @@ function playChecks() {
   b.lastMove = now; b.nextHit = now + 100000; b.nextTrade = now + 100000;
   b.ws = { send: (t) => { b.wsSent = (b.wsSent || []).concat([t]); } }; b.welcomed = true; b.passSentAt = now;
   c.queue.push({ type: 'message', message: { t: 33, idx: 20, refrId: 0xff000123, transform: { pos: [300, 100, 0], worldOrCell: 0x3c } } });
-  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1981e, transform: { pos: [350, 0, 0], rot: [0, 0, 90], worldOrCell: 0x3c } } });
+  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1981e, transform: { pos: [350, 0, 0], rot: [0, 0, 90], worldOrCell: 0x3c }, equipment: { inv: { entries: [] } } } });
   c.queue.push({ type: 'message', message: { t: 33, idx: 22, refrId: 0xff000999, transform: { pos: [90000, 0, 0], worldOrCell: 0x3c } } });
   b.pump();
   yes('it keeps where the actors it is sent are, by idx', b.others.size === 3 && b.others.get(21).refrId === 0x100000000 + 0x1981e);
@@ -590,7 +619,7 @@ function mathChecks() {
   const reading = (at, cpuUs, rss, up, upD, down, downD, busy, total) => ({ at, server: { at, user: cpuUs, system: 0, rss, heap: 0 }, proxy: { up, upDatagrams: upD, down, downDatagrams: downD }, cpu: { busy, total } });
   const a = reading(0, 0, 100 * 1048576, 0, 0, 0, 0, 0, 0);
   const b = reading(10000, 5e6, 150 * 1048576, 10000, 100, 50000, 500, 4000, 10000);
-  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80], movesSentPerBot: [20, 40], settledSent: 5 }, { cpuMs: 1000, movesReadPerBot: [90], movesSentPerBot: [0], settledSent: 0 }];
+  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80], movesSentPerBot: [20, 40], settledSent: 5, repeatsRead: 30 }, { cpuMs: 1000, movesReadPerBot: [90], movesSentPerBot: [0], settledSent: 0 }];
   const w = windowOf(a, b, bots, 10);
   yes('cores are the server\'s CPU time over the samples\' own times (5 s in 10 s is 0.5)', Math.abs(w.serverCores - 0.5) < 1e-9);
   yes('memory is the working set at the end, in MB', w.serverRssMB === 150);
@@ -598,6 +627,7 @@ function mathChecks() {
   yes('the runner\'s busy share and the bots\' cores are read', w.machineBusy === 0.4 && w.botCores === 0.3);
   yes('moves read are a second, per walking bot, with the fewest', w.movesReadPerBotPerS === 8 && w.fewestMovesReadPerS === 7);
   yes('moves sent are a second, per walking bot, and settled ones a second in all', w.movesSentPerBotPerS === 2 && w.settledSentPerS === 0.5);
+  yes('copies read are a second, per person (30 by 10 people in 10 s is 0.3)', Math.abs(w.repeatsReadPerBotPerS - 0.3) < 1e-9);
   const base = { serverCores: 0.1, serverRssMB: 100 };
   const p = perPerson(w, base);
   yes('per person is against step 0: (0.5 - 0.1) / 10 cores, (150 - 100) / 10 MB', Math.abs(p.cores - 0.04) < 1e-9 && p.memoryMB === 5);
@@ -605,7 +635,7 @@ function mathChecks() {
   yes('step 0 has no per person numbers', perPerson(Object.assign({}, w, { people: 0 }), base) === null);
   const md = markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'change', stand: 0.5, steps: [{ people: 10, window: w, perPerson: p }, { people: 20, stopped: 'the runner was 95% busy' }], problem: '' });
   yes('the summary has a row a step and says where it stopped', /\| 10 \| 0\.500 \| 150 \|/.test(md) && /Stopped at 20: the runner was 95% busy/.test(md));
-  yes('  and says how the bots sent their moves and how much they stood', /stands still 50% of the time/.test(md) && /only when it changed, then once settled/.test(md) && /\| 2\.0 \| 8\.0 \| 40% \|/.test(md));
+  yes('  and says how the bots sent their moves and how much they stood', /stands still 50% of the time/.test(md) && /only when it changed, then once settled/.test(md) && /\| 2\.0 \| 8\.0 \| 0\.30 \| 40% \|/.test(md));
   yes('  or that they sent on every look', /on every look, as the game did before/.test(markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'beat', stand: 0, steps: [], problem: '' })));
 }
 

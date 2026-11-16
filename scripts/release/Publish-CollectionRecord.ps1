@@ -29,7 +29,8 @@
        in one run, after its own checks (each page's permissions, patches,
        mod rules);
     4. Install-NexusRevision.ps1 lays the draft out with -KeepPlugins and
-       stops on a rule that loops with the game's order;
+       -Modlist (#6244), and stops on a rule that loops with the game's
+       order;
     5. the record that layout makes (New-CollectionRecordFromLayout: each
        plugin's facts from its own header) is held to the record that was
        merged. Where they part, nothing the pull request reviewed is what
@@ -41,8 +42,10 @@
   record of the new revision (collection.json), the dropped plugins for
   records\collection-dropped.json (dropped.json), the draft's own
   collection.json for collection-permissions.js update (nexus-collection.json),
-  and last-rebuild.txt, the Last plugin's sources whose bytes the new
-  revision changes. No plugin goes in it: the plugins are other authors'
+  last-rebuild.txt, the Last plugin's sources whose bytes the new revision
+  changes, and the revision's Wabbajack modlist for
+  records\collection-modlist.wabbajack (collection-modlist.wabbajack: names,
+  hashes and our own files, and the collection's own patches as deltas). No plugin goes in it: the plugins are other authors'
   files and stay on the runner.
 
   WHAT THE LOG SHOWS. The steps, the change, and a STOP line from any script
@@ -221,7 +224,7 @@ Say "  draft revision $draft" 'Green'
 # ------------------------------------------------- 4 and 5. laid out, held --
 Head "Laying out revision $draft and holding it to the record"
 $lay = Join-Path $Work 'layout'
-$code = Invoke-RecordStep 'Install-NexusRevision' ([ordered]@{ Revision = $draft; Slug = [string]$want.collection; GameDomain = [string]$want.game; Record = $lay; KeepPlugins = $true; NoPause = $true })
+$code = Invoke-RecordStep 'Install-NexusRevision' ([ordered]@{ Revision = $draft; Slug = [string]$want.collection; GameDomain = [string]$want.game; Record = $lay; KeepPlugins = $true; Modlist = $true; NoPause = $true })
 $why = ''
 $diff = @()
 $got = $null
@@ -251,6 +254,7 @@ if ($env:GITHUB_OUTPUT) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "publishe
 
 # ------------------------------------------- what the records follow from --
 foreach ($f in @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt')) { Copy-Item -LiteralPath (Join-Path $lay $f) -Destination (Join-Path $Out $f) }
+Copy-Item -LiteralPath (Join-Path $lay 'thornswood.wabbajack') -Destination (Join-Path $Out 'collection-modlist.wabbajack')
 $got.revision = $draft
 [IO.File]::WriteAllText((Join-Path $Out 'collection.json'), (ConvertTo-CollectionRecordText $got), $utf8)
 $dropped = [ordered]@{ collection = [string]$want.collection; revision = $draft; dropped = @(@($want.dropped) | Where-Object { $_ }) }

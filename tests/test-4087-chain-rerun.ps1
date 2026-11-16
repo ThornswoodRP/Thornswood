@@ -83,12 +83,17 @@ function New-Sandbox([string]$mode, [string]$cut, [string]$withChain = $chain) {
     $root = Join-Path ([IO.Path]::GetTempPath()) ('ts-4087-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     Put $root 'scripts/mods/Rebuild-ContentTables.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/Rebuild-ContentTables.ps1')))
     Put $root 'scripts/dev/OwnPlugins.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')))
+    Put $root 'scripts/mods/ContentPaths.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/ContentPaths.ps1')))
     Put $root 'scripts/mods/content-tables.json' $withChain
     Put $root 'scripts/dev/CostWriter.js' $writer.Replace("'writer'", "'cost'").Replace("'docs', 'systems', 'cut.json'", "'docs', 'systems', 'cost.json'")
     Put $root 'scripts/dev/Reader.js' $reader
     Put $root 'scripts/dev/Between.js' $between
     Put $root 'scripts/dev/Writer.js' $writer
     Put $root 'game/data/npc-population.json' $population
+    # The order the commit records, which the catalogue is held to (#5191).
+    Put $root 'records/collection.json' '{"collection":"t","revision":1,"plugins":[]}'
+    Put $root 'records/collection-plugins.json' '{"collection":"t","revision":1,"plugins":[]}'
+    Put $root 'records/load-order.json' '{"loadOrder":["Skyrim.esm","Update.esm","Dawnguard.esm","HearthFires.esm","Dragonborn.esm","A.esp"]}'
     Put $root 'records/asset-provenance.json' "{`n  `"assets`": []`n}`n"
     Put $root 'docs/systems/cut.json' $cut
     Put $root 'mode.txt' $mode

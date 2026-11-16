@@ -18,6 +18,11 @@
 #   spread  new characters put at 36 spots over Tamriel, so few see each other.
 # A person is also a chat socket on the voice service, which carries their
 # join pass, so the voice service from this checkout runs beside the server.
+# A run by hand can have the bots do more than walk (play: fight, host, trade,
+# quest; load-bots.js says what each is), and keep the masters' NPCs alive
+# (npcs: yes; off unless asked). With both, the bots ask for and run the NPCs
+# near them, as games do, and each step says how many copies of one message
+# a bot read (#6252).
 # The numbers are in the run's summary and in the load-test-<shape> artifact
 # (result.json, the two services' logs and samples, nothing else), and go on
 # #4623.
@@ -53,6 +58,14 @@ on:
         description: 'Share of the time each bot stands still, 0 to 1'
         required: false
         default: '0.5'
+      play:
+        description: 'What the bots do besides walking, comma separated (fight, host, trade, quest), or none'
+        required: false
+        default: 'none'
+      npcs:
+        description: 'yes: the engine keeps the masters NPCs alive near the bots, for play host'
+        required: false
+        default: 'no'
   pull_request:
     paths:
       - 'scripts/bot/Load-Test.js'
@@ -135,8 +148,10 @@ jobs:
 
       - name: Lay out the load server
         shell: pwsh
+        env:
+          NPCS: ${{ github.event.inputs.npcs == 'yes' && 'yes' || 'no' }}
         run: |
-          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
+          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes --npcs $env:NPCS
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Put the bots on it
@@ -146,8 +161,11 @@ jobs:
           HOLD: ${{ github.event.inputs.hold || '60' }}
           MOVES: ${{ github.event.inputs.moves || 'change' }}
           STAND: ${{ github.event.inputs.stand || '0.5' }}
+          PLAY: ${{ github.event.inputs.play || 'none' }}
         run: |
-          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --moves $env:MOVES --stand $env:STAND --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
+          $play = @()
+          if ($env:PLAY -and $env:PLAY -ne 'none') { $play = @('--play', $env:PLAY) }
+          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --moves $env:MOVES --stand $env:STAND @play --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Keep the result and the server's log

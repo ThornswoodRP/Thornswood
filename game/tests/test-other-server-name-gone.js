@@ -3,7 +3,8 @@
 // The name of the SkyMP server Thornswood-Content.esp was salvaged from, and
 // its two short forms, are in no tracked file: not in code, comments, tests,
 // records, data, documents, docs\archive, the plugins themselves, or any
-// tracked file's path.
+// tracked file's path. Nor in what the content build lays over the checkout
+// (#5191: the content plugin and the tables are built, never committed).
 //
 // WHY THIS EXISTS. Issue #400. Patrick, 12 October, answering the decision on
 // the plugin's header description: "B and yes they can just don't mention
@@ -40,6 +41,14 @@
 //     compressed or pixel data, where three letters turn up by chance
 //     (measured 16 October: nine of them hold it, in mixed case, inside
 //     their compressed data, and none as a word).
+//   - A Wabbajack modlist (.wabbajack, records/collection-modlist.wabbajack,
+//     #6244): a zip, so its compressed bytes are not searched; every entry's
+//     name and every entry inflated are, all of them, in any case. In the
+//     modlist JSON each file's xxHash64 is eight random bytes written as
+//     base64 (eleven letters and "="), where any three letters turn up by
+//     chance (measured 16 November: 13 of revision 8's 35,443 hold the
+//     three letter form, in mixed case), so those are blanked first, as a
+//     PEM block is.
 //   - Every other binary file (meshes, interface files, programs): all of
 //     them, as single bytes and as UTF-16, in any case.
 //   - Thornswood-Last.esp, which no repository holds since #2791 step 3: it
@@ -97,6 +106,17 @@ try {
   console.log('git ls-files failed: ' + e.message);
 }
 yes('git lists the tracked files (' + tracked.length + ')', tracked.length > 100);
+// #5191: the content plugin, its Last plugin's recipe and every table are
+// built on the box and never committed. The build laid over this checkout
+// (scripts/release/Get-ContentBuild.ps1, temp/content-laid.json) is searched
+// with the tracked files, the plugin's records above all.
+let laid = [];
+try {
+  laid = Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, 'temp', 'content-laid.json'), 'utf8')).files || {});
+} catch (e) {
+  console.log('NOTE  no content build is laid here (' + e.message + '); pwsh scripts/release/Get-ContentBuild.ps1 -Newest lays one');
+}
+const searched = Array.from(new Set(tracked.concat(laid)));
 
 function lineOf(text, at) {
   let n = 1;
@@ -138,6 +158,55 @@ function pluginText(buf) {
   } catch (e) { return null; }
 }
 
+// The entries of a zip, each { name, data } with its data inflated. Throws
+// when it does not read as a zip of stored and deflated entries.
+function zipEntries(buf) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('no end of central directory');
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out = [];
+  for (let n = 0; n < count; n++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('a central directory entry does not start where it should');
+    const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32);
+    const local = buf.readUInt32LE(p + 42);
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen);
+    if (buf.readUInt32LE(local) !== 0x04034b50) throw new Error(name + ' has no local header where the directory says');
+    const at = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const raw = buf.subarray(at, at + csize);
+    if (method !== 0 && method !== 8) throw new Error(name + ' is packed by method ' + method);
+    out.push({ name: name, data: method === 8 ? zlib.inflateRawSync(raw) : raw });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+// A JSON string that is an xxHash64 in base64: eleven letters and "=", its
+// plus written as \u002B where the writer escapes it. Blanked to as many
+// spaces, so offsets still match.
+const HASH64 = /"(?:[A-Za-z0-9\/]|\\u002B|\+){11}="/g;
+function withoutHashes(s) {
+  return s.replace(HASH64, function (h) { return '"' + ' '.repeat(h.length - 2) + '"'; });
+}
+yes('an xxHash64 in base64 is blanked and nothing else is',
+    withoutHashes('{"Hash":"NW\\u002Bt1' + SHORT3 + 'eQY=","To":"' + SHORT3 + '"}').indexOf(SHORT3) === withoutHashes('{"Hash":"NW\\u002Bt1' + SHORT3 + 'eQY=","To":"' + SHORT3 + '"}').lastIndexOf(SHORT3) &&
+    withoutHashes('"' + SHORT3.toUpperCase() + 'FbvVgYZk="').toLowerCase().indexOf(SHORT3) < 0 && withoutHashes('"a path, not a hash="') === '"a path, not a hash="');
+
+function searchModlist(rel, buf) {
+  let entries;
+  try { entries = zipEntries(buf); } catch (e) { hits.push(rel + ' (a modlist that does not read as a zip, so it could not be searched: ' + e.message + ')'); return; }
+  entries.forEach(function (e) {
+    ALL.lastIndex = 0;
+    if (ALL.test(e.name)) hits.push(rel + ' (the name of its entry ' + JSON.stringify(e.name) + ')');
+    const s = withoutHashes(e.data.toString('latin1'));
+    let m;
+    ALL.lastIndex = 0;
+    while ((m = ALL.exec(s)) !== null) hits.push(rel + ' (its entry ' + e.name + ', at byte ' + m.index + ')  ' + JSON.stringify(m[0]));
+  });
+}
+
 // Compressed or pixel data, where three letters turn up by chance.
 const MEDIA = /\.(png|jpe?g|gif|webp|ico|bmp|tga|dds|mp3|mp4|webm|ogg|wav|flac|xwm|fuz|ttf|otf|woff2?)$/i;
 
@@ -151,7 +220,7 @@ function searchPlugin(rel, buf) {
   ALL.lastIndex = 0;
   while ((m = ALL.exec(s)) !== null) hits.push(rel + ' (plugin, at byte ' + m.index + ' of its inflated records)  ' + JSON.stringify(m[0]));
 }
-tracked.forEach(function (rel) {
+searched.forEach(function (rel) {
   ALL.lastIndex = 0;
   if (ALL.test(rel)) hits.push(rel + ' (its path)');
 
@@ -166,6 +235,11 @@ tracked.forEach(function (rel) {
     plugins++;
     pluginNames.push(path.basename(rel));
     searchPlugin(rel, buf);
+    return;
+  }
+  if (/\.wabbajack$/i.test(rel)) {
+    binary++;
+    searchModlist(rel, buf);
     return;
   }
   if (buf.indexOf(0) < 0) {
@@ -188,8 +262,8 @@ tracked.forEach(function (rel) {
   });
 });
 
-yes('read the tracked text files (' + text + '), plugins (' + plugins + ') and other binary files (' + binary + ')',
-    text > 100 && pluginNames.indexOf('Thornswood-Content.esp') >= 0 && tracked.indexOf('game/data/last-plugin.recipe') >= 0 && binary > 0);
+yes('read the tracked and laid text files (' + text + '), plugins (' + plugins + ') and other binary files (' + binary + '), the build\'s ' + laid.length + ' among them',
+    text > 100 && pluginNames.indexOf('Thornswood-Content.esp') >= 0 && searched.indexOf('game/data/last-plugin.recipe') >= 0 && binary > 0);
 const last = require('../../tests/last-plugin-made.js').made();
 if (last.buf) { searchPlugin('Thornswood-Last.esp (made from game/data/last-plugin.recipe)', last.buf); yes('read Thornswood-Last.esp, made from its recipe', true); }
 else { console.log('SKIP  Thornswood-Last.esp: ' + last.why); }

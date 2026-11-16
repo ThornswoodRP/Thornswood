@@ -21504,8 +21504,10 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     mayCharter(who)  game/trading-company.js mayCharter(who, terms) over the
                      terms in force (#511, #2700 builds on it)
     freightFor()     { gold, to } for one load into a ship hold
-  The property block posts and pays hauls by these, and the trade block
-  splits a sale by them. Nothing loads a ship yet; that is #2700's.
+  The property block posts and pays hauls by these, the trade block splits a
+  sale by them, and the trade ship dock asks mayCharter before every load
+  and sail (#2700). Nothing calls freightFor yet, so no freight is charged
+  on a load.
 
   THE STAFF CARD ON THE OFFICE PAGE OF K, the same way as #2685's world
   card: the server proposes, staff confirm, and nothing is typed. Staff see
@@ -21543,8 +21545,13 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
   #1393, #1646). Its hauls, its tenth and its sales out of the world are in the
   property block of gamemode.js. This file is the company's terms as data staff
   can change, and the arithmetic that reads them. It never touches the world, a
-  pack, a ledger, a purse or a price, and it is not wired in yet: the design and
-  Patrick's questions are on #512 (issuecomment-6245906394).
+  pack, a ledger, a purse or a price. The gamemode reads it through
+  globalThis.__thornswoodCompany (game/gamemode/company-terms.ts): the property
+  block posts and pays hauls by it, the trade block splits sales out of the
+  world by it, and the trade ship dock asks mayCharter before every load and
+  sail (#2700). Nothing calls freightFor yet, so no freight is charged on a
+  load. The design and Patrick's questions are on #512
+  (issuecomment-6245906394).
 
   THE TERMS are one object, kept in game/data/trading-company.json:
 
@@ -34028,12 +34035,23 @@ return module.exports;
     var SESSION_MS = 10 * 60 * 1000;   // a dock panel left open this long asks for the crate again
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a dock crate, the same as a hold's box
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0, timer = null;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, timer = null;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return kind + ':' + RUN + ':' + (++receiptN); }
+    /*
+      A RECEIPT'S NAME is kind:RUN:n (#4928). RUN is the server's run, kept on
+      globalThis, which a gamemode reload keeps, and the register on disk keeps
+      every name used. So n is kept on globalThis beside the run: a reload
+      carries on counting where the last load stopped, and a restart, a new
+      run, starts again at 1 under a run no name has used yet.
+    */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodShipReceiptN) || 0) + 1;
+      g.__thornswoodShipReceiptN = n;
+      return kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -35748,12 +35766,17 @@ return module.exports;
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a stop's crate, the same as a dock's
     var RAID_REACH = 700;              // how close a raider stands to the driver: a trade's 10 metres
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return 'cart-' + kind + ':' + RUN + ':' + (++receiptN); }
+    /* A cart receipt's name is cart-kind:RUN:n, n kept on globalThis beside the run, as the ships keep theirs (#4928). */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodCartReceiptN) || 0) + 1;
+      g.__thornswoodCartReceiptN = n;
+      return 'cart-' + kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];

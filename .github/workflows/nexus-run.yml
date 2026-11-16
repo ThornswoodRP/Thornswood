@@ -50,6 +50,7 @@ on:
         description: 'The public half of the key the output is sealed to (Nexus-Run.ps1 makes it)'
         required: false
 permissions:
+  actions: read
   contents: read
 # One at a time: Nexus keeps one draft revision, and two runs writing to the
 # same mod or collection would race.
@@ -76,6 +77,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
+
+      # What the box's content build writes is never committed (#5191,
+      # stage 4e): the newest a merge release kept, laid as the gate's shares
+      # lay it (build.yml, "Lay the newest content build"). Reading the list
+      # of kept builds is what actions: read is for.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
 
       - name: Run the script
         shell: pwsh -NoProfile -NonInteractive -Command ". '{0}'"

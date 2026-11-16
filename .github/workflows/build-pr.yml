@@ -441,12 +441,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The newest content build's list (Get-ContentBuild.ps1 -Newest).
+      actions: read
     timeout-minutes: 15
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # What the box's content build writes is never committed (#5191,
+      # stage 4e): the plugin and table checks below read the newest a merge
+      # release kept, laid as the shares lay it.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
 
       # The hosted image ships whatever node and python it has this month;
       # these are pinned so a check means the same thing every month.

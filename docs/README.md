@@ -38,7 +38,6 @@ and the long form of each, are in the Developer Guide's pages under
 | [LIGHT-ORDER-DRIFT.md](LIGHT-ORDER-DRIFT.md) | Every light plugin form id the live and the dev world stored, which plugin each was for, which have drifted with the light order, and the one-time move (#1715). |
 | [NPC-POPULATION.md](NPC-POPULATION.md) | NPC population catalogue from the winning records in the load order. |
 | [NPC-SERVER-ACTIVITY.md](NPC-SERVER-ACTIVITY.md) | Shared NPC activity on dev and main: who owns placed identities, movement, combat and return. |
-| [npc-server-runtime.md](npc-server-runtime.md) | Dev NPC loading and first unattended activity. |
 | [NPC-WORLD-PLAN.md](NPC-WORLD-PLAN.md) | NPC world work: town cut, habitat rules, rates and merchant quests. |
 
 The pages about running the box (what runs where, restoring it, moving it,

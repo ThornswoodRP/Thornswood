@@ -243,7 +243,7 @@ try {
         $hv.params.Service -eq ('^(' + ($names -join '|') + ')$') -and $hv.params.Why -eq 'text' -and
         $hv.params.Clear -eq 'switch' -and $hv.params.List -eq 'switch' -and $hv.params.Minutes -eq '^[0-9]{1,3}$')
     $wsText = Text $watchPath
-    Yes '  and an install through the gate that fails exits 1, so Box-Run says so' ($wsText.Contains("if (`"`$l`" -match '^FAILED') { `$c = 'Red'; `$failed = `$true }") -and $wsText.Contains('if ($failed) { exit 1 }'))
+    Yes '  and an install through the gate that fails exits 1, so Box-Run says so' ($wsText.Contains("if (`"`$l`" -match '^FAILED') { `$c = 'Red'; `$failed = `$true }") -and $wsText.Contains('$failed = Show-BoxLines @($out)') -and $wsText.Contains("if (`$failed) { Die 'The watchdog is not set up"))
 }
 catch {
     Yes ('the harness ran to the end: ' + $_.Exception.Message + ' at ' + $_.InvocationInfo.PositionMessage) $false

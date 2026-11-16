@@ -75,7 +75,7 @@ $repo = Split-Path -Parent $Here
 # A path written the Windows way, under a folder on this machine.
 function P([string]$root, [string]$rel) { return (Join-Path $root ($rel.Replace('\', [IO.Path]::DirectorySeparatorChar))) }
 $script_ = P $repo 'scripts\release\Install-NexusRevision.ps1'
-. (Join-Path $PSScriptRoot 'Windows.ps1')
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # Windows.ps1 too, and Add-LauncherType
 $win = $OnWindows
 
 $script:pass = 0; $script:fail = 0
@@ -363,7 +363,7 @@ $ctrl = Bz ((OffT 4) + (OffT 0) + (OffT 0)) 'ctrl'
 $dif = Bz ([byte[]](0, 0, 0, 1)) 'diff'
 $ext = Bz ([byte[]]@()) 'extra'
 $patch = [byte[]]([Text.Encoding]::ASCII.GetBytes('BSDIFF40') + (OffT $ctrl.Length) + (OffT $dif.Length) + (OffT 4) + $ctrl + $dif + $ext)
-Add-Type -LiteralPath (P $repo 'scripts\release\NexusLayout.cs')
+[void](Add-LauncherType -File (P $repo 'scripts\release\NexusLayout.cs'))
 $crcOld = [Thornswood.Layout.NexusLayout]::Crc32Of((P $T 'src\Epsilon\Eps.esp'))
 $epsE = Entry 'eps' 'Epsilon' @{ patches = [ordered]@{ 'Eps.esp' = $crcOld } }
 $colFull = P $T 'col-full'
@@ -579,8 +579,9 @@ YesR 'a record written before layout.json carried the rules is refused, and says
 # -Modlist writes the record's revision as a Wabbajack modlist. Mod Organizer 2
 # is a made-up 7z here, put in the cache with a record of its own that pins it,
 # so nothing is fetched from GitHub.
-Add-Type -LiteralPath (P $repo 'scripts\release\WabbajackModlist.cs')
-Yes 'xxHash64 names "abc" as Wabbajack does (mQl3rfUsvEQ=)' ([Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('abc'))) -eq 'mQl3rfUsvEQ=')
+# The writer with the launcher's XxHash64, by the compiler the build runs.
+[void](Add-LauncherType -File @((P $repo 'scripts\release\WabbajackModlist.cs'), (P $repo 'launcher\app\XxHash64.cs')))
+Yes 'xxHash64 names "abc" as Wabbajack does (mQl3rfUsvEQ=)' ([Thornswood.XxHash64]::Base64([Thornswood.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('abc'))) -eq 'mQl3rfUsvEQ=')
 $moSrc = P $T 'src\mo2'
 Put (P $moSrc 'ModOrganizer.exe') 'organizer'
 Put (P $moSrc 'plugins\installer_fomod.dll') 'fomod plugin'
@@ -611,14 +612,14 @@ $wjText = if ($wjEntries.ContainsKey('modlist')) { (New-Object Text.UTF8Encoding
 $wj = $wjText | ConvertFrom-Json
 Yes 'the modlist is a zip holding the modlist JSON' ($wjEntries.ContainsKey('modlist') -and $wj.GameType -eq 'SkyrimSpecialEdition' -and $wj.Name -eq 'Thornswood' -and $wj.Version -eq '5.0.0.0')
 Yes 'every "$type" is the first property of its object, as Wabbajack reads them' (([regex]::Matches($wjText, '"\$type"')).Count -gt 0 -and ([regex]::Matches($wjText, '"\$type"')).Count -eq ([regex]::Matches($wjText, '\{"\$type"')).Count)
-$xx = { param($f) [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfFile($f)) }
+$xx = { param($f) [Thornswood.XxHash64]::Base64([Thornswood.XxHash64]::OfFile($f)) }
 $wjA = @{}; foreach ($a in @($wj.Archives)) { $wjA[$a.Hash] = $a }
 $alphaA = $wjA[(& $xx $arc.alpha)]
 Yes 'each mod''s archive is named by its xxHash64, with its Nexus mod and file id, and MO2''s by its GitHub address' (@($wj.Archives).Count -eq 8 -and $null -ne $alphaA -and $alphaA.State.'$type' -eq 'NexusDownloader, Wabbajack.Lib' -and $alphaA.State.ModID -eq 101 -and $alphaA.State.FileID -eq 900001 -and $alphaA.State.GameName -eq 'SkyrimSpecialEdition' -and $alphaA.Size -eq (Get-Item -LiteralPath $arc.alpha).Length -and $wjA[(& $xx $moFile)].State.'$type' -eq 'HttpDownloader, Wabbajack.Lib' -and $wjA[(& $xx $moFile)].State.Url -eq ('https://github.com/ModOrganizer2/modorganizer/releases/download/v9.9.9/' + $moName))
 $wjD = @{}; foreach ($d in @($wj.Directives)) { $wjD[$d.To.ToLowerInvariant()] = $d }
 function WjFrom([string]$to, [string]$archive, [string]$inArc, [string]$text) {
     $d = $wjD[$to.ToLowerInvariant()]
-    return ($null -ne $d -and $d.'$type' -eq 'FromArchive' -and $d.ArchiveHashPath[0] -eq (& $xx $archive) -and $d.ArchiveHashPath[1] -eq $inArc -and $d.Hash -eq [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes((New-Object Text.UTF8Encoding($false)).GetBytes($text))))
+    return ($null -ne $d -and $d.'$type' -eq 'FromArchive' -and $d.ArchiveHashPath[0] -eq (& $xx $archive) -and $d.ArchiveHashPath[1] -eq $inArc -and $d.Hash -eq [Thornswood.XxHash64]::Base64([Thornswood.XxHash64]::OfBytes((New-Object Text.UTF8Encoding($false)).GetBytes($text))))
 }
 Yes 'a mod''s file goes to its MO2 folder, named by its archive and its path in it' ((WjFrom 'mods\Alpha\Alpha.esp' $arc.alpha 'Data\Alpha.esp' 'alpha plugin') -and (WjFrom 'mods\Beta\Beta.esp' $arc.beta 'junk\Beta.esp' 'beta plugin'))
 Yes 'the FOMOD''s choice is the file the modlist takes, and its own name in the archive is used' ((WjFrom 'mods\Gamma\Gamma.esp' $arc.gamma 'opt2\Gamma.esp' 'gamma two') -and (WjFrom 'mods\Lambda\lambda.txt' $arc.lambda 'opt\Lambda.txt' 'lambda text'))
@@ -643,7 +644,7 @@ function Apply-OctoDelta([byte[]]$old, [byte[]]$delta) {
 }
 $epsD = $wjD['mods\epsilon\eps.esp']
 $epsNew = if ($null -ne $epsD -and $wjEntries.ContainsKey([string]$epsD.PatchID)) { Apply-OctoDelta ([Text.Encoding]::ASCII.GetBytes('AAAA')) $wjEntries[[string]$epsD.PatchID] } else { $null }
-Yes 'the patched Eps.esp is a PatchedFromArchive whose delta turns the archive''s AAAA into AAAB' ($null -ne $epsD -and $epsD.'$type' -eq 'PatchedFromArchive' -and $epsD.ArchiveHashPath[1] -eq 'Eps.esp' -and $epsD.FromHash -eq [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('AAAA'))) -and $null -ne $epsNew -and [Text.Encoding]::ASCII.GetString($epsNew) -eq 'AAAB')
+Yes 'the patched Eps.esp is a PatchedFromArchive whose delta turns the archive''s AAAA into AAAB' ($null -ne $epsD -and $epsD.'$type' -eq 'PatchedFromArchive' -and $epsD.ArchiveHashPath[1] -eq 'Eps.esp' -and $epsD.FromHash -eq [Thornswood.XxHash64]::Base64([Thornswood.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('AAAA'))) -and $null -ne $epsNew -and [Text.Encoding]::ASCII.GetString($epsNew) -eq 'AAAB')
 Yes 'Mod Organizer 2''s own files come from its archive, at the instance''s root' ((WjFrom 'ModOrganizer.exe' $moFile 'ModOrganizer.exe' 'organizer') -and (WjFrom 'plugins\installer_fomod.dll' $moFile 'plugins\installer_fomod.dll' 'fomod plugin'))
 function WjInline([string]$to) { $d = $wjD[$to.ToLowerInvariant()]; if ($null -eq $d -or -not $wjEntries.ContainsKey([string]$d.SourceDataID)) { return $null }; return (New-Object Text.UTF8Encoding($false)).GetString($wjEntries[[string]$d.SourceDataID]) }
 $mlLines = @((WjInline 'profiles\Thornswood\modlist.txt') -split "`r`n" | Where-Object { $_ -and -not $_.StartsWith('#') })

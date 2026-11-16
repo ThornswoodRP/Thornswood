@@ -16,9 +16,12 @@
 //   - Unprotect is untouched: still an empty string on failure, never a throw,
 //     because an unreadable blob is nothing to recover and the launcher asks
 //     for the secret again;
-//   - its one caller, Discord.Save, still catches and logs, so the throw
-//     stops the write without stopping the launcher. Config.Save was the
-//     other until the update token went with the update feed (#5608).
+//   - its callers stop the write when it throws: Discord.Save catches and
+//     logs, so the throw stops the write without stopping the launcher, and
+//     Nexus.Write (the Nexus sign in, #6244) seals the tokens as the argument
+//     to its write and turns the throw into a reason the person reads, so
+//     nothing is written. Config.Save was another until the update token
+//     went with the update feed (#5608).
 //
 // Read only.
 const fs = require('fs');
@@ -108,11 +111,21 @@ yes('and that write is inside a try that logs',
     dSave.indexOf('try') >= 0 && dSave.indexOf('try') < dSave.indexOf('Secrets.Protect(t ?? "")') &&
     /catch \(Exception ex\) \{ Swallow\.Note\("Discord\.Save"/.test(dSave));
 
+const nexus = read('launcher/app/Nexus.cs');
+const nWrite = body(nexus, 'static void Write(Kept k)');
+yes('Nexus seals with Secrets.Protect', /Func<string, string> Seal = Secrets\.Protect;/.test(nexus));
+yes('and Nexus.Write seals as the argument to the write, so a throw leaves its file alone',
+    /File\.WriteAllText\(KeptFile, Seal\(/.test(nWrite));
+yes('and that write is inside a try whose catch throws the reason on, never a plain write',
+    nWrite.indexOf('try') >= 0 && nWrite.indexOf('try') < nWrite.indexOf('Seal(') &&
+    /catch \(Exception ex\) \{ throw new ModlistStop\(/.test(nWrite) &&
+    (nWrite.match(/File\.WriteAllText/g) || []).length === 1);
+
 yes('nothing else in the launcher calls Protect',
     fs.readdirSync(path.join(ROOT, 'launcher/app'))
       .filter((n) => /\.cs$/.test(n) && n !== 'Secrets.cs')
       .filter((n) => read('launcher/app/' + n).indexOf('Secrets.Protect') >= 0)
-      .sort().join(',') === 'Discord.cs');
+      .sort().join(',') === 'Discord.cs,Nexus.cs');
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

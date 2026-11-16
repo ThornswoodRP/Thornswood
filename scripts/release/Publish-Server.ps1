@@ -363,7 +363,19 @@ if (-not $PutBack -and -not $TaskOnly) { $committedOnly += 'game/gamemode.js', '
 . (Join-Path $Here 'RepoPlugins.ps1')
 . (Join-Path $Here '..\deploy\LastPluginRecipe.ps1')
 if ($FromStore) { $committedOnly += @($ThornswoodRepoPlugins | Where-Object { $_ -ine $ThornswoodLastPlugin } | ForEach-Object { 'game/content/' + $_ }) + 'game/data/last-plugin.json' }
-try { Assert-ThornswoodCommitted -RepoDir (Join-Path $Here '..\..') -Paths $committedOnly -What 'this publish' }
+# Our plugin, the Last plugin's record and the gamemode's tables are never
+# committed (#5191, stage 4e): they are the box's content build of this
+# commit, laid over this checkout first and held to that build instead of the
+# commit. On either channel it is the dev server's build, the one every
+# Release carries: merge-release.yml takes it, and a main release is one of
+# those promoted (#6175).
+$laidBuild = $null
+if (-not $PutBack -and -not $TaskOnly) {
+    . (Join-Path $Here '..\mods\ContentPaths.ps1')
+    try { $laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev } catch { Die ($_.Exception.Message + ' Nothing was sent.') }
+    Say ('{0,-22} {1}, built from {2}' -f 'content build', $laidBuild.Key.Substring(0, 12), $laidBuild.Commit.Substring(0, 12)) 'DarkGray'
+}
+try { Assert-ThornswoodCommitted -RepoDir (Join-Path $Here '..\..') -Paths $committedOnly -What 'this publish' -Laid $(if ($laidBuild) { $laidBuild.Files } else { $null }) }
 catch { Die $_.Exception.Message }
 
 # ------------------------------------------------------------- installer ----
@@ -553,7 +565,7 @@ else { Say ('{0,-22} {1}' -f 'built server', $Dist) 'DarkGray' }
 # names it. Built here, after the committed check above, so it is the commit.
 # Its tables (#5191) are in the artifact with it: the gamemode reads them from
 # the gamemode-tables folder beside it as it loads, and a load without them stops.
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables'
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -Content dev
 Say ('{0,-22} {1}' -f 'gamemode artifact', (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 $gmSrc = Join-Path $artifact.Folder 'game\gamemode.js'
 $gmSha = (Get-FileHash -LiteralPath $gmSrc -Algorithm SHA256).Hash.ToLowerInvariant()
