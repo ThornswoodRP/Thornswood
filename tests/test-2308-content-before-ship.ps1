@@ -281,7 +281,7 @@ try {
         # b. The server holds version two: the release goes out.
         Put $liveEsp $contentV2
         $r = Publish @('-Notes', "'Test release`n- one line'")
-        YesR ("the same release, once the server holds the same plugin, goes out (exit {0}, release {1})" -f $r.Code, $r.Published) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}$') $r
+        YesR ("the same release, once the server holds the same plugin, goes out (exit {0}, release {1})" -f $r.Code, $r.Published) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}Z$') $r
         Yes '  and says the server already holds it' ($r.Out -match 'already holds this release''s Thornswood-Content.esp')
         $feed = Read-Json (SiteFeed $site)
         Yes '  the feed the site serves has the release''s pack' (@($feed.packs).Count -ge 1)
@@ -295,7 +295,7 @@ try {
         Put $liveEsp 'whatever the server has now'
         Put (Join-Path $inst 'Game\Data\Platform\UI\thornswood-ours.esp') 'the plugin, changed again'
         $r = Publish @('-Notes', "'Second test release`n- another line'")
-        YesR ("a release that does not change the content plugin goes out whatever the server holds (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}$') $r
+        YesR ("a release that does not change the content plugin goes out whatever the server holds (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}Z$') $r
         Yes '  and does not ask it' ($r.Out -notmatch 'The content plugin on the server')
     } else {
         Write-Host 'SKIP  b. and c., a release that goes out: a release that signs here makes its catalog with New-FileCatalog, which only Windows has'

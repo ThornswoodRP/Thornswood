@@ -201,7 +201,8 @@ jobs:
       found: ${{ steps.find.outputs.found }}
       key: ${{ steps.find.outputs.key }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Find the build, or ask the box for it
@@ -210,11 +211,190 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Ask
+      # The build, held to its key, for the content checks below: a job of
+      # theirs could list the draft only with a token that writes Contents.
+      - name: Take the build for the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-taken'
+      - name: Hand the build to the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-taken
+          path: |
+            ${{ runner.temp }}/content-taken/content.zip
+            ${{ runner.temp }}/content-taken/content-build.json
+          if-no-files-found: error
+          # Read by this run's content checks, minutes later, and by nothing
+          # after it.
+          retention-days: 1
+
+  # THE CONTENT CHECKS (#5191, stage 4). Every gate harness a new content
+  # build can affect, as main's nightly map says (scripts\dev\Run-Gate.ps1
+  # -Content), run over the box's build of this merge before any release
+  # carries it, in shares as the gate runs: a red one stops the release, and
+  # the build is not kept as content-dev, so no checkout or pull request
+  # lays a build whose checks failed. A pull request that changes a content
+  # input runs these here and not in its own checks, where only an older
+  # build is there to run them over (Run-Gate.ps1 -Content says why).
+  checks-pick:
+    name: Pick the content checks
+    needs: content
+    if: ${{ needs.content.outputs.found == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Main's nightly gate map, an artifact of gate-map.yml.
+      actions: read
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      shares: ${{ steps.pick.outputs.shares }}
+      linux_shares: ${{ steps.pick.outputs.linux_shares }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Pick and split the content checks
+        id: pick
+        shell: pwsh
+        env:
+          GATE_MAP_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Pick 5 -LinuxShares 4 -Content
+          exit $LASTEXITCODE
+
+  checks:
+    name: Content checks (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.shares != '[]' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.shares) }}
+    steps:
+      # As build.yml's gate shares, which say why each step is there.
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Put .NET and NuGet's packages on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
+
+  checks-linux:
+    name: Content checks on Linux (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.linux_shares != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.linux_shares) }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
 
   release:
     name: Build, sign and release the merge
-    needs: content
-    if: ${{ needs.content.outputs.found == 'yes' }}
+    needs: [content, checks-pick, checks, checks-linux]
+    # The content checks passed, or had nothing to run on a platform.
+    if: ${{ !cancelled() && needs.content.outputs.found == 'yes' && needs.checks-pick.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.checks-linux.result == 'success' || needs.checks-linux.result == 'skipped') }}
     runs-on: windows-latest
     # ONE AT A TIME, NEVER CANCELLED (#6008). A run that has started runs to
     # its end; a newer merge waits, and GitHub keeps only the newest one waiting,
@@ -258,7 +438,8 @@ jobs:
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

@@ -82,6 +82,13 @@ forms.forEach(function (f) {
   if (!forTeam) {
     yes(f + ' is for reports from outside, so it puts on triage', !!label && /"triage"/.test(label[1]));
     yes(f + ' uses none of the team\'s own words', !TEAM_WORDS.test(t.replace(/^description:.*$/m, '')) && !STAFF.test(t));
+    // A form that says which log to send, and offers the installer, names the
+    // installer's log too. The install is the launcher's first start and
+    // writes Profile\setup-log.txt (launcher/app/InstallWindow.cs), and
+    // somebody whose install broke has no launcher.log to give.
+    if (/\.log\b/.test(t) && /^\s+- The installer\s*$/m.test(t)) {
+      yes(f + ' offers the installer and names its log, Profile\\setup-log.txt', /Profile\\setup-log\.txt/.test(t));
+    }
   } else {
     yes(f + ' is for the team and puts on no triage label', !label || !/"triage"/.test(label[1]));
   }

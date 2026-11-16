@@ -21,8 +21,8 @@ three clams, one small pearl, one pearl, one horker, and one egg.
 That is the whole of a new fisher's evening, and it is not enough to
 climb.
 
-The table under Every record is that current book. The same rows are
-in [lists/fisher.md](../lists/fisher.md).
+The table in [lists/fisher.md](../lists/fisher.md) is that current
+book.
 
 ## The water this server places
 
@@ -134,29 +134,6 @@ You cannot run the fishing mod's minigame and have it count. The
 cast is a press on water this server owns. You cannot dress a live
 slaughterfish. If one is on the hunter list, that is the hunter's.
 The egg nest is yours.
-
-<!-- detail:begin -->
-
-## Every record
-
-Generated from the work tables by `scripts/dev/Write-SystemLists.js`. The same rows are in [fisher](../lists/fisher.md).
-
-| Name | Rank | Records | You receive | In the world |
-| --- | --- | --- | --- | --- |
-| Clam Meat | novice | 3 | Clam Meat | Clam |
-| Salmon Meat | novice | 8 | Salmon Meat | Salmon |
-| Histcarp | advanced | 1 | Histcarp | Histcarp |
-| Horker Meat | advanced | 1 | Horker Meat | Horker meat |
-| River Betty | advanced | 1 | River Betty | River Betty |
-| Slaughterfish Scales | advanced | 1 | Slaughterfish Scales | Slaughterfish Scales |
-| Small Pearl | advanced | 1 | Small Pearl | Pearl Oyster |
-| Cyrodilic Spadetail | expert | 1 | Cyrodilic Spadetail | Cyrodilic Spadetail |
-| Pearl | expert | 1 | Pearl | Pearl Oyster |
-| Silverside Perch | expert | 1 | Silverside Perch | Silverside Perch |
-| Abecean Longfin | master | 1 | Abecean Longfin | Abecean Longfin |
-| Slaughterfish Egg | master | 1 | Slaughterfish Egg | Slaughterfish Egg Nest |
-
-<!-- detail:end -->
 
 ## Where this is
 

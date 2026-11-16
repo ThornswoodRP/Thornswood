@@ -1,6 +1,5 @@
 {
  "builtBy": "scripts\\dev\\Build-RaceTable.js",
- "builtAt": "2026-10-31T21:14:52.271Z",
  "source": "the RACE records of the plugins in load order",
  "note": "which recipes a race owns is in game\\data\\recipes.json; this only says what the races are",
  "count": 215,

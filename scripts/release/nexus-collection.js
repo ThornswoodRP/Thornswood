@@ -253,7 +253,38 @@ function named(rule, entry, fileExpression) {
   return false;
 }
 
-// The plugins the revision installs off its list, lower case, as the
+// WHAT TO DO NEXT (#4215). A stop says what is wrong and the step that
+// follows, so whoever ran it is not left to work that out.
+
+// For a mod number with no entry or more than one: the step for each, and
+// the entries by name when there are several.
+function entriesNext(hits, none, many) {
+  if (!hits.length) return none;
+  return 'They are ' + hits.map(m => m.name).join(' and ') + '. ' + many;
+}
+
+// A mod rule by what it names, as "Alpha after Charlie", not only its place
+// in collection.json.
+function sideSays(side) {
+  if (!side) return 'nothing';
+  if (side.logicalFileName) return String(side.logicalFileName);
+  if (side.fileExpression) return String(side.fileExpression);
+  if (side.fileMD5) return 'the archive with md5 ' + side.fileMD5;
+  if (side.tag) return 'the entry tagged ' + side.tag;
+  return 'an entry it does not name';
+}
+function ruleSays(r) { return sideSays(r.source) + ' ' + String(r.type) + ' ' + sideSays(r.reference); }
+
+// For an added plugin the list already names: the entry whose file hashes
+// bring it, and the two ways on from there.
+function bringsNext(collection, low, name, addName) {
+  const by = collection.mods.find(m => Array.isArray(m.hashes) && m.hashes.some(h => String(h.path || '').toLowerCase() === low));
+  if (by) {
+    return by.name + ' brings it now: if ' + addName + ' replaces it, take that out first with -Remove ' + by.source.modId +
+      ', and if not, leave ' + name + ' off ' + addName + '\'s plugins.';
+  }
+  return 'No entry\'s file hashes say which mod brings it: leave ' + name + ' off ' + addName + '\'s plugins, or make this revision in Vortex on One.';
+}
 // "unlisted" entries of the swaps gave them (PLUGINS OFF THE LIST above).
 const UNLISTED = new WeakMap();
 function unlistedOf(collection) { return UNLISTED.get(collection) || new Set(); }
@@ -313,7 +344,7 @@ function applySwaps(collection, swaps) {
     }
     if (!/^[0-9a-f]{32}$/.test(String(sw.md5))) stop('The md5 for mod ' + sw.modId + ' is not 32 lower case hex characters.');
     const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(sw.modId));
-    if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + sw.modId + ', so there is no one entry to change.');
+    if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + sw.modId + ', so there is no one entry to change. ' + entriesNext(hits, 'A mod the revision does not carry goes in with -Add, a file naming it and its archive.', 'A mod with more than one entry is changed in Vortex on One.'));
     const e = hits[0];
     const carried = ['hashes', 'choices', 'fileOverrides'].filter(k => {
       const v = e[k];
@@ -402,6 +433,7 @@ function moveRules(collection, e, sw, lines) {
   const oldVersion = coerce(e.version);
   const newVersion = coerce(sw.version);
   (collection.modRules || []).forEach((r, i) => {
+    const says = ruleSays(r);
     for (const sideName of ['source', 'reference']) {
       const side = r[sideName];
       if (!side || !sideNames(side, e)) continue;
@@ -413,12 +445,12 @@ function moveRules(collection, e, sw, lines) {
       };
       if (side.fileMD5 !== undefined) put('fileMD5', String(sw.md5));
       if (side.fileExpression !== undefined) {
-        if (!sw.fileExpression) stop('Mod rule ' + i + ' names ' + e.name + ' by its file name on Nexus, and the swap gives no fileExpression for the new one.');
+        if (!sw.fileExpression) stop('Mod rule ' + i + ' (' + says + ') names ' + e.name + ' by its file name on Nexus, and the swap gives no fileExpression for the new one. .\\scripts\\release\\New-NexusRevision.ps1 -Mod ' + sw.modId + ' reads that name from Nexus; run the move through it.');
         put('fileExpression', String(sw.fileExpression));
       }
       if (side.logicalFileName !== undefined && side.logicalFileName === s.logicalFilename) put('logicalFileName', String(sw.logicalFilename));
       if (side.versionMatch !== undefined && side.versionMatch !== '*') {
-        if (!oldVersion || side.versionMatch !== oldVersion || !newVersion) stop('Mod rule ' + i + ' matches ' + e.name + ' by the version "' + side.versionMatch + '", which is not its version ' + e.version + ' as Vortex reads it, so what it should become for ' + sw.version + ' is not known.');
+        if (!oldVersion || side.versionMatch !== oldVersion || !newVersion) stop('Mod rule ' + i + ' (' + says + ') matches ' + e.name + ' by the version "' + side.versionMatch + '", which is not its version ' + e.version + ' as Vortex reads it, so what it should become for ' + sw.version + ' is not known. Move it to the new file in Vortex on One, which writes the rule again for the version it installs.');
         put('versionMatch', newVersion);
       }
     }
@@ -456,7 +488,7 @@ function applyAdd(collection, add, lines) {
   for (const p of plugins) {
     if (!p || !p.name || !/\.es[mpl]$/i.test(p.name)) stop('A plugin of ' + add.name + ' has no plugin name (.esm, .esp or .esl).');
     const low = String(p.name).toLowerCase();
-    if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data.');
+    if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data. ' + bringsNext(collection, low, p.name, add.name));
     if (own.has(low)) stop(add.name + ' names ' + low + ' twice, in names that differ only in case, and Data holds one file by that name.');
     own.add(low);
     const after = Array.isArray(p.after) ? p.after : [];
@@ -592,7 +624,7 @@ function applyRule(collection, ru, lines) {
 function applyRemove(collection, rm, lines) {
   if (!/^\d+$/.test(String(rm.modId))) stop('A mod to take out has no mod number.');
   const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(rm.modId));
-  if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + rm.modId + ', so there is no one entry to take out.');
+  if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + rm.modId + ', so there is no one entry to take out. ' + entriesNext(hits, 'Nothing was taken out: -Remove takes a mod the revision carries, by the number in its page\'s address.', 'Take it out in Vortex on One.'));
   const e = hits[0];
   if (e.patches && Object.keys(e.patches).length) stop(e.name + ' carries patches, whose folder is in the archive. Take it out in Vortex on One.');
   // A mod rule may name the entry by its file name on Nexus alone, which

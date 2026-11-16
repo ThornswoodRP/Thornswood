@@ -356,25 +356,30 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   yes('  the pull request number and head through env, never pasted into the script', /\n          PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}\n          PR_HEAD: \$\{\{ github\.event\.pull_request\.head\.sha \}\}\n/.test(note) &&
       !/\$\{\{/.test(note.split('        run: |')[1] || ''));
   yes('the pull request build has the same note step', pr.indexOf(note) >= 0);
-  // The gate's reports are the one artifact a build keeps (#5295, public
-  // since 30 Oct 2026): the Windows shares', the Linux shares' (#5293) and
-  // the merged one. The note is never one (#3399).
+  // The gate's reports are what a build keeps (#5295, public since 30 Oct
+  // 2026): the Windows shares', the Linux shares' (#5293) and the merged
+  // one; and the content build the pick laid, handed to the shares for a
+  // day so they lay the same one and hold no token (#5191, stage 4). The
+  // note is never one (#3399).
   const uploads = (y) => (y.replace(/^\s*#.*$/gm, '').match(/uses: actions\/upload-artifact@[\s\S]*?\n\s+name: (.+)/g) || []).map(m => m.replace(/[\s\S]*name: /, ''));
-  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n));
-  yes('no step of either build uploads an artifact but the gate\'s reports, and the note is never one (#3399, #5295)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 3 && !/tested-tree/i.test(uploads(build).join(' ')));
+  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n) || n === 'content-laid');
+  yes('no step of either build uploads an artifact but the gate\'s reports and the content build the pick laid, and the note is never one (#3399, #5295, #5191)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 4 && !/tested-tree/i.test(uploads(build).join(' ')));
   for (const n of T.JOBS) { yes('the script\'s job name "' + n + '" is a job in build-pr.yml', pr.indexOf('\n    name: ' + n + '\n') >= 0); }
   yes('the script\'s workflow is the pull request build', fs.existsSync(path.join(REPO, T.WORKFLOW)) && /\non:\n  pull_request:\n/.test(pr));
   yes('  and runs in the merge queue, whose run the script reads first (#5182)', /\non:\n  pull_request:\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));
 
   // ---- 3. why the tree is enough ---------------------------------------------
-  const checkout = steps.find(st => /^      - uses: actions\/checkout@/.test(st)) || '';
+  // A step that runs an action carries a name of its own (#4166), so the
+  // checkout's first line is its name and its uses comes next.
+  const CHECKOUT = /^      - (name: .+\n        )?uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/;
+  const checkout = steps.find(st => CHECKOUT.test(st + '\n')) || '';
   const treeCheckout = treeSteps[0] || '';
   // persist-credentials: false keeps the token out of .git/config (#4162)
   // and changes nothing the checks see; any other with: (a depth, a filter,
   // a ref) would.
   const oneCommit = (c) => !/^\s+with:/m.test(c.replace(/\n        with:\n          persist-credentials: false(?=\n|$)/, ''));
-  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(checkout + '\n') && oneCommit(checkout) &&
-      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(treeCheckout + '\n') && oneCommit(treeCheckout));
+  yes('the checks check out one commit, with no history on either build, in both jobs', CHECKOUT.test(checkout + '\n') && oneCommit(checkout) &&
+      CHECKOUT.test(treeCheckout + '\n') && oneCommit(treeCheckout));
   yes('  and keep no credentials in .git/config (#4162)', /\n          persist-credentials: false(\n|$)/.test(checkout) && /\n          persist-credentials: false(\n|$)/.test(treeCheckout));
   // The lint step is the one step that reads the event and fetches the
   // base (#3185): it reports warnings and cannot fail a build, and it is the

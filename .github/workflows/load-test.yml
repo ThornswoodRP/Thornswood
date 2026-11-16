@@ -5,10 +5,11 @@
 #
 # Each job lays out a server on a fresh windows-2022 runner from the server
 # build records\server-build.json names (the fork's own build of the pin, the
-# one the build Release carries, every file held to the record), this checkout's gamemode.js and
-# Thornswood-Content.esp, and the five masters the fork's build downloads,
-# held to the same sha256 (scripts\bot\New-LoadServer.js; THIRD-PARTY.md says
-# where they come from, and they go with the runner). Then
+# one the build Release carries, every file held to the record), this
+# checkout's gamemode.js, the newest content build's tables and
+# Thornswood-Content.esp (#5191), and the five masters the fork's build
+# downloads, held to the same sha256 (scripts\bot\New-LoadServer.js;
+# THIRD-PARTY.md says where they come from, and they go with the runner). Then
 # scripts\bot\Load-Test.js puts more and more bots on it and, at each step,
 # reads the server process's cores and memory and every byte between the bots
 # and the server. Two shapes, one job each:
@@ -24,7 +25,7 @@
 # Why GitHub's runner: this repository is public, so its standard runners cost
 # nothing, and nothing here needs a secret, the box, or a real server. No job
 # here may name a self-hosted runner. Its token reads only: the public fork's
-# build of the pin and nothing else.
+# build of the pin and the newest content build a merge release kept.
 #
 # The runner is not the box: its cores are a cloud machine's, and the bots run
 # on it beside the server. Load-Test.js reads how busy the whole runner was at
@@ -44,6 +45,14 @@ on:
         description: 'Seconds each step is measured over'
         required: false
         default: '60'
+      moves:
+        description: 'How bots send moves: change (the game since #6247) or beat (every 130 ms, the game before it)'
+        required: false
+        default: 'change'
+      stand:
+        description: 'Share of the time each bot stands still, 0 to 1'
+        required: false
+        default: '0.5'
   pull_request:
     paths:
       - 'scripts/bot/Load-Test.js'
@@ -65,6 +74,10 @@ jobs:
       matrix:
         shape: [crowd, spread]
     runs-on: windows-2022
+    permissions:
+      contents: read
+      # The content build, an artifact of a merge release (#5191).
+      actions: read
     # Each step takes its fill, 20 s of settling and its window, so six
     # steps of 60 s are about 15 minutes after the downloads and the
     # gamemode's load; three times that is the limit.
@@ -74,11 +87,24 @@ jobs:
       - name: Check out as committed, LF
         shell: pwsh
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      # The content build (#5191, stage 4): the newest a merge release kept,
+      # laid over the checkout as every run of the harnesses lays it: the
+      # box builds the gamemode's tables and Thornswood-Content.esp, and the
+      # committed copies are not kept current (they leave git in stage 4e).
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
 
@@ -118,8 +144,10 @@ jobs:
         env:
           STEPS: ${{ github.event.inputs.steps || '10,20,40,60,80,100' }}
           HOLD: ${{ github.event.inputs.hold || '60' }}
+          MOVES: ${{ github.event.inputs.moves || 'change' }}
+          STAND: ${{ github.event.inputs.stand || '0.5' }}
         run: |
-          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
+          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --moves $env:MOVES --stand $env:STAND --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Keep the result and the server's log

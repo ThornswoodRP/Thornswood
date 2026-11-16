@@ -38,7 +38,16 @@
        layout.json carries, with drift where no rule binds only listed; a
        plugin differing only in its light flag named as that; a file the
        machine writes for itself and a switched off line with no plugin file
-       listed, not counted; and a record with no rules refused.
+       listed, not counted; and a record with no rules refused;
+    9. -Modlist (#6244): the record's revision as a Wabbajack modlist. Each
+       file named by its archive's xxHash64 and its path in it, in its mod's
+       Mod Organizer 2 folder (what a dinput mod puts beside the game under
+       Root), the bsdiff-patched file as an Octodiff delta that makes AAAB
+       of AAAA, MO2's own files
+       from its pinned archive, the profile's mod priority from the mod
+       rules and its plugin order from the record, every "$type" first, the
+       same bytes on a second run; and a pin that is not MO2's GitHub
+       release refused.
 
   OFF WINDOWS (#2969) every run writes only the record (-Record), because a
   game folder is laid out on Windows, and the same layout is held through
@@ -300,6 +309,7 @@ $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
 Control @{ corrupt = @() }
 YesR 'a download whose md5 is not the revision''s stops the run, naming the file' ($r.Code -eq 1 -and $r.Out -match 'The download of Beta \(mod 102, file 900002\) is not the archive the revision lists' -and $r.Out -match 'deleted from the cache') $r
+YesR '  and it says how to tell a broken download from a changed file, and what to do for each (#4215)' ($r.Out -match 'Run it again to tell which' -and $r.Out -match 'made again in Vortex on One' -and $r.Out -match 'broke on the way') $r
 Yes 'and nothing of it stays in the cache, while the one before it does' (@(Get-ChildItem -LiteralPath (P $cache '900002') -File -ErrorAction SilentlyContinue).Count -eq 0 -and @(Get-ChildItem -LiteralPath (P $cache '900001') -File).Count -eq 1)
 Yes 'and -Game (or -Record) was not made' (-not (Test-Path -LiteralPath (P $T 'game')))
 $got = @(Since $n0)
@@ -427,6 +437,21 @@ $colNoRule = P $T 'col-norule'
 Write-Col $colNoRule (Collection @($alphaE, $gammaE) @())
 $r = Run (@('-CollectionArchive', $colNoRule, '-Revision', '5', '-Cache', $cache) + (To 'game3'))
 YesR 'two mods that share a file with no rule between them stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'No mod rule says which' -and $r.Out -match 'Alpha and Gamma \(1 files\)' -and -not (Test-Path -LiteralPath (P $T 'game3'))) $r
+YesR '  and it says what to do: a mod rule for each pair, in Vortex on One (#4215)' ($r.Out -match 'Give each pair a mod rule in Vortex on One') $r
+
+# #4215: mod rules that go round in a circle, and plugins no mod has, each
+# stop with the next step, not only what is wrong.
+$ruleBack = [ordered]@{ type = 'after'; reference = [ordered]@{ fileMD5 = (Md5 $arc.gamma); versionMatch = '1.0.0'; logicalFileName = 'Gamma' }; source = [ordered]@{ fileMD5 = (Md5 $arc.alpha); versionMatch = '1.0.0'; logicalFileName = 'Alpha' } }
+$colCircle = P $T 'col-circle'
+Write-Col $colCircle (Collection @($alphaE, $gammaE) @($rule, $ruleBack))
+$r = Run (@('-CollectionArchive', $colCircle, '-Revision', '5', '-Cache', $cache) + (To 'game-circle'))
+YesR 'mod rules that go round in a circle stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'mod rules go round in a circle' -and -not (Test-Path -LiteralPath (P $T 'game-circle'))) $r
+YesR '  and it says what to do: take one of them out in Vortex on One (#4215)' ($r.Out -match 'Take one of those rules out in Vortex on One') $r
+$colGhost = P $T 'col-ghost'
+Write-Col $colGhost (Collection @($alphaE, $gammaE) @($rule))
+$r = Run (@('-CollectionArchive', $colGhost, '-Revision', '5', '-Cache', $cache) + (To 'game-ghost'))
+YesR 'plugins on the list that no mod has stop the run, naming them, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'lists plugins no mod in it has' -and $r.Out -match 'Beta\.esp' -and -not (Test-Path -LiteralPath (P $T 'game-ghost'))) $r
+YesR '  and it says what to do: put the mod in or take them off the list, in Vortex on One (#4215)' ($r.Out -match 'Put in the mod that has them, or take them off the plugin list, in Vortex on One') $r
 
 # 27 Oct: revision 5 ruled cheddars_mashups.esl, which the game loads as a
 # master, to load after plugins that are not, and the list had it at the end,
@@ -539,6 +564,87 @@ $lj9 = Get-Content -Raw -LiteralPath (P $rec9 'layout.json') | ConvertFrom-Json
 Put (P $rec9 'layout.json') ([ordered]@{ schema = 1; mods = $lj9.mods; plugins = @() } | ConvertTo-Json -Depth 5)
 $r = RunCmp @('-Record', $rec9, '-Vortex', $vg9, '-Plugins', (P $T 'kinds-plugins.txt'))
 YesR 'a record written before layout.json carried the rules is refused, and says how to write it again' ($r.Code -eq 1 -and $r.Out -match 'has no pluginRules' -and $r.Out -match 'Install-NexusRevision\.ps1 -Record') $r
+
+# ---- 9: the modlist (#6244) ---------------------------------------------------------
+# -Modlist writes the record's revision as a Wabbajack modlist. Mod Organizer 2
+# is a made-up 7z here, put in the cache with a record of its own that pins it,
+# so nothing is fetched from GitHub.
+Add-Type -LiteralPath (P $repo 'scripts\release\WabbajackModlist.cs')
+Yes 'xxHash64 names "abc" as Wabbajack does (mQl3rfUsvEQ=)' ([Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('abc'))) -eq 'mQl3rfUsvEQ=')
+$moSrc = P $T 'src\mo2'
+Put (P $moSrc 'ModOrganizer.exe') 'organizer'
+Put (P $moSrc 'plugins\installer_fomod.dll') 'fomod plugin'
+$moName = 'Mod.Organizer-9.9.9.7z'
+New-Item -ItemType Directory -Force -Path (P $cache 'mo2') | Out-Null
+$moFile = P $cache ('mo2\' + $moName)
+Push-Location $moSrc; try { & $sz a -t7z -y $moFile '*' | Out-Null } finally { Pop-Location }
+$moRec = P $T 'mo2.json'
+function Write-Mo2([string]$url) { Put $moRec ([ordered]@{ version = '9.9.9'; url = $url; name = $moName; size = (Get-Item -LiteralPath $moFile).Length; sha256 = (Sha $moFile) } | ConvertTo-Json) }
+Write-Mo2 ('https://github.com/ModOrganizer2/modorganizer/releases/download/v9.9.9/' + $moName)
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Modlist', '-Mo2Record', $moRec)
+YesR '-Modlist with no -Record is refused' ($r.Code -eq 1 -and $r.Out -match '-Modlist writes the modlist beside a record') $r
+Write-Mo2 'https://example.com/ModOrganizer.7z'
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', (P $T 'wj-bad'), '-Modlist', '-Mo2Record', $moRec)
+YesR 'a Mod Organizer 2 record whose address is not its GitHub release is refused' ($r.Code -eq 1 -and $r.Out -match 'not a Mod Organizer 2 release on GitHub') $r
+Write-Mo2 ('https://github.com/ModOrganizer2/modorganizer/releases/download/v9.9.9/' + $moName)
+$wjRec = P $T 'wj-record'
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec, '-Modlist', '-Mo2Record', $moRec)
+YesR 'the record with -Modlist runs to the end and prints the modlist''s sha256' ($r.Code -eq 0 -and $r.Out -match 'thornswood\.wabbajack, \d+ bytes, sha256 [0-9a-f]{64}') $r
+$wjFile = P $wjRec 'thornswood.wabbajack'
+Yes 'the record folder holds the four records and the modlist' ((@(Get-ChildItem -LiteralPath $wjRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt thornswood.wabbajack')
+$wjEntries = @{}
+if (Test-Path -LiteralPath $wjFile) {
+    $za = [IO.Compression.ZipFile]::OpenRead($wjFile)
+    try { foreach ($z in $za.Entries) { $ms = New-Object IO.MemoryStream; $st = $z.Open(); try { $st.CopyTo($ms) } finally { $st.Dispose() }; $wjEntries[$z.FullName] = $ms.ToArray() } } finally { $za.Dispose() }
+}
+$wjText = if ($wjEntries.ContainsKey('modlist')) { (New-Object Text.UTF8Encoding($false)).GetString($wjEntries['modlist']) } else { '{}' }
+$wj = $wjText | ConvertFrom-Json
+Yes 'the modlist is a zip holding the modlist JSON' ($wjEntries.ContainsKey('modlist') -and $wj.GameType -eq 'SkyrimSpecialEdition' -and $wj.Name -eq 'Thornswood' -and $wj.Version -eq '5.0.0.0')
+Yes 'every "$type" is the first property of its object, as Wabbajack reads them' (([regex]::Matches($wjText, '"\$type"')).Count -gt 0 -and ([regex]::Matches($wjText, '"\$type"')).Count -eq ([regex]::Matches($wjText, '\{"\$type"')).Count)
+$xx = { param($f) [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfFile($f)) }
+$wjA = @{}; foreach ($a in @($wj.Archives)) { $wjA[$a.Hash] = $a }
+$alphaA = $wjA[(& $xx $arc.alpha)]
+Yes 'each mod''s archive is named by its xxHash64, with its Nexus mod and file id, and MO2''s by its GitHub address' (@($wj.Archives).Count -eq 8 -and $null -ne $alphaA -and $alphaA.State.'$type' -eq 'NexusDownloader, Wabbajack.Lib' -and $alphaA.State.ModID -eq 101 -and $alphaA.State.FileID -eq 900001 -and $alphaA.State.GameName -eq 'SkyrimSpecialEdition' -and $alphaA.Size -eq (Get-Item -LiteralPath $arc.alpha).Length -and $wjA[(& $xx $moFile)].State.'$type' -eq 'HttpDownloader, Wabbajack.Lib' -and $wjA[(& $xx $moFile)].State.Url -eq ('https://github.com/ModOrganizer2/modorganizer/releases/download/v9.9.9/' + $moName))
+$wjD = @{}; foreach ($d in @($wj.Directives)) { $wjD[$d.To.ToLowerInvariant()] = $d }
+function WjFrom([string]$to, [string]$archive, [string]$inArc, [string]$text) {
+    $d = $wjD[$to.ToLowerInvariant()]
+    return ($null -ne $d -and $d.'$type' -eq 'FromArchive' -and $d.ArchiveHashPath[0] -eq (& $xx $archive) -and $d.ArchiveHashPath[1] -eq $inArc -and $d.Hash -eq [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes((New-Object Text.UTF8Encoding($false)).GetBytes($text))))
+}
+Yes 'a mod''s file goes to its MO2 folder, named by its archive and its path in it' ((WjFrom 'mods\Alpha\Alpha.esp' $arc.alpha 'Data\Alpha.esp' 'alpha plugin') -and (WjFrom 'mods\Beta\Beta.esp' $arc.beta 'junk\Beta.esp' 'beta plugin'))
+Yes 'the FOMOD''s choice is the file the modlist takes, and its own name in the archive is used' ((WjFrom 'mods\Gamma\Gamma.esp' $arc.gamma 'opt2\Gamma.esp' 'gamma two') -and (WjFrom 'mods\Lambda\lambda.txt' $arc.lambda 'opt\Lambda.txt' 'lambda text'))
+Yes 'a file two mods share is in both folders; MO2''s priority picks it' ((WjFrom 'mods\Alpha\textures\shared.dds' $arc.alpha 'Data\textures\shared.dds' 'alpha texture') -and (WjFrom 'mods\Gamma\textures\shared.dds' $arc.gamma 'common\textures\shared.dds' 'gamma texture'))
+Yes 'a dinput mod''s game folder files go under Root in its folder, and its Data files are the mod''s own' ((WjFrom 'mods\Delta\Root\skse64_loader.exe' $arc.delta 'delta_1\skse64_loader.exe' 'loader') -and (WjFrom 'mods\Delta\Scripts\delta.pex' $arc.delta 'delta_1\Data\Scripts\delta.pex' 'script') -and -not $wjD.ContainsKey('mods\delta\root\data\scripts\delta.pex'))
+$alphaMeta = $wjD['mods\alpha\meta.ini']
+Yes 'each mod folder''s meta.ini is MO2''s own, never the archive''s' ($null -ne $alphaMeta -and $alphaMeta.'$type' -eq 'InlineFile' -and (New-Object Text.UTF8Encoding($false)).GetString($wjEntries[$alphaMeta.SourceDataID]) -match 'modid=101' -and @($wj.Directives | Where-Object { $_.'$type' -ne 'InlineFile' -and $_.To -match '(?i)meta\.ini$' }).Count -eq 0)
+# Octodiff's delta: the header, then copy (0x60) and data (0x80) commands.
+function Apply-OctoDelta([byte[]]$old, [byte[]]$delta) {
+    $br = New-Object IO.BinaryReader((New-Object IO.MemoryStream(, $delta)))
+    if ([Text.Encoding]::ASCII.GetString($br.ReadBytes(9)) -ne 'OCTODELTA' -or $br.ReadByte() -ne 1 -or $br.ReadString() -ne 'SHA1') { return $null }
+    $null = $br.ReadBytes($br.ReadInt32())
+    if ([Text.Encoding]::ASCII.GetString($br.ReadBytes(3)) -ne '>>>') { return $null }
+    $out = New-Object IO.MemoryStream
+    while ($br.BaseStream.Position -lt $br.BaseStream.Length) {
+        $c = $br.ReadByte()
+        if ($c -eq 0x60) { $o = $br.ReadInt64(); $n = $br.ReadInt64(); $out.Write($old, [int]$o, [int]$n) }
+        elseif ($c -eq 0x80) { $n = $br.ReadInt64(); $b = $br.ReadBytes([int]$n); $out.Write($b, 0, $b.Length) }
+        else { return $null }
+    }
+    return , $out.ToArray()
+}
+$epsD = $wjD['mods\epsilon\eps.esp']
+$epsNew = if ($null -ne $epsD -and $wjEntries.ContainsKey([string]$epsD.PatchID)) { Apply-OctoDelta ([Text.Encoding]::ASCII.GetBytes('AAAA')) $wjEntries[[string]$epsD.PatchID] } else { $null }
+Yes 'the patched Eps.esp is a PatchedFromArchive whose delta turns the archive''s AAAA into AAAB' ($null -ne $epsD -and $epsD.'$type' -eq 'PatchedFromArchive' -and $epsD.ArchiveHashPath[1] -eq 'Eps.esp' -and $epsD.FromHash -eq [Thornswood.Layout.XxHash64]::Base64([Thornswood.Layout.XxHash64]::OfBytes([Text.Encoding]::ASCII.GetBytes('AAAA'))) -and $null -ne $epsNew -and [Text.Encoding]::ASCII.GetString($epsNew) -eq 'AAAB')
+Yes 'Mod Organizer 2''s own files come from its archive, at the instance''s root' ((WjFrom 'ModOrganizer.exe' $moFile 'ModOrganizer.exe' 'organizer') -and (WjFrom 'plugins\installer_fomod.dll' $moFile 'plugins\installer_fomod.dll' 'fomod plugin'))
+function WjInline([string]$to) { $d = $wjD[$to.ToLowerInvariant()]; if ($null -eq $d -or -not $wjEntries.ContainsKey([string]$d.SourceDataID)) { return $null }; return (New-Object Text.UTF8Encoding($false)).GetString($wjEntries[[string]$d.SourceDataID]) }
+$mlLines = @((WjInline 'profiles\Thornswood\modlist.txt') -split "`r`n" | Where-Object { $_ -and -not $_.StartsWith('#') })
+Yes ('the profile''s modlist.txt lists the mod the rules deploy last first, as MO2 does: ' + ($mlLines -join ' ')) ($mlLines.Count -eq 7 -and @($mlLines | Where-Object { -not $_.StartsWith('+') }).Count -eq 0 -and [array]::IndexOf($mlLines, '+Gamma') -lt [array]::IndexOf($mlLines, '+Alpha') -and [array]::IndexOf($mlLines, '+Gamma') -ge 0)
+$wjPl = @((WjInline 'profiles\Thornswood\plugins.txt') -split "`r`n" | Where-Object { $_ -and -not $_.StartsWith('#') })
+Yes 'the profile''s plugins.txt is the record''s plugins.txt' (($wjPl -join '|') -eq (@([IO.File]::ReadAllLines((P $wjRec 'plugins.txt')) | Where-Object { $_ -and -not $_.StartsWith('#') }) -join '|'))
+Yes 'ModOrganizer.ini is filled in at install, and portable.txt makes the instance portable' ($wjD['modorganizer.ini'].'$type' -eq 'RemappedInlineFile' -and (WjInline 'ModOrganizer.ini') -match 'GAME_PATH_MAGIC' -and (WjInline 'ModOrganizer.ini') -match 'selected_profile=@ByteArray\(Thornswood\)' -and $null -ne $wjD['portable.txt'])
+$wjSha1 = Sha $wjFile
+$wjRec2 = P $T 'wj-record-2'
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec2, '-Modlist', '-Mo2Record', $moRec)
+YesR 'the same record writes the same modlist, byte for byte' ($r.Code -eq 0 -and (Sha (P $wjRec2 'thornswood.wabbajack')) -eq $wjSha1 -and $r.Out -match ('sha256 ' + $wjSha1)) $r
 
 # ---- the key, across every run ---------------------------------------------------
 Yes ('no run printed the key, in ' + $script:outs.Count + ' runs') (@($script:outs | Where-Object { $_.Contains($KEY) }).Count -eq 0)
