@@ -25,5 +25,9 @@ Every row the recipe, harvest, ore and hunt tables currently hold. The pages tha
 - [Hunter](hunter.md) (96 rows, 336 records)
 - [Eggs and wild food](wild-food.md) (4)
 - [Unranked](unranked.md) (45)
-- [Who makes what the world hands out](who-makes-it.md)
+- [The Destruction book](mage-destruction.md) (21 spells)
+- [The Restoration book](mage-restoration.md) (16 spells)
+- [The Alteration book](mage-alteration.md) (13 spells)
+- [The Conjuration book](mage-conjuration.md) (20 spells)
+- [The Illusion book](mage-illusion.md) (15 spells)
 
