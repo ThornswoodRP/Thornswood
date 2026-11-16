@@ -199,8 +199,30 @@ db.changeForms.insertMany([
         Yes ('Wipe-Saves empties a MongoDB world: ' + (($r.Out | Where-Object { $_ -match '^(moved|FAILED|RELEASE)' }) -join ' / ')) ($left.Trim() -eq '0' -and -not @($r.Out | Where-Object { $_ -like 'FAILED*' }).Count)
         Yes 'into world-before-<stamp>\changeForms, one file per form, as a file world is set aside' ((Test-Path -LiteralPath (Join-Path $before 'a01.json')) -and (Test-Path -LiteralPath (Join-Path $before '13164_Skyrim.esm.json')) -and -not (Test-Path -LiteralPath (Join-Path $scratch 'world-mongo-20261116-0300')))
         Yes 'and names its character on the release list' (@($r.Out | Where-Object { $_ -like 'RELEASE|*|0|1|*' }).Count -eq 1)
+
+        # The nightly backup's TakeWorld, lifted, on a MongoDB world.
+        $bk = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts/vps/vps-nightly-backup.ps1'), [ref]$null, [ref]$null)
+        $tw = @($bk.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'TakeWorld' }, $true))
+        $db = 'thornswood-wtestf'
+        $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "a01", profileId: 5001, recType: 1, position: [Double(1), Double(2.5), Double(3)] }, { formDesc: "13164:Skyrim.esm", profileId: -1, recType: 0 }])'
+        Settings $db
+        $stage = Join-Path $scratch 'stage'; $ownedStage = $scratch; $MongoUri = $uriFile
+        $notes = New-Object System.Collections.ArrayList
+        function Note($m) { [void]$notes.Add([string]$m) }
+        $took = 0; $worldsNotTaken = @()
+        . ([scriptblock]::Create($tw[0].Extent.Text))
+        TakeWorld $scratch 'game/world'
+        $got = @(Get-ChildItem -LiteralPath (Join-Path $stage 'game/world/changeForms') -File -EA SilentlyContinue | ForEach-Object Name | Sort-Object)
+        Yes ('the nightly backup reads a MongoDB world out into game\world\changeForms with the backup''s file: ' + ($notes -join ' / ')) (($got -join ',') -eq '13164_Skyrim.esm.json,a01.json' -and $took -eq 2 -and -not $worldsNotTaken.Count)
+        Yes 'one file per form, each number''s type kept' ([IO.File]::ReadAllText((Join-Path $stage 'game/world/changeForms/a01.json')).Contains('"position":[1.0,2.5,3.0]'))
+        $MongoUri = Join-Path $scratch 'none.uri'
+        TakeWorld $scratch 'game-dev/world'
+        Yes 'a world it could not read out is said and counted, for the run to end non-zero' ($worldsNotTaken -contains 'game-dev/world' -and @($notes | Where-Object { $_ -like '*WORLD NOT TAKEN game-dev/world*' }).Count -eq 1)
+        $inst = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Install-Backup.ps1'))
+        Yes 'Install-Backup sends the world functions beside the backup as world.ps1' ($inst.Contains('$ThornswoodWorld, (New-Object Text.UTF8Encoding $true)') -and $inst.Contains('/world.ps1"'))
     } finally {
         Remove-Item Env:THORNSWOOD_MONGOSH -ErrorAction SilentlyContinue
+        $null = Shell 'thornswood-wtestf' 'db.dropDatabase()'
         $null = Shell 'thornswood-wteste' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestd' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestc' 'db.dropDatabase()'

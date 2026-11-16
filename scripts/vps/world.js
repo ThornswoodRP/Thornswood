@@ -20,10 +20,15 @@
 // a tool that needs a number reads it through the server's load order
 // (scripts\bot\character.js, descToId).
 //
-// export   {op, uri, db, to, manifest}: every form into the folder `to`,
-//          which must not be there yet, and the manifest beside it: the
-//          database, the count, and each file's SHA-256 as written. Prints
-//          EXPORTED|<count>.
+// export   {op, uri, db, to, manifest, live}: every form into the folder
+//          `to`, which must not be there yet, and the manifest beside it:
+//          the database, the count, and each file's SHA-256 as written.
+//          Prints EXPORTED|<count>. A form read by a tool must be the world
+//          as it stands, so a count that changed while it read stops it;
+//          with live (the nightly backup, while the server runs) the forms
+//          read are kept: each is whole, as MongoDB keeps every document
+//          whole, though one saved during the read may be the newer or the
+//          older save.
 // apply    {op, uri, db, from, manifest, mode}: the folder back into the
 //          database. Every file is read and checked before anything is
 //          written, so a file that does not parse or is not named by its own
@@ -155,7 +160,7 @@ function exportWorld(plan) {
     n++;
   }
   const counted = db.getCollection(kCollection).countDocuments({});
-  if (counted !== n) fail('read ' + n + ' forms where the collection counts ' + counted + '; the server must not be writing while a tool reads its world');
+  if (counted !== n && !plan.live) fail('read ' + n + ' forms where the collection counts ' + counted + '; the server must not be writing while a tool reads its world');
   fs.renameSync(part, plan.to);
   fs.writeFileSync(plan.manifest, JSON.stringify({ db: plan.db, count: n, exported: new Date().toISOString(), forms }, null, 1));
   print('EXPORTED|' + n);

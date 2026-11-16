@@ -39,6 +39,16 @@
   the dev voice service, and anything over the size cap. All of those come
   back from the repo. Uploads are always taken in full.
 
+  A server that keeps its world in MongoDB (#6237) has it read out instead,
+  with the backup user (MongoUri), into the same place in the backup:
+  game\world\changeForms, one file per form, named and laid out as the
+  file driver lays out a world, so a restore, a rehearsal and a deletion
+  read either alike (World.ps1, beside this on the box as world.ps1, which
+  Install-Backup.ps1 sends with it). MongoDB keeps each document whole, so
+  none is torn; one saved while it is read may be the newer save or the one
+  before. A world that could not be read out is said, and the run ends
+  non-zero once the rest is taken.
+
   The server writes world while this runs, so a file can be caught half
   written. Every .json taken from a world folder is read back, and one that
   does not parse is copied again a moment later; one that still does not is
@@ -70,6 +80,10 @@ param(
   # The record of completed deletion requests (Delete-Person.ps1, #2351).
   [string]$DeletionRoot = 'C:\Thornswood-Deletions',
   [string]$Out        = 'C:\Thornswood-Backup',
+  # The backup user's connection file (Install-Mongo.ps1, #6237), which this
+  # task alone of the tasks may read: a server that keeps its world in
+  # MongoDB is read out with it. Its role reads every world and changes none.
+  [string]$MongoUri   = 'C:\Thornswood-Mongo\access\backup.uri',
   # The passphrase. Created by Install-Backup.ps1 if it is not already there,
   # and the one thing in all of this that has to be kept somewhere else as
   # well: lose it and the backups are noise.
@@ -303,6 +317,41 @@ function Mend($from, $to) {
   if ($bad) { Note ("  TORN      {0}: {1} file(s) would not parse after three copies" -f $to, $bad) }
 }
 
+# A server's world, wherever it keeps it (#6237): its world folder, taken
+# and mended as above, or read out of MongoDB into the same place.
+$worldsNotTaken = @()
+$worldPs = Join-Path $PSScriptRoot 'world.ps1'
+if (Test-Path -LiteralPath $worldPs) { . $worldPs }
+function TakeWorld($root, $to) {
+  $settings = Join-Path $root 'server-settings.json'
+  if (-not (Get-Command Get-ThornswoodWorld -ErrorAction SilentlyContinue)) {
+    # Without world.ps1 a server's settings are not read; its world folder
+    # is taken as before, and one in MongoDB is said below.
+    $w = @{ Stop = ''; Driver = 'file'; Forms = (Join-Path $root 'world\changeForms') }
+    $cfgText = ''
+    try { $cfgText = [IO.File]::ReadAllText($settings) } catch { }
+    if ($cfgText -match '"databaseDriver"\s*:\s*"mongodb"') { $w = @{ Stop = ('world.ps1 is not beside this script, so ' + $root + '''s world in MongoDB could not be read out. Run Install-Backup.ps1 again') } }
+  } else { $w = Get-ThornswoodWorld $root }
+  if ($w.Stop) { Note ('  WORLD NOT TAKEN ' + $to + ': ' + $w.Stop); $script:worldsNotTaken += $to; return }
+  if ($w.Driver -eq 'file') {
+    Grab (Split-Path -Parent $w.Forms) $to
+    Mend (Split-Path -Parent $w.Forms) $to
+    return
+  }
+  $dest = Join-Path $stage ($to + '\changeForms')
+  $manifest = Join-Path $ownedStage (($to -replace '[\\/]', '-') + '.export.json')
+  $said = @(Invoke-ThornswoodWorldJs @{ op = 'export'; uri = $MongoUri; db = $w.Db; to = $dest; manifest = $manifest; live = $true })
+  $done = @($said | Where-Object { $_ -like 'EXPORTED|*' })
+  if (-not $done.Count) {
+    Note ('  WORLD NOT TAKEN ' + $to + ': ' + $w.Db + ' in MongoDB could not be read out: ' + (($said | Where-Object { $_ }) -join ' '))
+    $script:worldsNotTaken += $to
+    return
+  }
+  $n = [int](($done[0] -split '\|')[1])
+  $script:took += $n
+  Note ("  {0,-42} {1} forms, read out of {2} in MongoDB" -f $to, $n, $w.Db)
+}
+
 # How many people a world folder holds: the runtime change forms, named with
 # their form id in lowercase hex and no plugin (the engine's
 # FormDesc::ToString, %x, so a.json and 1f.json as well as 3.json), are
@@ -339,8 +388,7 @@ else {
   try {
     $servers = @(@{ Root = $GameRoot; Tag = 'game' }, @{ Root = $DevGameRoot; Tag = 'game-dev' })
     foreach ($sv in $servers) {
-      Grab (Join-Path $sv.Root 'world')                ($sv.Tag + '\world')
-      Mend (Join-Path $sv.Root 'world')                ($sv.Tag + '\world')
+      TakeWorld $sv.Root                               ($sv.Tag + '\world')
       Grab (Join-Path $sv.Root 'private')              ($sv.Tag + '\private')
       Grab (Join-Path $sv.Root 'data')                 ($sv.Tag + '\data')
       Grab (Join-Path $sv.Root 'server-settings.json') ($sv.Tag + '\server-settings.json')
@@ -554,6 +602,9 @@ if ($stuck.Count) {
 }
 if ($serversNotTaken) {
   throw ("The game servers were not taken (" + $serversNotTaken + "). Tonight's backup was made without them (#3247).")
+}
+if ($worldsNotTaken.Count) {
+  throw ("The world of " + ($worldsNotTaken -join ' and ') + " was not taken (WORLD NOT TAKEN above). Tonight's backup was made without it (#6237).")
 }
 if ($denied) {
   throw ("{0} place(s) could not be read by the backup task (NO ACCESS above). Tonight's backup was made without them. Run Install-Backup.ps1 again, which gives the task read there (#2612)." -f $denied)

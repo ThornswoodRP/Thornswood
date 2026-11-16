@@ -45,6 +45,8 @@
        in with it. The first run makes the admin through MongoDB's localhost
        exception, the one step it allows on a server with no users; the
        admin's file is kept only once the admin is made.
+    8. Lets the backup task read and run bin, for the nightly backup's
+       mongosh, which reads each world out (World.ps1).
   When mongod or its configuration changes while mongod runs, the admin asks
   it to stop cleanly first. While a game server runs that does not happen:
   it says to stop them, since their worlds will be kept here.
@@ -360,6 +362,13 @@ try {
     `$said
     if (`$global:usersCode -ne 0 -or `$said -notcontains 'USERS OK') { 'the users were not all made'; 'MONGO REFUSED'; exit 1 }
     if (`$firstRun) { Move-Item -LiteralPath `$adminUse -Destination `$adminFile -Force; Lock-UriFile `$adminFile '' }
+    # The nightly backup reads each world out with mongosh (World.ps1), so
+    # its task may read and run what is in bin, and nothing else here.
+    `$backupSid = Get-ThornswoodTaskSidFromName ([string]`$rec.backup.task)
+    `$acl = Get-Acl -LiteralPath `$bin
+    `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$backupSid)), 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
+    Set-ThornswoodServiceAcl `$bin `$acl
+    'the backup task may run mongosh from bin, to read the worlds out'
     'MONGO OK'; exit 0
 } catch { 'STOPPED: ' + `$_.Exception.Message; 'MONGO REFUSED'; exit 1 }
 finally { if (`$held) { Clear-ThornswoodHold -Target `$task } }

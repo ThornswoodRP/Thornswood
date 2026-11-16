@@ -1244,9 +1244,11 @@
       "script": "scripts/deploy/Install-Backup.ps1",
       "reads": [
         "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/Vps.ps1",
-        "scripts/vps/vps-nightly-backup.ps1"
+        "scripts/vps/vps-nightly-backup.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 20,
       "fixed": ["-FromGate", "-NoPause"],

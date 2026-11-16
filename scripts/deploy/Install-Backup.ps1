@@ -78,6 +78,9 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 . (Join-Path $Here 'ServiceAccount.ps1')
+# What the backup reads a world in MongoDB out with (#6237), sent beside it
+# as world.ps1.
+. (Join-Path $Here 'World.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 
@@ -188,6 +191,14 @@ Say "  $Root is SYSTEM's and Administrators' only" 'Green'
 Invoke-ThornswoodNative { & scp @ssh $script "${target}:$($Root.Replace('\','/'))/vps-nightly-backup.ps1" }
 if ($LASTEXITCODE -ne 0) { Die 'scp failed.' }
 Say "  $runner" 'Green'
+# world.ps1 beside it: World.ps1's functions with world.js in them, the copy
+# this checkout was tested with, which the backup dot-sources.
+$worldTmp = Join-Path ([IO.Path]::GetTempPath()) ('world-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+[IO.File]::WriteAllText($worldTmp, $ThornswoodWorld, (New-Object Text.UTF8Encoding $true))
+try { Invoke-ThornswoodNative { & scp @ssh $worldTmp "${target}:$($Root.Replace('\','/'))/world.ps1" } }
+finally { Remove-Item -LiteralPath $worldTmp -Force -ErrorAction SilentlyContinue }
+if ($LASTEXITCODE -ne 0) { Die 'scp of world.ps1 failed.' }
+Say ("  " + (Join-Path $Root 'world.ps1')) 'Green'
 
 Head 'The passphrase'
 # A new box, and this machine already has the passphrase every backup so far
