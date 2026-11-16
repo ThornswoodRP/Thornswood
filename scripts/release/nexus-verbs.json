@@ -103,6 +103,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/WabbajackModlist.cs",
         "scripts/release/Where.ps1"
       ],
       "timeoutMinutes": 150,
@@ -112,7 +113,8 @@
         "Revision": "^[0-9]{1,4}$",
         "Slug": "^[a-z0-9]{1,16}$",
         "GameDomain": "^[a-z0-9]{1,40}$",
-        "KeepPlugins": "switch"
+        "KeepPlugins": "switch",
+        "Modlist": "switch"
       }
     },
     "Set-NexusDescription": {

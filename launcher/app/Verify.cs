@@ -779,7 +779,7 @@ namespace Thornswood
             if (cfg != null)
             {
                 try { why = OwnGame.WhyNot(cfg, OwnGame.DeploysInto(cfg)); }
-                catch (Exception ex) { why = ex.Message; }
+                catch (Exception ex) { why = Failure.Why("Verify, asking the server", ex, "the server"); }
             }
             string what = Paths.OwnFirst
                 ? "Thornswood's own Skyrim folder was chosen when Thornswood was installed and is not made yet, so there is no game to check."
@@ -1041,7 +1041,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                say("The plugin list could not be written (" + ex.Message.TrimEnd('.') + "). Close Skyrim and press Fix again.");
+                say("The plugin list could not be written (" + Failure.Why("Verify, writing the plugin list", ex, "plugins.txt") + "). Close Skyrim and press Fix again.");
                 return 0;
             }
             if (added.Count > 0)
@@ -1173,7 +1173,7 @@ namespace Thornswood
             try { bytes = release(i.Plugin); }
             catch (Exception ex)
             {
-                say(i.Plugin + ": the release's copy could not be read (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                say(i.Plugin + ": the release's copy could not be read (" + Failure.Why("Verify, the release's copy of " + i.Plugin, ex, i.Plugin) + "), so nothing was changed.");
                 return false;
             }
             if (bytes == null)
@@ -1217,7 +1217,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                say(i.Plugin + " could not be written (" + ex.Message.TrimEnd('.') + "). Close Skyrim and Vortex and press Fix again.");
+                say(i.Plugin + " could not be written (" + Failure.Why("Verify, writing " + i.Plugin, ex, i.Plugin) + "). Close Skyrim and Vortex and press Fix again.");
                 return false;
             }
             lock (crcCache) { crcCache.Remove(dest); }
@@ -1359,7 +1359,7 @@ namespace Thornswood
             // like uncleared on Djinn's machine. Restore from Vortex first.
             // Then fetch any of ours still missing.
             try { n += OwnGame.RestoreMissingPlugins(cfg, say); }
-            catch (Exception ex) { Swallow.Note("Verify.Fix, restoring missing plugins from Vortex", ex); say("Could not restore missing plugins from Vortex (" + ex.Message.TrimEnd('.') + ")."); }
+            catch (Exception ex) { say("Could not restore missing plugins from Vortex: " + Failure.Say("Verify.Fix, restoring missing plugins from Vortex", ex)); }
 
             // The release's copy of our own plugin when its bytes are not the
             // server's (#3386); another author's is named for Vortex (#1180).
@@ -1461,7 +1461,7 @@ namespace Thornswood
                     say(Path.GetFileName(f) + " was in your own mods folder, where a plugin only stops Play. It is in " + bin + " now; nothing was deleted.");
                     n++;
                 }
-                catch (Exception ex) { say(Path.GetFileName(f) + " could not be moved out of your own mods folder (" + ex.Message.TrimEnd('.') + ")."); }
+                catch (Exception ex) { say(Path.GetFileName(f) + " could not be moved out of your own mods folder: " + Failure.Say("Verify, moving " + f, ex, f)); }
             }
             return n;
         }

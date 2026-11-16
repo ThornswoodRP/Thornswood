@@ -1233,7 +1233,7 @@ function sessionTable(rows) {
             (s.troubleFile === 'crash.log' && s.looked ? ' <span class="pill pass">looked at</span>' : '') +
             '<div class="said">' + esc(s.trouble) + '</div>'
           : '') +
-        (s.profile ? '<code>' + esc(s.profile) + '</code>' : 'none picked') + '</div></td>' +
+        (s.profile ? sessionChars(s) : 'none picked') + '</div></td>' +
       '<td data-label="Build"><div class="cell">' + esc(s.version || 'not said') + '</div></td>' +
       /*
         Where they actually GOT TO, not which feed the launcher follows, and
@@ -1375,7 +1375,7 @@ function sessionMatches(s, q, show, chan) {
 
   if (q) {
     var hay = [
-      s.session, s.name, s.who, s.profile, s.version, s.channel,
+      s.session, s.name, s.who, s.profile, (s.profiles || []).join(' '), s.version, s.channel,
       s.trouble, s.troubleLine, s.troubleFile,
       s.start ? new Date(s.start).toLocaleString() : '',
       s.end ? new Date(s.end).toLocaleString() : ''
@@ -1593,6 +1593,17 @@ function drawSessions() {
   session's profile number and its own window, and /api/session-logs hands
   the lines back with the rest of that session. drawLogs draws them.
 */
+
+/*
+  Every character a session played, in the order first picked (#4643): the
+  launcher sends them all at the end, since Change character brings the menu
+  back without closing the game. A row from before that has its last one only.
+*/
+function sessionChars(s) {
+  var ids = Array.isArray(s.profiles) && s.profiles.length ? s.profiles.slice() : [s.profile];
+  if (s.profile && ids.indexOf(s.profile) < 0) ids.push(s.profile);
+  return ids.map(function (id) { return '<code>' + esc(id) + '</code>'; }).join(', ');
+}
 
 /* ---------------------------------------------------------------- draw -- */
 function draw() {

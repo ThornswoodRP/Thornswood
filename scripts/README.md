@@ -97,7 +97,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Check-Push.ps1](dev/Check-Push.ps1) | The pre-push hook's checks (#5291): every script parses and the writing rules hold, in the commit being pushed, before it leaves the machine. |
 | [dev/Check-Secrets.ps1](dev/Check-Secrets.ps1) | Read only. Looks for anything that must never leave a machine: in the files this repository tracks, in a pack or another zip, or in a built program. |
 | [dev/Check-Serena.ps1](dev/Check-Serena.ps1) | Read only. Says how Claude Code on this machine starts Serena, and times one start the way Claude Code makes it: from the repo folder, over stdin and stdout, until Serena answers initialize and lists its tools. |
-| [dev/Check-Swallow.ps1](dev/Check-Swallow.ps1) | Counts the silent catches in the launcher and in the PowerShell under scripts\ and installer\, file by file, and fails when any file has more than scripts\dev\swallow-baseline.txt allows, or fewer than it allows with its line not yet lowered. |
+| [dev/Check-Swallow.ps1](dev/Check-Swallow.ps1) | Counts the silent catches in the launcher, the PowerShell under scripts\ and installer\, the site, voice, the bot, the game and the tools' C#, file by file, and fails when any file has more than scripts\dev\swallow-baseline.txt allows, or fewer than it allows with its line not yet lowered. |
 | [dev/Check-Words.ps1](dev/Check-Words.ps1) | The writing rules in docs/guide/rules.md, checked on every file people read instead of hoped for; each hit names the file, the line and the rule. |
 | [dev/Close-Launcher.ps1](dev/Close-Launcher.ps1) | Shared by every script that writes into the build. |
 | [dev/Copy-BoxGuard.ps1](dev/Copy-BoxGuard.ps1) | Writes scripts\vps\BoxGuard.ps1's Get-ThornswoodBoxRefusal into every box script that carries a copy of it. |
@@ -140,7 +140,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Check-Manifest.ps1](mods/Check-Manifest.ps1) | Says what load order the game server is actually handing out, and how it compares to the one you play with. |
 | [mods/Check-Plugins.ps1](mods/Check-Plugins.ps1) | What is enabled that should not be, and what is missing that should be there. |
 | [mods/Clean-Everything.ps1](mods/Clean-Everything.ps1) | Finds the old installers, build leftovers, temp files, stale backups and old GitHub release assets across this machine, the server and the source repository, adds up what they are costing, and prints it. |
-| [mods/Clean-Leftovers.ps1](mods/Clean-Leftovers.ps1) | The other half of Audit-Leftovers.ps1. That one measures and never touches anything; this one removes what it found. |
+| [mods/Clean-Leftovers.ps1](mods/Clean-Leftovers.ps1) | Removes the leftovers Thornswood's own tools leave on this machine, in the folders Thornswood owns, and lists, without touching, backup and temp files in the game's Data folder. |
 | [mods/ContentPaths.ps1](mods/ContentPaths.ps1) | What a content build on the box reads and what it writes, worked out from scripts\mods\content-tables.json and the builders themselves (#5191). |
 | [mods/Enable-MCM.ps1](mods/Enable-MCM.ps1) | RETIRED. DO NOT RUN. Issue #1179: patched SkyUI_SE.esp's light flag by hand. |
 | [mods/Find-MissingMasters.ps1](mods/Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |

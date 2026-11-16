@@ -2197,8 +2197,10 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 
   if (size !== 'small') {
     const what = (row && row.name) ? String(row.name).trim() : 'That';
-    notify(actorId, what + ' takes ' + CRAFT_SIZE_WORDS[size] + '. Stay at the bench until it is made; ' +
-                    'getting up stops the work and keeps your materials.');
+    const line = what + ' takes ' + CRAFT_SIZE_WORDS[size] + '. Stay at the bench until it is made; ' +
+                 'getting up stops the work and keeps your materials.';
+    notify(actorId, line);
+    say(actorId, line);
   }
 });
 

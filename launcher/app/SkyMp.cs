@@ -189,7 +189,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not start the server: " + ex.Message;
+                return "Could not start the server: " + Failure.Say("SkyMp, starting the server", ex);
             }
         }
 

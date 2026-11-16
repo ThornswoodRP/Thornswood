@@ -96,6 +96,10 @@ $real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secre
 # cut from a live release.
 $swallow = Join-Path $AppPath 'Swallow.cs'
 if (Test-Path -LiteralPath $swallow) { $real += $swallow }
+# Every catch that says what went wrong says it through Failure.cs since
+# #4633, which needs only Swallow. Taken only where it exists, as above.
+$failure = Join-Path $AppPath 'Failure.cs'
+if (Test-Path -LiteralPath $failure) { $real += $failure }
 # OwnGame and Verify report how far they have got to the Play button since
 # #1145; Progress.cs needs only Swallow. Taken only where it exists, as above.
 $progress = Join-Path $AppPath 'Progress.cs'

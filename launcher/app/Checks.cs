@@ -609,7 +609,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not move " + name + " aside: " + ex.Message +
+                        say("Could not move " + name + " aside: " + Failure.Why("Checks.IsolateForeign, " + name, ex, name) + "." +
                             "  Close Skyrim and try again.");
                 }
             }
@@ -770,7 +770,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not move " + name + " aside: " + ex.Message +
+                        say("Could not move " + name + " aside: " + Failure.Why("Checks.IsolateCreations, " + name, ex, name) + "." +
                             "  Close Skyrim and try again.");
                 }
             }
@@ -1326,8 +1326,8 @@ namespace Thornswood
                 {
                     // What Windows answered, kept for StuckReport: only a
                     // refusal here is Windows not letting the launcher end it.
-                    if (id >= 0) lock (refused) { refused[id] = ex.Message; }
-                    Swallow.Note("Checks.CloseGame, kill", ex);
+                    if (id >= 0) lock (refused) { refused[id] = Failure.Why("Checks.CloseGame, kill", ex, "the game"); }
+                    else Swallow.Note("Checks.CloseGame, kill", ex);
                 }
             }
 

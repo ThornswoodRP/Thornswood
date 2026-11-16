@@ -2284,6 +2284,18 @@ async function handle(req, res) {
       if (!isFinite(m) || m < 0) m = 0;
       m = Math.round(m * 10) / 10;
       const why = String(o.why || '') === 'update' ? 'update' : 'quit';
+      /* Every character played in the run, in the order first picked
+         (#4643). Change character brings the menu back without closing the
+         game, so profile alone, the last one, filed the whole run under it
+         and staff could not see the others were on. */
+      const played = Array.isArray(o.profiles)
+        ? o.profiles.map(Number).filter((n) => n > 0 && Number.isInteger(n)).slice(0, 20) : [];
+      const keepPlayed = (r) => {
+        if (!played.length) return;
+        const all = Array.isArray(r.profiles) ? r.profiles.map(Number) : [];
+        for (const n of played) if (all.indexOf(n) < 0) all.push(n);
+        r.profiles = all.slice(0, 20);
+      };
       if (at >= 0) {
         const was = rows[at];
         was.end = now;
@@ -2292,12 +2304,14 @@ async function handle(req, res) {
         // The character is picked at the game's menu, so the start went out
         // not knowing it and the end is the first that does.
         if (Number(o.profileId) > 0) was.profile = Number(o.profileId);
+        keepPlayed(was);
         if (o.version) was.version = String(o.version).slice(0, 32);
       } else {
         const row = sessionRow(t, o, key);
         row.end = now;
         row.minutes = m;
         row.why = why;
+        keepPlayed(row);
         rows.push(row);   // start stays 0: it was never seen
       }
     }

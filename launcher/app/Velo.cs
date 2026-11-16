@@ -169,7 +169,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not move the launcher's working folder out of its program folder (" + ex.Message + "), so an update may find the folder held.";
+                return "Could not move the launcher's working folder out of its program folder (" + Failure.Why("Velo.LeaveCurrentFolder", ex) + "), so an update may find the folder held.";
             }
         }
 

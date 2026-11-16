@@ -16,7 +16,8 @@
 // the world on this machine, which is three ways: its own 3D loading
 // (objectLoaded), its whole cell finishing loading (cellFullyLoaded, which
 // covers a cell that came in with a save or a login), and the person's own
-// cell when this plugin starts.
+// cell on the plugin's first frame (#6220: a game call made while the
+// plugin file is still being run is refused, so the walk waits for it).
 //
 // This lifts the shipped bed block and the activate handler out of
 // thornswood-front.js and drives them.
@@ -87,13 +88,15 @@ function cell(refs) {
 }
 
 /* Runs the bed block and the activate handler, as the plugin does when it
-   starts, with the person standing in `here` (or nowhere, at the menu). */
+   starts, with the person standing in `here` (or nowhere, at the menu).
+   `update()` runs what the plugin asked to run on its first frame. */
 function rig(here) {
-  const handlers = {}, said = [];
+  const handlers = {}, firstFrame = [], said = [];
   const keywords = {};
   const pc = { id: 0x14, getParentCell: function () { return here || null; } };
   const sp = {
     on: function (what, f) { handlers[what] = f; },
+    once: function (what, f) { if (what === 'update') { firstFrame.push(f); } },
     Keyword: { getKeyword: function (n) { return keywords[n] || (keywords[n] = { name: n }); } },
     Game: { getPlayer: function () { return here === undefined ? null : pc; } },
     Utility: { wait: function () { return { then: function () { } }; } },
@@ -105,7 +108,8 @@ function rig(here) {
   fn(sp, function (n, f) { return f; }, function (l) { said.push(l); },
      {}, {}, {}, { now: function () { return 5000000; } });
   return { load: handlers.objectLoaded, cellLoaded: handlers.cellFullyLoaded,
-           press: handlers.activate, said: said };
+           press: handlers.activate, said: said,
+           update: function () { firstFrame.splice(0).forEach(function (f) { f(); }); } };
 }
 
 const ME = { getFormID: function () { return 0x14; } };
@@ -143,10 +147,12 @@ if (beds && onPress) {
 
   // B4: a bed whose 3D loaded BEFORE this plugin registered anything (the
   //     person's own cell when the plugin starts). No objectLoaded ever comes
-  //     for it, and it still has no owner by the person's first press.
+  //     for it, and it still has no owner by the person's first press, which
+  //     can only come after the first frame.
   {
     const b = bed();
     const r = rig(cell([b]));
+    r.update();
     yes('B4 a bed loaded before the plugin has no owner by the first press',
         b.actorOwner === null);
     r.press({ target: b, caster: ME });
@@ -183,7 +189,7 @@ if (beds && onPress) {
   // B7: at the main menu there is no person and no cell, and nothing throws.
   {
     let threw = null;
-    try { rig(undefined); } catch (e) { threw = e; }
+    try { rig(undefined).update(); } catch (e) { threw = e; }
     yes('B7 starting at the main menu, with nobody in the world, is quiet', threw === null);
   }
 }

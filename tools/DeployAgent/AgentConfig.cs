@@ -30,6 +30,10 @@ public sealed class Config
     [JsonPropertyName("adminState")] public string AdminState { get; set; } = @"C:\Thornswood-Admin\state";
     /// <summary>The agent's own folder: the program, agent.json, logs, work and state.</summary>
     [JsonPropertyName("home")] public string Home { get; set; } = @"C:\Thornswood-Agent";
+    /// <summary>The box's store of each collection revision's plugins
+    /// (scripts/deploy/CollectionStore.ps1), where a plugin a Release's load
+    /// order adds is taken from (ServerOrder, #6209).</summary>
+    [JsonPropertyName("collectionStore")] public string CollectionStore { get; set; } = @"C:\Thornswood-Deploys\collection";
     [JsonPropertyName("pollSeconds")] public int PollSeconds { get; set; } = 60;
     [JsonPropertyName("updateMinutes")] public int UpdateMinutes { get; set; } = 15;
     [JsonPropertyName("environments")] public Dictionary<string, EnvConfig> Environments { get; set; } = new();

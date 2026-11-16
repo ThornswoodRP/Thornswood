@@ -143,7 +143,7 @@ namespace Thornswood
             {
                 string path = null, err = null;
                 try { path = Diag.Report(cfg, Updater.Version); }
-                catch (Exception ex) { err = ex.Message; }
+                catch (Exception ex) { err = Failure.Why("Pages", ex); }
 
                 Dispatcher.UIThread.Post(delegate
                 {
