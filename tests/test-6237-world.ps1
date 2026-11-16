@@ -105,14 +105,26 @@ db.changeForms.insertMany([
         $types = Shell $db 'print(db.changeForms.countDocuments({ formDesc: "14", "inv.entries.0.count": 299, "position.0": { $type: "double" }, "inv.entries.1.baseId": { $type: "long" } }), db.changeForms.countDocuments({ formDesc: "20", "position.0": { $type: "double" }, "position.1": { $type: "int" } }), db.changeForms.countDocuments({ formDesc: "1f" }))'
         Yes ('what was written keeps each number''s type: ' + ($types -join ' ')) (($types -join ' ').Trim() -eq '1 1 0')
         Yes 'the form moved away is still on disk' (Test-Path -LiteralPath (Join-Path $aside '1f.json'))
-        $again = Save-ThornswoodWorld $w
-        Yes ('Save run again finishes what it did and changes nothing more: ' + $again) ($again -eq 'WORLDSAVED|mongodb|2|1|0|3')
+        $left = @(Get-ChildItem -LiteralPath $w.Forms -Recurse -File | ForEach-Object { $_.FullName.Substring($w.Forms.Length + 1) -replace '\\', '/' })
+        Yes ('once written, the copy read out goes and only what was set aside stays: ' + ($left -join ',')) (($left -join ',') -eq '_discarded-one/1f.json' -and -not (Test-Path -LiteralPath $w.Manifest))
 
+        # A Save cut off part way is finished by the same Save again; a form
+        # the server wrote meanwhile stops it.
+        $w = Open-ThornswoodWorld $scratch 'two'
+        $t = [IO.File]::ReadAllText((Join-Path $w.Forms '14.json'))
+        [IO.File]::WriteAllText((Join-Path $w.Forms '14.json'), $t.Replace('"count":299', '"count":298'))
+        $null = Shell $db 'db.changeForms.updateOne({ formDesc: "14" }, { $set: { "inv.entries.0.count": Int32(298) } })'
+        $again = Save-ThornswoodWorld $w
+        Yes ('Save of a change already in the database finishes and changes nothing more: ' + $again) ($again -eq 'WORLDSAVED|mongodb|1|0|0|3')
+        $w = Open-ThornswoodWorld $scratch 'three'
+        $t = [IO.File]::ReadAllText((Join-Path $w.Forms '14.json'))
+        [IO.File]::WriteAllText((Join-Path $w.Forms '14.json'), $t.Replace('"count":298', '"count":297'))
         $null = Shell $db 'db.changeForms.updateOne({ formDesc: "14" }, { $set: { profileId: 44 } })'
         $stop = Save-ThornswoodWorld $w
         Yes 'a form the server wrote meanwhile stops Save' ($stop -like 'STOP|*' -and $stop -match '14 changed in the database')
         $kept = Shell $db 'print(db.changeForms.findOne({ formDesc: "14" }).profileId)'
         Yes 'and nothing was written over it' (($kept -join '').Trim() -eq '44')
+        Yes 'and the folder is left to be saved again' ((Test-Path -LiteralPath (Join-Path $w.Forms '14.json')) -and (Test-Path -LiteralPath $w.Manifest))
 
         $db2 = 'thornswood-wtestb'
         $null = Shell $db2 'db.dropDatabase(); db.changeForms.insertOne({ formDesc: "99", profileId: 1 })'
@@ -130,7 +142,37 @@ db.changeForms.insertMany([
         $r = Restore-ThornswoodWorld (Get-ThornswoodWorld $scratch) $w.Forms
         Yes 'a file not named by its own formDesc stops a restore' ($r -like 'STOP|*' -and $r -match 'whose file is 22.json')
         Yes 'with nothing written' ((Get-ThornswoodWorldCount (Get-ThornswoodWorld $scratch)) -eq 'COUNT|3|2')
+
+        # ---- the tools, on a world in MongoDB ----
+        $env:THORNSWOOD_MONGOSH = $shell
+        $box = (Get-Command pwsh).Source
+        function Lift([string]$file, [string]$name) {
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo $file), [ref]$null, [ref]$null)
+            $a = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and "$($n.Left)" -eq $name }, $true))
+            if ($a.Count -ne 1) { return $null }
+            return (& ([scriptblock]::Create($a[0].Right.Extent.Text)))
+        }
+        function RunBody([string]$body, [string[]]$arg) {
+            $f = Join-Path $scratch ('body-' + [guid]::NewGuid().ToString('n') + '.ps1')
+            [IO.File]::WriteAllText($f, $body)
+            $out = @(& $box -NoProfile -NonInteractive -File $f @arg 2>&1 | ForEach-Object { "$_" })
+            return @{ Code = $LASTEXITCODE; Out = $out }
+        }
+        . (Join-Path $Repo 'scripts/ops/Release-List.ps1')
+        $db = 'thornswood-wtestc'
+        $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "a01", profileId: 5001, recType: 1, appearanceDump: { name: "A" } }, { formDesc: "13164:Skyrim.esm", profileId: -1, recType: 1 }, { formDesc: "a02", profileId: -1, recType: 1 }])'
+        Settings $db
+        $reset = Lift 'scripts/ops/Reset-Character.ps1' '$body'
+        $r = RunBody $reset @('-Root', $scratch)
+        $left = (Shell $db 'print(db.changeForms.find().sort({ formDesc: 1 }).toArray().map(d => d.formDesc).join(","))') -join ''
+        Yes ('Reset-Character takes the character out of a MongoDB world and leaves the world''s own forms: ' + $left) ($r.Code -eq 0 -and $left.Trim() -eq '13164:Skyrim.esm,a02')
+        $aside = @(Get-ChildItem -LiteralPath $scratch -Recurse -File -Filter 'a01.json' | Where-Object { $_.FullName -match '[\/]world-mongo-[0-9-]+[\/]changeForms[\/]_discarded-' })
+        Yes 'and keeps it on disk in world-mongo-<stamp>\changeForms\_discarded-<stamp>' ($aside.Count -eq 1)
+        $list = Join-Path $scratch 'private/deleted-characters.json'
+        Yes 'and names it on the release list by its runtime form id' ((Test-Path -LiteralPath $list) -and ([IO.File]::ReadAllText($list) -match '"actors":\[4278192641\]'))
     } finally {
+        Remove-Item Env:THORNSWOOD_MONGOSH -ErrorAction SilentlyContinue
+        $null = Shell 'thornswood-wtestc' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtest' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestb' 'db.dropDatabase()'
         Remove-Item -LiteralPath $scratch -Recurse -Force -EA SilentlyContinue

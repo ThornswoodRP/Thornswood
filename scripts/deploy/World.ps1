@@ -30,9 +30,12 @@
   (world.js apply, mode changes): a changed file replaces its form, a new
   one adds one, and one moved away takes its form out. What was moved away
   stays in that folder on disk, as it did beside the files, and nothing is
-  taken out of the database before it is there. The server must be stopped
-  from Open to Save; Save refuses, with nothing written, when a form it
-  would write changed in the database meanwhile.
+  taken out of the database before it is there. Once written, the forms read
+  out go, so the only copies left are the ones set aside, which
+  server-log.js deletes after 30 days and Delete-Person.ps1 reaches, as
+  beside the files. The server must be stopped from Open to Save; Save
+  refuses, with nothing written, when a form it would write changed in the
+  database meanwhile, and leaves the folder as it is to be saved again.
 
   Every line these return is one a caller prints or reads:
     WORLD|<driver>|<forms folder>          what Open opened
@@ -42,7 +45,10 @@
 
 $ThornswoodWorldFunctions = @'
 # ---- the world (scripts\deploy\World.ps1, #6237) ----
+# The box's mongosh (Install-Mongo.ps1); THORNSWOOD_MONGOSH names another
+# for a harness on a machine without one there.
 $ThornswoodMongoShell = 'C:\Thornswood-Mongo\bin\mongosh.exe'
+if ($env:THORNSWOOD_MONGOSH) { $ThornswoodMongoShell = $env:THORNSWOOD_MONGOSH }
 # The settings a world is found by, or a STOP line.
 function Get-ThornswoodWorld([string]$Root) {
   $settings = Join-Path $Root 'server-settings.json'
@@ -105,6 +111,11 @@ function Save-ThornswoodWorld($World) {
   $out = @(Invoke-ThornswoodWorldJs @{ op = 'apply'; uri = $World.UriFile; db = $World.Db; from = $World.Forms; manifest = $World.Manifest; mode = 'changes' })
   $done = @($out | Where-Object { $_ -like 'APPLIED|*' })
   if (-not $done.Count) { return ('STOP|the changes in ' + $World.Forms + ' were not written to ' + $World.Db + ': ' + (($out | Where-Object { $_ }) -join ' ')) }
+  # Written: the forms read out are what the database holds now, so that
+  # copy goes, and what is left is what the tool set aside, as beside the
+  # files (#2351: a person's deletion reaches every copy there is).
+  foreach ($f in @(Get-ChildItem -LiteralPath $World.Forms -Filter *.json -File)) { Remove-Item -LiteralPath $f.FullName -Force }
+  Remove-Item -LiteralPath $World.Manifest -Force
   return ('WORLDSAVED|mongodb|' + (($done[0] -split '\|', 2)[1]))
 }
 # The world as a restore puts it back: the database made to hold exactly
