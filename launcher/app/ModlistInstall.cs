@@ -19,11 +19,12 @@
 // records\collection-modlist.wabbajack); the caller holds the file to that
 // before it reads it here.
 //
-// WHAT IT DOES NOT DO YET: download. Missing() says which archives are not in
-// downloads, held to size and xxHash64; fetching them (Nexus sign-in, the MO2
-// release) and an unpacker for what is not a zip are the next slices of
-// #6244. The game still runs from Thornswood's own folder
-// (OwnGame.cs), never inside MO2.
+// WHAT IT DOES NOT DO: download. Missing() says which archives are not in
+// downloads, held to size and xxHash64. ModlistFetch.cs downloads the ones the
+// modlist gets by address (Mod Organizer 2 from its GitHub release) and puts
+// in the pinned unpacker, whose SevenZip.With unpacks what is not a zip; the
+// Nexus files wait on Nexus sign-in, the next slice of #6244. The game still
+// runs from Thornswood's own folder (OwnGame.cs), never inside MO2.
 //
 // A reason a person reads comes from Failure.cs, as every catch's does
 // (#4633). tests\test-6244-modlist-install.ps1 builds it with the launcher and
@@ -314,7 +315,7 @@ namespace Thornswood
         /// <summary>Unpacks one archive into an empty folder.</summary>
         public delegate void Unpack(string archive, string into);
 
-        /// <summary>A zip, by the framework. Anything else needs an unpacker of its own, the next slice.</summary>
+        /// <summary>A zip, by the framework. Anything else goes through SevenZip.With (ModlistFetch.cs).</summary>
         public static void UnpackZip(string archive, string into)
         {
             ZipFile.ExtractToDirectory(archive, into);
