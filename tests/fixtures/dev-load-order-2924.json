@@ -1,5 +1,5 @@
 {
-  "about": "The dev server's own load order and which of its plugins are light, read on the box on 20 Oct 2026 at 11:31 PM UTC for #2924: the loadOrder of C:\\Thornswood-Server-Dev\\server-settings.json, and the flags of each plugin's TES4 header in C:\\Thornswood-Server-Dev\\plugins, the files the dev server loads (an .esl name, or 0x200). The box's server-build.json said lightPlugins true and its start point was 0x2D19BAD4. tests\\test-dev-start-point-light.ps1 runs the dev deploy's settings block over it. A record of what was measured, not kept in step with the box: Check-Chargen.ps1 -From dev reads the box as it is now.",
+  "about": "The dev server's own load order and which of its plugins are light, read on the box on 20 Oct 2026 at 11:31 PM UTC for #2924: the loadOrder of C:\\Thornswood-Server-Dev\\server-settings.json, and the flags of each plugin's TES4 header in C:\\Thornswood-Server-Dev\\plugins, the files the dev server loads (an .esl name, or 0x200). The box's server-build.json said lightPlugins true and its start point was 0x2D19BAD4. scripts\\tests\\test-dev-start-point-light.ps1 runs the dev deploy's settings block over it. A record of what was measured, not kept in step with the box: Check-Chargen.ps1 -From dev reads the box as it is now.",
   "measured": "2026-10-20T23:31:15Z",
   "startPoint": "0x2D19BAD4",
   "plugins": [

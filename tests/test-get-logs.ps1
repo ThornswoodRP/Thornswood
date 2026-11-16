@@ -5,7 +5,8 @@
 
   Get-Logs.ps1, issue #453 leftover: the rolled generations of every log
   that rolls come down with the current file. door.log does not roll, so it
-  stays current-only.
+  stays current-only. The deploy agent's log of each Deployment comes down
+  too (#6149).
 
   And the pull itself (#1605). On 4 Oct every pull under PowerShell 7.6.6
   printed a MetadataError for every log, said "1 lines" for each, and wrote a
@@ -134,6 +135,10 @@ Put 'Thornswood-Server-Dev\private\door.log.1' 7
 Put 'Thornswood-Voice-Dev\voice.log' 7
 Put 'Thornswood-Voice-Dev\voice.log.1' 0
 Put 'Thornswood-Bot\data\bot.log' 7
+# The deploy agent's logs in dev's data folder (#6149), and a file beside
+# them that is not one.
+Put 'Thornswood-Server-Dev\data\deploy-7808834094.log' 7
+Put 'Thornswood-Server-Dev\data\deploy-7808834094.after.json' 2
 New-Item -ItemType Directory -Path (Join-Path $global:standInBox 'Thornswood-Docs') -Force | Out-Null
 
 # Here, from an earlier pull: an older voice.log.1, which the empty one on
@@ -202,8 +207,8 @@ try {
     $healthAsks = @($global:standInAsks | Where-Object { $_.Contains('/health') })
     $reads = @($global:standInAsks | Where-Object { $_ -match "Get-Content -LiteralPath '([^']+)'" } | ForEach-Object { [regex]::Match($_, "Get-Content -LiteralPath '([^']+)'").Groups[1].Value })
     Yes 'it asks the box once which files it has' ($listings.Count -eq 1)
-    Yes ('the box names 8 files, and the pull reads those 8, asks voice once and nothing else ({0} asks)' -f $global:standInAsks.Count) (
-        $global:standInListed.Count -eq 8 -and $reads.Count -eq 8 -and $healthAsks.Count -eq 1 -and $global:standInAsks.Count -eq 10)
+    Yes ('the box names 9 files, and the pull reads those 9, asks voice once and nothing else ({0} asks)' -f $global:standInAsks.Count) (
+        $global:standInListed.Count -eq 9 -and $reads.Count -eq 9 -and $healthAsks.Count -eq 1 -and $global:standInAsks.Count -eq 11)
 
     # ---- voice's /health, on the box (#3806) ----
     # Only a caller on the box is told the build, so the detail is read there,
@@ -239,6 +244,9 @@ try {
     Yes 'and nothing is written for it' (-not (Test-Path -LiteralPath (Pulled 'site.log')))
     Yes 'bot.log comes down' (Test-Path -LiteralPath (Pulled 'bot.log'))
     Yes 'nothing is called MISSING any more' (-not ($words -match 'MISSING'))
+    Yes 'the deploy agent''s log of a Deployment comes down by its own name (#6149)' (
+        (Test-Path -LiteralPath (Pulled 'deploy-7808834094.log')) -and $words -match '(?m)^\s*deploy-7808834094\.log\s+3 lines')
+    Yes 'and the file beside it that is not a log does not' (-not (Test-Path -LiteralPath (Pulled 'deploy-7808834094.after.json')))
 } finally {
     Remove-Item -Path function:global:ssh -ErrorAction SilentlyContinue
     Remove-Item -Path function:global:Invoke-RestMethod -ErrorAction SilentlyContinue

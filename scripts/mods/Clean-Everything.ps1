@@ -25,6 +25,7 @@
   -ServerSaves. With none of them it looks at all of them except -ServerSaves,
   which is a wipe and has to be asked for by name.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Vps  = '',

@@ -57,7 +57,7 @@
   var keys = {
     help: 'F7', chat: 'Enter', command: '/', skills: 'K', party: 'P', journal: 'J',
     friend: 'Y', trade: 'H', mute: 'L', mold: 'U', lock: 'X', maneuver: '9',
-    talk: 'V', voiceMode: 'B', wheel: 'G', activate: 'E'
+    talk: 'V', voiceMode: 'B', wheel: 'G', activate: 'E', stop: 'N', voiceLock: 'O'
   };
 
   /*
@@ -71,7 +71,9 @@
         k.chat + ' opens the chat box, and Escape gives the keyboard back to the game. ' +
           'A line typed there reaches the people near you.',
         'Hold ' + k.talk + ' to talk out loud. ' + k.voiceMode + ' steps your voice between a ' +
-          'whisper, your normal voice and a yell, and each carries a different distance.',
+          'whisper, your normal voice and a yell, and each carries a different distance. ' +
+          k.voiceLock + ' locks the microphone open until you press it again, for a song or ' +
+          'a long speech without holding ' + k.talk + '.',
         'Start a line with /me for what your character does, or /do for what there is to see. ' +
           '/w whispers it, and /s or /y shouts it.',
         '/ooc and what you meant is out of character, to whoever is near you.',
@@ -105,6 +107,8 @@
           'than the road, and your own bed is best. ' +
           'Somebody else\'s bed counts when they let you sleep there or you carry its key. ' +
           'A lute, flute or drum played on the wheel, or Sing, helps everybody resting there.',
+        k.stop + ' stands you up out of an idle or an emote, one you are stuck in too, and ' +
+          'works with the wheel shut.',
         'Log out lying in a bed indoors, your own, one you may use, or an inn or temple bed, ' +
           'and nothing runs down while you are away, and you come back rested. Anywhere else ' +
           'the bars fall at half the pace while you are gone, and never below 25. The Body ' +

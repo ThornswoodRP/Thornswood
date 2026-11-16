@@ -190,21 +190,18 @@ def main():
         return 1
     canon = dict((n.lower(), n) for n in order)
     rank = dict((n.lower(), i) for i, n in enumerate(order))
-    recs, failed = {}, 0
+    recs = {}
     for name in order:
         pl = Plugin(own_plugins.plugin_path(a.data, name), name)
-        if not pl.ok:
-            continue
         pl.masters = [canon.get(m.lower(), m) for m in pl.masters]
         if pl.localised:
             pl.strings = bsa.load_strings(a.data, name)
         read(pl, rank, recs)
-        failed += pl.failed
 
     creation = creation_records()
     items = table(recs, rank, True, creation)
     actors = table(recs, rank, False, creation)
-    print('%d plugins, %d records read, %d failed to inflate' % (len(order), len(recs), failed))
+    print('%d plugins, %d records read' % (len(order), len(recs)))
     print('%d item names, %d actor names' % (len(items), len(actors)))
     for probe in ('troll', 'frost troll', 'giant', 'skeleton', 'draugr', 'mammoth', 'gold', 'iron sword', 'dragon'):
         tab = items if probe in ('gold', 'iron sword') else actors
@@ -217,4 +214,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

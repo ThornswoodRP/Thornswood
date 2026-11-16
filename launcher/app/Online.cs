@@ -52,20 +52,21 @@ namespace Thornswood
             int mine = SkyMp.ResourcePortFor(cfg);
             // Main resources are on 3000; Dev is game-port+1 (7788 when Dev is 7787).
             int other = mine == 3000 ? 7788 : 3000;
-            // No fallback number: cfg.MaxOnline is this build's own feed's,
+            // No fallback number: cfg.MaxOnline is this build's own server's,
             // and main and dev seat differently since 12 Oct (30 and 5), so
             // the other server's number is only ever the one it announces.
             return AskPort(cfg, other, 0);
         }
 
-        // fallbackMax is the feed's copy of this server's seats, shown until
-        // the server says its own.
+        // fallbackMax is config.json's copy of this server's seats, shown
+        // until the server says its own.
         static Count AskPort(Config cfg, int resourcePort, int fallbackMax)
         {
             var got = new Count();
             got.Max = fallbackMax;
             string url = "";
             string why = null;
+            Exception error = null;
             try
             {
                 if (cfg != null && !string.IsNullOrEmpty(cfg.ServerAddress) && resourcePort > 0)
@@ -95,8 +96,8 @@ namespace Thornswood
                     }
                 }
             }
-            catch (Exception ex) { why = ex.GetType().Name + ": " + ex.Message; }
-            SayWhenItChanges(resourcePort, url, why);
+            catch (Exception ex) { why = Failure.Plain(ex, null); error = ex; }
+            SayWhenItChanges(resourcePort, url, why, error);
             return got;
         }
 
@@ -109,9 +110,10 @@ namespace Thornswood
         /// 404 looked the same as one that had not said yet. Asked every ten
         /// seconds and on every dropdown, so a line goes in when the answer
         /// changes (it fails, it fails another way, it reads again) and not on
-        /// every ask while it stays the same.
+        /// every ask while it stays the same. An exception the ask threw goes
+        /// to launcher.log whole with that line, once, not on every ask (#4633).
         /// </summary>
-        static void SayWhenItChanges(int port, string url, string why)
+        static void SayWhenItChanges(int port, string url, string why, Exception error)
         {
             string was;
             lock (lastWhy)
@@ -120,6 +122,7 @@ namespace Thornswood
                 if (string.Equals(was, why, StringComparison.Ordinal)) return;
                 lastWhy[port] = why;
             }
+            if (error != null) Swallow.Note("Online.AskPort", error);
             if (why != null)
                 Swallow.Say("Online.AskPort", "how many are awake could not be read from " + url + ": " + why +
                     ". The Play page shows the seats alone until it reads. Said again when that changes.");

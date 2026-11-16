@@ -1275,7 +1275,7 @@ const settingsPage = fs.readFileSync(path.join(root, 'game', 'ui', 'thornswood-s
   Rush's speed rides the K panel's view and ends on a timer in memory. A
   restart takes the timer with it, and the server that comes up has nothing
   running, so the view it works out when the person is back (arrival in the
-  character block, tests/test-1642-effects-restart.js) has no speed on it.
+  character block, game/tests/test-1642-effects-restart.js) has no speed on it.
 */
 {
   const RUSHER = actor(0xff00000b, { pos: [7000, 0, 0] });

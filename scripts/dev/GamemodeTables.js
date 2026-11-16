@@ -15,7 +15,7 @@
 // the same bytes for the same value, so a table written from PowerShell,
 // Python or JavaScript is laid out alike. The same rule is GamemodeTables.ps1
 // for the PowerShell builders and gamemode_tables.py for the Python ones;
-// tests/test-5191-gamemode-tables.js holds the three to each other.
+// game/tests/test-5191-gamemode-tables.js holds the three to each other.
 'use strict';
 const fs = require('fs');
 const path = require('path');

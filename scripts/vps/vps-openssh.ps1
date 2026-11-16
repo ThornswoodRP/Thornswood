@@ -72,7 +72,7 @@
 
 .PARAMETER Layer
   A file that replaces the functions below that touch Windows. Only
-  tests\test-1043-openssh-upgrade.ps1 passes it.
+  scripts\tests\test-1043-openssh-upgrade.ps1 passes it.
 #>
 [CmdletBinding()]
 param(

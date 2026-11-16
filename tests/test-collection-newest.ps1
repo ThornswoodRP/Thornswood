@@ -137,13 +137,14 @@ try {
   At 'newest-current'
   Yes 'the current newestVersion is read out of a compressed table' ((Get-CollectionNewest 'ombo2a') -eq 5)
 
-  # The case #1902 is about: installed at 4 with Vortex knowing 5 is out.
-  # Before it, the table hid the 5, Newest fell to the installed 4, and
-  # Behind read false.
+  # The case #1902 is about: installed at 4 with 5 out. Since #4735 the 5 is
+  # Nexus's newest published revision, passed in here as Publish-Update and
+  # Ship pass the number they already asked for.
   At 'newest-behind'
-  $behind = Get-CollectionState $ombo
-  Yes 'a newer revision in the table is read: Newest 5 over the installed 4' ($behind.Newest -eq 5 -and $behind.Have -eq 4)
+  $behind = Get-CollectionState $ombo -Published 5
+  Yes 'a newer published revision is read: Newest 5 over the installed 4' ($behind.Newest -eq 5 -and $behind.Have -eq 4)
   Yes 'so Behind is true and Known is true' ($behind.Behind -and $behind.Known)
+  Yes 'and what Vortex itself knows is still read out of the table' ($behind.VortexNewest -eq 5)
 
   At 'newest-log-after-table'
   Yes 'a newestVersion written to the log after compaction wins over the table' ((Get-CollectionNewest 'ombo2a') -eq 5)
@@ -173,12 +174,18 @@ try {
   Yes 'a newestVersion that is not a whole number is not read as one' ((Get-CollectionNewest 'ombo2a') -eq 5)
 
   # ---- when it genuinely cannot tell ---------------------------------------
-  # 0 has to keep meaning "could not read", because Behind is false on 0 and
-  # the deploy gate refuses on an unreadable revision rather than passing.
+  # A database that does not read stops the readers with a sentence naming
+  # it (#4735), and Get-CollectionState turns that into not Known with Why,
+  # because Behind is false on 0 and the deploy gate refuses on an unreadable
+  # revision rather than passing.
   At 'newest-corrupt'
-  $corrupt = Get-CollectionState $ombo
+  $corrupt = Get-CollectionState $ombo -Published 5
   Yes 'a table whose checksum does not match reads 0, not a guess' ($corrupt.Newest -eq 0 -and $corrupt.Have -eq 0)
   Yes 'and Known is false, so the gate says it could not read' (-not $corrupt.Known)
+  Yes 'and Why names state.v2' (([string]$corrupt.Why) -match 'state\.v2')
+  $corruptWhy = ''
+  try { $null = Get-CollectionNewest 'ombo2a' } catch { $corruptWhy = $_.Exception.Message }
+  Yes 'Get-CollectionNewest itself throws on it, never 0' ($corruptWhy -match 'state\.v2')
 
   $env:APPDATA = $root
   Clear-State
@@ -223,7 +230,7 @@ try {
   # the collection installed at 5 and Vortex knowing 5 is newest, the state is
   # Known and not Behind, which is a deploy that no longer needs -IgnoreRevision.
   At 'newest-current'
-  $csReady = Get-CollectionState $ombo
+  $csReady = Get-CollectionState $ombo -Published 5
   Yes 'Get-CollectionState reads Have from state' ($csReady.Have -eq 5)
   Yes 'and Known is true, so the deploy gate reads a real revision without -IgnoreRevision' ($csReady.Known)
   Yes 'and Behind is false when Have matches Newest' (-not $csReady.Behind)
@@ -233,17 +240,17 @@ try {
 
     # ---- Known without newestVersion (draft / first revision) --------------
     At ('draft' + $w)
-    $csDraft = Get-CollectionState $essx
+    $csDraft = Get-CollectionState $essx -Published 1
     Yes "draft $($where): without newestVersion, Have still reads 1 from state" ($csDraft.Have -eq 1)
-    Yes "draft $($where): and Newest is 1 from the cached revision and the installed floor" ($csDraft.Newest -eq 1)
+    Yes "draft $($where): and Vortex's newest is 1 from the cached revision and the installed floor" ($csDraft.VortexNewest -eq 1)
     Yes "draft $($where): so Known is true on a current draft with no newestVersion key" ($csDraft.Known)
     Yes "draft $($where): and the mod id is found" (((Get-CollectionModIds '7essxf') -join ',') -eq $z)
 
     # ---- authoring shape: newestFileId, no collectionSlug (live ship PC) ----
     At ('authoring' + $w)
-    $csAuthor = Get-CollectionState $essx
+    $csAuthor = Get-CollectionState $essx -Published 1
     Yes "authoring $($where): without collectionSlug, Have still reads 1 via newestFileId and the revisions cache" ($csAuthor.Have -eq 1)
-    Yes "authoring $($where): and Newest is 1 so Known is true" ($csAuthor.Newest -eq 1 -and $csAuthor.Known)
+    Yes "authoring $($where): and Vortex's newest is 1 so Known is true" ($csAuthor.VortexNewest -eq 1 -and $csAuthor.Known)
     Yes "authoring $($where): ombo2a stays 0 when only 7essxf is wired through newestFileId" ((Get-CollectionRevision 'ombo2a') -eq 0)
     Yes "authoring $($where): ModIds finds vortex_collection_* via newestFileId" (((Get-CollectionModIds '7essxf') -join ',') -eq $z)
     Yes "authoring $($where): and no mod id for a slug nothing is tied to" ((Get-CollectionModIds 'ombo2a').Count -eq 0)

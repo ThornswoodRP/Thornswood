@@ -100,7 +100,9 @@
   --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
+/* Smooth in-page scrolling only for a visitor who has not asked for less
+   motion (#4127); the hero and the slideshow already keep to that. */
+@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 body{margin:0;background:var(--night);color:var(--page);
   font:400 17px/1.7 var(--serif);overflow-x:hidden;
   -webkit-font-smoothing:antialiased}
@@ -197,6 +199,12 @@ nav.top a:hover{color:var(--page)}
 .notice b{color:var(--gold-hot);font-weight:600}
 .notice a{margin-left:8px;white-space:nowrap}
 @media(max-width:560px){ .notice{font-size:13.5px} }
+/* What a Discord sign in that did not finish says, on the page it began on
+   (#4406). The line is in the page from the start, empty, so a screen
+   reader hears it when home.js fills it; empty, it takes no room. */
+.signin-said{margin-top:14px;padding:12px 16px;border-left:3px solid var(--gold);
+  background:rgba(201,162,75,.08);font:400 15px/1.5 var(--sans)}
+.signin-said:empty{margin-top:0;padding:0;border:0}
 
 /* ----------------------------------------------------------------- hero -- */
 /*
@@ -406,6 +414,7 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
 .shot img,.shot video{width:100%;height:100%;object-fit:cover}
 .shot-card{display:flex;flex-direction:column;gap:8px}
 .shot-card .shot-actions{display:flex;flex-wrap:wrap;gap:8px}
+.shot-card .shot-actions .said{flex:1 1 100%;margin:0}
 /* Gallery submit box: same dark gold panel language as the rest of the site,
    not a separate olive slab. Staff queue lives on the hub only. */
 .gal-box{margin-top:28px;padding:26px 28px;border:1px solid var(--edge);
@@ -500,10 +509,19 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
   background:var(--gold);color:var(--night)}
 .gal-show .gal-prev{left:14px}
 .gal-show .gal-next{right:14px}
+/* The pause button (#4127), top right, the arrows' look and size. */
+.gal-show .gal-pause{position:absolute;top:14px;right:14px;z-index:3;
+  width:44px;height:44px;padding:0;border-radius:2px;
+  border:1px solid var(--gold);background:rgba(11,14,10,.82);
+  color:var(--gold);cursor:pointer;font:600 14px/1 var(--carve);
+  display:grid;place-items:center}
+.gal-show .gal-pause:hover,.gal-show .gal-pause:focus-visible{
+  background:var(--gold);color:var(--night)}
 @media(max-width:560px){
   .gal-show .gal-nav{width:38px;height:38px;font-size:18px}
   .gal-show .gal-prev{left:8px}
   .gal-show .gal-next{right:8px}
+  .gal-show .gal-pause{width:38px;height:38px;top:8px;right:8px}
 }
 /* Each dot is a 24 pixel button with the 9 pixel dot drawn in the middle of
    it (#3218). The buttons were the 9 pixel dots themselves, 8 apart, under

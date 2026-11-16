@@ -124,7 +124,7 @@ namespace Thornswood
             }
             catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException || ex is IOException || ex is UriFormatException || ex is InvalidOperationException)
             {
-                why = ex.GetType().Name + ": " + ex.Message;
+                why = Failure.Why("Http, a request", ex);
                 return null;
             }
         }

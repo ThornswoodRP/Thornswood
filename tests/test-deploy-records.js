@@ -203,11 +203,11 @@ async function main() {
       crypto.createHmac('sha256', SECRET).update(ADMIN_ID + '|Admin|' + at).digest('hex').slice(0, 32);
     const adminCookie = 'twa=' + encodeURIComponent(raw);
 
-    const port = await freePort();
+    let port = 0;
     const srv = spawn(process.execPath, ['server.js'], {
       cwd: site,
       env: Object.assign({}, process.env, {
-        THORNSWOOD_DOCS_PORT: String(port),
+        THORNSWOOD_DOCS_PORT: '0',
         THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
         THORNSWOOD_DOCS_LOCAL: '1',
         THORNSWOOD_DEPLOYS_DIR: store,
@@ -220,7 +220,7 @@ async function main() {
     try {
       let up = false;
       for (let i = 0; i < 120 && !up; i++) {
-        if (out.indexOf('listening on ') >= 0) { up = true; break; }
+        if (siteFiles.saidPort(out)) { port = siteFiles.saidPort(out); up = true; break; }
         if (srv.exitCode !== null) break;
         await wait(50);
       }

@@ -45,13 +45,13 @@ does not establish ownership, eligibility, objective completion, durability
 or authority to pay. Never write it separately or infer a committed reward
 from a lost reply. Existing legacy work is not retroactively charged.
 
-`node tests/test-scene-reward-budget.js` exercises arithmetic, boundaries,
+`node game/tests/test-scene-reward-budget.js` exercises arithmetic, boundaries,
 tokens, corruption and small operation sequences. The synthetic transaction
-fixture in `node tests/test-quest-transactions.js` carries the budget
+fixture in `node game/tests/test-quest-transactions.js` carries the budget
 through the real JavaScript adapter with modeled native comparisons, including
 competing reservations, an inventory refusal and a stale repeated payout.
 These are source tests, not a game/server or connected acceptance test.
-The production-controller fixture in `node tests/test-merchant-expanded-scenes.js`
+The production-controller fixture in `node game/tests/test-merchant-expanded-scenes.js`
 checks all four objectives, gates, original terms, allowance, cancellation and
 recovery, competing writes and full-property capacity. Dev delivery can follow
 once this playable section passes CI and merges; the complete catalogue need

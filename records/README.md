@@ -195,6 +195,10 @@ folder here is named below, under the heading it belongs to.
 
 ## The collection
 
+- `mo2.json`: the Mod Organizer 2 the Thornswood modlist installs (#6244):
+  its version, its release asset on GitHub and that asset's size and sha256.
+  `scripts\release\Install-NexusRevision.ps1 -Modlist` downloads it, refuses
+  any other bytes, and names each of its files in the modlist.
 - `collection.json`: the collection as it should be (issue #5189): each
   Nexus file it installs with the plugins that file puts in Data, every
   plugin in the collection's order with its load-after rule and what its
@@ -223,6 +227,25 @@ folder here is named below, under the heading it belongs to.
   Only a line against being in a collection is `not allowed`; one against
   uploading or redistributing the files is `not stated` (Patrick, 27 Oct,
   q-3649-no-upload-lines).
+  What makes a reading `allowed` (#4190): the page grants the mod's own
+  files more than a collection asks, in one of three ways the reading
+  records. `licence`: an open licence covering all of the mod's own files,
+  named on the page or in a licence file the page points to as its terms;
+  one the page only points to also says where it is (`at`) and who opened
+  it and when (`by`, `read`). `upload`: the page's Upload permission line
+  lets the files go to other sites, with or without credit. `grant`: the
+  page's own words letting anyone do anything with the files, copied as
+  they stand in a term. A licence for part of the mod (a program but not
+  its assets) is none of these, nor is "open source" with no licence named.
+  Any other reading is `not stated`. `collection-permissions.js ruled()` is
+  the same rule, and the record's own shape check fails a reading it does
+  not give; `allowed` and `not stated` both pass a revision, so the rule
+  says what a reading means and lets nothing new through.
+  An entry that is not a Nexus mod (a bundle packed into the collection's own
+  archive, or a direct, browse or manual one) goes in `others`, by its source
+  type and its name, with `ours` or a reading held to the same rule (#4278);
+  check refuses one the list does not have, has not read, or reads as not
+  allowed.
   `node scripts\release\collection-permissions.js update <collection.json>
   --revision <n>` takes the list of mods from a new revision and keeps every
   reading, so a new mod comes in unread. `New-NexusRevision.ps1` makes and
@@ -238,6 +261,16 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `load-order.json`: the load order the servers run and every content
+  build reads, at the revision `collection-plugins.json` names, the five
+  masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
+  revision adds goes on the end of its kind and none moves to another index
+  (`docs\LIGHT-ORDER-DRIFT.md`). Until 16 Nov 2026 the order was
+  `game\data\npc-population.json`'s, a table the box's build writes, so a
+  build read it back from the build before. `scripts\mods\Set-LoadOrder.ps1`
+  writes it in the pull request that moves the records to a new revision,
+  and `tests\test-5191-load-order.ps1` fails while it is another
+  revision's.
 
 ## The box, GitHub and Cloudflare
 

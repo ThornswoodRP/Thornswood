@@ -11,7 +11,7 @@
 // file).
 module.exports = { askReleaseCopies, assetLocation, feedFile, feedReleaseTag, feedSettings,
   feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseAsset, releaseCopy,
-  releaseList, setupChannel };
+  releaseList, releaseNotes, serverRevision, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -36,7 +36,7 @@ function feedGeneration(n) { return String(n).padStart(8, '0') + '.json'; }
    store keeps every generation whole, and every script, backup and page reads
    it whole. What /feed[-dev]/version.json answers is feedView's: once the
    feed's minLauncher is at or above FEED_SPLIT_LAUNCHER, the first launcher
-   that reads it this way (launcher\app\FeedSettings.cs), version.json holds
+   that reads it this way (FeedSettings.cs, out of the launcher since #5608), version.json holds
    only what the update check needs, FEED_TOP, and names everything else as
    one more asset, "settings": { sha256 }, the rest of the feed as one line
    of JSON, answered at /feed[-dev]/assets/<sha256> from here. And every asset
@@ -210,7 +210,10 @@ function readJsonQuiet(file) {
    and says so once in its log. */
 const RELEASE_REPO = 'ThornswoodRP/Thornswood';
 const RELEASE_LOOK_MS = 10 * 60 * 1000;
-const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
+// A release id is its instant: yyyyMMdd-HHmmss with a Z, in UTC since
+// #4950, -dev on dev. The ids already published (seconds with no Z, and
+// the older minutes) still read, and a Z only ever follows the seconds.
+const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4}(\d{2}Z?)?(-dev)?$/;
 const releaseCopies = {};   // tag -> { files: { sha: { id, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
 /* The site's GitHub token (#5608): an installation token of the box admin
@@ -241,10 +244,32 @@ function siteToken() {
     tokenLog(SITE_TOKEN + ' did not read (' + e.message + '), so GitHub is asked without one', true);
     return '';
   }
+  /* What a token may hold (#6186): the characters of GitHub's installation
+     token shapes, which can go into the authorization header as they are,
+     and nothing else, so a damaged file never puts a line break or a space
+     in a request. Since GitHub's stateless tokens (rolled out by 2 Oct
+     2026) one is ghs_<App id>_<a JWT>: about 520 characters, its length
+     varying with what it carries, with the JWT's dots and its base64url
+     hyphens in it. The old check took only letters, digits and _ up to 255,
+     so it refused every token the admin service has written since the site
+     first asked with one (#5608, 9 Nov). The site asked GitHub without a
+     token from then on, sixty calls an hour, and on 15 Nov at 1:59 PM
+     Mountain, after three restarts emptied what it kept, GitHub answered 403
+     and every /release/ file answered 503 until the hour turned over. */
   const token = doc && typeof doc.token === 'string' ? doc.token : '';
   const left = Date.parse(String((doc && doc.expires_at) || '')) - Date.now();
-  if (!/^[A-Za-z0-9_]{20,255}$/.test(token) || !(left > 2 * 60 * 1000)) {
-    tokenLog(SITE_TOKEN + ' holds no token with more than two minutes left, so GitHub is asked without one; the admin service writes a new one every half hour', true);
+  // Each reason said apart: one line for both hid for six days that the
+  // token was there, and current, and refused only by its shape.
+  if (!token) {
+    tokenLog(SITE_TOKEN + ' holds no token, so GitHub is asked without one; the admin service writes one every half hour', true);
+    return '';
+  }
+  if (!/^[A-Za-z0-9._-]{20,4096}$/.test(token)) {
+    tokenLog(SITE_TOKEN + ' holds a token of ' + token.length + ' characters that is not in the shape of a GitHub token, so GitHub is asked without one', true);
+    return '';
+  }
+  if (!(left > 2 * 60 * 1000)) {
+    tokenLog(SITE_TOKEN + ' holds a token with less than two minutes left, so GitHub is asked without one; the admin service writes a new one every half hour', true);
     return '';
   }
   tokenLog('signed in, from ' + SITE_TOKEN, false);
@@ -558,11 +583,15 @@ function assetIds(assets) {
    is answered and a new one asked for behind it. A look that fails keeps the
    list the last one found. null when GitHub has not answered yet. */
 const LIST_SIGNED_MS = 60 * 1000;
-const releaseListHeld = { body: null, files: {}, at: 0, busy: null };
+const releaseListHeld = { body: null, files: {}, notes: null, at: 0, busy: null };
 function listFromGitHub(list) {
-  const out = [], files = {};
+  const out = [], files = {}, notes = [];
   for (const r of list) {
     if (!r || r.draft || typeof r.tag_name !== 'string' || !RELEASE_ROUTE_TAG.test(r.tag_name) || !Array.isArray(r.assets)) continue;
+    // What the News page reads of it (news.js): its title, its note and when
+    // it went out.
+    notes.push({ tag: r.tag_name, name: typeof r.name === 'string' ? r.name : '', body: typeof r.body === 'string' ? r.body : '',
+                 published_at: r.published_at || null });
     const ids = assetIds(r.assets);
     files[r.tag_name] = ids;
     const assets = [];
@@ -574,7 +603,7 @@ function listFromGitHub(list) {
     out.push({ name: typeof r.name === 'string' ? r.name : r.tag_name, tag_name: r.tag_name, prerelease: !!r.prerelease,
                published_at: r.published_at || null, assets });
   }
-  return { body: JSON.stringify(out), files };
+  return { body: JSON.stringify(out), files, notes };
 }
 function askReleaseList() {
   if (releaseListHeld.busy) return releaseListHeld.busy;
@@ -587,6 +616,7 @@ function askReleaseList() {
       const made = listFromGitHub(got.body);
       releaseListHeld.body = made.body;
       releaseListHeld.files = made.files;
+      releaseListHeld.notes = made.notes;
     } else {
       console.error('[thornswood-docs] the Release list for launchers: ' + (got.why || 'did not read'));
     }
@@ -601,6 +631,15 @@ async function releaseList() {
   const asking = askReleaseList();
   if (releaseListHeld.body === null) await asking;
   return releaseListHeld.body;
+}
+// The same newest hundred published Releases as the News page reads them
+// (news.js): [{ tag, name, body, published_at }], newest first as GitHub
+// lists them, or null when GitHub has not answered yet. One list, one call,
+// for the launchers and the page.
+async function releaseNotes() {
+  const asking = askReleaseList();
+  if (releaseListHeld.notes === null) await asking;
+  return releaseListHeld.notes;
 }
 /* THE LAUNCHERS A CHANNEL LETS IN, SINCE VELOPACK (#4825). The launcher goes
    out only through Velopack: merge-release.yml packs it as version 1.3.<n>
@@ -669,6 +708,54 @@ async function nativePublished(channel, said) {
   nativeSeen[key] = ok ? { ok: true } : { at: Date.now() };
   if (ok) console.log('[thornswood-docs] launcher ' + said + ' is published on ' + channel + ' (' + tag + ')');
   return ok ? 'yes' : 'no';
+}
+/* THE SERVERS' COLLECTION REVISION (#5767). The revision a channel's servers
+   run is the one in the signed manifest of the Release that channel is on
+   (New-SignedManifest.ps1 writes collectionRevision from the commit's
+   records/collection-plugins.json): main's promoted build, by the tag of
+   main's setup program (main-build-1.3.<n> is build-1.3.<n>), and dev's newest
+   build. Until 11 Nov the Downloads page took it from the feed, which only a
+   Ship writes, and releases stopped going through a Ship: revision 8 sat
+   behind 7 from 8 to 11 Nov. A manifest never changes, so each is read once;
+   0 until it has been, or for a record from before the field. The page reads
+   only the number; launchers hold the record to its signature (VeloRecord.cs). */
+const revisionOf = {};   // build tag -> the collectionRevision its manifest names
+const revisionBusy = {};
+function serverRevision(channel) {
+  const st = newestSetup(channel);
+  if (!st || typeof st.tag !== 'string') return 0;
+  const tag = st.tag.replace(/^main-/, '');
+  if (Object.prototype.hasOwnProperty.call(revisionOf, tag)) return revisionOf[tag];
+  if (!revisionBusy[tag]) {
+    revisionBusy[tag] = true;
+    readManifestRevision(tag).then((n) => {
+      revisionOf[tag] = n;
+      console.log('[thornswood-docs] ' + channel + ' runs ' + tag + ', collection revision ' + n);
+    }, (e) => {
+      console.error('[thornswood-docs] the collection revision of ' + tag + ': ' + (e && e.message));
+    }).then(() => { revisionBusy[tag] = false; });
+  }
+  return 0;
+}
+async function readManifestRevision(tag) {
+  const where = await releaseAsset(tag, 'manifest.json');
+  if (!where.url) throw new Error(where.missing ? 'it has no manifest.json' : (where.why || 'its manifest.json could not be found'));
+  const text = await new Promise((resolve, reject) => {
+    const req = https.get(where.url, { headers: { 'user-agent': 'thornswood-site' } }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); reject(new Error('GitHub\'s storage answered ' + res.statusCode)); return; }
+      let out = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => { out += d; if (out.length > 1048576) req.destroy(new Error('manifest.json is over 1 MB')); });
+      res.on('end', () => resolve(out));
+      res.on('error', reject);
+    });
+    req.setTimeout(10000, () => req.destroy(new Error('GitHub\'s storage did not answer inside ten seconds')));
+    req.on('error', reject);
+  });
+  const doc = JSON.parse(text);
+  if (!doc || doc.tag !== tag) throw new Error('its manifest.json names another Release');
+  const n = Number(doc.collectionRevision);
+  return Number.isInteger(n) && n > 0 ? n : 0;
 }
 /* ---- end release copies ---- */
 

@@ -176,7 +176,7 @@ function gates(state) {
                           helpers.join('\n') + '\n' + craftSrc + '\n' + benchSrc +
                           '\nreturn { craftAnswer: craftAnswer, benchGate: benchGate };');
   const byBase = { lab: 'alchemy', enchanter: 'enchanting' };
-  // Everybody here holds their trade's tool (#3162); tests/test-3162-bench-tools.js asks the refusal.
+  // Everybody here holds their trade's tool (#3162); game/tests/test-3162-bench-tools.js asks the refusal.
   return fn(g, function () {}, function () { return null; }, NO_PROFESSION, byBase, BENCH_ACCESS,
             function () { return ''; }, function () { return null; }, function () { return ''; });
 }

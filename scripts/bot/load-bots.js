@@ -14,13 +14,24 @@
 //      character (createActor with isMe);
 //   3. send a face (UpdateAppearance), which closes the race menu the engine
 //      opens for a new character;
-//   4. walk: an UpdateMovement every 130 ms, unreliable, the rate and the
-//      reliability skymp5-client's SendInputsService.sendMovement uses, in a
-//      slow circle around where it was put, at a walk. A teleport the server
-//      sends (Teleport, Teleport2) is carried out and its teleportSeq echoed,
-//      as the game's RemoteServer does. Moves keep to their 130 ms beat
-//      (the next is due 130 ms after the last was due), so Windows' timer
-//      steps of about 15.6 ms do not slow a bot below the game's rate.
+//   4. walk and stand: in a slow circle around where it was put, at a walk,
+//      and for a share of every 20 s (--stand, 0 to 1) standing still, as
+//      people in a town mostly do. It looks at its place every 130 ms, the
+//      beat skymp5-client's SendInputsService.sendMovement looks on, and
+//      sends what the game sends (--moves):
+//        change  the game since #6247: a move only when what anybody could
+//                see changed (a whole unit of place, a whole degree of
+//                facing, the run mode and flags), unreliable; the first
+//                unchanged look sends that move once more as settled,
+//                reliably; then nothing until it changes. Every move
+//                carries moveSeq, one more each time;
+//        beat    the game before it: an UpdateMovement every 130 ms,
+//                unreliable, standing or not.
+//      A teleport the server sends (Teleport, Teleport2) is carried out and
+//      its teleportSeq echoed, as the game's RemoteServer does. The looks
+//      keep to their 130 ms beat (the next is due 130 ms after the last was
+//      due), so Windows' timer steps of about 15.6 ms do not slow a bot
+//      below the game's rate.
 //   5. hold the game's chat socket on the voice service, as a person in the
 //      world does: a join token (POST /token, as the launcher asks for it),
 //      the socket with it, a join with voice off, and over it the join pass
@@ -32,7 +43,7 @@
 // Every message the server sends is read and counted, by type; none is kept.
 // What the chat socket carries is counted in bytes each way.
 //
-// WHAT ELSE A PERSON DOES (--play, any of fight, host and trade). Each bot
+// WHAT ELSE A PERSON DOES (--play, any of fight, host, trade and quest). Each bot
 // keeps where the actors it is sent are (CreateActor, their moves,
 // DestroyActor), and:
 //   fight  every 2 to 3 s swings at another person in its cell within
@@ -41,14 +52,37 @@
 //          both reliable, as skymp5-client sends them. What the server makes
 //          of it (ChangeValues, death, respawn) shows in the message counts;
 //   host   carries out HostStart: the actor it is handed (an NPC near it,
-//          whose AI a game runs and the server only passes on) is sent an
-//          UpdateMovement on the same 130 ms beat as its own character,
-//          standing where the server put it, until HostStop. Without this the
-//          bots would leave every NPC's moves out of the load;
+//          whose AI a game runs and the server only passes on) is looked at
+//          on the same 130 ms beat as its own character and sent by the same
+//          rule, standing where the server put it, until HostStop. Without
+//          this the bots would leave every NPC's moves out of the load. An
+//          NPC a bot hosts never walks, so under --moves change it costs one
+//          move and one settled move, where a game's NPC that walks about
+//          costs more;
 //   trade  every 30 s asks, over the chat socket as a person types it, to
 //          trade with the nearest NPC within TRADE_REACH: "/merchant <id>",
 //          the guild trader command the panel's E press is (gamemode.js,
 //          createMerchantTrading). The answers are counted by what they say.
+//   quest  takes guild work the way the trader panel's buttons ask for it
+//          (game/ui/thornswood-merchant.js): every 30 s or so it stands still
+//          beside the nearest NPC within the trade block's REACH, opens the
+//          panel ("/merchant <id>") and reads the view the server pushes
+//          (the thornswoodMerchantView property, visible by its owner);
+//          5 s later it presses Take work on the first work it can take
+//          ("/merchant quest take <id>", with the commission's quote as the
+//          panel sends it), 5 s after that Leave work on what it holds
+//          ("/merchant quest abandon <id> @<token>"), then Step back
+//          ("/merchant close") and walks on. Each take and leave is a saved
+//          change on the server (the trader's purse holds the commission's
+//          gold, the quest record on the character), which is the quest load.
+//          A new character holds no trade, so every rank of work is locked
+//          to it: on the first panel with nothing it can take, it picks the
+//          trade of a novice work it saw there ("/pick profession <p>
+//          <half>"), as a person picks one on the K panel, and opens the
+//          panel again. Turning work in needs the work done (the goods, the
+//          kill, the item fetched), which a crowd standing in one inn does
+//          not do, so a bot leaves what it took. The answers are counted by
+//          what they say, against the merchant block's own lines.
 //
 // Messages from Load-Test.js:
 //   { add: [profileId, ...] }   bots to start
@@ -63,6 +97,8 @@ const { Bot, MSG, loadAddon, mintPass, passLoginKey } = require('./bot.js');
 const { face } = require('./Bot-Pass.js');
 
 const MOVE_MS = 130;           // SendInputsService.sendMovement's sendMovementRateMs
+const MOVES = ['change', 'beat']; // see step 4 above; change is the game's own since #6247
+const STAND_CYCLE_MS = 20000;  // --stand is a share of this, at a phase of each bot's own
 const STEP_MS = 60000;         // how long each login step may take
 const WALK = 100;              // units a second, a walk
 const TELEPORT = 20;
@@ -77,6 +113,51 @@ const FIGHT_REACH = 1000;      // units: who a bot swings at
 const TRADE_REACH = 600;       // units: which NPC a bot asks to trade with
 const TRADE_EVERY_MS = 30000;
 const PLAYER_IDS = 0xff000000; // a person's character; an NPC's refrId is its form id plus 2^32 (PartOne.cpp)
+const QUEST_REACH = 400;       // merchant-trading-bundle.ts REACH: the panel answers somebody this near
+const QUEST_EVERY_MS = 30000;  // from one Step back to the next panel
+const QUEST_STEP_MS = 5000;    // between the presses at an open panel
+const MERCHANT_VIEW = 'thornswoodMerchantView';
+// What the merchant block says to a quest press (merchant-trading-bundle.ts,
+// the quest verb's text and reasons), by the count it adds to. A line said
+// for anything else is a trade answer.
+const QUEST_SAID = {
+  'You take the work.': 'questTaken',
+  'You give back what you drew and leave the work.': 'questLeft',
+  'You leave the work without payment.': 'questLeft',
+  'The work is turned in.': 'questTurnedIn',
+  'Choose the work in the trader panel.': 'questRefused:panel',
+  'This work takes a different class.': 'questRefused:class',
+  'This work takes a higher rank.': 'questRefused:rank',
+  'You do not meet this work\'s class or profession requirements.': 'questRefused:eligibility',
+  'This work is still resting.': 'questRefused:cooldown',
+  'You already hold this work.': 'questRefused:open',
+  'You do not hold this work.': 'questRefused:none',
+  'This work has no appointed place yet.': 'questRefused:unbound',
+  'The work could not be committed just now.': 'questRefused:unwritten',
+  'Quest work is unavailable.': 'questRefused:unavailable',
+  'This trader does not handle that work.': 'questRefused:role',
+  'The submitted price changed or is missing. Choose the work again.': 'questRefused:price',
+  'This trader cannot reserve the quoted payment.': 'questRefused:purse',
+  'This trader cannot accept more work yet.': 'questRefused:capacity',
+  'The transfer is waiting for its saved inventory.': 'questRefused:waiting',
+  'Finish or leave one of your three open jobs of this kind first.': 'questRefused:open-limit',
+  'Choose the work again from the trader.': 'questRefused:session',
+  'The work could not be changed.': 'questRefused:other'
+};
+// Why the panel shows a commission it cannot be taken (merchant-trading-
+// bundle.ts, the commissions' view: the reason ends its check line), by the
+// count it adds to. The 15 Nov 2026 box crowd saw 499 rows at 50 people and
+// none it could take, with nothing to say why.
+const QUEST_ROW_WHY = {
+  'This trader is finishing a saved transfer.': 'busy',
+  'Trading is waiting for a saved inventory.': 'inventory',
+  'You do not meet this work\'s requirements.': 'requirements',
+  'This work is still resting.': 'resting',
+  'No submitted buy price is available for this work.': 'noPrice',
+  'You already hold three commissions.': 'threeHeld',
+  'This trader cannot accept more work yet.': 'traderFull',
+  'The trader cannot reserve this payment.': 'purse'
+};
 
 function distance(a, b) {
   const dx = a[0] - b[0]; const dy = a[1] - b[1]; const dz = a[2] - b[2];
@@ -100,6 +181,13 @@ class LoadBot extends Bot {
     this.angle = Math.random() * Math.PI * 2;
     this.radius = 200 + Math.random() * 300;
     this.lastMove = 0;
+    this.moves = 'change';     // what it sends on each look: see step 4 above
+    this.stand = 0;            // the share of every STAND_CYCLE_MS it stands still
+    this.standPhase = Math.random() * STAND_CYCLE_MS;
+    this.moveSeq = 0;          // the moveSeq of its newest move, for itself and what it hosts
+    this.lastSent = new Map(); // idx -> { key, settled }, the move it sent last for each
+    this.movesSent = 0;        // moves it sent, since the last report
+    this.settledSent = 0;      // of those, settled moves, since the last report
     this.teleports = 0;
     this.voicePort = 0;
     this.ws = null;            // the chat socket on the voice service
@@ -114,14 +202,53 @@ class LoadBot extends Bot {
     this.nextHit = 0;
     this.nextTrade = 0;
     this.anim = 0;
+    this.nextQuest = 0;
+    this.questPhase = 'idle';  // idle, asked (the panel), held (work taken), leaving
+    this.questView = null;     // the newest panel the server pushed it
+    this.questTook = '';       // the work it pressed Take on
+    this.questGem = '';
+    this.picked = false;       // it picked a trade for the work it saw
+    this.atPanel = null;       // [x, y, z] it stands at while the panel is open
   }
 
   did(what, n) { this.played[what] = (this.played[what] || 0) + (n === undefined ? 1 : n); }
 
   // The position the bot's own character is at now.
   here() {
+    if (this.atPanel) { return this.atPanel; }
     const c = this.center || [0, 0, 0];
     return [c[0] + Math.cos(this.angle) * this.radius, c[1] + Math.sin(this.angle) * this.radius, c[2]];
+  }
+
+  // Whether it stands still now: at an open trader panel, or in the standing
+  // share of its own 20 s.
+  standing(now) {
+    if (this.atPanel) { return true; }
+    return this.stand > 0 && ((now + this.standPhase) % STAND_CYCLE_MS) < this.stand * STAND_CYCLE_MS;
+  }
+
+  // One look at idx's move, sent by --moves. Under change, the key is
+  // skymp5-client's movementKey (sendInputsService.ts): what anybody could
+  // see, rounded the same way.
+  sendMove(idx, data) {
+    if (this.moves === 'beat') {
+      this.send({ t: MSG.UpdateMovement, idx, data }, false);
+      this.movesSent++;
+      return true;
+    }
+    const r = Math.round;
+    const key = [idx, data.worldOrCell, r(data.pos[0]), r(data.pos[1]), r(data.pos[2]), r(data.rot[0]), r(data.rot[1]), r(data.rot[2]),
+      data.runMode, r(data.direction), r(data.speed), r(data.healthPercentage * 100),
+      data.isInJumpState, data.isSneaking, data.isBlocking, data.isWeapDrawn, data.isDead, '', data.teleportSeq === undefined ? '' : data.teleportSeq].join('|');
+    const last = this.lastSent.get(idx);
+    const settled = !!last && last.key === key;
+    if (settled && last.settled) { return false; }
+    const out = Object.assign({}, data, { moveSeq: ++this.moveSeq });
+    if (settled) { out.settled = true; this.settledSent++; }
+    this.send({ t: MSG.UpdateMovement, idx, data: out }, settled);
+    this.lastSent.set(idx, { key, settled });
+    this.movesSent++;
+    return true;
   }
 
   // The nearest actor it knows that keep(actor) holds for, within reach.
@@ -161,10 +288,95 @@ class LoadBot extends Bot {
     this.did('tradeAsks');
   }
 
-  // What the chat socket brought that answers a trade ask.
+  // What the chat socket brought that answers a quest press or a trade ask.
   heard(text) {
-    if (this.play.indexOf('trade') < 0 || text.indexOf('"t":"chat"') < 0) { return; }
-    if (/Trading with/.test(text)) { this.did('tradeOpened'); } else if (/not a guild trader/.test(text)) { this.did('notATrader'); } else if (/trade|trader/i.test(text)) { this.did('tradeOtherAnswer'); }
+    const quest = this.play.indexOf('quest') >= 0;
+    const trade = this.play.indexOf('trade') >= 0;
+    if ((!quest && !trade) || text.indexOf('"t":"chat"') < 0) { return; }
+    let said = '';
+    try { said = String(JSON.parse(text).text || ''); } catch (e) { return; }
+    if (quest && Object.prototype.hasOwnProperty.call(QUEST_SAID, said)) {
+      const k = QUEST_SAID[said];
+      this.did(k);
+      if (k.indexOf('questRefused:') === 0) { this.did('questRefused'); }
+      return;
+    }
+    if (!trade) { return; }
+    if (/Trading with/.test(said)) { this.did('tradeOpened'); } else if (/not a guild trader/.test(said)) { this.did('notATrader'); } else if (/trade|trader/i.test(said)) { this.did('tradeOtherAnswer'); }
+  }
+
+  // One press at the trader panel, the way the panel's buttons send them;
+  // now is Date.now(). See quest in the header.
+  questStep(now) {
+    const say = (line) => this.wsSend({ t: 'chat', text: line });
+    const end = () => { say('/merchant close'); this.atPanel = null; this.questPhase = 'idle'; this.questView = null; this.nextQuest = now + QUEST_EVERY_MS; };
+    this.nextQuest = now + QUEST_STEP_MS;
+    if (this.questPhase === 'idle') {
+      const npc = this.nearest(QUEST_REACH, (o) => o.refrId >= 0x100000000);
+      if (!npc) { this.did('questNoTraderNear'); this.nextQuest = now + QUEST_EVERY_MS; return; }
+      this.atPanel = this.here();
+      this.questView = null;
+      say('/merchant ' + (npc.refrId - 0x100000000).toString(16));
+      this.questPhase = 'asked';
+      this.did('questPanelAsks');
+      return;
+    }
+    const quests = this.questView && this.questView.open !== false && Array.isArray(this.questView.quests) ? this.questView.quests : null;
+    if (this.questPhase === 'asked') {
+      if (!quests) { this.did('questNoPanel'); end(); return; }
+      const held = quests.find((q) => q && q.state === 'open' && q.canAbandon);
+      if (held) { this.leave(held, say); this.questPhase = 'leaving'; return; }
+      const take = quests.find((q) => q && q.canTake === true);
+      if (take) {
+        const quote = take.kind === 'commission' && typeof take.quoteToken === 'string' && /^[0-9a-f]{64}$/.test(take.quoteToken) ? take.quoteToken
+          : take.kind === 'commission' && Number.isSafeInteger(take.quotedUnit) && take.quotedUnit >= 0 ? String(take.quotedUnit) : '';
+        const gems = Array.isArray(take.gems) ? take.gems : [];
+        this.questGem = quote ? '' : (gems[0] || '');
+        say('/merchant quest take ' + take.id + (quote ? ' @' + quote : this.questGem ? ' ' + this.questGem : ''));
+        this.questTook = String(take.id);
+        this.questPhase = 'held';
+        this.did('questTakeAsks');
+        return;
+      }
+      const trade = this.picked ? null : quests.map((q) => String(q && q.who || '').split(',').map((w) => w.trim().toLowerCase()))
+        .find((w) => w.length === 3 && w[2] === 'novice' && w[0] !== 'mage' && /^[a-z]+$/.test(w[0]) && /^[a-z]+$/.test(w[1]));
+      if (trade) {
+        say('/pick profession ' + trade[0] + ' ' + trade[1]);
+        this.picked = true;
+        this.did('questPicks');
+        this.questPhase = 'idle';
+        return;
+      }
+      this.did('noQuestToTake');
+      end();
+      return;
+    }
+    if (this.questPhase === 'held') {
+      const held = quests && quests.find((q) => q && String(q.id) === this.questTook && q.state === 'open' && q.canAbandon);
+      if (!held) { this.did('questNotHeld'); end(); return; }
+      this.leave(held, say);
+      this.questPhase = 'leaving';
+      return;
+    }
+    end();
+  }
+
+  // What a row of the panel says: its state, and for one it cannot take,
+  // why (a commission's reason, the end of its check line).
+  tallyRow(q) {
+    if (!q || typeof q !== 'object') { return; }
+    this.did('questRow:' + String(q.kind || 'scarce') + ':' + String(q.state || 'none'));
+    if (q.canTake === true || q.state === 'open') { return; }
+    const check = String(q.check || '');
+    const why = Object.keys(QUEST_ROW_WHY).find((t) => check.endsWith(t));
+    if (why) { this.did('questWhy:' + QUEST_ROW_WHY[why]); }
+  }
+
+  // Leave work: the panel's second button on work that is open.
+  leave(q, say) {
+    const token = Number.isSafeInteger(q.token) && q.token > 0 ? ' @' + q.token : (q.gem ? ' ' + q.gem : this.questGem ? ' ' + this.questGem : '');
+    say('/merchant quest abandon ' + q.id + token);
+    this.did('questLeaveAsks');
   }
 
   // The chat socket, once the character is in: a token, then the socket.
@@ -224,6 +436,19 @@ class LoadBot extends Bot {
       this.counts[t] = (this.counts[t] || 0) + 1;
       if (!m) { continue; }
       if (m.t === MSG.CreateActor && m.isMe && !this.character) { this.character = m; }
+      if (m.t === MSG.UpdateProperty && m.propName === MERCHANT_VIEW && this.character && m.idx === this.character.idx && this.play.indexOf('quest') >= 0) {
+        let v = null;
+        try { v = JSON.parse(m.dataDump); } catch (err) { v = null; }
+        if (v && typeof v === 'object') {
+          this.questView = v;
+          this.did('questViews');
+          if (Array.isArray(v.quests)) {
+            this.did('questRowsSeen', v.quests.length);
+            this.did('questRowsTakeable', v.quests.filter((q) => q && q.canTake === true).length);
+            for (const q of v.quests) { this.tallyRow(q); }
+          }
+        }
+      }
       if (m.t === MSG.CreateActor && !m.isMe && this.play.length) {
         const tr = m.transform || {};
         if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0 }); }
@@ -232,7 +457,7 @@ class LoadBot extends Bot {
         const o = this.others.get(m.idx);
         if (o) { o.pos = m.data.pos.map(Number); if (typeof m.data.worldOrCell === 'number') { o.cell = m.data.worldOrCell; } }
       }
-      if (m.t === MSG.DestroyActor && this.play.length) { this.others.delete(m.idx); this.hosted.delete(m.idx); }
+      if (m.t === MSG.DestroyActor && this.play.length) { this.others.delete(m.idx); this.hosted.delete(m.idx); this.lastSent.delete(m.idx); }
       if (m.t === HOST_START && this.play.indexOf('host') >= 0) {
         let found = false;
         for (const [idx, o] of this.others) {
@@ -241,7 +466,7 @@ class LoadBot extends Bot {
         this.did(found ? 'hostStarts' : 'hostStartsNotSeen');
       }
       if (m.t === HOST_STOP && this.play.indexOf('host') >= 0) {
-        for (const [idx, o] of this.others) { if (o.refrId === Number(m.target)) { this.hosted.delete(idx); } }
+        for (const [idx, o] of this.others) { if (o.refrId === Number(m.target)) { this.hosted.delete(idx); this.lastSent.delete(idx); } }
         this.did('hostStops');
       }
       if (m.t === MSG.CustomPacket && typeof m.contentJsonDump === 'string' && m.contentJsonDump.indexOf('thornswoodLoginChallenge') >= 0) {
@@ -291,6 +516,7 @@ class LoadBot extends Bot {
       }
       this.step = 'moving'; this.deadline = 0; this.lastMove = now - Math.random() * MOVE_MS;
       this.nextHit = now + 5000 + Math.random() * 3000; this.nextTrade = now + 10000 + Math.random() * TRADE_EVERY_MS;
+      this.nextQuest = now + 10000 + Math.random() * QUEST_EVERY_MS;
       if (this.voicePort) { this.voiceBy = now + STEP_MS; this.openVoice(); }
       return;
     }
@@ -300,25 +526,28 @@ class LoadBot extends Bot {
       // On the beat, unless the bot fell a whole beat behind, which starts
       // the beat again from now rather than sending the missed ones at once.
       this.lastMove = now - this.lastMove >= 2 * MOVE_MS ? now : this.lastMove + MOVE_MS;
-      this.angle += (WALK * dt) / this.radius;
-      const c = this.center;
-      const pos = [c[0] + Math.cos(this.angle) * this.radius, c[1] + Math.sin(this.angle) * this.radius, c[2]];
+      // At an open trader panel it stands where it opened it, as a person
+      // does, and in its standing share it stands wherever it got to.
+      const still = this.standing(now);
+      if (!still) { this.angle += (WALK * dt) / this.radius; }
+      const pos = this.here();
       const heading = ((this.angle * 180 / Math.PI) + 90) % 360;
-      this.send({ t: MSG.UpdateMovement, idx: this.character.idx, data: {
-        worldOrCell: this.cell, pos, rot: [0, 0, heading], direction: 0, healthPercentage: 1, speed: WALK,
-        runMode: 'Walking', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: this.play.indexOf('fight') >= 0, isDead: false,
+      this.sendMove(this.character.idx, {
+        worldOrCell: this.cell, pos, rot: [0, 0, heading], direction: 0, healthPercentage: 1, speed: still ? 0 : WALK,
+        runMode: still ? 'Standing' : 'Walking', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: this.play.indexOf('fight') >= 0, isDead: false,
         teleportSeq: this.seq
-      } }, false);
+      });
       for (const [idx, h] of this.hosted) {
-        this.send({ t: MSG.UpdateMovement, idx, data: {
+        const sent = this.sendMove(idx, {
           worldOrCell: h.cell, pos: h.pos, rot: h.rot, direction: 0, healthPercentage: 1, speed: 0,
           runMode: 'Standing', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: false, isDead: false
-        } }, false);
-        this.did('hostMoves');
+        });
+        if (sent) { this.did('hostMoves'); }
       }
     }
     if (this.step === 'moving' && this.play.indexOf('fight') >= 0 && now >= this.nextHit) { this.swing(now); }
     if (this.step === 'moving' && this.welcomed && this.play.indexOf('trade') >= 0 && now >= this.nextTrade) { this.askTrade(now); }
+    if (this.step === 'moving' && this.welcomed && this.play.indexOf('quest') >= 0 && now >= this.nextQuest) { this.questStep(now); }
   }
 }
 
@@ -341,11 +570,15 @@ function args(argv) {
 function main() {
   const a = args(process.argv.slice(2));
   if (!a.root || !a.port || !process.send) {
-    console.log('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade], started by Load-Test.js with IPC');
+    console.log('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade,quest] [--moves change|beat] [--stand <0 to 1>], started by Load-Test.js with IPC');
     process.exit(2);
   }
   const addon = loadAddon(a.root);
   const playing = String(a.play || '').split(',').filter(Boolean);
+  const moves = a.moves || 'change';
+  if (!MOVES.includes(moves)) { console.log('--moves takes ' + MOVES.join(' or ') + ', not ' + moves); process.exit(2); }
+  const stand = Number(a.stand) || 0;
+  if (!(stand >= 0 && stand <= 1)) { console.log('--stand is a share from 0 to 1, not ' + a.stand); process.exit(2); }
   const { passKey, server } = passKeyOf(a.root);
   const bots = [];
   let cpu0 = process.cpuUsage();
@@ -354,7 +587,7 @@ function main() {
     if (msg && Array.isArray(msg.add)) {
       for (const id of msg.add) {
         const b = new LoadBot(addon, { host: '127.0.0.1', port: Number(a.port), password: a.password || '', name: 'load ' + id });
-        b.profileId = id; b.passKey = passKey; b.server = server; b.voicePort = Number(a.voice) || 0; b.play = playing;
+        b.profileId = id; b.passKey = passKey; b.server = server; b.voicePort = Number(a.voice) || 0; b.play = playing; b.moves = moves; b.stand = stand;
         try {
           b.client = addon.createBotClient(b.host, b.port, b.password, b.timeoutMs);
           b.state = 'connecting'; b.step = 'connecting'; b.deadline = Date.now() + STEP_MS;
@@ -372,6 +605,8 @@ function main() {
       let wsDown = 0; let wsUp = 0; let inVoice = 0;
       let all = 0;
       const perBot = [];
+      const sentPerBot = [];
+      let settled = 0;
       const play = {};
       let hostedNow = 0;
       // The NPCs the bots hold as sent to them at the report, and how many of
@@ -383,7 +618,8 @@ function main() {
         steps[b.step] = (steps[b.step] || 0) + 1;
         if (b.step === 'failed') { failed.push({ profileId: b.profileId, why: b.why }); }
         for (const k of Object.keys(b.counts)) { counts[k] = (counts[k] || 0) + b.counts[k]; }
-        if (b.step === 'moving') { perBot.push(b.counts[MSG.UpdateMovement] || 0); }
+        if (b.step === 'moving') { perBot.push(b.counts[MSG.UpdateMovement] || 0); sentPerBot.push(b.movesSent); settled += b.settledSent; }
+        b.movesSent = 0; b.settledSent = 0;
         b.counts = {};
         teleports += b.teleports; all += b.all;
         wsDown += b.wsDown; wsUp += b.wsUp; b.wsDown = 0; b.wsUp = 0;
@@ -395,7 +631,7 @@ function main() {
           if (o.refrId >= 0x100000000) { npcsKnown++; if (o.cell === b.cell) { npcsInCell++; } }
         }
       }
-      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
+      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, movesSentPerBot: sentPerBot, settledSent: settled, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
       cpu0 = process.cpuUsage(); at0 = now;
     }
     if (msg && msg.stop) {
@@ -417,4 +653,4 @@ function main() {
 
 if (require.main === module) { main(); }
 
-module.exports = { LoadBot, MOVE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH };
+module.exports = { LoadBot, MOVE_MS, MOVES, STAND_CYCLE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };

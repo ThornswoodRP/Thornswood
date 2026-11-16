@@ -98,8 +98,10 @@
   until the main run points the main feed away from them.
 
   -SiteDir <folder> stands in for C:\Thornswood-Docs and nothing connects
-  anywhere; tests\test-scrub-feed.ps1 drives it that way.
+  anywhere; tests\test-scrub-feed.ps1 drove it that way until it went with
+  the launcher's feed reader (#5608); this script goes with the feed (#5783).
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # main or dev. No default: which feed is scrubbed is always said.

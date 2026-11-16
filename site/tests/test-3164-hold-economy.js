@@ -27,7 +27,6 @@
 */
 const fs = require('fs');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const path = require('path');
 const vm = require('vm');
@@ -315,7 +314,7 @@ yes('the Hold economy page has its own address and is a staff page',
     /'\/economy':\s*'economy'/.test(SERVER) && /economy: 'staff'/.test(SERVER) &&
     /'\/economy':'economy'/.test(HUB));
 yes('it is in the hub\'s tabs, on its home cards and drawn by its own function',
-    /keys:\['uploads','sessions','linked','inbox','economy'\]/.test(HUB) && /card\('economy'\)/.test(HUB) &&
+    /keys:\['uploads','sessions','linked','inbox','economy','ledger'\]/.test(HUB) && /card\('economy'\)/.test(HUB) &&
     /if \(S\.at === 'economy'\) return drawEconomy\(\);/.test(HUB));
 yes('it reads the counts when it opens, and a read that fails is said rather than shown as nothing counted',
     /api\('\/api\/economy'\)/.test(HUB) && /The counts could not be read: /.test(HUB));
@@ -401,12 +400,6 @@ const cookieFor = (id, name) => {
   const raw = id + '|' + name + '|' + at + '|' + sign(id + '|' + name + '|' + at);
   return 'twa=' + encodeURIComponent(raw);
 };
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(method, where, headers, bodyText) {
@@ -434,11 +427,11 @@ function ask(method, where, headers, bodyText) {
 const asJson = { 'content-type': 'application/json' };
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['-r', path.join(sdir, 'stub.js'), 'server.js'], {
     cwd: sdir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+      THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(sdir, 'chat'),
       TS_STUB_GUILD: GUILD, TS_STUB_OWNER: OWNER_ID, TS_STUB_LORE: LORE_ID, TS_STUB_TESTER: TESTER_ID
     })
@@ -449,7 +442,7 @@ const asJson = { 'content-type': 'application/json' };
   try {
     let up = false;
     for (let i = 0; i < 100 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
+      if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }

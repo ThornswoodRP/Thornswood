@@ -19,6 +19,7 @@
 
   The key is Mark in Data\SKSE\Plugins\Thornswood.ini, F8 by default.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Game = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game'),

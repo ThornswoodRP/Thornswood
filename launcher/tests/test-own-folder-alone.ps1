@@ -90,7 +90,7 @@ Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDot
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
 # Config and OwnGame read their JSON through LooseString since the move to System.Text.Json, and
 # Downgrade opens the clipboard for Ask.Owner, the window its boxes belong to (#4823).
-$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
+$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 foreach ($f in $real) {
     Yes "launcher\app\$([IO.Path]::GetFileName($f)) is there" (Test-Path -LiteralPath $f)
@@ -1072,7 +1072,7 @@ Yes 'SkyrimSE.exe goes in last (#369 F3)' `
 Yes 'removing a pack no longer deletes anything from the Steam copy' `
     ($upd -notmatch 'also went from the Skyrim on Steam')
 $shellPlay = & $read 'ShellPlay.cs'
-$play = $shellPlay.Substring($shellPlay.IndexOf('static void Play()'))
+$play = $shellPlay.Substring($shellPlay.IndexOf('static async Task PlayAsync()'))
 Yes 'Play checks the shared archives before anything else is read, and stops when one changed' `
     (($play.IndexOf('OwnGame.CheckShared(') -ge 0) -and ($play.IndexOf('OwnGame.CheckShared(') -lt $play.IndexOf('Verify.Run(cfg)')))
 Yes 'after the Downgrade, the folder is made from the download, and Steam''s updates are not asked about' `

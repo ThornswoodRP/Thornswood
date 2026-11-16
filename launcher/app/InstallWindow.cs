@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -120,9 +121,14 @@ namespace Thornswood
                 Avalonia.Platform.IPlatformHandle h = TryGetPlatformHandle();
                 if (h != null) Ask.Owner = h.Handle;
                 KeepOnScreen();
+                // Focus on the first control, so the keyboard and a screen
+                // reader start somewhere and not on nothing (#4459).
+                btnPick.Focus(NavigationMethod.Tab);
             };
             Closing += OnClosing;
             Closed += delegate { done.TrySetResult(null); };
+            // Enter and Esc, before the control with focus sees them (#4459).
+            AddHandler(KeyDownEvent, OnKeys, RoutingStrategies.Tunnel);
         }
 
         IBrush B(string name)
@@ -162,8 +168,8 @@ namespace Thornswood
             txtBody = new TextBlock
             {
                 Foreground = B("Muted"), FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
-                Text = "This puts Thornswood's own content on your PC. With Thornswood's own Skyrim folder chosen below, it does not install into the Skyrim you already have on Steam, and that copy is left as it is, for you to play and mod however you like. Without it, Thornswood's own content goes into that copy until you turn the folder on in the launcher, which then takes it back out.\n\n" +
-                       "Thornswood runs from its own game folder. The launcher builds it out of your Steam copy and what Vortex has deployed there, most of it as hard links that take no extra space, and copies of the few files other programs rewrite. Hard links only work inside one drive, so Thornswood goes on the same drive as Skyrim.\n\n" +
+                Text = "This puts Thornswood's own content on your PC. With the box for Thornswood's own Skyrim folder below left ticked, as it starts, it does not install into the Skyrim you already have on Steam, and that copy is left as it is, for you to play and mod however you like. Unticked, Thornswood's own content goes into that copy until the launcher makes the folder, and then the launcher takes it back out.\n\n" +
+                       "Thornswood only plays from its own game folder. The launcher builds it out of your Steam copy and what Vortex has deployed there, most of it as hard links that take no extra space, and copies of the few files other programs rewrite. Hard links only work inside one drive, so Thornswood goes on the same drive as Skyrim.\n\n" +
                        "The mods themselves come from a collection on Nexus. Vortex installs them into a profile of their own, so switching back to your usual profile and running Purge Mods leaves your Skyrim where you started. The launcher has the link and walks you through it.\n\n" +
                        "Nothing of Bethesda's is renamed or deleted. You need Steam running and Skyrim on build 1.6.1170.",
             };
@@ -195,7 +201,8 @@ namespace Thornswood
 
             // Thornswood's own Skyrim folder, offered here as well as in the
             // launcher's Settings, Maintenance (issue #906), in that panel's
-            // own words, so the two say the same thing.
+            // own words, so the two say the same thing. The box starts ticked
+            // (Patrick, 12 Nov): the own folder is the default for everyone.
             var ownStack = new StackPanel();
             ownStack.Children.Add(Caption("Thornswood's own Skyrim folder"));
             ownStack.Children.Add(new TextBlock
@@ -204,7 +211,8 @@ namespace Thornswood
                 Text = "Runs Thornswood from a Skyrim folder of its own, made from what Vortex has deployed while the Thornswood profile is on. Any other Vortex profile can then use the Steam copy without reaching Thornswood, and switching profiles in Vortex no longer takes Thornswood's mods away. The big files are links to Vortex's copies, so the collection is not on the disk twice. When Vortex deploys a newer Thornswood collection, the launcher brings it in by itself the next time it starts.",
             });
             chkOwn = Box("Give Thornswood a Skyrim folder of its own", new Thickness(0, 12, 0, 0));
-            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); };
+            chkOwn.IsChecked = true;
+            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); SayRoom(); };
             ownStack.Children.Add(chkOwn);
             txtOwn = Small(new Thickness(0, 8, 0, 0));
             txtOwn.LineHeight = 18;
@@ -395,9 +403,25 @@ namespace Thornswood
             string colour;
             txtSkyrim.Text = InstallPlace.SaySkyrim(skyrimDrive, root, out colour);
             txtSkyrim.Foreground = B(colour);
-            txtRoom.Text = InstallPlace.SayRoom(FreeOn(root), out colour);
-            txtRoom.Foreground = B(colour);
+            SayRoom();
             SayOwnGame();
+        }
+
+        /// <summary>
+        /// The drives this install writes to and the room each needs, by what
+        /// the window says now: the same rule InstallSteps stops by (#4681).
+        /// </summary>
+        List<InstallPlace.Room> Rooms()
+        {
+            bool intoSteam = chkOwn.IsChecked != true && !InstallPlace.MadeOwn(installRoot);
+            return InstallPlace.Rooms(InstallPlace.DriveOf(installRoot), InstallPlace.DriveOf(skyrimPath), intoSteam);
+        }
+
+        void SayRoom()
+        {
+            string colour;
+            txtRoom.Text = InstallPlace.SayRoom(Rooms(), FreeOn, out colour);
+            txtRoom.Foreground = B(colour);
         }
 
         static long FreeOn(string driveRoot)
@@ -432,10 +456,11 @@ namespace Thornswood
         // collection is the step after this. So a tick is the launcher's own
         // question answered in advance, written into config.json as
         // MakeOwnGame, and the launcher then makes the folder without asking
-        // once Vortex has deployed (ShellOwnGame.AskOwnGame). No tick is what
-        // every install did before: the launcher asks. Thornswood will not
-        // start out of a shared Skyrim either way (OwnGameRequired), which is
-        // why the off line says Play asks for it too.
+        // once Vortex has deployed (ShellOwnGame.AskOwnGame). The box starts
+        // ticked (Patrick, 12 Nov), because Thornswood will not start out of a
+        // shared Skyrim (OwnGameRequired): a question whose no leaves Play
+        // shut only stands between a new install and the game. Unticked, the
+        // launcher asks first, and Play asks for it too.
         //
         // The tick also decides where Thornswood's own files go (#1226,
         // Patrick, 29 Sep): ticked, Profile\Payload, and nothing is written
@@ -511,6 +536,33 @@ namespace Thornswood
             e.Cancel = true;
         }
 
+        // ---------------------------------------------------------------- keys
+        //
+        // Issue #4459. Enter and Esc work the window the way Windows' own
+        // dialogs do. Esc is Not now, or Close once an install has stopped,
+        // and does nothing while Close is off. Enter is Install, once every
+        // box is ticked, unless focus is on another button: that button does
+        // its own thing on Enter, as it always has. A tick box is not such a
+        // button: Space ticks it, and Enter on it is Install, not a tick.
+
+        void OnKeys(object sender, KeyEventArgs e)
+        {
+            if (e.KeyModifiers != KeyModifiers.None) return;
+            if (e.Key == Key.Escape)
+            {
+                if (!btnClose.IsEnabled) return;
+                e.Handled = true;
+                Close();
+            }
+            else if (e.Key == Key.Enter)
+            {
+                if (FocusManager?.GetFocusedElement() is Button b && !(b is Avalonia.Controls.Primitives.ToggleButton)) return;
+                if (!btnGo.IsEnabled) return;
+                e.Handled = true;
+                Start();
+            }
+        }
+
         // ---------------------------------------------------------------- Install
 
         void Start()
@@ -520,11 +572,11 @@ namespace Thornswood
             {
                 if (!Ask.YesNo(InstallPlace.OtherDriveQuestion(skyrimDrive, root), Title_, Ask.Icon.Warning)) return;
             }
-            long free = FreeOn(root);
-            if (free >= 0 && free < InstallPlace.Needed)
+            InstallPlace.Room shortOn;
+            string refused = InstallPlace.Short(Rooms(), FreeOn, out shortOn);
+            if (refused != null)
             {
-                Ask.Tell("There is only " + InstallPlace.Gb(free) + " free on " + root + " and this needs about " +
-                         InstallPlace.Gb(InstallPlace.Needed) + ".\n\nPick another drive.", Title_, Ask.Icon.Warning);
+                Ask.Tell(refused, Title_, Ask.Icon.Warning);
                 return;
             }
 
@@ -559,6 +611,9 @@ namespace Thornswood
             bar.IsVisible = true;
             bar.IsIndeterminate = true;
             txtBody.Text = "Installing. What it is doing shows below, and Thornswood opens by itself when it is done.";
+            // Install, which had focus, is off now: focus goes to what the
+            // install says, so it is never left on nothing (#4459).
+            txtLog.Focus(NavigationMethod.Tab);
 
             var t = new Thread(() => Work(choice, acceptedAt)) { IsBackground = true, Name = "Install" };
             t.Start();
@@ -594,8 +649,9 @@ namespace Thornswood
             catch (InstallStop stop)
             {
                 Line("");
-                Line("STOP. " + stop.Message);
-                why = stop.Message;
+                string stopped = Failure.Say("InstallWindow, the install stopped", stop);
+                Line("STOP. " + stopped);
+                why = stopped;
             }
             catch (Exception e)
             {
@@ -603,9 +659,10 @@ namespace Thornswood
                 // an exception left to escape it ends the launcher with no
                 // word. So it is said like a stop, in full in the log.
                 Line("");
-                Line("STOP. " + e.Message);
+                string failed = Failure.Say("InstallWindow, the install", e);
+                Line("STOP. " + failed);
                 Log(e.ToString());
-                why = e.Message;
+                why = failed;
             }
             finally
             {
@@ -637,6 +694,8 @@ namespace Thornswood
                 txtStat.Text = "";
                 btnClose.IsEnabled = true;
                 btnClose.Content = "Close";
+                // Straight to Close, right under why it stopped (#4459).
+                btnClose.Focus(NavigationMethod.Tab);
             });
         }
 

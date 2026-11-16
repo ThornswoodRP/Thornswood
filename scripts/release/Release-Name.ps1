@@ -43,7 +43,7 @@
   id, ending on its last pack. A rollback writes "release" for itself (#1058):
   its own id, the launcher the feed keeps, its one pack, its baseline, and no
   commit, so no tag. tests\test-release-name.ps1 drives the names;
-  tests\test-feed-rollback.ps1 drives a rolled-back feed.
+  tests\test-feed-rollback.ps1 drove a rolled-back feed until #5608.
 #>
 
 # ==== thornswood release id ====

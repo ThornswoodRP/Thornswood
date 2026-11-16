@@ -9,7 +9,7 @@ and the long form of each, are in the Developer Guide's pages under
 | --- | --- |
 | [guide/](../Developer-Guide.md#the-pages) | The Developer Guide's pages, one task each, in the order a first day reads them: [Set up a machine](guide/set-up-a-machine.md), [Make a change](guide/make-a-change.md), [The rules](guide/rules.md), [The board, issues and test tasks](guide/the-board.md), [Settled design](guide/settled-design.md), [How work moves](guide/how-work-moves.md), [Release to dev](guide/release-to-dev.md), [Release to main](guide/release-to-main.md), [After a pull request is merged](guide/after-a-merge.md), [How the system fits together](guide/the-system.md), [The tools, A to O](guide/tools.md), [Secrets](guide/secrets.md), [Staff commands](guide/staff-commands.md). [Developer-Guide.md](../Developer-Guide.md) is their index. |
 | [FEED.md](FEED.md) | The update feed launchers read: every field of version.json, who writes it, who reads it, and what happens when it is wrong. |
-| [JSON-STATE-INVENTORY.md](JSON-STATE-INVENTORY.md) | Every critical JSON file, who writes and reads it, how it is checked, and the four records held to a version and shape (#2180). |
+| [JSON-STATE-INVENTORY.md](JSON-STATE-INVENTORY.md) | Every critical JSON file, who writes and reads it, how it is checked, and the records held to a version and shape (#2180), held to the code by a test (#4434). |
 | [ICONS.md](ICONS.md) | Which icon file is which: Main launcher badge, Dev launcher monogram, site favicon. |
 | [PATREON.md](PATREON.md) | Every word pasted into Thornswood's Patreon page: the blurb, the tiers, and connecting the tiers to their Discord roles. |
 | [GAMEMODE.md](GAMEMODE.md) | How game/gamemode.js is laid out, where its data lives, how it is deployed and which tests cover it. |
@@ -31,7 +31,7 @@ and the long form of each, are in the Developer Guide's pages under
 | [COLLECTION-REVISIONS.md](COLLECTION-REVISIONS.md) | Which revision the collection is on, what each published revision changed, and how a new one goes from Nexus to a release (#4533). |
 | [COLLECTION-REVISION-2.md](COLLECTION-REVISION-2.md) | The Vortex pass for collection revision 2, step by step, and the exact plugin order a clean install must land in. |
 | [COLLECTION-REVISION-6.md](COLLECTION-REVISION-6.md) | Collection revision 6: Thornswood Content 1.4, Atlas Map Markers SE out, and the cheddars_mashups.esl rule that ended LOOT's cyclic interactions (#4070), made in one run. |
-| [COLLECTION-REBUILD-7ESSXF.md](COLLECTION-REBUILD-7ESSXF.md) | Rebuilding onto the 7essxf Nexus collection and the steps on the ship PC. |
+| [COLLECTION-REBUILD-7ESSXF.md](COLLECTION-REBUILD-7ESSXF.md) | A record of the move onto the 7essxf Nexus collection (#648, 27 September 2026), and what is different on main since. |
 | [COLLECTION-METHOD.md](COLLECTION-METHOD.md) | Why the mods come from a Nexus collection (half of the 15 September plan was reversed; it says which). |
 | [VIRUSTOTAL-FALSE-POSITIVE.md](VIRUSTOTAL-FALSE-POSITIVE.md) | Historical notes on scanner flags and vendor reports. Publish no longer uploads to VirusTotal; signing (#390) is the trust path. |
 | [JKS-SKYRIM.md](JKS-SKYRIM.md), [GOURMET-FISHING-PATCH.md](GOURMET-FISHING-PATCH.md) | Records of two mod decisions and the patch made for one. |
