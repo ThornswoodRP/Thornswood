@@ -61,9 +61,11 @@ if (plugins) {
       named.every((n) => n === plugins[1]), 'it names: ' + named.join(', '));
 }
 if (counts) {
+  // The captured counts are digits and commas only, so they go into the
+  // pattern as they are; the edges keep 4,883 from matching inside 14,883.
   for (const [what, n] of [['placements', counts[1]], ['retained', counts[2]], ['excluded', counts[3]]]) {
     yes('NPC-SERVER-ACTIVITY.md gives the catalogue\'s ' + n + ' ' + what,
-        new RegExp('\\b' + n.replace(/,/g, ',') + '\\b[^.]*').test(activity));
+        new RegExp('(^|[^\\d,])' + n + '($|[^\\d,])').test(activity));
   }
   const sentence = new RegExp(counts[1] + ' placements: ' + counts[2] + ' retained and ' + counts[3] + ' excluded');
   yes('in one sentence, as the generated page has them', sentence.test(activity));
