@@ -25,7 +25,9 @@
   WHEN. The task "Thornswood Send Backups" starts when the nightly backup's
   task ends (the Task Scheduler's own "task completed" event for
   \Thornswood Backup), so it sends tonight's straight after it is made, with
-  no clock between them.
+  no clock between them. Windows writes that event only while the Task
+  Scheduler's Operational log is on, which Windows Server ships off, so
+  -Install turns it on.
 
   WHAT STAFF SEE. After each file the VM took, its name goes into
   C:\Thornswood-Watch\offbox.txt, which the watchdog's "copy of the backups
@@ -59,6 +61,14 @@ $Cfg = Join-Path $Box 'vm.json'
 $Sent = Join-Path $Box 'sent.txt'
 $Log = Join-Path $Box 'send.log'
 $Name = '^thornswood-\d{8}-\d{6}\.zip\.enc$'
+# How sftp logs in, the same for the send and for -Status's login check, so
+# the check tries exactly what the send does.
+$Login = @('-i', $Key, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', ('UserKnownHostsFile=' + $Known))
+# The event that starts the send: Task Scheduler's 102 ("task completed") for
+# the nightly, in its Operational log. -Install subscribes the task to it and
+# -Status asks the log the same question, so both read one query.
+$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'
+$Ended = "<QueryList><Query Id='0' Path='$TaskLog'><Select Path='$TaskLog'>*[System[(EventID=102)]] and *[EventData[Data[@Name='TaskName']='\$BackupTask']]</Select></Query></QueryList>"
 function Say($m) { Write-Host $m }
 function Note($m) {
   Say $m
@@ -75,9 +85,61 @@ if ($Status) {
   if (-not (Test-Path -LiteralPath $Cfg)) { Say 'not set up: there is no vm.json (Send-Backups.ps1 -Install -VmHost <address>)' }
   else { Say ('sends to   tw-boxdrop@' + (Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json).host) }
   if (Test-Path -LiteralPath ($Key + '.pub')) { Say ('its key    ' + (Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim()) }
+  # Why the VM refuses the key. On 11 Nov 2026 at 8:25 PM every file came
+  # back "Permission denied (publickey)" while the VM held this key's public
+  # half from this box's address, and its sshd logged only "Connection reset
+  # by authenticating user tw-boxdrop [preauth]". So: does the private key
+  # match the .pub, who may open it, and what sftp itself says while it logs
+  # in. The login check runs an empty batch, so it sends nothing.
+  if (Test-Path -LiteralPath $Key) {
+    $EAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $kg = Get-Command ssh-keygen -ErrorAction SilentlyContinue
+    if ($kg) {
+      # -P '': ssh-keygen asks for a passphrase when a key has one, and
+      # nobody is there to answer (gate run 315 on 12 Nov 2026 waited out
+      # its 30 minutes on that ask).
+      $half = ((& $kg.Source -y -P '' -f $Key 2>&1) -join ' ').Trim()
+      $pub = if (Test-Path -LiteralPath ($Key + '.pub')) { ((Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim() -split '\s+')[0..1] -join ' ' } else { '' }
+      $mine = ($half -split '\s+')[0..1] -join ' '
+      Say ('key pair   ' + $(if ($half -notmatch '^ssh-') { 'the private key does not load without a passphrase, so the task cannot sign with it (-Install takes the old one off): ' + $half } elseif ($mine -eq $pub) { 'the private key matches its .pub' } else { 'the private key is ' + $mine + ', NOT its .pub' }))
+    }
+    $ka = Get-Acl -LiteralPath $Key
+    Say ('key owner  ' + $ka.Owner + $(if ($ka.AreAccessRulesProtected) { ', nothing inherited' } else { ', rules inherited' }))
+    foreach ($r in $ka.Access) { Say ('key rule   ' + $r.IdentityReference + ' ' + $r.AccessControlType + ' ' + $r.FileSystemRights) }
+    Say ('runs as    ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name)
+    $sf = Get-Command sftp -ErrorAction SilentlyContinue
+    if ($sf -and (Test-Path -LiteralPath $Cfg)) {
+      $vm = Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json
+      $empty = Join-Path $Box 'login-check.txt'
+      [IO.File]::WriteAllText($empty, '')
+      $probe = @(& $sf.Source -v -b $empty @Login -o ConnectTimeout=20 ($vm.user + '@' + $vm.host) 2>&1 | ForEach-Object { "$_" })
+      $code = $LASTEXITCODE
+      Remove-Item -LiteralPath $empty -Force -ErrorAction SilentlyContinue
+      Say ('--- logging in as ' + $vm.user + ', sftp ended ' + $code + ' ---')
+      $probe | Where-Object { $_ -match 'OpenSSH_|Server host key|Host .* is known|identity file|Load key|load_|bad permissions|UNPROTECTED|Will attempt key|Offering|Server accepts|Authentications that can continue|Next authentication|we did not send|sign_and_send|Authenticated to|Permission denied|No more authentication|Connection|Connecting to|kex_exchange|banner|disconnect' } | ForEach-Object { Say ('  ' + $_) }
+    }
+    $ErrorActionPreference = $EAP
+  }
   $t = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   if ($t) { $i = Get-ScheduledTaskInfo -TaskName $TaskName; Say ('task       ' + $t.State + ', last ran ' + $i.LastRunTime + ' result ' + $i.LastTaskResult) }
   else { Say 'task       NOT REGISTERED' }
+  # Whether Windows writes the event the task waits for: on 10 Nov 2026 the
+  # task had never run, though the nightly ended with 0 at 1:18 AM.
+  try {
+    $l = Get-WinEvent -ListLog $TaskLog -ErrorAction Stop
+    Say ('task log   ' + $(if ($l.IsEnabled) { 'on, ' + [int64]$l.RecordCount + ' events' } else { 'OFF, so no "task completed" event is written and nothing starts this task (-Install turns it on)' }))
+  } catch { Say ('task log   could not be read: ' + $_.Exception.Message) }
+  $ends = @(Get-WinEvent -FilterXml ([xml]$Ended) -MaxEvents 3 -ErrorAction SilentlyContinue)
+  Say ('ends seen  ' + $ends.Count + ' of ' + $BackupTask + $(if ($ends.Count) { ', newest ' + $ends[0].TimeCreated }))
+  # What Windows wrote about this task's own runs (started, action started
+  # and ended with its code, terminated): on 11 Nov 2026 it was started at
+  # 1:18 AM and ended "terminated" (267014) with nothing in send.log.
+  $own = "<QueryList><Query Id='0' Path='$TaskLog'><Select Path='$TaskLog'>*[EventData[Data[@Name='TaskName']='\$TaskName']]</Select></Query></QueryList>"
+  $runs = @(Get-WinEvent -FilterXml ([xml]$own) -MaxEvents 12 -ErrorAction SilentlyContinue)
+  if ($runs.Count) {
+    Say ('--- what Windows wrote about ' + $TaskName + ', newest first ---')
+    foreach ($e in $runs) { Say ($e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') + '  ' + $e.Id + '  ' + (($e.Message -split "`r?`n")[0])) }
+  }
   $s = @(Get-Content -LiteralPath $Sent -ErrorAction SilentlyContinue | Where-Object { $_ })
   Say ('sent       ' + $s.Count + $(if ($s.Count) { ', newest ' + $s[-1] }))
   if (Test-Path -LiteralPath $Log) { Say '--- send.log, last 10 ---'; Get-Content -LiteralPath $Log -Tail 10 | ForEach-Object { Say $_ } }
@@ -100,10 +162,25 @@ if ($Install) {
   }
   [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $Box -Force), $acl)
   Note "  $Box is SYSTEM's and the Administrators' only"
+  # No passphrase: the task has nobody to type one. PowerShell 7 hands
+  # ssh-keygen the text it is given, so -N '' is an empty passphrase; the
+  # -N '""' this used to say became the two quote marks themselves. The
+  # key made on 1 Nov 2026 was locked with them, so ssh in BatchMode could
+  # offer its public half but never sign with it, and on 11 Nov the VM
+  # refused every file ("Permission denied (publickey)").
   if (-not (Test-Path -LiteralPath $Key)) {
-    & $keygen -q -t ed25519 -N '""' -C 'thornswood-box-drops-backups' -f $Key
+    & $keygen -q -t ed25519 -N '' -C 'thornswood-box-drops-backups' -f $Key
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Key)) { Die 'ssh-keygen could not make the key.' }
     Note '  made the drop key'
+  }
+  & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    # The same key with the quote marks taken off, so the VM's entry for it
+    # still holds and nothing changes there.
+    & $keygen -p -q -P '""' -N '' -f $Key 2>&1 | Out-Null
+    & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Die "$Key needs a passphrase that is not the old two quote marks, so the task cannot use it. Nothing else was changed." }
+    Note '  took the passphrase (two quote marks) off the drop key; it is the same key'
   }
   # Said before anything that needs the VM, so the key can go into
   # Thornswood-Hermes even while the VM does not answer this box yet.
@@ -120,8 +197,17 @@ if ($Install) {
   Copy-Item -LiteralPath (Join-Path $Here 'Send-Backups.ps1') -Destination (Join-Path $Box 'Send-Backups.ps1') -Force
   Copy-Item -LiteralPath (Join-Path $Here 'Restore-Backup.ps1') -Destination (Join-Path $Box 'Restore-Backup.ps1') -Force
   # Started by the nightly's own end: Task Scheduler writes event 102 ("task
-  # completed") in its Operational log when \Thornswood Backup finishes.
-  $q = "<QueryList><Query Id='0' Path='Microsoft-Windows-TaskScheduler/Operational'><Select Path='Microsoft-Windows-TaskScheduler/Operational'>*[System[(EventID=102)]] and *[EventData[Data[@Name='TaskName']='\$BackupTask']]</Select></Query></QueryList>"
+  # completed") in its Operational log when \Thornswood Backup finishes, but
+  # only while that log is on, and Windows Server ships it off (the task
+  # history). Off on the box on 10 Nov 2026, so the send had never started.
+  $l = Get-WinEvent -ListLog $TaskLog
+  if (-not $l.IsEnabled) {
+    $l.IsEnabled = $true
+    $l.SaveChanges()
+    if (-not (Get-WinEvent -ListLog $TaskLog).IsEnabled) { Die "$TaskLog would not turn on, so nothing would start the send. The task was not registered." }
+    Note "  turned on $TaskLog, where Windows writes the nightly's end"
+  }
+  $q = $Ended
   $class = Get-CimClass -ClassName MSFT_TaskEventTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
   $trigger = New-CimInstance -CimClass $class -ClientOnly
   $trigger.Subscription = $q
@@ -146,14 +232,18 @@ $todo = @(Get-ChildItem -LiteralPath $Root -File | Where-Object { $_.Name -match
 if (-not $todo.Count) { Note '  nothing new to send'; exit 0 }
 $failed = 0
 foreach ($f in $todo) {
-  $check = & pwsh -NoProfile -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly 2>&1
+  # -NoPause: Restore-Backup waits for Enter at its end without it, and the
+  # task has nobody to press it. On 11 Nov 2026 the first check sat there
+  # until the task's two hours ran out and Windows ended it (event 329),
+  # with nothing sent. -NonInteractive makes any other prompt an error.
+  $check = & pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly -NoPause 2>&1
   if ($LASTEXITCODE -ne 0) { Note ("  NOT SENT $($f.Name): it does not open with the passphrase. " + ("$check" -replace '\s+', ' ')); $failed++; continue }
   $sha = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
   $mark = Join-Path $Box ($f.Name + '.done')
   [IO.File]::WriteAllText($mark, ($sha + ' ' + $f.Length + "`n"), (New-Object Text.ASCIIEncoding))
   $batch = Join-Path $Box 'batch.txt'
   [IO.File]::WriteAllLines($batch, [string[]]@(('put "' + $f.FullName + '" "' + $f.Name + '"'), ('put "' + $mark + '" "' + $f.Name + '.done"')))
-  $out = & $sftp -b $batch -i $Key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ("UserKnownHostsFile=" + $Known) ($vm.user + '@' + $vm.host) 2>&1
+  $out = & $sftp -b $batch @Login ($vm.user + '@' + $vm.host) 2>&1
   $code = $LASTEXITCODE
   Remove-Item -LiteralPath $mark, $batch -Force -ErrorAction SilentlyContinue
   if ($code -ne 0) { Note ("  NOT SENT $($f.Name): sftp ended with $code. " + ("$out" -replace '\s+', ' ')); $failed++; continue }

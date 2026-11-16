@@ -22,8 +22,12 @@ const { trimInbox } = require('./limits');
 const { GPENDING, GREPORTS, pruneRemovedUploads, UPMETA } = require('./uploads');
 const { BANS, bansNow, MODLOG, NOTES, PK } = require('./staff');
 const { sweepSignIns } = require('./signins');
+const { sweepLedger } = require('./ledger');
+const { sweepTakeBack } = require('./takeback');
+const { sweepPcs } = require('./pcs');
+const { sweepSignOuts } = require('./auth');
 const { pruneSessionLogs, retentionSay, sessionKey, sessionRows, slogFile,
-  SLOGS, sweepSessions } = require('./sessions');
+  SLOGS, sweepSessions, writeSlogSet } = require('./sessions');
 
 // ==== thornswood keeping times ====
 //
@@ -312,7 +316,7 @@ function copyKeptChat(row, now) {
   set.chat = chat;
   try {
     if (!fs.existsSync(SLOGS)) fs.mkdirSync(SLOGS, { recursive: true });
-    fs.writeFileSync(slogFile(key), JSON.stringify(set));
+    writeSlogSet(slogFile(key), set);
     return 'copied';
   } catch (e) {
     retentionSay('kept-chat', { event: 'copy-failed', session: key, code: (e && e.code) || 'unknown' });
@@ -326,7 +330,7 @@ function dropKeptChat(key) {
   if (!had.set || !had.set.chat) return 'none';
   try {
     if (had.set.chatOnly) fs.unlinkSync(slogFile(key));
-    else { delete had.set.chat; fs.writeFileSync(slogFile(key), JSON.stringify(had.set)); }
+    else { delete had.set.chat; writeSlogSet(slogFile(key), had.set); }
     return 'dropped';
   } catch (e) {
     retentionSay('kept-chat', { event: 'drop-failed', session: key, code: (e && e.code) || 'unknown' });
@@ -407,9 +411,10 @@ function retentionSweep() {
   return { sessions, keptChat, sessionLogs: pruneSessionLogs(),
            trouble: sweepTrouble(now), pending: expirePending(now),
            removedUploads: pruneRemovedUploads(now),
-           signIns: sweepSignIns(now), inbox: sweepInbox(now),
+           signIns: sweepSignIns(now), signOuts: sweepSignOuts(now), inbox: sweepInbox(now),
            staff: sweepStaffRecords(now), moderationLog: sweepModLog(now),
-           galleryReports: sweepGalleryReports(now),
+           galleryReports: sweepGalleryReports(now), ledger: sweepLedger(now),
+           takeBack: sweepTakeBack(now), pcs: sweepPcs(now),
            restoreCopies: sweepRestoreCopies(now) };
 }
 setInterval(retentionSweep, RETENTION_EVERY_MS).unref?.();

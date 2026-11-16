@@ -170,7 +170,7 @@ const qrecs = Object.keys(recs).filter((k) => k.startsWith('QUST:')).map((k) => 
 const stopped = manifest.quests.stopped, kept = manifest.quests.kept, modStopped = manifest.quests.modStopped;
 const propped = manifest.questScriptProperties || [];
 yesR('Q1 every quest in the plugin is one the manifest stops (' + (qrecs.length - propped.length) + '), or one whose ' +
-    'script properties the policy sets (' + propped.length + ', tests/test-3101-unbound-start-gear.js)',
+    'script properties the policy sets (' + propped.length + ', game/tests/test-3101-unbound-start-gear.js)',
     () => qrecs.length === stopped.length + modStopped.length + propped.length &&
     stopped.concat(modStopped, propped).every((q) => recs['QUST:' + fidOf(q.quest)]));
 const proppedFids = new Set(propped.map((q) => fidOf(q.quest)));
@@ -234,7 +234,8 @@ if (inOrder) {
 }
 const pop = fs.readFileSync(POP_TOOL, 'utf8');
 yes('S2 the catalogue does not read this plugin\'s records, which are made from it',
-    /LAST_PLUGIN = 'Thornswood-Last\.esp'/.test(pop) && /if name == LAST_PLUGIN:/.test(pop));
+    /LAST_PLUGIN = 'Thornswood-Last\.esp'/.test(pop) && /if name\.lower\(\) == LAST_PLUGIN\.lower\(\):\r?\n(?:.*\r?\n)?\s+continue/.test(pop) &&
+    /C\.place_holds\(tables, place_rules\(policy\)\)/.test(pop));
 
 // ---------------------------------------------------------------- B
 const built = manifest.builtAgainst || [];

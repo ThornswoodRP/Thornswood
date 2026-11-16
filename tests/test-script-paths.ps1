@@ -47,7 +47,7 @@ $notInGit = @{
     'version.json'                  = 'the releases clone''s feed; the scripts that name it are pointed at that clone'
     'local'                         = 'what one machine keeps and git ignores; Audit-Mods.ps1 writes mod-audit.json there'
     'out'                           = 'the build output, which git ignores; Build-Launcher and Update-ShipRoot build under it'
-    'out/dist'                      = 'the release output, under out, which git ignores (CONTRIBUTING, the fork and its build)'
+    'out/dist'                      = 'the release output, under out, which git ignores (docs/guide/settled-design.md, "Settled design, not up for a quiet rewrite")'
     'records/signing/signing.json'  = 'a machine''s signing settings, ignored by git'
     'records/signing/client'        = 'Microsoft''s signing client, fetched from NuGet by Setup-ShipMachine.ps1 and ignored by git (#458)'
     'local/backup-key.txt'          = 'the backup passphrase, a secret kept out of git'
@@ -56,9 +56,19 @@ $notInGit = @{
     'bot/dev-webhook.txt' = 'a webhook, a secret kept out of git'
     'bot/news-webhook.txt'= 'a webhook, a secret kept out of git'
     'scripts/vps/runner-logs.log'      = 'what vps-runner-logs.ps1 writes beside its copy on the box, C:\Thornswood-Watch\runner-logs.log (#3184), never in this repository'
+    'scripts/vps/world.ps1'            = 'World.ps1 with world.js in it, which Install-Backup.ps1 writes beside the nightly backup on the box (#6237), never in this repository'
     'scripts/vps/watch-outside.json'   = 'what Watch-Outside.ps1 -Export writes beside its copy in the public repository it runs from (#2755), never in this one'
+    'temp/content-laid.json'           = 'what Get-ContentBuild.ps1 laid over this checkout (#5191), under temp, which git ignores'
+    'scripts/mods/Rebuild-OnBox.ps1'   = 'retired with the Rebuild-ContentTables verb (#5191); test-2841-deploy-gate.ps1 holds that it stays gone'
     'Thornswood-Ops'                   = 'the private ops repo, checked out beside this one (#3693): Check-RehearsalDue.ps1 reads RESTORING.md there, and the path climbs above this root, so it is named here without the ..'
 }
+
+# What the box's content build writes is never committed (#5191, stage 4e):
+# a checkout lays it (Get-ContentBuild.ps1) and git ignores it, so a path at
+# or under one, or a folder holding one, is not looked for in git.
+. (Join-Path $repo 'scripts/mods/ContentPaths.ps1')
+$builtNotInGit = @(Get-ThornswoodBuiltPaths -Repo $repo -NotCommitted)
+function Test-BuiltNotInGit([string]$Rel) { return (Test-ThornswoodBuiltPath $builtNotInGit $Rel) -or [bool]@($builtNotInGit | Where-Object { $_.StartsWith($Rel + '/') }).Count }
 
 $tracked = @{}
 foreach ($t in (& git -C $repo ls-files)) {
@@ -70,6 +80,7 @@ Yes ('git lists the tracked files ({0})' -f $tracked.Count) ($tracked.Count -gt 
 
 $rx = [regex]"Join-Path\s+\`$(Here|PSScriptRoot|RepoDir|Repo)\s+'([^'`$``*]+)'"
 $found = 0
+$built = 0
 $missing = @()
 $allowedSeen = @{}
 # The harnesses too, since they moved to tests\ (issue #440, phase 5). In a
@@ -129,12 +140,13 @@ foreach ($f in $scan) {
         if (-not $full) { $found++; continue }
         if ($tracked.ContainsKey($full)) { $found++; continue }
         if ($notInGit.ContainsKey($full)) { $allowedSeen[$full] = $true; continue }
+        if (Test-BuiltNotInGit $full) { $built++; continue }
         $missing += ('{0} (named in {1})' -f $full, $f.Name)
     }
 }
 $missing = @($missing | Sort-Object -Unique)
 foreach ($m in $missing) { Write-Host "      not in the repository: $m" }
-Yes ("every path the scripts build is in the repository ($found found)") ($missing.Count -eq 0)
+Yes ("every path the scripts build is in the repository ($found found, and $built of the content build, which git ignores)") ($missing.Count -eq 0)
 Yes ('the scripts still build a few hundred such paths, so the pattern still matches how they are written') ($found -ge 200)
 $stale = @($notInGit.Keys | Where-Object { -not $allowedSeen.ContainsKey($_) } | Sort-Object)
 foreach ($s in $stale) { Write-Host "      nothing names this any more, take it off the list: $s" }

@@ -22,12 +22,17 @@ You need **Skyrim Special Edition** on Steam, on build **1.6.1170**, and
 **Vortex** with a free Nexus Mods account. Nothing else has to be installed
 first. Anniversary Edition is not required.
 
-Thornswood leaves the Skyrim you already have alone. The launcher builds a
-game folder of its own, `C:\Thornswood\Game`, out of your Steam copy and what
-Vortex put into it. Most of it is hard links to your own files, which take no
-extra space, and the few files other programs rewrite are real copies. Vortex
-keeps the mods in a profile of their own, so switching back to your usual
-profile and running Purge Mods leaves your own Skyrim the way it was.
+Where Thornswood's files go is one box in the install window, **Give
+Thornswood a Skyrim folder of its own**, and it starts ticked. Left ticked,
+Thornswood writes nothing of its own into your Steam copy: once Vortex has deployed, the launcher
+builds a game folder of its own, `Game` in the install folder on the same
+drive as Skyrim, out of your Steam copy and what Vortex put into it. Most of it
+is hard links to your own files, which take no extra space, and the few files
+other programs rewrite are real copies. Unticked, Thornswood's own files
+go into your Steam copy, with a list of what went there, and the launcher asks
+before it builds the folder. Vortex keeps the mods in a profile of their own,
+so switching back to your usual profile and running Purge Mods leaves your own
+Skyrim the way it was.
 
 1. From the [Downloads](/downloads) page take the installer. One file. Run it.
    It fetches Thornswood's own content while you watch, about half a gigabyte,
@@ -41,14 +46,25 @@ profile and running Purge Mods leaves your own Skyrim the way it was.
    the launcher's Diagnostics page, and it opens the revision the server was
    built against. Install that revision, not a newer one Nexus may show first.
    Not optional: without it you have a launcher and no mods, and the server
-   turns you away when you press Play.
-4. Press **Connect Discord** on the launcher's Play page. Your browser opens,
-   you say yes, and it closes itself. You never do this again.
+   turns you away when you press Play. Some of the collection's mods are
+   marked adult, so first turn on adult content in your Nexus Mods settings,
+   or Nexus shows the collection as hidden. On a free account Vortex opens
+   each file's page on Nexus and you press **Slow download** there, once for
+   each file: 120 files, from 111 mods.
+4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
+   above Settings. Your browser opens, you say yes, and it closes itself. You
+   never do this again.
 <!-- alpha -->
    It works once your application has been accepted; before that it says
    your account has not been accepted into the alpha yet, and applying is the
    fix.
 <!-- /alpha -->
+5. Press **Play**. The first time, the launcher builds Thornswood's animation
+   and body files on your computer, with the collection's Pandora and
+   BodySlide, before the game starts. Its status line reads **Building
+   Thornswood's animation and body files** while it works, and it takes a few
+   minutes. Leave it be: it has not stuck. It builds them again after the
+   collection changes, and an ordinary Play goes straight to the game.
 
 ## When the mods need updating
 
@@ -77,6 +93,16 @@ If the launcher says **The server has not caught up with you** and Play reads
 one the server was built against. Nothing is wrong with your install and
 nothing needs installing. Play opens once the server is rebuilt on your
 revision. Say so in the Discord if nobody has.
+
+## When the collection shows as hidden
+
+If the collection's page on Nexus says it is hidden or cannot be found, or
+Vortex cannot open it, the Nexus account you are signed in with has adult
+content turned off. Some of the collection's mods are marked adult, and Nexus
+hides the collection from an account that has not turned it on. Turn on adult
+content in your Nexus Mods settings, signed in with the same account Vortex
+uses, then open the link from the [Downloads](/downloads) page again. In some
+countries Nexus asks you to verify your age first.
 
 <a id='defender'></a>
 
@@ -239,6 +265,16 @@ using it to get out of a fight or to travel can mean a warning or a ban.
    enough to start with.
 3. If you have a screenshot or a crash log, drag it into your ticket in the
    Discord, or say in the report that you have one. Where the logs are is below.
+
+If the first Play's build stops, a box about Thornswood's animation and body
+files comes up and the game does not start. That happens when the files
+cannot be built, or when a body comes out uncovered. The box says why, and the
+launcher log on the Diagnostics page has each step it took. Put right what the
+box names, for example a mod to deploy in Vortex, or Skyrim to close first.
+Then open **Diagnostics**, press **Scan** and then **Fix**, which builds the
+files again, and press Play. If it stops again, press **Build the report** on
+Diagnostics and drag the zip into a ticket in the Discord, or
+[report it](/report).
 
 A launcher last opened before 26 September says it cannot read the update
 source, or never offers an update. Updates are asked for at thornswood.net now

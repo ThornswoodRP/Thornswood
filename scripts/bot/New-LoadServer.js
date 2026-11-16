@@ -3,16 +3,18 @@
 //
 // #4623. Lays out the load test's server on GitHub's runner, from three
 // things and nothing else:
-//   the engine   the server build records\server-build.json names, as the
-//                signed build-<date>.<run> Release carries it for the deploy
-//                agent (the server-<commit>-<hash>.zip, unpacked, as the
-//                workflow downloads it), every file the record names held to
-//                its sha256, so the server measured is the one dev runs. The
-//                fork's own artifact of the commit is not used: after the
-//                history rewrite the fork built that commit again (run
-//                41340857541), and a rebuild is never the same bytes
-//                (engine\README.md), so its scam_native.node is not the one
-//                the record holds;
+//   the engine   the server build records\server-build.json names: the
+//                fork's own build of the pin, as Get-EngineArtifact.ps1
+//                takes it and holds every file to the record, the same build
+//                merge-release.yml makes the build Release's server zip from
+//                (the workflow unpacks that zip, server-build.json and all). Every
+//                file the record names is held to its sha256 again here. A
+//                rebuild is never the same bytes (engine\README.md), and
+//                after the history rewrite the fork built one commit twice
+//                (run 41340857541); EngineArtifact.ps1 takes only the build
+//                whose files are the record's. Until #6153 this took the
+//                build Release instead, which a pin merge left behind until
+//                the next dev release;
 //   the game     game\gamemode.js, its tables (game\gamemode-tables, which
 //                the gamemode reads as it loads since #5280) and
 //                game\content\Thornswood-Content.esp from this checkout;
@@ -48,7 +50,13 @@
 //         [--download yes]
 //     node New-LoadServer.js --from <server installed on the box> --out <folder>
 //         --port <n> --voice-port <n> [--shape crowd|spread] [--seats 100]
+//         [--world-db thornswood-load --world-uri <connection file>]
 // The second lays out the collection's world on the box (fromInstalled).
+// Its world is a folder of its own, or with --world-db and --world-uri the
+// load test's own database in the box's MongoDB (#6237, records\mongodb.json
+// "load"), for a server whose world is kept there: Load-Box.ps1 passes them
+// then and empties that database before and after, so the test saves the
+// way the server does and never into the server's database.
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
@@ -156,6 +164,10 @@ async function build(o) {
   const shape = o.shape || 'crowd';
   if (!['crowd', 'spread'].includes(shape)) { throw new Error('--shape is crowd or spread, not ' + shape); }
   const seats = Number(o.seats) || 100;
+  // --npcs yes: the engine keeps the masters' placed NPCs alive near the
+  // bots, guards and named people too, so bots that host (load-bots.js
+  // --play host) have NPCs to run (#6252). Off unless asked, as before.
+  const npcs = o.npcs === 'yes';
   const record = readJson(path.join(REPO, 'records', 'server-build.json'));
   const commit = String(record.source && record.source.commit || '');
   const dist = path.resolve(o.build);
@@ -198,8 +210,10 @@ async function build(o) {
     offlineMode: true,
     port: Number(o.port) || 7777,
     maxPlayers: seats,
-    npcEnabled: false,
+    npcEnabled: npcs,
     npcSettings: {},
+    npcAllowCrimeFaction: npcs,
+    npcAllowEssential: npcs,
     startPoints: startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
@@ -211,7 +225,7 @@ async function build(o) {
   fs.writeFileSync(path.join(out, 'server-settings.json'), JSON.stringify(settings, null, 2) + '\n');
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
-  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins');
+  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins, engine NPCs ' + (npcs ? 'on' : 'off'));
   return { out, commit, settings };
 }
 
@@ -220,10 +234,11 @@ async function build(o) {
 // (its NPCs, the gamemode's NPC runtime, merchants and quests) is laid out on
 // the box, from a server installed there, and never leaves it. From that
 // server, read and never written: its program (dist_back, scam_native.node,
-// package.json), its gamemode.js and gamemode-tables, its Papyrus scripts and its
-// merchant ledger (copied), the plugins its loadOrder names (by their
+// package.json), its gamemode.js and gamemode-tables, its Papyrus scripts, its
+// merchant ledger and its hold price lists (copied), the plugins its loadOrder names (by their
 // full paths, not copied), whether the engine keeps NPCs alive (npcEnabled,
-// npcSettings) and the gameplay switches below. Nothing else of its settings
+// npcSettings) and which NPCs it lets in (npcAllowCrimeFaction,
+// npcAllowEssential), and the gameplay switches below. Nothing else of its settings
 // is taken, so the copy has no site, no Discord, no ports and no keys of the
 // server's: its own port, its own voice service on 127.0.0.1, its own world
 // folder, and a pass key made here. Its world starts empty, as the runner's.
@@ -233,11 +248,35 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
   'thornswoodBodyReset', 'thornswoodLoadOrderRefuse'];
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
+// The hold price lists the factions and businesses submitted at the drop
+// boxes, kept in the books file (staff-spells.ts), which set what a guild
+// trader buys and sells, and the reward prices staff set for guild work
+// beside it (#6180), which set what a commission pays; a good staff never
+// changed pays its starting price from the gamemode's tables. The copy once
+// left the books file out, and every commission on it said "No submitted buy
+// price" whatever dev held (#6180).
+const PRICE_BOOKS = 'books.json';
+const REWARD_PRICES = 'commission-rewards.json';
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
   if (typeof v === 'string') { return v.length <= 200 && !/[:\\/]/.test(v); }
   return false;
+}
+
+// How many hold price lists the books file holds, and at which holds, for
+// the run's own line: counts and hold names only, never a book, a person or
+// a price. The gamemode verifies the file as it loads it; this only reads.
+function priceLists(file) {
+  const doc = readJson(file);
+  const ledgers = (doc && doc.ledgers && typeof doc.ledgers === 'object') ? doc.ledgers : {};
+  let lists = 0;
+  const holds = [];
+  for (const hold of Object.keys(ledgers).sort()) {
+    const n = Object.keys(ledgers[hold] || {}).length;
+    if (n) { lists += n; holds.push(hold + ' ' + n); }
+  }
+  return { lists, holds };
 }
 
 function fromInstalled(o) {
@@ -247,6 +286,15 @@ function fromInstalled(o) {
   const port = Number(o.port) || 0;
   const voicePort = Number(o['voice-port']) || 0;
   if (!port || !voicePort) { throw new Error('--port and --voice-port are needed on the box, so the copy keeps off the servers\' own'); }
+  // Its world: a folder of its own, or the load test's own database (#6237).
+  const world = {};
+  if (o['world-db'] !== undefined || o['world-uri'] !== undefined) {
+    if (o['world-db'] !== 'thornswood-load') { throw new Error('--world-db is the load test\'s own database, thornswood-load, never a server\'s'); }
+    if (!o['world-uri'] || !fs.existsSync(o['world-uri'])) { throw new Error('--world-uri names no connection file that is there: ' + o['world-uri']); }
+    world.databaseDriver = 'mongodb';
+    world.databaseName = o['world-db'];
+    world.databaseUriFile = path.resolve(o['world-uri']);
+  }
   const from = path.resolve(o.from);
   const out = path.resolve(o.out);
   if (fs.existsSync(out)) { throw new Error(out + ' is there already'); }
@@ -291,12 +339,23 @@ function fromInstalled(o) {
     maxPlayers: seats,
     npcEnabled: theirs.npcEnabled === true,
     npcSettings: theirs.npcSettings && typeof theirs.npcSettings === 'object' ? theirs.npcSettings : {},
+    // The engine's two gates on who is loaded (WorldState.cpp
+    // AttachEspmRecord): off, it refuses everyone in a hold's crime faction
+    // and every essential, protected or unique actor, which is every guard
+    // and nearly every named trader. Dev and live have both on
+    // (Deploy-DevGamemode.ps1, Deploy-Gamemode.ps1). Without them the box's
+    // load copy refused the Frozen Hearth's traders ("Skipping actor
+    // 0x200b4a3 because it's in faction 0x2816f") and the crowd there was
+    // sent no NPC at all (#5563).
+    npcAllowCrimeFaction: theirs.npcAllowCrimeFaction === true,
+    npcAllowEssential: theirs.npcAllowEssential === true,
     startPoints: shape === 'crowd' ? [TRADERS_ROOM] : startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
     thornswoodChargen: false,
     thornswoodVoicePort: voicePort
   };
+  Object.assign(settings, world);
   const kept = [];
   for (const k of GAMEPLAY_KEYS) {
     if (Object.prototype.hasOwnProperty.call(theirs, k) && plain(theirs[k])) { settings[k] = theirs[k]; kept.push(k); }
@@ -317,10 +376,22 @@ function fromInstalled(o) {
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
   for (const name of LEDGER) { fs.copyFileSync(path.join(theirPrivate, name), path.join(out, 'private', name)); }
+  // The price lists, copied like the ledger, so the copy's traders quote
+  // what the server's quote. A server nobody has submitted a list to has no
+  // file, and the copy has none either.
+  const books = path.join(theirPrivate, PRICE_BOOKS);
+  const prices = fs.existsSync(books) ? priceLists(books) : { lists: 0, holds: [] };
+  if (fs.existsSync(books)) { fs.copyFileSync(books, path.join(out, 'private', PRICE_BOOKS)); }
+  const rewards = path.join(theirPrivate, REWARD_PRICES);
+  const rewardsSet = fs.existsSync(rewards) ? Object.keys((readJson(rewards) || {}).items || {}).length : 0;
+  if (fs.existsSync(rewards)) { fs.copyFileSync(rewards, path.join(out, 'private', REWARD_PRICES)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
-    ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') + (kept.length ? ', ' + kept.join(' ') : ''));
-  return { out, engine, settings };
+    ' seats, ' + order.length + ' plugins, its world in ' + (settings.databaseDriver === 'mongodb' ? settings.databaseName : 'a folder of its own') + ', engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
+    ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : '') +
+    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list') +
+    ', ' + (rewardsSet ? rewardsSet + ' guild reward price(s) set by staff' : 'the starting guild reward prices'));
+  return { out, engine, settings, prices, rewardsSet };
 }
 
 async function main() {
@@ -329,7 +400,7 @@ async function main() {
   for (let i = 0; i < argv.length; i += 2) { o[String(argv[i]).replace(/^--/, '')] = argv[i + 1]; }
   if (o.from && o.out) { fromInstalled(o); return 0; }
   if (!o.build || !o.masters || !o.out) {
-    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes]');
+    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes] [--npcs yes]');
     console.log('node New-LoadServer.js --from <server installed on the box> --out <folder> --port <n> --voice-port <n> [--shape crowd|spread] [--seats 100]');
     return 2;
   }

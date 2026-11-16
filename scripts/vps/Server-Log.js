@@ -330,7 +330,10 @@ function rollNow(log, now, o) {
   (mod-settings.json), their take counts (take-limit.json) and when they last
   left (last-left.json). The gamemode's blocks let go of the registers as they
   load, after this (game\gamemode.js, the release block). A part done is marked
-  with the time in the list; the one that finds every part done deletes it.
+  with the time in the taken list, deleted-characters.taken.json, which only
+  this and the gamemode write (thornswoodTakeReleaseList, #4920); the one that
+  finds every part done deletes it. deleted-characters.json itself, the
+  requests, is only ever taken, never written.
   RELEASE_PARTS is the gamemode's PARTS, and tests\test-2758-start-deletions.js
   holds the two to the same list.
 
@@ -355,6 +358,160 @@ function rollNow(log, now, o) {
   leaves the request where it is, for the next start, and is said. Each line
   here says counts and never a name, a Discord id, a profile id or a form id.
 */
+// -- the release list, taken (#4920), begin --
+/*
+  THE LIST IS TAKEN, NEVER WRITTEN OVER (#4920). private\deleted-characters.json
+  is the requests: Delete-Person.ps1 and Release-List.ps1 merge a new one in
+  whenever they run, while the game server runs too. A server that wrote back
+  the copy it had read, or deleted the file once that copy was done, put
+  back or threw away a request merged in since, and nobody was told.
+
+  So the server never writes that file. It takes it, with a rename, the one
+  step no other write can come between: deleted-characters.json becomes
+  deleted-characters.taking.json, which goes into deleted-characters.taken.json,
+  the server's own, and is deleted. Only the server writes .taken (server-log.js
+  before the engine starts, then the gamemode as it loads, never at once), and
+  its marks and its deleting are there. A request merged in after the take
+  lands in a new deleted-characters.json and is taken at the next start; one
+  merged in before it is in what was taken.
+
+  Taking it in: every id of both, and a part done only where it is done on
+  both, so a part that ran for the ids already taken runs again for the new
+  ones (running again for an id already let go finds nothing). A .taking left
+  by a stop between the rename and the merge goes in first, and a new list is
+  never renamed onto it.
+
+  Answers { list, file, left }: list is what is taken (null for none) and
+  file is .taken; left, when set, is a request file that could not be taken
+  and is left where it is, for a person: { bad, file } for one that is not a
+  list (bad is what it held, null when it would not parse), or { error, file }.
+  A .taken that is not a list answers { bad, file } or { error, file } and no
+  list, so nothing is let go. Server-Log.js carries this same text, and
+  tests\test-4920-taken-list.js holds the two the same.
+*/
+function thornswoodTakeReleaseList(fs, path, priv, valid) {
+  var LIST = path.join(priv, 'deleted-characters.json');
+  var TAKING = path.join(priv, 'deleted-characters.taking.json');
+  var TAKEN = path.join(priv, 'deleted-characters.taken.json');
+  function why(e) { return (e && (e.code || e.message)) || String(e); }
+  function load(p) {
+    var text;
+    try { text = fs.readFileSync(p, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') { return { none: true }; }
+      return { error: why(e), file: p };
+    }
+    var v = null;
+    try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
+    return valid(v) ? { list: v } : { bad: v, file: p };
+  }
+  function ids(a, b) {
+    var seen = {}, out = [];
+    (a || []).concat(b || []).forEach(function (n) { if (!seen[n]) { seen[n] = true; out.push(n); } });
+    return out.sort(function (x, y) { return x - y; });
+  }
+  var left = null;
+  var taking = load(TAKING);
+  if (taking.none) {
+    var asked = load(LIST);
+    if (asked.list) {
+      try { fs.renameSync(LIST, TAKING); taking = load(TAKING); }
+      catch (e) { if (!(e && e.code === 'ENOENT')) { left = { error: why(e), file: LIST }; } }
+    } else if (!asked.none) { left = asked; }
+  }
+  if (!taking.none && !taking.list) { left = taking; taking = { none: true }; }
+  var taken = load(TAKEN);
+  if (!taken.none && !taken.list) { return taken; }
+  if (!taking.list) { return { list: taken.list || null, file: TAKEN, left: left }; }
+  var was = taken.list || { profiles: [], actors: [], done: taking.list.done || {} };
+  var a = was.done || {}, b = taking.list.done || {}, done = {};
+  Object.keys(a).forEach(function (k) {
+    if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
+  });
+  var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  try {
+    fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
+    fs.renameSync(TAKEN + '.tmp', TAKEN);
+  } catch (e) {
+    return { error: why(e), file: TAKEN };
+  }
+  try { fs.unlinkSync(TAKING); }
+  catch (e) { left = { error: why(e), file: TAKING }; }
+  return { list: list, file: TAKEN, left: left };
+}
+// -- the release list, taken (#4920), end --
+/*
+  A WORLD IN MONGODB (#6237). A server whose server-settings.json says
+  databaseDriver "mongodb" keeps its change forms in the changeForms
+  collection of databaseName, signed in to with databaseUriFile (the
+  server's own connection file, which its task may read). Two things here
+  reach it, through the box's mongosh (Install-Mongo.ps1 lets the server's
+  task run it):
+    forget   the part "saves" below: every form whose profileId is one of
+             the list's, taken out of the database before the engine starts,
+             with the engine's own write concern (journaled).
+    people   --people <ids>: the formDesc of every such form, one FORM| line
+             each and PEOPLE|<n>, for Delete-Person.ps1 to count and to name
+             the characters' form ids in the release list, without a copy of
+             the world anywhere. It runs this file beside the server, so the
+             two read the database the same way.
+  The script is carried here because server-log.js goes up alone beside a
+  server; scripts\vps\world.js is the tools' (read out, write back) and
+  signs in the same way: the connection file is read inside mongosh and
+  nothing prints it. A failure is the line WORLD FAILED: <why>.
+*/
+const WORLD_SHELL = process.env.THORNSWOOD_MONGOSH || 'C:\\Thornswood-Mongo\\bin\\mongosh.exe';
+const WORLD_PEOPLE_JS = [
+  "const fs = require('fs');",
+  "function fail(m) { print('WORLD FAILED: ' + m); quit(1); }",
+  "let plan;",
+  "try { plan = JSON.parse(fs.readFileSync(process.env.THORNSWOOD_WORLD_PLAN, 'utf8')); } catch (e) { fail('the plan does not read: ' + e.message); }",
+  "if (!/^thornswood-[a-z]+$/.test(String(plan.db))) fail('the plan names no world database: ' + plan.db);",
+  "try {",
+  "  const text = fs.readFileSync(plan.uri, 'utf8').trim();",
+  "  if (!/^mongodb:\\/\\//.test(text)) fail('the connection file is not a mongodb: URI: ' + plan.uri);",
+  "  const coll = new Mongo(text).getDB(plan.db).getCollection('changeForms');",
+  "  const theirs = { profileId: { $in: plan.profiles } };",
+  "  if (plan.op === 'people') {",
+  "    let n = 0;",
+  "    coll.find(theirs, { _id: 0, formDesc: 1 }).sort({ formDesc: 1 }).forEach((d) => { print('FORM|' + d.formDesc); n++; });",
+  "    print('PEOPLE|' + n);",
+  "  } else if (plan.op === 'forget') {",
+  "    const r = coll.deleteMany(theirs, { writeConcern: { w: 1, j: true } });",
+  "    const left = coll.countDocuments(theirs);",
+  "    if (left) fail(left + ' of their forms are still there');",
+  "    print('FORGOT|' + r.deletedCount);",
+  "  } else fail('the plan names no step this knows: ' + plan.op);",
+  "} catch (e) { fail(String(e && e.message ? e.message : e)); }"
+].join('\n');
+// Runs that script for a server's settings; { lines } or { error }.
+function worldPeople(settings, op, profiles) {
+  if (!/^thornswood-[a-z]+$/.test(String(settings.databaseName || ''))) return { error: 'server-settings.json names no world database (databaseName ' + settings.databaseName + ')' };
+  if (!settings.databaseUriFile) return { error: 'server-settings.json names no databaseUriFile' };
+  if (!fs.existsSync(WORLD_SHELL)) return { error: WORLD_SHELL + ' is not there; Install-Mongo puts it there' };
+  let tmp;
+  try {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-people-'));
+    const js = path.join(tmp, 'people.js'), planFile = path.join(tmp, 'plan.json');
+    fs.writeFileSync(js, WORLD_PEOPLE_JS, 'utf8');
+    fs.writeFileSync(planFile, JSON.stringify({ op, uri: String(settings.databaseUriFile), db: String(settings.databaseName), profiles }), 'utf8');
+    const r = cp.spawnSync(WORLD_SHELL, ['--nodb', '--quiet', '--file', js], {
+      encoding: 'utf8', windowsHide: true, timeout: 5 * 60 * 1000,
+      env: Object.assign({}, process.env, { THORNSWOOD_WORLD_PLAN: planFile })
+    });
+    const lines = String(r.stdout || '').split(/\r?\n/).filter((l) => l);
+    const failed = lines.filter((l) => l.indexOf('WORLD FAILED: ') === 0);
+    if (failed.length) return { error: failed[0].slice('WORLD FAILED: '.length) };
+    if (r.error) return { error: 'mongosh did not run: ' + (r.error.code || r.error.message) };
+    if (r.status !== 0) return { error: 'mongosh exited with ' + r.status };
+    return { lines };
+  } catch (e) {
+    return { error: e.code || e.message };
+  } finally {
+    if (tmp) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* the temp folder holds no password */ } }
+  }
+}
+
 const RELEASE_PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
 
 function startDeletions(dir, now) {
@@ -402,17 +559,32 @@ function startDeletions(dir, now) {
   const settings = readJson(path.join(dir, 'server-settings.json'));
   if (isObj(settings)) {
     const priv = path.join(dir, settings.privDir ? String(settings.privDir) : 'private');
-    const listFile = path.join(priv, 'deleted-characters.json');
-    const list = readJson(listFile);
-    const ok = isObj(list) && ids(list.profiles) && (list.actors === undefined || (Array.isArray(list.actors) && list.actors.every(isFormId))) &&
-      (list.done === undefined || (isObj(list.done) && Object.keys(list.done).every((k) => Number.isSafeInteger(list.done[k]) && list.done[k] > 0)));
-    if (list === null || (list !== undefined && !ok)) {
+    const validList = (l) => isObj(l) && ids(l.profiles) && (l.actors === undefined || (Array.isArray(l.actors) && l.actors.every(isFormId))) &&
+      (l.done === undefined || (isObj(l.done) && Object.keys(l.done).every((k) => Number.isSafeInteger(l.done[k]) && l.done[k] > 0)));
+    // Taken, never written over (thornswoodTakeReleaseList, above, #4920).
+    const got = thornswoodTakeReleaseList(fs, path, priv, validList);
+    if (got.left) {
+      say(path.basename(got.left.file) + (got.left.error
+        ? ' could not be taken (' + got.left.error + '), so the requests in it wait for the next start'
+        : ' is not a list of deleted characters, so ' + (got.list ? 'the requests in it were not taken,' : 'nothing was removed') + ' and it is left as it is'));
+    }
+    const listFile = got.file;
+    const list = got.error || got.bad !== undefined ? null : (got.list || undefined);
+    if (got.error) {
+      say(path.basename(listFile) + ' could not be read or written (' + got.error + '), so nothing was removed');
+    } else if (list === null) {
       say(path.basename(listFile) + ' is not a list of deleted characters, so nothing was removed and it is left as it is');
     } else if (list !== undefined && !(isObj(list.done) && has(list.done, 'saves'))) {
       const P = new Set(list.profiles);
       const mine = (v) => P.has(Number(v));
       let whole = true;
-      if (settings.databaseDriver && settings.databaseDriver !== 'file') {
+      if (settings.databaseDriver === 'mongodb') {
+        // The engine is not started yet, so nothing writes their forms back.
+        const r = worldPeople(settings, 'forget', list.profiles);
+        const got = r.lines ? r.lines.filter((l) => /^FORGOT\|\d+$/.test(l)) : [];
+        if (got.length) count('characters', Number(got[0].split('|')[1]));
+        else { say('their characters in ' + settings.databaseName + ' were not taken out: ' + (r.error || 'mongosh said nothing')); whole = false; }
+      } else if (settings.databaseDriver && settings.databaseDriver !== 'file') {
         say('the saves are in ' + settings.databaseDriver + ', not in files, so their characters were not removed and the part waits');
         whole = false;
       } else {
@@ -548,6 +720,10 @@ function startDeletions(dir, now) {
       <root>\<privDir>\<name>-before-<stamp>          a wipe's other marks
       <root>\<world>\changeForms\_discarded-<stamp>   a character reset's forms
       <root>\<world>\changeForms\<id>.json.bak-<stamp>  an appearance reset's copy
+      <root>\world-mongo-<stamp>                      a tool's read-out of a world in
+                                                      MongoDB (World.ps1): once saved
+                                                      it holds only what the tool set
+                                                      aside (changeForms\_discarded-*)
 
   Only a game server's folder (a server-settings.json in it), only those
   names, and only directly where each step puts them. A link is left as it is
@@ -572,6 +748,7 @@ function ageAside(dir, now, days) {
   const world = settings.databaseName ? String(settings.databaseName) : 'world';
   const places = [
     [dir, /^world-before-(?:restore-)?(\d{8}-\d{6})$/, true],
+    [dir, /^world-mongo-(\d{8}-\d{6})$/, true],
     [path.join(dir, settings.privDir ? String(settings.privDir) : 'private'), /^.+-before-(\d{8}-\d{6})(?:\.json)?$/, false],
     [path.join(dir, world, 'changeForms'), /^_discarded-(\d{8}-\d{6})$/, true],
     [path.join(dir, world, 'changeForms'), /^.+\.json\.bak-(\d{8}-\d{6})$/, false]
@@ -755,6 +932,21 @@ function run(o) {
 }
 
 if (require.main === module) {
+  // --people <ids, by commas>: run beside a server, in its folder, by
+  // Delete-Person.ps1 (above, A WORLD IN MONGODB). Exit 0 with the lines,
+  // 1 with WORLD FAILED, 2 when the folder's world is not in MongoDB.
+  if (process.argv[2] === '--people') {
+    const profiles = String(process.argv[3] || '').split(',').map(Number);
+    if (!profiles.length || !profiles.every((n) => Number.isSafeInteger(n) && n > 0)) { console.log('WORLD FAILED: --people takes profile ids, by commas'); process.exit(1); }
+    let settings;
+    try { settings = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'server-settings.json'), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { console.log('WORLD FAILED: server-settings.json will not read: ' + (e.code || e.message)); process.exit(1); }
+    if (!settings || settings.databaseDriver !== 'mongodb') { console.log('NOT MONGODB'); process.exit(2); }
+    const r = worldPeople(settings, 'people', profiles);
+    if (r.error) { console.log('WORLD FAILED: ' + r.error); process.exit(1); }
+    for (const l of r.lines) console.log(l);
+    process.exit(r.lines.some((l) => /^PEOPLE\|\d+$/.test(l)) ? 0 : 1);
+  }
   const o = parseArgs(process.argv.slice(2));
   if (o.roll) {
     for (const l of rollNow(o.log, Date.now(), o)) console.log(l);
@@ -762,5 +954,5 @@ if (require.main === module) {
   }
   run(o);
 } else {
-  module.exports = { KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
+  module.exports = { WORLD_PEOPLE_JS, worldPeople, KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
 }

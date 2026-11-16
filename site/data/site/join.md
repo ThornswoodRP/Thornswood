@@ -15,12 +15,17 @@ do not, nothing is missing.
 **Vortex**, with a free Nexus Mods account. The mods come from a collection on
 Nexus, and a collection is a Vortex thing: Mod Organizer cannot install it.
 
-Thornswood leaves the Skyrim you already have alone: you can update it,
-verify it and mod it as you like. The launcher builds a game folder of its
-own, `C:\Thornswood\Game`, out of your Steam copy and what Vortex put into it,
-and after that it only takes Vortex's files from there. The mods and Skyrim's
-archives are hard links, which take no extra space, and the launcher checks
-the archives before every Play; everything else is Thornswood's own copy.
+Where Thornswood's files go is one box in the install window, **Give
+Thornswood a Skyrim folder of its own**, and it starts ticked. Left ticked,
+Thornswood writes nothing of its own into the Skyrim you already have on Steam,
+so that copy stays yours to play and mod however you like: once Vortex has
+deployed, the launcher builds a game folder of its own, `Game` in the install
+folder on the same drive as Skyrim, out of your Steam copy and what Vortex put
+into it, and after that it only takes Vortex's files from there. The mods and
+Skyrim's archives are hard links, which take no extra space, and the launcher
+checks the archives before every Play; everything else is Thornswood's own
+copy. Unticked, Thornswood's own files go into your Steam copy, with a
+list of what went there, and the launcher asks before it builds the folder.
 Vortex keeps the mods in a profile of their own, so switching back to your
 usual profile and running Purge Mods leaves your own Skyrim the way it was.
 
@@ -81,7 +86,17 @@ The link is on the [Downloads](/downloads) page, on the card above Play and on
 the launcher's Diagnostics page. Each opens the revision of the collection the
 server was built against and names its number. Install that revision, not a
 newer one Nexus may show first: a newer one keeps Play shut until the server
-catches up. Vortex takes it from there: it makes a profile for Thornswood,
+catches up.
+
+A new Nexus account has two stops before Vortex can start. First, some of the
+collection's mods are marked adult, and Nexus hides the collection until you
+turn on adult content in your Nexus Mods settings. In some countries Nexus
+asks you to verify your age first. Second, on a free account Vortex opens
+each file's page on Nexus and you press **Slow download** there, once for
+each file: 120 files, from 111 mods. A Premium account downloads them without
+pressing anything.
+
+After that, Vortex takes it from there: it makes a profile for Thornswood,
 downloads every mod from its own author, and deploys them. Give it time.
 
 When the server later moves to a newer revision, update the collection inside
@@ -96,8 +111,9 @@ Play.
 
 ## 4. Connect your Discord in the launcher
 
-Open Thornswood from the desktop shortcut and press **Connect Discord** on the
-Play page. Your browser opens, you say yes, and it closes itself.
+Open Thornswood from the desktop shortcut and press **Connect Discord** at the
+bottom of the left sidebar, above Settings. Your browser opens, you say yes,
+and it closes itself.
 
 You never do this again.
 
@@ -111,6 +127,14 @@ compares every plugin with the server's copy, byte for byte. If one differs it
 says so. For Thornswood's own plugin **Fix** downloads the latest release's
 copy; for another author's mod it names the mod to update or reinstall in
 Vortex.
+
+The first time you press Play, and again after the collection changes, the
+launcher builds Thornswood's animation and body files on your computer before
+the game starts. Its status line reads **Building Thornswood's animation and
+body files** while it works, and it takes a few minutes, so leave it be. If the
+build stops, a box says why and the game does not start. The launcher log on
+the Diagnostics page has each step it took, and the [help](/help) page says
+what to do.
 
 Then the game loads to its main menu and lists your characters, with an empty
 slot for a new one. Pick one and you are in. There is no address to type and

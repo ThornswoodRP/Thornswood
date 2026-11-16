@@ -33,6 +33,7 @@
   The original is kept beside it. Nothing here is one way.
 #>
 
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string] $Game = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),
@@ -158,18 +159,11 @@ if ((-not $Undo) -and (Test-Path -LiteralPath $off)) {
 
 # ------------------------------------------------------------- load order ---
 Head 'Rebuilding the server load order'
-$sync = Join-Path $Here 'Sync-LoadOrder.ps1'
-if (Test-Path -LiteralPath $sync) {
-  & $sync
-} else {
-  Bad 'Sync-LoadOrder.ps1 is missing, so the server list has NOT been updated.'
-  Bad 'Do not launch until it has been, or every mod form resolves wrong.'
-  return
-}
+Note 'Deploy-Gamemode.ps1 builds it now (#4688): .\scripts\deploy\Deploy-Gamemode.ps1'
 
 Head 'Now'
 Note 'The server must get the new list before you launch, or the two disagree:'
 Note ''
-Note '    .\Publish-Server.ps1'
+Note '    .\scripts\release\Publish-Server.ps1'
 Note ''
-Note 'To undo all of this:  .\Enable-MCM.ps1 -Undo   then publish again.'
+Note 'To undo all of this:  .\scripts\mods\Enable-MCM.ps1 -Undo   then publish again.'

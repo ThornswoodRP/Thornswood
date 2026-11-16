@@ -121,7 +121,7 @@ sumKeys.forEach(function (k) {
 const raw = all(/s\.AppendLine\(([^;]*)\);/g, summary).map(m => m[1].trim());
 const allowed = ['', '"ThornsWood - report"', '"==================="', 'DateTime.Now.ToString("dddd d MMMM yyyy, HH:mm")',
                  'k', 'new string(\'-\', k.Length)', 'k.PadRight(22) + v', '"none"',
-                 '(i.Blocking ? "[blocking] " : "[note]     ") + i.Text', '"could not check: " + ex.Message',
+                 '(i.Blocking ? "[blocking] " : "[note]     ") + i.Text', '"could not check: " + Failure.Why("Diag, a check for the report", ex)',
                  '"in " + dir', 'Path.GetFileName(f)'];
 const stray = raw.filter(r => allowed.indexOf(r) < 0);
 yes('Summary() writes no line of its own outside Add and Section' + (stray.length ? ' (writes ' + stray.join(' | ') + ')' : ''),

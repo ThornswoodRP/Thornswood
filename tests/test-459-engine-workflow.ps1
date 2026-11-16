@@ -18,7 +18,7 @@
   16 Oct, also the fork's own build taken first: the LF checkout, the look
   for it before anything compiles, every compile step skipped when it is in,
   and the records made from it naming the fork's run (section 3b;
-  tests\test-459-fork-build.ps1 runs ForkEngineBuild.ps1 and -BuiltBy).
+  scripts\tests\test-459-fork-build.ps1 runs ForkEngineBuild.ps1 and -BuiltBy).
   Since Patrick's A on #3014 (22 Oct) the box compiles nothing, and since
   his A on #3399 (26 Oct) neither does GitHub's runner: a Ship machine takes
   the fork's own build, so with no fork build of the commit the job stops

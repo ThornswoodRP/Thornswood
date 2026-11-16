@@ -125,7 +125,7 @@ const FLAME_MODELS = [
 // editor id begins with it (full editor ids listed when the shared words are not at the front).
 // #2259: a 'craft' row warms and never sets anybody alight. Rows of this kind
 // carry a third element 'craft' in FIRE_BASES in game/plugins/thornswood-front.js;
-// tests/test-2259-forge-burn.js fails until the plugin's marks match a rebuild.
+// game/tests/test-2259-forge-burn.js fails until the plugin's marks match a rebuild.
 const CRAFT_HEAT = [
   'CraftingBlackSmithForge',
   'CraftingSmelterMarker',
@@ -317,7 +317,6 @@ if (process.exitCode === 1) {
 } else {
   const doc = {
     builtFrom: PLUGINS,
-    builtAt: new Date().toISOString(),
     reach: REACH,
     inside: INSIDE,
     rule: 'flame: the model is one of the fire effects or wood fires. ' +

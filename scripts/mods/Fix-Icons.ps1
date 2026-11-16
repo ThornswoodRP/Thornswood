@@ -11,6 +11,7 @@
 
       .\scripts\mods\Fix-Icons.ps1
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param([string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install))
 

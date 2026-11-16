@@ -4,11 +4,12 @@
 # runner with the five masters.
 #
 # Each job lays out a server on a fresh windows-2022 runner from the server
-# build records\server-build.json names (as the signed build Release carries
-# it for the deploy agent, every file held to the record), this checkout's gamemode.js and
-# Thornswood-Content.esp, and the five masters the fork's build downloads,
-# held to the same sha256 (scripts\bot\New-LoadServer.js; THIRD-PARTY.md says
-# where they come from, and they go with the runner). Then
+# build records\server-build.json names (the fork's own build of the pin, the
+# one the build Release carries, every file held to the record), this
+# checkout's gamemode.js, the newest content build's tables and
+# Thornswood-Content.esp (#5191), and the five masters the fork's build
+# downloads, held to the same sha256 (scripts\bot\New-LoadServer.js;
+# THIRD-PARTY.md says where they come from, and they go with the runner). Then
 # scripts\bot\Load-Test.js puts more and more bots on it and, at each step,
 # reads the server process's cores and memory and every byte between the bots
 # and the server. Two shapes, one job each:
@@ -17,14 +18,19 @@
 #   spread  new characters put at 36 spots over Tamriel, so few see each other.
 # A person is also a chat socket on the voice service, which carries their
 # join pass, so the voice service from this checkout runs beside the server.
+# A run by hand can have the bots do more than walk (play: fight, host, trade,
+# quest; load-bots.js says what each is), and keep the masters' NPCs alive
+# (npcs: yes; off unless asked). With both, the bots ask for and run the NPCs
+# near them, as games do, and each step says how many copies of one message
+# a bot read (#6252).
 # The numbers are in the run's summary and in the load-test-<shape> artifact
 # (result.json, the two services' logs and samples, nothing else), and go on
 # #4623.
 #
 # Why GitHub's runner: this repository is public, so its standard runners cost
 # nothing, and nothing here needs a secret, the box, or a real server. No job
-# here may name a self-hosted runner. Its token reads only: the Releases of
-# this repository and nothing else.
+# here may name a self-hosted runner. Its token reads only: the public fork's
+# build of the pin and the newest content build a merge release kept.
 #
 # The runner is not the box: its cores are a cloud machine's, and the bots run
 # on it beside the server. Load-Test.js reads how busy the whole runner was at
@@ -44,6 +50,22 @@ on:
         description: 'Seconds each step is measured over'
         required: false
         default: '60'
+      moves:
+        description: 'How bots send moves: change (the game since #6247) or beat (every 130 ms, the game before it)'
+        required: false
+        default: 'change'
+      stand:
+        description: 'Share of the time each bot stands still, 0 to 1'
+        required: false
+        default: '0.5'
+      play:
+        description: 'What the bots do besides walking, comma separated (fight, host, trade, quest), or none'
+        required: false
+        default: 'none'
+      npcs:
+        description: 'yes: the engine keeps the masters NPCs alive near the bots, for play host'
+        required: false
+        default: 'no'
   pull_request:
     paths:
       - 'scripts/bot/Load-Test.js'
@@ -65,6 +87,10 @@ jobs:
       matrix:
         shape: [crowd, spread]
     runs-on: windows-2022
+    permissions:
+      contents: read
+      # The content build, an artifact of a merge release (#5191).
+      actions: read
     # Each step takes its fill, 20 s of settling and its window, so six
     # steps of 60 s are about 15 minutes after the downloads and the
     # gamemode's load; three times that is the limit.
@@ -74,48 +100,58 @@ jobs:
       - name: Check out as committed, LF
         shell: pwsh
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+          persist-credentials: false
+      # The content build (#5191, stage 4): the newest a merge release kept,
+      # laid over the checkout as every run of the harnesses lays it: the
+      # box builds the gamemode's tables and Thornswood-Content.esp, and the
+      # committed copies are not kept current (they leave git in stage 4e).
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
 
-      # The server build dev runs: the signed build-<date>.<run> Release the
-      # deploy agent takes it from carries it as server-<commit>-<hash>.zip,
-      # with its server-build.json. The newest Release whose record holds the
-      # same scam_native.node as this checkout's is taken, and
-      # New-LoadServer.js then holds every file to this checkout's record.
+      # The server build the checkout records: the fork's own build of the
+      # pin, every file held to records/server-build.json
+      # (Get-EngineArtifact.ps1), and the server zip it makes of it, as
+      # merge-release.yml takes it for the build Release. Until #6153 this waited for that Release,
+      # so every pull request after an engine pin merged went red until the
+      # next dev release; the fork keeps its build the moment the pin is
+      # recorded, so nothing here waits on main's Releases.
       - name: Get the server build the checkout records
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $want = ((Get-Content -Raw records/server-build.json) | ConvertFrom-Json).sha256
-          $h = @{ Authorization = "Bearer $env:GH_TOKEN"; 'X-GitHub-Api-Version' = '2022-11-28' }
-          $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
-          $rels = Invoke-RestMethod -Uri "$api/releases?per_page=100" -Headers $h
-          $found = $null
-          foreach ($r in @($rels | Where-Object { $_.tag_name -like 'build-*' } | Sort-Object created_at -Descending)) {
-            $rec = $r.assets | Where-Object { $_.name -eq 'server-build.json' }
-            $zip = $r.assets | Where-Object { $_.name -like 'server-*.zip' }
-            if (-not $rec -or -not $zip) { continue }
-            $f = Join-Path $env:RUNNER_TEMP "record-$($r.id).json"
-            Invoke-WebRequest -Uri $rec.url -Headers ($h + @{ Accept = 'application/octet-stream' }) -OutFile $f
-            if ((((Get-Content -Raw $f) | ConvertFrom-Json).sha256) -eq $want) { $found = @{ Release = $r; Zip = $zip }; break }
-          }
-          if (-not $found) { Write-Host "::error::no build Release carries the server build records/server-build.json holds (scam_native.node sha256 $want)"; exit 1 }
-          $z = Join-Path $env:RUNNER_TEMP 'server.zip'
-          Invoke-WebRequest -Uri $found.Zip.url -Headers ($h + @{ Accept = 'application/octet-stream' }) -OutFile $z
-          if ((Get-Item -LiteralPath $z).Length -ne [long]$found.Zip.size) { Write-Host "::error::the download of $($found.Zip.name) is $((Get-Item -LiteralPath $z).Length) bytes, and the Release says $($found.Zip.size)"; exit 1 }
-          Expand-Archive -LiteralPath $z -DestinationPath (Join-Path $env:RUNNER_TEMP 'build')
-          Write-Host "$($found.Zip.name) from $($found.Release.tag_name), $($found.Zip.size) bytes"
+          ./scripts/release/Get-EngineArtifact.ps1 -NoPause
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::CI's engine build of the pin could not be fetched; the lines above say why"; exit 1 }
+          # Its server zip, the one the build Release carries, as the deploy
+          # agent unpacks it, server-build.json and all.
+          . ./scripts/release/Read-JsonFile.ps1
+          $ciDir = & ./scripts/release/Where.ps1 EngineArtifact
+          $ciStamp = Join-Path $ciDir 'engine-artifact.json'
+          $ciInfo = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($ciStamp)) $ciStamp
+          $zip = Join-Path (Join-Path (Join-Path $ciDir 'artifact') 'server') ([string]$ciInfo.serverZip)
+          if (-not $ciInfo.serverZip -or -not (Test-Path -LiteralPath $zip -PathType Leaf)) { Write-Host "::error::$ciStamp names no server zip that is there"; exit 1 }
+          Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'build')
+          Write-Host "server build $($ciInfo.serverZip)"
 
       - name: Lay out the load server
         shell: pwsh
+        env:
+          NPCS: ${{ github.event.inputs.npcs == 'yes' && 'yes' || 'no' }}
         run: |
-          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
+          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes --npcs $env:NPCS
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Put the bots on it
@@ -123,13 +159,18 @@ jobs:
         env:
           STEPS: ${{ github.event.inputs.steps || '10,20,40,60,80,100' }}
           HOLD: ${{ github.event.inputs.hold || '60' }}
+          MOVES: ${{ github.event.inputs.moves || 'change' }}
+          STAND: ${{ github.event.inputs.stand || '0.5' }}
+          PLAY: ${{ github.event.inputs.play || 'none' }}
         run: |
-          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
+          $play = @()
+          if ($env:PLAY -and $env:PLAY -ne 'none') { $play = @('--play', $env:PLAY) }
+          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --moves $env:MOVES --stand $env:STAND @play --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Keep the result and the server's log
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: load-test-${{ matrix.shape }}
           path: |

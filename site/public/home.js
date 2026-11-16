@@ -65,6 +65,19 @@ var PAGES = { '/world':1, '/rules':1, '/join':1, '/credits':1,
               '/privacy':1, '/terms':1, '/cookies':1 };
 var here = location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
 
+/* The open page's link in the top bar says so (#4127): aria-current="page"
+   on the one link to where this is, and on no other. Only the breadcrumb
+   said it before. Every public page is this file and this script, a whole
+   load each, so this runs once a page. */
+function markCurrent(bar, at) {
+  var links = bar.querySelectorAll('a');
+  for (var k = 0; k < links.length; k++) {
+    if (links[k].getAttribute('href') === at) links[k].setAttribute('aria-current', 'page');
+    else links[k].removeAttribute('aria-current');
+  }
+}
+markCurrent(nav, here);
+
 
 /* The anchor in a fetched page. Called after the markdown is on the page,
    because until then there is nothing with that id to scroll to. */
@@ -103,6 +116,18 @@ function request(url, options) {
     }).then(function (r) { clearTimeout(timer); resolve(r); }, function (e) { clearTimeout(timer); reject(e); });
   });
 }
+/* The site's public data, asked for once a page load (#4393). The part of
+   this script every page runs reads it for the status line, the news and the
+   front page's pictures, and the gallery reads it for its pictures; each
+   asked on its own, so the gallery asked twice on every load, and each ask
+   counted against the visitor's request limit. Both now take this one
+   answer. Back from another page (pageshow) is a new look at who is in the
+   world, so that one asks afresh. */
+var publicAsked = null;
+function publicData() {
+  if (!publicAsked) publicAsked = request('/api/public?galleryLimit=24', { credentials: 'same-origin' });
+  return publicAsked;
+}
 // Reduce large still pictures before uploading. Animated GIFs stay intact.
 function preparePicture(file) {
   if (file.size > 25 * 1024 * 1024) return Promise.reject(new Error('Pictures must be 25 MB or smaller.'));
@@ -134,10 +159,19 @@ function sendCopies(file, name) {
   });
 }
 function show(html) {
-  var headingSeen = false;
-  html = html.replace(/<h1\b([^>]*)>([\s\S]*?)<\/h1>/gi, function (all, attrs, text) {
-    if (!headingSeen) { headingSeen = true; return all; }
-    return '<h2' + attrs + '>' + text + '</h2>';
+  /* One h1 a page, and its sections nested under it (#4389). The written
+     pages use # both for their title and for their top sections (the rules'
+     Eighteen and over, In the Discord, In the World; the world's Accord),
+     and this used to turn every h1 after the first into an h2 and leave the
+     h2 and h3 under it where they were, so a section's own parts became its
+     siblings. Now from the second h1 on, every heading goes down one level,
+     so each part stays under its section. A page with one h1 is as it was.
+     site/lib/public.js does the same for the pages the server sends. */
+  var h1s = 0;
+  html = html.replace(/<(\/?)h([1-6])\b([^>]*)>/gi, function (all, close, n, attrs) {
+    if (!close && n === '1') h1s++;
+    if (h1s < 2) return all;
+    return '<' + close + 'h' + Math.min(6, Number(n) + 1) + attrs + '>';
   });
   document.getElementById('landing').hidden = true;
   var page = document.getElementById('page');
@@ -328,7 +362,7 @@ if (AGE_PATHS[here] && !ageOk()) {
     .then(function (r) { return r.json(); })
     .catch(function () { return {}; })
     .then(function (w) { galWho = w || {}; if (galData) drawGallery(); });
-  request('/api/public?galleryLimit=24').then(function (r) { return r.json(); }).then(function (d) {
+  publicData().then(function (r) { return r.json(); }).then(function (d) {
     galData = d || {};
     drawGallery();
   }).catch(function () { show('<h1>From the world</h1><p>Could not load it.</p>'); });
@@ -341,9 +375,12 @@ if (AGE_PATHS[here] && !ageOk()) {
       'somebody playing. Send yours in and it waits for staff to put it up.</p>';
 
     if (who.canSubmit) {
+      /* Each hint is named by its field with aria-describedby (#4389), as
+         on the report page: the kinds and size by Choose pictures, and what
+         to keep out of a caption or a note by the two boxes. */
       out += '<div class="gal-box" id="galSubmit">' +
         '<h2>Send a picture</h2>' +
-        '<p class="hint">png, jpg, webp or gif, up to 25 MB each. Large still pictures are reduced to at most 2560 pixels and converted to WebP when that makes them smaller. Animated GIFs stay unchanged. They go to the queue, not live.</p>' +
+        '<p class="hint" id="galKinds">png, jpg, webp or gif, up to 25 MB each. Large still pictures are reduced to at most 2560 pixels and converted to WebP when that makes them smaller. Animated GIFs stay unchanged. They go to the queue, not live.</p>' +
         '<div class="form">' +
         '<div class="gal-field">' +
         '<span class="gal-label">Pictures</span>' +
@@ -351,23 +388,24 @@ if (AGE_PATHS[here] && !ageOk()) {
         '<input type="file" id="galFile" accept=".png,.jpg,.jpeg,.webp,.gif,image/*" multiple tabindex="-1" aria-hidden="true">' +
         '<p class="gal-drop-lead">Drop pictures here or choose files</p>' +
         '<div class="file-pick">' +
-        '<button class="btn gal-pick" type="button" id="galPick">Choose pictures</button>' +
+        '<button class="btn gal-pick" type="button" aria-describedby="galFileName galKinds" id="galPick">Choose pictures</button>' +
         '<span class="file-name" id="galFileName">No file chosen</span>' +
         '</div>' +
         '<ul class="gal-chosen" id="galChosen" hidden></ul>' +
         '</div></div>' +
         '<div class="gal-field">' +
         '<label class="gal-label" for="galBy">By</label>' +
-        '<input type="text" id="galBy" maxlength="40" placeholder="a name for the caption" autocomplete="nickname">' +
+        '<input type="text" id="galBy" maxlength="40" placeholder="a name for the caption" autocomplete="nickname" aria-describedby="galTerms">' +
         '</div>' +
         '<div class="gal-field">' +
         '<label class="gal-label" for="galNote">Note<span class="gal-opt">optional</span></label>' +
-        '<input type="text" id="galNote" maxlength="300" placeholder="a short note for staff">' +
+        '<input type="text" id="galNote" maxlength="300" placeholder="a short note for staff" aria-describedby="galTerms">' +
         '</div>' +
-        '<p class="hint">Submit only pictures you have permission to share. Staff review them before publication. ' +
+        '<p class="hint" id="galTerms">Submit only pictures you have permission to share. Staff review them before publication. ' +
         'Avoid personal information. <a href="/terms">Submission terms</a> and <a href="/privacy">privacy details</a>.</p>' +
         '<div><button class="btn first" type="button" id="galSend">Send pictures</button></div>' +
-        '<p class="said" id="galSaid" role="status" aria-live="polite" hidden></p>' +
+        // On the page from the start and empty, never hidden (#4389, rSaid says why).
+        '<p class="said" id="galSaid" role="status" aria-live="polite"></p>' +
         '</div></div>';
     } else if (waiting) {
       out += '<div class="gal-box"><p class="hint">Checking who you are.</p></div>';
@@ -384,8 +422,8 @@ if (AGE_PATHS[here] && !ageOk()) {
         '">Sign in with Discord</a></p></div>';
     }
 
-    function galleryCards(items) {
-      return items.map(function (g) {
+    function galleryCards(items, start) {
+      return items.map(function (g, k) {
         var description = esc(g.alt || 'Skyrim scene shared by ' + (g.by || 'the Thornswood community'));
         var recording = /\.(mp4|webm)$/i.test(g.name || '');
         var media = recording
@@ -398,17 +436,27 @@ if (AGE_PATHS[here] && !ageOk()) {
         var card = '<div class="shot-card"><div class="shot">' + media + '</div>';
         if (g.by) card += '<div class="also faintly">' + esc(g.by) + '</div>';
         // Per-image report for live public shots only. No staff inbox here.
+        /* Named for its picture (#4389): every card's button said only
+           Report, so a screen reader's list of buttons was the same word
+           down the page with nothing to tell which picture each was for. Its
+           place on the page goes in too, so two of one person's pictures
+           are told apart, and the name starts with the word it shows. */
         if (who.signed || who.canSubmit) {
           card += '<div class="shot-actions">' +
             '<button class="btn ghost" type="button" data-galreport="' + esc(g.name) +
-            '">Report</button></div>';
+            '" aria-label="Report picture ' + ((start || 0) + k + 1) + ', ' + description +
+            '">Report</button>' +
+            // What became of a report that did not go (#4407): on the card
+            // from the start and empty, as rSaid is, so it is read out when
+            // the words go in.
+            '<p class="said" data-galsaid role="status" aria-live="polite"></p></div>';
         }
         card += '</div>';
         return card;
       }).join('');
     }
     if (!shots.length) out += '<p class="faint-mt-28">No approved pictures are available yet.</p>';
-    out += '<div class="gallery" id="galleryCards">' + galleryCards(shots) + '</div>';
+    out += '<div class="gallery" id="galleryCards">' + galleryCards(shots, 0) + '</div>';
     if (d.galleryNext !== null && d.galleryNext !== undefined) {
       out += '<p><button class="btn ghost" type="button" id="galMore">Load more pictures</button></p>' +
         '<p id="galMoreStatus" role="status" aria-live="polite"></p>';
@@ -419,9 +467,10 @@ if (AGE_PATHS[here] && !ageOk()) {
       if (more.disabled) return;
       more.disabled = true; more.textContent = 'Loading pictures';
       request('/api/gallery?offset=' + d.galleryNext).then(function (r) { return r.json(); }).then(function (page) {
+        var before = galData.gallery.length;
         galData.gallery = galData.gallery.concat(page.gallery || []);
         galData.galleryNext = page.next;
-        document.getElementById('galleryCards').insertAdjacentHTML('beforeend', galleryCards(page.gallery || []));
+        document.getElementById('galleryCards').insertAdjacentHTML('beforeend', galleryCards(page.gallery || [], before));
         bindGalleryReports();
         more.disabled = false; more.textContent = 'Load more pictures';
         var status = document.getElementById('galMoreStatus');
@@ -438,7 +487,6 @@ if (AGE_PATHS[here] && !ageOk()) {
     function said(msg, bad) {
       var el = document.getElementById('galSaid');
       if (!el) return;
-      el.hidden = false;
       el.textContent = msg;
       el.style.color = bad ? 'var(--faint)' : 'var(--gold)';
     }
@@ -639,17 +687,29 @@ if (AGE_PATHS[here] && !ageOk()) {
       b.addEventListener('click', function () {
         var why = window.prompt('Why are you reporting this picture?', '');
         if (why === null) return;
+        /* What happened goes in the line beside the button, never an alert
+           (#4407). The site's own sentence when it says one; the page's
+           when the answer is not one it can read or never came. */
+        var line = b.parentNode.querySelector('[data-galsaid]');
+        function told(words) { b.disabled = false; if (line) line.textContent = words; }
         b.disabled = true;
+        if (line) line.textContent = '';
         request('/api/gallery/report', {
           method: 'POST', credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ name: b.getAttribute('data-galreport'), why: why })
-        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (x) {
-            if (x.ok) { b.textContent = 'Reported'; }
-            else { b.disabled = false; window.alert((x.j && x.j.error) || 'Could not report it.'); }
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; },
+                                 function () { return { ok: false, j: {} }; });
           })
-          .catch(function () { b.disabled = false; window.alert('Could not report it.'); });
+          .then(function (x) {
+            if (x.ok) {
+              b.textContent = 'Reported';
+              b.setAttribute('aria-label', (b.getAttribute('aria-label') || 'Report').replace(/^Report\b/, 'Reported'));
+            }
+            else told(x.j.error || 'The site could not take that report just now, so it was not sent. Try again in a minute.');
+          })
+          .catch(function () { told('The site did not answer, so that report may not have gone. Try again in a minute.'); });
       });
     });
     }
@@ -684,15 +744,19 @@ if (AGE_PATHS[here] && !ageOk()) {
     '<p>Somebody behaving badly goes here too: tick the box about a person. ' +
     'That one needs you signed in with Discord, and only staff read it.</p>' +
     '<form id="rep" class="form">' +
+    /* Each hint is named by its field with aria-describedby (#4389), so a
+       screen reader says it with the field. Beside it in the markup was not
+       enough: nothing tied the two, and a person moving through the form
+       field by field never heard that a name is optional or who reads it. */
     '<div><label for="rTitle">What happened</label>' +
-      '<span class="hint">One line. The rest goes below.</span>' +
-      '<input id="rTitle" type="text" maxlength="200" required></div>' +
+      '<span class="hint" id="rTitleHint">One line. The rest goes below.</span>' +
+      '<input id="rTitle" type="text" maxlength="200" required aria-describedby="rTitleHint"></div>' +
     '<div><label for="rDetail">Anything else</label>' +
-      '<span class="hint">What you were doing, what you expected, where it was.</span>' +
-      '<textarea id="rDetail" maxlength="8000"></textarea></div>' +
+      '<span class="hint" id="rDetailHint">What you were doing, what you expected, where it was.</span>' +
+      '<textarea id="rDetail" maxlength="8000" aria-describedby="rDetailHint"></textarea></div>' +
     '<div><label for="rBy">Your Discord name</label>' +
-      '<span class="hint">So somebody can come back to you. Optional.</span>' +
-      '<input id="rBy" type="text" maxlength="40"></div>' +
+      '<span class="hint" id="rByHint">So somebody can come back to you. Optional.</span>' +
+      '<input id="rBy" type="text" maxlength="40" aria-describedby="rByHint"></div>' +
     // Off the page and out of the tab order, so a person never meets it and a
     // script that fills in every box does. The site keeps nothing that comes
     // back with it filled in.
@@ -707,9 +771,9 @@ if (AGE_PATHS[here] && !ageOk()) {
     '<label class="check"><input type="checkbox" id="rPerson"> ' +
       'This is about a person, not the game</label>' +
     '<div id="rWhoBox" hidden><label for="rWho">Who</label>' +
-      '<span class="hint">Their character name, or their Discord name. It goes to ' +
+      '<span class="hint" id="rWhoHint">Their character name, or their Discord name. It goes to ' +
       'staff and nobody else, and staff see that it came from you.</span>' +
-      '<input id="rWho" type="text" maxlength="60">' +
+      '<input id="rWho" type="text" maxlength="60" aria-describedby="rWhoHint">' +
       '<p id="rSign" class="hint" hidden>Reporting somebody needs you signed in, so staff ' +
       'can come back to you about it. <a href="/auth/discord?back=/report">Sign in with ' +
       'Discord</a>. In the game, /report does the same.</p>' +
@@ -721,7 +785,11 @@ if (AGE_PATHS[here] && !ageOk()) {
     // drawn here when the site has a key for it.
     '<div id="rCheck" class="ts-check" hidden></div>' +
     '<div><button class="btn first" type="submit">Send report</button></div>' +
-    '<p id="rSaid" class="said" role="status" aria-live="polite" hidden></p>' +
+    /* On the page from the start and empty, never hidden (#4389). It was
+       hidden until the first message, and unhidden and filled in the same
+       moment: a live region that is not in the accessibility tree when its
+       words change is not read, so the first message often went unsaid. */
+    '<p id="rSaid" class="said" role="status" aria-live="polite"></p>' +
     '</form>');
   var form = document.getElementById('rep');
   /* Turnstile (#3216). The site says whether the check is on and with which
@@ -796,14 +864,12 @@ if (AGE_PATHS[here] && !ageOk()) {
     // than leaving the button grey.
     btn.disabled = true;
     btn.textContent = 'Sending';
-    said.hidden = false;
     said.textContent = 'Sending it.';
     var ctl = window.AbortController ? new AbortController() : null;
     var gaveUp = false;
     var timer = setTimeout(function () { gaveUp = true; if (ctl) ctl.abort(); }, 15000);
     function finish(text) {
       clearTimeout(timer);
-      said.hidden = false;
       said.textContent = text;
       btn.textContent = 'Send report';
       btn.disabled = false;
@@ -853,6 +919,29 @@ if (AGE_PATHS[here] && !ageOk()) {
       });
   });
 }
+
+// ==== thornswood lore pick ====
+/* The lore line under The World, picked again in the browser (#5978). The
+   site picks one each time it serves a page (#3147), but Cloudflare keeps the
+   public pages for five minutes (#5190), so everybody got the same line until
+   the copy ran out. /api/public hands out every line, so the pick is made
+   here, once a page load; the server's pick stays for a page whose script
+   never runs. The quote is under the fold, so the swap is not seen. */
+function pickLoreLine(lore, pick) {
+  var q = document.getElementById('loreLine');
+  var list = Array.isArray(lore) ? lore : [];
+  if (!q || !list.length) return;
+  var one = list[Math.min(list.length - 1, Math.floor(pick * list.length))];
+  if (!one || !one.text) return;
+  q.textContent = String(one.text);
+  if (one.from) {
+    var c = document.createElement('cite');
+    c.textContent = String(one.from);
+    q.appendChild(c);
+  }
+  q.hidden = false;
+}
+// ==== end thornswood lore pick ====
 
 /* The line under the title and the figure beside it: whether the world is
    up and who is in it, from /api/public. */
@@ -931,7 +1020,7 @@ window.addEventListener('pageshow', function (e) {
 
 /* The three live things on the front page, all of them honest about being
    empty rather than filled with something invented. */
-request('/api/public?galleryLimit=24', { credentials:'same-origin' })
+publicData()
   .then(function(r){ return r.json(); })
   .then(function(d){
     /* Both Patreon links are written into the markup, so they work before
@@ -949,6 +1038,7 @@ request('/api/public?galleryLimit=24', { credentials:'same-origin' })
     }
 
     paintStatus(d);
+    pickLoreLine(d.lines && d.lines.lore, Math.random());
 
     var rel = document.getElementById('releases');
     if (!rel) return;
@@ -972,112 +1062,8 @@ request('/api/public?galleryLimit=24', { credentials:'same-origin' })
     var shots = (d.gallery || []).filter(function (shot) { return !/\.(mp4|webm)$/i.test(shot.name || ''); });
     if (show && band && shots.length) {
       band.hidden = false;
-      var i = 0;
-      /* Only the picture on show and the one after it are fetched (#3218).
-         Every picture had its address from the start, and loading="lazy" did
-         not hold the rest back: they are stacked in the same box, so all of
-         them are "in view" once the box is, and scrolling down to it fetched
-         every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
-         the band is far below the first screen. */
-      var frames = shots.map(function (s, n) {
-        var img = document.createElement('img');
-        img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
-        img.loading = 'lazy';
-        if (n === 0) img.className = 'on';
-        show.appendChild(img);
-        return img;
-      });
-      // A picture's smaller copies (#3218) are set with its address, so
-      // neither is fetched early. The band is the page's width less its
-      // margins, at most 1480.
-      function fetchFrame(n) {
-        var img = frames[n];
-        if (!img || img.getAttribute('src')) return;
-        if (shots[n].srcset) {
-          img.sizes = '(max-width: 1528px) calc(100vw - 48px), 1480px';
-          img.srcset = shots[n].srcset;
-        }
-        img.src = shots[n].url;
-      }
-      fetchFrame(0);
-      fetchFrame(1 % shots.length);
-      var cap = document.createElement('div');
-      cap.className = 'gal-cap';
-      cap.innerHTML = (shots[0].by ? esc(shots[0].by) + ' \u00b7 ' : '') +
-        '<a href="/gallery">Open the gallery</a>';
-      show.appendChild(cap);
-      if (shots.length > 1 && dots) {
-        dots.hidden = false;
-        shots.forEach(function (_s, n) {
-          var b = document.createElement('button');
-          b.type = 'button';
-          b.setAttribute('aria-label', 'Picture ' + (n + 1));
-          if (n === 0) b.className = 'on';
-          b.onclick = function () { go(n); };
-          dots.appendChild(b);
-        });
-      }
-      function go(n) {
-        i = ((n % shots.length) + shots.length) % shots.length;
-        fetchFrame(i);
-        fetchFrame((i + 1) % shots.length);
-        var imgs = show.querySelectorAll('img');
-        for (var k = 0; k < imgs.length; k++) {
-          imgs[k].className = k === i ? 'on' : '';
-        }
-        if (dots) {
-          var bs = dots.querySelectorAll('button');
-          for (var k = 0; k < bs.length; k++) {
-            bs[k].className = k === i ? 'on' : '';
-          }
-        }
-        cap.innerHTML = (shots[i].by ? esc(shots[i].by) + ' \u00b7 ' : '') +
-          '<a href="/gallery">Open the gallery</a>';
-      }
-      var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-      var timer = null;
-      var paused = false;
-      function stopFlip() {
-        if (timer) { clearInterval(timer); timer = null; }
-      }
-      function startFlip() {
-        stopFlip();
-        if (reduce || paused || shots.length < 2) return;
-        timer = setInterval(function () { go((i + 1) % shots.length); }, 5000);
-      }
-      function userStep(n) {
-        go(n);
-        paused = true;
-        stopFlip();
-        setTimeout(function () { paused = false; startFlip(); }, 8000);
-      }
-      if (shots.length > 1) {
-        var prev = document.createElement('button');
-        prev.type = 'button';
-        prev.className = 'gal-nav gal-prev';
-        prev.setAttribute('aria-label', 'Previous picture');
-        prev.innerHTML = '&#8249;';
-        prev.onclick = function () { userStep(i - 1); };
-        var next = document.createElement('button');
-        next.type = 'button';
-        next.className = 'gal-nav gal-next';
-        next.setAttribute('aria-label', 'Next picture');
-        next.innerHTML = '&#8250;';
-        next.onclick = function () { userStep(i + 1); };
-        show.appendChild(prev);
-        show.appendChild(next);
-        show.addEventListener('mouseenter', function () { paused = true; stopFlip(); });
-        show.addEventListener('mouseleave', function () { paused = false; startFlip(); });
-        if (dots) {
-          var bs0 = dots.querySelectorAll('button');
-          for (var d = 0; d < bs0.length; d++) {
-            (function (n) {
-              bs0[n].onclick = function () { userStep(n); };
-            })(d);
-          }
-        }
-        startFlip();
-      }
+      startSlideshow(show, dots, shots,
+        !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches));
     }
   })
   .catch(function(){
@@ -1085,5 +1071,180 @@ request('/api/public?galleryLimit=24', { credentials:'same-origin' })
     if (t) t.textContent = '';
   });
 
+/*
+  The front page's slideshow of approved public shots (#4127). Its own
+  function so site\tests\test-4127-slideshow-a11y.js can run it on a stand-in
+  page with a clock it turns by hand.
+
+  It turns every 5 seconds unless something holds it: the pointer over it,
+  focus anywhere in it or on its dots, or its pause button. Until #4127 only
+  the pointer held it, so somebody tabbing through it watched it move under
+  them, and nothing stopped it for good. An arrow or a dot press holds it
+  for 8 seconds; each press clears the one before (two presses had left two
+  timers, the first restarting it early), and when the 8 seconds end it
+  turns again only if nothing else holds it (it had restarted with the
+  pointer still on it). Reduced motion: it never turns, and offers no pause.
+
+  The box is not a live region (home.html): it read every caption aloud
+  at every turn, wherever a screen reader was. The open picture's dot
+  carries aria-current.
+*/
+function startSlideshow(show, dots, shots, reduce) {
+  var i = 0;
+  /* Only the picture on show and the one after it are fetched (#3218).
+     Every picture had its address from the start, and loading="lazy" did
+     not hold the rest back: they are stacked in the same box, so all of
+     them are "in view" once the box is, and scrolling down to it fetched
+     every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
+     the band is far below the first screen. */
+  var frames = shots.map(function (s, n) {
+    var img = document.createElement('img');
+    img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
+    img.loading = 'lazy';
+    if (n === 0) img.className = 'on';
+    show.appendChild(img);
+    return img;
+  });
+  // A picture's smaller copies (#3218) are set with its address, so
+  // neither is fetched early. The band is the page's width less its
+  // margins, at most 1480.
+  function fetchFrame(n) {
+    var img = frames[n];
+    if (!img || img.getAttribute('src')) return;
+    if (shots[n].srcset) {
+      img.sizes = '(max-width: 1528px) calc(100vw - 48px), 1480px';
+      img.srcset = shots[n].srcset;
+    }
+    img.src = shots[n].url;
+  }
+  fetchFrame(0);
+  fetchFrame(1 % shots.length);
+  var cap = document.createElement('div');
+  cap.className = 'gal-cap';
+  cap.innerHTML = (shots[0].by ? esc(shots[0].by) + ' \u00b7 ' : '') +
+    '<a href="/gallery">Open the gallery</a>';
+  show.appendChild(cap);
+  if (shots.length > 1 && dots) {
+    dots.hidden = false;
+    shots.forEach(function (_s, n) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Picture ' + (n + 1));
+      if (n === 0) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
+      b.onclick = function () { userStep(n); };
+      dots.appendChild(b);
+    });
+  }
+  function go(n) {
+    i = ((n % shots.length) + shots.length) % shots.length;
+    fetchFrame(i);
+    fetchFrame((i + 1) % shots.length);
+    var imgs = show.querySelectorAll('img');
+    for (var k = 0; k < imgs.length; k++) {
+      imgs[k].className = k === i ? 'on' : '';
+    }
+    if (dots) {
+      var bs = dots.querySelectorAll('button');
+      for (var k = 0; k < bs.length; k++) {
+        bs[k].className = k === i ? 'on' : '';
+        if (k === i) bs[k].setAttribute('aria-current', 'true');
+        else bs[k].removeAttribute('aria-current');
+      }
+    }
+    cap.innerHTML = (shots[i].by ? esc(shots[i].by) + ' \u00b7 ' : '') +
+      '<a href="/gallery">Open the gallery</a>';
+  }
+  // What holds it. Each is its own, so one letting go never starts it
+  // while another still holds it.
+  var hovered = false, focused = false, stopped = false, stepped = null;
+  var timer = null;
+  function held() { return hovered || focused || stopped || stepped !== null; }
+  function stopFlip() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  function startFlip() {
+    stopFlip();
+    if (reduce || held() || shots.length < 2) return;
+    timer = setInterval(function () { go((i + 1) % shots.length); }, 5000);
+  }
+  function userStep(n) {
+    go(n);
+    stopFlip();
+    if (stepped !== null) clearTimeout(stepped);
+    stepped = setTimeout(function () { stepped = null; startFlip(); }, 8000);
+  }
+  if (shots.length < 2) return;
+  var prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'gal-nav gal-prev';
+  prev.setAttribute('aria-label', 'Previous picture');
+  prev.innerHTML = '&#8249;';
+  prev.onclick = function () { userStep(i - 1); };
+  var next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'gal-nav gal-next';
+  next.setAttribute('aria-label', 'Next picture');
+  next.innerHTML = '&#8250;';
+  next.onclick = function () { userStep(i + 1); };
+  show.appendChild(prev);
+  show.appendChild(next);
+  if (!reduce) {
+    var pause = document.createElement('button');
+    pause.type = 'button';
+    pause.className = 'gal-pause';
+    var said = function () {
+      pause.setAttribute('aria-label', stopped ? 'Play the slideshow' : 'Pause the slideshow');
+      pause.innerHTML = stopped ? '&#9654;' : '&#10074;&#10074;';
+    };
+    said();
+    pause.onclick = function () {
+      stopped = !stopped;
+      said();
+      if (stopped) stopFlip(); else startFlip();
+    };
+    show.appendChild(pause);
+  }
+  show.addEventListener('mouseenter', function () { hovered = true; stopFlip(); });
+  show.addEventListener('mouseleave', function () { hovered = false; startFlip(); });
+  // Focus in the box or on its dots holds it; it lets go only when focus
+  // goes somewhere that is neither.
+  var within = function (el) { return !!el && (show.contains(el) || (!!dots && dots.contains(el))); };
+  [show, dots].forEach(function (box) {
+    if (!box) return;
+    box.addEventListener('focusin', function () { focused = true; stopFlip(); });
+    box.addEventListener('focusout', function (e) {
+      if (within(e && e.relatedTarget)) return;
+      focused = false;
+      startFlip();
+    });
+  });
+  startFlip();
+}
+
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+/* A Discord sign in that did not finish comes back to the page it began on
+   with ?discord= and one of three words (#4406, the callback in
+   site\lib\serve.js). The line goes in #signinSaid, which is in the page
+   from the start, and the word comes out of the address so a reload or a
+   shared link does not say it again. Only these three words are shown, and
+   as text, never as markup. hub.js says the same three lines on its gate,
+   and site\tests\test-4406-signin-failure-line.js holds the two equal. It is
+   here with the code that runs as the page loads, not among the helpers
+   above show(), which site\tests\test-site-front-resilience.js lifts and
+   runs on their own. */
+var SIGNIN_WORDS = {
+  cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
+  expired: 'That Discord sign in ran out of time before it finished. Sign in again to carry on.',
+  failed: 'Discord could not sign you in just then. Give it a minute and try again.'
+};
+(function signinSaid() {
+  // Most loads carry nothing after the ?, and then there is nothing to read.
+  if (!location.search) return;
+  var word = new URLSearchParams(location.search).get('discord');
+  if (word === null) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  var line = document.getElementById('signinSaid');
+  if (line && Object.prototype.hasOwnProperty.call(SIGNIN_WORDS, word)) line.textContent = SIGNIN_WORDS[word];
+})();

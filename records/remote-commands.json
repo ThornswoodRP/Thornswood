@@ -221,6 +221,15 @@
                       "reason":  "reload block; replaces gamemode.js and the stamp in the server folder, stops nothing"
                   },
                   {
+                      "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote \"Remove-Item -LiteralPath \u0027$stageWin\u0027 -Recurse -Force -EA SilentlyContinue\" | Out-Null",
+                      "does":  "takes away an -OrderOnly stage when the dev server already runs that order (#6166)",
+                      "class":  "stage",
+                      "reason":  "writes or checks a stage folder or file"
+                  },
+                  {
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",
@@ -660,6 +669,51 @@
                       "does":  "runs the backup task once and reads its log",
                       "class":  "task-start-stop",
                       "reason":  "start of a named task"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "Remote",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "return Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Script $script",
+                      "does":  "sends a script or file for its caller",
+                      "class":  "transport",
+                      "reason":  "carries what its caller hands it; each caller is mapped"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote ($common + @\"",
+                      "does":  "reads files, settings, logs or status",
+                      "class":  "read-status",
+                      "reason":  "reads files, settings, logs or status only"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "$made = Remote @\"",
+                      "does":  "makes MongoDB\u0027s folder on the box",
+                      "class":  "admin",
+                      "reason":  "install-time work"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh $usersJs \"${target}:$($Root.Replace(\u0027\\\u0027,\u0027/\u0027))/mongo-users.js\" }",
+                      "does":  "uploads the script that makes MongoDB\u0027s users",
+                      "class":  "admin",
+                      "reason":  "script run with the admin\u0027s connection file"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "$out = @(Remote $install | ForEach-Object { Say \"  $_\"; \"$_\".Trim() })",
+                      "does":  "installs MongoDB, registers its task and makes its users",
+                      "class":  "admin",
+                      "reason":  "sends Register-ScheduledTask and makes secrets"
                   },
                   {
                       "script":  "scripts/deploy/Install-Bot.ps1",
@@ -1209,6 +1263,15 @@
                       "does":  "registers the voice task again and restarts voice under it (-TaskOnly)",
                       "class":  "admin",
                       "reason":  "task registration is install-time work outside the gate verbs"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Voice.ps1",
+                      "scope":  "Assert-VoiceJoin",
+                      "via":  "Remote",
+                      "anchor":  "$join = Read-VoiceJoin @(Remote (Get-VoiceJoinCheck $Port)",
+                      "does":  "asks the voice service's /token on loopback with a ticket nobody holds, to see a join reaches its site (#4467)",
+                      "class":  "read-status",
+                      "reason":  "one request to the service; nothing is minted, written or changed"
                   },
                   {
                       "script":  "scripts/deploy/Install-Voice.ps1",
@@ -2167,11 +2230,11 @@
                   {
                       "script":  "scripts/vps/Request-Restart.ps1",
                       "scope":  "\u003ctop\u003e",
-                      "via":  "ssh",
-                      "anchor":  "$out = Invoke-ThornswoodNative { \u0026 ssh @ssh \"$User@$Vps\" \"pwsh -NoProfile -EncodedCommand $enc\" } 2\u003e\u00261",
-                      "does":  "drops a restart request json into the server data folder",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "$out = @(Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script $remote 2\u003e\u00261)",
+                      "does":  "drops a restart request json into the server data folder, and the restart notice the Discord bot posts into C:\\Thornswood-Deploys\\for-bot (#5784)",
                       "class":  "stage",
-                      "reason":  "file write in a Thornswood folder; the gamemode reads it, warns, and deletes it"
+                      "reason":  "file writes in Thornswood folders; the gamemode reads the request, warns, and deletes it, and the bot reads the notice"
                   },
                   {
                       "script":  "scripts/vps/Restart-Server.ps1",
@@ -2438,10 +2501,10 @@
                       "script":  "scripts/vps/Setup-SshKey.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "ssh",
-                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target \"powershell -NoProfile -EncodedCommand $b64\" }",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target $line }",
                       "does":  "install-time or outside-the-gate work",
                       "class":  "admin",
-                      "reason":  "sends authorized_keys"
+                      "reason":  "puts the pinned pwsh on a new box and sends authorized_keys"
                   },
                   {
                       "script":  "scripts/vps/Show-BotLog.ps1",
@@ -2865,6 +2928,33 @@
                       "does":  "locks C:\\Thornswood-Agent, downloads and checks the newest signed agent-v Release, writes agent.json, and makes, sets and starts the LocalSystem service ThornswoodDeployAgent, or puts the old program back (#5180)",
                       "class":  "admin",
                       "reason":  "ACLs and sc.exe create"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Backup.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "try { Invoke-ThornswoodNative { \u0026 scp @ssh $worldTmp \"${target}:$($Root.Replace(\u0027\\\u0027,\u0027/\u0027))/world.ps1\" } }",
+                      "does":  "uploads world.ps1, which the nightly backup reads a world in MongoDB with (#6237)",
+                      "class":  "admin",
+                      "reason":  "script a SYSTEM task runs"
+                  },
+                  {
+                      "script":  "scripts/ops/Move-World.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "Head \u0027What a move would do (nothing changes)\u0027",
+                      "does":  "says what a move of a server\u0027s world into MongoDB would do, and changes nothing (#6237)",
+                      "class":  "read-status",
+                      "reason":  "reads files, settings, logs or status only"
+                  },
+                  {
+                      "script":  "scripts/ops/Move-World.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "Head \u0027Moving\u0027",
+                      "does":  "stops a server, moves its world into its MongoDB database with the engine\u0027s checked move, rewrites its settings and starts it (#6237)",
+                      "class":  "admin",
+                      "reason":  "stops and starts a server and rewrites its settings, outside the deploy stages"
                   }
               ]
 }

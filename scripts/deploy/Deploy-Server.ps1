@@ -3,7 +3,11 @@
 
   Sends the built server up to the VPS and restarts it.
 
-  Warns first, but does not evict anybody.
+  Warns first, but does not evict anybody. The warning is said in Discord
+  too (#5784, Request-Restart.ps1): the bot posts it in #updates with the
+  time the server goes down, and the swap says when it is back. It is given
+  and waited out even when nobody is on, so somebody about to join is told.
+  -Now tells nobody, in the game or in Discord.
 
   Stopping and starting the server reads from a chair as a freeze and then
   everything carrying on, because the client holds its session across it. So
@@ -100,9 +104,10 @@
 
   FROM THE RECORD (#4069). -FromStore -FromRecord moves the live server to
   the collection revision the repository records, with nothing of One's:
-    - the load order becomes game\data\last-plugin.json's, with
-      Thornswood-Last.esp on the end, the order every table and the Last
-      plugin of this commit were built against;
+    - the load order becomes the one the box's content build of this commit
+      reads (records\load-order.json moved to the record's revision,
+      ContentPaths.ps1), with Thornswood-Last.esp on the end, the order every
+      table and the Last plugin of this commit were built against;
     - the collection's plugins that order names and the box does not hold at
       the store's size go up from the box's store of that revision
       (scripts\deploy\CollectionStore.ps1, fetched from Nexus through
@@ -300,7 +305,7 @@ function Get-StageDirectories([string]$stageRoot, [string[]]$relativePaths) {
 }
 
 # ==== thornswood live deploy warning ====
-# Shared with tests\test-deploy-gamemode-warning.ps1 and the OnlineNow harness.
+# Shared with scripts\tests\test-deploy-gamemode-warning.ps1 and the OnlineNow harness.
 # Deploy-Gamemode.ps1 builds locally and never stops the live server; this is
 # the live half of issue #520. The names come from private\online-names.json,
 # which the gamemode keeps beside online.json but outside the served folder.
@@ -428,17 +433,21 @@ function Warn-LiveRoom {
     return
   }
 
-  if ($on -le 0) {
-    if ($room.Up -eq $false) {
-      Write-Host '  the live server is not listening, so nobody is on it'
-    } else {
-      Write-Host '  nobody is online, going straight down'
-    }
+  if ($room.Up -eq $false) {
+    Write-Host '  the live server is not listening, so nobody is on it and there is no restart to say'
     return
   }
 
-  Write-Host ("  $on online$who, $Mode, giving them $Minutes " +
-              $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }))
+  # Said in Discord as well as in the game, and waited out, whoever is on
+  # (#5784): somebody about to join reads #updates, not the game. Until 11
+  # Nov 2026 an empty room went straight down and Discord heard nothing.
+  if ($on -le 0) {
+    Write-Host ("  nobody is online; saying it in Discord, then $Minutes " +
+                $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }) + ' before the stop')
+  } else {
+    Write-Host ("  $on online$who, $Mode, giving them $Minutes " +
+                $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }))
+  }
   $ask = Join-Path $Here '..\vps\Request-Restart.ps1'
   if (-not (Test-Path -LiteralPath $ask)) {
     Write-Host ''
@@ -498,7 +507,9 @@ function Warn-LiveRoom {
     while ((Get-Date) -lt $deadline) {
       Start-Sleep -Seconds 15
       $left = OnlineNow
-      if ($left -le 0) { Write-Host '  room is clear'; break }
+      # Early only once the people who were on have gone: an empty room from
+      # the start waits out the time Discord was given.
+      if ($left -le 0 -and $on -gt 0) { Write-Host '  room is clear'; break }
       $mins = [Math]::Max(0, [int]([Math]::Round(($deadline - (Get-Date)).TotalMinutes)))
       Write-Host "  $left still on, $mins min left"
     }
@@ -627,8 +638,16 @@ if (-not $noBuild -and -not (Test-Path -LiteralPath $Dist)) {
 # The gamemode's tables (#5191) are in the artifact with it, and go up with
 # it on every deploy, full or -GamemodeOnly: the gamemode reads them from the
 # gamemode-tables folder beside it as it loads, and a load without them stops.
+# They, our plugin and the Last plugin's recipe are never committed (#5191,
+# stage 4e): they are the box's content build of this commit, laid over this
+# checkout first, and the artifact holds them to it. It is the dev server's
+# build, the one every Release carries: merge-release.yml takes it, and a
+# main release is one of those promoted (#6175), so the live server runs it.
+. (Join-Path $Here '..\mods\ContentPaths.ps1')
+$laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev
+'{0,-22} {1}, built from {2}' -f 'content build', $laidBuild.Key.Substring(0, 12), $laidBuild.Commit.Substring(0, 12) | Write-Host
 $artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' `
-  -AlsoSends 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json', 'records/server-build.json'
+  -AlsoSends 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json', 'records/server-build.json' -Content dev
 '{0,-22} {1}' -f 'artifact', (Format-ThornswoodArtifact $artifact) | Write-Host
 $src = Join-Path $artifact.Folder 'game\gamemode.js'
 $tablesFrom = Join-Path $artifact.Folder 'game\gamemode-tables'
@@ -916,16 +935,21 @@ if (Test-Path -LiteralPath $rp) {
   $lastWant = Get-ThornswoodLastPluginWant (Join-Path $Here '..\..')
   $orderWire = ''
   if ($FromRecord) {
-    # FROM THE RECORD (#4069): the order last-plugin.json was built against,
-    # and the collection's plugins from the box's store of the record's
-    # revision. Worked out before anything is sent.
+    # FROM THE RECORD (#4069): the order the box's content build of this
+    # commit reads, records\load-order.json moved to the revision the record
+    # names (ContentPaths.ps1, Get-ThornswoodContentOrder, #5191), and the
+    # collection's plugins from the box's store of that revision. Worked out
+    # before anything is sent. Until 16 Nov 2026 it was game\data\last-plugin.json's
+    # order, a file the box's content build writes and git no longer keeps
+    # current: git's named revision 7's 105 plugins while revision 8 has 107.
     . (Join-Path $Here 'CollectionStore.ps1')
     $repoRoot = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
     $store = Get-ThornswoodCollectionStore -RecordPath (Join-Path $repoRoot 'records\collection-plugins.json') -Fetch { param($w, $h) Invoke-ThornswoodCollectionFetch -Work $w -Head $h -Repo $repoRoot } -Say { param($m) Write-Host $m -ForegroundColor DarkGray }
-    $lastDoc = Join-Path $repoRoot 'game\data\last-plugin.json'
-    $lastBuilt = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($lastDoc)) $lastDoc
-    $recordOrder = @(@(@($lastBuilt.loadOrder) | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -ine $ThornswoodLastPlugin }) + $ThornswoodLastPlugin)
-    if ($recordOrder.Count -lt 2) { throw "$lastDoc has no loadOrder, so there is no order to move to. Nothing was sent and the server was not touched." }
+    . (Join-Path $repoRoot 'scripts\mods\ContentPaths.ps1')
+    $contentOrder = Get-ThornswoodContentOrder -Repo $repoRoot
+    $recordOrder = @(@(@($contentOrder.Names) | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -ine $ThornswoodLastPlugin }) + $ThornswoodLastPlugin)
+    if ($recordOrder.Count -lt 2) { throw 'the records name no load order, so there is no order to move to. Nothing was sent and the server was not touched.' }
+    if ([int]$contentOrder.Revision -ne [int]$store.Revision) { throw ('the order is for revision ' + $contentOrder.Revision + ' and the store holds revision ' + $store.Revision + '. Nothing was sent and the server was not touched.') }
     if (-not $boxContent.OrderRead) { throw 'the live server did not say which load order it runs, so what the move drops cannot be held. Nothing was sent and the server was not touched.' }
     # What the move may drop is the repository's word: records\collection-dropped.json,
     # for the revision the record names, never the caller's.
@@ -964,7 +988,7 @@ if (Test-Path -LiteralPath $rp) {
     . (Join-Path $Here 'CollectionPlugins.ps1')
     Assert-ThornswoodCollectionPlugins -RecordPath (Join-Path $repoRoot 'records\collection-plugins.json') -Files $sendPlugins -Exempt $ThornswoodRepoPlugins -What 'this deploy'
     $orderWire = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($recordOrder -join "`n"))
-    Write-Host ('{0,-22} game\data\last-plugin.json''s, {1} plugins, collection revision {2}, over the live server''s {3}' -f 'load order', $recordOrder.Count, $store.Revision, @($boxContent.Order).Count) -ForegroundColor Yellow
+    Write-Host ('{0,-22} the one the content build reads, {1} plugins, collection revision {2}, over the live server''s {3}' -f 'load order', $recordOrder.Count, $store.Revision, @($boxContent.Order).Count) -ForegroundColor Yellow
   }
   if ($lastWant -and -not $FromRecord) {
     $liveOrder = @($boxContent.Order)

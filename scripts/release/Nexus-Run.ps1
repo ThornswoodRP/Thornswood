@@ -106,9 +106,24 @@ function ConvertTo-NexusRunParams($Req, $Verbs) {
     $packs = @($OwnParams | Where-Object { $own.ContainsKey($_) })
     if ($packs.Count -and $packs.Count -ne 3) { throw '-PackRoot, -Pack and -PackName go together: the folder, the files in it, and the zip''s name. Nothing was run.' }
     if ($Req.Verb -eq 'Send-NexusFile' -and -not $packs.Count) { throw 'Send-NexusFile uploads an archive zipped from files of main: give -PackRoot, -Pack and -PackName. An archive built anywhere else is uploaded from One. Nothing was run.' }
-    $fileIds = if ($params.Contains('FileId')) { @($params['FileId']).Count } else { 0 }
-    if ($params.Contains('Mod') -and $Req.Verb -eq 'New-NexusRevision' -and @($params['Mod']).Count -ne $fileIds) {
-        throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.'
+    if ($Req.Verb -eq 'New-NexusRevision') {
+        # New-NexusRevision refuses these itself, but on the runner, after every
+        # -FileId and -Add archive is downloaded with the key (#4325). Held here,
+        # before the workflow starts, as the script holds them and in its
+        # order: -Publish and -Discard take a draft that is already there, so
+        # they take none of the changes; then -Mod and -FileId pair, whichever
+        # is given.
+        $count = { param($n) if ($params.Contains($n)) { @($params[$n]).Count } else { 0 } }
+        $changes = @('Mod', 'FileId', 'DropPatch', 'Add', 'Rule', 'Remove')
+        if ($params.Contains('Publish')) {
+            $with = @(@('Discard') + $changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Publish publishes a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ($params.Contains('Discard')) {
+            $with = @($changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Discard throws away a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ((& $count 'Mod') -ne (& $count 'FileId')) { throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.' }
     }
     return [pscustomobject]@{ Params = $params; Own = $own }
 }
@@ -139,7 +154,23 @@ function Get-NexusRunTracked([string]$RepoRoot, [string]$Rel) {
     return $files
 }
 
-# The zip Send-NexusFile uploads, from files of main alone. Entries in
+# What the box's content build writes at or under $Rel, as paths from the
+# repository's root: the content plugin and the tables are never committed
+# (#5191, stage 4e), so they are packed from the build laid over the checkout
+# (nexus-run.yml lays it), held to this commit's inputs and to the sha256
+# each was laid at (Get-ThornswoodLaidBuild). It is the dev server's build,
+# the one every Release carries. Nothing for a path the build does not write.
+function Get-NexusRunLaid([string]$RepoRoot, [string]$Rel) {
+    . (Join-Path $RepoRoot 'scripts/mods/ContentPaths.ps1')
+    $built = @(Get-ThornswoodBuiltPaths -Repo $RepoRoot -NotCommitted | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') -or $Rel.StartsWith($_ + '/') })
+    if (-not $built.Count) { return @() }
+    try { $laid = Get-ThornswoodLaidBuild -Repo $RepoRoot -Server dev }
+    catch { throw ($Rel + ' is the box''s content build, which is never committed (#5191): ' + $_.Exception.Message + ' Nothing was run.') }
+    return @(@($laid.Files.Keys) | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') } | Sort-Object -CaseSensitive)
+}
+
+# The zip Send-NexusFile uploads, from files of main alone and the content
+# build laid over it. Entries in
 # ordinal order, each with the commit's time, so the same commit packs the
 # same bytes. Returns @{ Path; Entries }.
 function New-NexusRunPack([string]$RepoRoot, [string]$Root, [string[]]$Items, [string]$Name, [string]$Into, [DateTimeOffset]$When) {
@@ -148,7 +179,7 @@ function New-NexusRunPack([string]$RepoRoot, [string]$Root, [string[]]$Items, [s
     foreach ($it in $Items) {
         $it = $it.Trim()
         if (-not (Test-NexusRunPath $it)) { throw ('-Pack ' + $it + ' is not a path under -PackRoot. Nothing was run.') }
-        $got = @(Get-NexusRunTracked $RepoRoot ($Root + '/' + $it))
+        $got = @(Get-NexusRunTracked $RepoRoot ($Root + '/' + $it)) + @(Get-NexusRunLaid $RepoRoot ($Root + '/' + $it))
         if (-not $got.Count) { throw ($Root + '/' + $it + ' is no file of main. Nothing was run.') }
         foreach ($f in $got) { $entries[$f.Substring($Root.Length + 1)] = $f }
     }

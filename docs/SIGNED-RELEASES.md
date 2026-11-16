@@ -23,15 +23,27 @@ runner against local. Provenance here means "this signed file came from this com
 this runner and these records", recorded and signed, not "anyone can rebuild
 the same bytes".
 
+## Contents
+
+- [1. Where things stand today (measured 11 Oct 2026)](#1-where-things-stand-today-measured-11-oct-2026)
+- [2. Artifact types and how each is signed](#2-artifact-types-and-how-each-is-signed)
+- [3. Owners, custody, rotation, recovery, revocation](#3-owners-custody-rotation-recovery-revocation)
+- [4. Verification points](#4-verification-points)
+- [5. Migration and enforcement](#5-migration-and-enforcement)
+- [6. Tags, drafts, replacement and failed signatures](#6-tags-drafts-replacement-and-failed-signatures)
+- [7. The pilot](#7-the-pilot)
+- [8. Decisions (Patrick)](#8-decisions-patrick)
+- [9. Doing nothing, set beside the change](#9-doing-nothing-set-beside-the-change)
+
 ## 1. Where things stand today (measured 11 Oct 2026)
 
 | Layer | What it is | Where |
 | --- | --- | --- |
 | Authenticode signing | Azure Artifact Signing, account ThornswoodSigning, profile ThornswoodRelease, `signtool /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256` | `scripts\release\Sign-Artifact.ps1`, `records\signing\` |
-| What is signed | Every program of the launcher's folder (`Thornswood.exe`, which is also the setup program since #4824, and the native libraries beside it) | `Build-Launcher.ps1`, `.github/workflows/release.yml` |
+| What is signed | Every program of the launcher's folder (`Thornswood.exe`, which is also the setup program since #4824, and the native libraries beside it), and Velopack's own setup program, on GitHub's runner (#4825; rows 2 and 5 read again 12 Nov, #5857) | `.github/workflows/merge-release.yml`, `scripts\release\Sign-OnRunner.ps1`; by hand, `Build-Launcher.ps1` |
 | Publish gate | Ship refuses an unsigned or wrongly signed file | `scripts\release\Assert-PublishSigned.ps1` |
 | Launcher check | WinVerifyTrust, chain to Microsoft Identity Verification Root CA 2020 (`F40042E2...BFA2`), a "Microsoft ID Verified CS" issuer, a timestamp, the ThornswoodRelease durable identity `1.3.6.1.4.1.311.97.203948530.216998690.847558466.123546472`, Subject contains `ExpectedSigner` | `launcher\app\Signature.cs`, `Updater.cs` |
-| Checksums | release.yml writes `SHA256SUMS` for every file of the launcher's folder onto a DRAFT release; Ship downloads and refuses on mismatch. The feed names every pack, the launcher and the client runtime by sha256 and serves them at `/feed[-dev]/assets/<sha256>`; the launcher refuses an empty or mismatched hash | `.github/workflows/release.yml`, `docs\FEED.md`, `Updater.cs` |
+| Checksums | merge-release.yml writes a manifest of every file of the Release with its sha256 and a catalog over it, signed with ThornswoodRelease and held to the manifest before the Release is published; a launcher holds each package to that record (`VeloRecord.cs`). The feed names every pack, the launcher and the client runtime by sha256 and serves them at `/feed[-dev]/assets/<sha256>`; the launcher refuses an empty or mismatched hash | `.github/workflows/merge-release.yml`, `scripts\release\New-SignedManifest.ps1`, `docs\FEED.md`, `Updater.cs` |
 | Build records | `records\client-build.json` and `server-build.json` name every built file by hash and the fork commit; the feed's `release` object names id, channel, commit, branch, tag; `releases.txt` on the VPS keeps the history | `records\README.md`, `docs\FEED.md` |
 
 What is NOT covered today, which is what this issue is about:
@@ -230,7 +242,7 @@ the sha256 and keeps the sha256 check.
   logs and keeps the old version; in phase D it refuses to install and keeps
   the old version running. The pilot proves a one byte change inside the
   hashed region fails both the checksum and the signature
-  (`tests\test-sign-pilot.ps1`, `Test-SignPilot.ps1 -Verify`).
+  (`scripts\tests\test-sign-pilot.ps1`, `Test-SignPilot.ps1 -Verify`).
 
 ## 7. The pilot
 

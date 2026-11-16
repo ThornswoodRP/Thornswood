@@ -16,8 +16,12 @@
 //   - Unprotect is untouched: still an empty string on failure, never a throw,
 //     because an unreadable blob is nothing to recover and the launcher asks
 //     for the secret again;
-//   - both callers, Config.Save and Discord.Save, still catch and log, so the
-//     throw stops the write without stopping the launcher.
+//   - its callers stop the write when it throws: Discord.Save catches and
+//     logs, so the throw stops the write without stopping the launcher, and
+//     Nexus.Write (the Nexus sign in, #6244) seals the tokens as the argument
+//     to its write and turns the throw into a reason the person reads, so
+//     nothing is written. Config.Save was another until the update token
+//     went with the update feed (#5608).
 //
 // Read only.
 const fs = require('fs');
@@ -93,15 +97,11 @@ yes('an untagged string still comes back unchanged, so an old plaintext file loa
     /!stored\.StartsWith\(Tag/.test(unprotect) && /return stored;/.test(unprotect));
 
 // ------------------------------------------- what the throw reaches first --
-const save = body(read('launcher/app/Config.cs'), 'public void Save(string path)');
-yes('Config.Save protects the update token', save.indexOf('Secrets.Protect(tk)') >= 0);
-yes('and it is inside a try that logs, so the throw is a Save that did not happen',
-    save.indexOf('try') >= 0 && save.indexOf('try') < save.indexOf('Secrets.Protect(tk)') &&
-    /catch \(Exception ex\) \{ Swallow\.Note\("Config\.Save/.test(save));
-yes('and the plaintext token is put back in memory either way',
-    /finally[\s\S]*UpdateToken = tk;/.test(save));
-yes('the file is written after the protect, so nothing is written when it throws',
-    save.indexOf('Secrets.Protect(tk)') < save.indexOf('File.WriteAllBytes(path'));
+// The update token Config.Save protected went with the update feed (#5608):
+// updates come from public Releases on GitHub and need no credential.
+const cfgSrc = read('launcher/app/Config.cs');
+yes('Config keeps no update token any more, so it has nothing to protect',
+    !/UpdateToken/.test(cfgSrc) && cfgSrc.indexOf('Secrets.Protect') < 0);
 
 const dSave = body(read('launcher/app/Discord.cs'), 'static void Save(string t, string who, string pic)');
 yes('Discord.Save protects the ticket', dSave.indexOf('Secrets.Protect(t ?? "")') >= 0);
@@ -111,11 +111,21 @@ yes('and that write is inside a try that logs',
     dSave.indexOf('try') >= 0 && dSave.indexOf('try') < dSave.indexOf('Secrets.Protect(t ?? "")') &&
     /catch \(Exception ex\) \{ Swallow\.Note\("Discord\.Save"/.test(dSave));
 
+const nexus = read('launcher/app/Nexus.cs');
+const nWrite = body(nexus, 'static void Write(Kept k)');
+yes('Nexus seals with Secrets.Protect', /Func<string, string> Seal = Secrets\.Protect;/.test(nexus));
+yes('and Nexus.Write seals as the argument to the write, so a throw leaves its file alone',
+    /File\.WriteAllText\(KeptFile, Seal\(/.test(nWrite));
+yes('and that write is inside a try whose catch throws the reason on, never a plain write',
+    nWrite.indexOf('try') >= 0 && nWrite.indexOf('try') < nWrite.indexOf('Seal(') &&
+    /catch \(Exception ex\) \{ throw new ModlistStop\(/.test(nWrite) &&
+    (nWrite.match(/File\.WriteAllText/g) || []).length === 1);
+
 yes('nothing else in the launcher calls Protect',
     fs.readdirSync(path.join(ROOT, 'launcher/app'))
       .filter((n) => /\.cs$/.test(n) && n !== 'Secrets.cs')
       .filter((n) => read('launcher/app/' + n).indexOf('Secrets.Protect') >= 0)
-      .sort().join(',') === 'Config.cs,Discord.cs');
+      .sort().join(',') === 'Discord.cs,Nexus.cs');
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

@@ -30,12 +30,10 @@ namespace Thornswood
     /// published from a Release of its own once Patrick approves it (#5181),
     /// and is held to the record the merge release signed.
     ///
-    /// Fetched through the site's Release route (Velo.ReleaseFile, #5608),
-    /// which sends each file on to where GitHub keeps it, so the check asks
-    /// GitHub nothing itself and spends none of the sixty anonymous API
-    /// requests an hour. Until 9 Nov 2026 it was github.com's download
-    /// address, which GitHub stopped answering for anybody not signed in that
-    /// day, and every update was refused for want of its record.
+    /// Read from the Release on GitHub itself (GitHub.File, #5608), and kept
+    /// on disk once read, since a published Release never changes: the
+    /// launcher on the Release it already has asks GitHub nothing for its
+    /// record at the next start. Every read is held to the signature again.
     /// </summary>
     static class VeloRecord
     {
@@ -55,6 +53,8 @@ namespace Thornswood
             [JsonPropertyName("tag")] public string Tag { get; set; }
             [JsonPropertyName("version")] public string Version { get; set; }
             [JsonPropertyName("launcherVersion")] public string LauncherVersion { get; set; }
+            /// <summary>The collection revision the Release's servers run (#5767); 0 in a record from before it.</summary>
+            [JsonPropertyName("collectionRevision")] public int CollectionRevision { get; set; }
             [JsonPropertyName("parts")] public Dictionary<string, PartFile[]> Parts { get; set; }
 
             /// <summary>The file of <paramref name="part"/> called <paramref name="name"/>, or null.</summary>
@@ -120,34 +120,9 @@ namespace Thornswood
             return "build-1.3." + v.Patch;
         }
 
-        static string Download(string tag, string name)
-        {
-            return Velo.ReleaseFile(tag, name);
-        }
-
-        // Through Http.cs, the launcher's one HttpClient, with the feed's ten
-        // seconds for the answer to start and Http's own wait for each read;
-        // these are files of a few kilobytes. The packages themselves go
-        // through Velopack's own downloader.
         static byte[] Fetch(string tag, string name)
         {
-            return FetchUrl(tag, name, tag);
-        }
-
-        // From the Release <paramref name="on"/>, for the record of <paramref name="tag"/>.
-        static byte[] FetchUrl(string on, string name, string tag)
-        {
-            string url = Download(on, name);
-            using (var req = new HttpRequestMessage(HttpMethod.Get, url))
-            {
-                req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);
-                using (HttpResponseMessage r = Http.Send(req, 10000))
-                {
-                    if (!r.IsSuccessStatusCode)
-                        throw new Exception("The site, or GitHub behind it, answered HTTP " + (int)r.StatusCode + " for " + name + " of " + tag + ".");
-                    return Http.Body(r, Http.DefaultReadMs);
-                }
-            }
+            return GitHub.File(tag, name);
         }
 
         public static string Sha256(byte[] b)
@@ -229,7 +204,7 @@ namespace Thornswood
             string said;
             Manifest m;
             try { m = Get(a.Version, out said); }
-            catch (Exception ex) { return "could not be held to its release record: " + ex.Message; }
+            catch (Exception ex) { return "could not be held to its release record: " + Failure.Why("VeloRecord", ex); }
             PartFile f = m.File(PartOf("dev"), a.FileName) ?? m.File(PartOf("main"), a.FileName);
             if (f == null)
                 return "is not among the Velopack files the signed release record of " + m.Tag + " lists.";
@@ -258,6 +233,30 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The collection's Wabbajack modlist the Release <paramref name="m"/>
+        /// records (its part "modlist", #6244), written to
+        /// <paramref name="file"/> once it is held to the sha256 and size the
+        /// signed record gives it. Throws with the reason, writing nothing.
+        /// </summary>
+        public static void Modlist(Manifest m, string file)
+        {
+            const string name = "collection-modlist.wabbajack";
+            PartFile f = m.File("modlist", name);
+            if (f == null) throw new Exception("The release record of " + m.Tag + " lists no " + name + ", so this Release has no modlist to install the mods from.");
+            byte[] raw = Fetch(m.Tag, name);
+            if (raw.LongLength != f.Size || !string.Equals(Sha256(raw), f.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new Exception(name + " of " + m.Tag + " is not the one its signed release record lists.");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file)));
+            string part = file + ".part";
+            try
+            {
+                File.WriteAllBytes(part, raw);
+                File.Move(part, file, true);
+            }
+            finally { if (File.Exists(part)) File.Delete(part); }
+        }
+
+        /// <summary>
         /// The record's part that holds a channel's Velopack files: "velopack"
         /// for dev, published with the merge release, and "main" for main,
         /// held back until Patrick approves a promotion to main (#5181,
@@ -282,7 +281,7 @@ namespace Thornswood
             string name = "setup-files." + channel + ".json";
             PartFile f = m.File(PartOf(channel), name);
             if (f == null) throw new Exception("The release record of " + m.Tag + " lists no " + name + ", so the files beside the game files in the package cannot be held to a list.");
-            byte[] raw = channel == "main" ? FetchUrl(MainRelease(m.Tag), name, m.Tag) : Fetch(m.Tag, name);
+            byte[] raw = Fetch(channel == "main" ? MainRelease(m.Tag) : m.Tag, name);
             if (!string.Equals(Sha256(raw), f.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new Exception(name + " of " + m.Tag + " is not the one its signed release record lists.");
             GameList list = JsonSerializer.Deserialize(raw, VeloJson.Default.GameList);
@@ -309,11 +308,10 @@ namespace Thornswood
     /// <summary>
     /// The JSON the Velopack update reads, compiled when the launcher builds
     /// (no reflection, so it works in the native build): the release record,
-    /// the game and setup lists, and GitHub's list of Releases (VeloUpdate.cs).
+    /// the game and setup lists.
     /// </summary>
     [JsonSerializable(typeof(VeloRecord.Manifest))]
     [JsonSerializable(typeof(VeloRecord.GameList))]
-    [JsonSerializable(typeof(List<GithubRelease>))]
     internal partial class VeloJson : JsonSerializerContext
     {
     }

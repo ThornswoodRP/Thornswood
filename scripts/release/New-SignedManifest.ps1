@@ -6,7 +6,7 @@
   (tools/DeployAgent/ReleaseFetch.cs):
 
       manifest.json   { schema: 1, repo, commit, tag, version, made,
-                        [launcherVersion,]
+                        [launcherVersion,] [collectionRevision,]
                         parts: { <part>: [ { name, sha256, size } ] } }
       manifest.cat    a catalog over manifest.json alone (New-FileCatalog,
                       version 2, SHA256), the shape release.cat has over
@@ -57,6 +57,15 @@
   names are still unique across the whole manifest.
 
   Keep it ASCII.
+  collectionRevision, on a build-<...> Release: the collection revision this
+  commit's records\collection-plugins.json names, the one its servers are
+  deployed against (CollectionRevision.ps1). A launcher and the site read the
+  server's revision from the Release its channel runs (VeloRecord.cs,
+  site/lib/feed.js), so a revision bump reaches dev with the merge release
+  that carries the record and main with its promotion (#5767). Until then the
+  number was the feed's, which only a Ship writes, and since releases stopped
+  going through a Ship a bump stalled: revision 8 sat behind 7 from 8 to 11 Nov.
+
 #>
 [CmdletBinding()]
 param(
@@ -133,8 +142,10 @@ if ($ServerZip) {
 }
 
 # The parts a merge release adds file by file (#5179). The bot pass is "bot",
-# so the Discord bot is "discord".
-$addParts = @('launcher', 'game', 'velopack', 'main', 'site', 'discord', 'voice', 'after')
+# so the Discord bot is "discord". "modlist" is the collection's Wabbajack
+# modlist, records\collection-modlist.wabbajack, which the launcher installs
+# from (#6244).
+$addParts = @('launcher', 'game', 'velopack', 'main', 'site', 'discord', 'voice', 'after', 'modlist')
 $adds = [ordered]@{}
 foreach ($pair in @($Add)) {
   if ($pair -notmatch '^([a-z]+)=(.+)$') { throw "-Add $pair is not <part>=<path>" }
@@ -167,6 +178,10 @@ $m = [ordered]@{
   made    = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 }
 if ($LauncherVersion) { $m['launcherVersion'] = $LauncherVersion }
+if ($Tag -like 'build-*') {
+  . (Join-Path $PSScriptRoot 'CollectionRevision.ps1')
+  $m['collectionRevision'] = (Get-ShipRecordedCollectionRevision -RepoDir (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path).Revision
+}
 $m['parts'] = $parts
 $json = Join-Path $filesDir 'manifest.json'
 [IO.File]::WriteAllText($json, ($m | ConvertTo-Json -Depth 6 -Compress), (New-Object Text.UTF8Encoding($false)))

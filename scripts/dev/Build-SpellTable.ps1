@@ -38,6 +38,7 @@
   Exit code 1 if a name in the book has no record, if two names land on the
   same record, or if a name had to be resolved by a rule other than the first.
 #>
+#Requires -Version 7
 param(
     [string]   $Data     = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),
     [string]   $Book     = '',

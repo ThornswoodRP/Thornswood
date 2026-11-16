@@ -124,7 +124,7 @@ for (const cls in MATERIALS) {
   The bits are Skyrim's biped slots offset by thirty: bit 0 is slot 30 and bit
   31 is slot 61. Named here the way a person would name them, and the same
   names are the keys of NEEDS.wear.perPart in gamemode.js, so the two files
-  have to agree and tests\test-temp.js checks that they do.
+  have to agree and game\tests\test-temp.js checks that they do.
 
   WHAT IS DELIBERATELY LEFT OUT: amulet (35), ring (36), shield (39), tail
   (40), the decapitation slots (50 and 51) and FX01 (61). None of them is
@@ -386,7 +386,6 @@ if (process.exitCode === 1) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-WarmthTable.js',
-    builtAt: new Date().toISOString(),
     source: 'the ARMO records of ' + parsed + ' plugins in load order, and the ' +
             'KYWD records their keywords point at',
     readFrom: 'BOD2 for what it covers, KWDA for the material, DATA for the weight',

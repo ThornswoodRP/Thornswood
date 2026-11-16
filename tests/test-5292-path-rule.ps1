@@ -65,7 +65,10 @@ $pick = Get-Job $build 'pick'
 # window is compiled markup, so the window check (Check-Controls.ps1) and the
 # MSBuild check (test-498-msbuild.ps1) went; the publish took their place.
 # Since #5524 the published exe is started for real after the publish.
-$want = @('Say why there is nothing to build', 'Publish the native launcher', 'Start the native launcher', 'Build the ship root tool',
+# Since #5988 .NET goes on the work drive, its SDK from main's cache, first.
+# Since #4166 each step that runs an action has a name of its own too.
+$want = @('Say why there is nothing to build', 'Check out the code', 'Set up Node', 'Set up Python', 'Put .NET and NuGet''s packages on the work drive',
+    'Take the .NET SDK from main''s cache', 'Set up .NET', 'Publish the native launcher', 'Start the native launcher', 'Build the ship root tool',
     'Write down the tree these checks passed on')
 $have = Get-StepNames $launcher
 Yes ('the job "Launcher builds" has exactly the step that says why there is nothing to build, the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))
@@ -94,7 +97,7 @@ $runs += @([regex]::Matches($launcher, '(?m)(scripts\\release\\ShipRoot\\ShipRoo
 $runs += @([regex]::Matches($launcher, '(?m)^\s*(?:&\s*)?\.\\(scripts\\\S+\.ps1)') | ForEach-Object { $_.Groups[1].Value.Replace('\', '/') })
 $unlisted = @($runs | Where-Object { $_ -notin $reads })
 Yes ('  and every script or project the job runs is one of those (' + ($runs -join ', ') + ')') ($runs.Count -ge 4 -and -not $unlisted.Count)
-Yes 'the writing check''s harness runs in Tree checks for every change too' ($checks -match "foreach \(\`$n in 'test-check-words\.ps1', 'test-note-rules\.ps1', 'test-ship-check-words\.ps1'\)")
+Yes 'the writing check''s harness runs in Tree checks for every change too' ($checks -match "foreach \(\`$n in 'tests/test-check-words\.ps1', 'scripts/tests/test-note-rules\.ps1', 'tests/test-ship-check-words\.ps1'\)")
 Yes 'Tree checks is on Linux and always runs, once "tested" found no green pull request build' ($checks -match '(?m)^    runs-on: ubuntu-latest$' -and $checks -match "(?m)^    needs: tested\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}$")
 $code = ($checks -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
 Yes '  and none of its steps needs Windows: no Windows PowerShell, no MSBuild, no backslash path handed to node' ($code -notmatch 'shell: powershell|Find-MSBuild|\bmsbuild\b|node\s+\S*\\|Scripts\\python\.exe')

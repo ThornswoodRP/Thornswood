@@ -261,7 +261,7 @@ WHAT IT WRITES
   parent or location it had before, and the floor items it switches off,
   counted by type and by the plugin that won each, with the cells only they
   needed (#2791 reads those). tests/test-2468-last-plugin.js holds the two
-  together on every build, without the game, tests/test-2551-place-holds.js
+  together on every build, without the game, game/tests/test-2551-place-holds.js
   the place holds and tests/test-3077-floor-items.js the floor items, each
   reading the plugin's records where a machine has the game to make it from
   (tests/last-plugin-made.js).
@@ -301,9 +301,12 @@ Usage:
     python scripts/mods/Build-LastPlugin.py --verify
     python scripts/mods/Build-LastPlugin.py --data C:\\Thornswood\\Game\\Data
 
---check builds it in memory and says whether the committed recipe and manifest
-are what it builds (the recipe names the plugin's size and sha256, so it pins
-the plugin too). --verify makes the plugin from the committed recipe out of
+--check builds it in memory and says whether the committed recipe is what it
+builds, byte for byte (the recipe names the plugin's size and sha256, so it
+pins the plugin too), whether game/data/last-plugin.json says what it builds
+(compared by what it says, not as bytes), and whether the gamemode's
+HELD_BY_SERVER and RECIPES_MOVED_IN_GAME tables are what it builds; it exits
+1 when any of them is not. --verify makes the plugin from the committed recipe out of
 --data, reads the load order with it at its end and checks, record by record,
 that no cut actor and no floor item is left able to show and no cut quest is
 left able to start, and lists the gate, door and arrival talk with what stops
@@ -701,8 +704,21 @@ def vmad_objects(tree):
 # plugin in the catalogue's order overrides any of them (read 16 Oct). This
 # plugin carries each winning record without its lock and without its script,
 # so the gates load unlocked. A claimed gate is still locked by the property
-# block's own lock script (#615), which never read the record's lock.
-GATES = (('skyrim.esm', 0x01B1F1), ('skyrim.esm', 0x042284), ('skyrim.esm', 0x042286))
+# block's own lock script (#615), which never read the record's lock. The
+# list is the policy's gatesUnlocked, which scripts/dev/Build-DoorTable.py
+# reads too, so the door table says the gates are open from the list itself
+# and not from this plugin, which it is built before (#5191).
+def policy_gates(policy):
+    """The policy's gatesUnlocked as (plugin, form id) pairs, plugin lower case."""
+    out = []
+    for desc in (policy.get('gatesUnlocked') or {}).get('gates', []):
+        fid, _, plug = str(desc).partition(':')
+        out.append((plug.lower(), int(fid, 16)))
+    return tuple(out)
+
+
+with open(POLICY, encoding='utf-8') as _policy:
+    GATES = policy_gates(json.load(_policy))
 
 # What a gate's copy keeps, and which of those hold a form id in their first
 # four bytes. Anything else on the record stops the build.

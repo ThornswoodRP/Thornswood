@@ -34,7 +34,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -124,12 +123,6 @@ function jpg(w, h, turn) {
   return Buffer.concat(parts);
 }
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(method, where, headers, body) {
@@ -165,18 +158,19 @@ const pendingOf = (name) => (readJson('gallery-pending.json') || []).find((x) =>
 const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name === name);
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', (d) => { out += d; });
   try {
-    for (let i = 0; i < 100 && out.indexOf('listening on ') < 0 && srv.exitCode === null; i++) await wait(50);
-    if (out.indexOf('listening on ') < 0) throw new Error('the scratch site never came up:\n' + out);
+    for (let i = 0; i < 100 && !siteFiles.saidPort(out) && srv.exitCode === null; i++) await wait(50);
+    if (!siteFiles.saidPort(out)) throw new Error('the scratch site never came up:\n' + out);
+    PORT = siteFiles.saidPort(out);
 
     // ---- a picture, sent from the launcher ----------------------------------
     let r = await submit(MEMBER_ID, 'Shot one.png', png(2000, 1000), 'image/png');

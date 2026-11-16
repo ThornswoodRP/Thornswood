@@ -39,7 +39,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -89,12 +88,6 @@ const gameDir = path.join(dir, 'game');
 const PRIV = path.join(gameDir, 'private');
 fs.mkdirSync(PRIV, { recursive: true });
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 function request(port, method, where, headers, body) {
   return new Promise((ok) => {
     const data = body === undefined ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
@@ -112,39 +105,6 @@ function request(port, method, where, headers, body) {
     });
     r.on('error', () => ok({ status: 0, j: null }));
     r.end(data);
-  });
-}
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
   });
 }
 /* The hub's sign in cookie, made the way the site's Discord callback makes it. */
@@ -225,13 +185,13 @@ async function until(cond, ms) {
 const modlog = () => { try { return fs.readFileSync(path.join(gameDir, 'for-bot', 'moderation.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)); } catch (e) { return []; } };
 
 (async function main() {
-  const port = await freePort();
+  let port = 0;
   const site = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   try {
-    yes('the scratch site starts', await listening(site, port).then(() => true));
+    yes('the scratch site starts', await siteFiles.listening(site).then((r) => (port = r.port, r)).then(() => true));
     const K = { 'X-Thornswood-Key': KEY };
     const game = (what, body, headers) => request(port, 'POST', '/api/staff/game/' + what, headers === undefined ? K : headers, body);
     const allowed = () => request(port, 'GET', '/api/allowed', K);
@@ -408,7 +368,7 @@ const modlog = () => { try { return fs.readFileSync(path.join(gameDir, 'for-bot'
       return null;
     }
     const escM = /var esc = function \(s\) \{[\s\S]*?\n\};/.exec(page);
-    const fns = ['banUntil', 'byLine', 'charName', 'charLine', 'linkedNotes', 'lengthPick',
+    const fns = ['banUntil', 'byLine', 'charName', 'charLine', 'pcLine', 'linkedNotes', 'lengthPick',
                  'linkedControls', 'looseBans'].map(grab);
     yes('the page has a Notes line and its controls', !!escM && fns.every(Boolean));
     if (escM && fns.every(Boolean)) {

@@ -224,8 +224,7 @@ namespace Thornswood
             // parked one stayed on the disk. This run writes the files into
             // the folder that is already there.
             string ownGame = Path.Combine(Root, "Game");
-            string madeRecord = Path.Combine(ProfileDir, "OwnGame", "files.txt");
-            madeOwn = Directory.Exists(ownGame) && File.Exists(madeRecord);
+            madeOwn = InstallPlace.MadeOwn(Root);
             ownFirst = choice.MakeOwnGame && !madeOwn;
 
             if (madeOwn)
@@ -279,7 +278,7 @@ namespace Thornswood
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
                     Say("");
-                    Say("  It would not move: " + e.Message);
+                    Say("  It would not move: " + Failure.Say("InstallSteps, moving it aside", e));
                     Say("  Close Skyrim, Vortex and the launcher, then run this again.");
                     throw Die("The old Game folder is in the way and the launcher will read it instead.");
                 }
@@ -306,27 +305,19 @@ namespace Thornswood
             // ------------------------------------------------- space
             // The launcher, Thornswood's own content and the script extender,
             // and nothing else: the fifteen gigabytes of Bethesda archives are
-            // already on the disk and stay where they are. The window says the
-            // same number (InstallPlace.Needed) before Install is pressed.
-            long needGB = InstallPlace.Needed / 1073741824L;
-            string dl = DriveName(Root);
-            double freeGB = FreeGB(Root);
+            // already on the disk and stay where they are. The drives and the
+            // room each needs are InstallPlace.Rooms, the rule the window's
+            // line says and its Install button refuses by, so this never stops
+            // what the window let through (#4681). An unreadable drive stops
+            // here with its reason, since this is about to write to it.
+            List<InstallPlace.Room> rooms = InstallPlace.Rooms(InstallPlace.DriveOf(Root), InstallPlace.DriveOf(steamGame), !ownFirst && !madeOwn);
+            Func<string, long> freeOn = d => new DriveInfo(d).AvailableFreeSpace;
             Say("  Installing to " + Root);
-            Say("  " + Gb1(freeGB) + " GB free on " + dl);
-            if (freeGB < needGB) throw Die("You need about " + needGB + " GB free on " + dl + ". Close this, open Thornswood again and pick a different drive.");
-            if (!ownFirst && !madeOwn)
-            {
-                // The files land on whichever drive Steam keeps Skyrim on,
-                // which is not necessarily the one just checked. With the own
-                // folder chosen they land under Root, which is.
-                string sd = DriveName(steamGame);
-                if (sd.Length > 0 && !string.Equals(sd, dl, StringComparison.OrdinalIgnoreCase))
-                {
-                    double sf = FreeGB(steamGame);
-                    Say("  " + Gb1(sf) + " GB free on " + sd + ", where Steam keeps Skyrim");
-                    if (sf < 3) throw Die("Only " + Gb1(sf) + " GB free on " + sd + ", and Thornswood's own content needs about 3 GB there.");
-                }
-            }
+            foreach (InstallPlace.Room r in rooms)
+                Say("  " + InstallPlace.Gb(freeOn(r.Drive)) + " free on " + InstallPlace.Letter(r.Drive) + (r.Steam ? ", where Steam keeps Skyrim" : ""));
+            InstallPlace.Room shortOn;
+            string refused = InstallPlace.Short(rooms, freeOn, out shortOn);
+            if (refused != null) throw Die(refused + " Close this and open Thornswood again to choose again.");
 
             // ------------------------------------------------- the base game
             // Copying Bethesda's files into the Steam folder they are already
@@ -339,7 +330,6 @@ namespace Thornswood
 
             // ------------------------------------------------- the files
             Head("Installing the mods");
-            Say("  Several thousand files, a few minutes.");
             List<string> files = PayloadFiles(payload);
             RecordIntoGame(files);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
@@ -432,6 +422,10 @@ namespace Thornswood
         {
             long total = 0;
             foreach (string rel in files) total += new FileInfo(Path.Combine(payload, rel)).Length;
+            // What is about to be copied, counted in the package itself, so it
+            // is always this build's and never a figure typed in for an older
+            // one (#4538).
+            Say(string.Format(CultureInfo.InvariantCulture, "  {0:n0} files, {1:n1} MB", files.Count, total / 1048576.0));
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
@@ -446,7 +440,7 @@ namespace Thornswood
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + e.Message + "). " +
+                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
                               "Check the disk has room and nothing has those files open, then run this again.");
                 }
                 done += new FileInfo(from).Length;
@@ -564,22 +558,23 @@ namespace Thornswood
         /// Thornswood's own Skyrim folder, as the window's card left it. The
         /// launcher makes the folder itself (OwnGame.Make) once Vortex has
         /// deployed, so all this does is answer its question in advance and
-        /// name Vortex's folder. The same check as the launcher's
-        /// OwnGame.PointAt: a Skyrim, with Vortex's record in it. Anything
-        /// else is said and left out, never a stop, because the launcher's
-        /// own Settings button can still set it.
+        /// name Vortex's folder. The tick is always written, ticked or not:
+        /// an absent MakeOwnGame reads as ticked (Config.MakeOwnGame), so the
+        /// box left unticked has to say so. Vortex's folder gets the same
+        /// check as the launcher's OwnGame.PointAt: a Skyrim, with Vortex's
+        /// record in it. Anything else is said and left out, never a stop,
+        /// because the launcher's own Settings button can still set it.
         /// </summary>
         Dictionary<string, JsonNode> OwnFolderCard()
         {
             var own = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
             string vortex = choice.VortexGame ?? "";
-            if (!choice.MakeOwnGame && vortex.Length == 0) return own;
             Head("Thornswood's own Skyrim folder");
+            own["MakeOwnGame"] = JsonValue.Create(choice.MakeOwnGame);
             if (choice.MakeOwnGame)
-            {
-                own["MakeOwnGame"] = JsonValue.Create(true);
                 Say("  On. The launcher makes it by itself once Vortex has deployed the Thornswood collection.");
-            }
+            else
+                Say("  Off. The launcher asks before it makes it.");
             if (vortex.Length > 0)
             {
                 string vg = vortex.Trim().Trim('"').Trim().TrimEnd('\\');
@@ -699,7 +694,7 @@ namespace Thornswood
             catch (Exception e) when (e is UnauthorizedAccessException || e is IOException || e is InvalidOperationException ||
                                       e is System.Security.Principal.IdentityNotMappedException || e is PlatformNotSupportedException)
             {
-                Say("  config.json could not be kept to this account only: " + e.Message);
+                Say("  config.json could not be kept to this account only: " + Failure.Say("InstallSteps, config.json's rights", e, "config.json"));
             }
         }
 
@@ -757,6 +752,13 @@ namespace Thornswood
             // versions)", Nexus 32444, and skse is deployed by Vortex into the
             // game root the same way.
             var fromCollection = new HashSet<string>(StringComparer.Ordinal) { "Script Extender", "Address library" };
+            // The load order too, until the launcher has made its own folder
+            // (#4680). With Root\Game not made yet, the plugin list in
+            // AppData is the one Vortex writes when it deploys the collection,
+            // which is the next step; on a PC where Skyrim and Vortex never
+            // ran there is none yet, and that is no broken install. Once the
+            // own folder is made, Vortex has deployed, so a missing list is.
+            if (!madeOwn) fromCollection.Add("Load order");
             Bad = 0;
             Later = 0;
             foreach (KeyValuePair<string, bool> c in checks)
@@ -799,7 +801,11 @@ namespace Thornswood
             if (choice.MakeOwnGame)
             {
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
-                Say("Skyrim folder by itself and restarts.");
+                Say("Skyrim folder by itself, then makes the rest from your game:");
+                Say("Thornswood-Last.esp, the plugin order, and the animation and body");
+                Say("files, which Pandora and BodySlide build in their own windows.");
+                Say("Then it takes a newer launcher if there is one and restarts once.");
+                Say("Nothing needs a press of Fix.");
             }
             if (ownFirst || madeOwn) Say("Nothing was written into your Steam copy of Skyrim.");
             if (madeOwn) Say("Thornswood's own folder was updated in place.");
@@ -808,21 +814,6 @@ namespace Thornswood
         }
 
         // ---------------------------------------------------------------- helpers
-
-        /// <summary>"D:" for a path on D:, as the script's Split-Path -Qualifier said it.</summary>
-        static string DriveName(string path)
-        {
-            string r = Path.GetPathRoot(Path.GetFullPath(path)) ?? "";
-            return r.Length > 1 ? r.TrimEnd('\\') : r;
-        }
-
-        static double FreeGB(string path)
-        {
-            string r = Path.GetPathRoot(Path.GetFullPath(path));
-            return Math.Round(new DriveInfo(r).AvailableFreeSpace / 1073741824.0, 1);
-        }
-
-        static string Gb1(double gb) { return gb.ToString("0.0", CultureInfo.InvariantCulture); }
 
         // How many names a file has, asked with a handle that may read the
         // file's attributes and nothing else, as OwnGame.Links asks it

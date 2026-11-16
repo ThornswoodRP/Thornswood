@@ -30,6 +30,10 @@ public sealed class Config
     [JsonPropertyName("adminState")] public string AdminState { get; set; } = @"C:\Thornswood-Admin\state";
     /// <summary>The agent's own folder: the program, agent.json, logs, work and state.</summary>
     [JsonPropertyName("home")] public string Home { get; set; } = @"C:\Thornswood-Agent";
+    /// <summary>The box's store of each collection revision's plugins
+    /// (scripts/deploy/CollectionStore.ps1), where a plugin a Release's load
+    /// order adds is taken from (ServerOrder, #6209).</summary>
+    [JsonPropertyName("collectionStore")] public string CollectionStore { get; set; } = @"C:\Thornswood-Deploys\collection";
     [JsonPropertyName("pollSeconds")] public int PollSeconds { get; set; } = 60;
     [JsonPropertyName("updateMinutes")] public int UpdateMinutes { get; set; } = 15;
     [JsonPropertyName("environments")] public Dictionary<string, EnvConfig> Environments { get; set; } = new();
@@ -52,6 +56,7 @@ public sealed class Config
         // ServerReadyWait.ps1: the slower of the measured starts (dev, 113 s)
         // and half again, the wait every swap gives a started server (#1938).
         StartSeconds = 170,
+        AnnounceSeconds = 60,
     };
 
     /// <summary>The site (#5190): one app on the box, run by the scheduled task
@@ -68,6 +73,19 @@ public sealed class Config
         Watch = @"C:\Thornswood-Watch",
         // Deploy-Docs.ps1's -Wait.
         WaitSeconds = 30,
+    };
+
+    /// <summary>The content build (#5191, stage 3): a merge whose content
+    /// inputs have no build yet makes a Deployment to "Content", and the agent
+    /// has the gate's Build-Content verb build it on this box, then puts it on
+    /// a draft Release for the merge release to take (Patrick's B on
+    /// q-5191-box-build-upload, 12 Nov 2026). Root is where Build-Content
+    /// keeps its builds (scripts/mods/Build-ContentOnBox.ps1 -Cache).</summary>
+    public static EnvConfig DefaultContent() => new()
+    {
+        Kind = ContentBuild.Kind,
+        GitHubEnvironment = "Content",
+        Root = @"C:\Thornswood-ContentBuilds",
     };
 
     /// <summary>The Discord bot (#5187): the Windows service ThornswoodBot that
@@ -129,6 +147,7 @@ public sealed class Config
         "dev" => DefaultDev(),
         AppKinds.Site => DefaultSite(),
         AppKinds.Discord => DefaultDiscord(),
+        ContentBuild.Kind => DefaultContent(),
         "main" => DefaultMain(),
         _ => new EnvConfig(),
     };
@@ -150,6 +169,8 @@ public sealed class Config
         Task = "Thornswood Server",
         Watch = @"C:\Thornswood-Watch",
         StartSeconds = 170,
+        // Five minutes, Request-Restart.ps1's own default countdown (#5784).
+        AnnounceSeconds = 300,
         Approved = true,
     };
 
@@ -198,9 +219,9 @@ public sealed class Config
         if (Environments.Count == 0) throw new ConfigException("no environment is named, so there is nothing to look after");
         foreach (var (name, e) in Environments)
         {
-            // Dev, the site, the Discord bot, and the live server once Patrick
-            // approves (#5181).
-            if (name is not ("dev" or "main" or AppKinds.Site or AppKinds.Discord)) throw new ConfigException($"environment \"{name}\": this agent applies dev, main, site and discord only so far (#5180, #5181, #5190, #5187)");
+            // Dev, the site, the Discord bot, the live server once Patrick
+            // approves (#5181), and the content build (#5191).
+            if (name is not ("dev" or "main" or AppKinds.Site or AppKinds.Discord or ContentBuild.Kind)) throw new ConfigException($"environment \"{name}\": this agent applies dev, main, site, discord and content only so far (#5180, #5181, #5190, #5187, #5191)");
             if (name != "main" && e.GitHubEnvironment is "" or "Main")
                 throw new ConfigException($"environment {name}: githubEnvironment \"{e.GitHubEnvironment}\" must be named, and not Main, whose Deployments wait on Patrick's approval (#5181)");
             if (name == "main")
@@ -213,6 +234,7 @@ public sealed class Config
             }
             else if (e.Approved) throw new ConfigException($"environment {name}: only main is held to an approval");
             if (e.Root == "" || !(Path.IsPathRooted(e.Root) || e.Root.Contains(@":\"))) throw new ConfigException($"environment {name}: root \"{e.Root}\" is not a full path");
+            if (e.Kind == ContentBuild.Kind) continue;
             if (e.Kind != EnvConfig.ServerKind)
             {
                 if (e.Kind == AppKinds.Site && (e.Health == "" || e.Task == "")) throw new ConfigException($"environment {name}: the site needs its health address and its task");
@@ -230,6 +252,8 @@ public sealed class Config
                 if (v.WaitSeconds < 10) throw new ConfigException($"environment {name}: voice waitSeconds must be 10 or more");
             }
             if (e.LoadSeconds < 10 || e.TurnSeconds < 10 || e.StartSeconds < 10) throw new ConfigException($"environment {name}: loadSeconds, turnSeconds and startSeconds must be 10 or more");
+            // A restart is said before it happens (#5784), so the notice is never written away.
+            if (e.AnnounceSeconds < 60) throw new ConfigException($"environment {name}: announceSeconds must be 60 or more, so a restart is said in Discord and in the game before the server stops");
             if (e.BotPassRoot != "")
             {
                 if (!(Path.IsPathRooted(e.BotPassRoot) || e.BotPassRoot.Contains(@":\"))) throw new ConfigException($"environment {name}: botPassRoot \"{e.BotPassRoot}\" is not a full path");
@@ -258,8 +282,8 @@ public sealed class Config
 public sealed class EnvConfig
 {
     public const string ServerKind = "server";
-    /// <summary>What it is: a game server ("server"), the site ("site") or
-    /// the Discord bot ("discord"). Set by the environment's name; agent.json
+    /// <summary>What it is: a game server ("server"), the site ("site"),
+    /// the Discord bot ("discord") or the content build ("content"). Set by the environment's name; agent.json
     /// does not change it.</summary>
     public string Kind { get; set; } = ServerKind;
     /// <summary>A server's voice service, which goes in with its Deployments:
@@ -320,6 +344,16 @@ public sealed class EnvConfig
     /// <summary>How long a started server has to answer on both its ports
     /// before a swap puts the old build back.</summary>
     public int StartSeconds { get; set; } = 170;
+    /// <summary>How long before a server build swap stops the server the
+    /// restart is announced (#5784): in Discord through the bot
+    /// (RestartNotice) and in the game by a notice countdown (restart.json).
+    /// 300 for main, 60 for dev; agent.json may lengthen it, never take it
+    /// under 60.</summary>
+    public int AnnounceSeconds { get; set; } = 60;
+    /// <summary>The box's game archive store (OnBox.ps1,
+    /// $ThornswoodGameArchiveStore): the string tables Thornswood-Last.esp
+    /// is made with on a server (#6175, ServerPlugins).</summary>
+    public string GameData { get; set; } = @"C:\Thornswood-GameData";
 
     /// <summary>Lays agent.json's fields for this environment over it. voice
     /// is the voice service a "voice" entry starts from (DefaultVoiceFor).</summary>
@@ -343,6 +377,8 @@ public sealed class EnvConfig
         Task = S("task", Task);
         Watch = S("watch", Watch);
         StartSeconds = I("startSeconds", StartSeconds);
+        AnnounceSeconds = I("announceSeconds", AnnounceSeconds);
+        GameData = S("gameData", GameData);
         Service = S("service", Service);
         WaitSeconds = I("waitSeconds", WaitSeconds);
         LogDir = S("logDir", LogDir);

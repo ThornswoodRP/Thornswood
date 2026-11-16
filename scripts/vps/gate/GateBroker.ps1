@@ -17,13 +17,20 @@
 
     1. brings its own checkout, C:\Thornswood-Gate\repo, to the tip of
        main on GitHub, read with a key that may only read the repository
-       (a deploy key). What runs is always main as it is now: a verb cannot
-       name a branch, a commit or a file;
+       (a deploy key). What runs is main as it is now, or for a live verb
+       the commit of main Patrick gave his word for: a verb cannot name a
+       branch, a file, or a commit that is not on main;
     2. runs the verb's script from that checkout with PowerShell 7, with the
        verb's fixed words and the parameters the line gave, each held to its
-       rule. A live verb (verbs.json "build") runs only when that tip is
-       the exact commit the line named with -Build, which only ever holds
-       it to main's tip, never runs another commit. The script reaches the
+       rule. A live verb (verbs.json "build") runs only from the exact
+       commit the line named with -Build, the build on Patrick's live Main
+       card. When main has moved past it since he answered, the checkout
+       goes to that commit, once it is shown to be on main, and the verb
+       runs from there, held to that commit's own verbs.json; a commit that
+       is not on main is refused (Ops #379: the merge queue moved main
+       between his answer and the run, twice on 15 Nov, and his yes could
+       never run). It never runs a commit he did not name. The script
+       reaches the
        box the way it does from One, as
        Administrator over ssh, here over loopback with the gate's own key
        (from="127.0.0.1", thornswood-gate), because the deploy scripts'
@@ -214,6 +221,30 @@ function Update-Checkout {
     return ($o.Out -join '')
 }
 
+# The checkout moved to the commit of main a live line named, when main has
+# moved past it since Patrick answered (Ops #379). The commit must be on main:
+# main's last 300 commits are fetched and the named one must be among their
+# ancestors, or nothing moves. Returns the commit checked out, or '' with the
+# reason sent.
+function Use-NamedBuild([string]$Build) {
+    $git = [string]$Cfg.git
+    $c = Invoke-Child $git @('-C', $Repo, 'fetch', '--quiet', '--deepen=300', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main') $Root 10
+    if ($c -ne 0) { Send ('| git fetch ended ' + $c + ', so it is not known whether ' + $Build + ' is on main'); return '' }
+    $on = Invoke-Short $git @('-C', $Repo, 'merge-base', '--is-ancestor', $Build, 'refs/remotes/origin/main')
+    if ($on.Code -ne 0) { Send ('| ' + $Build + ' is not one of main''s last 300 commits'); return '' }
+    foreach ($step in @(
+        @('-C', $Repo, 'checkout', '--quiet', '--force', '--detach', $Build),
+        @('-C', $Repo, 'clean', '-ffdxq'),
+        @('-C', $Repo, 'submodule', 'sync', '--quiet'),
+        @('-C', $Repo, 'submodule', 'update', '--checkout', '--force', '--depth', '1'))) {
+        $c = Invoke-Child $git $step $Root 10
+        if ($c -ne 0) { Send ('| git ' + $step[2] + ' ended ' + $c + ' on ' + $Build); return '' }
+    }
+    $o = Invoke-Short $git @('-C', $Repo, 'rev-parse', 'HEAD')
+    if ($o.Code -ne 0 -or ($o.Out -join '') -cne $Build) { return '' }
+    return $Build
+}
+
 # A file the verb wrote, in pieces small enough for one line each.
 function Send-File([string]$Path, [string]$Name) {
     $bytes = [IO.File]::ReadAllBytes($Path)
@@ -275,9 +306,21 @@ function Invoke-Request($Pipe) {
     try { $req = Test-ThornswoodGateRequest -Line $line -Verbs (Read-ThornswoodGateVerbs $verbsAt) }
     catch { $req = [pscustomobject]@{ Ok = $false; Why = ('main''s verbs.json could not be read: ' + $_.Exception.Message + ' Nothing was run.') } }
     if (-not $req.Ok) { Send ('@REFUSED ' + $req.Why); Send '@END 64'; Log ('END ' + $id + ' 64 REFUSED [' + $shown + '] ' + $req.Why); return }
-    # A live verb runs only on the build it was named for (GateRules.ps1,
-    # Build): a merge that landed after Patrick gave his word is not that build.
-    if ($req.Build -and $req.Build -cne $commit) { Send ('@REFUSED main is at ' + $commit + ' now, not ' + $req.Build + ', the build this run was named for. Nothing was run.'); Send '@END 64'; Log ('END ' + $id + ' 64 main moved past the named build ' + $req.Build); return }
+    # A live verb runs only from the build it was named for (GateRules.ps1,
+    # Build). A merge that landed after Patrick gave his word is not that
+    # build, so when main has moved on, the checkout goes back to the named
+    # commit, once it is shown to be on main, and the line is held again to
+    # that commit's own verbs.json (Ops #379).
+    if ($req.Build -and $req.Build -cne $commit) {
+        Send ('| main is at ' + $commit + ' now; this live line runs from ' + $req.Build + ', the build it was named for')
+        if (-not (Use-NamedBuild $req.Build)) { Send ('@REFUSED ' + $req.Build + ', the build this run was named for, is not a commit of main that could be checked out. Nothing was run.'); Send '@END 64'; Log ('END ' + $id + ' 64 named build ' + $req.Build + ' not on main'); return }
+        $commit = $req.Build
+        try { $req = Test-ThornswoodGateRequest -Line $line -Verbs (Read-ThornswoodGateVerbs $verbsAt) }
+        catch { $req = [pscustomobject]@{ Ok = $false; Why = ('verbs.json at ' + $commit + ' could not be read: ' + $_.Exception.Message + ' Nothing was run.') } }
+        if (-not $req.Ok) { Send ('@REFUSED ' + $req.Why); Send '@END 64'; Log ('END ' + $id + ' 64 REFUSED at the named build [' + $shown + '] ' + $req.Why); return }
+        if ($req.Build -cne $commit) { Send ('@REFUSED the line at ' + $commit + ' is not a live line for that build. Nothing was run.'); Send '@END 64'; Log ('END ' + $id + ' 64 not live at the named build'); return }
+        Send ('| main at ' + $commit + ', the named build')
+    }
 
     $script = Join-Path $Repo ($req.Script.Replace('/', '\'))
     if (-not (Test-Path -LiteralPath $script)) { Send ('@REFUSED main has no ' + $req.Script + ' now. Nothing was run.'); Send '@END 64'; Log ('END ' + $id + ' 64 no script'); return }

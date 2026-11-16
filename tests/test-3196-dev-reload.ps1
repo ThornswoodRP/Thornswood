@@ -31,7 +31,8 @@
     - a load that crosses a roll of server.log is still read
     - the stand-in reads gamemode.js's bytes and write time from one open
       file, as the engine loads it, so a replace landing between two reads
-      is never logged as a load of the old blob (#5405)
+      is never logged as a load of the old blob (#5405); on Windows, which
+      refuses a replace of an open file, the replace lands as it closes
     - it does not reload, and touches nothing, for a run that sends a plugin,
       changes a setting, meets an engine that cannot say how a load went, a
       server that is not running, or a gamemode loaded from somewhere else
@@ -39,9 +40,9 @@
       with the server never stopped
     - an engine that loads neither leaves the old files on disk and in .prev,
       and says RELOAD FAILED, for the put-back swap
-    - Deploy-DevGamemode.ps1 reloads only when neither -PutBack nor -Restart
-      is given, before the warning, and restarts with the put-back after
-      RELOAD FAILED
+    - Deploy-DevGamemode.ps1 reloads only when none of -PutBack, -Restart
+      and -OrderOnly is given, before the warning, and restarts with the
+      put-back after RELOAD FAILED
     - the gamemode's tables (#5191): the deploy's tree id is git's; a run
       that changes only the tables puts the folder in whole, the gamemode
       again, and waits for the server to say it loaded that tree, keeping
@@ -110,17 +111,32 @@ const has = (m) => fs.existsSync(path.join(root, m));
 function say(l) { fs.appendFileSync(log, '[' + new Date().toISOString() + '] ' + l + '\n'); }
 let last = null, loads = 0, failed = false;
 // .stub-replace-mid-read (#5405): once the server has started, the next read
-// of gamemode.js's bytes is followed at once by .stub-next.js renamed over
-// it, so a deploy's replace lands between the read and the look at the file,
-// as it did in run 41533074640.
+// of gamemode.js's bytes is followed by .stub-next.js renamed over it, so a
+// deploy's replace lands between the read and the look at the file, as it
+// did in run 41533074640. Windows refuses a rename over a file this process
+// holds open (EPERM, measured in #5718), as it would refuse the deploy's
+// File.Replace, so there the replace lands as the stand-in closes the file:
+// the first moment Windows lets one land after the read.
+let replaceAtClose = false;
+function replaceNow() {
+  // What the rename threw goes where the case reads it and prints it: thrown
+  // inside load(), its catch hid why the case failed on Windows.
+  try { fs.renameSync(path.join(root, '.stub-next.js'), gm); }
+  catch (e) { fs.writeFileSync(path.join(root, '.stub-replace-error'), String(e.code) + ': ' + e.message); }
+}
 const readFile = fs.readFileSync;
 fs.readFileSync = function (p, ...rest) {
   const out = readFile.call(fs, p, ...rest);
   if (loads > 0 && (p === gm || typeof p === 'number') && has('.stub-replace-mid-read')) {
     fs.unlinkSync(path.join(root, '.stub-replace-mid-read'));
-    fs.renameSync(path.join(root, '.stub-next.js'), gm);
+    if (typeof p === 'number' && process.platform === 'win32') replaceAtClose = true; else replaceNow();
   }
   return out;
+};
+const closeFile = fs.closeSync;
+fs.closeSync = function (fd) {
+  closeFile.call(fs, fd);
+  if (replaceAtClose) { replaceAtClose = false; replaceNow(); }
 };
 // The tables folder as the gamemode names it (game/gamemode.js, tableFolder).
 function tables() {
@@ -211,6 +227,18 @@ function New-Server([hashtable]$send, [string[]]$marks = @(), [string]$engineSay
   $null = New-Item -ItemType Directory -Path (Join-Path $root 'gamemode-tables') -Force
   foreach ($k in $oldTables.Keys) { [IO.File]::WriteAllText((Join-Path (Join-Path $root 'gamemode-tables') $k), $oldTables[$k]) }
   if ($running) { [IO.File]::WriteAllText((Join-Path $root '.stub-udp'), '7787') }
+  # The running files went in at an earlier deploy, as on the box, where a
+  # run's files reach the stage by scp, written as they arrive (#5673). Left
+  # with the time they were written here, the running gamemode.js and the
+  # staged one were written milliseconds apart, and a file's write time comes
+  # from a clock that moves in steps (about 15.6 ms on Windows, a scheduler
+  # tick on Linux), so the two often had the same time. A run that sends the
+  # same gamemode.js with new tables then put in a file the stand-in could not
+  # tell from the one it had loaded, same bytes and same time, so it never
+  # loaded the new tables, and the case waited out its 30 seconds and put
+  # them back.
+  $before = (Get-Date).ToUniversalTime().AddHours(-1)
+  foreach ($f in @(Get-ChildItem -LiteralPath $root -File -Force -Recurse)) { $f.LastWriteTimeUtc = $before }
   foreach ($m in $marks) { [IO.File]::WriteAllText((Join-Path $root $m), '') }
   $stamp = '20261022-' + (100000 + $script:case)
   $stage = Join-Path $root ('.stage-' + $stamp)
@@ -293,7 +321,9 @@ try {
   $until = (Get-Date).AddSeconds(10)
   while ((Get-Date) -lt $until -and -not (Logs $srv).Contains("git blob $nextBlob")) { Start-Sleep -Milliseconds 100 }
   $said = @((Logs $srv) -split "`n" | Where-Object { $_ -match 'gamemode\.js is git blob ([0-9a-f]{40})' } | ForEach-Object { [regex]::Match($_, 'git blob ([0-9a-f]{40})').Groups[1].Value })
-  Yes ('a gamemode.js replaced while the stand-in reads it is loaded as what it read: the old once at the start, then the new (' + ($said -join ', ') + ')') (
+  $replaceError = Join-Path $srv.Root '.stub-replace-error'
+  $why = $(if (Test-Path -LiteralPath $replaceError) { '; the stand-in''s replace threw ' + [IO.File]::ReadAllText($replaceError) } else { '' })
+  Yes ('a gamemode.js replaced while the stand-in reads it is loaded as what it read: the old once at the start, then the new (' + ($said -join ', ') + $why + ')') (
     -not (Test-Path -LiteralPath (Join-Path $srv.Root '.stub-replace-mid-read')) -and ($said -join ',') -eq ($runBlob + ',' + $nextBlob))
   Stop-Server $srv
 
@@ -375,6 +405,10 @@ try {
   $srv = New-Server ([ordered]@{ 'gamemode.js' = $oldGm; 'thornswood-build.json' = '{"commit":"tables"}'; 'gamemode-tables/KEPT.json' = $oldTables['KEPT.json']; 'gamemode-tables/NEW_ONE.json' = "{`n`"n`":2`n}`n" })
   $oldTree = Get-ThornswoodTablesTree (Join-Path $srv.Root 'gamemode-tables')
   $newTree = Get-ThornswoodTablesTree (Join-Path $srv.Stage 'gamemode-tables')
+  $runAt = (Get-Item -LiteralPath (Join-Path $srv.Root 'gamemode.js')).LastWriteTimeUtc
+  $stagedAt = (Get-Item -LiteralPath (Join-Path $srv.Stage 'gamemode.js')).LastWriteTimeUtc
+  Yes ('a tables-only run sends the same gamemode.js, written after the running one, as scp writes it on the box (' + $runAt.ToString('o') + ', ' + $stagedAt.ToString('o') + ')') (
+    (Read-At $srv 'gamemode.js') -eq [IO.File]::ReadAllText((Join-Path $srv.Stage 'gamemode.js')) -and $stagedAt -gt $runAt)
   $out = Invoke-Reload $srv 30
   Yes 'a run that changes only the tables reloads: RELOAD OK' ($out -contains 'RELOAD OK')
   Yes '  it waited for the server to say it loaded the new tree' (@($out | Where-Object { $_ -like "*gamemode tables are git tree $newTree*" }).Count -eq 1 -and @($out | Where-Object { $_ -like "PASS: *with tables git tree $newTree*" }).Count -eq 1)
@@ -417,7 +451,7 @@ Yes 'Deploy-DevGamemode.ps1 takes -Restart and loads Reload.ps1' ($cmd.Parameter
 Yes '  it waits for the blob of the gamemode it sends, and the tree of its tables (#5191)' ($dev.Contains('$newBlob = Get-ThornswoodGamemodeBlob $Gamemode') -and $dev.Contains('$newTree = Get-ThornswoodTablesTree $GamemodeTables') -and $dev.Contains('(ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob $newTree) + $reloadBlock'))
 $atReload = $dev.IndexOf('+ $reloadBlock')
 $atWarn = $dev.IndexOf("Write-Host 'Who is on the dev server...'")
-Yes '  it reloads before the warning, and only without -PutBack and -Restart' ($atReload -gt 0 -and $atWarn -gt $atReload -and $dev.Contains('if (-not $PutBack -and -not $Restart) {'))
+Yes '  it reloads before the warning, and only without -PutBack, -Restart and -OrderOnly (#6166)' ($atReload -gt 0 -and $atWarn -gt $atReload -and $dev.Contains('if (-not $PutBack -and -not $Restart -and -not $OrderOnly) {'))
 Yes '  the warning and the swap run only for a restart or the put-back after RELOAD FAILED' (
   $dev.Contains("if (`$outcome -eq 'swap' -or `$outcome -eq 'recover') {") -and $dev.Contains("if (`$PutBack -or `$outcome -eq 'recover') { `$pick = `$putBackPick }") -and
   $dev.Contains("elseif (`$reloadOut -contains 'RELOAD FAILED') {"))

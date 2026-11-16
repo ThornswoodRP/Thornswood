@@ -378,7 +378,35 @@ function sweepSilenced(now) {
  * pluginReport below).
  */
 const CHAT_DIR = process.env.THORNSWOOD_CHAT_DIR || path.join(HERE, 'chat');
-const CHAT_DAYS = Number(process.env.THORNSWOOD_CHAT_DAYS || 365);
+
+/* HOW MANY DAYS CHAT IS KEPT, AND NEVER FEWER THAN 365 (#4410).
+
+   This was Number(process.env.THORNSWOOD_CHAT_DAYS || 365), used as it came.
+   Number() turns a word into NaN and a blank into 0, and the prune below
+   deletes every day older than now less this many days, so a value that was
+   not a number, blank, 0 or negative put the cutoff at or past now and the
+   prune at start deleted every day of chat, today's included, with nothing
+   to say why. The privacy page promises 365 days, and staff copy a kept
+   session's chat out of these days inside that time, so a value below 365
+   lost chat early too.
+
+   Now only a whole number of 365 or more is taken, written as digits and
+   nothing else. Anything else keeps 365 and says so in the log once, the
+   value and the days in use, and /health carries the days in use
+   (chatRetention.days). Unset is 365 with nothing said. */
+const CHAT_DAYS_MIN = 365;
+function chatDaysOf(v) {
+  if (v === undefined || v === '') return { days: CHAT_DAYS_MIN, said: '' };
+  const s = String(v).trim();
+  const n = /^\d+$/.test(s) ? Number(s) : NaN;
+  if (Number.isSafeInteger(n) && n >= CHAT_DAYS_MIN) return { days: n, said: '' };
+  return { days: CHAT_DAYS_MIN,
+           said: '[voice] THORNSWOOD_CHAT_DAYS is ' + JSON.stringify(String(v)) + ', which is not a whole number of ' +
+                 CHAT_DAYS_MIN + ' or more, so chat is kept ' + CHAT_DAYS_MIN + ' days' };
+}
+const CHAT_DAYS_READ = chatDaysOf(process.env.THORNSWOOD_CHAT_DAYS);
+const CHAT_DAYS = CHAT_DAYS_READ.days;
+if (CHAT_DAYS_READ.said) console.log(CHAT_DAYS_READ.said);
 
 /* Local time, because every other stamp on this box is local and an evening's
    argument that straddles midnight UTC should not straddle two files. */
@@ -839,7 +867,11 @@ function relayCaption(me, raw, now) {
  * that changes when chat goes local, and a limit written into it would go
  * with it.
  *
- * SAID LINES ONLY. The handler asks after the slash branch, never before.
+ * SAID LINES AND EMOTES, NOT COMMANDS. What reaches other people asks: a
+ * typed line, a /me, /do, /w, /s or /ooc, and an emote from the wheel, all
+ * from the one bucket (#4466: an emote asked nothing and was a free-text
+ * line over the head as often as a socket liked). A command is asked after
+ * the slash branch, never before.
  * The plugins report gameplay down this same socket as slash lines: /chopped
  * on every fall of the axe, /place as somebody walks about, /burn, the
  * journal, the party and the trade window. A limit ahead of that branch
@@ -1325,7 +1357,23 @@ class Sock {
 
       let msg = null;
       try { msg = JSON.parse(body.toString('utf8')); } catch (e) { continue; }
-      if (msg && this.onmessage) this.onmessage(msg);
+      if (!msg || !this.onmessage) continue;
+      /*
+        A fault in handling one message costs that one socket (#4206). It
+        used to leave the process, and every socket in the room went with
+        it, for one page's one message. The fields a page sends are read
+        with pageText and pageNumber so that a shape cannot do that; this is
+        where whatever else could still throw stops, and it says in the log
+        what it was so it can be found and fixed where it is.
+      */
+      try {
+        this.onmessage(msg);
+      } catch (e) {
+        console.log('[voice] closed a connection whose ' + JSON.stringify(String(typeof msg.t === 'string' ? msg.t : '?').slice(0, 20)) +
+                    ' message could not be handled: ' + (e && e.stack || e));
+        this.close();
+        return;
+      }
     }
   }
 }
@@ -1341,9 +1389,26 @@ class Sock {
   is for. Anything unrecognised becomes local rather than being rejected, so an
   older client that has never heard of modes still sounds normal to everyone.
 */
+/*
+  A FIELD AS A PAGE SENT IT (#4206).
+
+  Every message is the page's own JSON, so a field the service reads as text
+  or as a number can arrive as an object, and String() or Number() on an
+  object with no callable toString or valueOf throws. One chat line whose
+  text was { "toString": 0 } stopped the whole service. So what a page sent
+  is read here, and nowhere else: text is a string or nothing, and a number
+  is a number, or a string of one, or nothing.
+*/
+function pageText(v) {
+  return typeof v === 'string' ? v : '';
+}
+function pageNumber(v) {
+  return typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+}
+
 const MODES = ['whisper', 'local', 'yell'];
 function cleanMode(v) {
-  const m = String(v == null ? '' : v).toLowerCase();
+  const m = pageText(v).toLowerCase();
   return MODES.indexOf(m) === -1 ? 'local' : m;
 }
 
@@ -1365,7 +1430,7 @@ function cleanMode(v) {
 */
 const SDP_TYPES = ['offer', 'answer', 'pranswer'];
 function signal(msg) {
-  const to = Number(msg.to);
+  const to = pageNumber(msg.to);
   if (msg.t === 'sdp') {
     const d = msg.sdp;
     if (!d || typeof d !== 'object' || SDP_TYPES.indexOf(d.type) === -1 || typeof d.sdp !== 'string') return null;
@@ -1533,7 +1598,7 @@ function sendRoster() {
   proven and relay marks), so no name can change the command it rides with.
 */
 function cleanName(v) {
-  return String(v == null ? '' : v)
+  return pageText(v)
     .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '')
     .trim()
     .slice(0, 40);
@@ -1546,7 +1611,7 @@ function cleanName(v) {
   compared, so a page that says one thing and proved another is written down.
 */
 function onJoin(ws, msg, profileId) {
-  const claimed = Number(msg.profileId) || 0;
+  const claimed = pageNumber(msg.profileId) || 0;
   if (claimed && claimed !== profileId) {
     console.log('[voice] join claimed profile ' + claimed + ' on a connection whose token is for ' +
                 profileId + '. The token wins.');
@@ -1746,20 +1811,46 @@ function viewsOf(snap) {
 
   A quiet socket is no longer sent something five times a second, which is
   why the pages keep their own ping (SILENT_AFTER, above).
+
+  AND ONLY THE FIELDS THAT CHANGED (#5358). In a crowd everybody can hear
+  everybody, so each person must be told where each other person is: that
+  part grows with the square of the crowd and is what voice needs. But a
+  walker's row went out whole each tick, name, cell, actor id and mode with
+  the new position, and only the position and the facing had moved. At 100
+  people at one spot that was 6.6 MB a second against the game server's 4.75
+  (the load test, run 41355151372). So a row a peer already holds is sent as
+  the fields that differ from it; a field that went away is sent as 0, which
+  only the staff silence (hush) ever does. A row new to a peer is sent whole.
+  Every client merges a moved row's fields into the one it holds
+  (thornswood-voice.js applyMoved, thornswood-chat.js keep, VoiceSession.cs
+  ApplyRows), and voice/tests/test-moved.js counts the bytes.
 */
 setInterval(() => {
   sweepSilenced(Date.now());
   if (peers.size === 0) return;
   const snap = snapshot();
   const viewOf = viewsOf(snap);
-  const text = {};
-  const rowText = (pid) => text[pid] || (text[pid] = JSON.stringify(snap[pid]));
+  // Each row once a tick: its whole text, to see whether it changed at all,
+  // and each field's text, to see which did.
+  const rows = {};
+  const rowOf = (pid) => {
+    if (rows[pid]) return rows[pid];
+    const fields = {};
+    for (const k of Object.keys(snap[pid])) fields[k] = JSON.stringify(snap[pid][k]);
+    return (rows[pid] = { text: JSON.stringify(snap[pid]), fields: fields });
+  };
+  const changed = (was, now, row) => {
+    const out = {};
+    for (const k of Object.keys(now.fields)) if (was.fields[k] !== now.fields[k]) out[k] = row[k];
+    for (const k of Object.keys(was.fields)) if (!(k in now.fields)) out[k] = 0;
+    return out;
+  };
   const at = Date.now();
   let heardChanged = false;
   for (const [, p] of peers) {
     const view = viewOf(p.profileId);
     const now = new Map();
-    for (const pid of Object.keys(view)) now.set(pid, rowText(pid));
+    for (const pid of Object.keys(view)) now.set(pid, rowOf(pid));
     // Who this connection's roster and signalling are held to (#5516).
     const heard = new Set(now.keys());
     if (!p.heard || p.heard.size !== heard.size || Array.from(heard).some((pid) => !p.heard.has(pid))) heardChanged = true;
@@ -1770,8 +1861,10 @@ setInterval(() => {
     } else {
       const moved = {};
       let any = false;
-      for (const [pid, t] of now) {
-        if (p.sent.get(pid) !== t) { moved[pid] = view[pid]; any = true; }
+      for (const [pid, r] of now) {
+        const was = p.sent.get(pid);
+        if (!was) { moved[pid] = view[pid]; any = true; }
+        else if (was.text !== r.text) { moved[pid] = changed(was, r, view[pid]); any = true; }
       }
       const gone = [];
       for (const pid of p.sent.keys()) if (!now.has(pid)) gone.push(Number(pid));
@@ -2027,6 +2120,18 @@ function readBody(req, res, limit, then) {
     let doc;
     try { doc = JSON.parse(body); }
     catch (e) { res.writeHead(400).end('bad json'); return; }
+    /*
+      ONLY AN OBJECT REACHES A ROUTE (#4462). null is valid JSON, and the
+      first property a route read off it (doc.profileId on /token, doc.text on
+      /say) threw here, in the end handler, outside any catch, so one POST of
+      null stopped the whole service, voice and chat with it. Every body this
+      service takes is an object, so anything else is refused here, once, for
+      every route that reads one.
+    */
+    if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
+      res.writeHead(400, { 'content-type': 'text/plain' }).end('the body is not a JSON object');
+      return;
+    }
     then(doc);
   });
 }
@@ -2324,46 +2429,33 @@ const server = http.createServer((req, res) => {
       res.writeHead(403).end('no');
       return;
     }
-    let body = '';
-    let tooBig = false;
-    // Answered rather than dropped; see readBody for why.
-    req.on('data', (d) => {
-      if (tooBig) { return; }
-      body += d;
-      if (body.length > 200000) {
-        tooBig = true;
-        res.writeHead(413, { 'content-type': 'text/plain' }).end('too big');   // see readBody
-        req.destroy();
+    // Read by readBody like every other body here, so null, a number or a list
+    // is refused there and nothing below runs inside a catch that would call
+    // any fault in it bad json (#4462).
+    readBody(req, res, 200000, (doc) => {
+      const now = Date.now();
+      const seen = new Set();
+      for (const row of (Array.isArray(doc.who) ? doc.who : [])) {
+        if (row === null || typeof row !== 'object') continue;
+        const pid = Number(row.profileId);
+        if (!pid) continue;
+        seen.add(pid);
+        positions.set(pid, {
+          pos: row.pos, angleZ: Number(row.angleZ) || 0,
+          cell: String(row.cell || ''), name: String(row.name || ''),
+          actor: Number(row.actor) || 0,
+          // Kept here and never sent on: it only decides who is told about
+          // whom. See WHO IS TOLD ABOUT WHOM.
+          party: String(row.party || ''), at: now
+        });
       }
-    });
-    req.on('end', () => {
-      try {
-        const doc = JSON.parse(body);
-        const now = Date.now();
-        const seen = new Set();
-        for (const row of (doc.who || [])) {
-          const pid = Number(row.profileId);
-          if (!pid) continue;
-          seen.add(pid);
-          positions.set(pid, {
-            pos: row.pos, angleZ: Number(row.angleZ) || 0,
-            cell: String(row.cell || ''), name: String(row.name || ''),
-            actor: Number(row.actor) || 0,
-            // Kept here and never sent on: it only decides who is told about
-            // whom. See WHO IS TOLD ABOUT WHOM.
-            party: String(row.party || ''), at: now
-          });
-        }
-        for (const pid of Array.from(positions.keys())) if (!seen.has(pid)) positions.delete(pid);
-        // Who is in the world is who holds a voice place (#3570).
-        placeVoices();
-        // doc.requirePass, the game server's join pass switch (#410), is not
-        // read here any more: it refused unproven joins while it was on, and
-        // since #1303 every unproven join is refused whatever it says.
-        res.writeHead(204).end();
-      } catch (e) {
-        res.writeHead(400).end('bad json');
-      }
+      for (const pid of Array.from(positions.keys())) if (!seen.has(pid)) positions.delete(pid);
+      // Who is in the world is who holds a voice place (#3570).
+      placeVoices();
+      // doc.requirePass, the game server's join pass switch (#410), is not
+      // read here any more: it refused unproven joins while it was on, and
+      // since #1303 every unproven join is refused whatever it says.
+      res.writeHead(204).end();
     });
     return;
   }
@@ -2465,7 +2557,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/commands/ack') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 20000, (doc) => {
-      const ids = new Set((doc && Array.isArray(doc.ids) ? doc.ids : []).map(String));
+      const ids = new Set((Array.isArray(doc.ids) ? doc.ids : []).map(String));
       let removed = 0;
       for (let i = commands.length - 1; i >= 0; i--) {
         if (ids.has(commands[i].id)) { commands.splice(i, 1); removed++; }
@@ -2480,7 +2572,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/silenced') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 20000, (doc) => {
-      const list = (doc && doc.profiles && typeof doc.profiles === 'object') ? doc.profiles : {};
+      const list = (doc.profiles && typeof doc.profiles === 'object') ? doc.profiles : {};
       const now = Date.now();
       const before = new Set(silenced.keys());
       silenced.clear();
@@ -2506,7 +2598,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/textmute') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 200000, (doc) => {
-      const by = (doc && doc.by && typeof doc.by === 'object') ? doc.by : {};
+      const by = (doc.by && typeof doc.by === 'object') ? doc.by : {};
       textOff.clear();
       for (const k of Object.keys(by)) {
         const listener = Number(k) || 0;
@@ -2645,7 +2737,7 @@ const server = http.createServer((req, res) => {
                             skippedRosters: skippedRosters,
                             closedBacklogged: closedBacklogged,
                             closedSilent: closedSilent,
-                            chatRetention: { overdueDays: chatOverdue, pruneError: chatPruneError },
+                            chatRetention: { overdueDays: chatOverdue, pruneError: chatPruneError, days: CHAT_DAYS },
                             // Last: /health's fields only ever go on the end (voice/tests/test-turn-key.js).
                             captions: { on: CAPTIONS, sent: captionCounts.sent, dropped: captionCounts.dropped,
                                         tailMs: CAPTION_TAIL_MS, burst: CAPTION_BURST, refillMs: CAPTION_REFILL_MS,
@@ -2841,7 +2933,7 @@ server.on('upgrade', (req, socket, head) => {
     // server never inspects what an offer or a candidate says, it only
     // decides who is allowed to hear it; see signal for the shape.
     if (msg.t === 'sdp' || msg.t === 'ice') {
-      const to = peers.get(Number(msg.to));
+      const to = peers.get(pageNumber(msg.to));
       // Only between two voice places (#3570): a socket at the menu is on
       // nobody's roster, and nobody's page builds a connection to it.
       // And only between two who each have the other in their view (#5516):
@@ -2919,7 +3011,7 @@ server.on('upgrade', (req, socket, head) => {
     // Words made of what somebody said on voice, on their own machine
     // (#2475). Never written down; see captions, above.
     if (msg.t === 'caption') {
-      const why = relayCaption(peers.get(myId), msg.text, Date.now());
+      const why = relayCaption(peers.get(myId), pageText(msg.text), Date.now());
       if (why) captionCounts.dropped++; else captionCounts.sent++;
       return;
     }
@@ -2941,6 +3033,9 @@ server.on('upgrade', (req, socket, head) => {
         }
         return;
       }
+      // The same limit as a typed line, and the same bucket (#4466): an emote
+      // is a line over the head and in the log as much as a said one is.
+      if (!chatAllow(me, myId, Date.now())) return;
       chatWrite('emote', myId, me, name);
       const actor = actorOf(me && me.profileId);
       const line = {
@@ -2969,7 +3064,7 @@ server.on('upgrade', (req, socket, head) => {
       const me = peers.get(myId);
       // A slash line that is not speech (/me, /do, /w, /s and /ooc are) is a
       // command, and keeps up to COMMAND_CHARS. Everything said keeps 400.
-      const long = String(msg.text == null ? '' : msg.text).slice(0, COMMAND_CHARS);
+      const long = pageText(msg.text).slice(0, COMMAND_CHARS);
       const text = (long.charAt(0) === '/' && !headlines.floatLine(long)) ? long : long.slice(0, SAID_CHARS);
       if (!text) return;
 
@@ -3034,15 +3129,12 @@ server.on('upgrade', (req, socket, head) => {
       // placeatme, disable, mp) and coc is not one of them, so a coc moves you
       // in your own game and the server puts you straight back.
       if (text.charAt(0) === '/') {
-        // What the chat log keeps of it: the pass masked, and a waiting
-        // menu's repeated "/line" and the front plugin's own reports not at
-        // all (commandLogText). Asked before lineMark below, which is what
-        // moves the waiting mark it reads.
-        const press = msg.press === true;
-        const logged = commandLogText(me, text, press);
-        if (logged) chatWrite('command', myId, me, logged, press ? 'press' : '');
         // Full: the newest is refused and its sender told, and everything
-        // already taken stays. See the note over COMMAND_CAP.
+        // already taken stays. See the note over COMMAND_CAP. A refused one
+        // is not in the chat log (#4466): it was never run, and a socket
+        // sending into a full queue wrote a log line for every one; the
+        // service log says the queue is full, at most once in
+        // COMMAND_REFUSED_EVERY_MS.
         if (commands.length >= COMMAND_CAP) {
           const now = Date.now();
           if (now - refusedAt >= COMMAND_REFUSED_EVERY_MS) {
@@ -3057,6 +3149,13 @@ server.on('upgrade', (req, socket, head) => {
           }
           return;
         }
+        // What the chat log keeps of it: the pass masked, and a waiting
+        // menu's repeated "/line" and the front plugin's own reports not at
+        // all (commandLogText). Asked before lineMark below, which is what
+        // moves the waiting mark it reads.
+        const press = msg.press === true;
+        const logged = commandLogText(me, text, press);
+        if (logged) chatWrite('command', myId, me, logged, press ? 'press' : '');
         lineMark(me, text);
         commands.push({
           id: COMMANDS_BOOT + ':' + (nextCommand++),
@@ -3171,7 +3270,10 @@ server.on('upgrade', (req, socket, head) => {
 const BIND = String(process.env.THORNSWOOD_VOICE_BIND || '127.0.0.1').trim() || '127.0.0.1';
 
 server.listen(PORT, BIND, () => {
-  console.log('[voice] listening on ' + BIND + ':' + PORT +
+  // The port it is listening on, not the one it was handed: given 0, the
+  // system picks a free one as it binds, and whoever started it reads the
+  // port off this line (#6050), so no other socket can take it in between.
+  console.log('[voice] listening on ' + BIND + ':' + server.address().port +
               (BIND === '127.0.0.1' ? ' (loopback only, so something must be proxying to it)' : ''));
   console.log('[voice] positions accepted from loopback at POST /positions');
 });

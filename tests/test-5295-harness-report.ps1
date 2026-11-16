@@ -25,8 +25,8 @@
        and bars come back as written, and a control character in the output
        does not break the file;
     4. the merge reads several share reports into one, every suite once,
-       counts them, and writes a summary naming each failing check beside
-       its harness; it exits 0 when the reports are all there, failing
+       counts them, and writes a summary naming each failing check under
+       its harness, with the command that runs the harness alone (#4178); it exits 0 when the reports are all there, failing
        checks or not;
     5. it says so and exits 1 when fewer reports came than -Expect, or one
        is not a harness report, so a share that died early is not hidden
@@ -50,6 +50,11 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+# The runner reads the processor from Windows or from /proc/stat, so where
+# neither is there it cannot run, and parts 1 to 7, which run it, say NOT
+# RUN rather than fail one after another as if it were broken (#5737).
+$runnerRuns = $OnWindows -or (Test-Path -LiteralPath '/proc/stat')
 $runner = Join-Path $repo 'scripts\dev\Nightly-Harnesses.ps1'
 $merge = Join-Path $repo 'scripts\dev\Merge-HarnessReports.ps1'
 
@@ -66,14 +71,34 @@ function Put([string]$path, [string]$text) {
     $null = [IO.Directory]::CreateDirectory((Split-Path -Parent $path))
     [IO.File]::WriteAllText($path, $text, $utf8)
 }
+# A runner that ends with anything but 0 (all passed) or 1 (something
+# failed) did not end as a runner ends: it was killed, or its runtime gave up
+# (134 is SIGABRT). The case it was run for fails then for that reason, and
+# only its own lines would say why, but they are in the job log, which is too
+# big for a Bot to read (#5737). So the run's own last lines are said as
+# FAIL lines, which the gate's annotation carries (#5660): first any that
+# name an abort or an unhandled exception, then the end of what it printed.
+function Say-Ended([string]$what, [int]$code, [string]$said) {
+    if ($code -eq 0 -or $code -eq 1) { return }
+    Yes ($what + ' ended as a runner never does, with exit ' + $code + '; what it said last follows') $false
+    $lines = @($said -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $why = @($lines | Where-Object { $_ -match 'Unhandled exception|Fatal error|Abort|Exception|Segmentation|core dumped' } | Select-Object -First 4)
+    $last = @($lines | Select-Object -Last (8 - $why.Count))
+    foreach ($l in @($why + @($last | Where-Object { $why -notcontains $_ }))) { Write-Host ('FAIL    ' + $what + ' said: ' + $l) }
+    if (-not $lines.Count) { Write-Host ('FAIL    ' + $what + ' said nothing') }
+}
 function Run([string]$root, [string[]]$more) {
     $out = Join-Path $work ('out-' + [Guid]::NewGuid().ToString('N'))
-    $said = @(& pwsh -NoProfile -NonInteractive -File $runner -Root $root -OutDir $out @more 2>&1 | ForEach-Object { "$_" })
-    return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
+    $said = @(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $runner -Root $root -OutDir $out @more 2>&1 | ForEach-Object { "$_" })
+    $code = $LASTEXITCODE
+    Say-Ended ('the runner (' + ($more -join ' ') + ')') $code ($said -join "`n")
+    return @{ Code = $code; Said = ($said -join "`n") }
 }
 function Merge([string[]]$more) {
-    $said = @(& pwsh -NoProfile -NonInteractive -File $merge @more 2>&1 | ForEach-Object { "$_" })
-    return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
+    $said = @(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $merge @more 2>&1 | ForEach-Object { "$_" })
+    $code = $LASTEXITCODE
+    Say-Ended ('the merge (' + ($more -join ' ') + ')') $code ($said -join "`n")
+    return @{ Code = $code; Said = ($said -join "`n") }
 }
 function Load([string]$file) {
     $d = New-Object System.Xml.XmlDocument
@@ -94,8 +119,26 @@ function Cases($suite) {
 }
 
 try {
+    # ---- 2. where a process waits, said for every wchan /proc gives (#5733) -------
+    # Get-WchanSaid, taken out of the runner as it is written, so it is held on
+    # every OS, not only where a harness hangs on Linux.
+    $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
+    $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-WchanSaid' }, $true)
+    Yes '2. the runner says where a process waits with Get-WchanSaid' ($null -ne $fn)
+    if ($null -ne $fn) {
+        . ([scriptblock]::Create($fn.Extent.Text))
+        Yes '   a named kernel call is named' ((Get-WchanSaid 'S' 'ep_poll' '') -eq 'in ep_poll')
+        Yes '   wchan 0 on a running process says it is running' ((Get-WchanSaid 'R' '0' '') -eq 'running, in no kernel call')
+        Yes '   wchan 0 on a sleeping one says /proc does not name the call' ((Get-WchanSaid 'S' '0' '') -eq 'in a kernel call /proc does not name (wchan 0)')
+        Yes '   an empty wchan says the same' ((Get-WchanSaid 'D' '' '') -eq 'in a kernel call /proc does not name (wchan 0)')
+        Yes '   a wchan that could not be read says why' ((Get-WchanSaid 'S' '' 'Access to the path is denied.') -eq 'wchan not read: Access to the path is denied.')
+    }
+
     # ---- 1 to 3. one share, every kind of harness ---------------------------------
     $a = Join-Path $work 'kinds'
+    if (-not $runnerRuns) {
+        Write-Host 'NOT RUN  1 to 7. the runner and the merge, end to end: this machine has neither Windows nor /proc/stat, which the runner reads the processor from'
+    } else {
     $odd = 'quotes "x" and ''y'', <tags> & a | bar'
     Put (Join-Path $a 'tests\test-1-mixed.js') ("console.log('PASS  one thing');`n" +
         "console.log('  FAIL indented, with no two spaces');`n" +
@@ -131,7 +174,7 @@ try {
         Yes ('2. one killed at its clock says so (' + ($hc -join ' / ') + ')') ($hc.Count -eq 2 -and $hc[1] -eq 'FAIL the harness timed out after 3 s and was killed')
         if ($IsLinux) {
             $w = [regex]::Match($r.Said, '(?m)^::warning file=[^:]*test-4-hang\.js::at its clock its processes were: (.*)$')
-            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] in \S+ \(\S*node\S* .*test-4-hang\.js\)')
+            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] (in \S+|running, in no kernel call|in a kernel call /proc does not name \(wchan 0\)|wchan not read: [^(]+) \(\S*node\S* .*test-4-hang\.js\)')
         } else { Write-Host 'SKIP  what a hung harness was doing is read from /proc, on Linux' }
         $lc = @(Cases (Suite $doc 'test-5-late.js'))
         Yes ('2. one not run, out of time, is a failing case (' + ($lc -join ' / ') + ')') (($lc -join '') -eq 'FAIL the harness was not run, out of time')
@@ -167,8 +210,8 @@ try {
         Yes '   and counts them all' ([int]$all.DocumentElement.GetAttribute('failures') -eq 5 -and [int]$all.DocumentElement.GetAttribute('tests') -eq (@($all.DocumentElement.SelectNodes('testsuite/testcase')).Count))
     } else { Yes '4. the merged report reads as XML' $false }
     Yes '4. the summary is headed and counts the checks' ($md -match '(?m)^## Gate harnesses\s*$' -and $md -match '(?m)^\d+ checks in 6 harnesses: 5 failed, 2 skipped\.\s*$')
-    Yes '   and names each failing check beside its harness' ($md -match '(?m)^\| test-1-mixed\.js \| indented, with no two spaces \|\s*$' -and $md -match '(?m)^\| test-4-hang\.js \| the harness timed out after 3 s and was killed \|\s*$')
-    Yes '   a bar in a check does not split its row' ($md -match '(?m)^\| test-1-mixed\.js \| quotes .* a \\\| bar \|\s*$')
+    Yes '   and names each failing check under its harness, with the command that runs it alone (#4178)' ($md -match '(?m)^### test-1-mixed\.js\s*$' -and $md -match '(?m)^FAIL  indented, with no two spaces\s*$' -and $md -match '(?m)^### test-4-hang\.js\s*$' -and $md -match '(?m)^FAIL  the harness timed out after 3 s and was killed\s*$' -and $md -match '(?m)^node tests/test-1-mixed\.js\s*$')
+    Yes '   a bar in a check is kept as written, on its own line' ($md -match '(?m)^FAIL  quotes .* a \| bar\s*$')
     Yes '   and no passing check is listed' ($md -notmatch 'all well' -and $md -notmatch 'one thing')
 
     $m = Merge @('-Path', (Join-Path $work 'reports'), '-Expect', '3', '-Summary', (Join-Path $work 'short.md'))
@@ -188,12 +231,29 @@ try {
     $r = Run $a @('-Summary', $page, '-Title', 'Gate harnesses, share 2 of 5', '-BudgetSeconds', '400')
     $md = $(if (Test-Path -LiteralPath $page) { [IO.File]::ReadAllText($page) } else { '' })
     Yes "7. -Summary writes the run's section, under the title given (exit $($r.Code))" ($r.Code -eq 1 -and $md -match '(?m)^## Gate harnesses, share 2 of 5\s*$' -and $md -match '(?m)^\d+ checks in 5 harnesses: 5 failed, 2 skipped\.\s*$')
-    Yes '   naming each failing check by harness' ($md -match '(?m)^\| test-3-throws\.js \| the harness ended with exit 1 and no FAIL line \|\s*$')
+    Yes '   naming each failing check by harness' ($md -match '(?m)^### test-3-throws\.js\s*$' -and $md -match '(?m)^FAIL  the harness ended with exit 1 and no FAIL line\s*$')
     $r = Run $b @('-Summary', $page)
     $md = [IO.File]::ReadAllText($page)
     Yes "   a second run adds its own section after the first, a share's own title by default (exit $($r.Code))" ($r.Code -eq 0 -and $md -match '(?m)^## Harnesses, share 1 of 1\s*$' -and $md.IndexOf('## Gate harnesses, share 2 of 5') -lt $md.IndexOf('## Harnesses, share 1 of 1'))
     $rg = [IO.File]::ReadAllText((Join-Path $repo 'scripts\dev\Run-Gate.ps1'))
     Yes '7. Run-Gate.ps1 hands -Summary on, titled "Gate harnesses, share n of m"' ($rg -match "\`$with\.Summary = \`$Summary" -and $rg -match [regex]::Escape("'Gate harnesses, share {0} of {1}' -f `$Shard, `$Of"))
+    }
+
+    # ---- 9. a runner that ends as no runner does says why (#5737) ---------------
+    # Say-Ended with what an abort prints; its FAIL lines taken, and the count
+    # it adds to put back, so only the checks below count here.
+    $failWas = $script:fail
+    $aborted = "PASS  one`nreading the record`nUnhandled exception. System.InvalidOperationException: the handle is gone`n   at Somewhere()`nAborted (core dumped)"
+    $said9 = @(Say-Ended 'the runner (-Summary page.md)' 134 $aborted 6>&1 | ForEach-Object { "$_" })
+    $added = $script:fail - $failWas
+    $script:fail = $failWas
+    Yes ('9. a runner that ends with 134 is a failure that says so (' + ($said9 -join ' / ') + ')') ($added -eq 1 -and $said9[0] -eq 'FAIL  the runner (-Summary page.md) ended as a runner never does, with exit 134; what it said last follows')
+    Yes '   naming the abort and the unhandled exception first, then its last lines' (
+        $said9[1] -eq 'FAIL    the runner (-Summary page.md) said: Unhandled exception. System.InvalidOperationException: the handle is gone' -and
+        $said9[2] -eq 'FAIL    the runner (-Summary page.md) said: Aborted (core dumped)' -and ($said9 -join "`n").Contains('said: reading the record'))
+    $said9 = @(Say-Ended 'the runner' 1 'FAIL  x' 6>&1)
+    $said9 += @(Say-Ended 'the runner' 0 '' 6>&1)
+    Yes '   and one that ends 0 or 1 says nothing more' ($said9.Count -eq 0 -and $script:fail -eq $failWas)
 
     # ---- 8. the workflows -------------------------------------------------------
     $wf = Join-Path $repo '.github\workflows'
@@ -201,7 +261,7 @@ try {
         $k, $runs, $art, $job, $name, $expect = $pair
         $y = [IO.File]::ReadAllText((Join-Path $wf $k))
         Yes "8. $k's shares each write a report" ($y -match ('(?m)^\s+\.\\scripts\\dev\\' + $runs + '\.ps1 -Shard .* -Report \(Join-Path \$env:RUNNER_TEMP ''' + $art + '\\share\.xml''\)\s*$'))
-        Yes "   and keep it for the run as $art-<share>, a day" ($y -match ('(?s)uses: actions/upload-artifact@[0-9a-f]{40} # v\d+\s+with:\s+name: ' + $art + '-\$\{\{ matrix\.shard \}\}\s+path: \$\{\{ runner\.temp \}\}/' + $art + '/share\.xml.*?retention-days: 1\b'))
+        Yes "   and keep it for the run as $art-<share>, a day" ($y -match ('(?s)uses: actions/upload-artifact@[0-9a-f]{40} # v\d+(?:\.\d+)*\s+with:\s+name: ' + $art + '-\$\{\{ matrix\.shard \}\}\s+path: \$\{\{ runner\.temp \}\}/' + $art + '/share\.xml.*?retention-days: 1\b'))
         $jb = [regex]::Match($y, '(?s)(?m)^  ' + [regex]::Escape($job) + ':\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
         Yes "   the job ""$name"" downloads them all and merges them onto the run's page" ($jb -match ('name: ' + [regex]::Escape($name)) -and $jb -match ('pattern: ' + [regex]::Escape($art) + '-\*') -and $jb -match 'Merge-HarnessReports\.ps1 -Path \$in -Expect ' -and $jb -match [regex]::Escape($expect))
         # In the builds, whenever either the Windows or the Linux shares (#5293) ran.

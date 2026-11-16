@@ -40,7 +40,12 @@
        entry with hashes is refused; a moved entry's patch stays when the new
        archive holds the same file, goes when it is dropped and is refused
        otherwise, and a mod rule that names it is given the new archive's md5,
-       file name and version (#2793); -WhatIf builds the
+       file name and version (#2793), while a rule naming another mod that
+       only shares its file name stays, a swap onto a file id another entry
+       installs is refused, and so is one add naming a plugin twice in
+       names that differ only in case (#4200); each -Mod and -Add archive is held to
+       the file Nexus serves as its file id, and one that is not it is
+       refused with both sizes and md5s (#4980); -WhatIf builds the
        archive and writes nothing; the real run uploads an archive with the
        same files as the published one and only the swapped entry changed,
        as a draft; a second draft, a base that is not the latest and a
@@ -48,7 +53,9 @@
        publishes it;
     6. taking a mod out (#3649): its entry and its plugins go and nothing
        else changes; one with patches, no hashes or a rule naming it is
-       refused;
+       refused; a plugin another entry brings stays, and a plugin left with
+       one taken out as a master, a rule naming it by its file name on Nexus
+       alone and a plugin left with no masters given are refused (#4191);
     7. what each mod's page allows (#3649): a revision with a mod the
        permission record has not read, or does not have, is refused before
        anything is written, and so is publishing a draft with a mod whose
@@ -80,6 +87,7 @@ function Yes([string]$what, [bool]$cond) {
 function Skip([string]$what) { Write-Host "SKIP  $what" }
 $script:standin = $null
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-2914-' + [Guid]::NewGuid().ToString('N').Substring(0, 10))
+$script:plugRec = $null   # the light flags' plugin record, set where they are tested (#4279)
 function Done {
     if ($script:standin -and -not $script:standin.HasExited) { $script:standin.Kill() }
     if (Test-Path -LiteralPath $T) { Remove-Item -LiteralPath $T -Recurse -Force }
@@ -144,7 +152,9 @@ function Run([string]$name, [string[]]$arguments) {
     $psi.FileName = $pwsh
     # New-NexusRevision holds every mod to a permission record (#3649): the
     # stand-in's mods are in one of the test's own, never the real one.
-    if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm) }
+    if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm, '-PageRecord', $script:pageRec) }
+    # And its light flags to a plugin record of the test's own (#4279).
+    if ($name -eq 'New-NexusRevision.ps1' -and $script:plugRec) { $arguments = @($arguments) + @('-PluginRecord', $script:plugRec) }
     $psi.Arguments = ((@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Q (Join-Path $rel $name))) + @($arguments | ForEach-Object { Q $_ }) + @('-NoPause')) -join ' ')
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $p = [Diagnostics.Process]::Start($psi)
@@ -158,6 +168,10 @@ function Run([string]$name, [string[]]$arguments) {
 # The permission record for the stand-in's mods (#3649), with what each
 # page says set per run: ours, a reading's collections value, or null.
 $script:perm = Join-Path $T 'collection-permissions.json'
+# The page's text every built revision carries (#4537), the test's own and
+# never the real one, whose mods the stand-in's revisions do not install.
+$script:pageRec = Join-Path $T 'collection-page.json'
+Put $script:pageRec '{"version":1,"collection":"7essxf","revision":2,"summary":"A made-up collection.","description":"## About\n\nA made-up collection for the harness.","installInstructions":"Add it in Vortex.","notSaid":[]}'
 function Perm([hashtable]$say) {
     $rows = foreach ($id in @(1111, 1932, 47618, 192001, 192762)) {
         if (-not $say.ContainsKey($id)) { continue }
@@ -165,7 +179,8 @@ function Perm([hashtable]$say) {
         $head = '{"modId":' + $id + ',"name":"Mod ' + $id + '","author":"Someone","files":[{"fileId":1,"name":"f","version":"1"}],"plugins":[],"page":"https://www.nexusmods.com/skyrimspecialedition/mods/' + $id + '?tab=description"'
         if ($v -eq 'ours') { $head + ',"ours":true,"reading":null}' }
         elseif ($null -eq $v) { $head + ',"reading":null}' }
-        else { $head + ',"reading":{"read":"2026-10-27","by":"the test","collections":"' + $v + '","terms":{"Author''s instructions":"x"}}}' }
+        # An allowed reading names what allows it (#4190): here an open licence.
+        else { $head + ',"reading":{"read":"2026-10-27","by":"the test","collections":"' + $v + '"' + $(if ($v -eq 'allowed') { ',"licence":{"name":"MIT"}' } else { '' }) + ',"terms":{"Author''s instructions":"x"}}}' }
     }
     Put $script:perm ('{"version":1,"collection":"7essxf","revision":2,"mods":[' + (@($rows) -join ',') + ']}')
 }
@@ -437,6 +452,23 @@ Yes 'a rule that matches the moved entry by a version range is refused, and noth
 $said = NodeSaid $js $cj $sw $o1 $o2
 Yes 'and one that matches it by its own version moves to the new one' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -match ('modRules\[0\]\.source\.fileMD5\tfa1fe7613d21ab5826d4a3a3b258f14a\t' + $md5) -and (@($said) -join '|') -match 'modRules\[0\]\.source\.versionMatch\t1\.0\.0\t9\.0\.0')
 
+# Issue #4200: a rule moves only when it names the moved entry. Here the
+# runtime and another mod both have the file name "Main File" on Nexus; a
+# rule naming the other mod by its md5 stays as it is, and one naming the
+# runtime by its md5 moves.
+$cjMain = Join-Path $T 'main-file-collection.json'
+& $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.mods[1].source.logicalFilename='Main File';c.mods.push({name:'Another Mod',version:'1.0.0',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:5050,fileId:5051,md5:'00000000000000000000000000000005',fileSize:10,logicalFilename:'Main File',updatePolicy:'exact',tag:'otherTag123'},author:'Someone',details:{category:'Gameplay',type:''},phase:0});const fish={fileMD5:'fa1fe7613d21ab5826d4a3a3b258f14a',logicalFileName:'Fishing In Skyrim',versionMatch:'1.0.0'};c.modRules.push({type:'after',reference:{fileMD5:'00000000000000000000000000000005',logicalFileName:'Main File',versionMatch:'1.0.0'},source:fish});c.modRules.push({type:'after',reference:{fileMD5:'c515679068f6563750b1ca1f9260031f',logicalFileName:'Main File',versionMatch:'1.0.0'},source:fish});fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjMain
+Put $sw ('[{"modId":"192762","fileId":"812346","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Main File"}]')
+$o1 = Join-Path $T 'main-file-out.json'
+$said = NodeSaid $js $cjMain $sw $o1 (Join-Path $T 'main-file-payload.json')
+& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));process.exit(JSON.stringify(b.modRules[1])===JSON.stringify(a.modRules[1])&&b.modRules[2].reference.fileMD5===process.argv[3]&&b.modRules[2].reference.versionMatch==='1.0.2'?0:1)" $cjMain $o1 $md5
+Yes '#4200 a rule naming another mod by its md5 stays, though it shares the moved entry''s file name, and one naming the moved entry moves' ($LASTEXITCODE -eq 0 -and -not ((@($said) -join '|') -match 'modRules\[1\]') -and (@($said) -join '|') -match 'modRules\[2\]\.reference\.fileMD5')
+# Issue #4200: a swap onto a file id another entry already installs.
+Put $sw ('[{"modId":"192762","fileId":"191234","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Thornswood Client Runtime"}]')
+Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+$err = (& $node.Source $js $cj $sw (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes '#4200 a swap onto a file id another entry of the revision installs is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'file 191234 is already in this revision, as A Fishing Mod' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+
 # Issue #2969: a mod the revision does not carry yet, added the way Vortex
 # writes one it put in with its basic installer.
 $addJson = Join-Path $T 'add.json'
@@ -461,6 +493,11 @@ foreach ($case in @(
     $null = & $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>$null
     Yes ('adding ' + $case[1] + ' is refused, and nothing is written') ($LASTEXITCODE -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 }
+# Issue #4200: one mod with two plugins whose names differ only in case.
+Put $addJson ('[' + (AddSpec '8662' 'Hair.esp' 'Dragonborn.esm').Replace(']}]}', ']},{"name":"hair.esp","after":["Dragonborn.esm"]}]}') + ']')
+Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+$err = (& $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes '#4200 one mod adding two plugins whose names differ only in case is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'names hair\.esp twice' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 
 # #4603: revision 6 installs RaceMenuMorphsCBBE.esp off its list, and the
 # record (checked by Check-CollectionRecord.ps1) lets a new plugin load after
@@ -540,16 +577,39 @@ Put $ruJson '[{"unlisted":["Immersive Weapons.esp"]},{"rule":true,"name":"chedda
 Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
 $err = (& $node.Source $js $cjRule $ruJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
 Yes 'an "unlisted" plugin the list has is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'which the plugin list has, so it is not installed off the list' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+# #6090: a plugin installed off the list may be given a rule itself, as
+# revision 9's CBBE.esp is (#4728). It has no place in the list to move to,
+# so the list stays as it was and only the rule changes.
+Put $ruJson '[{"unlisted":["CBBE.esp"]},{"rule":true,"name":"CBBE.esp","after":["RaceCompatibility.esm"]}]'
+$o1 = Join-Path $T 'rule-off-list-out.json'
+Remove-Item -LiteralPath $o1 -ErrorAction SilentlyContinue
+$said = NodeSaid $js $cjRule $ruJson $o1 (Join-Path $T 'rule-off-list-payload.json')
+$code = $LASTEXITCODE
+$ok = $false
+if ($code -eq 0 -and (Test-Path -LiteralPath $o1)) {
+    & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));if(JSON.stringify(b.plugins)!==JSON.stringify(a.plugins))process.exit(2);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify(a.pluginRules.plugins.concat([{name:'cbbe.esp',after:['racecompatibility.esm']}])))process.exit(3);a.pluginRules=b.pluginRules;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cjRule $o1
+    $ok = ($LASTEXITCODE -eq 0)
+}
+Yes '#6090 a plugin "unlisted" gives may be given a rule, the list stays as it was, and only the rule is added' ($code -eq 0 -and $ok -and (@($said) -join '|') -eq ("CBBE.esp`trule`tafter `tafter racecompatibility.esm"))
 
 # Issue #3649: a mod taken out, with the plugins its hashes put in Data.
+# Since #4191 each one carries its file name on Nexus, as New-NexusRevision.ps1
+# reads it from the v1 file record, and the plugins' masters come with it.
+$hashedExpr = 'Hashed 1111 2.0 2026-01-01T00-00Z Tok2222'
+function RmSpec([string]$id, [string]$expr = $hashedExpr, [string]$masters = '') {
+    $x = if ($expr) { ',"fileExpression":' + (ConvertTo-Json $expr) } else { '' }
+    $m = if ($masters) { ',{"masters":' + $masters + '}' } else { '' }
+    return '[{"remove":true,"modId":"' + $id + '"' + $x + '}' + $m + ']'
+}
 $rmJson = Join-Path $T 'remove.json'
-Put $rmJson '[{"remove":true,"modId":"1111"}]'
+Put $rmJson (RmSpec '1111')
 $o1 = Join-Path $T 'remove-collection.json'; $o2 = Join-Path $T 'remove-payload.json'
 $said = NodeSaid $js $cj $rmJson $o1 $o2
 & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));if(b.mods.some(m=>m.source.modId===1111))process.exit(2);a.mods=a.mods.filter(m=>m.source.modId!==1111);process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj $o1
 Yes 'nexus-collection.js takes the hashed mod out, says so, and changes nothing else' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("A Hashed Mod`tremoved`t`tfile 2222"))
 $cjp = Join-Path $T 'remove-plugins.json'
 & $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.plugins=[{name:'A.esp',enabled:true},{name:'b.esp',enabled:true}];fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjp
+Put $rmJson (RmSpec '1111' $hashedExpr '{"b.esp":["Skyrim.esm"]}')
 $said = NodeSaid $js $cjp $rmJson $o1 $o2
 & $node.Source -e "const b=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.exit(JSON.stringify(b.plugins)===JSON.stringify([{name:'b.esp',enabled:true}])?0:1)" $o1
 Yes 'its plugin comes off the plugin list whatever its case, and the rest stay' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("A Hashed Mod`tremoved`t`tfile 2222|A.esp`tplugin`t`tremoved"))
@@ -563,10 +623,46 @@ foreach ($case in @(
         @($cj, '192762', 'no file hashes'),
         @($cjp, '47618', 'a mod rule naming it'),
         @($cj, '5555', 'no entry'))) {
-    Put $rmJson ('[{"remove":true,"modId":"' + $case[1] + '"}]')
+    Put $rmJson (RmSpec $case[1] ('File of ' + $case[1]) '{"b.esp":["Skyrim.esm"]}')
     Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
     $null = & $node.Source $js $case[0] $rmJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>$null
     Yes ('taking out a mod with ' + $case[2] + ' is refused, and nothing is written') ($LASTEXITCODE -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+}
+
+# Issue #4191, the three things -Remove did not look at. The mod's plugin
+# another entry still brings (Immersive Armors and its Script Free and
+# Skypatched file both bring the Hothtrooper44 plugins), a plugin left in the
+# revision that has it as a master, and a mod rule that names it by its file
+# name on Nexus alone.
+$cjs = Join-Path $T 'remove-shared.json'
+& $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.mods.push({name:'A Script Free Mod',version:'1.0',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:3333,fileId:4444,md5:'00000000000000000000000000000003',fileSize:10,logicalFilename:'Script Free',updatePolicy:'exact',tag:'yyy'},hashes:[{path:'A.esp',md5:'00000000000000000000000000000004'}],author:'Someone',details:{category:'Gameplay',type:''},phase:1});c.plugins=[{name:'A.esp',enabled:true},{name:'b.esp',enabled:true}];fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjs
+Put $rmJson (RmSpec '1111' $hashedExpr '{"b.esp":["Skyrim.esm","A.esp"]}')
+$said = NodeSaid $js $cjs $rmJson $o1 $o2
+& $node.Source -e "const b=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.exit(JSON.stringify(b.plugins)===JSON.stringify([{name:'A.esp',enabled:true},{name:'b.esp',enabled:true}])&&!b.mods.some(m=>m.source.modId===1111)&&b.mods.some(m=>m.source.modId===3333)?0:1)" $o1
+Yes '#4191 a plugin another entry''s hashes bring stays on the list when the mod is taken out, and says why' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("A Hashed Mod`tremoved`t`tfile 2222|A.esp`tplugin`t`tkept, A Script Free Mod installs it too"))
+$cjm = Join-Path $T 'remove-masters.json'
+& $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.plugins=[{name:'A.esp',enabled:true},{name:'b.esp',enabled:true}];fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjm
+foreach ($case in @(
+        @($cjm, '{"b.esp":["Skyrim.esm","A.esp"]}', '', 'a plugin left on the list has its plugin as a master', 'b\.esp, which the revision still installs, has A\.esp as a master'),
+        @($cjm, '{"b.esp":["Skyrim.esm"],"c.esp":["a.esp"]}', '["c.esp"]', 'a plugin installed off the list has its plugin as a master', 'c\.esp, which the revision still installs, has A\.esp as a master'),
+        @($cjm, '', '', 'no masters are given for the plugins left', 'nothing says which masters b\.esp has'),
+        @($cjm, '{"a.esp":[]}', '', 'a plugin left has no masters given', 'nothing says which masters b\.esp has'))) {
+    $spec = RmSpec '1111' $hashedExpr $case[1]
+    if ($case[2]) { $spec = $spec.Substring(0, $spec.Length - 1) + ',{"unlisted":' + $case[2] + '}]' }
+    Put $rmJson $spec
+    Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+    $err = (& $node.Source $js $case[0] $rmJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+    Yes ('#4191 taking out a mod when ' + $case[3] + ' is refused, saying so, and nothing is written') ($LASTEXITCODE -eq 1 -and $err -match $case[4] -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+}
+$cjx = Join-Path $T 'remove-by-name.json'
+& $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.modRules.push({type:'after',reference:{fileExpression:process.argv[3],versionMatch:'2.0.0'},source:{fileMD5:'fa1fe7613d21ab5826d4a3a3b258f14a',logicalFileName:'Fishing In Skyrim',versionMatch:'1.0.0'}});fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjx $hashedExpr
+foreach ($case in @(
+        @((RmSpec '1111'), 'a mod rule names it by its file name on Nexus alone', '1 of the collection''s mod rules name A Hashed Mod'),
+        @((RmSpec '1111' ''), 'it comes with no file name on Nexus', 'gives no fileExpression for A Hashed Mod'))) {
+    Put $rmJson $case[0]
+    Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+    $err = (& $node.Source $js $cjx $rmJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+    Yes ('#4191 taking out a mod when ' + $case[1] + ' is refused, saying so, and nothing is written') ($LASTEXITCODE -eq 1 -and $err -match $case[2] -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 }
 
 if (-not $sz) { Skip 'the collection revision runs: 7-Zip is not on this machine'; Done }
@@ -611,9 +707,32 @@ $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $newFileArchive, '-WhatIf')
 $built = Join-Path $T 'scratch\nexus-revision-7essxf\out\collection_3.7z'
 YesR '-WhatIf builds collection_3.7z with the same files as revision 2 and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'source\.fileId: 809366 -> 812346' -and $r.Out -match 'the same 5 files and folders as revision 2' -and (Test-Path -LiteralPath $built) -and @(Writes @(Since $n0)).Count -eq 0) $r
+# Issue #4980: the md5 and size an entry pins are the file Nexus serves as
+# that file id. Each -Archive is held to that file, downloaded through its
+# download-link, and one that is not it (a zip rebuilt from the same plugin
+# is not byte for byte the one uploaded) is refused with both sizes and md5s.
+$got = @(Since $n0)
+YesR '  it downloads file 812346 through its download-link with the key, the CDN getting none, and finds the -Archive is that file' (@($got | Where-Object { $_.path -eq '/v3/games/skyrimspecialedition/mod-file-versions/812346/download-link' -and $_.key -eq 'right' }).Count -eq 1 -and @($got | Where-Object { $_.path -eq '/cdn/file/812346' -and $_.key -eq 'none' }).Count -eq 1 -and $r.Out -match 'is the file Nexus serves as file id 812346') $r
+$rebuilt = Join-Path $T 'Thornswood Client Runtime-1.0.1-rebuilt.7z'
+[IO.File]::WriteAllBytes($rebuilt, [byte[]]($bytes + [byte[]](1, 2, 3)))
+$rbMd5 = (Get-FileHash -LiteralPath $rebuilt -Algorithm MD5).Hash.ToLowerInvariant()
 $n0 = Count
-$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Remove', '1111', '-WhatIf')
+$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $rebuilt, '-WhatIf')
+YesR 'an -Archive of another size than the file Nexus serves is refused, saying both sizes and both md5s, and nothing is written' ($r.Code -eq 1 -and $r.Out -match ('is 300003 bytes, md5 ' + $rbMd5) -and $r.Out -match ('Nexus serves file id 812346 as 300000 bytes, md5 ' + $md5) -and $r.Out -notmatch 'which makes revision' -and @(Writes @(Since $n0)).Count -eq 0) $r
+$same = [byte[]]$bytes.Clone(); $same[0] = $same[0] -bxor 0xFF
+[IO.File]::WriteAllBytes($rebuilt, $same)
+$rbMd5 = (Get-FileHash -LiteralPath $rebuilt -Algorithm MD5).Hash.ToLowerInvariant()
+$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $rebuilt, '-WhatIf')
+YesR 'one of the same size with other bytes is refused too, by its md5' ($r.Code -eq 1 -and $r.Out -match ('is 300000 bytes, md5 ' + $rbMd5) -and $r.Out -match ('Nexus serves file id 812346 as 300000 bytes, md5 ' + $md5)) $r
+$n0 = Count
+# #4191: the plugins' masters come from the collection record when it follows
+# the revision this starts from, and the mod's file name on Nexus from v1.
+$colRecord = Join-Path $T 'collection-record.json'
+Put $colRecord '{"version":1,"collection":"7essxf","game":"skyrimspecialedition","revision":2,"mods":[],"plugins":[{"name":"a.esp","master":false,"light":false,"masters":["Skyrim.esm"],"after":[]}]}'
+$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Remove', '1111', '-CollectionRecord', $colRecord, '-WhatIf')
 YesR '-Remove -WhatIf builds the revision without the mod, with the same files, and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'A Hashed Mod, removed: file 2222' -and $r.Out -match 'the same 5 files and folders as revision 2' -and @(Writes @(Since $n0)).Count -eq 0) $r
+Yes '#4191 and it reads the file name on Nexus of the file it takes out, as a moved file''s is read' (@((Since $n0) | Where-Object { $_.method -eq 'GET' -and $_.path -eq '/v1/games/skyrimspecialedition/mods/1111/files/2222.json' }).Count -eq 1)
+YesR '#4191 and says the masters come from the record' ($r.Code -eq 0 -and $r.Out -match 'the plugins'' masters, by the record: 1 plugin') $r
 $r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Remove', '192001', '-WhatIf')
 YesR '-Remove of a mod with patches is refused, saying so' ($r.Code -eq 1 -and $r.Out -match 'Thornswood Content carries patches') $r
 $r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Remove', 'x', '-WhatIf')
@@ -655,8 +774,8 @@ Yes 'the upload is the archive built, bound to its md5' ($up -and $up.md5 -eq (G
 $x = Join-Path $T 'unpacked'
 & $sz x -y ('-o' + $x) $built | Out-Null
 Yes 'the archive holds collection.json, patches and the empty bundled folder, as Vortex packs them' ((Test-Path -LiteralPath (Join-Path $x 'collection.json')) -and (Test-Path -LiteralPath (Join-Path $x 'patches\Thornswood Content\Thornswood-Content.esp.diff')) -and (Test-Path -LiteralPath (Join-Path $x 'bundled') -PathType Container))
-& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2')process.exit(2);r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj (Join-Path $x 'collection.json')
-Yes 'its collection.json is revision 2''s with only the runtime entry moved' ($LASTEXITCODE -eq 0)
+& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2')process.exit(2);r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;const i=b.info;if(i.description!=='## About\n\nA made-up collection for the harness.'||i.summary!=='A made-up collection.'||i.installInstructions!=='Add it in Vortex.')process.exit(3);i.description=a.info.description;i.installInstructions=a.info.installInstructions;delete i.summary;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj (Join-Path $x 'collection.json')
+Yes 'its collection.json is revision 2''s with only the runtime entry moved, and the page''s text from the page record (#4537)' ($LASTEXITCODE -eq 0)
 $rv = (State).collection.revisions.PSObject.Properties['3']
 if ($rv) { $rv = $rv.Value }
 Yes 'the revision''s collection_data names the new runtime file' ($null -ne $rv -and $rv.status -eq 'draft' -and @($rv.data.collection_manifest.mods | Where-Object { $_.source.mod_id -eq '192762' -and $_.source.file_id -eq '812346' -and $_.source.md5 -eq $md5 }).Count -eq 1)
@@ -687,6 +806,8 @@ foreach ($k in 'plain', 'fomod') {
 function AddFile([string]$arc, [string]$plugin) {
     $p = if ($plugin) { '[{"name":' + (ConvertTo-Json $plugin) + ',"after":["Dragonborn.esm"]}]' } else { '[]' }
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $arc) + ',"plugins":' + $p + '}]')
+    # Nexus serves that archive as file 8662, so the -Add is held to it (#4980).
+    Control @{ serve = @{ '8662' = @{ path = $arc; name = (Split-Path -Leaf $arc) } } }
 }
 AddFile $hairArc $hair
 $n0 = Count
@@ -698,6 +819,13 @@ $x4 = Join-Path $T 'unpacked4'
 & $sz x -y ('-o' + $x4) $built4 | Out-Null
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===8662);process.exit(e&&e.source.md5===process.argv[2]&&e.source.fileSize===Number(process.argv[3])&&e.author==='Brataccas'&&/^[0-9A-Za-z_-]{10}$/.test(e.source.tag)&&b.plugins.some(p=>p.name===process.argv[4]&&p.enabled)?0:1)" (Join-Path $x4 'collection.json') ((Get-FileHash -LiteralPath $hairArc -Algorithm MD5).Hash.ToLowerInvariant()) ((Get-Item -LiteralPath $hairArc).Length) $hair
 Yes 'its entry has the archive''s md5 and size, a new tag, and the plugin switched on' ($LASTEXITCODE -eq 0)
+# Issue #4980: an -Add archive is held to the file Nexus serves as its file id.
+Control @{ serve = @{ '8662' = @{ path = (Join-Path $T 'fomod.7z'); name = 'fomod.7z' } } }
+$fomodSize = (Get-Item -LiteralPath (Join-Path $T 'fomod.7z')).Length
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'an -Add archive that is not the file Nexus serves as its file id is refused, saying both sizes, and nothing is written' ($r.Code -eq 1 -and $r.Out -match ('is ' + (Get-Item -LiteralPath $hairArc).Length + ' bytes, md5 ' + (Get-FileHash -LiteralPath $hairArc -Algorithm MD5).Hash.ToLowerInvariant()) -and $r.Out -match ('Nexus serves file id 8662 as ' + $fomodSize + ' bytes') -and @(Writes @(Since $n0)).Count -eq 0) $r
+Control @{ serve = @{ '8662' = @{ path = $hairArc; name = (Split-Path -Leaf $hairArc) } } }
 # #4603: the plugins installed off the list come from the record, and only
 # when it follows the revision this starts from; a draft is not that.
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $hairArc) + ',"plugins":[{"name":' + (ConvertTo-Json $hair) + ',"after":["RaceMenuMorphsCBBE.esp"]}]}]')
@@ -740,6 +868,7 @@ $dgChoice = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add
 function AddEyes([string[]]$plugins, [string]$choices) {
     $p = '[' + ((@($plugins) | ForEach-Object { '{"name":"' + $_ + '","after":["Dragonborn.esm"]}' }) -join ',') + ']'
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyesArc) + ',"plugins":' + $p + $(if ($choices) { ',"choices":' + $choices } else { '' }) + '}]')
+    Control @{ serve = @{ '8662' = @{ path = $eyesArc; name = (Split-Path -Leaf $eyesArc) } } }
 }
 AddEyes @('Eyes.esp', 'EyesDG.esp') $dgChoice
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
@@ -826,6 +955,7 @@ $given = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose
 $vortexForm = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Human","groups":[{"name":"Choose Version","choices":[]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]},{"name":"Werewolf Eyes","choices":[]}]}]}'
 $eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Dragonborn.esm"]},{"name":"EyesFull.esp","after":["Dragonborn.esm"]}]'
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":' + $eyes2Plugins + ',"choices":' + $given + '}]')
+Control @{ serve = @{ '8662' = @{ path = $eyes2Arc; name = (Split-Path -Leaf $eyes2Arc) } } }
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
 YesR 'a FOMOD archive added with only the answers picked is drafted' ($r.Code -eq 0 -and $r.Out -match '3 plugin\(s\) by FOMOD, with the choices given' -and $r.Out -match 'its answers as Vortex records them: 4 step\(s\), 5 group\(s\)') $r
 $x4v = Join-Path $T 'unpacked4v'
@@ -926,6 +1056,17 @@ function Layout([string]$md5) {
 }
 Layout ((Get-FileHash -LiteralPath $lightBase -Algorithm MD5).Hash.ToLowerInvariant())
 Control @{ serve = @{ '191234' = @{ path = $fishArc; name = (Split-Path -Leaf $fishArc) } } }
+# The plugin record the light flags are held to: revision 3's, the one this
+# starts from (#4279).
+$script:plugRec = Join-Path $fl 'collection-plugins.json'
+function PlugRec([int]$rev) { Put $script:plugRec ('{"version":1,"collection":"7essxf","revision":' + $rev + ',"plugins":[{"name":"Fish-Light.esp","size":64,"sha256":"' + (Get-FileHash -LiteralPath (Join-Path $fishMod 'Fish-Light.esp') -Algorithm SHA256).Hash.ToLowerInvariant() + '"}]}') }
+PlugRec 2
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '-SetLight with the plugin record of another revision is refused, naming both' ($r.Code -eq 1 -and $r.Out -match 'is the plugins of collection revision 2, and this starts from revision 3') $r
+Remove-Item -LiteralPath $script:plugRec
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '  and with no plugin record at all' ($r.Code -eq 1 -and $r.Out -match 'there is no collection-plugins record at') $r
+PlugRec 3
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
 $got = @(Since $n0)

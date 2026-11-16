@@ -106,8 +106,11 @@ try {
       !J(path.join(PV, 'mod-settings.json')).who[P1] && !!J(path.join(PV, 'mod-settings.json')).who[PY] &&
       !J(path.join(PV, 'take-limit.json')).counts[P1 + '|1a2b3'] && !!J(path.join(PV, 'take-limit.json')).counts[PY + '|1a2b3'] &&
       J(path.join(PV, 'last-left.json'))[P1] === undefined && J(path.join(PV, 'last-left.json'))[PY] === 2);
-  const l1 = J(path.join(PV, 'deleted-characters.json'));
-  yes('  the list stays for the gamemode, with saves marked done', l1.done && l1.done.saves > 0 && Object.keys(l1.done).length === 1 &&
+  // The server takes the request and keeps its marks in its own list (#4920).
+  const TK = path.join(PV, 'deleted-characters.taken.json');
+  const l1 = J(TK);
+  yes('  the list stays for the gamemode, taken, with saves marked done', !fs.existsSync(path.join(PV, 'deleted-characters.json')) &&
+      l1.done && l1.done.saves > 0 && Object.keys(l1.done).length === 1 &&
       JSON.stringify(l1.profiles) === JSON.stringify([P1]));
   yes('  and server.log says it with counts, never an id',
       /deletions: saves: characters 2, cards 1, mod menu choices 1, take counts 1, last-left times 1; the gamemode lets go of the registers as it loads/.test(g1.log) &&
@@ -118,14 +121,14 @@ try {
   game({ profiles: [P1], actors: [], done: Object.fromEntries(SL.RELEASE_PARTS.filter((p) => p !== 'saves').map((p) => [p, 1])) });
   const g3 = start(G);
   yes('a list with every other part done is deleted once the saves go',
-      !fs.existsSync(path.join(PV, 'deleted-characters.json')) && /every part is done, and the list is gone/.test(g3.log));
+      !fs.existsSync(path.join(PV, 'deleted-characters.json')) && !fs.existsSync(TK) && /every part is done, and the list is gone/.test(g3.log));
 
   game({ profiles: [P1], actors: [] });
   const entry = (pid, n) => ({ file: n + '.json', json: JSON.stringify({ formDesc: n, profileId: pid }, null, 2) });
   put(path.join(CF, '.pending-batch'), { version: 1, batch: [entry(P1, 'ff000a01')], checksum: 'x' });
   const g4 = start(G);
   yes('an unfinished save holding one of theirs leaves the part waiting, said',
-      J(path.join(PV, 'deleted-characters.json')).done === undefined &&
+      Object.keys(J(TK).done || {}).length === 0 &&
       /holds one of their characters, or could not be read; the server replays it as it starts/.test(g4.log) &&
       /the part waits for the next start/.test(g4.log));
   yes('  and the rest of theirs still goes now', !J(path.join(PV, 'characters.json')).who[P1] && !fs.existsSync(path.join(CF, 'ff000a09.json')));
@@ -133,7 +136,7 @@ try {
   game({ profiles: [P1], actors: [] });
   put(path.join(CF, '.pending-batch'), { version: 1, batch: [entry(PY, 'ff000a02')], checksum: 'x' });
   start(G);
-  yes('one that holds nobody of theirs does not hold the part back', J(path.join(PV, 'deleted-characters.json')).done.saves > 0);
+  yes('one that holds nobody of theirs does not hold the part back', J(TK).done.saves > 0);
 
   game('{"profiles":[5001,"x"]}');
   const g5 = start(G);
@@ -177,6 +180,7 @@ try {
     put(path.join(D, 'linked.json'), { [ME]: { profiles: [P1, P2, 5003] }, [YOU]: { profiles: [PY, P2] } });
     put(path.join(D, 'rules-accepted.json'), { [ME]: 1, [YOU]: 1 });
     put(path.join(D, 'signins.json'), [{ id: ME, ip: '203.0.113.1' }, { id: YOU, ip: '203.0.113.2' }]);
+    put(path.join(D, 'pcs.json'), [{ id: ME, pc: 'a'.repeat(32), at: 1 }, { id: YOU, pc: 'a'.repeat(32), at: 1 }]);
     put(path.join(D, 'sessions.json'), [{ session: 's1', who: ME, profile: P1 }, { session: 's2', who: ME, profile: P1, keep: true }, { session: 's3', who: YOU }]);
     put(path.join(D, 'session-logs', 's1.json'), { session: 's1', who: ME });
     put(path.join(D, 'session-logs', 's2.json'), { session: 's2', who: ME });
@@ -191,17 +195,20 @@ try {
     put(path.join(UP, 'uploads.json'), { 'mine.png': { discordId: ME }, 'yours.png': { discordId: YOU }, 'approved.png': { discordId: ME },
       'reported.png': { discordId: ME }, 'yours2.png': { discordId: YOU } });
     put(path.join(D, 'bans.json'), { [ME]: { why: 'x' } });
+    // Each account's settings (#5939).
+    put(path.join(D, 'settings.json'), { [ME]: { at: 1, files: { 'launcher.json': '{}' } }, [YOU]: { at: 1, files: { 'launcher.json': '{}' } } });
     put(path.join(D, 'deletion-requests.json'), { people: [{ discordId: ME, profiles: [P1] }] });
   }
   function runSite() {
     const logged = [];
     const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
     const fn = new Function('fs', 'path', 'console', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS',
-      'TROUBLE_FILE', 'ROSTER', 'INBOX', 'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', cut[1] + '\napplyDeletionRequests();');
+      'TROUBLE_FILE', 'ROSTER', 'INBOX', 'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', 'PCS', cut[1] + '\napplyDeletionRequests();');
     fn(fs, path, { log: (l) => logged.push(l), error: (l) => logged.push(l) }, putJson, D, UP,
       path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
       path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
-      path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'));
+      path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
+      path.join(D, 'settings.json'), path.join(D, 'pcs.json'));
     return logged.join('\n');
   }
   if (cut) {
@@ -209,9 +216,12 @@ try {
     const bans = rd(path.join(D, 'bans.json'));
     const said = runSite();
     const lk = J(path.join(D, 'linked.json'));
+    const kept = J(path.join(D, 'settings.json'));
+    yes('the site: their settings go, the others\' stay (#5939)', !(ME in kept) && (YOU in kept));
     yes('the site: their Discord link, rules answer and sign-in rows go, the others stay',
         !lk[ME] && !!lk[YOU] && J(path.join(D, 'rules-accepted.json'))[ME] === undefined &&
-        J(path.join(D, 'signins.json')).length === 1 && J(path.join(D, 'signins.json'))[0].id === YOU);
+        J(path.join(D, 'signins.json')).length === 1 && J(path.join(D, 'signins.json'))[0].id === YOU &&
+        J(path.join(D, 'pcs.json')).length === 1 && J(path.join(D, 'pcs.json'))[0].id === YOU);
     yes('  their session row and its logs and alert go; the kept session\'s stay',
         J(path.join(D, 'sessions.json')).map((x) => x.session).join(',') === 's2,s3' &&
         !fs.existsSync(path.join(D, 'session-logs', 's1.json')) && fs.existsSync(path.join(D, 'session-logs', 's2.json')) &&

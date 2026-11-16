@@ -39,16 +39,18 @@
   record says and never an address.
 
   WHO. Their Discord id, and their characters: the profile ids linked.json
-  holds for them, which the site checked were theirs when they played, and on
-  a reapply also the ids the record wrote down. A profile id that another
+  holds for them, which the site checked were theirs when they played, and
+  the ids the record wrote down for them, which stay theirs after the site
+  has let go of their link (#4470). A profile id that another
   account also holds is not theirs to delete and is left, and said.
 
   WHAT A REAL RUN REMOVES, the person's own records, in every copy on the box
   (the live folder and the copies a restore, a wipe, an install or a character
   reset sets aside beside it). The copies go at once. The live folders are
   each service's own, and it takes them at its next start (below):
-    site            their Discord link (linked.json), their answer to the
-                    rules (rules-accepted.json), their sign-in rows
+    site            their Discord link (linked.json) with their list of
+                    characters, their settings (settings.json), their answer
+                    to the rules (rules-accepted.json), their sign-in rows
                     (signins.json, which hold an address), their session rows
                     (sessions.json) with the launcher logs sent with them
                     (session-logs) and the failed-session alerts about them
@@ -56,8 +58,10 @@
                     roster.json, the tickets, applications and calls for help
                     they sent (for-bot\inbox.json), and their gallery
                     pictures, waiting or approved, with the file
-    game servers    each character's change form (world\changeForms, and the
-                    world-before-* and _discarded-* copies), its card
+    game servers    each character's change form (world\changeForms, or the
+                    server's database for a world kept in MongoDB, #6237;
+                    and the world-before-*, world-mongo-* and _discarded-*
+                    copies), its card
                     (private\characters.json and the characters-before-*
                     copies), its mod menu choices (private\mod-settings.json),
                     its take counts (private\take-limit.json) and when it last
@@ -185,8 +189,12 @@
       is, or a machine Windows will not say is a server (BoxGuard.ps1)
     - a Discord id that is not 17 to 20 digits
     - -Delete without -By, the person running it
-    - a JSON file, or a line of the record, that is there and will not parse
+    - a JSON file, or a line of the record, that is there and will not parse,
+      in a store it reads whole or among the launcher logs, change forms and
+      other data files it reads one by one, each such file named (#4203)
     - no node on the PATH (the JSON is edited by node, as the site writes it)
+    - a game server whose world is in MongoDB (#6237) whose database cannot
+      be asked who is in it, through server-log.js beside the server
 
   tests\test-2351-delete-person.ps1 runs it against stand-ins of every store.
 
@@ -373,7 +381,13 @@ if ($Reapply) {
     Say ('record    ' + @($have).Count + ' completed request(s) in ' + $record + $(if ($adds.Count) { ', and ' + $adds.Count + ' more in ' + ($Merge -join ', ') } else { '' }))
     if (-not $people.Count) { Say 'NOTHING TO REAPPLY: no record names a request.'; exit 0 }
 } else {
-    $people = @(@{ discordId = $DiscordId; profiles = @() })
+    # Their characters as the record wrote them down when the request was
+    # made, beside the ones linked.json holds. The site lets go of their link
+    # as it next starts, and a game server that has not started since still
+    # holds those characters and its request for them, so a dry run after the
+    # site started still finds them, and shows that server waiting (#4470).
+    $mine = @(@(Read-Record $record) | Where-Object { $_.discordId -eq $DiscordId } | ForEach-Object { @($_.profiles) } | Sort-Object -Unique)
+    $people = @(@{ discordId = $DiscordId; profiles = @($mine) })
 }
 
 # ------------------------------------------------------------------ node ---
@@ -386,6 +400,7 @@ $core = @'
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const cp = require('child_process');
 const a = JSON.parse(fs.readFileSync(process.argv[2], 'utf8').replace(/^\uFEFF/, ''));
 const say = (s) => process.stdout.write(s + '\n');
 function stop(m) { say('STOP|' + m); process.exit(2); }
@@ -473,7 +488,11 @@ function requestFile(w) {
 }
 function requestFiles() {
   const ws = ['site'].concat(a.servers.map((s) => 'server:' + s.tag), a.voices.map((v) => 'voice:' + v.tag), ['bot']);
-  return ws.map((w) => [w, requestFile(w)]);
+  const out = ws.map((w) => [w, requestFile(w)]);
+  // A game server's taken list as well: requests it has taken and not finished
+  // letting go of (#4920, thornswoodTakeReleaseList in Server-Log.js).
+  for (const s of a.servers) out.push(['server:' + s.tag, path.join(s.root, 'private', 'deleted-characters.taken.json')]);
+  return out;
 }
 // A request already there, to say it still waits; one that will not parse
 // is said by the run that would merge into it.
@@ -596,6 +615,10 @@ const people = a.people.map((x) => ({ discordId: String(x.discordId), profiles: 
 const linked = json(path.join(a.site, 'data', 'linked.json'), 'site');
 want(linked, 'object');
 const results = [];
+// Every file in scope that would not parse (#4203). One that cannot be read
+// may hold this person's records, so the run stops before anything is
+// written, naming each, the same as json() does for a store it reads whole.
+const unread = [];
 // What each service is asked to take out of its own files at its next start:
 // writer -> { people: Map(Discord id -> Set(profile)), actors: Set, kept: [] }.
 const asks = new Map();
@@ -617,6 +640,10 @@ for (const person of people) {
   const P = new Set(person.profiles);
   const L = linked.value || {};
   if (isObj(L[id]) && Array.isArray(L[id].profiles)) for (const n of L[id].profiles) if (Number(n) > 0) P.add(Number(n));
+  // The site's list of their characters (#5938), and the ones they deleted at
+  // the menu, which stay on the game server and drop off the door's list.
+  if (isObj(L[id]) && Array.isArray(L[id].chars)) for (const c of L[id].chars) if (isObj(c) && Number(c.id) > 0) P.add(Number(c.id));
+  if (isObj(L[id]) && Array.isArray(L[id].retired)) for (const n of L[id].retired) if (Number(n) > 0) P.add(Number(n));
   for (const other of Object.keys(L)) {
     if (other === id || !isObj(L[other]) || !Array.isArray(L[other].profiles)) continue;
     for (const n of L[other].profiles) if (P.has(Number(n))) { P.delete(Number(n)); r.skipped.push(Number(n)); }
@@ -636,6 +663,8 @@ for (const person of people) {
     if (want(lk, 'object') && has(lk.value, id)) { delete lk.value[id]; dirty(lk); removed(T + ': Discord link', 1); }
     const rules = json(path.join(D, 'rules-accepted.json'), s.writer);
     if (want(rules, 'object') && has(rules.value, id)) { delete rules.value[id]; dirty(rules); removed(T + ': answer to the rules', 1); }
+    const settings = json(path.join(D, 'settings.json'), s.writer);
+    if (want(settings, 'object') && has(settings.value, id)) { delete settings.value[id]; dirty(settings); removed(T + ': settings', 1); }
     const signins = json(path.join(D, 'signins.json'), s.writer);
     if (want(signins, 'array')) {
       const keep = signins.value.filter((x) => !(isObj(x) && String(x.id) === id));
@@ -669,7 +698,7 @@ for (const person of people) {
       // can be a year of them, up to a megabyte each.
       let set = null;
       try { set = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); }
-      catch (e) { left(T + ': launcher logs that would not parse, so were not read', 1); continue; }
+      catch (e) { unread.push(p); continue; }
       if (!isObj(set)) continue;
       if (String(set.who) !== id && !gone.has(String(set.session))) continue;
       if (kept.has(String(set.session))) held(T + ': launcher logs of kept sessions', 1);
@@ -783,7 +812,10 @@ for (const person of people) {
       if (!isDir(R)) continue;
       // The form ids of their characters found here, for the release list.
       const A = new Set();
-      const worlds = names(R).filter((n) => /^world(-before-.+)?$/i.test(n)).sort();
+      // world-mongo-<stamp> is a tool's read-out of a world kept in MongoDB
+      // (World.ps1, #6237): nothing runs from it, and once saved it holds only
+      // the forms the tool set aside, in changeForms\_discarded-*.
+      const worlds = names(R).filter((n) => /^world(-before-.+|-mongo-\d{8}-\d{6})?$/i.test(n)).sort();
       for (const w of worlds) {
         const forms = path.join(R, w, 'changeForms');
         const dirs = [forms].concat(names(forms).filter((n) => /^_discarded-/.test(n)).map((n) => path.join(forms, n)));
@@ -816,7 +848,7 @@ for (const person of people) {
             const p = path.join(dir, f);
             if (!P.size) continue;
             let o = null;
-            try { o = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { left(T + ': change forms that would not parse, so were not read', 1); continue; }
+            try { o = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { unread.push(p); continue; }
             if (isObj(o) && Number(o.profileId) > 0 && hasP(o.profileId) && !unlinks.has(p)) {
               unlink(p, live && !bak ? g.writer : null);
               removed(T + ': characters' + (bak ? ' in copies an appearance reset kept' : w === 'world' && dir === forms ? '' : ' in ' + path.relative(R, dir)), 1);
@@ -824,6 +856,35 @@ for (const person of people) {
               // (FormDesc::ToString); the list keeps its runtime form id (#2870).
               if (formIdOf(o.formDesc)) A.add(formIdOf(o.formDesc));
             }
+          }
+        }
+      }
+      /*
+        A live server whose world is in MongoDB (#6237) keeps its characters
+        in its database, not in world\changeForms. They are found by asking
+        it, through server-log.js beside the server (--people, which reads
+        the database the way the server's own start does), and they go the
+        way a live server's files go: the server takes them out at its next
+        start, before the engine loads, from the list written below. One the
+        database cannot be asked about stops the run, since it may hold them.
+      */
+      if (g.writer && P.size) {
+        const st = json(path.join(R, 'server-settings.json'), null);
+        if (!st.missing && isObj(st.value) && st.value.databaseDriver === 'mongodb') {
+          const writer = path.join(R, 'server-log.js');
+          if (!fs.existsSync(writer)) stop(writer + ' is not there, so the characters in ' + st.value.databaseName + ' could not be looked for. Nothing was changed');
+          const q = cp.spawnSync(process.execPath, [writer, '--people', Array.from(P).join(',')], { cwd: R, encoding: 'utf8', windowsHide: true, timeout: 5 * 60 * 1000 });
+          const out = String(q.stdout || '').split(/\r?\n/).filter((l) => l);
+          const done = out.filter((l) => /^PEOPLE\|\d+$/.test(l));
+          if (q.status !== 0 || !done.length) {
+            const why = out.filter((l) => l.indexOf('WORLD FAILED: ') === 0)[0] || ('server-log.js exited with ' + q.status + (out.length ? ': ' + out[out.length - 1] : ''));
+            stop('the characters in ' + st.value.databaseName + ' could not be looked for (' + why + '). Nothing was changed');
+          }
+          const descs = out.filter((l) => /^FORM\|/.test(l)).map((l) => l.slice(5));
+          if (descs.length) {
+            touched.add(g.writer);
+            removed(T + ': characters in ' + st.value.databaseName, descs.length);
+            for (const d of descs) if (formIdOf(d)) A.add(formIdOf(d));
           }
         }
       }
@@ -876,6 +937,9 @@ for (const person of people) {
       const LIST = 'deleted-characters.json';
       const RELEASED = /^(property|law|beds|farm-claims|embassy|books|dungeon-rewards-ledger|trade-cargo|market-stalls|trade-carts|merchant-ledger)\.json$/i;
       handled.add(path.join(priv, LIST).toLowerCase());
+      // The server's own taken list and one half taken (#4920): requests, not registers.
+      handled.add(path.join(priv, 'deleted-characters.taken.json').toLowerCase());
+      handled.add(path.join(priv, 'deleted-characters.taking.json').toLowerCase());
       let theirs = 0;
       if (P.size) {
         for (const dir of [priv, data]) {
@@ -886,7 +950,7 @@ for (const person of people) {
             if (!st.isFile() || st.size > 64 * 1024 * 1024) continue;
             let v;
             try { v = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); }
-            catch (e) { left(T + ': ' + path.relative(R, p) + ' would not parse, so was not read', 1); continue; }
+            catch (e) { unread.push(p); continue; }
             const n = refs(v, P, id, A);
             if (dir === priv && RELEASED.test(f)) {
               releases(T + ': places in ' + path.relative(R, p) + ' naming their character', n);
@@ -996,9 +1060,14 @@ for (const person of people) {
     const named = w.indexOf('server:') === 0
       ? (Array.isArray(v.profiles) && r.profiles.length && r.profiles.every((n) => v.profiles.indexOf(n) >= 0))
       : (Array.isArray(v.people) && v.people.some((x) => isObj(x) && String(x.discordId) === id));
-    if (named) r.waiting.push(w);
+    if (named && r.waiting.indexOf(w) < 0) r.waiting.push(w);
   }
   results.push(r);
+}
+
+if (unread.length) {
+  const each = Array.from(new Set(unread));
+  stop(each.length + ' file(s) that may hold their records will not parse, so nothing was changed: ' + each.join('; '));
 }
 
 // Each request, merged into one still waiting there.

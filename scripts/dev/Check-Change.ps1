@@ -143,7 +143,12 @@ try {
                 $code = 1
             } else {
                 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
-                & $dotnet.Source run --project (Join-Path (Join-Path $Repo 'tools') 'ReleaseNotes') --verbosity quiet -- pr --body-file (Resolve-Path -LiteralPath $Body).Path
+                # --disable-build-servers (#5925): test-5183 runs this beside
+                # other harnesses, and the MSBuild node a run leaves up is
+                # taken by the next build of the same user, here another
+                # harness's restore, which then fails when the runner kills
+                # what test-5183 left.
+                & $dotnet.Source run --project (Join-Path (Join-Path $Repo 'tools') 'ReleaseNotes') --verbosity quiet --disable-build-servers -- pr --body-file (Resolve-Path -LiteralPath $Body).Path
                 if ($LASTEXITCODE -ne 0) { $code = 1 }
             }
             $py = $null

@@ -21,7 +21,7 @@ namespace Thornswood
     static partial class Shell
     {
         static TextBlock txtDiagNote, txtDiagHolds, txtThemeNote;
-        static StackPanel diagReadings, diagCollection, diagAddons;
+        static StackPanel diagReadings, diagCollection;
         static Button btnDiagBundle, btnDiagOpen;
 
         // The last server test: its round trip in ms, -1 when nothing
@@ -36,7 +36,6 @@ namespace Thornswood
             txtDiagNote = win.TxtDiagNote; txtDiagHolds = win.TxtDiagHolds; txtThemeNote = win.TxtThemeNote;
             diagReadings = win.DiagReadings;
             diagCollection = win.DiagCollection;
-            diagAddons = win.DiagAddons;
             btnDiagBundle = win.BtnDiagBundle; btnDiagOpen = win.BtnDiagOpen;
         }
 
@@ -82,16 +81,13 @@ namespace Thornswood
 
             if (diagCollection != null)
             {
-                diagCollection.Children.Clear();
                 // After the last Ready to launch row, before Bring it up to
                 // date from Vortex. Used to sit in DiagReadings under What the
                 // launcher can see right now, which put it under the Vortex
-                // section.
-                diagCollection.Children.Add(CollectionStatusCard());
+                // section. The launcher's own install is offered beside it
+                // (ShellModlist.cs, #6244).
+                DrawCollectionCards();
             }
-
-            // The optional packs, under the collection card (#1170).
-            DrawAddons();
 
             DrawReadings();
             // Voice is asked again whenever the page opens, the way its card
@@ -147,7 +143,7 @@ namespace Thornswood
             {
                 string path = null, err = null;
                 try { path = Diag.Report(cfg, Updater.Version); }
-                catch (Exception ex) { err = ex.Message; }
+                catch (Exception ex) { err = Failure.Why("Pages", ex); }
 
                 Dispatcher.UIThread.Post(delegate
                 {

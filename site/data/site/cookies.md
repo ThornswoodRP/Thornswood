@@ -1,6 +1,6 @@
 # Cookies
 
-Last changed: 26 October 2026.
+Last changed: 11 November 2026.
 
 This page is every cookie and every piece of browser storage thornswood.net
 uses, what each one is for, and how long it lasts. The site uses them for
@@ -13,7 +13,7 @@ embed.
 
 | Name | Set by | Purpose | Duration |
 | --- | --- | --- | --- |
-| `twa` | the site | Signed Discord identity. Access is checked against your Discord roles each time; signing in alone does not grant staff access. | Up to 30 days; cleared on sign-out. |
+| `twa` | the site | Signed Discord identity. Access is checked against your Discord roles each time; signing in alone does not grant staff access. | Up to 30 days; cleared on sign-out, and a copy made before a sign-out is refused after it. |
 | `twst_*` | the site | One-use security state during a Discord sign-in, scoped to `/auth/discord`. | Ten minutes; cleared when the sign-in returns. |
 | `tw` | the site | Fallback member-password sign-in, used only when Discord sign-in is not set up. Ignored when it is. | Up to one year; cleared on sign-out. |
 | `tw-age-18` | the site | Remembers that this browser stated eighteen or older. It does not verify age. | One year. |

@@ -44,7 +44,10 @@ yes('landing build starts a rotating slideshow',
     /function startFlip\(\)/.test(home));
 yes('slideshow respects reduced motion',
     /prefers-reduced-motion: reduce/.test(home) &&
-    /if \(reduce \|\| paused \|\| shots\.length < 2\) return/.test(home));
+    // held(): the pointer, focus, the pause button or a press's 8 seconds
+    // (#4127), each its own, where one shared paused flag let a press's
+    // timer start it under the pointer.
+    /if \(reduce \|\| held\(\) \|\| shots\.length < 2\) return/.test(home));
 yes('slideshow has themed prev next arrows',
     /gal-nav gal-prev/.test(home) && /gal-nav gal-next/.test(home) &&
     /\.gal-show \.gal-nav\{[^}]*border:1px solid var\(--gold\)/.test(home) &&
@@ -137,7 +140,8 @@ yes('By and Note inputs use charcoal iron night theme',
     /\.gal-box \.form input\[type=text\]\{[^}]*background:var\(--iron\)/.test(home) &&
     /\.gal-box \.form input\[type=text\]\{[^}]*color-scheme:dark/.test(home) &&
     /\.gal-box \.form input\[type=text\]:focus\{[^}]*border-color:var\(--gold\)/.test(home) &&
-    /::placeholder\{[^}]*color:var\(--faint\)/.test(home) &&
+    // --quiet since #4389: --faint was 4.12 to 1 on the --iron field.
+    /::placeholder\{[^}]*color:var\(--quiet\)/.test(home) &&
     /placeholder="a name for the caption"/.test(home) &&
     /placeholder="a short note for staff"/.test(home));
 yes('form gap keeps By Note off the drop zone and Send it',
@@ -173,7 +177,7 @@ yes('hub Gallery keeps staff Accept + Delete intro',
     /Staff Accept waiting shots and Delete pending or live ones/.test(hub));
 
 yes('hub Gallery loads one staff grid of pending + live',
-    /function loadGalleryStaff\(\)/.test(hub) &&
+    /function loadGalleryStaff\(after\)/.test(hub) &&
     /\/api\/gallery\/pending/.test(hub) &&
     /\/api\/public/.test(hub) &&
     /method:'DELETE'/.test(hub) &&

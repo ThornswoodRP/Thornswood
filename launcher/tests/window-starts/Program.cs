@@ -49,6 +49,11 @@ namespace Thornswood.Tests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
                 .SetupWithoutStarting();
 
+            // launcher\tests\test-4459-setup-keys.ps1: the install window
+            // worked from the keyboard, and nothing else.
+            string[] argv = Environment.GetCommandLineArgs();
+            if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
+
             MainWindow win = null;
             Check("the window is made from its markup", () => win = new MainWindow());
             if (win == null) return 1;

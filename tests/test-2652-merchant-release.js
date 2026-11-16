@@ -144,6 +144,10 @@ function open(dir, opt) {
   const logged = [], mirror = new Map(opt.copies || []);
   const box = { require: require, Buffer: Buffer, console: { log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } },
                 log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } };
+  // The world the release block asks whether a listed id is held now: the
+  // listed characters' forms are gone, which the engine says in its own words
+  // (WorldState::GetFormAt, #5036).
+  box.mp = { get: function (id) { throw new Error('Form with id 0x' + (Number(id) >>> 0).toString(16) + " doesn't exist"); } };
   box.globalThis = box;
   vm.createContext(box);
   vm.runInContext(purseSrc, box, { filename: 'gamemode.js (purses)' });
@@ -288,8 +292,9 @@ try {
   const rp = p1.purses.release(whoOf([P1], [A3]));
   const after3 = readFile(dir3);
   const c9 = after3.entries['9:Skyrim.esm'].commissions, c8 = after3.entries['8:Skyrim.esm'].commissions;
-  yes('P1 a promise held for them goes by profile, and its gold is the trader\'s to spend again',
-      !(pkey(OWN_P1, 'q-iron-1') in c9.held) && COMMISSIONS.spendable(after3.entries['9:Skyrim.esm']) === 300 - 20);
+  // A promise holds none of the purse back: commission pay is new gold (#6180).
+  yes('P1 a promise held for them goes by profile, and the trader\'s whole purse is still its own to spend',
+      !(pkey(OWN_P1, 'q-iron-1') in c9.held) && COMMISSIONS.spendable(after3.entries['9:Skyrim.esm']) === 300);
   yes('P2 somebody else\'s promise stays as it was', JSON.stringify(c9.held[pkey(OWN_PY, 'q-iron-2')]) === JSON.stringify(held(2, OWN_PY, 'q-iron-2', 20)));
   yes('P3 a finished one of theirs cooling down goes by form id; one whose owner names a plugin is never a character',
       !(pkey(OWN_A3, 'q-iron-3') in c9.cool) && c9.cool[pkey(OWN_PLACED, 'q-iron-4')] === NOW - 100);
@@ -338,7 +343,7 @@ try {
     f1.box.__thornswoodRelease('merchants', f1.purses.release);
     yes('F1 a save that fails writes nothing', fs.readFileSync(fileOf(dir2), 'utf8') === keep);
     yes('F2 the part waits, said in the log', f1.logged.some(function (l) { return /release: merchants stopped: .*its part waits for the next start/.test(l); }) &&
-        !('merchants' in JSON.parse(fs.readFileSync(path.join(dir2, 'private', 'deleted-characters.json'), 'utf8')).done));
+        !('merchants' in JSON.parse(fs.readFileSync(path.join(dir2, 'private', 'deleted-characters.taken.json'), 'utf8')).done));
     let revoked = false;
     try { f1.purses.read(9); } catch (e) { revoked = /unavailable/.test(String(e.message)); }
     yes('F3 and the service is revoked, as after a failed commit', revoked);
@@ -350,7 +355,8 @@ try {
     yes('F4 the next start lets go, and then the list is gone',
         L.some(function (l) { return l === 'release: merchants: merchants 3, supply 2, trades 3'; }) &&
         L.some(function (l) { return /every part is done, and the list is gone/.test(l); }) &&
-        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')));
+        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')) &&
+        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.taken.json')));
     const all = f1.logged.concat(f2.logged).join('\n');
     yes('L1 the log is counts, never a profile id, a form id or a label of theirs',
         [P1, A1, A2].every(function (n) { return !new RegExp('\\b(' + n + '|' + hex(n) + ')\\b', 'i').test(all); }) && !/iron ore|wheat/.test(all));

@@ -398,6 +398,7 @@
   the game folder changed while this ran. Nothing is written unless every check
   passed.
 #>
+#Requires -Version 7
 param(
     # The build's Data folder. Read only.
     [string]   $Data       = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),
@@ -622,10 +623,9 @@ $CONDITION_FUNCTIONS_THE_SERVER_HAS = @{
 # and those rows are still counted as behind a perk, unless that plugin's row
 # says perkRecipesCopied: Immersive Armors' does (Patrick, 31 Oct 2026, A on
 # q-4826-ia-perk-recipes), so its perk tests come off like everybody's.
-# Thornswood-Last.esp's own copy of a recipe is never read for its
-# conditions: the ones below it are, the way its bench is (#3120), so the
-# table is the same whether the box's last plugin is from before this or
-# after. A perk test counts as passed, so one joined to other conditions by
+# Thornswood-Last.esp is never read (#5191): a recipe's conditions are the
+# ones its mod gave it, and the rule here takes the perk tests off, so the
+# table is the same whether or not the box's last plugin is there. A perk test counts as passed, so one joined to other conditions by
 # OR makes its whole OR group pass, and none of that group is a need either,
 # the same OR groups Build-LastPlugin.py takes off (perk_drops there).
 #
@@ -1623,7 +1623,7 @@ $COLLAPSED_SMELT_EDITOR_IDS = [ordered]@{
 }
 
 # THE DWARVEN SCRAP SMELT THAT STAYS (#613, #1400). It stays in the unowned map,
-# because #613 kept it out of the owned bucket and tests\test-613-dwarven-ingot-collapse.js
+# because #613 kept it out of the owned bucket and game\tests\test-613-dwarven-ingot-collapse.js
 # holds it there, and the gamemode gates it by hand in KEPT_SMELT as novice
 # Platewright work. Its reason says so instead of the smelter's "open to
 # everybody", which #1400 wrote into recipes.json by hand and a rebuild would
@@ -2004,7 +2004,7 @@ foreach ($nameEntry in $RECIPE_NAMES.owner.PSObject.Properties) {
 # spell gate already says. These are the thirteen the Bladebinder page
 # keeps; the other 147 and the Aetherial Staff are cut and stay where input
 # cost puts them. The rank is the spell's in the college book, the mage
-# school pages and STAFF_SPELLS, and tests\test-1622-recipe-generator.js
+# school pages and STAFF_SPELLS, and game\tests\test-1622-recipe-generator.js
 # holds each line to it. A Bladebinder below master buys the stones from a
 # master miner, which HALVES_WITH_AN_UNSTANDABLE_RUNG says for this half.
 # The kept smelt and tan rows named in RECIPE_OWNER (#1391, #1400): novice
@@ -2055,10 +2055,14 @@ $BENCH_OWNER = [ordered]@{
 # every bench the trade works at; Only narrows one of them to the families of
 # work done there (a Smith at the tanning rack tans, and makes no armour there).
 #
-# Only rows somebody can make are moved: a row that fires and is not cut. A
-# row nobody makes opens no bench, and a cut row put back for an event is moved
-# on the build that puts it back. A row the server never sees (a temper at the
-# sharpening wheel or the armour table) opens no bench either.
+# Every row that fires is moved, cut or not (#5037). The crafting menu lists
+# every recipe whose BNAM is one of the bench's keywords, whatever the server
+# would answer, so a cut row left at the bench its mod put it at is listed
+# there: 32 cut bows, arrows and fishing poles stayed on the forge's list until
+# this. A cut row is still refused at its new bench (craftAnswer), and it is
+# already where it belongs the day it is put back for an event. A row the
+# server never sees (a temper at the sharpening wheel or the armour table)
+# is not moved.
 #
 # The rows nobody owns are not moved: a row nobody owns is made by whoever the
 # bench opens for, which is Patrick's answer on 22 October (A on the report
@@ -2086,10 +2090,16 @@ $TRADE_BENCHES = [ordered]@{
     'Alchemist'  = @{ Home = 'ThornswoodCraftingAlchemy'; Benches = @('ThornswoodCraftingAlchemy') }
 }
 
-# The plugin Build-LastPlugin.py writes. Its BNAM is never read as where a mod
-# put a recipe: it is where this table moved it, so reading it back would take
-# every move off on the next build (#3120).
+# The plugin Build-LastPlugin.py writes, from this table among others. This
+# is built before it and never reads it (#5191, Patrick's B on
+# q-5191-last-plugin-loop): read back, its BNAM would take every move this
+# table made off on the next build (#3120), its copies would hide the perk
+# tests it takes off (#4826), and its counts would be the re-cost of the
+# build before. What it changes is taken from what decides it: the moves and
+# the perk tests from the rules here, the counts from game\data\recost.json
+# (THE RE-COSTED COUNTS below).
 $LAST_PLUGIN = 'Thornswood-Last.esp'
+$RECOST_FILE = Join-Path $PSScriptRoot '..\..\game\data\recost.json'
 
 if (-not $Out) { $Out = Join-Path $PSScriptRoot '..\..\game\data\recipes.json' }
 
@@ -2762,6 +2772,11 @@ if ($Plugins.Count -gt 0) {
     Ok ("{0} plugins: the five masters, then {1}" -f $order.Count, $PluginsTxt)
     if ($offCount -gt 0) { Note "$offCount line(s) in that list are switched off and were left out" }
 }
+# Never Thornswood-Last.esp, in the order or not (#5191): see $LAST_PLUGIN.
+if (@($order | Where-Object { $_ -ieq $LAST_PLUGIN }).Count) {
+    [void]$order.RemoveAll([Predicate[string]] { param($p) $p -ieq $LAST_PLUGIN })
+    Note ("{0} is left out: this is built before it, and what it changes is taken from what decides it" -f $LAST_PLUGIN)
+}
 
 $missing = New-Object 'System.Collections.Generic.List[string]'
 foreach ($p in $order) { if (-not (Test-Path -LiteralPath (Get-PluginPath $Data $p))) { $missing.Add($p) } }
@@ -3079,10 +3094,6 @@ foreach ($pl in $order) {
                         if ($hasCnam -and $cnam -ne 0) { $outDesc = DescOf ([uint32]$cnam) $masters $pl }
                         $benchDesc = ''
                         if ($hasBnam -and $bnam -ne 0) { $benchDesc = DescOf ([uint32]$bnam) $masters $pl }
-                        # Thornswood-Last.esp's BNAM is a move this table made
-                        # ($TRADE_BENCHES), so the bench stays the one the
-                        # plugin before it named (#3120).
-                        if ($pl -eq $LAST_PLUGIN -and $recipes.Contains($desc)) { $benchDesc = $recipes[$desc].BenchDesc }
                         # The inputs, as descs, resolved here where the master
                         # list of the plugin that carried the record is still
                         # in hand. The same two lines the output and the bench
@@ -3095,16 +3106,7 @@ foreach ($pl in $order) {
                                 Count = $c.Count
                             })
                         }
-                        # Thornswood-Last.esp's copy has its perk tests
-                        # taken out (#4826), so the conditions stay the ones
-                        # the plugin before it carried, read with that
-                        # plugin's masters.
                         $condList = $conds.ToArray(); $condMasters = $masters; $condIn = $pl
-                        if ($pl -eq $LAST_PLUGIN -and $recipes.Contains($desc)) {
-                            $condList = $recipes[$desc].Conditions
-                            $condMasters = $recipes[$desc].CondMasters
-                            $condIn = $recipes[$desc].CondIn
-                        }
                         $recipes[$desc] = [pscustomobject]@{
                             Desc = $desc; Edid = $edid; SeenIn = $pl
                             Plugin = $desc.Split(':')[1]
@@ -3146,6 +3148,64 @@ foreach ($pl in $order) {
 Ok ("{0} recipes after overrides, out of {1} COBJ records read" -f $recipes.Count, ($recipes.Count + $seenTwice.Count))
 Ok ("{0} item and keyword records to resolve against, {1} of them keywords" -f $items.Count, $kwName.Count)
 if ($recipes.Count -eq 0) { Bad 'no COBJ records found at all, which means the load order or the Data folder is not what this thinks it is' }
+
+# ------------------------------------------------- the re-costed counts --
+#
+# THE RE-COSTED COUNTS (#613, #5191). Thornswood-Last.esp carries each recipe
+# game\data\recost.json re-costs with only its input counts changed, and
+# without the coins of every forge recipe that charged them (Patrick,
+# q-3115-forge-coins, B). This table is built before that plugin and never
+# reads it, so it takes the counts from recost.json, the table the plugin is
+# made from. Build-Recost.py writes recost.json from this table, so it is
+# read back (readsBack in scripts\mods\content-tables.json): when
+# Build-Recost.py changes it, the chain runs this again (#4087). A row whose
+# inputs are no longer the ones recost.json measured is left as its mod has
+# it, and Build-Recost.py measures it again from that. A row of a plugin the
+# Last plugin never copies from is under notCopied and is not read here: each
+# person's game sets its counts (RECIPES_SET_IN_GAME), and its record stays
+# as its mod has it.
+function Use-RecostCounts($recipes, $rows) {
+    # Each row of recost.json's recipes onto its recipe: every input's count
+    # becomes its 'to', and an input taken to 0 (the coins) comes off, as
+    # Thornswood-Last.esp carries it. Answers the recipes it changed, and the
+    # rows whose recipe no longer has the inputs the row measured, which are
+    # left as their mod has them.
+    $applied = New-Object 'System.Collections.Generic.List[string]'
+    $stale = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($rr in @($rows)) {
+        $rd = [string]$rr.recipe
+        $want = @($rr.inputs)
+        $same = $recipes.Contains($rd)
+        if ($same) {
+            $have = @($recipes[$rd].InputList)
+            $same = $want.Count -eq $have.Count
+            for ($q = 0; $same -and $q -lt $want.Count; $q++) {
+                if ([string]$want[$q].item -ne [string]$have[$q].Desc -or [int]$want[$q].count -ne [int]$have[$q].Count) { $same = $false }
+            }
+        }
+        if (-not $same) { $stale.Add($rd); continue }
+        $list = New-Object 'System.Collections.Generic.List[object]'
+        for ($q = 0; $q -lt $want.Count; $q++) {
+            if ([int]$want[$q].to -gt 0) { $list.Add([pscustomobject]@{ Desc = $have[$q].Desc; Count = [int]$want[$q].to }) }
+        }
+        $recipes[$rd].Inputs = $recipes[$rd].Inputs - ($have.Count - $list.Count)
+        $recipes[$rd].InputList = $list.ToArray()
+        $applied.Add($rd)
+    }
+    return [pscustomobject]@{ Applied = $applied.ToArray(); Stale = $stale.ToArray() }
+}
+Write-Host ''
+Write-Host 'the re-costed counts' -ForegroundColor Cyan
+if (-not (Test-Path -LiteralPath $RECOST_FILE)) {
+    Note ("there is no {0} yet, so every recipe keeps its mod's counts; Build-Recost.py writes it, and the chain runs this again" -f $RECOST_FILE)
+} else {
+    $recostRows = @(([IO.File]::ReadAllText($RECOST_FILE) | ConvertFrom-Json).recipes)
+    $recostGot = Use-RecostCounts $recipes $recostRows
+    Ok ("{0} of {1} recipe(s) take the counts recost.json gives them, as Thornswood-Last.esp carries them" -f $recostGot.Applied.Count, $recostRows.Count)
+    if ($recostGot.Stale.Count) {
+        Note ("{0} row(s) of recost.json name inputs their recipe no longer has, and keep their mod's counts until Build-Recost.py measures them again: {1}" -f $recostGot.Stale.Count, (($recostGot.Stale | Select-Object -First 6) -join ', '))
+    }
+}
 
 # Spell desc -> every spell tome that teaches it, sorted so two runs agree.
 # Read out of the BOOK records the scan above kept, last one in the load order
@@ -5399,8 +5459,8 @@ if (-not (Test-Path -LiteralPath $CUT_FILE)) {
 
 # --------------------------------------------------- the rows that move -
 #
-# See $TRADE_BENCHES. After the cut file, because only a row somebody can make
-# is moved, and after every rank and count, so a move changes no ladder.
+# See $TRADE_BENCHES. After the cut file, so a cut row is moved with the rest
+# (#5037), and after every rank and count, so a move changes no ladder.
 
 Write-Host ''
 Write-Host 'the rows at a bench their trade does not work at' -ForegroundColor Cyan
@@ -5425,7 +5485,6 @@ $movedCount = @{}
 foreach ($desc in $owned.Keys) {
     $r = $owned[$desc]
     if (-not $r.Fires) { continue }
-    if ($r.PSObject.Properties['Book'] -and $r.Book -eq 'cut') { continue }
     if (-not $TRADE_BENCHES.Contains($r.Owner)) {
         Bad ("{0} ({1}) is owned by {2}, which names no benches in TRADE_BENCHES" -f $r.Edid, $desc, $r.Owner)
         continue
@@ -5447,7 +5506,7 @@ foreach ($desc in $owned.Keys) {
     $movedCount[$mk] = $movedCount[$mk] + 1
 }
 if ($movedCount.Count -eq 0) {
-    Ok 'every row somebody can make is at a bench its trade works at'
+    Ok 'every row the server is asked about is at a bench its trade works at'
 } else {
     foreach ($mk in ($movedCount.Keys | Sort-Object)) { Ok ("{0,4} moved: {1}" -f $movedCount[$mk], $mk) }
 }

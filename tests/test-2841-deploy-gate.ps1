@@ -6,14 +6,15 @@
   The deploy gate (#2841): the restricted, non-admin account whose key runs
   one dispatcher with only the named Deploy, Install and Get-Logs verbs, held
   only in the "desk" GitHub environment. This holds:
-    1. Every file of it parses, and the files the box runs under Windows
-       PowerShell 5.1 are plain ASCII (5.1 reads a file with no byte order
-       mark as the system code page).
+    1. Every file of it parses, and the files the box runs are plain ASCII
+       (Windows PowerShell 5.1, which ran them until #5356, read a file with
+       no byte order mark as the system code page).
     2. The rules (scripts\vps\gate\GateRules.ps1): lines the gate takes give
        exactly the words the broker starts the script with, and every line
        that names another verb, a parameter outside the verb's list, a value
        outside its rule or a character a shell or PowerShell would read is
-       refused whole. Under Windows PowerShell 5.1 too, when there is one.
+       refused whole, in a PowerShell 7 of their own too, as the broker runs
+       them (#5356).
     3. verbs.json against the scripts: each verb's script is there, takes
        every parameter the gate lets through and every fixed word, and no
        verb lets a caller name a host, a user, a folder, a file or a task.
@@ -164,9 +165,10 @@ Yes '  it finds the server''s processes by the installer''s own rule and reads o
 Yes 'Check-Site takes nothing of the caller''s' ((Words 'Check-Site') -eq '-NoPause' -and (Words 'Check-Site -Who 1') -eq 'REFUSED' -and (Words 'Check-Site -Site x') -eq 'REFUSED')
 # Box keys and runners, renewed from the cloud and never made new (#2862,
 # Patrick's A on q-retire-box-keys, 31 Oct 2026).
-Yes 'Renew-BoxKey takes desk or notices and nothing else: no name, environment, repository or file' ((Words 'Renew-BoxKey -Which desk') -eq '-NoPause|-Which|desk' -and
-    (Words 'Renew-BoxKey -Which notices') -eq '-NoPause|-Which|notices' -and (Words 'Renew-BoxKey -Which cloud') -eq 'REFUSED' -and
+Yes 'Renew-BoxKey takes desk and nothing else: no name, environment, repository or file' ((Words 'Renew-BoxKey -Which desk') -eq '-NoPause|-Which|desk' -and
+    (Words 'Renew-BoxKey -Which cloud') -eq 'REFUSED' -and
     (Words 'Renew-BoxKey -Which desk -AdminState x') -eq 'REFUSED' -and (Words 'Renew-BoxKey -Name djinn') -eq 'REFUSED')
+Yes '  the notices key and -Retire are gone (#5314)' ((Words 'Renew-BoxKey -Which notices') -eq 'REFUSED' -and (Words 'Renew-BoxKey -Which notices -Retire') -eq 'REFUSED')
 Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -NetworkOnly: never -Remove, -OffBox, another repository, name or folder' (
     (Words 'Install-Runner -Number 2') -eq '-FromGate|-AllowHost|pypi.org,files.pythonhosted.org,registry.npmjs.org|-NoPause|-Number|2' -and
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
@@ -181,10 +183,13 @@ Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and p
     $rk.IndexOf('& $ssh -n -F none -i $keyFile') -lt $rk.IndexOf('& gh secret set $K.Secret') -and
     $rk.IndexOf('& gh secret set $K.Secret') -lt $rk.IndexOf('Where-Object { $old -notcontains $_ }') -and
     $rk.Contains('if ($changed -and -not $done) { [IO.File]::WriteAllBytes($KeysFile, $before) }'))
-Yes '  its key goes only to the two fixed secrets of the ops repository, with the old line''s options and the App''s environments token' (
-    $rk.Contains("`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
+Yes '  its key goes only to the desk''s fixed secret of the ops repository, with the old line''s options and the App''s environments token' (
+    $rk.Contains("`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and -not $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
     $rk.Contains('$newLine = $opts + '' '' + $bare + $tag') -and $rk.Contains('Get-ThornswoodOpsAccess -Repo $RepoRoot -For keys') -and
     $rk.Contains('does not let in main alone'))
+$rkCode = $rk -replace '(?s)<#.*?#>', ''
+Yes '  and it holds the line to the gate''s forced command, with no -Retire and no say-staff.ps1 left' (
+    $rkCode.Contains('$wantCommand = ''command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"''') -and $rkCode -notmatch 'Retire|say-staff|gh secret delete')
 $ir = Text 'scripts/deploy/Install-Runner.ps1'
 Yes '  Install-Runner from the gate is the ops repository''s, with the App''s runners token, and puts back only a runner the records or GitHub already name' (
     $ir.Contains("`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
@@ -224,36 +229,17 @@ Yes '  both box scripts mint the token through ShipAccess.ps1' ($pubBox.Contains
     (Text 'scripts/release/Ship-OnBox.ps1').Contains('Get-ThornswoodShipAccess -Repo $repo -AdminState $AdminState'))
 Yes 'Deploy-Server takes no host, folder, build folder or role list' ((Words "Deploy-Server -Build $sha -Vps x") -eq 'REFUSED' -and (Words "Deploy-Server -Build $sha -Root C:/x") -eq 'REFUSED' -and
     (Words "Deploy-Server -Build $sha -Dist x") -eq 'REFUSED' -and (Words "Deploy-Server -Build $sha -Devs 1") -eq 'REFUSED')
-# Content rebuilds through the gate (Patrick's card, 30 Oct 2026): main's
-# whole chain against a server's plugins, its files back through -Out.
-Yes 'Rebuild-ContentTables takes -Server dev or main, and names its out parameter' ((Words 'Rebuild-ContentTables') -eq '' -and (Words 'Rebuild-ContentTables -Server main') -eq '-Server|main' -and
-    (Words 'Rebuild-ContentTables -Server live') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Rebuild-ContentTables' -Verbs $verbs).Out -eq '-Out')
-Yes '  and cannot name a branch, a tool or a build' ((Words "Rebuild-ContentTables -Build $sha") -eq 'REFUSED' -and (Words 'Rebuild-ContentTables -Script x') -eq 'REFUSED' -and (Words 'Rebuild-ContentTables -Branch x') -eq 'REFUSED')
-$rebuild = Text 'scripts/mods/Rebuild-OnBox.ps1'
-# A pull request's data, never its code (Patrick's B on the #4835 card).
-Yes '  a pull request by number and its full head commit' ((Words "Rebuild-ContentTables -Pull 4835 -Head $sha") -eq "-Pull|4835|-Head|$sha" -and
-    (Words 'Rebuild-ContentTables -Pull 0') -eq 'REFUSED' -and (Words 'Rebuild-ContentTables -Head abc') -eq 'REFUSED' -and (Words 'Rebuild-ContentTables -Pull x') -eq 'REFUSED')
-Yes '  it takes only the listed data files from the pull request, held to its head, and commits them for Run-OnBox.ps1' (
-    $rebuild.Contains("`$DataFromPull = @('game/content/Thornswood-Content.esp', 'records/recipe-owners.json', 'game/data/last-plugin-policy.json', 'scripts/mods/content-salvaged.json')") -and
-    $rebuild.Contains("'checkout', `$Head, '--', `$p") -and $rebuild.Contains('if ($at -cne $Head)') -and $rebuild.Contains("'commit', '--quiet', '--allow-empty'") -and
-    $rebuild.IndexOf("'commit', '--quiet'") -lt $rebuild.IndexOf("Run-OnBox.ps1')"))
-Yes '  and no file of the list is a script' (@([regex]::Match($rebuild, '\$DataFromPull = @\(([^)]*)\)').Groups[1].Value -split ',' | Where-Object { $_ -match '\.(ps1|psm1|py|js|cmd|bat|exe|dll)''' }).Count -eq 0)
-# The stations first (#1387): main's Build-StationSites.py measures them over
-# the server's plugins, main's Add-ContentRecords.py writes the plugin from
-# that table, each committed in the checkout, and then the chain.
-Yes '  -Stations is a switch, with a pull request or without' ((Words "Rebuild-ContentTables -Stations -Pull 1387 -Head $sha") -eq "-Stations|-Pull|1387|-Head|$sha" -and
-    (Words 'Rebuild-ContentTables -Stations') -eq '-Stations' -and (Words 'Rebuild-ContentTables -Stations yes') -eq 'REFUSED')
-$sites = $rebuild.IndexOf("'scripts/dev/Build-StationSites.py' '--data' '{data}' -Server `$Server -Out `$Out")
-$records = $rebuild.IndexOf("'scripts/mods/Add-ContentRecords.py' '--masters' '{data}' -Server `$Server -Out `$Out")
-$chain = $rebuild.IndexOf("'scripts/mods/Rebuild-ContentTables.ps1' '-Data'")
-Yes '  with it the stations are measured, then the plugin written, then the chain runs' ($rebuild.Contains('if ($Stations) {') -and $sites -gt 0 -and $records -gt $sites -and $chain -gt $records)
-Yes '  each step is committed, new files and all, before the next is sent' (
-    $rebuild.IndexOf("Save-Step 'Build-StationSites.py'") -gt $sites -and $rebuild.IndexOf("Save-Step 'Build-StationSites.py'") -lt $records -and
-    $rebuild.IndexOf("Save-Step 'Add-ContentRecords.py'") -gt $records -and $rebuild.IndexOf("Save-Step 'Add-ContentRecords.py'") -lt $chain -and
-    $rebuild.Contains("Invoke-PullGit @('add', '--all')"))
-Yes '  and a step that fails stops the run before the chain' (([regex]::Matches($rebuild, 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "STOP\. (Build-StationSites|Add-ContentRecords)\.py ended')).Count -eq 2)
-Yes '  it runs the chain by Run-OnBox.ps1, its words quoted so none is read as a parameter' ($rebuild.Contains("'scripts/mods/Rebuild-ContentTables.ps1' '-Data' '{data}' '-PluginsTxt' '{plugins}' -Server `$Server -Out `$Out"))
-Yes '  and Run-OnBox.ps1 copies what came back into -Out as well as the checkout' ((Text 'scripts/mods/Run-OnBox.ps1').Contains('foreach ($into in @($repo, $Out | Where-Object { $_ }))'))
+# The Rebuild-ContentTables verb, which built a pull request's tables to
+# commit them (Patrick's card, 30 Oct 2026), went with them out of git
+# (#5191, stage 4e): nothing generated is committed, and Build-Content builds.
+Yes 'there is no Rebuild-ContentTables verb, and no Rebuild-OnBox.ps1' ((Words 'Rebuild-ContentTables') -eq 'REFUSED' -and -not $verbs.verbs.PSObject.Properties['Rebuild-ContentTables'] -and
+    -not (Test-Path -LiteralPath (Join-Path $Repo 'scripts/mods/Rebuild-OnBox.ps1')))
+# The content build (#5191, stage 3): main's plugin and tables built on the
+# box against a server's plugins, and kept by their inputs.
+Yes 'Build-Content takes -Server dev or main, and names its out parameter' ((Words 'Build-Content') -eq '' -and (Words 'Build-Content -Server main') -eq '-Server|main' -and
+    (Words 'Build-Content -Server live') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Build-Content' -Verbs $verbs).Out -eq '-Out')
+Yes '  and cannot name a pull request, a cache, a runner or a build' ((Words 'Build-Content -Pull 4835') -eq 'REFUSED' -and (Words 'Build-Content -Cache C:/x') -eq 'REFUSED' -and
+    (Words 'Build-Content -Runner x') -eq 'REFUSED' -and (Words "Build-Content -Build $sha") -eq 'REFUSED')
 # The Ship verbs (Patrick's A, 30 Oct 2026: the box admin App mints the
 # token a Ship from the feed signs with, and the whole Ship runs on the box).
 Yes 'Ship-Dev is a dev Ship from the feed, its note as a title and detail lines' ((Words 'Ship-Dev -Title "Market stalls take your prices" -Detail "Claim a stall"') -eq '-Channel|dev|-Title|Market stalls take your prices|-Detail|Claim a stall' -and
@@ -342,13 +328,12 @@ $threw = $false; try { [void](Join-ThornswoodGateArgs @('C:\x\')) } catch { $thr
 Yes '  and a folder path that ends in a backslash' $threw
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the rules under Windows PowerShell 5.1, which the box runs them with: this is not Windows'
-} else {
-    $ps51 = Get-WindowsPowerShell
-    $probe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
-    try {
-        [IO.File]::WriteAllText($probe, @"
+# In a shell of their own, the PowerShell 7 the broker runs them in (#5356),
+# so what the rules answer leans on nothing this harness loaded.
+$boxPs = Get-BoxPowerShell
+$probe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
+try {
+    [IO.File]::WriteAllText($probe, @"
 . '$((Join-Path $Repo 'scripts\vps\gate\GateRules.ps1').Replace("'", "''"))'
 `$v = Read-ThornswoodGateVerbs '$((Join-Path $Repo 'scripts\vps\gate\verbs.json').Replace("'", "''"))'
 foreach (`$l in 'Deploy-DevGamemode -Restart -Why "a gamemode update"', 'Install-Bot', 'Deploy-DevGamemode -Vps x', 'Deploy-DevGamemode -Why `$(x)', 'ping') {
@@ -356,12 +341,11 @@ foreach (`$l in 'Deploy-DevGamemode -Restart -Why "a gamemode update"', 'Install
   if (`$r.Ok) { 'OK ' + (`$r.Args -join '|') } else { 'NO' }
 }
 "@)
-        $said = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe 2>&1 | ForEach-Object { "$_" })
-        Yes 'under Windows PowerShell 5.1 the rules give the same words and refusals' (
-            ($said -join ';') -eq 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ')
-        if (($said -join ';') -ne 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ') { $said | Write-Host }
-    } finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
-}
+    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe 2>&1 | ForEach-Object { "$_" })
+    Yes 'in a PowerShell 7 of their own, as the broker runs them, the rules give the same words and refusals' (
+        ($said -join ';') -eq 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ')
+    if (($said -join ';') -ne 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ') { $said | Write-Host }
+} finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
 
 # ---- 3. verbs.json against the scripts ---------------------------------------
 $never = @('Vps', 'VpsHost', 'User', 'VpsUser', 'Root', 'Task', 'TaskName', 'Data', 'Dist', 'Out', 'PasswordFile', 'Path', 'Script', 'Command', 'Site', 'Gamemode', 'ServerBuild', 'Note', 'DropPlugins', 'AsSystem', 'RunAs', 'Remove', 'RotateKey', 'Password')
@@ -419,11 +403,11 @@ Yes '  and allows SYSTEM and the deploy account alone' (
 $pipeBlock = [regex]::Match($broker, "(?s)\`$GatePipeCode = @'.*?\nfunction New-GatePipe.*?\n\}\r?\n").Value
 Yes '  and the pipe is made in one block a harness can run' ($pipeBlock.Length -gt 0)
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the pipe under Windows PowerShell 5.1, which the broker runs under: this is not Windows'
+    Write-Host 'SKIP  the pipe itself: a named pipe with an access list of Windows accounts is something only Windows has'
 } else {
-    # Under 5.1, as the broker runs it: the pipe made for this account, a
-    # line through it, its access list read back, and its name refused to a
-    # second maker while the first holds it.
+    # In PowerShell 7, as the broker runs it (#5356): the pipe made for this
+    # account, a line through it, its access list read back, and its name
+    # refused to a second maker while the first holds it.
     $pipeProbe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-pipe-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
     $pipeRun = @'
 $name = 'tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -438,7 +422,8 @@ try {
     $w.AutoFlush = $true
     $w.WriteLine('LINE x')
     'GOT ' + (New-Object IO.StreamReader($server)).ReadLine()
-    $rules = @($server.GetAccessControl().GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
+    # An extension method in .NET, which PowerShell 7 calls by its class.
+    $rules = @([IO.Pipes.PipesAclExtensions]::GetAccessControl($server).GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
     'DENY ' + @($rules | Where-Object { $_.AccessControlType -eq 'Deny' }).Count
     'ALLOW ' + ((@($rules | ForEach-Object { $_.IdentityReference.Value }) | Sort-Object -Unique) -join ',')
     $second = $null
@@ -449,10 +434,10 @@ try {
     try {
         $head = "`$ErrorActionPreference = 'Stop'`r`n`$Cfg = @{ deploySid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }`r`n"
         [IO.File]::WriteAllText($pipeProbe, $head + $pipeBlock + $pipeRun)
-        $said = @(& (Get-WindowsPowerShell) -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $pipeProbe 2>&1 | ForEach-Object { "$_" })
+        $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $pipeProbe 2>&1 | ForEach-Object { "$_" })
         $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $want = @('GOT LINE x', 'DENY 0', ('ALLOW ' + ((@('S-1-5-18', $me) | Sort-Object -Unique) -join ',')), 'SECOND REFUSED')
-        Yes 'under Windows PowerShell 5.1 the pipe takes its account''s line, denies nothing, allows SYSTEM and that account, and holds its name' (($said -join ';') -eq ($want -join ';'))
+        Yes 'in PowerShell 7, as the broker runs it, the pipe takes its account''s line, denies nothing, allows SYSTEM and that account, and holds its name' (($said -join ';') -eq ($want -join ';'))
         if (($said -join ';') -ne ($want -join ';')) { $said | Write-Host }
     } finally { Remove-Item -LiteralPath $pipeProbe -Force -ErrorAction SilentlyContinue }
 }
@@ -533,9 +518,19 @@ if (-not $gitExe) { Write-Host 'SKIP: the submodule move needs git' -ForegroundC
         Yes '  and a submodule never fetched stays unfetched' ($r2.Code -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $bare 'engine/skymp/a.txt')))
     } finally { Remove-Item -LiteralPath $sm -Recurse -Force -ErrorAction SilentlyContinue }
 }
-Yes 'a live verb runs only when main is at the build it named, checked after the fetch' ($brokerCode.Contains('if ($req.Build -and $req.Build -cne $commit)') -and
+Yes 'a live verb runs from the build it named, checked after the fetch and before the verb runs' ($brokerCode.Contains('if ($req.Build -and $req.Build -cne $commit)') -and
     $brokerCode.IndexOf('if ($req.Build -and $req.Build -cne $commit)') -gt $brokerCode.IndexOf('$commit = Update-Checkout') -and
     $brokerCode.IndexOf('if ($req.Build -and $req.Build -cne $commit)') -lt $brokerCode.IndexOf('Invoke-Child ([string]$Cfg.pwsh)'))
+# Ops #379: main moved between Patrick's answer and the run, twice on 15 Nov.
+# The checkout goes back to the named commit only when it is on main, and the
+# line is held again to that commit's own verbs.json.
+$useNamed = $brokerCode.Substring($brokerCode.IndexOf('function Use-NamedBuild'))
+$useNamed = $useNamed.Substring(0, $useNamed.IndexOf("`n}") + 2)
+Yes '  when main moved on, the named commit must be an ancestor of main before anything is checked out' ($useNamed.IndexOf("'merge-base', '--is-ancestor', `$Build, 'refs/remotes/origin/main'") -gt 0 -and
+    $useNamed.IndexOf("'merge-base', '--is-ancestor'") -lt $useNamed.IndexOf("'checkout', '--quiet', '--force', '--detach', `$Build"))
+Yes '  and a commit not on main is refused, with nothing run' ($brokerCode -match "if \(-not \(Use-NamedBuild \`$req\.Build\)\) \{ Send \('@REFUSED")
+Yes '  and the line is held again to the named commit''s verbs.json, still a live line for that build' ($brokerCode -match '\$commit = \$req\.Build\s+try \{ \$req = Test-ThornswoodGateRequest' -and $brokerCode.Contains('if ($req.Build -cne $commit) { Send (''@REFUSED the line at '''))
+Yes '  and the checkout it ran from is the named commit, read back' ($useNamed.Contains("(`$o.Out -join '') -cne `$Build"))
 Yes 'the script is the verb''s from verbs.json, under the checkout' ($brokerCode.Contains('Join-Path $Repo ($req.Script.Replace(''/'', ''\'')'))
 Yes 'the program starts with no shell, and nothing on its input' ($brokerCode.Contains('$si.UseShellExecute = $false') -and $brokerCode.Contains('$p.StandardInput.Close()') -and $brokerCode -notmatch 'Invoke-Expression|\biex\b|cmd(\.exe)? /c')
 Yes 'a run past its time is ended with everything it started' ($brokerCode.Contains('taskkill.exe" @(''/T'', ''/F'', ''/PID'''))
@@ -583,8 +578,8 @@ try {
 catch { $env:ProgramData = $oldPd; Yes ('the host key block runs: ' + $_.Exception.Message) $false }
 finally { Remove-Item -LiteralPath $keysDir -Recurse -Force -ErrorAction SilentlyContinue }
 
-# The broker runs under Windows PowerShell 5.1 too: every short program whose
-# stderr it reads goes through Invoke-Short, which holds 'Continue' for itself.
+# Every short program whose stderr the broker reads goes through Invoke-Short,
+# which holds 'Continue' for itself, so a line on stderr never stops it.
 $bk = Text 'scripts/vps/gate/GateBroker.ps1'
 $shortFn = [regex]::Match($bk, '(?s)function Invoke-Short.*?\n\}').Value
 Yes 'the broker''s short programs run with stderr unable to stop it' ($shortFn -match "ErrorActionPreference = 'Continue'" -and @([regex]::Matches($bk, '2>&1')).Count -eq 1 -and $bk -notmatch '2>\$null')
@@ -603,7 +598,7 @@ Yes 'a notices key''s line is forced to say-staff.ps1 through pwsh' ((Get-BoxKey
 $grant = Text 'scripts/vps/Grant-BoxAccess.ps1'
 Yes 'a deploy key goes into the gate account''s authorized_keys, and stops without the account' ($grant.Contains("Run scripts\deploy\Install-Gate.ps1 first") -and $grant.Contains("ProfileImagePath '.ssh\authorized_keys'"))
 Yes 'its proof needs a refused command and GATE READY' ($grant.Contains("@('echo THORNSWOOD_OK', 'ping')") -and $grant.Contains("'^\| GATE READY'") -and $grant.Contains('($NoticesOnly -or $Deploy) -and @($proof | Where-Object { $_ -match ''THORNSWOOD_OK'' }).Count'))
-Yes 'it goes into DESK_KEY_B64 of a main-only environment' ($grant.Contains("if (`$Deploy) { 'DESK_KEY_B64' }") -and $grant.Contains('gh secret set $SecretName --env $ToEnvironment'))
+Yes 'it goes into DESK_KEY_B64 of a main-only environment' ($grant.Contains("`$SecretName = 'DESK_KEY_B64'") -and $grant.Contains('gh secret set $SecretName --env $ToEnvironment'))
 
 # ShipAccess.ps1 against a stand-in ship-access.js, run by the real node.
 if (Get-Command node -ErrorAction SilentlyContinue) {
@@ -639,6 +634,35 @@ Yes 'box-run.yml is not in this repository, which has no VPS runner once public'
 $br = Text 'scripts/vps/Box-Run.ps1'
 Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
 
+# A live line is Bramble's, on Patrick's tap on its Main card in the Hermes
+# Agents app (#4989): box-run.yml refuses one anybody else started, so
+# Box-Run.ps1 refuses it before anything starts. Checked against a stand-in
+# gh that records what it is asked to start (global, since the stand-in
+# runs in Box-Run.ps1's own script scope).
+$global:twStarted = New-Object System.Collections.Generic.List[string]
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '^api -X POST repos/(\S+)/actions/workflows/(\S+)/dispatches') {
+        $global:twStarted.Add($Matches[1] + ' ' + $Matches[2])
+        return '{"workflow_run_id":77,"html_url":"https://github.com/o/r/actions/runs/77"}'
+    }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$oldScratch = $env:THORNSWOOD_SCRATCH_ROOT
+$env:THORNSWOOD_SCRATCH_ROOT = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-live-' + [Guid]::NewGuid().ToString('N'))
+$liveVerbs = @((Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts/vps/gate/verbs.json')).verbs.PSObject.Properties | Where-Object { $_.Value.PSObject.Properties['build'] -and $_.Value.build -eq $true } | ForEach-Object { $_.Name })
+Yes "  main's verbs.json has live verbs ($($liveVerbs -join ', '))" ($liveVerbs.Count -ge 1)
+foreach ($v in $liveVerbs) {
+    $said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line ($v + ' -Build ' + ('a' * 40)) *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
+    Yes "  a $v line is refused here, nothing starts, and it says to ask Bramble" ($code -eq 1 -and $global:twStarted.Count -eq 0 -and ($said -join ' ') -match 'ask Bramble for it')
+}
+$said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line 'ping' *>&1 | ForEach-Object { "$_" })
+Yes '  and a line that names no build goes to box-run.yml in the ops repository' ($global:twStarted.Count -eq 1 -and $global:twStarted[0] -eq 'ThornswoodRP/Thornswood-Ops box-run.yml')
+Remove-Item -LiteralPath function:\gh
+Remove-Item -LiteralPath $env:THORNSWOOD_SCRATCH_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+$env:THORNSWOOD_SCRATCH_ROOT = $oldScratch
+Remove-Variable -Name twStarted -Scope Global
+
 # ---- 9. the seal, and the ssh it uses -------------------------------------------
 . (Join-Path $Repo 'scripts/ops/Sealed.ps1')
 $rsa = [Security.Cryptography.RSA]::Create(3072)
@@ -671,6 +695,30 @@ function gh {
 }
 $l = Read-ThornswoodSealedLog 'o/r' 1
 Yes 'the session reads the sealed bytes back from the log' ($l.Bytes -and [Convert]::ToBase64String($l.Bytes) -eq [Convert]::ToBase64String($sealed))
+# A skipped job listed first has no log (GitHub answers 404), and is passed
+# over, not read (16 Nov 2026, run 43791090690).
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return @('6 skipped', '7 success') }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$l = Read-ThornswoodSealedLog 'o/r' 1
+Yes '  past a skipped job listed before the one that ran, whose log GitHub does not keep' ($l.Bytes -and [Convert]::ToBase64String($l.Bytes) -eq [Convert]::ToBase64String($sealed))
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return @('6 success', '7 success') }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$l = Read-ThornswoodSealedLog 'o/r' 1
+Yes '  but a job that ran and whose log cannot be read still stops the read' (-not $l.Bytes -and $l.Why -match 'the log of job 6 could not be read')
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { return '7' }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
 $keyPath = Join-Path $tmp 'run.key'
 [IO.File]::WriteAllText($keyPath, [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey()))
 $saved = Join-Path $tmp 'save'
@@ -683,6 +731,15 @@ $script:fakeLog = @($written | ForEach-Object { '2026-10-31T04:00:02.0000000Z ' 
 $into = Join-Path $tmp 'opened'
 $o = Open-ThornswoodSealedRun -Repo 'o/r' -Run 1 -Artifact 'box-run-sealed' -File 'box-run.sealed' -KeyPath $keyPath -Into $into -FromLog
 Yes '  and -FromLog opens it to the output and the files' ($o.Ok -and ([IO.File]::ReadAllText((Join-Path $into 'output.txt'))) -eq 'the verb said this' -and (Test-Path -LiteralPath (Join-Path (Join-Path $into 'files') 'a.log')))
+# A run whose verb said nothing still seals: Compress-Archive made no archive
+# from a folder holding only the empty files\ and the run ended on "Could not
+# find file ...out.zip", with why it stopped lost (15 Nov 2026).
+$bare = Join-Path $tmp 'bare'
+New-Item -ItemType Directory -Path (Join-Path $bare 'files') -Force | Out-Null
+$bareSealed = Join-Path $tmp 'bare.sealed'
+$threw = ''; try { [void](Save-ThornswoodSealed $bare ([Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())) $bareSealed) } catch { $threw = $_.Exception.Message }
+Yes '  an output with nothing in it is still sealed' (-not $threw -and (Test-Path -LiteralPath $bareSealed))
+Yes 'Box-Run puts the gate''s refusal and why it stopped in the sealed output' ((Text 'scripts/vps/Box-Run.ps1').Contains("'gate: REFUSED ' + `$Matches[1]") -and (Text 'scripts/vps/Box-Run.ps1').Contains("'box-run: REFUSED ' + `$refused"))
 $script:fakeLog = @($written | Where-Object { $_ -notmatch '^TWSEAL-LOG 1 ' } | ForEach-Object { '2026-10-31T04:00:02.0000000Z ' + $_ })
 $l = Read-ThornswoodSealedLog 'o/r' 1
 Yes '  a part missing from the log is refused' (-not $l.Bytes -and $l.Why -match 'lacks 1')
@@ -771,6 +828,55 @@ Yes 'the broker ends once a request has changed its files on disk, without openi
 Yes 'Update-Gate is a verb that takes nothing' ((Words 'Update-Gate') -eq '' -and (Words 'Update-Gate -Root x') -eq 'REFUSED' -and (Words 'Update-Gate -NoRestart') -eq 'REFUSED' -and (Words 'Update-Gate -FullName x/y') -eq 'REFUSED')
 Yes '  with the host keys held to the checkout''s pins, in a known_hosts of the run''s own' ($br.Contains('Get-ThornswoodVpsCommitted') -and $br.Contains("UserKnownHostsFile=`$knownHosts") -and $br.Contains("'-F', 'none'"))
 Yes '  and prints none of the verb''s output into the run''s log' ($br -notmatch 'Write-Host \$Matches\[1\]' -and $br.Contains("[IO.File]::AppendAllText(`$out, `$Matches[1]"))
+
+# ---- 10. a key main carries (Grant-BoxKey) -------------------------------------
+# Patrick's B on q-oracle-box-access (10 Nov 2026): his own Hermes's key, made
+# on the VM, goes on the box from main through the gate, with no step on One.
+Yes 'Grant-BoxKey takes a name and nothing else: never a key, a digest or a file' ((Words 'Grant-BoxKey -Name oracle-hermes') -eq '-NoPause|-Name|oracle-hermes' -and
+    (Words 'Grant-BoxKey -Name oracle-hermes -PublicKey x') -eq 'REFUSED' -and (Words 'Grant-BoxKey -Name Oracle') -eq 'REFUSED' -and (Words 'Grant-BoxKey') -eq '-NoPause')
+Invoke-Expression (Import-Functions 'scripts/vps/Grant-BoxKey.ps1' @('Get-KeyLine', 'Select-Named', 'Select-Holding', 'Read-KeyRecord'))
+Yes '  its line is the very line Grant-BoxAccess makes for a plain key' ((Get-KeyLine $bare 'oracle-hermes') -ceq (Get-BoxKeyLine $bare 'oracle-hermes' $false))
+$kdir = Join-Path ([IO.Path]::GetTempPath()) ('box-keys-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $kdir | Out-Null
+function Try-Record($obj) {
+    $f = Join-Path $kdir 'k.json'; [IO.File]::WriteAllText($f, ($obj | ConvertTo-Json))
+    try { [void](Read-KeyRecord $f 'oracle-hermes'); return 'OK' } catch { return $_.Exception.Message }
+}
+$goodPub = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI' + ('B' * 43)
+$good = @{ name = 'oracle-hermes'; public = $goodPub; token_sha256 = ('f' * 64) }
+Yes '  main''s record is taken in its one form' ((Try-Record $good) -eq 'OK')
+Yes '  and refused for another name, a private key, a comment or a digest that is not one' (
+    (Try-Record @{ name = 'one'; public = $goodPub; token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = ('-----BEGIN ' + 'OPENSSH PRIVATE KEY-----'); token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = ($goodPub + ' thornswood-x'); token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = $goodPub; token_sha256 = ('x' * 43) }) -ne 'OK')
+Remove-Item -LiteralPath $kdir -Recurse -Force
+foreach ($kf in @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts/vps/box-keys') -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
+    $ok = $true; try { [void](Read-KeyRecord $kf.FullName $kf.BaseName) } catch { $ok = $false }
+    Yes "box-keys/$($kf.Name) is a record Grant-BoxKey takes, for its own name" $ok
+}
+$gbk = Text 'scripts/vps/Grant-BoxKey.ps1'
+$gbkCode = ($gbk -replace '(?s)<#.*?#>', '')
+Yes '  it reads the key from main''s checkout, never from the caller' ($gbkCode.Contains("`$recordPath = Join-Path (Join-Path `$Here 'box-keys') (`$Name + '.json')") -and
+    @((Text 'scripts/vps/Grant-BoxKey.ps1') | Select-String -Pattern '\[string\]\$PublicKey|\[string\]\$Token' -AllMatches).Count -eq 0)
+Yes '  never touches One''s, the cloud''s or a workflow''s way in' ($gbkCode.Contains("`$Reserved = @('one', 'cloud', 'desk', 'claude')") -and $gbkCode.Contains('if ($Reserved -ccontains $Name)'))
+Yes '  writes only the Administrator key file and that one token, and puts both back when it does not finish' (
+    @([regex]::Matches($gbkCode, 'WriteAll\w*\(')).Count -eq 4 -and @([regex]::Matches($gbkCode, 'WriteAll\w*\((\$KeysFile|\$TokenFile)')).Count -eq 4 -and
+    $gbkCode.Contains('if ($changed -and -not $done) {') -and $gbkCode.Contains('[IO.File]::WriteAllBytes($KeysFile, $before)'))
+Yes '  refuses a key the box holds under another name, here or in the deploy account''s file' ($gbkCode.Contains('Select-Holding $have $blob | Where-Object { $mine -notcontains $_ }') -and $gbkCode.Contains('Select-Holding $deploy $blob'))
+Yes '  and never runs while a Grant-BoxAccess put back is armed' ($gbkCode.Contains('Get-ScheduledTask -TaskName $PutBack'))
+# Gate run 20261110-181821-a3732f (10 Nov 2026): the read back of the one
+# line it wrote stopped, since a function hands one line back as a string
+# and [0] of that is its first letter. Every use keeps the lines a list.
+$oneLine = Get-KeyLine $bare 'oracle-hermes'
+$named = @(Select-Named @('ssh-ed25519 AAAA thornswood-one', $oneLine) 'oracle-hermes')
+Yes '  one line of its name reads back whole, as a list of one' ($named.Count -eq 1 -and $named[0] -ceq $oneLine)
+Yes '  and every use of Select-Named or Select-Holding keeps its lines in @( )' (
+    @([regex]::Matches($gbkCode, '(?<!@\()Select-(Named|Holding) \$')).Count -eq 0 -and @([regex]::Matches($gbkCode, '@\(Select-(Named|Holding) \$')).Count -eq 4)
+foreach ($case in @(@('desk', "is a way in this never touches"), @('nobody-here', 'main carries no scripts/vps/box-keys/nobody-here.json'), @('Bad Name', 'one lower case word'))) {
+    $o = & pwsh -NoProfile -File (Join-Path $Repo 'scripts/vps/Grant-BoxKey.ps1') -Name $case[0] -NoPause 2>&1 | Out-String
+    Yes "  Grant-BoxKey -Name $($case[0]) stops and changes nothing" ($LASTEXITCODE -eq 1 -and $o.Contains($case[1]) -and $o -match 'Nothing was changed')
+}
 
 Write-Host ''
 Write-Host "$script:pass passed, $script:fail failed"

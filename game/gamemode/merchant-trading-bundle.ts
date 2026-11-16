@@ -95,10 +95,14 @@ function read(raw) {
  return copy(raw);
 }
 function reserved(raw){return Object.values(read(raw).held).reduce((sum,row)=>sum+row.gold,0);}
+// A commission's pay is new gold, never the trader's (#6180, Patrick, 16 Nov
+// 2026: "no dont make it come out of the purse", "othwerwise the economy would
+// have like 0 gold people only start with 40"), so work taken holds none of
+// the purse back and the whole purse is the trader's to trade with.
 function spendable(state) {
- const promised=reserved(state.commissions);
- if(!integer(state.purse,0,MAX_GOLD)||promised>state.purse)throw Error('Commission promises exceed the merchant purse.');
- return state.purse-promised;
+ reserved(state.commissions);
+ if(!integer(state.purse,0,MAX_GOLD))throw Error('The merchant purse cannot be verified.');
+ return state.purse;
 }
 function openCount(states,human) {
  const who=owner(human);if(!who)throw Error('Commission owner cannot be verified.');
@@ -110,7 +114,7 @@ function prepare(raw,at) {
  for(const name of Object.keys(next.cool))if(at-cooldownAt(next.cool[name])>=cooldownWait(next.cool[name]))delete next.cool[name];
  return next;
 }
-function reserve(raw,human,id,terms,at,purse) {
+function reserve(raw,human,id,terms,at) {
  const next=prepare(raw,at),name=key(human,id);
  if(!name)return {ok:false,why:'session'};
  const bundle=terms&&owns(terms,'goods');
@@ -122,7 +126,6 @@ function reserve(raw,human,id,terms,at,purse) {
  if(owns(next.cool,name))return {ok:false,why:'cooldown'};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
- if(spendable({purse,commissions:next})<gold)return {ok:false,why:'purse'};
  const token=++next.serial;
  if(bundle){next.v=2;next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,goods:copy(terms.goods),hours:terms.hours,gold,at};}
  else next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,item:copy(terms.item),count:terms.count,unit:terms.unit,gold,at};
@@ -399,7 +402,12 @@ function createSettlement(deps) {
     var moved=pending.kind==='buy'?difference(stockRows(previous.stock),stockRows(next.stock),true):
       difference(stockRows(next.stock),stockRows(previous.stock),true);
     if(!moved.length || moved.some(function(row) {return row.entry.baseId===15;})) throw new Error('Merchant goods cannot be verified.');
-    var gold=pending.kind==='buy'?next.purse-previous.purse:previous.purse-next.purse;
+    // A commission's pay is new gold (#6180): the trader's purse stays as it
+    // was, and the person is paid the promise's gold. A turn-in saved before
+    // that took the pay from the purse, and it finishes as it was saved.
+    var gold=pending.kind==='buy'?next.purse-previous.purse:pending.kind==='commission'?goldCount(credit):previous.purse-next.purse;
+    if(pending.kind==='commission'&&next.purse!==previous.purse&&next.purse!==previous.purse-gold)
+      throw new Error('Merchant transfer does not conserve goods and gold.');
     if(gold<0 || gold>MAX_COUNT || (pending.kind==='buy'?
       goldCount(removed)!==gold || goodsDigest(credit)!==goodsDigest(moved):
       removed.some(function(row) {return row.entry.baseId===15;}) || goodsDigest(removed)!==goodsDigest(moved) || goldCount(credit)!==gold))
@@ -740,7 +748,7 @@ function createSettlement(deps) {
       if(!equal(canonical(prior),canonical(replacement))||!action||!['reserve','cancel'].includes(action.kind)||
         !Number.isSafeInteger(action.at)||action.at<=0||action.at>now())throw new Error('Commission metadata action cannot be verified.');
       var changed=action.kind==='reserve'?
-        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at,state.purse):
+        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at):
         COMMISSION_STATE.cancel(state.commissions,human,action.job,action.token,action.at);
       if(!changed.ok||!equal(canonical(changed.next),canonical(next.commissions)))
         throw new Error('Commission metadata transition cannot be verified.');
@@ -1060,19 +1068,15 @@ function createCommissions(deps) {
     new Set(all.map(row=>row.reference)).size!==size)throw Error('The complete commission ledger cannot be verified.');
   return all.filter(row=>row.state!==null).map(row=>{STATE.spendable(row.state);return row.state;});
  }
+ // The staff's reward price for the good (#6180, Patrick, 15 Nov 2026,
+ // q-6180-guild-prices): guild work is set by staff, every good it asks for has
+ // a starting reward price, and staff change it in the game. The hold ledgers
+ // (deps.prices) set only what the trader itself buys and sells.
  function quoteGood(row,good) {
-  const catalog=deps.prices.catalog(row.bookHold)||[],matches=[];
-  for(const item of catalog) {
-   const resolved=deps.resolve(item.name);
-   if(resolved&&!resolved.error&&resolved.baseId===good.itemId) {
-    const price=deps.prices.quote(row.bookHold,item.name);
-    if(price&&Number.isSafeInteger(price.buy)&&price.buy>=0&&price.buy<=2147483647&&
-      Number.isSafeInteger(price.buy*good.count)&&price.buy*good.count<=2147483647)
-     matches.push({unit:price.buy,name:resolved.name||item.name});
-   }
-  }
-  // Ambiguous names or two aliases are never a guess at an accepted promise.
-  return matches.length===1?matches[0]:null;
+  const price=deps.rewards&&typeof deps.rewards.price==='function'?deps.rewards.price(good.itemDesc):null;
+  if(!price||!Number.isSafeInteger(price.gold)||price.gold<0||price.gold>2147483647||
+    !Number.isSafeInteger(price.gold*good.count)||price.gold*good.count>2147483647||typeof price.name!=='string'||!price.name)return null;
+  return {unit:price.gold,name:price.name};
  }
  function quoted(row) {
   const parts=row.deliveryVersion===2?row.goods:[row],goods=[];
@@ -1117,12 +1121,10 @@ function createCommissions(deps) {
    const activeCool=Object.keys(jobs.cool).filter(key=>at-STATE.cooldownAt(jobs.cool[key])<STATE.cooldownWait(jobs.cool[key])).length;
    const room=jobs.serial<Number.MAX_SAFE_INTEGER&&Object.keys(jobs.held).length<STATE.MAX_HELD&&
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
-   const funds=quote&&STATE.spendable(state)>=quote.gold;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'No submitted buy price is available for this work.':
-     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':
-     !open&&!funds?'The trader cannot reserve this payment.':'';
+     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
     state:open?'open':cooldown?'cooldown':!gate?'locked':reason?'unavailable':'available',
@@ -1158,7 +1160,7 @@ function createCommissions(deps) {
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
      {hash:row.sourceHash,...quote.goods[0]},at=now();
-   const accepted=STATE.reserve(jobs,human,id,terms,at,state.purse);
+   const accepted=STATE.reserve(jobs,human,id,terms,at);
    if(!accepted.ok)return accepted;
    const next=Object.assign({},state,{commissions:accepted.next});
    const saved=deps.settlement.changeCommissions(merchant,state,next,human,()=>current(true,quote),{kind:'reserve',job:id,terms,at});
@@ -1183,7 +1185,8 @@ function createCommissions(deps) {
     debit=outgoing.inventory;stock=deps.addStock(stock,outgoing.entries,good.item.name);
    }
   }catch(error){return {ok:false,why:'short'};}
-  const next={purse:state.purse-held.gold,stock,supply:copy(state.supply||{}),commissions:completed.next};
+  // The pay is new gold: the trader's purse is the same after (#6180).
+  const next={purse:state.purse,stock,supply:copy(state.supply||{}),commissions:completed.next};
   const moved=deps.settlement.begin({merchantId:merchant,humanId:actor,profileId:human.profileId,kind:'commission',
    previous:state,next,expected,debit,credit:held.gold?[{baseId:15,count:held.gold}]:[],caller:()=>current(false)});
   // A turn-in finishes once the save storage acknowledges it, a later tick (#5419): the trader says it then.
@@ -1254,13 +1257,17 @@ function createQuestTransactions(deps) {
               expectedLifeGeneration:metadataOwner.life,expectedRuntimeIdentity:metadataOwner.runtime});
           return {ok:committed===true,why:committed===true?'':'changed'};
         } catch(error) {
-          // An unchanged inventory receipt says nothing about a metadata save.
-          // Only a verified unchanged property establishes a refused operation.
+          // A metadata save that threw can still have written: the record
+          // read back says which (#4524). The new record is a save, the old
+          // one a refusal; only anything else, or no answer, is unknown.
           try {
             var record=mp.get(actor,property);
-            if(identity(actor)===token && same(record==null?null:record,expectedRecord==null?null:expectedRecord)) {
-              report('quest metadata refused: ',error);
-              return {ok:false,why:'unwritten'};
+            if(identity(actor)===token) {
+              if(same(record,nextRecord))return {ok:true};
+              if(same(record==null?null:record,expectedRecord==null?null:expectedRecord)) {
+                report('quest metadata refused: ',error);
+                return {ok:false,why:'unwritten'};
+              }
             }
           } catch(readError) { /* Unreadable outcomes revoke the service below. */ }
           active=false;
@@ -1875,6 +1882,23 @@ module.exports={createQuestOrchardSources,createQuestFishingSources,createQuestH
 return module.exports;})();
 const QUEST_ITEMS = (function () { const module = {exports:{}};
 'use strict';
+/*
+  WHICH ITEMS ARE QUEST ITEMS (#4915). The seven quest tokens in
+  Thornswood-Content.esp, 17000 to 17006, and nothing else. An item is one of
+  them or it is not, so the answer comes from its record and no other test.
+
+  The engine names a form with mp.getDescFromId: "<id>:<plugin>" for a
+  form a plugin holds, and the bare id for a form made while the server runs
+  (FormDesc::FromFormId gives a form at 0xff000000 and up no file, and
+  FormDesc::ToString prints only the id then), which is what a brewed potion
+  or a poison mixed at the lab is. Such a form is in no plugin, so it is not
+  one of the seven. Refusing every name without a plugin made each of those
+  bottles a quest item, and nothing could store, drop, take, trade or load it.
+
+  Still refused: an id that is no form id, and a lookup that throws or answers
+  with something that is no form name, because then which item it is is not
+  known, and a quest token must never get through for that.
+*/
 function createQuestItemPolicy(mp) {
  if(!mp||typeof mp.getDescFromId!=='function')throw new Error('Quest item identity lookup is unavailable');
  const lookup=mp.getDescFromId;
@@ -1883,9 +1907,9 @@ function createQuestItemPolicy(mp) {
   if(!Number.isInteger(baseId)||baseId<=0||baseId>0xffffffff)return true;
   try {
    const desc=Reflect.apply(lookup,mp,[baseId]);
-   if(typeof desc!=='string'||!/^[0-9a-f]{1,8}:[^:\0\r\n]+\.(?:esm|esp|esl)$/i.test(desc))return true;
-   const colon=desc.indexOf(':'),canonical=parseInt(desc.slice(0,colon),16).toString(16)+desc.slice(colon).toLowerCase();
-   return tokens.has(canonical);
+   const named=typeof desc==='string'?/^([0-9a-f]{1,8})(:[^:\0\r\n]+\.(?:esm|esp|esl))?$/i.exec(desc):null;
+   if(!named)return true;
+   return !!named[2]&&tokens.has(parseInt(named[1],16).toString(16)+named[2].toLowerCase());
   }catch(error){return true;}
  }});
 }
@@ -2388,8 +2412,8 @@ function createMerchantTrading(deps) {
   var settlement = SETTLEMENT.createSettlement({purses:purses,transfer:transfer,world:deps.namespace || purses.namespace,log:deps.log,now:now});
   var retirementRequired=deps.retirementRequired===true;
   var active = deps.suspended !== true && !retirementRequired, closed = false;
-  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,prices:prices,
-    resolve:deps.resolve,eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
+  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,rewards:deps.rewards,
+    eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
 
   function placeOf(reference) {
     return places[reference] || null;
@@ -2774,8 +2798,8 @@ function createMerchantTrading(deps) {
         unbound:'This work has no appointed place yet.',unwritten:'The work could not be committed just now.',
         unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',
         allowance:'Your new scene work has reached its shared daily gold allowance.',
-        price:'The submitted price changed or is missing. Choose the work again.',
-        purse:'This trader cannot reserve the quoted payment.',capacity:'This trader cannot accept more work yet.',
+        price:'The reward price changed or is missing. Choose the work again.',
+        capacity:'This trader cannot accept more work yet.',
         counter:'This trader cannot accept more work yet.',waiting:'The transfer is waiting for its saved inventory.',
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
@@ -2855,7 +2879,7 @@ function createMerchantTrading(deps) {
       var last = lastSupply(state, completedSupplyKey, itemName);
       if (last && now() - last < SUPPLY_WAIT) return fail('That supply is not due.');
     }
-    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay from its unreserved purse.');
+    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay that much from its purse.');
     if (!npcBuys && gold > 0 && world.carry(actorId, GOLD_BASE) < gold) return fail('You cannot pay.');
     if (npcBuys && world.carry(actorId, resolved.baseId) < asked.count) return fail('You are not carrying that.');
     if (!settlement.available()) {
@@ -3061,6 +3085,15 @@ function installMerchantTrading(env) {
     places: doc.byRef || {},
     roleTables: env.roleTables,
     commissions: env.commissions,
+    // What a commission pays for each good: the staff's reward prices, kept
+    // with the books (#6180).
+    rewards: {
+      price: function (desc) {
+        var books = g.__thornswoodBooks;
+        if (!books || typeof books.rewardPrice !== 'function') return null;
+        return books.rewardPrice(desc);
+      }
+    },
     commissionEligible:function(actor,gate) {
       var progression=g.__thornswoodProgression,character=g.__thornswoodCharacter;
       if(!progression||!character||!character.PROPERTY)return false;

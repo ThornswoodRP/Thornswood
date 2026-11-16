@@ -262,6 +262,32 @@ try:
     yes('M12 no em dash and never the forbidden word',
         chr(0x2014) not in idle and ('pla' + 'yer') not in idle.lower())
 
+    # M15: a big move of gold, flagged by the gold and trade log (#6270),
+    # says the server and the gamemode's sentence, and pings nobody.
+    gold = bot.moderation_text('live', {
+        'did': 'gold', 'by': 2002, 'byName': 'Bjorn', 'who': 2002, 'whoName': 'Bjorn',
+        'why': 'Aela (profile 1001) handed 5000 gold to Bjorn (profile 2002) in a trade.'})
+    yes('M15 a gold flag says the server and the sentence the gamemode wrote',
+        gold == '**Gold flagged on the live server:** Aela (profile 1001) handed 5000 gold to '
+                'Bjorn (profile 2002) in a trade.')
+    yes('M15 the gamemode writes it', "did: 'gold'" in gm and 'gold' in bot._MOD_DID)
+    gold_ping = bot.moderation_text('dev', {'did': 'gold', 'why': '@everyone <@&111111111111111111>'})
+    yes('M15 nothing in it pings anybody',
+        '@everyone' not in gold_ping and '<@&111111111111111111>' not in gold_ping)
+
+    # M16: an admin taking gold back from the hub (#6271), done by the game
+    # server and written by the site.
+    tb = bot.moderation_text('site', {
+        'did': 'takeback', 'byName': 'Patrick', 'who': 102, 'whoName': 'Bjorn',
+        'why': '4200 of the 5000 gold asked, on the main server (they held 4200): duped'})
+    yes('M16 a take back says the admin, whose character, what was taken of what was asked, and why',
+        tb == '**Staff on the site:** Patrick took back from Bjorn (profile 102): '
+              '4200 of the 5000 gold asked, on the main server (they held 4200): duped')
+    tbf = bot.moderation_text('site', {'did': 'takebackfailed', 'byName': 'Patrick', 'who': 7, 'whoName': 'profile 7',
+                                       'why': '1 Iron Sword on the dev server: no such character. Asked because: x'})
+    yes('M16 one the game server could not do says so',
+        tbf is not None and tbf.startswith('**Staff on the site:** Patrick could not take back from profile 7'))
+
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the
     # building and its hold in the why, and each reads as who did what where.

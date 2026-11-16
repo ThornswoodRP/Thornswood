@@ -37,7 +37,9 @@
   saying it is back comes once it has answered on two runs in a row, so a
   service that flaps is one outage and two messages, not two every five
   minutes. A thing that answers on its port but fails its health check is
-  told about after two runs in a row, and is never restarted for it.
+  told about after two runs in a row, and is never restarted for it. The
+  tunnel's /ready is the one check of that kind that is restarted for, and
+  the list below says why.
 
   The messages go into alerts.jsonl beside watch.log, one JSON line each (id,
   at, service, kind, text), and the same sentence goes into watch.log. The
@@ -56,7 +58,7 @@
   Discord where a pasted webhook points and refuses any other channel, and
   the report this prints with no switch says where the one on the box points
   (#2501: until 12 Oct nothing checked, and the bot itself was saying the
-  watchdog's messages in the dev updates channel).
+  watchdog's messages in #staff-news).
 
   Anything else on this box that needs to tell staff something (the bot's own
   wrapper, issue #449) appends a line of the same shape to alerts.jsonl and
@@ -92,7 +94,18 @@
               into the box over ssh once port 22 takes no outside address
               (#2891). Down, it locks everybody out but the VNC console, so
               it is restarted like the rest
-    disk      free space on C:, which every one of the above shares. Under
+    tunnel    cloudflared, the task Thornswood Tunnel (#5779). Since #5334 it
+              carries thornswood.net, both update feeds and the ssh bridge,
+              so down it is the site and every way in over ssh at once. Its
+              metrics port, 20241 on loopback (records\cloudflare-tunnel.json),
+              answering is the process alive, and http://127.0.0.1:20241/ready
+              answering 200 is it holding a connection to Cloudflare. Its
+              metrics answer while it holds none, which is the outage itself,
+              so a /ready that is not 200 is down and restarted too, after two
+              runs in a row, so a reconnect cloudflared is making by itself
+              is let finish. On 11 Nov 2026 a Windows Update restart left it
+              stopped and nothing on the box started it for 7.5 hours
+    disk     free space on C:, which every one of the above shares. Under
               twenty percent it writes DISK LOW, under ten DISK CRITICAL,
               once when the line is crossed and once when it comes back. It
               restarts nothing for it, because a restart frees nothing.
@@ -112,6 +125,16 @@
     runner    every build runner's Windows service is running: the first,
               thornswood-vps, and the numbered ones Install-Runner.ps1
               -Number puts beside it (4 October)
+    site files  the website's readiness, not only its liveness (#4448):
+              http://127.0.0.1:3001/api/ready answers 503 naming each file
+              the site holds that will not read (bans.json, pk.json,
+              linked.json, sessions.json, signins.json). Its health check
+              above asks /api/public, which answers 200 whatever those say,
+              so a broken bans.json, pk.json or linked.json shut the door
+              to play with nobody told. Told once when it fails, naming the
+              file, and once when it reads again. Never restarted for: a
+              restart does not mend a file. A site that cannot be asked at
+              all is the website check's to tell, and changes nothing here
     cert      the certificate Caddy holds for thornswood.net is accepted
               and has more than 14 days left. Caddy renews it about 30 days
               before the end, so under 14 is a renewal failing for two weeks.
@@ -176,6 +199,23 @@ function Remote($script) {
   # Send-Script.ps1 (issue #1070): a long script goes by scp and its run takes
   # it off the box before it runs, and the far side's exit code comes back.
   return Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $script
+}
+
+# What the box said for -Install and -SetWebhook, a line each, and whether it
+# failed: a FAILED line, or nothing back at all. Each of their steps on the
+# box says FAILED with why when it does not work, so this is the one place
+# that turns that into the exit code (#5155, #4207). Called with @(...), so
+# an answer of nothing stays empty and is not taken for one empty line.
+function Show-BoxLines([object[]]$out) {
+  $failed = -not @($out).Count
+  if ($failed) { Say '  FAILED    the box said nothing back' 'Red' }
+  foreach ($l in $out) {
+    $c = 'Gray'
+    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
+    if ("$l" -match '^(wrote|made|ran|saved|posted)') { $c = 'Green' }
+    Say "  $l" $c
+  }
+  return $failed
 }
 
 Write-Host ''
@@ -493,6 +533,93 @@ function HealthProblem($url) {
     if ($st -eq 'Timeout') { return 'did not answer within ten seconds' }
     return 'could not be reached'
   }
+}
+
+# '' when the address answers 200 within ten seconds, else why not. Stricter
+# than HealthProblem: cloudflared's /ready answers 503 while it holds no
+# connection to Cloudflare, and that is the tunnel down (#5779).
+function ReadyProblem($url) {
+  try {
+    $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+    if ([int]$r.StatusCode -eq 200) { return '' }
+    return ('answered HTTP ' + [int]$r.StatusCode + ', not 200')
+  } catch {
+    # An answer that is not 2xx comes back as the error's Response.
+    $e = $_.Exception
+    if ($e.PSObject.Properties['Response'] -and $e.Response) { return ('answered HTTP ' + [int]$e.Response.StatusCode + ', so it holds no connection to Cloudflare') }
+    if ($e.PSObject.Properties['Status'] -and ('' + $e.Status) -eq 'Timeout') { return 'did not answer within ten seconds' }
+    return ('could not be reached (' + $e.Message + ')')
+  }
+}
+
+# The website's readiness (#4448): '' while its app reads every file it
+# holds, bans.json, pk.json, linked.json, sessions.json and signins.json,
+# else which will not and what that shuts. Its /api/ready answers 503 naming
+# each (site\lib\staff.js heldBroken, #2180). The website's health check
+# asks /api/public, which answers 200 whatever those files say, so a
+# bans.json that will not parse shut the door to play and nobody was told.
+# $null when /api/ready cannot be asked at all: whether the site answers is
+# the website check's to tell, and it says nothing either way of the files.
+# Any answer but 503 is ready, as an app from before /api/ready would be.
+function HeldProblem($url) {
+  $code = 0
+  $text = ''
+  $res = $null
+  try {
+    $q = [Net.HttpWebRequest]::Create($url)
+    $q.Timeout = 10000
+    $q.ReadWriteTimeout = 10000
+    try { $res = $q.GetResponse() } catch {
+      # A 503 comes back as the WebException's Response, under whatever
+      # PowerShell wraps it in.
+      $e = $_.Exception
+      while ($e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
+      if ($e) { $res = $e.Response }
+    }
+    if (-not $res) { return $null }
+    $code = [int]$res.StatusCode
+    $text = (New-Object IO.StreamReader($res.GetResponseStream(), [Text.Encoding]::UTF8)).ReadToEnd()
+  } catch { return $null }
+  finally { if ($res) { $res.Close() } }
+  if ($code -ne 503) { return '' }
+  $j = $null
+  try { $j = $text | ConvertFrom-Json } catch { $j = $null }
+  $files = @()
+  $play = $false
+  if ($j -and $j.PSObject.Properties['broken']) {
+    foreach ($b in @($j.broken)) {
+      if (-not "$($b.file)".Trim()) { continue }
+      $files += ("$($b.file)".Trim() + ', which ' + "$($b.why)".Trim())
+      if ($b.play -eq $true) { $play = $true }
+    }
+  }
+  if ($files.Count -eq 0) { return ('The site answered HTTP 503 at ' + $url + ' and did not say which file') }
+  $why = 'The site cannot use ' + ($files -join ', and ') + ' (' + $url + ' answered HTTP 503)'
+  if ($play) { $why += ', so nobody is let in to play until it is repaired: who is banned, who is dead for good or who holds which character is not known' }
+  return $why
+}
+
+# Ends a task whose program is running but not working, so the start after it
+# is a new run. Task Scheduler drops a start while a run is going
+# (MultipleInstances IgnoreNew), and the program a task starts through the
+# owner launcher (ServiceAccount.ps1) is its child, which ending the task may
+# leave running. So the task is ended and the process that holds its port is
+# stopped and waited for, as Install-Tunnel.ps1 does before it starts the
+# task. What it did, in words, for watch.log.
+function EndTask($task, $port) {
+  $ids = @(Get-NetTCPConnection -LocalPort $port -State Listen -EA SilentlyContinue | ForEach-Object { [int]$_.OwningProcess } | Select-Object -Unique)
+  $null = & schtasks /end /tn $task 2>&1
+  $said = 'ended ' + $task
+  foreach ($id in $ids) {
+    $p = Get-Process -Id $id -EA SilentlyContinue
+    if (-not $p) { continue }
+    try {
+      $p | Stop-Process -Force -EA Stop
+      if ($p.WaitForExit(15000)) { $said += ', stopped ' + $p.ProcessName + ' (' + $id + ')' }
+      else { $said += ', ' + $p.ProcessName + ' (' + $id + ') had not exited 15 seconds after it was stopped' }
+    } catch { $said += ', could not stop ' + $p.ProcessName + ' (' + $id + '): ' + $_.Exception.Message }
+  }
+  return $said
 }
 
 # '' when every service matching the name is running, else why not. Where
@@ -841,8 +968,19 @@ $checks = @(
   @{ Name = 'dev voice'; Task = 'Thornswood Dev Voice';  Port = 7789; Say = 'Dev voice'; Health = 'http://127.0.0.1:7789/health' },
   # The way in over ssh (#2891). A plain request answers 404 on purpose, so
   # the port answering is the whole check.
-  @{ Name = 'bridge';    Task = 'Thornswood Bridge';     Port = 7790; Say = 'The ssh bridge, the way into the box' }
+  @{ Name = 'bridge';    Task = 'Thornswood Bridge';     Port = 7790; Say = 'The ssh bridge, the way into the box' },
+  # What carries the site, both feeds and the bridge since #5334 (#5779).
+  # Ready, unlike Health, is restarted for: the header says why.
+  @{ Name = 'tunnel';    Task = 'Thornswood Tunnel';     Port = 20241; Say = 'The Cloudflare tunnel, which carries the website, both update feeds and the ssh bridge'; Ready = 'http://127.0.0.1:20241/ready' }
 )
+# MongoDB, where a game server keeps its world once Move-World has moved it
+# (#6237): a server whose database does not answer cannot load or save. Put
+# first, so a run starts it before it looks at the game servers. Only once
+# Install-Mongo.ps1 has installed it (bin\installed.json), so a box without
+# it is not told about a task that is not there.
+if (Test-Path -LiteralPath 'C:\Thornswood-Mongo\bin\installed.json') {
+  $checks = @(@{ Name = 'mongo'; Task = 'Thornswood Mongo'; Port = 27017; Say = 'MongoDB, which keeps the game servers'' worlds' }) + $checks
+}
 
 # Told about and never restarted. The runner's service name is the one
 # Install-Runner.ps1 registers, actions.runner.<owner>-<repo>.<runner name>,
@@ -852,9 +990,14 @@ $tellOnly = @(
   @{ Name = 'offbox'; Say = 'The copy of the backups off the VPS'; Fails = 'is out of date'; Recovers = 'is up to date again'; OffBox = (Join-Path $root 'offbox.txt'); Hours = 26
      Fix = 'The Thornswood Send Backups task sends each nightly to the Oracle VM when the backup task ends (#2862). Its record says why it did not: the gate verb Send-Backups -Status. Until then a VPS lost is everything since that copy lost too.' },
   @{ Name = 'runner'; Say = 'The build runner (Launcher builds on thornswood-vps and every numbered one)'; Service = 'actions.runner.*.thornswood-vps*' },
+  # The website's readiness (#4448): the files it holds read. A restart
+  # does not mend a file, and the site writes nothing over one it cannot
+  # read, so this is told and never restarted for.
+  @{ Name = 'site files'; Say = 'The files the website holds'; Fails = 'will not read'; Recovers = 'read again'; Held = 'http://127.0.0.1:3001/api/ready'
+     Fix = 'A restart does not mend a file, so the watchdog leaves the website running, and the site writes nothing over a file it cannot read. Repair the file by hand on the box, from the backup in C:\Thornswood-Backup; the site reads it again at its next request.' },
   # Caddy's own certificate (#2995), which only this box can reach now.
   @{ Name = 'cert'; Say = 'The certificate Caddy holds for thornswood.net'; Fails = 'needs a look'; Recovers = 'is fine again'; Cert = 'https://thornswood.net/'; Days = 14
-     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Cloudflare reaches it over port 443 for the renewal, so Set-WebFirewall.ps1 -Check says whether 443 still takes Cloudflare.' }
+     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Let''s Encrypt''s check reaches Caddy through Cloudflare, down the tunnel to 443 on the box (#5351), so Set-WebFirewall.ps1 -Check says whether the tunnel carries both names.' }
 )
 
 # What is wrong with one of $checks when it does not answer, in words.
@@ -869,6 +1012,14 @@ function IsUp($c) {
   if ($c.ContainsKey('Url')) { return (SiteAnswers $c.Url) }
   if ($c.Port -eq 0) { return (BotAlive) }
   return (Answers $c.Port)
+}
+
+# Up and, where it has a Ready address, answering 200 there: what a restart
+# has to give back before it counts as back.
+function Working($c) {
+  if (-not (IsUp $c)) { return $false }
+  if ($c.ContainsKey('Ready')) { return (-not (ReadyProblem $c.Ready)) }
+  return $true
 }
 
 # A check's verdict once the watchdog has acted on it. $h is the hold that
@@ -896,8 +1047,10 @@ foreach ($c in $checks) {
   }
   if ($held) { Remove-Item -LiteralPath $held.File -Force -EA SilentlyContinue }
 
-  # What is wrong with it in words, when it is down.
+  # What is wrong with it in words, when it is down. $alive is its program
+  # running while it does not work, which is ended before it is started.
   $why = DownWords $c
+  $alive = $false
   if (IsUp $c) {
     if ($held) { TellHold $c $held (HoldWords 'running'); $held = $null }
     $sick = ''
@@ -908,9 +1061,24 @@ foreach ($c in $checks) {
     $hung = ''
     if ($c.ContainsKey('Beat')) { $hung = BotSilent $c.Beat }
     if ($sick) { Observe $told $c $true $true ('It answers on port ' + $c.Port + ', but ' + $c.Health + ' ' + $sick) 'soft'; continue }
-    if (-not $hung) { Observe $told $c $false $false '' ''; continue }
-    if (-not $c.ContainsKey('Svc')) { Observe $told $c $true $false $hung 'soft'; continue }
-    $why = $hung
+    # Answering on its port and not ready is down (#5779): the tunnel's
+    # metrics answer while it holds no connection to Cloudflare. The first
+    # run of it is only noted, as a health check's is, so a reconnect
+    # cloudflared is making by itself is let finish; the second in a row
+    # (or any run of an outage already told) ends it and starts it again.
+    $cut = ''
+    if ($c.ContainsKey('Ready')) { $cut = ReadyProblem $c.Ready }
+    if ($cut) {
+      $why = 'It answers on port ' + $c.Port + ', but ' + $c.Ready + ' ' + $cut
+      $missed = 0
+      if ($told.ContainsKey($c.Name)) { $missed = [int]$told[$c.Name].Misses }
+      if ($missed + 1 -lt $healthMisses) { Observe $told $c $true $true $why 'soft'; continue }
+      $alive = $true
+    } else {
+      if (-not $hung) { Observe $told $c $false $false '' ''; continue }
+      if (-not $c.ContainsKey('Svc')) { Observe $told $c $true $false $hung 'soft'; continue }
+      $why = $hung
+    }
   }
 
   $already = 0
@@ -942,7 +1110,8 @@ foreach ($c in $checks) {
     $ended = ''
     if (-not $held) { $ended = HowItEnded $c.Task }
     if ($ended) { $why = $why + ', and ' + $ended }
-    Note ($c.Name + ' is not answering' + $(if ($ended) { ': ' + $ended } else { '' }) + '. Starting ' + $c.Task)
+    if ($alive) { Note ($c.Name + ' is running and not working (' + $why + '). ' + (EndTask $c.Task $c.Port) + '. Starting ' + $c.Task) }
+    else { Note ($c.Name + ' is not answering' + $(if ($ended) { ': ' + $ended } else { '' }) + '. Starting ' + $c.Task) }
     $null = & schtasks /run /tn $c.Task 2>&1
     $rc = $LASTEXITCODE
     if ($rc -ne 0) {
@@ -955,7 +1124,7 @@ foreach ($c in $checks) {
   # Caddy's first start after a gap waits on its certificate, so it is given
   # longer before the watcher decides it did not come back.
   Start-Sleep -Seconds $(if ($c.ContainsKey('Url')) { 45 } else { 25 })
-  if (IsUp $c) {
+  if (Working $c) {
     Note ($c.Name + ' is back')
     Verdict $c $held $why 'back'
   }
@@ -976,6 +1145,14 @@ if ($fresh.Count -gt 0) { Add-Content -LiteralPath $hist -Value $fresh }
 
 foreach ($c in $tellOnly) {
   $why = ''
+  if ($c.ContainsKey('Held')) {
+    # Its own words, already a sentence. A site that cannot be asked leaves
+    # this as it was: neither down nor back.
+    $why = HeldProblem $c.Held
+    if ($null -eq $why) { continue }
+    if ($why) { Observe $told $c $true $false $why 'nobody' } else { Observe $told $c $false $false '' '' }
+    continue
+  }
   if ($c.ContainsKey('Backup')) { $why = BackupProblem $c.Backup $c.Folder $c.Hours }
   elseif ($c.ContainsKey('OffBox')) { $why = OffBoxProblem $c.OffBox $c.Hours }
   elseif ($c.ContainsKey('Cert')) { $why = CertProblem $c.Cert $c.Days }
@@ -1165,13 +1342,9 @@ try {
   $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($put))
   $out = $url | Invoke-ThornswoodNative { $input | & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" } 2>&1
   $url = $null
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red' }
-    if ("$l" -match '^(saved|posted)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  $failed = Show-BoxLines @($out)
   Write-Host ''
+  if ($failed) { Die 'The webhook is not set as it should be: the FAILED line above says which step. Run -SetWebhook again once that is mended.' }
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
@@ -1189,10 +1362,14 @@ if ($Install) {
   $out = Remote @"
 `$ErrorActionPreference = 'Continue'
 $(Get-ThornswoodLockedFolderScript $Root)
-[IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
-'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
-[IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
-'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+try {
+  [IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
+  'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
+} catch { 'FAILED    $Root\watch.ps1 could not be written: ' + `$_.Exception.Message }
+try {
+  [IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
+  'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+} catch { 'FAILED    $Root\say-staff.ps1 could not be written: ' + `$_.Exception.Message }
 
 # Every five minutes, as SYSTEM, so it keeps going when nobody is logged in.
 #
@@ -1210,12 +1387,18 @@ $(Get-ThornswoodLockedFolderScript $Root)
 `$p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 try {
   Register-ScheduledTask -TaskName '$Task' -Action `$a -Trigger `$tr -Settings `$s -Principal `$p -Force -ErrorAction Stop | Out-Null
-  'made      the task, every five minutes, at priority ' + (Get-ScheduledTask -TaskName '$Task').Settings.Priority
+  # Read back, so a task the scheduler did not keep is said and not taken
+  # for registered (#4207).
+  `$made = Get-ScheduledTask -TaskName '$Task' -ErrorAction SilentlyContinue
+  if (`$made) { 'made      the task, every five minutes, at priority ' + `$made.Settings.Priority }
+  else { 'FAILED    the task is not there after registering it' }
 } catch { 'FAILED    the task could not be registered: ' + `$_.Exception.Message }
 
 # Run it once now so the log has something in it and any problem shows up
 # here rather than in five minutes when nobody is watching.
-`$null = & schtasks /run /tn '$Task' 2>&1
+`$said = & schtasks /run /tn '$Task' 2>&1
+if (`$LASTEXITCODE -ne 0) { 'FAILED    its first run was refused: ' + ((@(`$said) | ForEach-Object { "`$_" }) -join ' ') }
+else { 'ran       the task once' }
 Start-Sleep -Seconds 8
 if (Test-Path '$Root\watch.log') {
   'first run:'
@@ -1229,14 +1412,10 @@ if (Test-Path '$Root\alerts-webhook.txt') {
 "@
 
   # A FAILED line, or nothing back, is exit 1, so a run through the gate
-  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work (#5155).
-  $failed = -not @($out).Count
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
-    if ("$l" -match '^(wrote|made)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work
+  # (#5155), and nothing here says the watchdog runs when it may not (#4207).
+  $failed = Show-BoxLines @($out)
+  if ($failed) { Die 'The watchdog is not set up as it should be: the FAILED line above says which step. Run -Install again once that is mended.' }
 
   Head 'From now on'
   Say '  Anything that stops gets started again within five minutes,' 'DarkGray'
@@ -1245,7 +1424,6 @@ if (Test-Path '$Root\alerts-webhook.txt') {
   Say '  Run this script with no switches to see what it has been doing.' 'DarkGray'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
-  if ($failed) { exit 1 }
   exit 0
 }
 
@@ -1315,6 +1493,12 @@ if (Test-Path `$hb) {
 'dev game  ' + `$(if (Answers 7788) { 'up' } else { 'DOWN' })
 'dev voice ' + `$(if (Answers 7789) { 'up' } else { 'DOWN' })
 'bridge    ' + `$(if (Answers 7790) { 'up' } else { 'DOWN' })
+# cloudflared (#5779): its metrics port, then /ready, which is 200 only while
+# it holds a connection to Cloudflare. [Net.WebRequest] throws on anything
+# else, on Windows PowerShell 5.1 as well.
+`$ready = `$false
+try { `$r = [Net.WebRequest]::Create('http://127.0.0.1:20241/ready'); `$r.Timeout = 5000; `$a = `$r.GetResponse(); `$ready = ([int]`$a.StatusCode -eq 200); `$a.Close() } catch { `$ready = `$false }
+'tunnel    ' + `$(if (-not (Answers 20241)) { 'DOWN' } elseif (`$ready) { 'up' } else { 'NOT CONNECTED to Cloudflare (/ready is not 200)' })
 # Free space right now, and LOW or CRITICAL when the watcher's last run found
 # it under a line. The twenty and the ten are kept in the watcher only, so
 # this reads its verdict from disk.txt rather than holding a second copy.
@@ -1360,7 +1544,7 @@ Get-ThornswoodHolds
 foreach ($l in $out) {
   $c = 'Gray'
   if ("$l" -match '^held ') { $c = 'Yellow' }
-  if ("$l" -match 'DOWN|NOT installed|LOW$|CRITICAL$|OFF DISCORD|Stopped$|NOT #staff-updates|WOULD NOT SAY|NO say-staff') { $c = 'Red' }
+  if ("$l" -match 'DOWN|NOT CONNECTED|NOT installed|LOW$|CRITICAL$|OFF DISCORD|Stopped$|NOT #staff-updates|WOULD NOT SAY|NO say-staff') { $c = 'Red' }
   if ("$l" -match '\bup$|installed$|Running$') { $c = 'Green' }
   Say "  $l" $c
 }

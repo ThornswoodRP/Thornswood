@@ -66,7 +66,7 @@
 #
 # THE NOTES. The Release's body is the note people read: the Release note
 # lines of the pull requests merged since the Release before, joined and held
-# to Note-Rules (Collect-ReleaseNotes.ps1). When every one of them says none,
+# to the release note rules (Collect-ReleaseNotes.ps1). When every one of them says none,
 # the body is the single line in QUIET_NOTE below, and the news announces it
 # like any other: every release is announced (Patrick, 9 Nov: "just put like
 # various bug fixes and improvements and still make an announcement"), so
@@ -121,6 +121,9 @@ on:
     branches: [main]
     paths:
       - 'game/**'
+      # Nor the game's harnesses in game/tests: a change to a check is no
+      # new release.
+      - '!game/tests/**'
       - 'launcher/**'
       # Not its harnesses (plan line 42): a change to a check is no new
       # launcher, as LauncherVersion.ps1 says.
@@ -156,29 +159,22 @@ on:
       - 'scripts/release/Build-Front.ps1'
       - 'scripts/release/Build-Launcher.ps1'
       - 'scripts/release/Build-SetupFiles.ps1'
+      - 'scripts/release/Reference-List.ps1'
+      - 'scripts/release/RepoPlugins.ps1'
       - 'scripts/release/Source-Notice.ps1'
       - 'scripts/release/Go.ps1'
       - 'scripts/release/MergeRelease.ps1'
       - 'scripts/release/New-SignedManifest.ps1'
       - '.github/workflows/merge-release.yml'
+  # The box's content build (#5191): when a merge's content inputs had no
+  # build yet, the content job asked the deploy agent for one by a
+  # Deployment to Content, and the agent's success there starts this again.
+  # Every other Deployment's status starts a run whose jobs are skipped.
+  deployment_status:
   workflow_dispatch:
 
 permissions:
   contents: read
-
-# THE NEWEST MERGE. The newest merge is the one released (#5398). GitHub
-# refuses the run's own token any tag on a commit whose workflow files
-# differ from main's (it asks for workflows: write, which that token can
-# never hold), so a merge main
-# has moved past with a workflow change can never be tagged. A newer merge
-# cancels the run of the one before it, and its Release carries every part
-# and the notes of every pull request since the Release before, so nothing
-# a superseded merge changed is left out. A merge this workflow does not run
-# for cancels nothing, so a run that main moved past that way starts a run of
-# main's newest merge itself (Is this still main's newest merge).
-concurrency:
-  group: merge-release
-  cancel-in-progress: true
 
 env:
   QUIET_NOTE: 'Various bug fixes and improvements'
@@ -186,10 +182,245 @@ env:
   VPK_VERSION: '1.2.161'
 
 jobs:
+  # THE CONTENT BUILD (#5191, stage 3). Nothing generated is committed
+  # (Patrick's B on #5191): the content plugin, the Last plugin's recipe and
+  # every table read out of the load order are built on the box, where the
+  # whole load order is, and the deploy agent puts each build on a draft
+  # Release named by its inputs (docs/DEPLOY-AGENT.md, "The content build").
+  # This job looks for the draft of this commit's inputs; when there is none
+  # it asks the agent for it by a Deployment to Content, and the release
+  # waits for that Deployment's success, which starts this workflow again.
+  content:
+    name: Find the box's content build
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'deployment_status' || (github.event.deployment.environment == 'Content' && github.event.deployment_status.state == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # A draft Release is listed only to a token that may write Contents.
+      contents: write
+      deployments: write
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+      key: ${{ steps.find.outputs.key }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Find the build, or ask the box for it
+        id: find
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Ask
+      # The build, held to its key, for the content checks below: a job of
+      # theirs could list the draft only with a token that writes Contents.
+      - name: Take the build for the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-taken'
+      - name: Hand the build to the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-taken
+          path: |
+            ${{ runner.temp }}/content-taken/content.zip
+            ${{ runner.temp }}/content-taken/content-build.json
+          if-no-files-found: error
+          # Read by this run's content checks, minutes later, and by nothing
+          # after it.
+          retention-days: 1
+
+  # THE CONTENT CHECKS (#5191, stage 4). Every gate harness a new content
+  # build can affect, as main's nightly map says (scripts\dev\Run-Gate.ps1
+  # -Content), run over the box's build of this merge before any release
+  # carries it, in shares as the gate runs: a red one stops the release, and
+  # the build is not kept as content-dev, so no checkout or pull request
+  # lays a build whose checks failed. A pull request that changes a content
+  # input runs these here and not in its own checks, where only an older
+  # build is there to run them over (Run-Gate.ps1 -Content says why).
+  checks-pick:
+    name: Pick the content checks
+    needs: content
+    if: ${{ needs.content.outputs.found == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Main's nightly gate map, an artifact of gate-map.yml.
+      actions: read
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      shares: ${{ steps.pick.outputs.shares }}
+      linux_shares: ${{ steps.pick.outputs.linux_shares }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Pick and split the content checks
+        id: pick
+        shell: pwsh
+        env:
+          GATE_MAP_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Pick 5 -LinuxShares 4 -Content
+          exit $LASTEXITCODE
+
+  checks:
+    name: Content checks (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.shares != '[]' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.shares) }}
+    steps:
+      # As build.yml's gate shares, which say why each step is there.
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Put .NET and NuGet's packages on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
+
+  checks-linux:
+    name: Content checks on Linux (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.linux_shares != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.linux_shares) }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
+
   release:
     name: Build, sign and release the merge
-    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: [content, checks-pick, checks, checks-linux]
+    # The content checks passed, or had nothing to run on a platform.
+    if: ${{ !cancelled() && needs.content.outputs.found == 'yes' && needs.checks-pick.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.checks-linux.result == 'success' || needs.checks-linux.result == 'skipped') }}
     runs-on: windows-latest
+    # ONE AT A TIME, NEVER CANCELLED (#6008). A run that has started runs to
+    # its end; a newer merge waits, and GitHub keeps only the newest one waiting,
+    # so the merge released next is the newest. Until 13 Nov a newer merge
+    # cancelled the run in progress (#5398). A release takes about 10 minutes, and
+    # once the org had 60 runners merges landed about every 5, so all 22 runs
+    # from 22:00 UTC on 12 Nov to 00:42 UTC on 13 Nov were cancelled and dev got
+    # no build for two and a half hours.
+    #
+    # WHICH MERGE IS TAGGED. GitHub refuses the run's own token any tag on a
+    # commit whose workflow files differ from main's (it asks for workflows:
+    # write, which that token can never hold; probe runs on #5398). So a merge
+    # main has moved past is released when its workflow files are still main's,
+    # and its Release carries every part and the notes of every pull request
+    # since the Release before; the run waiting for main's newest merge releases
+    # the rest after it. When they differ, nothing is released here and a run of
+    # main's newest merge is started, which carries this one's changes (Is this
+    # a merge that can still be tagged).
+    #
+    # On this job, not the workflow (#5191): the content job of a run started
+    # by a Deployment's status waits behind nothing and holds no merge back.
+    concurrency:
+      group: merge-release
+      cancel-in-progress: false
     environment: release
     # The engine package (about 100 MB), dev's last release from the site and
     # the Velopack package are the slow parts; the box taking it, at most 20
@@ -203,14 +434,40 @@ jobs:
       # Main's launcher package, kept on GitHub Packages (MAIN'S PACKAGE).
       packages: write
       # To start a run of main's newest merge when main moved on during
-      # this one (Is this still main's newest merge).
+      # this one with other workflow files (Is this a merge that can still
+      # be tagged).
       actions: write
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      # The box's build of this commit's inputs, written over the checkout
+      # before any part is built, each file held to the sha256 its record
+      # names (THE CONTENT BUILD, above).
+      - name: Take the box's content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-kept'
+
+      # What it took, as the artifact the harnesses and every checkout read
+      # the tables from now that they are not committed (#5191, stage 4;
+      # Get-ContentBuild.ps1 -Newest), newest first. Reading it needs Actions
+      # read only, which a pull request's token has.
+      - name: Keep what was taken
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-dev
+          path: |
+            ${{ runner.temp }}/content-kept/content.zip
+            ${{ runner.temp }}/content-kept/content-build.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Name the release and read the one before
         id: names
@@ -327,6 +584,24 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("list=" + (Join-Path $out 'game-files.json'))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("sha=" + (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant())
 
+      # What the install reads beside the game files on the first start
+      # (Build-SetupFiles.ps1), from the record the game files were built
+      # over, once for each channel's package: config.json and applied.txt
+      # are the channel's own. Built on every run, before the launcher step,
+      # because a change to them alone is a new package (MergeRelease.ps1,
+      # THE FILES BESIDE GAME; #6298).
+      - name: Build the files the install reads beside the game files
+        id: setup
+        shell: pwsh
+        run: |
+          foreach ($ch in 'dev', 'main') {
+            $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
+            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
+          }
+
       # Built whenever a Velopack package is made (header, WHAT A RELEASE
       # CARRIES; MergeRelease.ps1, ONE NUMBER), with the package's version.
       - name: The launcher, built and signed or carried from the Release before
@@ -340,6 +615,7 @@ jobs:
           GAME_SHA: ${{ steps.game.outputs.sha }}
           PREVIOUS: ${{ steps.names.outputs.previous }}
           PREVIOUS_MANIFEST: ${{ steps.names.outputs.previous_manifest }}
+          SETUP_DEV_LIST: ${{ steps.setup.outputs.dev_list }}
         run: |
           . ./scripts/release/LauncherVersion.ps1
           . ./scripts/release/MergeRelease.ps1
@@ -364,6 +640,35 @@ jobs:
               $build = $true
               $repack = $true
               Write-Host "main's newest launcher package, before $($env:PREVIOUS) or from it, has no main tag and can never go out, so this merge makes the package again"
+            }
+          }
+          # The files beside Game (the setup step) against those in the
+          # package dev's launchers are on, its list held to its manifest:
+          # a new reference load order alone is a new package
+          # (MergeRelease.ps1, THE FILES BESIDE GAME; #6298).
+          if (-not $build) {
+            try { $on = Get-MergeReleaseDevPackage -Releases @(Get-MergeReleaseList) }
+            catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+            $setupBefore = $null
+            if ($on -and @($on.assets | Where-Object name -eq 'setup-files.dev.json').Count) {
+              $sdir = Join-Path $env:RUNNER_TEMP 'setup-before'
+              New-Item -ItemType Directory -Force -Path $sdir | Out-Null
+              gh release download ([string]$on.tag_name) -R $env:GITHUB_REPOSITORY -p 'manifest.json' -p 'setup-files.dev.json' -D $sdir --clobber
+              if ($LASTEXITCODE -ne 0) { Write-Host "::error::the manifest and setup-files.dev.json of $($on.tag_name) could not be downloaded"; exit 1 }
+              $om = Get-Content -LiteralPath (Join-Path $sdir 'manifest.json') -Raw | ConvertFrom-Json
+              $ol = @($om.parts.PSObject.Properties | Where-Object Name -eq 'velopack' | ForEach-Object { $_.Value } | Where-Object { $_.name -eq 'setup-files.dev.json' })
+              if ($ol.Count -ne 1) { Write-Host "::error::the velopack part of $($on.tag_name) lists no setup-files.dev.json"; exit 1 }
+              $sl = Join-Path $sdir 'setup-files.dev.json'
+              if ((Get-FileHash -LiteralPath $sl -Algorithm SHA256).Hash.ToLowerInvariant() -ne ([string]$ol[0].sha256).ToLowerInvariant()) { Write-Host "::error::setup-files.dev.json of $($on.tag_name) is not the one its manifest names"; exit 1 }
+              $setupBefore = Get-Content -LiteralPath $sl -Raw | ConvertFrom-Json
+            }
+            $setupNow = Get-Content -LiteralPath $env:SETUP_DEV_LIST -Raw | ConvertFrom-Json
+            try { $setupMoved = Test-MergeReleaseSetupChanged -SetupFiles $setupNow -Before $setupBefore }
+            catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+            if ($setupMoved) {
+              $build = $true
+              $repack = $true
+              Write-Host ("the files beside Game differ from those in " + $(if ($on) { "$($on.tag_name)'s package" } else { 'any package' }) + ", so this merge makes the package again")
             }
           }
           if (-not $build) {
@@ -465,7 +770,11 @@ jobs:
           $tables = Join-Path $out 'gamemode-tables.zip'
           ./scripts/release/App-Part.ps1 -Part tables -Out $tables
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host ('gamemode tables are git tree ' + (git rev-parse "$($env:GITHUB_SHA):game/gamemode-tables"))
+          # The tables are the box's build taken above, never committed
+          # (#5191, stage 4e), so their tree is worked out from the folder,
+          # as the gamemode logs it when it loads (GamemodeId.ps1).
+          . .\scripts\deploy\GamemodeId.ps1
+          Write-Host ('gamemode tables are git tree ' + (Get-ThornswoodTablesTree (Resolve-Path 'game\gamemode-tables').Path))
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $launcher = @(Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { 'launcher=' + $_.FullName })
           $adds = $launcher + @("game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
@@ -473,6 +782,10 @@ jobs:
           # The steps after a deploy and the verbs they are held to (#5186).
           $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
           $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          # The collection's modlist the launcher installs from, its sha256 in
+          # this signed record (#6244); test-6244-collection-modlist.ps1 holds
+          # it to the revision collection-plugins.json names.
+          $adds += @('modlist=' + (Resolve-Path 'records\collection-modlist.wabbajack').Path)
           Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
@@ -481,10 +794,11 @@ jobs:
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
           $changed = @(Get-MergeReleaseChanged -Manifest $m -Previous $prev)
-          # A launcher built again for main's package (the launcher step:
-          # the newest one had no main tag) is a new launcher, though its
-          # sources are the same: it goes out, and the package with it.
-          if ($env:LAUNCHER_REPACK -eq 'yes' -and $changed -notcontains 'launcher') { $changed = @($changed) + @('launcher'); Write-Host 'the launcher was built again for a main package that can go out' }
+          # A launcher built again for a new package (the launcher step: the
+          # newest one had no main tag, or the files beside Game changed) is
+          # a new launcher, though its sources are the same: it goes out, and
+          # the package with it.
+          if ($env:LAUNCHER_REPACK -eq 'yes' -and $changed -notcontains 'launcher') { $changed = @($changed) + @('launcher'); Write-Host 'the launcher was built again for a new package (the launcher step says why)' }
           Remove-Item -LiteralPath $probe -Recurse -Force
           if ($changed.Count -eq 0) {
             Write-Host 'no part changed since the Release before, so nothing is released'
@@ -508,23 +822,6 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("gamemode=" + $gm)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("stamp=" + $stamp)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("tables=" + $tables)
-
-      # What the install reads beside the game files on the first start
-      # (Build-SetupFiles.ps1), from the record the game files were built
-      # over, once for each channel's package: config.json and applied.txt
-      # are the channel's own.
-      - name: Build the files the install reads beside the game files
-        id: setup
-        if: ${{ steps.changed.outputs.velopack == 'yes' }}
-        shell: pwsh
-        run: |
-          foreach ($ch in 'dev', 'main') {
-            $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
-            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
-            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
-            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
-          }
 
       # One package for each channel, from the same launcher and game files
       # (header, WHAT A RELEASE CARRIES): dev's goes out with this Release,
@@ -554,9 +851,12 @@ jobs:
           NOTES: ${{ steps.notes.outputs.file }}
         run: |
           . .\scripts\release\MergeRelease.ps1
+          # Each command's own reason goes into its ::error annotation, not
+          # only into the job log (#5765, scripts\release\Invoke-Said.ps1).
+          . .\scripts\release\Invoke-Said.ps1
           $tools = Join-Path $env:RUNNER_TEMP 'vpk'
-          dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk $($env:VPK_VERSION) could not be installed"; exit 1 }
+          Invoke-Said "installing vpk $($env:VPK_VERSION)" { dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $vpk = Join-Path $tools 'vpk.exe'
           $game = Join-Path $env:RUNNER_TEMP 'velopack-game'
           Expand-Archive -LiteralPath $env:GAME_ZIP -DestinationPath $game
@@ -571,8 +871,8 @@ jobs:
           # site names it in that channel's old feed (site\lib\feed.js,
           # feedMove).
           $moveOut = Join-Path $env:RUNNER_TEMP 'move'
-          dotnet build launcher\move\Move.csproj -c Release -p:Version=$env:VERSION -p:OutDir="$moveOut\"
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the move program did not build'; exit 1 }
+          Invoke-Said 'building the move program' { dotnet build launcher\move\Move.csproj -c Release -p:Version=$env:VERSION -p:OutDir="$moveOut\" }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $moveExe = Join-Path $moveOut 'Thornswood.exe'
           ./scripts/release/Sign-OnRunner.ps1 -Path $moveExe
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -607,24 +907,25 @@ jobs:
             # full package anyway.
             $delta = 'None'
             if ($ch -eq 'dev') {
-              $before = @($rels | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count } |
-                          Sort-Object { $_.published_at } -Descending)
-              $was = $(if ($before.Count) { Get-VelopackFullOf -Release $before[0] -Channel dev } else { $null })
+              $on = Get-MergeReleaseDevPackage -Releases $rels
+              $was = $(if ($on) { Get-VelopackFullOf -Release $on -Channel dev } else { $null })
               if ($was -and [version]$was.Version -lt [version]$env:VERSION) {
-                gh release download ([string]$before[0].tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out
-                if ($LASTEXITCODE -ne 0) { Write-Host "::error::the full package of $($before[0].tag_name) could not be taken for a delta"; exit 1 }
+                Invoke-Said "taking the full package of $($on.tag_name) for a delta" { gh release download ([string]$on.tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out }
+                if ($LASTEXITCODE -ne 0) { exit 1 }
                 $delta = 'BestSpeed'
-                Write-Host "dev: a delta from $($before[0].tag_name), $($was.Version)"
-              } elseif ($was) { Write-Host "dev: $($before[0].tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
+                Write-Host "dev: a delta from $($on.tag_name), $($was.Version)"
+              } elseif ($was) { Write-Host "dev: $($on.tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
               else { Write-Host 'dev: the first Velopack release, a full package and no delta' }
             } else { Write-Host 'main: a full package, held for the approval' }
             # packTitle is the name Windows shows in Apps and on the
             # shortcuts, packAuthors the publisher beside it, and the icon is
             # Setup.exe's and the installed app's.
-            & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
-              --icon $icon --channel $ch --outputDir $out --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
-              --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk pack for $ch failed; the lines above say why"; exit 1 }
+            Invoke-Said "vpk pack for $ch" {
+              & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
+                --icon $icon --channel $ch --outputDir $out --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
+                --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
+            }
+            if ($LASTEXITCODE -ne 0) { exit 1 }
             # This version's packages and the channel's feed files; a full
             # package of the release before, which vpk took for the delta,
             # stays on that Release.
@@ -710,16 +1011,17 @@ jobs:
         with:
           subject-path: ${{ steps.files.outputs.held_subjects }}
 
-      # Main may have moved on while this was built. A newer merge that this
-      # workflow runs for would have cancelled this run (concurrency, above),
-      # so getting here past main means the merges after it touched none of
-      # the paths above and start no run of their own. Until 2 Nov this step
-      # said a newer run would release the change anyway, and none did: the
-      # site fix #5451 (ed6dfc99) was built, then dropped, because a voice
-      # harness and a docs page merged during its build. So it asks for a
-      # run of main's newest merge now, which carries this one's changes,
-      # and that run is the one released (#5398, Patrick's A).
-      - name: Is this still main's newest merge
+      # Main may have moved on while this was built. A merge whose workflow
+      # files are still main's is tagged and released as it is (the header,
+      # WHICH MERGE IS TAGGED): the merges after it that this workflow runs
+      # for are waiting for this run and are released next, and those it
+      # does not run for change nothing it ships. A merge whose workflow files
+      # main has changed cannot be tagged, so it asks for a run of main's
+      # newest merge, which carries this one's changes. Until 2 Nov nothing
+      # asked, and the site fix #5451 (ed6dfc99) was built and then dropped
+      # because a voice harness and a docs page merged during its build
+      # (#5398).
+      - name: Is this a merge that can still be tagged
         id: newest
         if: ${{ steps.changed.outputs.release == 'yes' }}
         shell: pwsh
@@ -729,10 +1031,20 @@ jobs:
           $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
           if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
           if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
+          # The files that differ between this merge and main. GitHub lists at
+          # most 300, so a list that long is taken as "workflows may differ".
+          $files = @(gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$($env:GITHUB_SHA)...$head" --jq '.files[].filename')
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub did not say what changed between this merge and main ($head)"; exit 1 }
+          $flows = @($files | Where-Object { $_ -like '.github/workflows/*' })
+          if ($files.Count -lt 300 -and -not $flows.Count) {
+            Write-Host "main is $head now, past this merge, with the same workflow files, so this merge is released and main's newest merge comes after it"
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'
+            exit 0
+          }
           gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge, and the run that releases it could not be started"; exit 1 }
-          Write-Host "main is $head now, past this merge; a run of main's newest merge was started, and it releases this one's changes"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge with other workflow files, and the run that releases it could not be started"; exit 1 }
+          Write-Host ("main is $head now, past this merge, and its workflow files differ (" + ($(if ($flows.Count) { $flows -join ', ' } else { 'over 300 files differ' })) + "), so this merge cannot be tagged; a run of main's newest merge was started, and it releases this one's changes")
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head with other workflow files while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=no'
 
       - name: Publish the Release
@@ -822,7 +1134,7 @@ jobs:
 
       # One Deployment for each app that changed, with the part beside the
       # tag (header, THE DEPLOYMENT). The box deploy agent applies each and
-      # the bot posts the Release's news once, in the dev updates channel,
+      # the bot posts the Release's news once, in #staff-news,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
         id: appdeploy

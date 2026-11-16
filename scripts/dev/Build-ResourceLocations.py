@@ -1,4 +1,16 @@
-"""List source-derived fishing and hunting supply; never invent placement coordinates."""
+"""List source-derived fishing and hunting supply; never invent placement coordinates.
+
+A step of scripts/mods/content-tables.json since #5191, after
+Build-NpcPopulation.py: --data reads the catalogue's own load order out of
+one folder, as that step does. Thornswood-Last.esp switches placed things
+off and gives places their hold, and it is made by Build-LastPlugin.py
+earlier in the chain, so this reads the plugin of the same build (Patrick's
+B on q-5191-last-plugin-loop). It was run ahead of the chain on the box,
+with the catalogue, when the only Last plugin in its folder was the
+server's, from the build before; and it read the fish and game tables and
+waters.json of the build before too. --settings reads a server-settings
+file's loadOrder instead, for a run by hand.
+"""
 import argparse
 import collections
 import csv
@@ -16,6 +28,7 @@ C = P.C
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 import gamemode_tables  # noqa: E402  (the gamemode's tables, #5191)
+import own_plugins  # noqa: E402  (where Thornswood's own plugins are read, #2923)
 
 
 def js_table(name):
@@ -26,15 +39,20 @@ def js_table(name):
 
 
 def write_csv(filename, rows, columns):
+    # LF on every machine, as git stores it (#3029): a step of
+    # scripts/mods/content-tables.json since #5191.
     with (ROOT / 'docs' / filename).open('w', encoding='utf-8', newline='') as output:
-        writer = csv.DictWriter(output, fieldnames=columns)
+        writer = csv.DictWriter(output, fieldnames=columns, lineterminator='\n')
         writer.writeheader()
         writer.writerows({key: row.get(key, '') for key in columns} for row in rows)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--settings')
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument('--settings', help='a server-settings file; its loadOrder paths are read')
+    where.add_argument('--data', help='a folder holding every plugin of the catalogue\'s own load order '
+                       '(its string tables too, unless --strings-dir says where)')
     parser.add_argument('--strings-dir')
     parser.add_argument('--hunting-only', action='store_true',
         help='write docs/HUNTING-SPOTS.csv from npc-population.json and hunts.json, reading no plugin')
@@ -45,10 +63,14 @@ def main():
         print(json.dumps({'animalPlacements': len(animals),
             'dressablePlacements': sum(bool(row['products']) for row in animals)}))
         return
-    if not args.settings or not args.strings_dir:
-        parser.error('--settings and --strings-dir are required, unless --hunting-only')
-    settings = json.loads(pathlib.Path(args.settings).read_text(encoding='utf-8-sig'))
-    paths = settings['loadOrder']
+    if args.data:
+        paths = [own_plugins.plugin_path(args.data, row['name']) for row in population['loadOrder']]
+        args.strings_dir = args.strings_dir or args.data
+    elif args.settings and args.strings_dir:
+        settings = json.loads(pathlib.Path(args.settings).read_text(encoding='utf-8-sig'))
+        paths = settings['loadOrder']
+    else:
+        parser.error('--data, or --settings and --strings-dir, unless --hunting-only')
     order = [pathlib.Path(path).name for path in paths]
     if order != [row['name'] for row in population['loadOrder']]:
         raise ValueError('Resource locations and population use different plugin orders')
@@ -62,8 +84,6 @@ def main():
             plugin.strings = C.bsa.load_strings(args.strings_dir, plugin.name)
         C.read(plugin, tables)
         P.read_details(plugin, tables)
-        if plugin.failed:
-            raise ValueError('Failed compressed records: ' + plugin.name)
     context = C.Cast(tables)
     fish = js_table('FISH_BY_BASE')
     racks = js_table('GAME_BY_BASE')

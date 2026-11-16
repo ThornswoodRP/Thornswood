@@ -80,7 +80,7 @@ Yes 'Nexus-Run.ps1 parses' (-not $err.Count)
 . (Join-Path $Repo 'scripts/vps/gate/GateRules.ps1')
 . (Join-Path $Repo 'scripts/ops/Sealed.ps1')
 $OwnParams = @('PackRoot', 'Pack', 'PackName')
-Invoke-Expression (Import-Functions $nr @('Test-NexusRunLine', 'ConvertTo-NexusRunParams', 'Test-NexusRunPath', 'Get-NexusRunTracked', 'New-NexusRunPack'))
+Invoke-Expression (Import-Functions $nr @('Test-NexusRunLine', 'ConvertTo-NexusRunParams', 'Test-NexusRunPath', 'Get-NexusRunTracked', 'Get-NexusRunLaid', 'New-NexusRunPack'))
 $verbs = Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts/release/nexus-verbs.json')
 
 # ---- 1. nexus-verbs.json against the scripts --------------------------------------
@@ -130,6 +130,12 @@ foreach ($bad in @(
         @('a pack missing its name', 'Send-NexusFile -Mod 192001 -Version 1.3 -PackRoot game/content -Pack Thornswood-Content.esp'),
         @('a pack name that is not a zip', 'Send-NexusFile -Mod 192001 -Version 1.3 -PackRoot game/content -Pack a.esp -PackName a.7z'),
         @('-Mod with no -FileId', 'New-NexusRevision -Mod 192001'),
+        @('-FileId with no -Mod (#4325)', 'New-NexusRevision -FileId 830001'),
+        @('-FileId with -Publish', 'New-NexusRevision -Publish 7 -FileId 830001'),
+        @('-Mod and -FileId with -Publish', 'New-NexusRevision -Publish 7 -Mod 192001 -FileId 830001'),
+        @('-Add with -Publish', 'New-NexusRevision -Publish 7 -Add records/x.json'),
+        @('-Discard with -Publish', 'New-NexusRevision -Publish 7 -Discard 7'),
+        @('-Mod and -FileId with -Discard', 'New-NexusRevision -Discard 7 -Mod 192001 -FileId 830001'),
         @('-Add outside records', 'New-NexusRevision -Add game/x.json'),
         @('-Rule outside docs', 'New-NexusRevision -Rule records/x.json'),
         @('-Rule that climbs out', 'New-NexusRevision -Rule docs/../x.json'),
@@ -139,10 +145,27 @@ foreach ($bad in @(
     Yes ('refused: ' + $bad[0]) (Refused $bad[1])
 }
 Yes 'a path that climbs out of the repository is not one' (-not (Test-NexusRunPath '../x') -and -not (Test-NexusRunPath 'game/../../x') -and -not (Test-NexusRunPath 'game//x') -and -not (Test-NexusRunPath '/etc/x') -and (Test-NexusRunPath 'game/content'))
+# New-NexusRevision refuses these itself, but only once the runner has
+# downloaded every -FileId and -Add archive (#4325); Nexus-Run says why first.
+function Why([string]$line) { try { [void](Params $line); return '' } catch { return $_.Exception.Message } }
+Yes 'a -FileId with no -Mod says they go together, before anything runs' ((Why 'New-NexusRevision -FileId 830001') -match '-Mod and -FileId go together' -and (Why 'New-NexusRevision -FileId 830001') -match 'Nothing was run')
+Yes '-Publish with a file to move says it publishes a draft already there, naming what it takes none of' ((Why 'New-NexusRevision -Publish 7 -FileId 830001') -match '-Publish publishes a draft that is already there' -and (Why 'New-NexusRevision -Publish 7 -FileId 830001') -match '-FileId')
+Yes '-Publish alone, and with -WhatIf, still goes through' (-not (Refused 'New-NexusRevision -Publish 7') -and -not (Refused 'New-NexusRevision -Publish 7 -WhatIf'))
 
 # ---- 3. the pack ------------------------------------------------------------------
+# The content plugin is the box's build, never committed (#5191): the pack
+# takes it from the build laid over this checkout, and only when that build is
+# of this commit's inputs. A checkout with no build laid, or the build of other
+# inputs (a harness run before the box built this commit), gets the refusal.
+. (Join-Path $Repo 'scripts/mods/ContentPaths.ps1')
 $esp = 'game/content/Thornswood-Content.esp'
-if (Test-Path -LiteralPath (Join-Path $Repo $esp)) {
+$laidWhy = ''
+try { [void](Get-ThornswoodLaidBuild -Repo $Repo -Server dev) } catch { $laidWhy = $_.Exception.Message }
+if ($laidWhy) {
+    $why = ''; try { [void](New-NexusRunPack $Repo 'game/content' @('Thornswood-Content.esp') 'one.zip' (Join-Path $T 'pa') ([DateTimeOffset]::UtcNow)) } catch { $why = $_.Exception.Message }
+    Yes 'with no build of this commit laid, the pack refuses the content plugin, saying how to lay it' ($why.Contains('is the box''s content build, which is never committed (#5191)') -and $why.Contains('Get-ContentBuild.ps1 -Take -Server dev') -and $why.Contains('Nothing was run.'))
+}
+if (-not $laidWhy) {
     $when = [DateTimeOffset]::FromUnixTimeSeconds(1761523200)
     $a = New-NexusRunPack $Repo 'game/content' @('Thornswood-Content.esp') 'one.zip' (Join-Path $T 'pa') $when
     $b = New-NexusRunPack $Repo 'game/content' @('Thornswood-Content.esp') 'one.zip' (Join-Path $T 'pb') $when
@@ -158,7 +181,7 @@ if (Test-Path -LiteralPath (Join-Path $Repo $esp)) {
     Yes '  and its bytes are the repository''s' $same
     $f = New-NexusRunPack $Repo 'scripts' @('vps/gate') 'gate.zip' (Join-Path $T 'pc') $when
     Yes 'a folder packs every file git tracks under it' ((($f.Entries) -join ',') -eq 'vps/gate/Gate.ps1,vps/gate/GateBroker.ps1,vps/gate/GateRules.ps1,vps/gate/Update-Gate.ps1,vps/gate/verbs.json')
-} else { Skip "the pack: $esp is not in this checkout" }
+} else { Skip "the pack of the content plugin: no build of this commit is laid ($laidWhy)" }
 $threw = $false; try { [void](New-NexusRunPack $Repo 'tests' @('no-such-file.esp') 'x.zip' (Join-Path $T 'pd') ([DateTimeOffset]::UtcNow)) } catch { $threw = $true }
 Yes 'a file git does not track is refused' $threw
 $threw = $false; try { [void](New-NexusRunPack $Repo 'game' @('../scripts') 'x.zip' (Join-Path $T 'pe') ([DateTimeOffset]::UtcNow)) } catch { $threw = $true }
@@ -228,11 +251,11 @@ else {
     Yes '  the log has the end and none of what the script printed' ($r.Log -match 'ENDED 0 Set-NexusKey' -and $r.Log -notmatch 'owns 192001')
     Yes '  and no key anywhere' ($r.Log -notmatch 'marker-of-the-real-key' -and $r.Out -notmatch 'marker-of-the-real-key' -and $r.Log -notmatch [regex]::Escape($standinKey) -and $r.Out -notmatch [regex]::Escape($standinKey))
 
-    if (Test-Path -LiteralPath (Join-Path $Repo $esp)) {
+    if (-not $laidWhy) {
         $r = RunnerHalf 'Send-NexusFile -Mod 192001 -Version 1.3 -PackRoot game/content -Pack Thornswood-Content.esp -PackName Thornswood-Content-1.3.zip -WhatIf' $SI
         Yes 'Send-NexusFile -WhatIf uploads the zip packed from main' ($r.Code -eq 0 -and $r.Out -match 'packed Thornswood-Content-1\.3\.zip from game/content of main' -and $r.Out -match '"filename":"Thornswood-Content-1\.3\.zip"' -and $r.Out -match 'POST /v3/uploads')
         Yes '  and the log says only that it ended' ($r.Log -match 'ENDED 0 Send-NexusFile' -and $r.Log -notmatch 'POST /v3')
-    } else { Skip "Send-NexusFile with a pack: $esp is not in this checkout" }
+    } else { Skip "Send-NexusFile with a pack of the content plugin: no build of this commit is laid" }
 
     $arc = Join-Path $T 'served.zip'
     [IO.File]::WriteAllBytes($arc, [byte[]](1..200 | ForEach-Object { [byte]($_ % 256) }))
@@ -247,7 +270,7 @@ else {
 # ---- 5. nexus-run.yml -------------------------------------------------------------
 $wf = (Text '.github/workflows/nexus-run.yml') -replace "`r`n", "`n"
 Yes 'nexus-run.yml is started by hand and by nothing else' ($wf -match '(?m)^  workflow_dispatch:\s*$' -and @([regex]::Matches(([regex]::Match($wf, '(?ms)^on:\n(.*?)^\S').Groups[1].Value), '(?m)^  [a-z_]+:')).Count -eq 1)
-Yes '  on GitHub''s Windows runner, never the box (#4013), in the environment desk, from main only, reading the repository only' ($wf -match '(?m)^    runs-on: windows-latest$' -and $wf -notmatch 'self-hosted|thornswood-' -and $wf -match "(?m)^    if: github\.ref == 'refs/heads/main'$" -and $wf -match '(?m)^    environment: desk$' -and $wf -match '(?m)^permissions:\n  contents: read$')
+Yes '  on GitHub''s Windows runner, never the box (#4013), in the environment desk, from main only, reading the repository and the list of kept content builds only (#5191)' ($wf -match '(?m)^    runs-on: windows-latest$' -and $wf -notmatch 'self-hosted|thornswood-' -and $wf -match "(?m)^    if: github\.ref == 'refs/heads/main'$" -and $wf -match '(?m)^    environment: desk$' -and $wf -match '(?m)^permissions:\n  actions: read\n  contents: read\n(?!  )')
 Yes '  the key in one step''s environment, and nowhere else' (@([regex]::Matches($wf, 'secrets\.')).Count -eq 1 -and $wf.Contains('THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}'))
 $runBlocks = @([regex]::Matches($wf, '(?ms)^\s+run: \|\s*\n(.*?)(?=^\s+- |\z)') | ForEach-Object { $_.Groups[1].Value })
 Yes '  no input is pasted into a script; they reach it through the environment' (-not @($runBlocks | Where-Object { $_ -match '\$\{\{' }).Count)

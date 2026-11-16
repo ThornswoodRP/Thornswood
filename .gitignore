@@ -37,12 +37,14 @@ __pycache__/
 # to commit the whole working tree, which is the other reason this stays out.
 bot/announced.json
 
-# Which ticket each person has open, written by the bot beside itself on the
-# VPS. It is a list of the Discord ids of everybody waiting on staff, so it
+# Which ticket each person has open. On the VPS the bot writes it in its data
+# folder (bot/data/, ignored below); here for a run from a checkout with no
+# data folder, where the bot keeps its records in bot/ itself. It is a list of
+# the Discord ids of everybody waiting on staff, so it
 # stays out of the repo if the bot is ever run from a checkout.
 bot/open-tickets.json
 
-# Which arrival each person was, written by the bot beside itself on the VPS so
+# Which arrival each person was, kept by the bot so
 # the number on a join card only ever goes up. A list of Discord ids like the
 # one above, and a copy here would be some other run's numbers. The .tmp is the
 # half of a write that has not been swapped in yet.
@@ -59,7 +61,7 @@ bot/heartbeat.json.tmp
 bot/roots.pem
 bot/roots.pem.tmp
 
-# The dev build's own news webhook, for the dev updates channel. Same rule as
+# The dev build's own news webhook, for #staff-news. Same rule as
 # news-webhook.txt above: anyone holding the URL can post as the bot.
 bot/dev-webhook.txt
 
@@ -100,6 +102,26 @@ voice/owners.json
 voice/owners.json.tmp
 voice/chat/
 
+# What the site writes beside itself when it runs from a checkout, as
+# site\README.md has you run it (#4454): every store under site\data (the
+# inbox and trouble for the bot, linked accounts, sign-ins, sessions and
+# their logs, bans, kills, notes, the gallery and its queue and reports, the
+# roster, news, results, rule answers, deletion requests), the .bak a page
+# save keeps and the temp half of a write, site\uploads (the pictures and
+# their list), and site\files (the downloads folder, put there by hand on the
+# box). Names, Discord ids, addresses and pictures, and some other
+# run's. Everything under site\data is ignored except the pages, which are
+# tracked and edited here: help.md, tests.md and site\data\site. On the box
+# the same files live under C:\Thornswood-Docs, which is not a checkout, and
+# a release carries only server.js, lib, public and data\site there
+# (scripts\release\App-Part.ps1), so nothing here changes what the box keeps.
+/site/data/*
+!/site/data/help.md
+!/site/data/tests.md
+!/site/data/site/
+/site/uploads/
+/site/files/
+
 # Build output, in the repository folder since 25 September rather than in
 # C:\Thornswood-Dev (scripts\release\Where.ps1): the packs, the launcher and the
 # installer under out\dist, the server payload and thornswood-server.zip.
@@ -134,3 +156,54 @@ bot/data/
 # and its setup is its own, so the folder is ignored rather than moved.
 # Patrick, report page, 22 Oct 2026.
 /.codex-remote-attachments/
+
+# What the box's content build writes (#5191, stage 4e). Nothing generated is
+# committed (Patrick's B on #5191, 1 Nov 2026): the box builds the content
+# plugin and every table at deploy (scripts\mods\Build-ContentOnBox.ps1), and
+# a checkout lays that build (scripts\release\Get-ContentBuild.ps1 -Newest, or
+# -Take for its own commit's). The list is every path the chain of
+# scripts\mods\content-tables.json writes, less the few it names committed;
+# tests\test-5191-leave-git.ps1 holds the two to each other.
+/game/content/Thornswood-Content.esp
+/game/data/npc-population.json
+/game/data/hunts.json
+/game/data/ores.json
+/game/data/harvests.json
+/game/data/races.json
+/game/data/food.json
+/game/data/ingredients.json
+/game/data/spells.json
+/game/data/fires.json
+/game/data/warmth.json
+/game/data/waters.json
+/game/plugins/thornswood-table-placed-waters.js
+/game/data/weather.json
+/game/data/worldspaces.json
+/game/data/own-worlds.json
+/game/data/doors.json
+/game/data/jails.json
+/game/data/wells.json
+/game/data/cast.json
+/game/data/recipes.json
+/game/data/recost.json
+/game/data/last-plugin.recipe
+/game/data/last-plugin.json
+/game/data/crime-factions.json
+/game/plugins/thornswood-table-no-bounty-factions.js
+/game/data/resource-locations.json
+/docs/FISHING-SPOTS.csv
+/docs/HANGING-GAME-SPOTS.csv
+/docs/HUNTING-SPOTS.csv
+/game/data/building-holds.json
+/game/data/woodworking-benches.json
+/game/data/market-stalls.json
+/game/plugins/thornswood-table-stall-spots.js
+/game/data/merchant-role-tables.json
+/game/data/merchant-retrievals.json
+/tests/fixtures/merchant-retrieval-records.json
+/game/data/merchant-scarce-geodes.json
+/game/data/merchant-scarce-harvest.json
+/game/data/item-sources.json
+/game/ui/thornswood-profession-guides.js
+/docs/systems/lists/
+/game/gamemode-tables/
