@@ -30,6 +30,13 @@
      the same bytes every time and a DIFFERS line is only what moved. Until
      16 Nov 2026 six table builders wrote builtAt, and the first box run of
      -WithoutLast said food.json and races.json differ for that alone.
+  7. Build-CrimeTable.py runs after Build-LastPlugin.py. The scripts it
+     reads are the ones the game loads, and Thornswood-Last.esp takes the
+     script off every placed thing it switches off (#3077) and every actor
+     the catalogue cuts. Before it, the -WithoutLast box run of 16 Nov 2026
+     found crime-factions.json took that from the Last plugin of the build
+     before (TGTQ03LetterActivation). Nothing the Last plugin is made from
+     reads the crime table.
 
   Needs node and python on the path, as the script does; prints SKIP
   without them. No network.
@@ -150,6 +157,10 @@ try {
     $reads = @($real.steps | ForEach-Object { [string]$_.tool } | Select-Object -Unique | Where-Object {
         [IO.File]::ReadAllText((Join-Path $Repo $_)) -match $clock })
     Yes ('6 no step of the repository''s chain reads the clock' + $(if ($reads.Count) { ': ' + ($reads -join ', ') } else { '' })) ($reads.Count -eq 0)
+
+    $crime = @(0..($real.steps.Count - 1) | Where-Object { $real.steps[$_].tool -eq 'scripts/dev/Build-CrimeTable.py' })
+    Yes ('7 Build-CrimeTable.py runs after Build-LastPlugin.py, step ' + (@($crime | ForEach-Object { $_ + 1 }) -join ', ')) (
+        $crime.Count -eq 1 -and $at.Count -eq 1 -and $crime[0] -gt $at[0])
 } finally {
     foreach ($x in $roots) { try { Remove-Item -LiteralPath $x -Recurse -Force } catch { } }
 }
