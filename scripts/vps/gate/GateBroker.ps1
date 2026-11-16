@@ -33,26 +33,52 @@
        verb that writes some (Get-Logs, Rebuild-ContentTables), and its exit
        code.
 
-  One verb at a time: the pipe takes one connection, and a second caller
-  waits for it or is told the gate is busy. A run that outlives its verb's
-  timeoutMinutes is ended, with its whole process tree. A caller that goes
-  away does not end the run: a deploy stopped half way through a swap is
-  worse than one nobody watched end, and the log says how it ended.
+  TWO LANES (#6231). The pipe above runs one verb at a time: it takes one
+  connection, and a second caller waits for it or is told the gate is busy.
+  Beside it the read lane listens on \\.\pipe\thornswood-gate-read, in a
+  runspace of this same process, with a checkout of its own,
+  C:\Thornswood-Gate\repo-read. It answers a ping at once, saying what the
+  other lane runs, and runs a verb main's verbs.json marks onlyReads, one
+  read at a time. Any other line it answers with @CHANGE and what the other
+  lane runs, and Gate.ps1 takes the line there. The deploy agent (Gate.cs)
+  asks the first pipe for everything, as before.
+  WHY. Measured 15 Nov 2026: all 30 Box-Runs refused that day with "the
+  gate broker did not answer in 20 seconds" asked while a Build-Content run
+  held this pipe, the one the deploy agent starts for each merge to main's
+  Content deployment (about six minutes each); every run that answered
+  asked between two of them, or within 20 seconds of one's end. A ping and
+  a log read waited behind a build they have nothing to do with, past
+  Gate.ps1's 20 seconds, so on a day of merges the box could not be read.
+
+  A run that outlives its verb's timeoutMinutes is ended, with its whole
+  process tree. A caller that goes away does not end the run: a deploy
+  stopped half way through a swap is worse than one nobody watched end, and
+  the log says how it ended.
 
   THE RECORD. C:\Thornswood-Gate\log\gate.log, one line per request: when,
-  the line, main's commit, the exit code and how long it took. Each run's
-  whole output is runs\<id>\output.txt; the newest 30 runs are kept.
+  the line, main's commit, the exit code and how long it took; a read
+  lane's line says "read" after its run's id. Each run's whole output is
+  runs\<id>\output.txt; the newest 30 runs are kept.
 
   PowerShell 7 (pwsh), which its task starts since #5356 (Update-Gate.ps1).
 #>
-param([string]$Root = 'C:\Thornswood-Gate')
+# -Lane and -Shared are this file's own: the change lane starts the read
+# lane with them (TWO LANES above). The task passes neither.
+param([string]$Root = 'C:\Thornswood-Gate', [ValidateSet('change', 'read')][string]$Lane = 'change', [hashtable]$Shared = $null)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 . (Join-Path $Root 'GateRules.ps1')
 
 $Cfg = [IO.File]::ReadAllText((Join-Path $Root 'gate.json')) | ConvertFrom-Json
-$Repo = Join-Path $Root 'repo'
+# Each lane its own checkout, so a read never finds the files of a build
+# being thrown away under it.
+$Repo = Join-Path $Root $(if ($Lane -eq 'read') { 'repo-read' } else { 'repo' })
+$PipeName = if ($Lane -eq 'read') { 'thornswood-gate-read' } else { 'thornswood-gate' }
+$LaneTag = if ($Lane -eq 'read') { ' read' } else { '' }
+# What the lanes share: whether the process is handing over, what the change
+# lane runs now (a ping says it), and one lock for gate.log.
+if (-not $Shared) { $Shared = [hashtable]::Synchronized(@{ Stop = $false; Holds = ''; LogLock = (New-Object object) }) }
 $Runs = Join-Path $Root 'runs'
 $LogDir = Join-Path $Root 'log'
 foreach ($d in $Runs, $LogDir) { if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } }
@@ -66,10 +92,14 @@ $env:THORNSWOOD_GATE = '1'
 # The GitHub CLI Install-Gate pinned, first on the verbs' PATH, for the Ship
 # verbs' signing (Ship-OnBox.ps1). It holds no sign in: a run that needs
 # GitHub brings its own short token.
-if ($Cfg.PSObject.Properties['gh'] -and $Cfg.gh) { $env:PATH = (Split-Path -Parent ([string]$Cfg.gh)) + ';' + $env:PATH }
+# The read lane runs in the change lane's process, which has done this.
+if ($Lane -eq 'change' -and $Cfg.PSObject.Properties['gh'] -and $Cfg.gh) { $env:PATH = (Split-Path -Parent ([string]$Cfg.gh)) + ';' + $env:PATH }
 
+# Both lanes write it, so one at a time.
 function Log([string]$m) {
-    [IO.File]::AppendAllText((Join-Path $LogDir 'gate.log'), ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + ' ' + $m + "`r`n"), $Utf8)
+    [Threading.Monitor]::Enter($Shared.LogLock)
+    try { [IO.File]::AppendAllText((Join-Path $LogDir 'gate.log'), ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + ' ' + $m + "`r`n"), $Utf8) }
+    finally { [Threading.Monitor]::Exit($Shared.LogLock) }
 }
 
 # The pipe, for thornswood-deploy and SYSTEM, and for no other machine.
@@ -254,8 +284,12 @@ function Invoke-Request($Pipe) {
         # The copies it runs from, so Box-Run.ps1 can tell whether main's gate
         # has moved past them (GateRules.ps1, Get-ThornswoodGateFileLine).
         Send ('| GATE FILES ' + (Get-ThornswoodGateFileLine $Root))
+        # What holds the lane that runs one verb at a time, so a caller that
+        # finds it busy knows what for and since when (#6231).
+        $holds = [string]$Shared.Holds
+        Send ('| GATE RUNS ' + $(if ($holds) { $holds } else { 'nothing that changes the box now' }))
         Send '@END 0'
-        Log 'PING'
+        Log ('PING' + $LaneTag)
         return
     }
 
@@ -264,7 +298,8 @@ function Invoke-Request($Pipe) {
     New-Item -ItemType Directory -Path $run -Force | Out-Null
     $script:Transcript = Join-Path $run 'output.txt'
     $started = Get-Date
-    Log ('START ' + $id + ' [' + $shown + ']')
+    Log ('START ' + $id + $LaneTag + ' [' + $shown + ']')
+    if ($Lane -eq 'change') { $Shared.Holds = $shown + ' (run ' + $id + ', since ' + $started.ToUniversalTime().ToString('HH:mm:ss') + ' UTC)' }
     Send ('| gate run ' + $id + ': ' + $shown)
     $commit = Update-Checkout
     if (-not $commit) { Send '@END 66'; Log ('END ' + $id + ' 66 main could not be read'); return }
@@ -275,6 +310,9 @@ function Invoke-Request($Pipe) {
     try { $req = Test-ThornswoodGateRequest -Line $line -Verbs (Read-ThornswoodGateVerbs $verbsAt) }
     catch { $req = [pscustomobject]@{ Ok = $false; Why = ('main''s verbs.json could not be read: ' + $_.Exception.Message + ' Nothing was run.') } }
     if (-not $req.Ok) { Send ('@REFUSED ' + $req.Why); Send '@END 64'; Log ('END ' + $id + ' 64 REFUSED [' + $shown + '] ' + $req.Why); return }
+    # The read lane runs only what main marks onlyReads; anything else goes
+    # to the lane that runs one verb at a time, with what that lane runs now.
+    if ($Lane -eq 'read' -and $req.Lane -ne 'read') { Send ('@CHANGE ' + [string]$Shared.Holds); Log ('END ' + $id + ' handed to the change lane, which runs ' + $(if ($Shared.Holds) { [string]$Shared.Holds } else { 'nothing' })); return }
     # A live verb runs only on the build it was named for (GateRules.ps1,
     # Build): a merge that landed after Patrick gave his word is not that build.
     if ($req.Build -and $req.Build -cne $commit) { Send ('@REFUSED main is at ' + $commit + ' now, not ' + $req.Build + ', the build this run was named for. Nothing was run.'); Send '@END 64'; Log ('END ' + $id + ' 64 main moved past the named build ' + $req.Build); return }
@@ -304,12 +342,45 @@ function Invoke-Request($Pipe) {
         ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+# The read lane: the same requests, on its own pipe, with its own checkout,
+# until the change lane hands over (below).
+if ($Lane -eq 'read') {
+    Log 'BROKER read lane started'
+    while (-not $Shared.Stop) {
+        $pipe = New-GatePipe $PipeName
+        try {
+            $wait = $pipe.WaitForConnectionAsync()
+            while (-not $wait.Wait(1000)) { if ($Shared.Stop) { break } }
+            if ($wait.IsCompleted) { Invoke-Request $pipe }
+        }
+        catch { Log ('ERROR read lane: ' + $_.Exception.Message) }
+        finally {
+            try { if ($pipe.IsConnected) { $pipe.WaitForPipeDrain(); $pipe.Disconnect() } } catch { Log ('HUNG UP before the answer was read: ' + $_.Exception.Message) }
+            $pipe.Dispose()
+        }
+    }
+    Log 'BROKER read lane ended'
+    return
+}
+
 Log ('BROKER started, installed from ' + $Cfg.commit)
 # The copies of its own files it started on. When a request changes them on
 # disk (Update-Gate, #5178), this broker answers that request, ends, and
 # opens the pipe no more, so no caller reaches the old code after that
 # answer; Update-Gate's one-time task starts the task again on the new files.
 $StartedOn = Get-ThornswoodGateFileLine $Root
+# The read lane, in a runspace of this process: the type of the pipe is made
+# here first, once, and the lane runs this file with -Lane read.
+if (-not ('ThornswoodGate.Pipe' -as [type])) { Add-Type -TypeDefinition $GatePipeCode }
+$readState = [Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+$readState.ExecutionPolicy = [Microsoft.PowerShell.ExecutionPolicy]::Bypass
+$readSpace = [runspacefactory]::CreateRunspace($readState)
+$readSpace.Open()
+$readLane = [powershell]::Create()
+$readLane.Runspace = $readSpace
+[void]$readLane.AddCommand($PSCommandPath).AddParameter('Root', $Root).AddParameter('Lane', 'read').AddParameter('Shared', $Shared)
+$readRun = $readLane.BeginInvoke()
+$readSaid = $false
 while ($true) {
     $pipe = New-GatePipe
     try {
@@ -318,10 +389,18 @@ while ($true) {
     }
     catch { Log ('ERROR ' + $_.Exception.Message) }
     finally {
+        $Shared.Holds = ''
         try { if ($pipe.IsConnected) { $pipe.WaitForPipeDrain(); $pipe.Disconnect() } } catch { Log ('HUNG UP before the answer was read: ' + $_.Exception.Message) }
         $pipe.Dispose()
     }
+    # A read lane that ended on its own says why here, once: its pings and
+    # reads are refused until the broker starts again.
+    if ($readRun.IsCompleted -and -not $readSaid) { $readSaid = $true; Log ('ERROR the read lane ended: ' + ((@($readLane.Streams.Error | ForEach-Object { $_.ToString() }) -join ' ') + ' ' + $(if ($readLane.InvocationStateInfo.Reason) { $readLane.InvocationStateInfo.Reason.Message })).Trim()) }
     $onDisk = Get-ThornswoodGateFileLine $Root
     if ($onDisk -cne $StartedOn) { Log ('BROKER handing over: its files on disk are now ' + $onDisk); break }
 }
+# The read lane ends its read, if it runs one, and opens its pipe no more;
+# then the process ends, and Update-Gate's task starts the new files.
+$Shared.Stop = $true
+if (-not $readRun.AsyncWaitHandle.WaitOne([TimeSpan]::FromMinutes(20))) { Log 'the read lane still ran a read 20 minutes after the hand over, so it ends with the broker' }
 exit 0

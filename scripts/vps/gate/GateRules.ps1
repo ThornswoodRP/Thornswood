@@ -71,16 +71,20 @@ function Read-ThornswoodGateVerbs([string]$Path = '') {
 #            only when main is at exactly that commit once it has fetched
 #            it, so a live run is held to the build Patrick gave his word
 #            for, and -Build never reaches the script. '' for any other verb.
+#   Lane     'read' for ping and for a verb verbs.json marks onlyReads, which
+#            changes nothing on the box: the broker's read lane runs it
+#            beside whatever else runs (#6231). 'change' for every other
+#            verb, which the broker runs one at a time.
 function Test-ThornswoodGateRequest {
     param([string]$Line, $Verbs)
-    $r = [pscustomobject]@{ Ok = $false; Why = ''; Verb = ''; Script = ''; Args = @(); Out = ''; Minutes = 0; Build = '' }
+    $r = [pscustomobject]@{ Ok = $false; Why = ''; Verb = ''; Script = ''; Args = @(); Out = ''; Minutes = 0; Build = ''; Lane = 'change' }
     try { $words = Split-ThornswoodGateLine $Line }
     catch { $r.Why = $_.Exception.Message; return $r }
     if ($words.Count -eq 0) { $r.Why = 'the line is empty: it names no verb. Nothing was run.'; return $r }
     $name = $words[0]
     if ($name -eq 'ping') {
         if ($words.Count -gt 1) { $r.Why = 'ping takes nothing after it. Nothing was run.'; return $r }
-        $r.Ok = $true; $r.Verb = 'ping'; return $r
+        $r.Ok = $true; $r.Verb = 'ping'; $r.Lane = 'read'; return $r
     }
     $known = @($Verbs.verbs.PSObject.Properties | ForEach-Object { $_.Name })
     # Exact and case sensitive, so one verb has one spelling in every log.
@@ -140,6 +144,8 @@ function Test-ThornswoodGateRequest {
     $r.Args = @(@($v.fixed | Where-Object { $_ }) + $given.ToArray())
     $r.Out = [string]$v.out
     $r.Minutes = [int]$v.timeoutMinutes
+    # Only true itself marks a verb as one that reads, never a string or 1.
+    if ($v.PSObject.Properties['onlyReads'] -and $v.onlyReads -is [bool] -and $v.onlyReads) { $r.Lane = 'read' }
     return $r
 }
 
