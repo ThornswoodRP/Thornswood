@@ -1189,7 +1189,9 @@
         "scripts/bot/bot.js",
         "scripts/bot/character.js",
         "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/World.ps1",
+        "scripts/release/Read-JsonFile.ps1",
         "scripts/vps/Restore-Backup.ps1",
         "scripts/vps/Restore-Server.ps1",
         "scripts/vps/world.js"

@@ -74,8 +74,15 @@ Yes '  node is started by Start-Rehearsal and the bot run by Invoke-Check, both 
 $re = At "if (`$Reorder) {"
 $reText = if ($re -gt 0) { $src.Substring($re, $fin - $re) } else { '' }
 Yes '-Reorder runs only after the first check passed, and before finally' ($re -gt $bot -and $re -lt $fin)
-Yes '  it stops node, changes the order with Check-Character.js --reorder and needs its REORDERED line' ($reText.IndexOf('Stop-Rehearsal') -ge 0 -and $reText.IndexOf('Stop-Rehearsal') -lt $reText.IndexOf('--reorder') -and $reText -match "-like 'REORDERED \*'")
-Yes '  it starts node again taking only the new process''s endpoint, then checks again' ($reText.IndexOf('--reorder') -lt $reText.IndexOf('Start-Rehearsal -Own') -and $reText.IndexOf('Start-Rehearsal -Own') -lt $reText.IndexOf('Invoke-Check $json2') -and $src -match 'OwningProcess -eq \$script:Server\.Id')
+Yes '  it stops node, asks Check-Character.js --pick which plugin moves and needs its PICK line' ($reText.IndexOf('Stop-Rehearsal') -ge 0 -and $reText.IndexOf('Stop-Rehearsal') -lt $reText.IndexOf('--pick') -and $reText -match "-like 'PICK \* from slot \*'" -and $reText.IndexOf('--reorder') -lt 0)
+Yes '  and has the order made by the rule, Set-RehearsalOrder, before node starts again (#6313)' ($reText.IndexOf('--pick') -lt $reText.IndexOf('Set-RehearsalOrder') -and $reText.IndexOf('Set-RehearsalOrder') -lt $reText.IndexOf('Start-Rehearsal -Own'))
+$so = At 'function Set-RehearsalOrder'
+$soText = if ($so -gt 0) { $src.Substring($so, $src.IndexOf("`n}", $so) - $so) } else { '' }
+Yes '  Set-RehearsalOrder is defined before the run, and ServerOrder.ps1 is dot-sourced from the checkout' ($so -gt 0 -and $so -lt $restore -and $src -match "(?m)^\. \(Join-Path \`$Repo 'scripts\\deploy\\ServerOrder\.ps1'\)")
+Yes '  it takes the plugin out of the running order and has Get-ThornswoodServerOrder put it back' ($soText -match 'Get-ThornswoodServerOrder \$names @\(\) \$kinds @\(\$names \| Where-Object \{ \$_ -ne \$Name \}\)')
+Yes '  and stops unless that plugin is the one added and nothing is removed or is a new master' ($soText -match 'AddedFull' -and $soText -match 'Removed\.Count' -and $soText -match 'NewFullMasters\.Count')
+Yes '  it keeps the settings from before and refuses a second change' ($soText -match "\[IO\.File\]::Copy\(\`$file, \(\`$file \+ '\.before-reorder'\), \`$false\)")
+Yes '  it starts node again taking only the new process''s endpoint, then checks again' ($reText.IndexOf('Set-RehearsalOrder') -lt $reText.IndexOf('Start-Rehearsal -Own') -and $reText.IndexOf('Start-Rehearsal -Own') -lt $reText.IndexOf('Invoke-Check $json2') -and $src -match 'OwningProcess -eq \$script:Server\.Id')
 Yes '  and passes only when a plugin the character''s ids name moved' ($reText -match 'if \(-not \$changed\.Count\) \{ Fail' -and $reText -match 'LOAD ORDER CHECK PASSED')
 Yes 'the gate''s Rehearse-Restore verb takes -Reorder' ((Get-Content -LiteralPath (Join-Path $Root 'scripts\vps\gate\verbs.json') -Raw | ConvertFrom-Json).verbs.'Rehearse-Restore'.params.Reorder -eq 'switch')
 Yes 'the restore is a rehearsal held to the profile id' ($src -match "Restore-Server\.ps1'\) -Backup \`$Backup -Root \`$Root -Which \`$Which -KeyFile \`$KeyFile -Expect \`$ProfileId -Work \`$Work -Rehearse")
