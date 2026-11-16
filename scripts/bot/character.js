@@ -92,26 +92,44 @@ function masters(file) {
   } finally { fs.closeSync(fd); }
 }
 
-// The load order change a rehearsal makes to check ids by plugin (#6237): the
-// earliest full plugin no other loaded plugin names as a master, moved to the
-// end, so every full plugin after it loads one slot earlier. A plugin that is
-// somebody's master stays, since the game loads a master before what needs
-// it. list is loadOrder's entries as written; paths are where they are.
-// Returns { order, moved, from, to }, or throws when no plugin may move.
-function reorder(list, paths) {
+// The plugin a rehearsal's load order change moves (#6237): the earliest
+// full plugin no other loaded plugin names as a master and that the game
+// does not load as a master itself. A plugin that is somebody's master
+// stays, since the game loads a master before what needs it; one that is a
+// master (0x1, .esm or .esl) is loaded before every plugin that is not, so
+// it can never be last (#6313). It only names the plugin: the order is made
+// by the one rule, ServerOrder.ps1's Get-ThornswoodServerOrder, which takes
+// it out of the running order and puts it back on the end of the full
+// plugins (Rehearse-OnBox.ps1, Set-RehearsalOrder). paths are where
+// loadOrder's entries are. Returns { moved, from, to }, the full slot it
+// leaves and the one it takes, or throws when no plugin may move.
+function pick(paths) {
   const names = paths.map((p) => path.basename(p.replace(/\\/g, '/')).toLowerCase());
   const needed = new Set();
   for (const p of paths) { for (const m of masters(p)) { needed.add(m.toLowerCase()); } }
+  const fulls = paths.filter((p) => !isLight(p)).length;
   let full = -1;
   for (let i = 0; i < paths.length; i++) {
     if (isLight(paths[i])) { continue; }
     full++;
-    if (i === paths.length - 1 || needed.has(names[i])) { continue; }
-    const order = list.slice(0, i).concat(list.slice(i + 1), [list[i]]);
-    const after = paths.filter((p, j) => j !== i && !isLight(p)).length;
-    return { order, moved: path.basename(String(list[i]).replace(/\\/g, '/')), from: full, to: after };
+    if (full === fulls - 1 || needed.has(names[i]) || loadsAsMaster(paths[i])) { continue; }
+    return { moved: path.basename(paths[i].replace(/\\/g, '/')), from: full, to: fulls - 1 };
   }
-  throw new Error('every full plugin but the last is a master of another, so none can move');
+  throw new Error('every full plugin but the last is a master, or a master of another, so none can move');
+}
+
+// Whether the game loads a plugin as a master: an .esm or .esl name, or the
+// 0x1 flag in its TES4 header (Test-ThornswoodLoadsAsMaster's rule).
+function loadsAsMaster(file) {
+  if (/\.es[ml]$/i.test(file)) { return true; }
+  const fd = fs.openSync(file, 'r');
+  try {
+    const head = Buffer.alloc(12);
+    if (fs.readSync(fd, head, 0, 12, 0) < 12 || head.toString('latin1', 0, 4) !== 'TES4') {
+      throw new Error(file + ' does not start with a TES4 header');
+    }
+    return (head.readUInt32LE(8) & 0x1) !== 0;
+  } finally { fs.closeSync(fd); }
 }
 
 // Each plugin the character's ids name, with its slot in table, as
@@ -331,4 +349,4 @@ function compare(want, got) {
   return lines;
 }
 
-module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, masters, reorder, pluginsOf, canon, numbered, madeId, canonicalMade, canonicalEnchantment };
+module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, masters, pick, loadsAsMaster, pluginsOf, canon, numbered, madeId, canonicalMade, canonicalEnchantment };

@@ -41,9 +41,11 @@
        character from the restored world, logs in as it and compares what
        the server sends. CHARACTER CHECK OK is the rehearsal's pass.
     7b. With -Reorder, a load order change (#6237): node is stopped,
-       Check-Character.js --reorder moves the earliest full plugin no other
-       plugin needs as a master to the end of server-settings.json's
-       loadOrder, so every full plugin after it loads a slot earlier, node
+       Check-Character.js --pick names the earliest full plugin no other
+       plugin needs as a master and that is no master itself, and the one
+       rule, ServerOrder.ps1, takes it out of server-settings.json's
+       loadOrder and puts it back on the end of the full plugins (#6313),
+       so every full plugin after it loads a slot earlier, node
        starts again on that order and the bot checks the character again.
        It passes only when the check passes again and a plugin the
        character's ids name is at another slot than in step 7: a world
@@ -84,6 +86,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
+# The one rule for the server's load order (#4688), which -Reorder's change
+# is made by (Set-RehearsalOrder, #6313).
+. (Join-Path $Repo 'scripts\deploy\ServerOrder.ps1')
 $Mark = '.thornswood-rehearsal'
 $ServerRoots = @{ live = 'C:\Thornswood-Server'; dev = 'C:\Thornswood-Server-Dev' }
 $Source = $ServerRoots[$Which]
@@ -205,6 +210,39 @@ function Invoke-Check([string]$json) {
   if ($rc -ne 0 -or ($o | Out-String) -notmatch 'CHARACTER CHECK OK') { Fail ('Check-Character.js did not end CHARACTER CHECK OK (exit ' + $rc + ').') }
 }
 
+# -Reorder's load order change (#6237), made by the one rule (#4688, #6313):
+# the plugin Check-Character.js --pick named is taken out of the order the
+# rehearsal server runs, and Get-ThornswoodServerOrder puts it back as a new
+# plugin, on the end of the full plugins, so every full plugin after it
+# loads a slot earlier and the light order is kept. The settings from
+# before stay as server-settings.json.before-reorder, and a second change is
+# refused, so they are never lost. Returns the REORDERED line.
+function Set-RehearsalOrder([string]$Folder, [string]$Name) {
+  $file = Join-Path $Folder 'server-settings.json'
+  $s = [IO.File]::ReadAllText($file) -replace '^\uFEFF', '' | ConvertFrom-Json
+  $entries = @($s.loadOrder | ForEach-Object { [string]$_ })
+  if (-not $entries.Count) { Fail ($file + ' names no loadOrder, so there is no order to change.') }
+  $dataDir = if ($s.dataDir) { [string]$s.dataDir } else { 'data' }
+  $names = @(); $byName = @{}; $kinds = @{}
+  foreach ($e in $entries) {
+    $n = @($e -split '[\\/]')[-1]
+    $p = if ([IO.Path]::IsPathRooted($e)) { $e } else { Join-Path (Join-Path $Folder $dataDir) $e }
+    $names += $n
+    $byName[$n.ToLowerInvariant()] = $e
+    $kinds[$n] = Get-ThornswoodPluginKind $p
+  }
+  if (-not $byName.ContainsKey($Name.ToLowerInvariant())) { Fail ($Name + ' is not in ' + $file + '''s loadOrder.') }
+  $o = Get-ThornswoodServerOrder $names @() $kinds @($names | Where-Object { $_ -ne $Name })
+  if ((@($o.AddedFull) -join '|') -ne $Name -or $o.Removed.Count -or $o.NewFullMasters.Count -or $o.LightOutOfPlace.Count) {
+    Fail ('the rule did not put ' + $Name + ' back on the end alone (added ' + (@($o.AddedFull) -join ', ') + '; removed ' + (@($o.Removed) -join ', ') + '; new masters ' + (@($o.NewFullMasters) -join ', ') + ').')
+  }
+  [IO.File]::Copy($file, ($file + '.before-reorder'), $false)
+  $s.loadOrder = [string[]]@($o.Order | ForEach-Object { $byName[$_.ToLowerInvariant()] })
+  [IO.File]::WriteAllText($file, ($s | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
+  $isLight = { param($x) [bool]$kinds[$x].Light }.GetNewClosure()
+  return ('REORDERED {0} from slot 0x{1:x2} to 0x{2:x2}' -f $Name, (Get-ThornswoodFullIndex $names $isLight $Name), (Get-ThornswoodFullIndex $o.Order $isLight $Name))
+}
+
 $result = 1
 $moved = ''
 try {
@@ -283,9 +321,12 @@ try {
     Step '7b. a load order change, and the same check again'
     Stop-Rehearsal
     $script:Server = $null
-    $said = @(& $nodeExe $check --root $Root --reorder 2>&1 | ForEach-Object { "$_" })
+    $said = @(& $nodeExe $check --root $Root --pick 2>&1 | ForEach-Object { "$_" })
+    $picked = $LASTEXITCODE
     $said | ForEach-Object { Say ('  ' + $_) }
-    if ($LASTEXITCODE -ne 0 -or -not @($said | Where-Object { $_ -like 'REORDERED *' }).Count) { Fail 'Check-Character.js --reorder did not change the load order.' }
+    $pick = @($said | Where-Object { $_ -like 'PICK * from slot *' })
+    if ($picked -ne 0 -or $pick.Count -ne 1) { Fail 'Check-Character.js --pick named no plugin to move.' }
+    Say ('  ' + (Set-RehearsalOrder $Root ($pick[0] -replace '^PICK (.+) from slot .*$', '$1')))
     Start-Rehearsal -Own
     $json2 = Join-Path $Work 'character-check-reordered.json'
     Invoke-Check $json2
