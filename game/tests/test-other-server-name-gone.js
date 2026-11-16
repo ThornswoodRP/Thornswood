@@ -3,7 +3,8 @@
 // The name of the SkyMP server Thornswood-Content.esp was salvaged from, and
 // its two short forms, are in no tracked file: not in code, comments, tests,
 // records, data, documents, docs\archive, the plugins themselves, or any
-// tracked file's path.
+// tracked file's path. Nor in what the content build lays over the checkout
+// (#5191: the content plugin and the tables are built, never committed).
 //
 // WHY THIS EXISTS. Issue #400. Patrick, 12 October, answering the decision on
 // the plugin's header description: "B and yes they can just don't mention
@@ -105,6 +106,17 @@ try {
   console.log('git ls-files failed: ' + e.message);
 }
 yes('git lists the tracked files (' + tracked.length + ')', tracked.length > 100);
+// #5191: the content plugin, its Last plugin's recipe and every table are
+// built on the box and never committed. The build laid over this checkout
+// (scripts/release/Get-ContentBuild.ps1, temp/content-laid.json) is searched
+// with the tracked files, the plugin's records above all.
+let laid = [];
+try {
+  laid = Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, 'temp', 'content-laid.json'), 'utf8')).files || {});
+} catch (e) {
+  console.log('NOTE  no content build is laid here (' + e.message + '); pwsh scripts/release/Get-ContentBuild.ps1 -Newest lays one');
+}
+const searched = Array.from(new Set(tracked.concat(laid)));
 
 function lineOf(text, at) {
   let n = 1;
@@ -208,7 +220,7 @@ function searchPlugin(rel, buf) {
   ALL.lastIndex = 0;
   while ((m = ALL.exec(s)) !== null) hits.push(rel + ' (plugin, at byte ' + m.index + ' of its inflated records)  ' + JSON.stringify(m[0]));
 }
-tracked.forEach(function (rel) {
+searched.forEach(function (rel) {
   ALL.lastIndex = 0;
   if (ALL.test(rel)) hits.push(rel + ' (its path)');
 
@@ -250,8 +262,8 @@ tracked.forEach(function (rel) {
   });
 });
 
-yes('read the tracked text files (' + text + '), plugins (' + plugins + ') and other binary files (' + binary + ')',
-    text > 100 && pluginNames.indexOf('Thornswood-Content.esp') >= 0 && tracked.indexOf('game/data/last-plugin.recipe') >= 0 && binary > 0);
+yes('read the tracked and laid text files (' + text + '), plugins (' + plugins + ') and other binary files (' + binary + '), the build\'s ' + laid.length + ' among them',
+    text > 100 && pluginNames.indexOf('Thornswood-Content.esp') >= 0 && searched.indexOf('game/data/last-plugin.recipe') >= 0 && binary > 0);
 const last = require('../../tests/last-plugin-made.js').made();
 if (last.buf) { searchPlugin('Thornswood-Last.esp (made from game/data/last-plugin.recipe)', last.buf); yes('read Thornswood-Last.esp, made from its recipe', true); }
 else { console.log('SKIP  Thornswood-Last.esp: ' + last.why); }
