@@ -593,8 +593,15 @@ mp.onPutItem = guard('onPutItem', function (containerRefrId, actorId, baseId, co
   // The pair locked on a prisoner's wrists stays there (#2573).
   var cuffsPut = globalThis.__thornswoodCuffs;
   if (cuffsPut && !cuffsPut.mayLetGo(actorId, baseId, count)) { return false; }
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerPut = globalThis.__thornswoodLedger;
+  if (ledgerPut && typeof ledgerPut.gold === 'function') {
+    try { ledgerPut.gold('put', actorId, baseId, count, containerRefrId); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a put: ' + String((e && e.message) || e)); }
+  }
   return;
 });
+
 
 /*
   WHAT A CLIENT CAN ASK THIS SERVER, AND WHAT IT IS TOLD.
@@ -922,6 +929,12 @@ mp.onTakeItem = guard('onTakeItem', function (sourceRefrId, actorId, baseId, cou
   }
   log('take:', auditPerson(actorId), 'took', Number(count) || 0, auditItem(baseId),
       'from', auditSource(sourceRefrId), 'in', auditCell(actorId));
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerTake = globalThis.__thornswoodLedger;
+  if (ledgerTake && typeof ledgerTake.gold === 'function') {
+    try { ledgerTake.gold('take', actorId, baseId, count, sourceRefrId); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a take: ' + String((e && e.message) || e)); }
+  }
 });
 
 mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
@@ -931,6 +944,12 @@ mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
   if (cuffsDrop && !cuffsDrop.mayLetGo(actorId, baseId, count)) { return false; }
   log('drop:', auditPerson(actorId), 'dropped', Number(count) || 0, auditItem(baseId),
       'in', auditCell(actorId));
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerDrop = globalThis.__thornswoodLedger;
+  if (ledgerDrop && typeof ledgerDrop.gold === 'function') {
+    try { ledgerDrop.gold('drop', actorId, baseId, count, 0); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a drop: ' + String((e && e.message) || e)); }
+  }
   // The engine puts the piece's extra, its condition in the name included,
   // on the dropped reference and gives it back on the pickup (#1719).
 });

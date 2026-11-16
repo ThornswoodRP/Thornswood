@@ -279,7 +279,6 @@ if (!Object.keys(rows).length) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-RaceTable.js',
-    builtAt: new Date().toISOString(),
     source: 'the RACE records of the plugins in load order',
     note: 'which recipes a race owns is in game\\data\\recipes.json; this only says what the races are',
     count: Object.keys(rows).length,

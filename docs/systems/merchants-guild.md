@@ -61,7 +61,9 @@ They start with gold and no goods. Stock is what they have bought.
 The quests they give are on [Custom quests](quests.md). A supply
 quest pays out of this same purse. A scene quest does not. Its gold
 is created, at the amount written on that quest, and it does not
-run out. A letter is not a quest of theirs. The sender pays the
+run out. A guild commission does not either: its pay is new gold at
+the reward prices staff set, and the trader's purse is the same
+after it (#6180, [the quest catalogue](merchant-quest-catalogue.md#commission-pay)). A letter is not a quest of theirs. The sender pays the
 courier, on the notice board.
 
 ## Guild sites
@@ -119,7 +121,7 @@ trader's shelf. An empty purse refuses a buy. An empty shelf refuses a
 sale. A supply turn-in is five of an item at that same buy price, paid
 from the same purse. Each character waits six hours after its completed
 supply before that trader offers the same supply again.
-Scene quests are not paid from the purse.
+Scene quests and guild commissions are not paid from the purse.
 
 The person must be the authenticated character and within 400 of that
 trader in the same place. Press E on the trader, then use the panel's

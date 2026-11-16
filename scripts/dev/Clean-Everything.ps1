@@ -47,8 +47,8 @@ param(
   [switch]$Backups,
   [switch]$Temp,
   [switch]$Github,
-  # The server's character storage. This is a wipe, not a cleanup, so it is
-  # never part of -All and has to be named.
+  # The server's character storage. This is a wipe, not a cleanup, so naming
+  # no part never takes it in: it has to be named.
   [switch]$ServerSaves,
   [switch]$Delete,
   [switch]$NoPause

@@ -6,8 +6,8 @@
   wrote into the repository's game\, records\ and docs\systems\ folders.
   Issue #2899.
 
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}'
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}' --plugins '{plugins}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}' --plugins '{plugins}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Build-LastPlugin.py --data '{data}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Rebuild-ContentTables.ps1 -Data '{data}' -PluginsTxt '{plugins}'
 
@@ -18,7 +18,8 @@
   21 Oct 2026 though the box held what they read. The last line above runs
   the whole chain of scripts\mods\content-tables.json. Since #3105 its
   tables are the ones a game PC writes: every builder reads the load order
-  game\data\npc-population.json records, on the box and on a PC alike, and
+  the commit records (records\load-order.json since #5191), on the box and
+  on a PC alike, and
   the crime table reads the script pack a PC made (records\papyrus-scripts.json).
 
   WHY. Patrick, 20 Oct 2026: "let's make the content plugin available in the
@@ -106,12 +107,6 @@ param(
     [string]$VpsHost = '',
     [string]$VpsUser = '',
 
-    # A folder that gets a copy of every file the tool wrote, at its
-    # repository path, as well as this checkout. The deploy gate's
-    # Rebuild-ContentTables verb sets it to the run's out folder, so what the
-    # box wrote goes back to the session that asked (Rebuild-OnBox.ps1).
-    [string]$Out = '',
-
     # The box's store of the collection's plugins at the revision
     # records\collection-plugins.json names (CollectionStore.ps1): the run is
     # then built from the commit's record, the header says how.
@@ -158,6 +153,15 @@ if ($Collection) {
         $(if ($recordOrder.Added.Count) { ', with ' + ($recordOrder.Added -join ', ') + ' added' } else { '' }) +
         $(if ($recordOrder.Dropped.Count) { ', without ' + ($recordOrder.Dropped -join ', ') } else { '' })) 'DarkGray'
 }
+# What a content build writes is not committed (#5191, stage 4e), so a
+# written file the commit does not have yet, or a folder that holds only
+# such files (game/content, #6351), is one an earlier step of this build has
+# still to make, and goes up only once that step's run committed it
+# (Build-ContentOnBox.ps1, Save-Step).
+$paths = Select-ThornswoodSentPaths -Repo $repo -Commit 'HEAD' -Paths $paths
+# The plugins the build makes, whose server copies the run leaves out of its
+# Data folder even while the commit has none of them yet (OnBox.ps1, #6351).
+$own = @(Get-ThornswoodBuiltPaths -Repo $repo | Where-Object { $_ -cmatch '^game/content/[^/]+\.(esp|esm|esl)$' } | ForEach-Object { $_.Substring('game/content/'.Length) })
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
@@ -174,7 +178,7 @@ try {
     $runFar = $box.Far
     foreach ($l in $box.Said) { Say ('box  ' + $l) 'DarkGray' }
     if (-not $box.Made) { throw ('could not make ' + $run + ' on the box. What ssh said is above.') }
-    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection
+    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection -Own $own
     # The run's own script goes into its folder, so it goes with the folder.
     $farFile = Join-Path $local 'run.ps1'
     [IO.File]::WriteAllText($farFile, $farRun, (New-Object Text.UTF8Encoding($true)))
@@ -191,7 +195,14 @@ try {
         if ($l -cmatch '^EXIT (-?\d+)\s*$') { $exit = [int]$Matches[1]; continue }
         Write-Host $l
     }
-    if ($null -eq $exit) { throw 'the box did not say how the tool ended, so nothing was brought back.' }
+    if ($null -eq $exit) {
+        # The run stopped before the tool ended; its STOP line says why
+        # (OnBox.ps1), and goes on in what this throws, so a content build's
+        # status carries it (#6351).
+        $why = @($lines | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+        if ($why) { throw ('the run on the box stopped before the tool ended, so nothing was brought back: ' + $why.Substring(6)) }
+        throw 'the box did not say how the tool ended, so nothing was brought back.'
+    }
     $code = $exit
 
     if ($changed.Count) {
@@ -214,11 +225,9 @@ try {
             Say ''
             Say ('the tool wrote ' + $changed.Count + ' file(s), now in this checkout:') 'Green'
             foreach ($e in $zip.Entries) {
-                foreach ($into in @($repo, $Out | Where-Object { $_ })) {
-                    $dest = Join-Path $into $e.FullName
-                    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
-                    [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
-                }
+                $dest = Join-Path $repo $e.FullName
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
                 Say ('  ' + $e.FullName)
             }
         } finally { $zip.Dispose() }
@@ -237,4 +246,10 @@ try {
     Remove-Item -LiteralPath $local -Recurse -Force -ErrorAction SilentlyContinue
 }
 Say ('the tool exited ' + $code) $(if ($code -eq 0) { 'Green' } else { 'Yellow' })
+# Why, on a STOP line of its own, last, so whoever ran this can carry it on:
+# Build-ContentOnBox.ps1 puts it in the content build's status (#6351).
+if ($code -ne 0) {
+    $why = Get-ThornswoodToolReason $lines
+    if ($why) { Say ('STOP. ' + $why) 'Yellow' }
+}
 exit $code

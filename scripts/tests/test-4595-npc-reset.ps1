@@ -67,6 +67,8 @@ $err = $null
 [void][Management.Automation.Language.Parser]::ParseInput($ThornswoodNpcReset, [ref]$null, [ref]$err)
 Yes 'P the text it sends to the box parses' (-not $err -or $err.Count -eq 0)
 . ([scriptblock]::Create($ThornswoodNpcReset))
+# Where the world is kept (#6237), which the box gets with it.
+. (P 'scripts/deploy/World.ps1')
 
 # ---- stand-in servers -------------------------------------------------------
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('tw-4595-' + [Guid]::NewGuid().ToString('N'))

@@ -14,7 +14,9 @@
       .\Clean-Leftovers.ps1 -Go
 
   WHAT IT REMOVES, AND WHAT WRITES EACH ONE (#4808). Only a file a Thornswood
-  tool writes, in a folder Thornswood owns, named here with what writes it:
+  tool writes, in a folder Thornswood owns. Leftovers.ps1 names each one and
+  what writes it, and Audit-Leftovers.ps1 reads the same list to say what
+  this frees (#4256):
 
     <install>\Launcher\Thornswood.exe.old
     <install>-DevBuild\Launcher\Thornswood.exe.old
@@ -55,6 +57,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# What -Go removes, which Audit-Leftovers.ps1 reads too (#4256).
+. (Join-Path $PSScriptRoot 'Leftovers.ps1')
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
@@ -67,8 +71,9 @@ function Done([int]$code) {
 $where = Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Where.ps1'
 $installs = @((& $where Install), (& $where InstallDev))
 
-# Thornswood's own leftovers, by name, in the folders Thornswood owns.
-$own = @(foreach ($i in $installs) { Join-Path (Join-Path $i 'Launcher') 'Thornswood.exe.old' })
+# Thornswood's own leftovers, by name, in the folders Thornswood owns
+# (Leftovers.ps1).
+$own = @(Get-ThornswoodCleanTargets)
 
 # Backups, previous copies and scratch: what is listed in Data.
 $cruftRx = '(?i)(\.bak$|\.old$|\.tmp$|\.temp$|\.orig$|\.backup$|~$)'

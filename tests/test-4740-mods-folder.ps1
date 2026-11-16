@@ -47,7 +47,7 @@ $oneoff = Join-Path $scripts 'oneoff'
 
 $retired = @('Add-Accuracy.ps1', 'Add-Bodies.ps1', 'Add-CartTravel.ps1', 'Add-McmShortcut.ps1', 'Enable-MCM.ps1',
              'Fix-MaleBody.ps1', 'Fix-QuickLoot.ps1', 'Remove-Plugin.ps1', 'Set-UnboundMenu.ps1')
-$machine = @('Audit-Leftovers.ps1', 'Clean-Everything.ps1', 'Clean-Leftovers.ps1', 'Fix-Icons.ps1')
+$machine = @('Audit-Leftovers.ps1', 'Clean-Everything.ps1', 'Clean-Leftovers.ps1', 'Fix-Icons.ps1', 'Leftovers.ps1')
 
 # ---- 1. nothing retired in scripts\mods ----------------------------------------
 $dead = @(Get-ChildItem -LiteralPath $mods -File | Where-Object {

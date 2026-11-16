@@ -325,6 +325,15 @@ namespace Thornswood
             }
             return best;
         }
+        // Vortex's setting for where it keeps downloads (settings.downloads.path),
+        // as Vortex wrote it, placeholders and all; null when it was never
+        // changed, which means Vortex's own default. ModlistFetch.VortexDownloads
+        // works the folder out from it (#6244).
+        public static string DownloadsSetting(string stateDir)
+        {
+            const string key = "settings###downloads###path";
+            return StringValue(Text(CurrentValues(stateDir, delegate(string k) { return k == key; }), key));
+        }
         public static int CollectionRevision(string stateDir, string slug)
         {
             if (string.IsNullOrEmpty(slug)) return 0;

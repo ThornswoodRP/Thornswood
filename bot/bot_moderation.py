@@ -80,6 +80,14 @@ _MOD_DID = {
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).
     'idle': 'was moved out for being idle',
+    # An admin taking gold or a thing back out of a character from the hub's
+    # Gold and trades page, done by the game server (#6271): the why says
+    # how much of how much was asked, on which server, and why.
+    'takeback': 'took back from %s',
+    'takebackfailed': 'could not take back from %s',
+    # Not staff: 1000 gold or more handed to somebody, flagged by the gold
+    # and trade log (#6270), said as its why reads.
+    'gold': 'was flagged for gold',
 }
 
 
@@ -119,6 +127,12 @@ def moderation_text(where, row):
         why = clean(row.get('why'), 600) or 'nothing from their game for too long'
         return ('**Idle on the %s server:** %s was taken back to the character choice and put in line: %s'
                 % (where, person(row.get('whoName'), row.get('who')), why))[:1900]
+
+    # A big move of gold (#6270): the gamemode writes the whole sentence, who
+    # handed how much to whom and where, with the accounts.
+    if row['did'] == 'gold':
+        why = clean(row.get('why'), 600) or 'a big move of gold.'
+        return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
     did = _MOD_DID[row['did']] % person(row.get('whoName'), row.get('who'))
     try:

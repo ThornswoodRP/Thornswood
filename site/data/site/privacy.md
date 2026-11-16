@@ -2,7 +2,7 @@
 
 What Thornswood keeps about you, why, and how to have it deleted.
 
-Last changed: 12 November 2026.
+Last changed: 16 November 2026.
 
 Thornswood is a free fan project run by a small team in their own time. It is
 not a company. This page is written plainly rather than legally, and it is
@@ -86,6 +86,24 @@ the Discord account or the character, with who did it, when and why, and the
 staff channel is told. A character killed for good is kept, not deleted. Only
 staff read these: somebody who is not staff never sees a note, even one
 about them.
+
+**Gold and trades.** Each trade between two characters, each sale to the
+trading company, and each time gold is taken out of a container or off a
+body, dropped, or put away, is kept with both characters' names, their
+profile numbers and the Discord accounts they are on, the gold and the
+things that moved, and where. Staff search it by account or character, so
+gold gained by cheating can be taken back from the one who has it instead
+of wiping everybody. When 1000 gold or more goes to somebody, a line naming
+both and the amount is posted in the staff channel in the Discord, and that
+post stays in the channel.
+
+**This PC.** Each time you press Play, the launcher sends a scrambled form
+of the id Windows gave your PC when it was installed. The scrambling only
+goes one way, so the id itself never leaves your PC, and this site scrambles
+it again with a key only it holds before keeping it beside your Discord
+account. Staff can then see which accounts have played from the same PC, to
+spot a second account of somebody banned. A family PC shared by two people
+looks the same, so it is only shown to staff and never acts on its own.
 
 **Your join number.** When you join the Discord, the bot writes down which
 arrival you were against your Discord id, so the number on the welcome card
@@ -232,6 +250,8 @@ until 24 September 2026, and both are served from here now.
   front door takes the address from Cloudflare only when the connection
   really comes from Cloudflare. That is enforced by the site rather than
   promised: old rows go whenever the log is written or read.
+- **This PC**, the scrambled id above, is kept for 30 days after your
+  account last played from it, then deleted. The site checks every hour.
 - **When you last signed out of the site** is kept for 30 days, so a copy
   of a sign-in made before then is refused. It is the time alone, filed
   under a scrambled form of your Discord id that only this site can make,
@@ -302,6 +322,8 @@ until 24 September 2026, and both are served from here now.
   one an admin undid is kept for 365 days after it was undone, then deleted.
   A staff note is kept for 365 days from when it was written. The site
   checks every hour.
+- **Gold and trades**, each one above, are kept for 90 days, then dropped.
+  The site checks every hour.
 - **The game server's door log** keeps each line, a character connecting
   and whether it was let in, for 90 days, the same as the gamemode's own
   log. The game server checks every hour.
@@ -367,8 +389,8 @@ Discord message. Do not send a government identity document.
 A request covers what Thornswood keeps, not your PC: what the launcher keeps
 there is yours, and uninstalling removes it (above).
 
-What deletion means here: your Discord link, your session records and the
-logs your launcher sent with them, your chat, your character, your list of
+What deletion means here: your Discord link, which PCs your account played
+from, your session records and the logs your launcher sent with them, your chat, your character, your list of
 characters and your settings, your answer to the rules, the applications and calls for
 help you sent through the site, your gallery pictures and your join number.
 A ticket in the Discord, and the bot's lines about it in the staff ticket
@@ -378,7 +400,8 @@ else has already quoted in a report, because that now belongs to the report.
 Staff's own records stay for the same reason: a ban, a note, a character
 killed for good, a report you made or one made about you, a line in a staff
 log, a session staff marked kept because a report rests on it, with its logs,
-and a log line already posted in the staff channel. A request
+a line in the gold and trade log, and a log line already posted in the
+staff channel. A request
 does not delete them, and they still go when their time above is up. A completed request is written down
 with your Discord id and character numbers and nothing else, so that an older
 backup put back into service has you removed again first. Until every game
@@ -391,7 +414,8 @@ back.
 The Owner, the Co-Owner and the Dev rank, who run the site and the servers,
 can see all of it, chat and session records included. The other staff ranks
 see the parts their job needs: the staff who work in the world (Gamemasters
-and Loremasters) see the staff records and the gallery queue, and calls for
+and Loremasters) see the staff records, which accounts played from the same
+PC, the gold and trade log and the gallery queue, and calls for
 help and reports reach staff in the Discord's staff channels. The logs sent
 when a session ends are read on the site by the Owner, the Co-Owner and the
 Dev rank only; the one line from them that shows a crash or an error is

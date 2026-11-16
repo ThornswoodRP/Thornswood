@@ -19,6 +19,10 @@
        game= is still used.
     5. no record anywhere: refused, naming the record it looked for.
     6. a byte order mark at the start of made.txt does not hide source=.
+    7. source= is the Mod Organizer 2 instance the modlist installs into
+       (#6244): Pandora's files are read from its record, the files of the
+       mod that has Pandora's exe, under Data; and a record naming two such
+       mods is refused. The record's name is the one OwnGame reads.
 #>
 [CmdletBinding()]
 param([string]$Repo)
@@ -80,6 +84,23 @@ try {
     Made $none "source=$(Join-Path $work 'nowhere')`r`ngame=$(Join-Path $work 'nowhere-either')`r`n"
     $r = Try-Files $none
     Yes '5: no record anywhere is refused, naming the record it looked for' ($r -like "THREW Vortex's record (*vortex.deployment.json) cannot be read*")
+
+    $mo2 = Join-Path $work 'Mods'
+    New-Item -ItemType Directory -Force -Path $mo2 | Out-Null
+    $lines = @('modlist=00',
+        'Data\Pandora Behaviour Engine+.exe|Pandora|Pandora Behaviour Engine+.exe|0000000000000001|1',
+        'Data\Pandora_Engine\a.txt|Pandora|Pandora_Engine\a.txt|0000000000000002|1',
+        'Data\other.esp|Other|other.esp|0000000000000003|1',
+        'skse64_loader.exe|SKSE|Root\skse64_loader.exe|0000000000000004|1')
+    [IO.File]::WriteAllLines((Join-Path $mo2 'thornswood-deployment.txt'), $lines)
+    $fromMo2 = Join-Path $work 'from-mo2'
+    Made $fromMo2 "source=$mo2`r`ngame=$steam`r`n"
+    Yes '7: source is Mod Organizer 2, read from its record' ((Try-Files $fromMo2) -eq $want)
+    [IO.File]::AppendAllText((Join-Path $mo2 'thornswood-deployment.txt'), "Data\Pandora Behaviour Engine+.exe|Again|Pandora Behaviour Engine+.exe|0000000000000005|1`r`n")
+    Yes '7: and a record naming two mods for Pandora is refused' ((Try-Files $fromMo2) -like "THREW Mod Organizer 2's record (*) does not name one mod*")
+    $og = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\OwnGame.cs'))
+    $gen = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Generated.cs'))
+    Yes '7: the record has one name in OwnGame and Generated' ($og.Contains('ModsRecordName = "thornswood-deployment.txt"') -and $gen.Contains('Name = "thornswood-deployment.txt"'))
 }
 finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 

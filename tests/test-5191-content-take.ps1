@@ -78,7 +78,7 @@ try {
     Check '1 and Build-ContentOnBox.ps1 keeps its build by the same function' ($box -match 'Get-ThornswoodContentKey -Repo \$repo -Commit \$commit -Server \$Server -Paths \$content\.Paths')
     $mainKey = (Get-ThornswoodContentKey -Repo $repo -Commit $head -Server main -Paths $paths).Key
     Check '1 the main server has a key of its own' ($mainKey -ne $key)
-    Add-Content -LiteralPath (Join-Path $repo 'game\data\last-plugin.json') -Value ' '
+    Add-Content -LiteralPath (Join-Path $repo 'layout.json') -Value ' '
     TGit $repo @('commit', '--quiet', '-am', 'an input changes') | Out-Null
     $moved = (TGit $repo @('rev-parse', 'HEAD'))[0]
     $key2 = (Get-ThornswoodContentKey -Repo $repo -Commit $moved -Server dev -Paths $paths).Key
@@ -139,14 +139,14 @@ try {
     $same = @($built.Keys | Where-Object { (Sha ([IO.File]::ReadAllBytes((Join-Path $repo $_)))) -ne (Sha $built[$_]) }).Count -eq 0
     Check '3 -Take writes every file of the build over the checkout' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $key FROM $head`: 3 files")
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
-    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
     $kept = Join-Path $tmp 'kept'
     $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-AssetDir', $assets, '-Take', '-Keep', $kept, '-Output', '')
     Check '3 -Keep keeps the two files it took, byte for byte, for the artifact' ($r.Code -eq 0 -and
         (Sha ([IO.File]::ReadAllBytes((Join-Path $kept 'content.zip')))) -eq (Sha ([IO.File]::ReadAllBytes((Join-Path $assets 'content.zip')))) -and
         (Sha ([IO.File]::ReadAllBytes((Join-Path $kept 'content-build.json')))) -eq (Sha ([IO.File]::ReadAllBytes((Join-Path $assets 'content-build.json')))))
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
-    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
 
     # ----------------------------------------------------- 3b. -Newest
     # Whatever its key: a pull request's checkout has inputs of its own.
@@ -168,12 +168,12 @@ try {
     Check '3 and says OTHER KEY when it is not of this checkout''s inputs, with same=no, the build''s key and commit' (
         $r.Text -match "OTHER KEY: this checkout's content inputs are $key" -and $said -contains 'same=no' -and $said -contains "key=$('a' * 64)" -and $said -contains "commit=$head")
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
-    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
     Remove-Item -LiteralPath $out -Force
     $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $newest), '-Output', $out)
     Check '3 and SAME KEY, same=yes, when it is' ($r.Code -eq 0 -and $r.Text -match 'SAME KEY' -and @(Get-Content -LiteralPath $out) -contains 'same=yes')
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
-    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
     $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', $other, '-BuildKey', $key, '-Output', '')
     Check '3 -BuildKey holds it to that key, writing nothing' ($r.Code -eq 1 -and $r.Text -match "is for dev $('a' * 64), not dev $key" -and -not (Test-Path -LiteralPath (Join-Path $repo 'game\gamemode-tables\NewTable.json')))
     $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $newest $null $key 'main'), '-Output', '')
@@ -189,11 +189,14 @@ try {
     Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
 
     # ------------------------------------------------------- 4. refusals
+    # The plugin is built, never committed (#5191): a checkout has none until
+    # a build is laid, and a refusal leaves it so.
     $plugin = Join-Path $repo 'game\content\Thornswood-Content.esp'
-    $before = Sha ([IO.File]::ReadAllBytes($plugin))
+    function PluginNow { if (Test-Path -LiteralPath $plugin) { Sha ([IO.File]::ReadAllBytes($plugin)) } else { 'none' } }
+    $before = PluginNow
     function Refused([string]$What, [string]$Why, [string]$AssetsDir) {
         $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-AssetDir', $AssetsDir, '-Take', '-Output', '')
-        $kept = (Sha ([IO.File]::ReadAllBytes($plugin))) -eq $before
+        $kept = (PluginNow) -eq $before
         Check "4 $What stops and writes nothing" ($r.Code -eq 1 -and $r.Text -match $Why -and $kept)
         if (-not ($r.Text -match $Why)) { Write-Host ($r.Out | Select-Object -Last 3) }
     }
@@ -249,7 +252,7 @@ try {
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
     }
-    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'))) {
+    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
         $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])"))
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
         Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build.*?Get-ContentBuild\.ps1 -Newest')

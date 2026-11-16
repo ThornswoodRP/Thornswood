@@ -295,7 +295,7 @@ try {
     Yes '5. no signtool fails as a need' (-not $rows[2].Ok -and $rows[2].Level -eq 'need')
     $readyText = Get-Content -LiteralPath $Ready -Raw
     Yes '5. Check-ShipReady asks the signing rows' ($readyText -match "Head 'Signing'" -and $readyText -match 'Get-SigningRows \$signCfg')
-    Yes '5. and the Vortex profile named Thornswood, which Ship stops on' ($readyText -match "Ready 'Vortex has a profile named Thornswood'")
+    Yes '5. and the Vortex profile named Thornswood, deployed, by the check Ship stops on' ($readyText -match "Ready 'Vortex has a profile named Thornswood, deployed'" -and $readyText -match "Assert-VortexProfile 'Thornswood'")
 
     # ------------------------------------------------ the script's own rules --
     $setupText = Get-Content -LiteralPath $Setup -Raw

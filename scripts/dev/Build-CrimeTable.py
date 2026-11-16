@@ -53,6 +53,12 @@ archives, and a folder without them would say none of them can run. So
 does a folder that lacks a script the load order attaches, unless
 records\\papyrus-missing.json lists it as missing on a game PC too.
 
+Thornswood-Last.esp is read with the rest, and this runs after
+Build-LastPlugin.py in scripts\\mods\\content-tables.json (#5191): that plugin
+takes the script off every placed thing it switches off (#3077) and every
+actor the catalogue cuts, so which scripts are attached is its to say. Nothing
+the Last plugin is made from reads this table.
+
 WHAT IT WRITES. game\\data\\crime-factions.json, every faction that tracks
 crime with its flags, its amounts and the plugin whose record won, and the
 scripts that touch a bounty; and the client table NO_BOUNTY_FACTIONS,

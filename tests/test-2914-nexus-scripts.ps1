@@ -87,6 +87,7 @@ function Yes([string]$what, [bool]$cond) {
 function Skip([string]$what) { Write-Host "SKIP  $what" }
 $script:standin = $null
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-2914-' + [Guid]::NewGuid().ToString('N').Substring(0, 10))
+$script:plugRec = $null   # the light flags' plugin record, set where they are tested (#4279)
 function Done {
     if ($script:standin -and -not $script:standin.HasExited) { $script:standin.Kill() }
     if (Test-Path -LiteralPath $T) { Remove-Item -LiteralPath $T -Recurse -Force }
@@ -151,7 +152,9 @@ function Run([string]$name, [string[]]$arguments) {
     $psi.FileName = $pwsh
     # New-NexusRevision holds every mod to a permission record (#3649): the
     # stand-in's mods are in one of the test's own, never the real one.
-    if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm) }
+    if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm, '-PageRecord', $script:pageRec) }
+    # And its light flags to a plugin record of the test's own (#4279).
+    if ($name -eq 'New-NexusRevision.ps1' -and $script:plugRec) { $arguments = @($arguments) + @('-PluginRecord', $script:plugRec) }
     $psi.Arguments = ((@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Q (Join-Path $rel $name))) + @($arguments | ForEach-Object { Q $_ }) + @('-NoPause')) -join ' ')
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $p = [Diagnostics.Process]::Start($psi)
@@ -165,6 +168,10 @@ function Run([string]$name, [string[]]$arguments) {
 # The permission record for the stand-in's mods (#3649), with what each
 # page says set per run: ours, a reading's collections value, or null.
 $script:perm = Join-Path $T 'collection-permissions.json'
+# The page's text every built revision carries (#4537), the test's own and
+# never the real one, whose mods the stand-in's revisions do not install.
+$script:pageRec = Join-Path $T 'collection-page.json'
+Put $script:pageRec '{"version":1,"collection":"7essxf","revision":2,"summary":"A made-up collection.","description":"## About\n\nA made-up collection for the harness.","installInstructions":"Add it in Vortex.","notSaid":[]}'
 function Perm([hashtable]$say) {
     $rows = foreach ($id in @(1111, 1932, 47618, 192001, 192762)) {
         if (-not $say.ContainsKey($id)) { continue }
@@ -767,8 +774,8 @@ Yes 'the upload is the archive built, bound to its md5' ($up -and $up.md5 -eq (G
 $x = Join-Path $T 'unpacked'
 & $sz x -y ('-o' + $x) $built | Out-Null
 Yes 'the archive holds collection.json, patches and the empty bundled folder, as Vortex packs them' ((Test-Path -LiteralPath (Join-Path $x 'collection.json')) -and (Test-Path -LiteralPath (Join-Path $x 'patches\Thornswood Content\Thornswood-Content.esp.diff')) -and (Test-Path -LiteralPath (Join-Path $x 'bundled') -PathType Container))
-& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2')process.exit(2);r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj (Join-Path $x 'collection.json')
-Yes 'its collection.json is revision 2''s with only the runtime entry moved' ($LASTEXITCODE -eq 0)
+& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2')process.exit(2);r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;const i=b.info;if(i.description!=='## About\n\nA made-up collection for the harness.'||i.summary!=='A made-up collection.'||i.installInstructions!=='Add it in Vortex.')process.exit(3);i.description=a.info.description;i.installInstructions=a.info.installInstructions;delete i.summary;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj (Join-Path $x 'collection.json')
+Yes 'its collection.json is revision 2''s with only the runtime entry moved, and the page''s text from the page record (#4537)' ($LASTEXITCODE -eq 0)
 $rv = (State).collection.revisions.PSObject.Properties['3']
 if ($rv) { $rv = $rv.Value }
 Yes 'the revision''s collection_data names the new runtime file' ($null -ne $rv -and $rv.status -eq 'draft' -and @($rv.data.collection_manifest.mods | Where-Object { $_.source.mod_id -eq '192762' -and $_.source.file_id -eq '812346' -and $_.source.md5 -eq $md5 }).Count -eq 1)
@@ -1049,6 +1056,17 @@ function Layout([string]$md5) {
 }
 Layout ((Get-FileHash -LiteralPath $lightBase -Algorithm MD5).Hash.ToLowerInvariant())
 Control @{ serve = @{ '191234' = @{ path = $fishArc; name = (Split-Path -Leaf $fishArc) } } }
+# The plugin record the light flags are held to: revision 3's, the one this
+# starts from (#4279).
+$script:plugRec = Join-Path $fl 'collection-plugins.json'
+function PlugRec([int]$rev) { Put $script:plugRec ('{"version":1,"collection":"7essxf","revision":' + $rev + ',"plugins":[{"name":"Fish-Light.esp","size":64,"sha256":"' + (Get-FileHash -LiteralPath (Join-Path $fishMod 'Fish-Light.esp') -Algorithm SHA256).Hash.ToLowerInvariant() + '"}]}') }
+PlugRec 2
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '-SetLight with the plugin record of another revision is refused, naming both' ($r.Code -eq 1 -and $r.Out -match 'is the plugins of collection revision 2, and this starts from revision 3') $r
+Remove-Item -LiteralPath $script:plugRec
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '  and with no plugin record at all' ($r.Code -eq 1 -and $r.Out -match 'there is no collection-plugins record at') $r
+PlugRec 3
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
 $got = @(Since $n0)

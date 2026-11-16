@@ -233,6 +233,30 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The collection's Wabbajack modlist the Release <paramref name="m"/>
+        /// records (its part "modlist", #6244), written to
+        /// <paramref name="file"/> once it is held to the sha256 and size the
+        /// signed record gives it. Throws with the reason, writing nothing.
+        /// </summary>
+        public static void Modlist(Manifest m, string file)
+        {
+            const string name = "collection-modlist.wabbajack";
+            PartFile f = m.File("modlist", name);
+            if (f == null) throw new Exception("The release record of " + m.Tag + " lists no " + name + ", so this Release has no modlist to install the mods from.");
+            byte[] raw = Fetch(m.Tag, name);
+            if (raw.LongLength != f.Size || !string.Equals(Sha256(raw), f.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new Exception(name + " of " + m.Tag + " is not the one its signed release record lists.");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file)));
+            string part = file + ".part";
+            try
+            {
+                File.WriteAllBytes(part, raw);
+                File.Move(part, file, true);
+            }
+            finally { if (File.Exists(part)) File.Delete(part); }
+        }
+
+        /// <summary>
         /// The record's part that holds a channel's Velopack files: "velopack"
         /// for dev, published with the merge release, and "main" for main,
         /// held back until Patrick approves a promotion to main (#5181,

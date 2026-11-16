@@ -630,7 +630,16 @@ namespace Thornswood
                     if (m.Success) src = m.Groups[1].Value.Trim();
                 }
             string vm = src.Length > 0 ? Path.Combine(src, "Data\\vortex.deployment.json") : "";
-            if (vm.Length > 0 && File.Exists(vm))
+            string whose = "Vortex's";
+            // Or Mod Organizer 2's own copy, by its record, once the mods come from there (#6244).
+            string mr = src.Length > 0 ? Generated.Under(src, ModsDeployed.Name) : "";
+            if (mr.Length > 0 && File.Exists(mr))
+            {
+                whose = "Mod Organizer 2's";
+                foreach (ModsDeployed d in ModsDeployed.Read(mr))
+                    staged[d.Rel] = Generated.Under(src, "mods\\" + d.Mod + "\\" + d.Under);
+            }
+            else if (vm.Length > 0 && File.Exists(vm))
                 foreach (VortexFile vf in VortexFile.Read(vm))
                     staged["Data\\" + vf.RelPath.TrimStart('\\')] = Path.Combine(Path.Combine(vf.StagingPath, vf.Source), vf.RelPath.TrimStart('\\'));
             foreach (string rel in dropped)
@@ -641,7 +650,7 @@ namespace Thornswood
                 if (staged.TryGetValue(rel, out from) && File.Exists(from))
                 {
                     File.Copy(from, dest);
-                    Line("  " + rel + " is Vortex's again", "DarkGray");
+                    Line("  " + rel + " is " + whose + " again", "DarkGray");
                 }
                 else Line("  " + rel + " taken out", "DarkGray");
             }

@@ -56,9 +56,11 @@ const DOCS = {
    since #1010, because that page is where staff ban, PK and write notes, and
    every staff role may. The other two stay 'admin': the play sessions and
    the report inbox. The hold economy is 'staff' (#3164, Patrick, 22 Oct:
-   staff's hold economy view is a staff page on the hub). */
+   staff's hold economy view is a staff page on the hub). So is the gold
+   and trade log (#6270): staff find who moved gold to whom. */
 const LEVEL = {
-  uploads: 'staff', linked: 'staff', sessions: 'admin', inbox: 'admin', economy: 'staff'
+  uploads: 'staff', linked: 'staff', sessions: 'admin', inbox: 'admin', economy: 'staff',
+  ledger: 'staff'
 };
 
 /* The public front lives at / and needs no password. The working area moved
