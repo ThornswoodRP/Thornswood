@@ -248,7 +248,7 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
   srv.stderr.on('data', (d) => { out += d; });
   try {
     let up = false;
-    for (let i = 0; i < 200 && !up; i++) {
+    for (let i = 0; i < 200; i++) {
       if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);

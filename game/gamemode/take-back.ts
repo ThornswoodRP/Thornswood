@@ -46,7 +46,9 @@
 
   function tblog() {
     var a = ['[thornswood take back]'];
-    for (var i = 0; i < arguments.length; i++) { a.push(arguments[i]); }
+    // Each part on one line: an admin's reason or a site's answer cannot
+    // start a line of its own in the server log.
+    for (var i = 0; i < arguments.length; i++) { a.push(String(arguments[i]).replace(/[\u0000-\u001f\u007f]/g, ' ')); }
     try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
   }
 
