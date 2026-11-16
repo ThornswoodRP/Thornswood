@@ -164,6 +164,10 @@ async function build(o) {
   const shape = o.shape || 'crowd';
   if (!['crowd', 'spread'].includes(shape)) { throw new Error('--shape is crowd or spread, not ' + shape); }
   const seats = Number(o.seats) || 100;
+  // --npcs yes: the engine keeps the masters' placed NPCs alive near the
+  // bots, guards and named people too, so bots that host (load-bots.js
+  // --play host) have NPCs to run (#6252). Off unless asked, as before.
+  const npcs = o.npcs === 'yes';
   const record = readJson(path.join(REPO, 'records', 'server-build.json'));
   const commit = String(record.source && record.source.commit || '');
   const dist = path.resolve(o.build);
@@ -206,8 +210,10 @@ async function build(o) {
     offlineMode: true,
     port: Number(o.port) || 7777,
     maxPlayers: seats,
-    npcEnabled: false,
+    npcEnabled: npcs,
     npcSettings: {},
+    npcAllowCrimeFaction: npcs,
+    npcAllowEssential: npcs,
     startPoints: startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
@@ -219,7 +225,7 @@ async function build(o) {
   fs.writeFileSync(path.join(out, 'server-settings.json'), JSON.stringify(settings, null, 2) + '\n');
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
-  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins');
+  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins, engine NPCs ' + (npcs ? 'on' : 'off'));
   return { out, commit, settings };
 }
 
@@ -394,7 +400,7 @@ async function main() {
   for (let i = 0; i < argv.length; i += 2) { o[String(argv[i]).replace(/^--/, '')] = argv[i + 1]; }
   if (o.from && o.out) { fromInstalled(o); return 0; }
   if (!o.build || !o.masters || !o.out) {
-    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes]');
+    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes] [--npcs yes]');
     console.log('node New-LoadServer.js --from <server installed on the box> --out <folder> --port <n> --voice-port <n> [--shape crowd|spread] [--seats 100]');
     return 2;
   }

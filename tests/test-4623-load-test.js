@@ -263,6 +263,18 @@ function moveRuleChecks() {
   r.b.pump();
   yes('  and moves are never counted, since each is its own', r.b.repeats === 1);
 
+  const k = walker('change');
+  k.b.play = ['host'];
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 31, refrId: 0x100000000 + 0x1981f, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {} } });
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 32, refrId: 0xff000010, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: { isHostedByOther: true } } });
+  k.b.pump();
+  const asks = () => k.c.sent.filter((x) => x.m.t === 14);
+  yes('under --play host, an actor nobody hosts is asked for once, reliably; one somebody hosts is not',
+    asks().length === 1 && asks()[0].m.remoteId === 0x100000000 + 0x1981f && asks()[0].reliable === true);
+  k.c.queue.push({ type: 'message', message: { t: 7, idx: 32, propName: 'isHostedByOther', dataDump: 'false' } });
+  k.b.pump();
+  yes('  and one the server frees is asked for when it says so', asks().length === 2 && asks()[1].m.remoteId === 0xff000010);
+
   const o = walker('beat');
   o.b.stand = 1;
   for (let i = 0; i < 4; i++) { o.b.lastMove = now; now += MOVE_MS + 1; o.b.advance(now); }
