@@ -57,19 +57,21 @@ function Get-ThornswoodWorld([string]$Root) {
     try { $cfg = [IO.File]::ReadAllText($settings) -replace '^\uFEFF', '' | ConvertFrom-Json }
     catch { return @{ Stop = ($settings + ' will not read, so where the world is kept is not known: ' + $_.Exception.Message) } }
   }
-  $driver = 'file'
-  if ($cfg -and $cfg.databaseDriver) { $driver = [string]$cfg.databaseDriver }
+  # Read by name, so a script in strict mode reads a setting that is not there as none.
+  $get = { param($n) if ($cfg -and $cfg.PSObject.Properties[$n]) { [string]$cfg.PSObject.Properties[$n].Value } else { '' } }
+  $driver = & $get 'databaseDriver'
+  if (-not $driver) { $driver = 'file' }
   if ($driver -eq 'file') {
-    $name = 'world'
-    if ($cfg -and $cfg.databaseName) { $name = [string]$cfg.databaseName }
-    return @{ Driver = 'file'; Root = $Root; Forms = (Join-Path (Join-Path $Root $name) 'changeForms') }
+    $name = & $get 'databaseName'
+    if (-not $name) { $name = 'world' }
+    return @{ Stop = ''; Driver = 'file'; Root = $Root; Forms = (Join-Path (Join-Path $Root $name) 'changeForms') }
   }
   if ($driver -ne 'mongodb') { return @{ Stop = ($settings + ' names the database driver ' + $driver + ', which no tool here reads') } }
-  $db = [string]$cfg.databaseName
-  $uri = [string]$cfg.databaseUriFile
+  $db = & $get 'databaseName'
+  $uri = & $get 'databaseUriFile'
   if ($db -notmatch '^thornswood-[a-z]+$') { return @{ Stop = ($settings + ' names no world database (databaseName ' + $db + ')') } }
   if (-not $uri) { return @{ Stop = ($settings + ' names no databaseUriFile, the connection file a tool signs in with') } }
-  return @{ Driver = 'mongodb'; Root = $Root; Db = $db; UriFile = $uri }
+  return @{ Stop = ''; Driver = 'mongodb'; Root = $Root; Db = $db; UriFile = $uri; Forms = ''; Manifest = ''; Exported = 0 }
 }
 # Runs world.js with a plan, and hands back its lines. The plan names the
 # connection file; the password is read inside mongosh and never printed.

@@ -170,8 +170,21 @@ db.changeForms.insertMany([
         Yes 'and keeps it on disk in world-mongo-<stamp>\changeForms\_discarded-<stamp>' ($aside.Count -eq 1)
         $list = Join-Path $scratch 'private/deleted-characters.json'
         Yes 'and names it on the release list by its runtime form id' ((Test-Path -LiteralPath $list) -and ([IO.File]::ReadAllText($list) -match '"actors":\[4278192641\]'))
+
+        . (Join-Path $Repo 'scripts/ops/NpcReset.ps1')
+        . ([scriptblock]::Create($ThornswoodNpcReset))
+        $db = 'thornswood-wtestd'
+        $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "a01", profileId: 5, recType: 1 }, { formDesc: "12345:Skyrim.esm", profileId: -1, recType: 1 }, { formDesc: "b00", profileId: -1, recType: 0 }])'
+        Settings $db
+        $survey = @(Invoke-ThornswoodNpcReset -Root $scratch -Stamp '20261116-020000')
+        Yes ('Reset-Npcs surveys a MongoDB world: ' + ($survey -join ' / ')) (($survey -contains 'NPCRESET|1|1|1|0') -and -not (Test-Path -LiteralPath (Join-Path $scratch 'world-mongo-20261116-020000')))
+        $move = @(Invoke-ThornswoodNpcReset -Root $scratch -Stamp '20261116-020001' -Move)
+        $left = (Shell $db 'print(db.changeForms.find().sort({ formDesc: 1 }).toArray().map(d => d.formDesc).join(","))') -join ''
+        Yes ('and moves its NPCs out of it, keeping the character and the chest: ' + $left) (-not @($move | Where-Object { $_ -like 'STOP|*' -or $_ -like 'FAILED|*' }).Count -and $left.Trim() -eq 'a01,b00')
+        Yes 'with the NPC kept on disk' (Test-Path -LiteralPath (Join-Path $scratch 'world-mongo-20261116-020001/changeForms/_discarded-20261116-020001/12345_Skyrim.esm.json'))
     } finally {
         Remove-Item Env:THORNSWOOD_MONGOSH -ErrorAction SilentlyContinue
+        $null = Shell 'thornswood-wtestd' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestc' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtest' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestb' 'db.dropDatabase()'

@@ -776,10 +776,12 @@
       "reads": [
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/ops/NpcReset.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
       "afterDeploy": ["dev"],
@@ -793,10 +795,12 @@
       "reads": [
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/ops/NpcReset.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
       "build": true,
