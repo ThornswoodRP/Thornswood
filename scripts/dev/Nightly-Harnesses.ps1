@@ -60,8 +60,9 @@
   SIDE BY SIDE WHEN ASKED (#3114). -Throttle N runs up to N harnesses at
   once, each still a process of its own with its output in files of its own
   and printed the moment it ends, so no pipe is shared and nothing one leaves
-  running can hold the step. The pull request gate (build.yml, "Run the gate
-  harnesses") runs its list this way through -Only: one at a time, its 550
+  running can hold the step. The pull request gate (build-pr.yml, generated
+  from build.yml, "Run the gate harnesses", through Run-Gate.ps1) runs its
+  list this way through -Only: one at a time, its 550
   harnesses took 26 of a 28 minute build on 21 Oct 2026, most of it waiting
   on timers and child processes rather than working. Harnesses side by side
   share the runner's account, so its TEMP, its profile and the checkout. One
