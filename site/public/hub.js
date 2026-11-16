@@ -24,7 +24,7 @@ var S = {
 var ROUTES = {
   '/hub':'home',
   '/uploads':'uploads', '/linked':'linked', '/sessions':'sessions', '/inbox':'inbox',
-  '/economy':'economy'
+  '/economy':'economy', '/ledger':'ledger'
 };
 var PATHS = {};
 Object.keys(ROUTES).forEach(function (u) { PATHS[ROUTES[u]] = u; });
@@ -41,7 +41,8 @@ var ABOUT = {
   sessions:    'One card a person, newest first by when they last played. ' +
                'Open one for every session they have had, with its logs and ' +
                'what they said in it.',
-  economy:     'What each hold gathers, makes and trades, counted in pieces, so a hold out of balance shows.'
+  economy:     'What each hold gathers, makes and trades, counted in pieces, so a hold out of balance shows.',
+  ledger:      'Every trade and every move of gold between people, by Discord account and character. Big moves are flagged.'
 };
 
 /* Hub trimmed (#433): Gallery, Sessions, Linked Accounts, Inbox. Issue
@@ -49,7 +50,7 @@ var ABOUT = {
    No site theme/appearance prefs. */
 var GROUPS = [
   { label:'',     keys:['home'] },
-  { label:'Hub',  keys:['uploads','sessions','linked','inbox','economy'] }
+  { label:'Hub',  keys:['uploads','sessions','linked','inbox','economy','ledger'] }
 ];
 
 var el = function (id) { return document.getElementById(id); };
@@ -65,6 +66,7 @@ function label(k) {
   if (k === 'linked') return 'Linked accounts';
   if (k === 'sessions') return 'Play sessions';
   if (k === 'economy') return 'Hold economy';
+  if (k === 'ledger') return 'Gold and trades';
   return S.titles[k] || k;
 }
 /* The level the server sent for this page, against who the server says we are.
@@ -1625,6 +1627,7 @@ function draw() {
   if (S.at === 'linked')  return drawLinked();
   if (S.at === 'sessions') return drawSessions();
   if (S.at === 'economy') return drawEconomy();
+  if (S.at === 'ledger')  return drawLedger();
   if (S.editing)          return drawEdit();
   drawDoc();
 }
@@ -1909,6 +1912,123 @@ function wireEconomy() {
   }
 }
 
+/* -------------------------------------------------------------- ledger -- */
+/*
+  GOLD AND TRADES (#6270). Every trade and every move of gold between
+  people, which each game server sends here as it happens; GET /api/ledger
+  hands staff what matches. Searched the way a staff member asks: a Discord
+  account (copied from Linked accounts), a profile number, or a character's
+  name. Flagged only narrows it to the moves of 1000 gold or more that the
+  staff channel was told about.
+
+  Asked of the site on every search rather than loaded whole: 90 days of
+  every trade on both servers is far more than one page should hold.
+*/
+var LFIND = { srv: 'main', q: '', flagged: false };
+var LEDG = null;
+
+function ledgerWho(p) {
+  if (!p) return '<span class="faint">nobody</span>';
+  return esc(p.name || 'somebody') +
+    (p.pid ? ' <span class="faint">profile ' + esc(String(p.pid)) + '</span>' : '') +
+    (p.account ? ' <span class="faint">account ' + esc(p.account) + '</span>' : '');
+}
+function ledgerWhat(gold, things) {
+  var bits = [];
+  if (gold) bits.push(gold + ' gold');
+  (things || []).forEach(function (t) { bits.push(t.c + ' ' + (t.n || t.desc || 'something')); });
+  return bits.length ? esc(bits.join(', ')) : '<span class="faint">nothing</span>';
+}
+var LEDGER_KIND = { trade: 'Trade', halftrade: 'Trade, half through', sale: 'Sale to the company',
+                    take: 'Took gold', drop: 'Dropped gold', put: 'Put gold away' };
+
+function loadLedger() {
+  LEDG = { loading: true };
+  var q = '/api/ledger?server=' + encodeURIComponent(LFIND.srv) + '&q=' + encodeURIComponent(LFIND.q.trim()) +
+          (LFIND.flagged ? '&flagged=1' : '');
+  api(q).then(function (r) {
+    if (!r.ok) throw new Error('the site answered ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    LEDG = { rows: (d && d.rows) || [], more: !!(d && d.more), keepDays: (d && d.keepDays) || 90 };
+    if (S.at === 'ledger') drawLedger();
+  }).catch(function (e) {
+    // Said in the page, never shown as an empty log (#2736).
+    LEDG = { failed: String((e && e.message) || e) };
+    if (S.at === 'ledger') drawLedger();
+  });
+}
+
+function drawLedger() {
+  if (!LEDG) loadLedger();
+  var out = head('<button class="btn" id="lreload">Read again</button>') +
+    '<div class="bar bar-mb-16">' +
+      '<select id="lsrv" aria-label="Server">' +
+        [['main', 'Main server'], ['dev', 'Dev server']].map(function (o) {
+          return '<option value="' + o[0] + '"' + (LFIND.srv === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('') +
+      '</select>' +
+      '<input type="search" id="lfind" value="' + esc(LFIND.q) + '" aria-label="Find an account, a profile or a character" placeholder="A Discord account, a profile number or a character\'s name">' +
+      '<label class="check"><input type="checkbox" id="lflag" aria-label="Flagged only"' + (LFIND.flagged ? ' checked' : '') + '> Flagged only</label>' +
+    '</div>';
+  if (!LEDG || LEDG.loading) {
+    el('page').innerHTML = out + '<div class="empty">Reading the log.</div>';
+    return wireLedger();
+  }
+  if (LEDG.failed) {
+    el('page').innerHTML = out + '<div class="empty">The log could not be read: ' + esc(LEDG.failed) +
+      '. Read again, or reload the page if you were signed out.</div>';
+    return wireLedger();
+  }
+  if (!LEDG.rows.length) {
+    el('page').innerHTML = out + '<div class="empty">' + (LFIND.q.trim() || LFIND.flagged
+      ? 'Nothing matches that in the last ' + esc(String(LEDG.keepDays)) + ' days.'
+      : 'Nothing logged on the ' + (LFIND.srv === 'dev' ? 'dev' : 'main') + ' server in the last ' +
+        esc(String(LEDG.keepDays)) + ' days.') + '</div>';
+    return wireLedger();
+  }
+  out += '<div class="said said-show">Newest first, ' + LEDG.rows.length + (LEDG.more ? ' shown, and there are more: search narrower to see them.' : ' found.') +
+    ' Kept ' + esc(String(LEDG.keepDays)) + ' days.</div>';
+  out += '<div class="tablewrap"><table class="board ledger"><thead><tr><th>When</th><th>What</th>' +
+    '<th>From</th><th>Gave</th><th>To</th><th>Gave back</th><th>Where</th></tr></thead><tbody>' +
+    LEDG.rows.map(function (r) {
+      var back = (r.kind === 'trade' || r.kind === 'halftrade' || r.kind === 'sale');
+      return '<tr' + (r.flagged ? ' class="flagged"' : '') + '>' +
+        '<td data-label="When"><div class="cell">' + esc(new Date(r.at).toLocaleString()) + '</div></td>' +
+        '<td data-label="What"><div class="cell">' + esc(LEDGER_KIND[r.kind] || r.kind) +
+          (r.flagged ? ' <strong>flagged</strong>' : '') + '</div></td>' +
+        '<td data-label="From"><div class="cell">' + (r.from ? ledgerWho(r.from) : esc(r.source || 'nobody')) + '</div></td>' +
+        '<td data-label="Gave"><div class="cell">' + ledgerWhat(r.gold, r.things) + '</div></td>' +
+        '<td data-label="To"><div class="cell">' + (r.to ? ledgerWho(r.to) : esc(r.source || 'nobody')) + '</div></td>' +
+        '<td data-label="Gave back"><div class="cell">' + (back ? ledgerWhat(r.backGold, r.backThings) : '') + '</div></td>' +
+        '<td data-label="Where"><div class="cell">' + esc(r.where || '') + '</div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+  el('page').innerHTML = out;
+  wireLedger();
+}
+
+function wireLedger() {
+  var r = el('lreload');
+  if (r) r.onclick = function () { LEDG = null; drawLedger(); };
+  var s = el('lsrv');
+  if (s) s.onchange = function () { LFIND.srv = s.value; LEDG = null; drawLedger(); };
+  var c = el('lflag');
+  if (c) c.onchange = function () { LFIND.flagged = c.checked; LEDG = null; drawLedger(); };
+  var f = el('lfind');
+  if (f) {
+    f.oninput = function () {
+      LFIND.q = f.value;
+      clearTimeout(wireLedger.t);
+      wireLedger.t = setTimeout(function () {
+        LEDG = null;
+        drawLedger();
+        var again = el('lfind');
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      }, 400);
+    };
+  }
+}
+
 /* ---------------------------------------------------------------- home -- */
 function tallyOf() {
   var n = { pass:0, fail:0, skip:0 };
@@ -1967,7 +2087,7 @@ function drawHome() {
   // a Gamemaster lands on a home page with Gallery on it and nothing else.
   if (inHub()) {
     out += '<div class="cards">' +
-      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') +
+      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') + card('ledger') +
       '</div>';
   } else {
     out += '<p class="lede">Signing in with Discord opens the hub.</p>' +

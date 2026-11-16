@@ -53,6 +53,7 @@ const { LINKED, post } = require('./discord');
 const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
+const { searchLedger, takeLedger } = require('./ledger');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
@@ -2538,6 +2539,23 @@ async function handle(req, res) {
     return sendJson(res, 200, { ok: true, server: srv, days: Object.keys(kept.days).length });
   }
 
+  /*
+    A game server's gold and trade rows (#6270), with the door key, the
+    economy's way: the dev server's arrive on /dev/api/ledger and are kept
+    apart. A write that fails answers 500, so the game server keeps the rows
+    for its next push rather than losing them.
+  */
+  if ((route === '/api/ledger' || route === '/dev/api/ledger') && req.method === 'POST') {
+    if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
+    let o = {};
+    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
+    const n = takeLedger(srv, o.rows, Date.now());
+    if (n < 0) return sendJson(res, 500, { error: 'could not save' });
+    return sendJson(res, 200, { ok: true, server: srv, kept: n });
+  }
+
   if (p === '/api/play/roster' && req.method === 'POST') {
     let o = {};
     try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
@@ -3128,6 +3146,16 @@ async function handle(req, res) {
     if (p === '/api/economy' && req.method === 'GET') {
       if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
       return sendJson(res, 200, { keepDays: ECONOMY_KEEP_DAYS, servers: economyNow(Date.now()) });
+    }
+
+    /* The hub's Gold and trades page (#6270): staff, the same as the page.
+       ?q= an account, a profile or a name; ?server= main or dev; ?flagged=1. */
+    if (p === '/api/ledger' && req.method === 'GET') {
+      if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
+      const u = new URL(req.url, 'http://x');
+      const found = searchLedger(String(u.searchParams.get('q') || '').slice(0, 64),
+        String(u.searchParams.get('server') || ''), u.searchParams.get('flagged') === '1', Date.now());
+      return sendJson(res, 200, found);
     }
 
     if (p === '/api/results' && req.method === 'PUT') {

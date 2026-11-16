@@ -34,6 +34,7 @@ on 1 Oct. Every builder takes its load order from load_order.
 
 import hashlib
 import io
+import json
 import os
 import struct
 import zlib
@@ -133,6 +134,72 @@ def load_order(plugins_txt):
 
 def switched_off(plugins_txt):
     return read_plugins_txt(plugins_txt)[1]
+
+
+# THE COLLECTION'S RECORD IS HELD TO ITS SHAPE (#4279). Every builder holds
+# the load order to records/collection-plugins.json, the collection's plugins
+# at the collection's bytes (collection_stop in Build-WoodworkingBenches.py).
+# It parsed the file as it found it: a version this checkout does not know, a
+# plugin listed twice or a row with no size was read as if it were the
+# record, and no file at all was a traceback. These are the checks
+# RecordShape.ps1 makes for kind collection-plugins, the ones the deploys
+# read the same file with (Read-ThornswoodCollectionPluginRecord), so the
+# builders trust exactly what the deploys trust.
+COLLECTION_PLUGIN_VERSIONS = [1]
+
+
+def _whole(v, least):
+    return isinstance(v, int) and not isinstance(v, bool) and v >= least
+
+
+def collection_plugin_problems(doc):
+    """What is wrong with a collection-plugins record, one line each, as
+    RecordShape.ps1's Get-ThornswoodRecordProblems says it."""
+    if not isinstance(doc, dict):
+        return ['it is not a JSON object']
+    out = []
+    ver = doc.get('version')
+    if ver is None:
+        out.append('it has no version')
+    elif not _whole(ver, 1) or ver not in COLLECTION_PLUGIN_VERSIONS:
+        return ['it is version %s, and this checkout knows %s: update the checkout, or the record came from '
+                'somewhere else' % (json.dumps(ver), ', '.join(str(v) for v in COLLECTION_PLUGIN_VERSIONS))]
+    rows = doc.get('plugins')
+    if not isinstance(rows, list) or not rows:
+        out.append('plugins is missing or empty')
+        return out
+    seen = set()
+    for r in rows:
+        n = r.get('name') if isinstance(r, dict) else None
+        if not isinstance(n, str) or not n:
+            out.append('a plugins row has no name')
+            continue
+        if n.lower() in seen:
+            out.append('plugins lists %s twice' % n)
+        seen.add(n.lower())
+        if not _whole(r.get('size'), 0):
+            out.append('plugins.%s has no whole size' % n)
+        sha = r.get('sha256')
+        if not (isinstance(sha, str) and len(sha) == 64 and all(c in '0123456789abcdefABCDEF' for c in sha)):
+            out.append('plugins.%s has no sha256' % n)
+    return out
+
+
+def read_collection_plugins(path):
+    """records/collection-plugins.json as a dict, or ValueError naming the
+    file: none there, not JSON, or not the shape above."""
+    path = str(path)
+    if not os.path.isfile(path):
+        raise ValueError('there is no collection-plugins record at %s' % path)
+    try:
+        with io.open(path, encoding='utf-8-sig') as fh:
+            doc = json.load(fh)
+    except ValueError as exc:
+        raise ValueError('%s does not read as JSON: %s' % (path, exc))
+    bad = collection_plugin_problems(doc)
+    if bad:
+        raise ValueError('%s is not a collection-plugins record this checkout can trust: %s' % (path, '; '.join(bad)))
+    return doc
 
 
 def load_order_name(order):

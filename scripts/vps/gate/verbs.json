@@ -890,7 +890,8 @@
       "out": "-Out",
       "params": {
         "Server": "^(dev|main)$",
-        "Stations": "switch"
+        "Stations": "switch",
+        "WithoutLast": "switch"
       }
     },
     "Ship-Dev": {

@@ -2217,7 +2217,10 @@ function Get-ShipLastPluginProblem([string]$RepoDir, [string[]]$Enabled, [string
     try { $m = ([IO.File]::ReadAllText($mpath) -replace '^\uFEFF', '') | ConvertFrom-Json } catch { return "$ShipLastManifest does not read as JSON: " + $_.Exception.Message }
     $rpath = Join-Path $RepoDir 'records\collection-plugins.json'
     if (-not (Test-Path -LiteralPath $rpath)) { return "there is no records\collection-plugins.json, so nothing says which bytes the collection gives people." }
-    try { $record = ([IO.File]::ReadAllText($rpath) -replace '^\uFEFF', '') | ConvertFrom-Json } catch { return "records\collection-plugins.json does not read as JSON: " + $_.Exception.Message }
+    # Through RecordShape.ps1, as the deploys read it (#4279): a version this
+    # checkout does not know or a plugin listed twice is not a record of
+    # which bytes the collection gives people.
+    try { $record = Read-ThornswoodRecord -Path $rpath -Kind collection-plugins } catch { return $_.Exception.Message }
     $rows = @{}
     foreach ($r in @($record.plugins)) { $rows[([string]$r.name).ToLowerInvariant()] = $r }
     $sha = [Security.Cryptography.SHA256]::Create()
