@@ -187,5 +187,5 @@ async function main() {
 
 main().catch((e) => {
   console.error('Export-Pages: ' + (e && e.message) + '. Nothing was written.');
-  process.exit(1);
+  process.exitCode = 1;
 });

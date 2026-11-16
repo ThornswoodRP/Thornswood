@@ -175,13 +175,19 @@ function count(server) {
 module.exports = { formIdOf, isFormId, count };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const args = process.argv.slice(2);
   if (args.length !== 2 || args[0] !== '--server' || !args[1]) {
     console.error('Usage: node scripts\\ops\\Verify-FormIdShape.js --server <folder>');
-    process.exit(2);
+    return 2;
   }
   const now = count(args[1]);
   console.log(JSON.stringify(now, null, 2));
   const bad = now.unreadable || ['list', 'embassy', 'dungeon', 'cargo', 'merchants'].some((k) => now[k] && now[k].unreadable);
-  process.exit(bad ? 1 : 0);
+  return bad ? 1 : 0;
 }

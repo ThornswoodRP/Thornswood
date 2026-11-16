@@ -155,6 +155,7 @@ function walk(b, start, end, mast, self) {
 }
 
 const order = loadedOrder(PLUGINS_TXT, DATA);
+if (!order) return;
 let parsed = 0;
 for (const pl of order) {
   const p = pluginPath(DATA, pl);

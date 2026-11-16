@@ -8,70 +8,10 @@
 # compiler threads (nodejs/node#64274), and the node it was meant to end
 # never ends. A harness or a tool ends by setting process.exitCode instead,
 # and closes any server, socket, child or timer it left open, so node ends
-# by itself. The areas move one pull request at a time; each lowers its
-# lines here. game/tests and the three harnesses Tree checks runs on steps of
-# their own moved first, then every other folder of harnesses (tests/,
-# site/tests, launcher/tests, voice/tests, bot/tests and scripts/tests);
-# none of them has a line. The tools and services below are left.
+# by itself. game/tests and the three harnesses Tree checks runs on steps of
+# their own moved first, then every other folder of harnesses, then the tools
+# and services, so no file has a line: none may call it. The site's last net
+# for an uncaught exception ends with process.abort(), which tears nothing
+# down (site/lib/serve.js says why).
 #
-# A number here only goes down. node scripts/dev/Check-ProcessExit.js --list
-# prints today's numbers in this format.
-
-# STUDIES
-docs/studies/in-game-ui/measure/box-forwarder.js 3
-docs/studies/in-game-ui/measure/voice-mesh.js 1
-
-# THE SCRIPTS
-scripts/bot/Bot-Pass.js 2
-scripts/bot/Check-Character.js 2
-scripts/bot/Load-Test.js 2
-scripts/bot/New-LoadServer.js 2
-scripts/bot/load-bots.js 5
-scripts/bot/load-proxy.js 3
-scripts/deploy/Deploy-Docs.ps1 1
-scripts/deploy/Export-Pages.js 1
-scripts/dev/Affected-Harnesses.js 1
-scripts/dev/Audit-Systems.js 1
-scripts/dev/Audit-Temperature.js 1
-scripts/dev/Build-FuelTable.js 1
-scripts/dev/Build-Gamemode.js 11
-scripts/dev/Build-HairDyeGamemode.js 1
-scripts/dev/Build-ItemSources.js 5
-scripts/dev/Build-PrWorkflow.js 1
-scripts/dev/Build-ProfessionGuides.js 3
-scripts/dev/Build-SpoilNames.js 3
-scripts/dev/Build-StaffData.js 3
-scripts/dev/Build-TradingCompanyGamemode.js 3
-scripts/dev/Build-WakeTable.js 1
-scripts/dev/Build-WorldspaceTable.js 1
-scripts/dev/Check-AppPermissions.js 2
-scripts/dev/Check-Makers.js 1
-scripts/dev/GamemodeTables.js 1
-scripts/dev/Install-GamemodeConsts.js 4
-scripts/dev/OwnPlugins.js 2
-scripts/dev/PapyrusEventList.js 1
-scripts/dev/Tested-Tree.js 2
-scripts/dev/Trace-HarnessReads.js 2
-scripts/dev/Write-CutItems.js 2
-scripts/ops/Auto-Merge.js 4
-scripts/ops/Box-Step.js 2
-scripts/ops/Find-Duplicate.js 1
-scripts/ops/Sync-Board.js 2
-scripts/ops/Verb-Files.js 2
-scripts/ops/Verify-FormIdShape.js 2
-scripts/release/After-Deploy.js 3
-scripts/release/collection-page.js 1
-scripts/release/collection-permissions.js 3
-scripts/release/nexus-collection.js 1
-scripts/release/server-bundle-sources.js 5
-scripts/release/where.js 1
-scripts/vps/Delete-Person.ps1 2
-scripts/vps/Server-Log.js 9
-scripts/vps/admin/ops-access.js 1
-scripts/vps/admin/ship-access.js 1
-scripts/vps/bridge/connect.js 3
-scripts/vps/bridge/listen.js 1
-
-# THE SITE
-site/lib/serve.js 1
-site/server.js 2
+# A number here only goes down, so a line is never added back.

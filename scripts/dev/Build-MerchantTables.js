@@ -10,6 +10,7 @@ const path = require('node:path');
 const gamemodeSource = require('./gamemode-source.js');
 const TABLES = require(path.join(__dirname, 'GamemodeTables.js'));
 const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
+if (!opts) return;
 const tablesDir = opts['--tables'] || TABLES.DIR;
 const root = path.join(__dirname, '../..');
 const modePath = path.join(root, 'game/gamemode');

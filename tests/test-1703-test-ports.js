@@ -234,7 +234,7 @@ for (const f of sites) {
 {
   const srvSrc = read(path.join(REPO_DIR, 'site', 'server.js'));
   yes('site/server.js says the port it got, not the one it was handed',
-      /}\).listen\(PORT, BIND, function \(\) \{(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
+      /\nserver\.listen\(PORT, BIND, function \(\) \{\s*server\.off\('error', listenFailed\);(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
 }
 yes('saidPort() reads the port off a whole line, and nothing off half of one',
     siteFiles.saidPort('[thornswood-docs] listening on 127.0.0.1:4567\n') === 4567 &&
