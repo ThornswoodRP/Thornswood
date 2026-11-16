@@ -578,7 +578,7 @@ Yes 'every request is logged, refusals too' ($brokerCode.Contains("Log ('REFUSED
 Yes 'the read lane has a pipe and a checkout of its own' ($brokerCode.Contains("'repo-read'") -and $brokerCode.Contains("'thornswood-gate-read'") -and $brokerCode.Contains('$pipe = New-GatePipe $PipeName'))
 Yes '  and is started by the change lane in a runspace of its process, on this same file, with the pipe''s type made first' (
     $brokerCode.Contains(".AddCommand(`$PSCommandPath).AddParameter('Root', `$Root).AddParameter('Lane', 'read')") -and
-    $brokerCode.IndexOf("Add-Type -TypeDefinition `$GatePipeCode }`n`$readState") -gt 0)
+    $brokerCode -match 'Add-Type -TypeDefinition \$GatePipeCode \}\r?\n\$readState')
 $handOn = $brokerCode.IndexOf("if (`$Lane -eq 'read' -and `$req.Lane -ne 'read')")
 Yes '  and runs only what main''s verbs.json marks onlyReads: anything else is handed on after the rules, before any script runs' (
     $handOn -gt $brokerCode.IndexOf('Test-ThornswoodGateRequest -Line $line') -and $handOn -lt $brokerCode.IndexOf('Invoke-Child ([string]$Cfg.pwsh)') -and
