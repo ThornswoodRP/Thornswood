@@ -14,7 +14,8 @@
       the creator's own variable, leaves the folder locked
     - Send-ThornswoodArtifact's real text, with the far side stood in, locks
       a new store
-    - a folder that is already there is left as it is
+    - a folder that is already there is locked when it is not (a first lock
+      that failed, #4212), and left exactly as it is when it is
     - the helper leaves exactly the rules Lock-VpsFolders.ps1 leaves
 #>
 [CmdletBinding()]
@@ -117,12 +118,15 @@ Remove-Item `$zip, `$rec -Force
     Yes '  and current\ and the zip under it take no Users rule' (((Broad (Join-Path $store 'current')) + (Broad (Join-Path $store 'site\site-1.zip'))) -eq 0)
     if (-not (Locked $store)) { $sent | ForEach-Object { Write-Host "      $_" } }
 
-    # ---- a folder already there is left to Lock-VpsFolders.ps1
+    # ---- a folder already there (#4212): locked when it is not, left as it
+    # is when it is
     $old = Join-Path $c 'Thornswood-Caddy-old'
     $null = New-Item -ItemType Directory -Path $old
+    $out = Run51 (Get-ThornswoodLockedFolderScript -Path $old)
+    Yes 'a folder already there and not locked (a first lock that failed): locked now, and says so' ((Locked $old) -and @($out | Where-Object { $_ -like 'locked *' }).Count -eq 1)
     $before = (Get-Acl -LiteralPath $old).Sddl
     $out = Run51 (Get-ThornswoodLockedFolderScript -Path $old)
-    Yes 'a folder already there: left exactly as it was, and nothing said' (((Get-Acl -LiteralPath $old).Sddl -eq $before) -and -not @($out | Where-Object { $_ }).Count)
+    Yes 'a folder already there and locked: left exactly as it was, and nothing said' (((Get-Acl -LiteralPath $old).Sddl -eq $before) -and -not @($out | Where-Object { $_ }).Count)
 
     # ---- -Only: SYSTEM, Administrators and this account and nothing else
     $only = Join-Path $c 'only'
