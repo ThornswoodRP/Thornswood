@@ -47,7 +47,7 @@ function slice(src, start, end) {
 
 const block = slice(gm, '// ==== thornswood custom quests ====', '// ==== end thornswood custom quests ====');
 yes('the custom quests block is in the gamemode', !!block);
-if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; } else {
+if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; }
 
 const PROP = (/var QUEST_PROPERTY = '([^']+)';/.exec(block) || [])[1];
 yes('the block names the property it keeps each person\'s quests in', PROP === 'thornswoodQuests');
@@ -188,7 +188,7 @@ function boot(into, source, expanded) {
   require('../../tests/quest-eligibility-fixture')(ctx, gm);
   ctx.MERCHANT_TRADING.expandedScenes=vm.runInContext('(function(){return '+JSON.stringify(expanded || [])+';})',ctx);
   if(typeof ctx.__beforeQuestStartup==='function')ctx.__beforeQuestStartup(ctx);
-  vm.runInContext(source || block, ctx);
+  vm.runInContext(source || block || '', ctx);
   return { svc: ctx.__thornswoodQuests, ctx: ctx, logged: logged };
 }
 function restart() {
@@ -197,7 +197,10 @@ function restart() {
 }
 
 // ------------------------------------------------------------ the start --
+// The merchant harnesses take this file's text up to the next line as their
+// fixture, so nothing above it opens a block that closes below it.
 let w = boot();
+if (block) {
 yes('the server starts the quest service', !!w.svc && !!w.svc.mineRare &&
     !w.logged.some(function (l) { return /failed to start/.test(l); }));
 yes('the property is made, seen by nobody\'s client', !!w.ctx.__made[PROP] &&
