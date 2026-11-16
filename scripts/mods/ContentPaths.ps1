@@ -269,6 +269,44 @@ function Test-ThornswoodBuiltPath([string[]]$Built, [string]$Path) {
 }
 
 <#
+  WHAT A BOX RUN SENDS (#6351). -Paths as a box run of commit -Commit can
+  send them: a path the commit holds nothing at or under is left out when the
+  build makes it (a built path, or a folder a built path lies in), since an
+  earlier step of the build has still to write it there and commit it
+  (Build-ContentOnBox.ps1, Save-Step). Any other path stays, so a source the
+  commit lacks still stops the artifact by name.
+
+  game/content held only the content plugin. Once #6345 took the plugin out
+  of git, main had nothing at game/content, the first step's run kept the
+  folder because the folder is not itself built, and New-ThornswoodArtifact
+  stopped on it ("has nothing at game/content"): every box content build
+  from 67c120a on ended 1 before it reached the box.
+#>
+function Select-ThornswoodSentPaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$Commit,
+        [Parameter(Mandatory = $true)][string[]]$Paths,
+        [string[]]$Built = @()
+    )
+    if (-not $PSBoundParameters.ContainsKey('Built')) { $Built = Get-ThornswoodBuiltPaths -Repo $Repo }
+    $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try {
+        $lines = @(& git -C $Repo ls-tree -r --name-only --full-tree $Commit -- @Paths 2>&1 | ForEach-Object { "$_" })
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $was }
+    if ($code -ne 0) { throw ("git could not list $Commit's files (exit $code): " + (@($lines | Select-Object -First 2) -join ' ')) }
+    $out = New-Object 'Collections.Generic.List[string]'
+    foreach ($raw in $Paths) {
+        $p = $raw.Replace('\', '/').Trim('/')
+        $held = @($lines | Where-Object { $_ -ceq $p -or $_.StartsWith($p + '/') }).Count
+        $made = (Test-ThornswoodBuiltPath $Built $p) -or @($Built | Where-Object { $_.StartsWith($p + '/') }).Count
+        if ($held -or -not $made) { $out.Add($raw) }
+    }
+    return [string[]]$out.ToArray()
+}
+
+<#
   THE LAID BUILD. Get-ContentBuild.ps1 writes what it laid over a checkout to
   temp\content-laid.json there (temp\ is ignored): the build's server, key
   and commit, and every file it wrote with its sha256. Get-ThornswoodLaidBuild

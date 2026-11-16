@@ -19,8 +19,10 @@
        asking for another, lays one through Get-ContentBuild.ps1 when none
        is laid, and stops naming why when that fails;
     4. the box build carries what each step wrote, ignored as it is, to the
-       steps after it, and a box run sends a built file only once the
-       commit has it;
+       steps after it, and a box run sends a built file, or a folder that
+       holds only built files (game/content, #6351), only once the commit
+       has it, so every step of a build from this commit sends only paths
+       the commit holds;
     5. the workflows and cloud sessions that read a table lay a build first,
        and the hourly revision check, which reads none, lays nothing;
     6. the old way is gone: Rebuild-PullTables.ps1, Rebuild-OnBox.ps1, the
@@ -179,9 +181,41 @@ $box = Src 'scripts/mods/Build-ContentOnBox.ps1'
 Check '4 each step''s box build commits what it wrote past the ignore' (
     $box -match '\$builtHere = Get-ThornswoodBuiltPaths -Repo \$repo' -and $box -match "Invoke-BuildGit \(@\('add', '--force', '--'\) \+ \`$made\)")
 $run = Src 'scripts/mods/Run-OnBox.ps1'
-Check '4 a box run sends a built file only once the commit has it' (
-    $run -match '\$builtNow = Get-ThornswoodBuiltPaths -Repo \$repo' -and $run -match 'ls-tree -r --name-only --full-tree HEAD -- @paths' -and
-    $run.IndexOf('$builtNow =') -lt $run.IndexOf('New-ThornswoodArtifact -Component tools'))
+Check '4 a box run sends what Select-ThornswoodSentPaths keeps, before it makes the artifact' (
+    $run -match "\`$paths = Select-ThornswoodSentPaths -Repo \`$repo -Commit 'HEAD' -Paths \`$paths" -and
+    $run.IndexOf('Select-ThornswoodSentPaths') -lt $run.IndexOf('New-ThornswoodArtifact -Component tools'))
+# What every step of a box build would send from this commit, with nothing
+# built yet, is all in it: New-ThornswoodArtifact stops on a path the commit
+# has nothing at, which is how every content build from 67c120a ended 1 on
+# game/content (#6351).
+$head0 = (TGit $root @('rev-parse', 'HEAD')).Out[0]
+$tools = @('scripts/mods/Add-ContentRecords.py', 'scripts/dev/Build-NpcPopulation.py', 'scripts/mods/Rebuild-ContentTables.ps1')
+$empty = @()
+foreach ($t in $tools) {
+    foreach ($p in @(Select-ThornswoodSentPaths -Repo $root -Commit $head0 -Paths (Get-ThornswoodContentPaths -Repo $root -Tool $t).Paths)) {
+        if (-not @((TGit $root @('ls-tree', '-r', '--name-only', '--full-tree', $head0, '--', $p)).Out | Where-Object { $_ }).Count) { $empty += "$t sends $p" }
+    }
+}
+Check '4 every step of a box build sends only paths this commit holds something at' ($empty.Count -eq 0)
+if ($empty.Count) { Write-Host ('      not in the commit: ' + ($empty -join '; ')) }
+# The rule itself, on a commit of its own.
+$sel = Join-Path ([IO.Path]::GetTempPath()) ('ts-5191-sent-' + [Guid]::NewGuid().ToString('n').Substring(0, 10))
+try {
+    New-Item -ItemType Directory -Path (Join-Path $sel 'src') -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $sel 'src/a.txt'), 'a')
+    TGit $sel @('init', '-q') | Out-Null
+    TGit $sel @('add', '--all') | Out-Null
+    TGit $sel @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-m', 'base') | Out-Null
+    $b = [string[]]@('out/plugin.esp', 'data/t.json')
+    $s1 = @(Select-ThornswoodSentPaths -Repo $sel -Commit HEAD -Paths @('src', 'out', 'data/t.json', 'lost') -Built $b)
+    Check '4 a folder that holds only built files, and a built file, are left out until the commit has them' (($s1 -join ',') -ceq 'src,lost')
+    New-Item -ItemType Directory -Path (Join-Path $sel 'out') -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $sel 'out/plugin.esp'), 'p')
+    TGit $sel @('add', '--all') | Out-Null
+    TGit $sel @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-m', 'step') | Out-Null
+    $s2 = @(Select-ThornswoodSentPaths -Repo $sel -Commit HEAD -Paths @('src', 'out', 'data/t.json', 'lost') -Built $b)
+    Check '4   and go up once a step committed them; a source the commit lacks always stays, so the artifact names it' (($s2 -join ',') -ceq 'src,out,lost')
+} finally { Remove-Item -LiteralPath $sel -Recurse -Force -ErrorAction SilentlyContinue }
 
 # ------------------------------------- 5. workflows and cloud sessions lay it
 foreach ($wf in @('collection-record.yml', 'nexus-run.yml')) {

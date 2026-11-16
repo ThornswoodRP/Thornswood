@@ -21,7 +21,9 @@
      -Keep builds stay. The other server's build of the same commit has a
      key of its own.
   5. A tool that fails stops the run with nothing kept for its key, and a
-     checkout with an uncommitted change is refused before anything runs.
+     checkout with an uncommitted change is refused before anything runs. A
+     runner that throws stops it on a STOP line saying what it threw, which
+     the deploy agent puts in its status (#6351).
   6. The key is held to what ContentPaths.ps1 lists: a file outside the
      inputs (a harness) changes no key.
   7. Every tool runs from the commit's record: the runner is given the
@@ -92,6 +94,7 @@ $co = $env:TS5191_CHECKOUT
 Add-Content -LiteralPath $env:TS5191_CALLS -Value ("$Server $Script " + ($Arguments -join ' '))
 Add-Content -LiteralPath ($env:TS5191_CALLS + '.store') -Value $Collection
 if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { exit 3 }
+if ($env:TS5191_THROW -and $Script -like "*$($env:TS5191_THROW)*") { throw "the stand-in threw before it reached the box for $Script" }
 $src = [IO.File]::ReadAllText((Join-Path $co 'game/data/source.json'))
 function W($rel, $text) { $p = Join-Path $co $rel; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null; [IO.File]::WriteAllText($p, $text) }
 $sitesAt = Join-Path $co 'game/data/station-sites.json'
@@ -141,6 +144,7 @@ try {
     $env:TS5191_CHECKOUT = $co
     $env:TS5191_CALLS = $calls
     $env:TS5191_FAIL = ''
+    $env:TS5191_THROW = ''
     $env:TS5191_MOVED = 'the catalogue'
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
@@ -241,6 +245,16 @@ try {
     Put 'game/data/source.json' '{"v":"not committed"}'
     $r5b = Run
     Yes '5 a checkout with an uncommitted change is refused before any tool runs' ($r5b.Code -ne 0 -and $r5b.Text -match 'uncommitted' -and $r5b.Calls.Count -eq 0)
+    # A runner that throws (Run-OnBox.ps1 refusing its artifact, #6351)
+    # ended the build 1 with no STOP line, so the agent's status had no reason.
+    Fresh $v2
+    Put 'game/data/source.json' '{"v":4}'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'source v4') | Out-Null
+    $env:TS5191_THROW = 'Add-ContentRecords'
+    $r5c = Run
+    $env:TS5191_THROW = ''
+    Yes '5 a runner that throws stops the run on a STOP line naming what it threw' (
+        $r5c.Code -eq 1 -and @($r5c.Lines | Where-Object { $_ -match '^STOP\. the stand-in threw before it reached the box for scripts/mods/Add-ContentRecords\.py .*Nothing was kept\.$' }).Count -eq 1 -and -not $r5c.Key)
 
     # ---- 8. a revision that adds plugins ------------------------------------
     Fresh $v2
