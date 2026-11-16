@@ -761,6 +761,13 @@ namespace Thornswood
             // versions)", Nexus 32444, and skse is deployed by Vortex into the
             // game root the same way.
             var fromCollection = new HashSet<string>(StringComparer.Ordinal) { "Script Extender", "Address library" };
+            // The load order too, until the launcher has made its own folder
+            // (#4680). With Root\Game not made yet, the plugin list in
+            // AppData is the one Vortex writes when it deploys the collection,
+            // which is the next step; on a PC where Skyrim and Vortex never
+            // ran there is none yet, and that is no broken install. Once the
+            // own folder is made, Vortex has deployed, so a missing list is.
+            if (!madeOwn) fromCollection.Add("Load order");
             Bad = 0;
             Later = 0;
             foreach (KeyValuePair<string, bool> c in checks)
