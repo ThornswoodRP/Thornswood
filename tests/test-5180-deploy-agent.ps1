@@ -184,8 +184,8 @@ try {
             Yes '  and -Status prints where the last pass got to, its own lines and the copy server''s, addresses taken out' (
                 $null -ne $st -and $st.Parses -and $st.Text.Contains("'C:\Thornswood-BotPass\run'") -and $st.Text.Contains("'bot-pass.log'") -and
                 $st.Text.Contains('server\bot-pass-server.log') -and $st.Text.Contains("'<address>'") -and $st.Text.Contains('C:\Thornswood-BotPass\passes'))
-            Yes '  and every error the copy''s server threw in its tick, which the last lines miss' (
-                $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -SimpleMatch 'in server.tick' -Context 0,8") -and
+            Yes '  and every error the copy''s server threw in its tick or caught there, with the lines around it, which the last lines miss' (
+                $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8") -and
                 $st.Text.Contains("'server\bot-pass-server.log'"))
             $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
             Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))

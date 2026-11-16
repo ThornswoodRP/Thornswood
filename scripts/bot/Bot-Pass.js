@@ -135,19 +135,38 @@ const PICKS = '[thornswood character] ';
 // behind their login FAIL that way (#6346). A FAIL carries what was thrown
 // while its step ran.
 const TICK_THREW = 'in server.tick';
+// The tick's own frame (ts/index.ts, server.tick()). A throw that something
+// inside the tick caught and wrote out whole, such as the engine's handler of
+// a custom packet (index.ts, console.error(e)), which is where the login runs,
+// ends its stack with this frame and has no "in server.tick" line (#6346).
+const TICK_FRAME = /index\.ts:192:\d+/;
+const FRAME = /^\s+at /;
 
-// What the server's tick threw in lines[from..]: each throw's message and its
-// first two frames, at most three throws, each one line.
+// What the server threw in lines[from..], in its tick or caught inside it:
+// each throw's message and its first two frames, at most three throws, each
+// one line.
 function thrown(lines, from) {
   const out = [];
+  const said = new Set();
+  const one = (at) => {
+    if (said.has(at)) { return; }
+    said.add(at);
+    const what = [lines[at].trim().replace(/^(\[[^\]]*\] )+/, '')];
+    for (let j = at + 1; j < lines.length && what.length < 3 && FRAME.test(lines[j]); j++) { what.push(lines[j].trim()); }
+    out.push(what.join(' ').slice(0, 400));
+  };
   for (let i = from; i < lines.length && out.length < 3; i++) {
-    if (lines[i].indexOf(TICK_THREW) < 0) { continue; }
-    const what = [];
-    for (let j = i + 1; j < lines.length && j <= i + 6 && what.length < 3; j++) {
-      const t = lines[j].trim();
-      if (t) { what.push(t); }
+    if (lines[i].indexOf(TICK_THREW) >= 0) {
+      // Its message is the line after it.
+      if (i + 1 < lines.length && lines[i + 1].trim()) { one(i + 1); } else { out.push('(no message)'); }
+      continue;
     }
-    out.push((what.length ? what.join(' ') : '(no message)').slice(0, 400));
+    if (!TICK_FRAME.test(lines[i]) || !FRAME.test(lines[i])) { continue; }
+    // A stack's last frames: its message is the first line above its frames.
+    let k = i;
+    while (k > from && FRAME.test(lines[k])) { k--; }
+    if (FRAME.test(lines[k]) || (k > 0 && lines[k - 1].indexOf(TICK_THREW) >= 0)) { continue; }
+    one(k);
   }
   return out;
 }
@@ -471,7 +490,7 @@ async function pass(opts) {
     if (!ok) {
       detail += said(step);
       const t = thrown(server.lines, server.lines === stepLines ? stepFrom : 0);
-      if (t.length) { detail += '. The server\'s tick threw: ' + t.join(' | '); }
+      if (t.length) { detail += '. The server threw: ' + t.join(' | '); }
     }
     stepLines = server.lines;
     stepFrom = server.lines.length;
