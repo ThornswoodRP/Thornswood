@@ -335,7 +335,7 @@ if (-not $OrderOnly) {
     # stops. The folder in the build is made the source's whole, so a table
     # the source no longer has does not stay behind in it.
     $tablesFrom = Join-Path (Split-Path -Parent $Gamemode) 'gamemode-tables'
-    if (-not (Test-Path -LiteralPath $tablesFrom -PathType Container)) { throw "not found: $tablesFrom, the gamemode's tables (#5191)" }
+    if (-not (Test-Path -LiteralPath $tablesFrom -PathType Container)) { throw "not found: $tablesFrom, the gamemode's tables. They are the box's content build and never committed (#5191): pwsh scripts\release\Get-ContentBuild.ps1 -Take lays this commit's over the checkout." }
     $tablesTo = Join-Path $Dist 'gamemode-tables'
     if (Test-Path -LiteralPath $tablesTo) { Remove-Item -LiteralPath $tablesTo -Recurse -Force }
     New-Item -ItemType Directory -Path $tablesTo -Force | Out-Null
@@ -646,7 +646,7 @@ if ($loadsLight) {
     # against, so it is not held to the one the plugin was built against.
     if ($lastHeld -and -not $OrderOnly) {
         $lastRecord = [IO.Path]::GetFullPath((Join-Path $Here '..\..\game\data\last-plugin.json'))
-        if (-not (Test-Path -LiteralPath $lastRecord)) { throw "the checkout holds the recipe for $lastName and no game\data\last-plugin.json saying which load order it was built against" }
+        if (-not (Test-Path -LiteralPath $lastRecord)) { throw "the checkout holds the recipe for $lastName and no game\data\last-plugin.json saying which load order it was built against. It is the box's content build and never committed (#5191): pwsh scripts\release\Get-ContentBuild.ps1 -Take lays this commit's over the checkout." }
         $lastOrder = @((ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($lastRecord)) $lastRecord).loadOrder | ForEach-Object { [string]$_ })
         $rs = Get-ThornswoodRecordedSequence ([string[]]$wanted) ([string[]]$lastOrder)
         $sequence = $rs.Wanted

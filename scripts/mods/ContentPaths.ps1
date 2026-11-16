@@ -41,23 +41,26 @@ function Get-ThornswoodContentPaths {
         [Parameter(Mandatory = $true)][string]$Repo,
         [string]$Tool = ''
     )
-    $chain = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json
+    # As hashtables, read by key: a step names only the lists it has (reads,
+    # readsBack, uses, writes), and a missing key reads as nothing even under
+    # Set-StrictMode, which Ship.ps1 runs with (#5191).
+    $chain = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json -AsHashtable
     $paths = @('scripts/mods', 'scripts/dev', 'game/content', 'game/data', 'records', 'layout.json')
-    foreach ($s in @($chain.steps)) {
-        foreach ($p in @(@($s.reads) + @($s.readsBack) + @($s.uses) + @($s.writes) | Where-Object { $_ })) {
+    foreach ($s in @($chain['steps'])) {
+        foreach ($p in @(@($s['reads']) + @($s['readsBack']) + @($s['uses']) + @($s['writes']) | Where-Object { $_ })) {
             $p = [string]$p
             if (-not @($paths | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $paths += $p }
         }
     }
     $watch = @('game', 'records', 'docs/systems')
     $writes = @()
-    foreach ($p in @($chain.steps | ForEach-Object { @($_.writes) } | Where-Object { $_ })) {
+    foreach ($p in @($chain['steps'] | ForEach-Object { @($_['writes']) } | Where-Object { $_ })) {
         $p = [string]$p
         if ($writes -notcontains $p) { $writes += $p }
         if (-not @($watch | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $watch += $p }
     }
     $load = New-Object 'Collections.Generic.Queue[string]'
-    $tools = @(@($chain.steps | ForEach-Object { [string]$_.tool }) + @($chain.steps | ForEach-Object { @($_.uses) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }))
+    $tools = @(@($chain['steps'] | ForEach-Object { [string]$_['tool'] }) + @($chain['steps'] | ForEach-Object { @($_['uses']) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }))
     if ($Tool) { $tools += $Tool }
     foreach ($t in $tools) { $load.Enqueue([string]$t) }
     $seen = @{}
@@ -237,10 +240,22 @@ function Get-ThornswoodContentKey {
   from a laid build, never from the commit.
 #>
 function Get-ThornswoodBuiltPaths {
-    param([Parameter(Mandatory = $true)][string]$Repo)
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        # Only the ones git does not hold: content-tables.json's committed
+        # names the few a step writes that are sources as well (the cut
+        # decisions), and .gitignore lists every other one.
+        [switch]$NotCommitted
+    )
     $chain = Get-ThornswoodContentPaths -Repo $Repo
+    $kept = @()
+    if ($NotCommitted) {
+        $doc = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json -AsHashtable
+        if ($doc['committed']) { $kept = @($doc['committed'].Keys) }
+    }
     $out = New-Object 'Collections.Generic.List[string]'
     foreach ($p in @(@('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($chain.Writes))) {
+        if ($kept -ccontains [string]$p) { continue }
         if (-not $out.Contains([string]$p)) { $out.Add([string]$p) }
     }
     return [string[]]$out.ToArray()
@@ -310,4 +325,36 @@ function Get-ThornswoodLaidBuild {
     }
     if ($off.Count) { throw ("the content build laid over $Repo is not what it laid any more: " + (@($off | Select-Object -First 5) -join ', ') + $(if ($off.Count -gt 5) { ", and $($off.Count - 5) more" } else { '' }) + ". $how.") }
     return [pscustomobject]@{ Server = $Server; Key = [string]$rec.key; Commit = [string]$rec.commit; From = [string]$rec.from; Files = $files }
+}
+
+<#
+  The box's build of -Repo's commit for -Server, laid over it, for a deploy,
+  a Ship or a measurement that reads what the build writes (#5191, stage 4e):
+  the one laid already when it holds (Get-ThornswoodLaidBuild), or else laid
+  now by Get-ContentBuild.ps1 -Take. On the box, from the builds it keeps by
+  their keys (-Kept, C:\Thornswood-ContentBuilds); anywhere else, from the
+  draft Release the deploy agent makes of each build, which takes a GitHub
+  sign-in (GH_TOKEN, or gh's own). Throws, naming why, when neither has a
+  build of the commit's inputs: the gate's Build-Content verb makes one, and
+  the merge release of each merge asks for its own.
+#>
+function Use-ThornswoodContentBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][ValidateSet('dev', 'main')][string]$Server,
+        [string]$Kept = 'C:\Thornswood-ContentBuilds'
+    )
+    try { return (Get-ThornswoodLaidBuild -Repo $Repo -Server $Server) } catch { $null = $_ }
+    $words = @('-NoProfile', '-File', (Join-Path $Repo 'scripts/release/Get-ContentBuild.ps1'), '-Repo', $Repo, '-Server', $Server, '-Take')
+    # Combine, not Join-Path: Join-Path stops on a drive this system lacks
+    # (C:\ off Windows), where the builds are simply not kept.
+    if ($Kept -and (Test-Path -LiteralPath ([IO.Path]::Combine($Kept, $Server)) -PathType Container)) { $words += @('-Kept', $Kept) }
+    $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $out = @(& pwsh @words 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE } finally { $ErrorActionPreference = $was }
+    foreach ($l in $out) { Write-Host ('  ' + $l) }
+    if ($code -ne 0) {
+        $stop = @($out | Where-Object { $_ -match '^(STOP\.|MISSING)' })
+        throw ("the box's content build of this commit for the $Server server could not be laid over $Repo (" + $(if ($stop.Count) { $stop -join ' ' } else { "Get-ContentBuild.ps1 ended $code" }) + ").")
+    }
+    return (Get-ThornswoodLaidBuild -Repo $Repo -Server $Server)
 }

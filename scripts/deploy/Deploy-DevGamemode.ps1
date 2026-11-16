@@ -490,8 +490,15 @@ $alsoSends = @('records/most-online.json', 'records/server-build.json')
 # LastPluginOnBox.ps1), which goes up with the make's own tools.
 if ($LoadOrder) { $alsoSends += 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json' }
 # The gamemode's tables (#5191) are in the artifact with it: the gamemode
-# reads them from the folder beside it as it loads.
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends
+# reads them from the folder beside it as it loads. They, our plugin and the
+# Last plugin's recipe are never committed (#5191, stage 4e): they are the
+# box's content build of this commit for the dev server, laid over this
+# checkout first (on the box from the builds it keeps, elsewhere from the
+# build's draft Release), and the artifact holds them to that build.
+. (Join-Path $Here '..\mods\ContentPaths.ps1')
+$laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev
+Write-Host ('  content build ' + $laidBuild.Key.Substring(0, 12) + ', built from ' + $laidBuild.Commit.Substring(0, 12))
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends -Content dev
 Write-Host ('  artifact ' + (Format-ThornswoodArtifact $artifact))
 $Gamemode = Join-Path $artifact.Folder 'game\gamemode.js'
 $GamemodeTables = Join-Path $artifact.Folder 'game\gamemode-tables'

@@ -100,5 +100,10 @@
   "scripts/mods/Audit-ModMenus.js": "An audit: it says where each mod settings menu keeps its values and writes no table a server or another builder reads.",
   "scripts/mods/Audit-Mods.ps1": "An audit of the game folder's own install (its archives, folders and plugin list), which is what it is about. It reads no plugin's records.",
   "scripts/mods/Build-ContentOnBox.ps1": "Runs this whole chain itself, on the box (#5191, the gate's Build-Content verb): the plugin by Add-ContentRecords.py, then every step here by Run-OnBox.ps1, and keeps what they wrote by its inputs. It writes no table of its own."
+ },
+ "committed": {
+  "docs/systems/cut-items.json": "The cut decisions (#1714): Write-CutItems.js starts from the file it has and adds only what a new plugin brings, so it is a source the chain also writes, and stays in git (#4087).",
+  "docs/systems/cut-kept.json": "Every row the cut rules kept, decided once (#4087): Write-CutItems.js stops without it, so it is a source the chain also writes, and stays in git.",
+  "docs/systems/cut-items.md": "The page of the cut decisions, written beside cut-items.json from the same list, and kept with it."
  }
 }
