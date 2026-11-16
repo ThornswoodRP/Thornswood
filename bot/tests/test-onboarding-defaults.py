@@ -290,11 +290,14 @@ yes('7 somebody with no role sees #rules and #welcome-travelers, nothing else',
     B._seen_by(None) == '#rules, #welcome-travelers')
 member_sees = B._seen_by('Member').split(', ')
 yes('7 a Member sees #welcome, #start-here, #disboard, the Tickets, Information, '
-    'Roleplay Guide and Applications channels, and no Playtester channel',
+    'Roleplay Guide and Applications channels, #general-chat and '
+    '#travelers-questions, and no other Playtester channel',
     all(c in member_sees for c in ('#rules', '#welcome', '#start-here', '#disboard',
                                    '#get-help', '#news', '#faq', '#lore',
-                                   '#apply-to-playtest', '#welcome-travelers'))
-    and '#general-chat' not in member_sees)
+                                   '#apply-to-playtest', '#welcome-travelers',
+                                   '#general-chat', '#travelers-questions'))
+    and not any(c in member_sees for c in ('#media', '#suggestions',
+                                           '#choose-your-hold')))
 yes('7 the audit says them from the plan, not a fixed old order',
     "_seen_by('Member')" in audit and '_seen_by(None)' in audit
     and 'so Start Here only' not in audit)

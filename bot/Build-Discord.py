@@ -516,7 +516,8 @@ for _name in FACTION_OFFICE_ROLES:
 ROLES.append(('Business Owner', 0xA08C6A, False, NONE))
 
 # Joined, and answered the rules and age questions (#3317). Member sees the
-# front door and Information, read only; Playtester opens the rest.
+# front door, Information and #general-chat, read only, and asks in
+# #travelers-questions; Playtester opens the rest.
 ROLES.append(('Member', 0x8D9682, False, NONE))
 
 # THE ONE A BAN DEPENDS ON, and it was never created.
@@ -587,7 +588,10 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 # #rules gives Member (bot_rules_gate.py, #5841), and the reaction is the
 # record that they accept the rules and are 18 or over. Member reads the
 # welcome and about channels and applies: the rest of Start Here, Tickets,
-# Applications, Information and the Roleplay Guide. Playtester, given when a
+# Applications, Information and the Roleplay Guide. Member also reads
+# #general-chat and asks in #travelers-questions (Patrick, 16 Nov 2026), so
+# somebody who has not applied sees the server talking and has somewhere to
+# ask. Playtester, given when a
 # playtest application is approved, opens everything else that is not staff.
 # Staff see their own space and Staff, and the council sees every space. From
 # #3317 (22 Oct) until then somebody with no role saw Start Here, Tickets and
@@ -730,7 +734,20 @@ PLAN = [
         topic='A card for everybody who joins, posted by the bot. React to the '
               'rules in <#RULES> for the Member role.',
         was=(('Thornswood', 'welcome-travelers'),)),
+   # Somebody who has not applied yet asks here, before Playtester opens
+   # anything else: Member talks, Playtester and staff read and answer
+   # (Patrick, 16 Nov 2026: "what would we name the channel they can post
+   # in?", then "travelers-questions").
+   dict(kind='text',  name='travelers-questions', key='QUESTIONS', mode='open',
+        extra_roles=('Member',),
+        topic='Questions before you apply, or about anything you have read so '
+              'far. Ask here and staff will answer.'),
+   # Member reads it and does not post, so somebody who has not applied
+   # sees the server is alive; Playtester and staff talk (Patrick, 16 Nov
+   # 2026: "make Start Here and General Chat Read Only at the member level
+   # before applying").
    dict(kind='text',  name='general-chat', key='GENERAL', mode='open',
+        read_extra=('Member',),
         topic="Out of character chat for everyone. Talk Thornswood, Skyrim, or "
               "whatever's on your mind, and keep it friendly. Bug reports go in "
               "<#RESULTS>, screenshots and clips go in <#MEDIA>.",
@@ -1073,7 +1090,8 @@ RETIRED = [
 # Added 2 October after a run made channels again that had been moved or
 # renamed, and -Prune was one keystroke from taking the originals with it.
 KEEP = (
-    'general-chat', 'welcome-travelers', 'server-progression-and-economy',
+    'general-chat', 'welcome-travelers', 'travelers-questions',
+    'server-progression-and-economy',
     'play-testing', 'suggestions', 'dev-test-results', 'dev-test-findings',
     'test-results', 'test-tasks', 'jukebox',
     'test-findings', 'known-issues', 'dev-test-tasks',
@@ -1330,6 +1348,11 @@ def _seen_by(role):
                 names.append('#' + ch['name'])
             elif role is not None and mode in _PLAIN_MODES:
                 readers, talkers, _ = mode_audience(mode)
+                # A channel's own read_extra and extra_roles let one more
+                # role in there alone (#general-chat and #travelers-questions
+                # for Member).
+                readers = tuple(readers) + tuple(ch.get('read_extra') or ())
+                talkers = tuple(talkers) + tuple(ch.get('extra_roles') or ())
                 if role in readers or role in talkers:
                     names.append('#' + ch['name'])
     return ', '.join(names) or 'nothing'
@@ -3097,7 +3120,8 @@ ROLE_DOES = {
                'DISBOARD and any added later. A build gives it.',
     'Playtester': 'Plays the main build. Opens the Discord past Information.',
     'Member': 'Reacted to the rules in #rules, which says 18 or over and the '
-              'rules accepted. Sees Start Here, Applications and Information.',
+              'rules accepted. Sees Start Here, Applications and Information, '
+              'reads #general-chat and asks in #travelers-questions.',
     'Banned': 'Takes the site and the game away (site/server.js, access.banned).',
     'Thalmor Boot-Licker': 'A Patreon tier; Patreon gives and takes it.',
     'Talos Worshiper': 'A Patreon tier; Patreon gives and takes it.',

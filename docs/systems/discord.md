@@ -166,7 +166,7 @@ Holders of Moderator also talk in the Gamemasters space.
 | Blades Officer | #A08560 | no | nothing of its own | the build | An Officer of Blades: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Volkihar Clan Officer | #A08560 | no | nothing of its own | the build | An Officer of Volkihar Clan: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Business Owner | #A08C6A | no | nothing of its own | the build | Owns a business book in the game. Support gives it. |
-| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Sees Start Here, Applications and Information. |
+| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Sees Start Here, Applications and Information, reads #general-chat and asks in #travelers-questions. |
 | Banned | #4A4A4A | no | nothing of its own | the build | Takes the site and the game away (site/server.js, access.banned). |
 | News Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
 | Updates Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
@@ -274,7 +274,8 @@ Category mode: open. It was Thornswood.
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #welcome-travelers | text | read | everybody | the council | posts: the council; was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. React to the rules in #rules for the Member role. |
-| #general-chat | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
+| #travelers-questions | text | open | everybody on staff, Playtester, Member | everybody on staff, Playtester, Member | topic: Questions before you apply, or about anything you have read so far. Ask here and staff will answer. |
+| #general-chat | text | open | everybody on staff, Member, Playtester | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
 | #media | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #media in Thornswood; topic: Screenshots and clips. Talk about one in a thread under it. |
 | #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |
 | #suggestions | forum | open | everybody on staff, Playtester | everybody on staff, Playtester | was #suggestions in Help; topic: Mods and features you want. Nexus link if it's a mod, because whether it works here depends on how it's built. |
@@ -721,6 +722,6 @@ Categories retired by the plan, removed by `-Prune` once empty: Help, The Holds,
 
 Channel names the build no longer wants, removed by `-Prune`: tech-help, looking-for-group, off-topic, downloads, links-and-credits, Small Table, The Longhouse, Away, screenshots, clips, bot-commands, The Bannered Mare, The Road, test-these, test-tasks-archive, tickets-and-applications, tickets, seats.
 
-Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-news, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
+Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-news, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, travelers-questions, welcome-travelers.
 
 Roles never deleted: every Jarl, Citizen and office role, and every faction's Leader, member and Officer role.

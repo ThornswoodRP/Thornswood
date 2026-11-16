@@ -27,7 +27,8 @@ So this checks:
   3. After it, by the plan's own modes: a newcomer sees and cannot post in
      #rules and #welcome-travelers and sees nothing else of the gate; a
      Member sees and cannot post in the welcome, about, ticket and
-     application channels and #disboard, and still not #general-chat; nobody
+     application channels and #disboard; a Member reads #general-chat and
+     posts in #travelers-questions, and neither is a newcomer's; nobody
      but the bot posts in #welcome-travelers; in #disboard a Member and a
      Playtester run no command and staff talk and run commands. #disboard is
      #say-hello renamed.
@@ -163,7 +164,7 @@ MEMBERS_READ = ['Tickets', 'Applications', 'Information', 'Roleplay Guide',
                 '#apply-to-playtest', '#apply-for-a-seat', '#apply-for-staff',
                 '#news', '#updates', '#faq', '#game-rules', '#lore',
                 '#factions', '#disboard']
-BEHIND = ['#general-chat', '#media', '#choose-your-hold', '#suggestions']
+BEHIND = ['#media', '#choose-your-hold', '#suggestions']
 
 # ------------------------------------------------------ 1. the problem --
 yes('as the audit read it, a newcomer sees neither #rules nor #welcome-travelers',
@@ -248,6 +249,26 @@ for p in BEHIND:
     yes('a Member still does not see %s, which is Playtester\'s' % p,
         not resolve(everyone, member, places[p]).view_channel)
     yes('  and a Playtester does', resolve(everyone, tester, places[p]).view_channel)
+
+# Patrick, 16 Nov 2026: somebody who has not applied reads #general-chat and
+# asks in #travelers-questions; a newcomer with no role sees neither.
+for p in ('#general-chat', '#travelers-questions'):
+    yes('a newcomer does not see %s' % p,
+        not resolve(everyone, newcomer, places[p]).view_channel)
+got = resolve(everyone, member, places['#general-chat'])
+yes('a Member reads #general-chat and cannot post or answer in a thread there',
+    got.view_channel and got.read_message_history and not got.send_messages
+    and not got.send_messages_in_threads and not got.create_public_threads)
+got = resolve(everyone, member, places['#travelers-questions'])
+yes('a Member asks in #travelers-questions',
+    got.view_channel and got.read_message_history and got.send_messages)
+for p in ('#general-chat', '#travelers-questions'):
+    for who, m in (('a Playtester', tester), ('staff (Support)', support),
+                   ('a Playtester who is a Member as well',
+                    Member([roles['Member'], roles['Playtester']]))):
+        got = resolve(everyone, m, places[p])
+        yes('%s talks in %s' % (who, p), got.view_channel and got.send_messages)
+yes('#travelers-questions is never deleted by a prune', 'travelers-questions' in B.KEEP)
 
 hello = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'disboard']
 yes('#disboard is #say-hello renamed in Start Here, so its id and history go '
