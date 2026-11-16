@@ -53,8 +53,9 @@
   definition, or in the log.
 
   Kept: seven daily and four weekly. A weekly is whichever run lands on a
-  Sunday. Nothing else is deleted, ever, including anything a person put in
-  that folder by hand.
+  Sunday. A copy made without the game servers is marked .incomplete when it
+  is made and never pushes a whole copy out (#4205). Nothing else is deleted,
+  ever, including anything a person put in that folder by hand.
 
   Restoring one is RESTORING.md in the ops repo, which is also how you check that any of
   this works. A backup nobody has restored is a guess.
@@ -505,20 +506,41 @@ if ($Plain) {
   }
 }
 
+# ------------------------------------------------------------ marked ----
+# A copy made without the game servers is marked now, as it is made (#4205),
+# so retention below never counts it as a daily or a weekly; the run still
+# ends non-zero at the end, as before.
+$made = $(if ($Plain) { $archive } else { $archive + '.enc' })
+if ($serversNotTaken) { Set-Content -LiteralPath ($made + '.incomplete') -Value ('made without the game servers: ' + $serversNotTaken) -Encoding UTF8; Note ('  marked    ' + [IO.Path]::GetFileName($made) + ' as made without the game servers') }
+
 # ------------------------------------------------------------ retention ----
 # A weekly is a run that landed on a Sunday. Everything is matched by name, so
 # nothing anybody put in this folder by hand is ever considered.
+# A copy made without the game servers (#4205) has <archive>.incomplete
+# beside it, written when it was made, and never pushes a whole copy out:
+# counted as a daily, a week of nights without the servers left no copy with
+# the world in it. It takes only a daily place no whole daily needs, and only
+# while it is newer than the newest whole copy, so the server still keeps no
+# more than seven daily and four weekly copies (site/data/site/privacy.md).
+# Its mark goes with it.
 $all = Get-ChildItem -LiteralPath $Out -File |
        Where-Object { $_.Name -match '^thornswood-(\d{8})-(\d{6})\.zip(\.enc)?$' } |
        Sort-Object Name -Descending
-$weekly = @(); $daily = @()
+$weekly = @(); $daily = @(); $partial = @()
 foreach ($f in $all) {
+  if (Test-Path -LiteralPath ($f.FullName + '.incomplete')) { $partial += $f; continue }
   $d = [datetime]::ParseExact($f.Name.Substring(11, 8), 'yyyyMMdd', $null)
   if ($d.DayOfWeek -eq 'Sunday') { $weekly += $f } else { $daily += $f }
 }
 $drop = @()
 if ($daily.Count  -gt $KeepDaily)  { $drop += $daily[$KeepDaily..($daily.Count - 1)] }
 if ($weekly.Count -gt $KeepWeekly) { $drop += $weekly[$KeepWeekly..($weekly.Count - 1)] }
+# The stamp, yyyyMMdd-HHmmss, orders copies whatever their ending.
+$newestWhole = @($daily + $weekly | ForEach-Object { $_.Name.Substring(11, 15) } | Sort-Object -Descending | Select-Object -First 1)
+$room = $KeepDaily - [Math]::Min($daily.Count, $KeepDaily)
+$keepPartial = @($partial | Where-Object { -not $newestWhole.Count -or $_.Name.Substring(11, 15) -gt $newestWhole[0] } |
+                 Select-Object -First $room | ForEach-Object { $_.Name })
+$drop += @($partial | Where-Object { $keepPartial -notcontains $_.Name })
 # A copy that will not delete is said, by name and the kind of error, never
 # logged as dropped (#2354). It used to be Remove-Item -EA SilentlyContinue
 # and then "dropped" whatever happened, so a copy past the seven daily and
@@ -532,6 +554,8 @@ foreach ($f in $drop) {
   try {
     Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
     if (Test-Path -LiteralPath $f.FullName) { throw [IO.IOException]::new('still there after the delete') }
+    $mark = $f.FullName + '.incomplete'
+    if (Test-Path -LiteralPath $mark) { Remove-Item -LiteralPath $mark -Force -ErrorAction Stop }
     Note "  dropped   $($f.Name)"
   } catch {
     $ex = $_.Exception
@@ -548,7 +572,7 @@ if ($stuck.Count) {
   Remove-Item -LiteralPath $failedList -Force -ErrorAction Stop
   Note '  every copy past retention went this time, so retention-failed.txt is gone'
 }
-Note ("  kept      {0} daily, {1} weekly" -f [Math]::Min($daily.Count, $KeepDaily), [Math]::Min($weekly.Count, $KeepWeekly))
+Note ("  kept      {0} daily, {1} weekly, {2} made without the game servers" -f [Math]::Min($daily.Count, $KeepDaily), [Math]::Min($weekly.Count, $KeepWeekly), $keepPartial.Count)
 if ($stuck.Count) {
   throw ("Retention failed: {0} backup(s) past the seven daily and four weekly would not delete (listed in {1}). Tonight's backup itself was made." -f $stuck.Count, $failedList)
 }
