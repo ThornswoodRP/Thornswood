@@ -352,15 +352,17 @@ Yes '-Stdin: one byte more is refused, before anything is sent' ($null -ne $thre
 Reset
 Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" -Bypass | Out-Null
 Yes '-Bypass: the command line says -ExecutionPolicy Bypass' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand *')
-# A new box has only the Windows PowerShell Windows comes with until
-# Bootstrap-VPS.ps1 puts PowerShell 7 on it, so -NewBox, which Remote.ps1
-# passes for that script alone, is the one line that names it (#5356).
-Reset
-Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" -NewBox | Out-Null
-Yes '-NewBox: the command line starts the Windows PowerShell a new box comes with' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'powershell -NoProfile -EncodedCommand *')
+# A new box runs PowerShell 7 from its first login (Setup-SshKey.ps1 -NewBox
+# puts it there, #5356), so #6158 took Send-Script.ps1's -NewBox switch out:
+# every call starts pwsh, and there is no switch for another shell (#6311).
+Yes 'Invoke-ThornswoodRemote has no -NewBox, or any switch for another shell' (
+    @((Get-Command Invoke-ThornswoodRemote).Parameters.Keys | Where-Object { $_ -in @('NewBox', 'Shell', 'WindowsPowerShell') }).Count -eq 0)
 Reset
 Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" | Out-Null
-Yes '  and without it, pwsh' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'pwsh -NoProfile -EncodedCommand *')
+Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script (Long 'eight' 0) | Out-Null
+$lines = @(Calls 'ssh' | ForEach-Object { [string]$_.Command })
+Yes ('every command line starts pwsh, short or long (' + $lines.Count + ' calls)') (
+    $lines.Count -eq 2 -and @($lines | Where-Object { $_ -notlike 'pwsh -NoProfile *' }).Count -eq 0)
 
 # ---- 6. two runs at once ------------------------------------------------------------
 #
