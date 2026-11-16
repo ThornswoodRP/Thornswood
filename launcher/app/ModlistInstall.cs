@@ -33,6 +33,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -101,8 +102,7 @@ namespace Thornswood
 
         public ModlistArchive Archive(ulong hash)
         {
-            foreach (ModlistArchive a in Archives) if (a.Hash == hash) return a;
-            return null;
+            return Archives.FirstOrDefault(a => a.Hash == hash);
         }
 
         /// <summary>A path inside the install, parts joined with \, or null for one that is not.</summary>
@@ -114,9 +114,8 @@ namespace Thornswood
         {
             if (string.IsNullOrEmpty(p)) return null;
             var parts = new List<string>();
-            foreach (string x in p.Replace('/', '\\').Split('\\'))
+            foreach (string x in p.Replace('/', '\\').Split('\\').Where(part => part.Length > 0))
             {
-                if (x.Length == 0) continue;
                 if (x == "." || x == ".." || x.IndexOfAny(NotInName) >= 0) return null;
                 foreach (char c in x) if (c < ' ') return null;
                 if (x.Trim().Length == 0 || x.EndsWith(" ", StringComparison.Ordinal) || x.EndsWith(".", StringComparison.Ordinal)) return null;
@@ -163,11 +162,10 @@ namespace Thornswood
             try
             {
                 using (ZipArchive zip = ZipFile.OpenRead(path))
-                    foreach (ZipArchiveEntry e in zip.Entries)
+                    foreach (ZipArchiveEntry e in zip.Entries.Where(z => !z.FullName.EndsWith("/", StringComparison.Ordinal)))
                     {
-                        if (e.FullName.EndsWith("/", StringComparison.Ordinal)) continue;
                         if (e.Length > 256L * 1024 * 1024) throw new ModlistStop("The modlist's entry " + e.FullName + " is " + e.Length + " bytes, more than any file it may hold.");
-                        var ms = new MemoryStream();
+                        using var ms = new MemoryStream();
                         using (Stream s = e.Open()) s.CopyTo(ms);
                         if (e.FullName == "modlist") json = ms.ToArray();
                         else m.data[e.FullName] = ms.ToArray();
@@ -282,7 +280,7 @@ namespace Thornswood
                     if (n != 20) throw new ModlistStop("A patch in the modlist names its file by a SHA1 that is not 20 bytes.");
                     byte[] want = br.ReadBytes(n);
                     if (Encoding.ASCII.GetString(br.ReadBytes(3)) != ">>>") throw new ModlistStop("A patch in the modlist has no commands where they start.");
-                    var output = new MemoryStream();
+                    using var output = new MemoryStream();
                     while (br.BaseStream.Position < br.BaseStream.Length)
                     {
                         byte c = br.ReadByte();
@@ -395,9 +393,8 @@ namespace Thornswood
             int written = 0;
 
             var byArchive = new Dictionary<ulong, List<ModlistFile>>();
-            foreach (ModlistFile f in m.Files)
+            foreach (ModlistFile f in m.Files.Where(d => d.Kind == "FromArchive" || d.Kind == "PatchedFromArchive"))
             {
-                if (f.Kind != "FromArchive" && f.Kind != "PatchedFromArchive") continue;
                 List<ModlistFile> l;
                 if (!byArchive.TryGetValue(f.ArchiveHash, out l)) byArchive[f.ArchiveHash] = l = new List<ModlistFile>();
                 l.Add(f);
@@ -444,9 +441,8 @@ namespace Thornswood
                 finally { if (Directory.Exists(work)) Directory.Delete(work, true); }
             }
 
-            foreach (ModlistFile f in m.Files)
+            foreach (ModlistFile f in m.Files.Where(d => d.Kind == "InlineFile" || d.Kind == "RemappedInlineFile"))
             {
-                if (f.Kind != "InlineFile" && f.Kind != "RemappedInlineFile") continue;
                 string dest = Under(target, f.To);
                 byte[] b = m.Data(f.DataId);
                 if (f.Kind == "RemappedInlineFile") b = new UTF8Encoding(false).GetBytes(Remap(new UTF8Encoding(false).GetString(b), game, target, downloads));
