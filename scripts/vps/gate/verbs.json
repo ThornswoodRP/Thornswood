@@ -905,7 +905,6 @@
         "scripts/dev/Build-CastTable.py",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
-        "scripts/dev/Build-ResourceLocations.py",
         "scripts/dev/Build-StationSites.py",
         "scripts/dev/Build-WoodworkingBenches.py",
         "scripts/dev/MerchantRoster.py",
