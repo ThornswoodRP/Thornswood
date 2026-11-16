@@ -24,6 +24,8 @@ else does.
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
 | `/api/play/start`, `/api/play/end`, `/api/play/logs` | POST | the launcher, as a session starts, as it ends, and with the logs after (`launcher\app\Discord.cs`) |
 | `/api/play/roster` | POST | the launcher, for the names on the character cards (`launcher\app\Roster.cs`) |
+| `/api/play/characters` | POST | the launcher, at every Play and after a character is picked, deleted or played: the account's list of characters, their slots and the spare New character uses, kept in `linked.json` (#5938, `launcher\app\Chars.cs`) |
+| `/api/play/settings` | POST | the launcher, as it starts, before every launch, when the game closes and when its own settings change: the account's settings files, kept in `settings.json` (#5939, `launcher\app\YourSettings.cs`) |
 | `/api/play/pass` | POST | the launcher, when a character is picked at the game's menu and every minute while the game runs: a join pass the game server checks, or a plain no (#937, `launcher\app\Discord.cs`, which `launcher\app\JoinPass.cs` calls) |
 | `/auth/discord` | GET | the launcher's link button, through the browser; Discord sends the browser back to `/auth/discord/callback` (`launcher\app\Discord.cs`) |
 | `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |
@@ -115,6 +117,15 @@ token, which Releases hold the setup programs and the move program.
 where nothing answers, so what its copy serves never depends on the live
 Releases (#5547).
 
+### Settings for where it listens and what it reads
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `THORNSWOOD_DOCS_EXPOSE` | unset | `1` opens the site on every address as plain HTTP, with a warning at every start. Unset, or anything else, keeps it on 127.0.0.1, and `THORNSWOOD_DOCS_LOCAL=1` keeps it there even when this is `1` (`lib\base.js`). |
+| `THORNSWOOD_TRUSTED_PROXIES` | empty | Comma separated addresses of proxies on another box whose `X-Forwarded-For` the site believes, for the report limit and the sign in log. Loopback, which is Caddy, is always believed, and only the last forwarded hop is taken (`lib\limits.js`). |
+| `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
+| `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
+
 To see the door answer, from a second window:
 
 ```
@@ -154,7 +165,7 @@ shell's history would keep it. `-Password` reads the `config.json`
 on the VPS, changes the member password in it and keeps every other setting.
 A `config.json` there that will not read as JSON, an empty one included, is
 left exactly as it is and the password is not changed.
-`tests\test-docs-password.ps1` runs that part of the script against copies.
+`scripts\tests\test-docs-password.ps1` runs that part of the script against copies.
 
 `GET /api/deploys` says which commit, zip and hash each part on the box runs
 and when each last went out, read from the records the deploy scripts leave
@@ -222,7 +233,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
 | `/api/gallery/approved` | DELETE | staff | `{name}`; a `deleteFile` is no longer read | `200 {ok,removed,removedApproved,removedPending,fileDeleted}`; takes the name off `gallery.json` and off the pending queue, which is how staff turn down a waiting picture (there is no Reject); clears reports on that name; deletes the file, unless the picture had an open report, when it is kept unshown for `GALLERY_HOLD_DAYS` (#2352); `400` with no name |
-| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved |
+| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved; a repeat from the same account on the same picture updates its first row and keeps its id; `429` with `Retry-After` past the report limit (five an hour, twenty a day, per account) |
 | `/api/gallery/reports` | GET | staff | none | `200 {reports:[...]}` |
 | `/api/gallery/report/dismiss` | POST | staff | `{id}` | `200 {ok,removed}` |
 

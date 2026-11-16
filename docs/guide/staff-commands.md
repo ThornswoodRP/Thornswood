@@ -27,7 +27,7 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 | `/tp` | Lists the towns you can name |
 | `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
-| `/spawn <creature> [count]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40 |
+| `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
 
 The count is the last word, and only when it is a number with a name in front of it.
@@ -39,12 +39,38 @@ Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourse
 | Command | What it does |
 | --- | --- |
 | `/give <person> <item> [count]` | Puts it in their pack |
-| `/spawn <creature> [count] on <person>`, `/spawnat <person> <creature> [count]` | Puts it beside them |
+| `/spawn <creature> [count] on <person> [keep]`, `/spawnat <person> <creature> [count] [keep]` | Puts it beside them, temporary unless the line ends in `keep`, as above |
 | `/tp <person> <place or person>` | Sends them to a place, or to somebody else |
 | `/bring <person>` | Moves them to you |
 | `/goto <person>` | Moves you to them |
 
 Somebody frozen stays frozen where they are sent.
+
+## Spawned creatures
+
+Staff.
+
+| Command | What it does |
+| --- | --- |
+| `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
+
+## Buildings, stalls and carts
+
+A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff run them at any building or stall. The cart stops and roads are staff's alone. The panels send these lines rather than anybody typing them; [docs/systems/commands.md](../systems/commands.md) names each button.
+
+| Command | What it does |
+| --- | --- |
+| `/evict`, `/rent <gold>`, `/rent -`, `/rent paid <profile> <gold>` | Ends the claim on the door opened in the last minute, sets its rent, takes the rent off, or marks rent paid, at any building. Logged for staff (#2551). Evict, Set rent, No rent and Rent paid on the Office page of K send them |
+| `/stall end` | Ends somebody's keeping of a market stall, logged. End this claim on the stall's panel sends it (#3160) |
+| `/cart staff`, `/cart draft`, `/cart confirm <base>`, `/cart add <stop>`, `/cart bring <cart>` | The cart stops and roads: opens them, drafts and confirms a change, puts a new cart at a stop, and brings in a cart on the road. Cart stops and roads on the Office page of K opens them (#3158) |
+
+## Crafting
+
+Staff.
+
+| Command | What it does |
+| --- | --- |
+| `/craftstaff pick`, `raise`, `recipe`, `recipes`, `give` | The crafting card on the Office page of K (#3167): picks somebody in the world, raises one of their ranks one step, says why a recipe is stuck for them, and gives back an item with a count and a reason. Never on yourself for `raise` and `give`. Sent by the card's buttons, never typed |
 
 ## Keeping order
 

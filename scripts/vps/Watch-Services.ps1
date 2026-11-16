@@ -58,7 +58,7 @@
   Discord where a pasted webhook points and refuses any other channel, and
   the report this prints with no switch says where the one on the box points
   (#2501: until 12 Oct nothing checked, and the bot itself was saying the
-  watchdog's messages in the dev updates channel).
+  watchdog's messages in #staff-news).
 
   Anything else on this box that needs to tell staff something (the bot's own
   wrapper, issue #449) appends a line of the same shape to alerts.jsonl and
@@ -972,7 +972,7 @@ $tellOnly = @(
      Fix = 'A restart does not mend a file, so the watchdog leaves the website running, and the site writes nothing over a file it cannot read. Repair the file by hand on the box, from the backup in C:\Thornswood-Backup; the site reads it again at its next request.' },
   # Caddy's own certificate (#2995), which only this box can reach now.
   @{ Name = 'cert'; Say = 'The certificate Caddy holds for thornswood.net'; Fails = 'needs a look'; Recovers = 'is fine again'; Cert = 'https://thornswood.net/'; Days = 14
-     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Cloudflare reaches it over port 443 for the renewal, so Set-WebFirewall.ps1 -Check says whether 443 still takes Cloudflare.' }
+     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Let''s Encrypt''s check reaches Caddy through Cloudflare, down the tunnel to 443 on the box (#5351), so Set-WebFirewall.ps1 -Check says whether the tunnel carries both names.' }
 )
 
 # What is wrong with one of $checks when it does not answer, in words.

@@ -176,12 +176,13 @@ function Get-IndexText([string]$dir) {
     # Ordinal, so Windows PowerShell and PowerShell 7 agree on the order. The
     # culture comparers of the two runtimes do not agree about hyphens.
     # By path under $dir, area first: release\Ship.ps1. scripts\oneoff is parked
-    # history with a README of its own, so it is not listed.
+    # history with a README of its own, so it is not listed, and scripts\tests
+    # holds the scripts' harnesses (#5341), which tests\README.md describes.
     $root = (Resolve-Path -LiteralPath $dir).Path.TrimEnd('\', '/')
     [string[]]$names = @(Get-ChildItem -LiteralPath $dir -Filter '*.ps1' -File -Recurse |
                          Where-Object { $_.Extension -eq '.ps1' } |
                          ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\', '/') } |
-                         Where-Object { $_ -notlike 'oneoff/*' })
+                         Where-Object { $_ -notlike 'oneoff/*' -and $_ -notlike 'tests/*' })
     [Array]::Sort($names, [StringComparer]::OrdinalIgnoreCase)
 
     $out = New-Object System.Collections.Generic.List[string]

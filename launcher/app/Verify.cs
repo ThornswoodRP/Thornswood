@@ -229,6 +229,7 @@ namespace Thornswood
             foreach (string p in want)
             {
                 if (haveSet.Contains(p)) continue;
+                if (NotMadeYet(p, issues)) continue;
                 bool onDisk = true;
                 try { onDisk = File.Exists(Path.Combine(dataDir, p)); } catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is on disk", ex); }
                 Issue off = onDisk
@@ -389,6 +390,7 @@ namespace Thornswood
                 {
                     if (!File.Exists(Path.Combine(data, p)))
                     {
+                        if (NotMadeYet(p, issues)) continue;
                         var gone = Issue.Of(IssueKind.Plugins, p + " is in the list but the file is not in Data.",
                                             "Fix puts it back from Vortex's copy, or fetches the server's when it is ours.", VortexDeploys, true);
                         gone.FileMissing = true;
@@ -777,7 +779,7 @@ namespace Thornswood
             if (cfg != null)
             {
                 try { why = OwnGame.WhyNot(cfg, OwnGame.DeploysInto(cfg)); }
-                catch (Exception ex) { why = ex.Message; }
+                catch (Exception ex) { why = Failure.Why("Verify, asking the server", ex, "the server"); }
             }
             string what = Paths.OwnFirst
                 ? "Thornswood's own Skyrim folder was chosen when Thornswood was installed and is not made yet, so there is no game to check."
@@ -896,6 +898,30 @@ namespace Thornswood
         }
 
         /// <summary>True when the game gives the plugin no normal index: not in Data, an .esl, or flagged light.</summary>
+        /// <summary>
+        /// Thornswood-Last.esp, when the list names it and Data does not have
+        /// it yet, is made here from the release's recipe (#2791, LastPlugin)
+        /// and never comes from Vortex or the server: Play and Fix make it
+        /// (MadeFromGame), and Upkeep's line about the files made from the game
+        /// says what stops it when it cannot be. So it is one issue that says
+        /// that, never "not installed" (which Play answered with "Fix will not
+        /// help", #6181) and never counted as a missing mod.
+        /// </summary>
+        static bool NotMadeYet(string p, List<Issue> issues)
+        {
+            if (!LastPlugin.Makes(Paths.Game, p)) return false;
+            try { if (File.Exists(Path.Combine(Path.Combine(Paths.Game, "Data"), p))) return false; }
+            catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is made", ex); return false; }
+            foreach (Issue had in issues) if (had.Plugin == p && had.Kind == IssueKind.MadeFromGame) return true;
+            var i = Issue.Of(IssueKind.MadeFromGame,
+                p + " is made on this computer from your own plugins and has not been made yet.",
+                "Fix makes it from your game's own files.",
+                "When Fix cannot make it, the line about the files Thornswood makes from your game says which of your plugins stops it.", true);
+            i.Plugin = p;
+            issues.Add(i);
+            return true;
+        }
+
         static bool LightOrMissing(string name)
         {
             return !InData(name) || Checks.TakesNoPlace(name);
@@ -1015,7 +1041,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                say("The plugin list could not be written (" + ex.Message.TrimEnd('.') + "). Close Skyrim and press Fix again.");
+                say("The plugin list could not be written (" + Failure.Why("Verify, writing the plugin list", ex, "plugins.txt") + "). Close Skyrim and press Fix again.");
                 return 0;
             }
             if (added.Count > 0)
@@ -1147,7 +1173,7 @@ namespace Thornswood
             try { bytes = release(i.Plugin); }
             catch (Exception ex)
             {
-                say(i.Plugin + ": the release's copy could not be read (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                say(i.Plugin + ": the release's copy could not be read (" + Failure.Why("Verify, the release's copy of " + i.Plugin, ex, i.Plugin) + "), so nothing was changed.");
                 return false;
             }
             if (bytes == null)
@@ -1191,7 +1217,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                say(i.Plugin + " could not be written (" + ex.Message.TrimEnd('.') + "). Close Skyrim and Vortex and press Fix again.");
+                say(i.Plugin + " could not be written (" + Failure.Why("Verify, writing " + i.Plugin, ex, i.Plugin) + "). Close Skyrim and Vortex and press Fix again.");
                 return false;
             }
             lock (crcCache) { crcCache.Remove(dest); }
@@ -1333,7 +1359,7 @@ namespace Thornswood
             // like uncleared on Djinn's machine. Restore from Vortex first.
             // Then fetch any of ours still missing.
             try { n += OwnGame.RestoreMissingPlugins(cfg, say); }
-            catch (Exception ex) { Swallow.Note("Verify.Fix, restoring missing plugins from Vortex", ex); say("Could not restore missing plugins from Vortex (" + ex.Message.TrimEnd('.') + ")."); }
+            catch (Exception ex) { say("Could not restore missing plugins from Vortex: " + Failure.Say("Verify.Fix, restoring missing plugins from Vortex", ex)); }
 
             // The release's copy of our own plugin when its bytes are not the
             // server's (#3386); another author's is named for Vortex (#1180).
@@ -1435,7 +1461,7 @@ namespace Thornswood
                     say(Path.GetFileName(f) + " was in your own mods folder, where a plugin only stops Play. It is in " + bin + " now; nothing was deleted.");
                     n++;
                 }
-                catch (Exception ex) { say(Path.GetFileName(f) + " could not be moved out of your own mods folder (" + ex.Message.TrimEnd('.') + ")."); }
+                catch (Exception ex) { say(Path.GetFileName(f) + " could not be moved out of your own mods folder: " + Failure.Say("Verify, moving " + f, ex, f)); }
             }
             return n;
         }

@@ -430,7 +430,7 @@ $packCount = @(PropList $doc 'packs').Count
 Say ("  launcher {0}, {1} pack(s), for /{2}/ on the site" -f (Prop $doc 'launcherVersion'), $packCount, $prefix)
 
 # ==== thornswood feed assets wanted ====
-# tests\test-remirror-feed.ps1 runs this block on its own against a scratch
+# scripts\tests\test-remirror-feed.ps1 runs this block on its own against a scratch
 # version.json. If the markers move, it stops rather than quietly testing
 # nothing. It reads $doc and $prefix and writes $need, $offSite, $wrongChannel and
 # $mainNamed, and talks to nothing.

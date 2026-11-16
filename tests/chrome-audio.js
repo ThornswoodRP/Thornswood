@@ -38,11 +38,11 @@ function find() {
 // On Windows, chrome.exe takes no --version: it opens a browser window and
 // keeps running, which held the gate's Windows runner until the harness was
 // killed at 300 s. So there the version is the one the exe's own file
-// version resource carries, read by Windows PowerShell; elsewhere --version
-// prints it and exits.
+// version resource carries, read by PowerShell 7 (pwsh, as every script
+// runs since #5356); elsewhere --version prints it and exits.
 function version(exe) {
   const r = os.platform() === 'win32'
-    ? cp.spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    ? cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
       '$v = (Get-Item -LiteralPath $env:TS_CHROME_EXE).VersionInfo; $v.ProductName + \' \' + $v.ProductVersion'],
     { encoding: 'utf8', env: Object.assign({}, process.env, { TS_CHROME_EXE: exe }) })
     : cp.spawnSync(exe, ['--version'], { encoding: 'utf8' });
@@ -123,7 +123,7 @@ async function close(chrome, exited, browserWs, dir) {
   if (!asked) { chrome.kill(); }
   await exited;
   if (os.platform() !== 'win32') { return; }
-  const r = cp.spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
     '$d = $env:TS_CHROME_DIR; $ids = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($d) } | ForEach-Object { $_.ProcessId }); ' +
     'if ($ids.Count) { Wait-Process -Id $ids -Timeout 60 -ErrorAction SilentlyContinue }; ' +
     '$left = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($d) }); ' +

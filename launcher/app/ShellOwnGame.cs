@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -213,14 +214,17 @@ namespace Thornswood
         /// and says why. StartPlay rather than Play(), because Play() is also
         /// reached from paths that have not been through Discord.
         ///
-        /// ownGameBusy is read again after the wait. NeedsRefresh runs under
-        /// Waiting, which keeps the window's messages moving, and the
-        /// bring-up-to-date OwnGameAtStart queues when the window is first
-        /// shown can start inside that wait. Read only before it, a Play
-        /// pressed in that first second went on into the game while the
-        /// folder under it was being rewritten.
+        /// ownGameBusy is read again after the wait. NeedsRefresh runs off the
+        /// window's thread (OffThread), and while it does the window's own
+        /// loop carries on, so the bring-up-to-date OwnGameAtStart queues when
+        /// the window is first shown can start inside that wait. Read only
+        /// before it, a Play pressed in that first second went on into the
+        /// game while the folder under it was being rewritten.
+        ///
+        /// The second StartPlay is awaited inside ownGameRefreshedForPlay, so
+        /// the flag is still up when that pass asks NeedsRefresh again.
         /// </summary>
-        static bool OwnGameRefreshIfDue()
+        static async Task<bool> OwnGameRefreshIfDue()
         {
             if (!OwnGame.Active) return false;
             if (playing || Checks.GameRunning()) return false;
@@ -232,15 +236,14 @@ namespace Thornswood
             bool due = false;
             try
             {
-                Waiting(delegate { due = OwnGame.NeedsRefresh(cfg); });
+                await OffThread(delegate { due = OwnGame.NeedsRefresh(cfg); });
             }
             catch (Exception ex)
             {
                 // Same as at startup: not knowing is not a reason to refuse
                 // Play, but it is said, so a report shows the check was missed.
-                Swallow.Note("ShellOwnGame.OwnGameRefreshIfDue", ex);
                 Log("Could not tell whether Thornswood's own Skyrim folder matches what Vortex has deployed (" +
-                    ex.Message.TrimEnd('.') + "). Starting from the folder as it is.");
+                    Failure.Why("ShellOwnGame.OwnGameRefreshIfDue", ex) + "). Starting from the folder as it is.");
                 return false;
             }
             if (ownGameBusy)
@@ -257,13 +260,16 @@ namespace Thornswood
                     "Press Scan, then Fix, on Diagnostics, and send the launcher log if it keeps saying this.");
                 return true;
             }
-            StartOwnGame(false, true, delegate
-            {
-                ownGameRefreshedForPlay = true;
-                try { StartPlay(); }
-                finally { ownGameRefreshedForPlay = false; }
-            });
+            StartOwnGame(false, true, delegate { Begin(PlayAfterRefresh()); });
             return true;
+        }
+
+        /// <summary>StartPlay again once the bring-up-to-date for this press is done, with ownGameRefreshedForPlay up until that pass has ended.</summary>
+        static async Task PlayAfterRefresh()
+        {
+            ownGameRefreshedForPlay = true;
+            try { await StartPlayAsync(); }
+            finally { ownGameRefreshedForPlay = false; }
         }
 
         /// <summary>
@@ -472,7 +478,7 @@ namespace Thornswood
             PlayProgress.FolderFirst(true);
             string said = null, fail = null;
             try { said = make ? OwnGame.Make(c, say) : OwnGame.Refresh(c, say); }
-            catch (Exception ex) { fail = ex.Message; }
+            catch (Exception ex) { fail = Failure.Why("ShellOwnGame", ex); }
 
             // Made: from here Paths name the new folder, as they will after
             // the restart below, so the light flags and the load order are
@@ -494,7 +500,7 @@ namespace Thornswood
 
             // The same load-order step Fix runs. SettleSettings on a full
             // Refresh used to lay Golden's plugins.txt over Live, which put
-            // Thornswood-Content.esp out of the server's order (Gavin: Mod
+            // Thornswood-Content.esp out of the server's order (Patrick: Mod
             // list red at position 21 after "already matches"), so
             // PutInServerOrder (the same write Scan and Fix uses) keeps Mod
             // list green. Light flags are not written here or anywhere: the
@@ -514,8 +520,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    Swallow.Note("ShellOwnGame.StartOwnGame, PutInServerOrder after Vortex bring-up-to-date", ex);
-                    say("Could not put the plugin list into the server's order after the Vortex update (" + ex.Message.TrimEnd('.') + "). Press Fix on Diagnostics if Mod list goes red.");
+                    say("Could not put the plugin list into the server's order after the Vortex update (" + Failure.Why("ShellOwnGame.StartOwnGame, PutInServerOrder after Vortex bring-up-to-date", ex, "plugins.txt") + "). Press Fix on Diagnostics if Mod list goes red.");
                 }
                 bool needVerify = !already || ordered > 0
                     || !Verify.LastUsedServer || Verify.LastIssues == null;
@@ -638,7 +643,7 @@ namespace Thornswood
                 {
                     string why;
                     try { why = OwnGame.WhyNot(askCfg, askInto); }
-                    catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + ex.Message; }
+                    catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + Failure.Say("ShellOwnGame, what Vortex deployed", ex); }
                     string text = (why == null
                         ? "Not made yet. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
                         : "Not made yet. " + why) + askChosen;
@@ -743,7 +748,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not restart by itself (" + ex.Message + "). Close the launcher and open it again.");
+                Log("Could not restart by itself (" + Failure.Why("ShellOwnGame, restarting", ex, "Thornswood.exe") + "). Close the launcher and open it again.");
                 return;
             }
             restarting = true;

@@ -48,7 +48,7 @@
 .PARAMETER Layer
   A file that replaces the functions below that touch Windows (the firewall,
   scheduled tasks, SSH_CLIENT, the save folder, the save's rules). Only
-  tests\test-ssh-scope.ps1 passes it, to run this against stand-ins.
+  scripts\tests\test-ssh-scope.ps1 passes it, to run this against stand-ins.
 #>
 [CmdletBinding()]
 param(

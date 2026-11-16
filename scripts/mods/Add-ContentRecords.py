@@ -88,7 +88,7 @@ charcoal and its recipe; they are written from their own numbers now as well.
 The tool refuses to write a plugin that holds any salvaged record the
 register does not keep, by its bytes under any editor id, or by its form id
 for one that left before #2553 (the skill manuals, the Execution Block).
-tests\\test-2553-salvaged-gone.js holds the committed plugin to the register.
+game\\tests\\test-2553-salvaged-gone.js holds the committed plugin to the register.
 
 WHY
 
@@ -435,7 +435,7 @@ COMPRESSED = 0x00040000
 
 # The other server's full name, lower case. Written as its code points so that
 # this file does not carry the name either: it goes from everywhere in the
-# repository (Patrick, 12 October, #400), and tests\test-other-server-name-gone.js
+# repository (Patrick, 12 October, #400), and game\tests\test-other-server-name-gone.js
 # refuses it in any file git tracks.
 OTHER_SERVER_NAME = bytes([107, 101, 105, 122, 97, 97, 108])
 
@@ -642,7 +642,7 @@ RECIPE_REMEDY = 0x50154C7
 # ingredient carries the effect by game/data/ingredients.json, which reads it
 # off the INGR records, and has a maker by scripts/dev/Check-Makers.js, at a
 # gathering rank no higher than the recipe's;
-# tests/test-3470-potion-recipes.js holds both. After a gap from the master
+# game/tests/test-3470-potion-recipes.js holds both. After a gap from the master
 # key, in numbers no version of this plugin used.
 POTION_RECIPES = (
     # (recipe, editor id, the potion it makes, its inputs)

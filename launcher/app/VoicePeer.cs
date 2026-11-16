@@ -262,7 +262,7 @@ namespace Thornswood
                     tr = c.DoHandshake(out error, io);
                 }
             }
-            catch (Exception ex) { tr = null; error = ex.Message; }
+            catch (Exception ex) { tr = null; error = Failure.Why("VoicePeer, the handshake", ex, "the voice peer"); }
 
             if (closed) return;
             if (tr == null || got == null)
@@ -287,7 +287,7 @@ namespace Thornswood
                     // Closing this side ends the read with an exception, which
                     // is the end and says nothing. Anything else is the other
                     // side ending DTLS, which launcher.log should show.
-                    if (!closed) Debug("dtls: peer " + Id + " stopped (" + ex.Message + ")");
+                    if (!closed) Debug("dtls: peer " + Id + " stopped (" + Failure.Why("VoicePeer " + Id, ex, "the voice peer") + ")");
                     return;
                 }
             }
