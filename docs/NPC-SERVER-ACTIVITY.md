@@ -25,8 +25,11 @@ native acceptance run with the plugin and no list, 13 Oct: all 5,072 kept
 identities loaded and controlled before and after a gamemode reload, none of
 the 9,596 cut ones, peak 1,477 MiB.
 
-The 48-plugin catalogue contains 14,641 placements: 5,072 retained and 9,569
-excluded. Named pets and enemies are cut even without a Unique flag. Fourteen
+The 106-plugin catalogue in [NPC-POPULATION.md](NPC-POPULATION.md), which
+`scripts/dev/Build-NpcPopulation.py` writes, inspects
+14,668 placements: 4,883 retained and 9,785 excluded. Its counts by hold and
+location are there; this page does not repeat them. Named pets and enemies
+are cut even without a Unique flag. Fourteen
 old Justiciars and the embassy soldier are excluded too. Remnant patrols are
 not placed by this catalogue. Traders, outside transport services, ecological
 wildlife and generic hostile encounters remain under habitat caps.
