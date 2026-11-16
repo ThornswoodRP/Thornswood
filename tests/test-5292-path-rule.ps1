@@ -66,7 +66,9 @@ $pick = Get-Job $build 'pick'
 # MSBuild check (test-498-msbuild.ps1) went; the publish took their place.
 # Since #5524 the published exe is started for real after the publish.
 # Since #5988 .NET goes on the work drive, its SDK from main's cache, first.
-$want = @('Say why there is nothing to build', 'Put .NET and NuGet''s packages on the work drive', 'Take the .NET SDK from main''s cache', 'Publish the native launcher', 'Start the native launcher', 'Build the ship root tool',
+# Since #4166 each step that runs an action has a name of its own too.
+$want = @('Say why there is nothing to build', 'Check out the code', 'Set up Node', 'Set up Python', 'Put .NET and NuGet''s packages on the work drive',
+    'Take the .NET SDK from main''s cache', 'Set up .NET', 'Publish the native launcher', 'Start the native launcher', 'Build the ship root tool',
     'Write down the tree these checks passed on')
 $have = Get-StepNames $launcher
 Yes ('the job "Launcher builds" has exactly the step that says why there is nothing to build, the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))

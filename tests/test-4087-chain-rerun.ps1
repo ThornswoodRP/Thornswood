@@ -13,8 +13,12 @@
   This copies Rebuild-ContentTables.ps1 into a scratch repository with a
   chain of three small node builders (a reader, a step between, a writer) and
   runs it three ways: the writer changes nothing, changes the file once and
-  then settles, and changes it every time. Needs node and python on the path,
-  as the script does; prints SKIP without them. No network.
+  then settles, and changes it every time. Since #5191 the recipe build reads
+  game\data\recost.json back as well, which Build-Recost.py writes, so a
+  fourth chain has a reader of two files and a writer of each, both changing
+  once: each file may change once, and the chain runs again for each. Needs
+  node and python on the path, as the script does; prints SKIP without them.
+  No network.
 #>
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -75,11 +79,12 @@ $chain = @'
 '@
 $population = '{"loadOrder":[{"name":"Skyrim.esm"},{"name":"Update.esm"},{"name":"Dawnguard.esm"},{"name":"HearthFires.esm"},{"name":"Dragonborn.esm"},{"name":"A.esp"}]}'
 
-function New-Sandbox([string]$mode, [string]$cut) {
+function New-Sandbox([string]$mode, [string]$cut, [string]$withChain = $chain) {
     $root = Join-Path ([IO.Path]::GetTempPath()) ('ts-4087-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     Put $root 'scripts/mods/Rebuild-ContentTables.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/Rebuild-ContentTables.ps1')))
     Put $root 'scripts/dev/OwnPlugins.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')))
-    Put $root 'scripts/mods/content-tables.json' $chain
+    Put $root 'scripts/mods/content-tables.json' $withChain
+    Put $root 'scripts/dev/CostWriter.js' $writer.Replace("'writer'", "'cost'").Replace("'docs', 'systems', 'cut.json'", "'docs', 'systems', 'cost.json'")
     Put $root 'scripts/dev/Reader.js' $reader
     Put $root 'scripts/dev/Between.js' $between
     Put $root 'scripts/dev/Writer.js' $writer
@@ -122,6 +127,29 @@ try {
     Yes ("a writer that never settles stops the chain after the second pass (exit 1, ran {0})" -f $r.Ran) ($r.Code -eq 1 -and $r.Ran -eq 'reader,between,writer,reader,between,writer')
     Yes 'and says it changed the file again' ($r.Out -match 'STOP\. scripts/dev/Writer\.js changed docs/systems/cut\.json again after scripts/dev/Reader\.js ran on it a second time')
 
+    # Two files read back by one reader, each changed once by its writer: the
+    # chain runs again for each, and ends 0.
+    $two = @'
+{
+ "steps": [
+  { "tool": "scripts/dev/Reader.js", "data": null, "plugins": null,
+    "reads": [], "readsBack": ["docs/systems/cut.json", "docs/systems/cost.json"], "writes": ["game/data/table.json"] },
+  { "tool": "scripts/dev/CostWriter.js", "data": null, "plugins": null,
+    "reads": ["game/data/table.json"], "writes": ["docs/systems/cost.json"] },
+  { "tool": "scripts/dev/Writer.js", "data": null, "plugins": null,
+    "reads": ["game/data/table.json"], "writes": ["docs/systems/cut.json"] }
+ ]
+}
+'@
+    $d = New-Sandbox 'settle' "old`n" $two
+    $roots += $d
+    Put $d 'docs/systems/cost.json' "old`n"
+    $r = Invoke-Chain $d
+    Yes ("a reader of two files, each changed once by its writer: the chain runs again for each and ends 0 (ran {0})" -f $r.Ran) (
+        $r.Code -eq 0 -and $r.Ran -eq 'reader,cost,reader,cost,writer,reader,cost,writer')
+    Yes 'and says which file sent it back each time' (
+        $r.Out -match 'CostWriter\.js changed docs/systems/cost\.json' -and $r.Out -match 'Writer\.js changed docs/systems/cut\.json')
+
     # The chain as the repository has it: the recipe build reads the cut file
     # back and Write-CutItems.js writes it later, so a run reaches the rerun.
     $real = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json
@@ -133,6 +161,10 @@ try {
     Yes 'content-tables.json has the recipe build read cut-items.json back before Write-CutItems.js writes it' ($readerAt -ge 0 -and $writerAt -gt $readerAt -and $real.steps[$readerAt].tool -eq 'scripts/dev/Build-RecipeTable.ps1')
     $writesKept = @($real.steps | Where-Object { $_.tool -eq 'scripts/dev/Write-CutItems.js' } | ForEach-Object { @($_.writes) })
     Yes 'and Write-CutItems.js names cut-kept.json among what it writes' ($writesKept -contains 'docs/systems/cut-kept.json')
+    $recostAt = -1
+    for ($i = 0; $i -lt $real.steps.Count; $i++) { if ($real.steps[$i].tool -eq 'scripts/dev/Build-Recost.py' -and @($real.steps[$i].writes) -contains 'game/data/recost.json') { $recostAt = $i } }
+    Yes 'and has it read recost.json back before Build-Recost.py writes it (#5191)' (
+        $readerAt -ge 0 -and @($real.steps[$readerAt].readsBack) -contains 'game/data/recost.json' -and $recostAt -gt $readerAt)
 } finally {
     foreach ($x in $roots) { try { Remove-Item -LiteralPath $x -Recurse -Force } catch { } }
 }
