@@ -1,15 +1,19 @@
-# Says on a new issue which open issues it may repeat (#5185, the redesign's
-# part 5, approved by Patrick on 31 Oct 2026).
+# Closes a new issue that exactly repeats an open one, and says on any other
+# which open issues it may repeat (#5185, the redesign's part 5, approved by
+# Patrick on 31 Oct 2026; the close added 15 Nov 2026).
 #
 # WHY. The same problem was filed twice often enough that 17 issues had been
 # closed as duplicates by 1 Nov 2026, each found by hand, some only after work
 # had gone into both. scripts/ops/Find-Duplicate.js reads the new title
 # against every open issue's and, when one is alike, comments with a link to
-# it, so whoever triages sees both at once. Its header says how it matches
-# and what was measured. It never closes, labels or edits: a person decides.
+# it, so whoever triages sees both at once. A comment alone never stopped a
+# repeat, so one with the same title as an open issue, or asking for the same
+# deploy/after step, is closed as a duplicate of it, with a comment naming it.
+# Its header says how it matches and what was measured. A title that is only
+# alike is never closed: a person decides.
 #
-# WHAT IT USES. The run's own token, issues write, to read the open issues
-# and make the one comment. It checks out only the script, and the title
+# WHAT IT USES. The run's own token, issues write, to read the open issues,
+# make the one comment and close an exact repeat. It checks out only the script, and the title
 # reaches it through the environment, never pasted into a command.
 #
 # WHERE IT RUNS. GitHub's ubuntu-latest (#3685: opening an issue is something
@@ -29,7 +33,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    # About ten calls to read the open issues and one to comment.
+    # About ten calls to read the open issues, one to comment and one to close.
     timeout-minutes: 5
     steps:
       - name: Check out the code

@@ -40,7 +40,7 @@
   Measured on this machine on 29 September, in Windows PowerShell 5.1 and in
   PowerShell 7: a value piped into powershell -EncodedCommand this way arrives
   whole, and no process command line holds it while the script runs
-  (tests\test-secret-channel.ps1 repeats that on every run).
+  (scripts\tests\test-secret-channel.ps1 repeats that on every run).
 
   Never print the value, including in an error message.
 #>

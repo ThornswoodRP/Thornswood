@@ -140,7 +140,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not remove the dev build: " + ex.Message;
+                return "Could not remove the dev build: " + Failure.Say("DevBuild, removing the dev build", ex);
             }
             // Every shortcut that ran it, the pinned taskbar copy among them,
             // asked by what it runs rather than by name (#3205).

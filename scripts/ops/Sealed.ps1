@@ -82,9 +82,14 @@ function Unprotect-ThornswoodSealed([byte[]]$Sealed, [string]$PrivateB64) {
 
 # The runner's half: zips everything in $Folder (output.txt and files\),
 # seals it to $RecipientB64 and writes it to $To. Returns how many files went.
+# ZipFile, not Compress-Archive: Compress-Archive makes no archive at all from
+# a folder that holds only empty folders, and says nothing, so a run whose
+# verb said nothing (a gate that did not answer, 15 Nov 2026) ended on "Could
+# not find file ...out.zip" and the reason it stopped never reached anyone.
 function Save-ThornswoodSealed([string]$Folder, [string]$RecipientB64, [string]$To) {
     $zip = $Folder.TrimEnd('\', '/') + '.zip'
-    Compress-Archive -Path (Join-Path $Folder '*') -DestinationPath $zip -Force
+    Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+    [IO.Compression.ZipFile]::CreateFromDirectory($Folder, $zip)
     try {
         $sealed = Protect-ThornswoodSealed ([IO.File]::ReadAllBytes($zip)) $RecipientB64
         New-Item -ItemType Directory -Path (Split-Path -Parent $To) -Force | Out-Null

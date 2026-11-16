@@ -155,7 +155,7 @@ try {
     $driver = $driver.Replace('__OWNGAME__', $region.Groups[1].Value.TrimEnd() + "`n" + $block.Groups[1].Value.TrimEnd())
 
     $exe = $null
-    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.CrashSnapshotTest' -Source $driver -File (Join-Path $app 'CrashDump.cs'), (Join-Path $app 'Enforce.cs') }
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.CrashSnapshotTest' -Source $driver -File (Join-Path $app 'CrashDump.cs'), (Join-Path $app 'Enforce.cs'), (Join-Path $app 'Failure.cs') }
     catch { ($_.Exception.Message -split "`n") | ForEach-Object { Write-Host "      $_" } }
     Yes 'CrashDump.cs and Enforce.cs build with the .NET SDK the launcher builds with' ($null -ne $exe)
     if (-not $exe) { Done }
@@ -170,7 +170,7 @@ try {
     Yes 'nothing in the registry and nothing that asks for administrator (no LocalDumps, no runas)' ($code -notmatch 'Registry|LocalDumps|runas|HKEY|HKLM|HKCU')
     # ------------------------------------------- 6. the launcher around it
     $shell = (Get-ChildItem -LiteralPath $app -Filter 'Shell*.cs' | Sort-Object Name | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-    $play = [regex]::Match($shell, '(?s)static void Play\(\)\s*\{(.*?)\n        \}\r?\n')
+    $play = [regex]::Match($shell, '(?s)static async Task PlayAsync\(\)\s*\{(.*?)\n        \}\r?\n')
     $body = $play.Groups[1].Value
     $iEnf = $body.IndexOf('Enforce.Apply()'); $iDump = $body.IndexOf('CrashDump.Apply(cfg)'); $iSaid = $body.IndexOf('foreach (string note in Enforce.Said)'); $iNote = $body.IndexOf('Keep.LeaveNote')
     Yes 'Play writes it every time, after the other held settings and before the game starts' ($play.Success -and $iEnf -ge 0 -and $iDump -gt $iEnf -and $iSaid -gt $iDump -and $iNote -gt $iDump)

@@ -108,6 +108,8 @@
   function why(row, kitsByKind) {
     var kit = kitsByKind[row.kind] || {};
     if (row.cond >= row.to) { return 'A repair by you would not raise it.'; }
+    // Not your trade, or not its bench (#4578): the server says where it is mended.
+    if (row.where) { return row.where; }
     if (!kit.made) { return 'No ' + row.kit + ' has been made in the world yet.'; }
     return 'You carry no ' + row.kit + '. ' + (/^[aeiou]/i.test(row.maker) ? 'An ' : 'A ') +
       row.maker + ' makes them.';
@@ -146,8 +148,8 @@
     }
     // Who mends to what is the server's (repairTo, #3442): each row already
     // says the number, so the note does not say the rule again.
-    out += '<div class="note">One kit mends one piece. Each row says what a repair by you ' +
-      'comes out at.</div>';
+    out += '<div class="note">One kit mends one piece, by the trade that makes it, at the bench it is made at. ' +
+      'Each row says what a repair by you comes out at.</div>';
     body.innerHTML = out;
     var buttons = body.querySelectorAll('button[data-n]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onMend; }

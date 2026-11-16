@@ -47,10 +47,8 @@ left of them. Work that recurs or waits on a date is an issue, not a note. A
 step only a person can take outside the game (a click in Vortex's
 own window) is a card on Patrick's report page, never a note, and a main or
 live run still waits for Patrick's word. Bot branches carry the Bot's name
-(`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
-shared and sits detached at `origin/main`: branch work goes in a worktree in
-its ignored `worktrees` folder, removed with its branch once the pull request
-merges.
+(`wisp/3150-what-it-is`). How branch work goes in the shared clone on the
+shipping machine is in [Clone the repository](set-up-a-machine.md#clone-the-repository).
 
 A Bot writes test tasks the way "Test tasks and known issues" says, in
 its pull request and on the issue: Main for what any playtester can check,
@@ -85,9 +83,9 @@ A line that has to say it anyway (this section naming the word it bans, a
 document quoting a note as it went out) goes in
 `scripts\dev\Check-Words.allow.txt` with its reason; an allowance that no
 longer matches anything is itself a hit. Release notes are not files, so
-`scripts\release\Note-Rules.ps1` checks them when Ship or Rollback-Feed runs,
-before anything is built. The same build step runs `tests\test-check-words.ps1`
-and `tests\test-note-rules.ps1`, which plant a break of every rule and fail
+the release note rules, `tools\ReleaseNotes\NoteRules.cs`, check them when
+Ship or Rollback-Feed runs, before anything is built. The same build step runs `tests\test-check-words.ps1`
+and `scripts\tests\test-note-rules.ps1`, which plant a break of every rule and fail
 if either check lets one through. Secrets are checked by
 `scripts\dev\Check-Secrets.ps1` in the same build. It reads the files of
 `engine\skymp` too whenever the fork is checked out, and says so when it is
@@ -99,7 +97,7 @@ Two names are in no tracked file at all, code, tests, records, data,
 comes back: the multiplayer mod this build replaced (#497,
 `tests\test-old-name-gone.js`), and the SkyMP server `Thornswood-Content.esp`
 was salvaged from (#400, Patrick, 12 Oct: "no records may keep it";
-`tests\test-other-server-name-gone.js`), along with that server's two short
+`game\tests\test-other-server-name-gone.js`), along with that server's two short
 forms, the prefix its editor ids, scripts and folders carried (Patrick,
 15 Oct, decision C). Say "the other server" in prose and OtherServer in a
 file, folder or code name. A check that has to find that server's leftovers

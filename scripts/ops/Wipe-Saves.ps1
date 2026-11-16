@@ -446,8 +446,16 @@ foreach ($l in $moved) {
   else { Say "  $l" 'Green' }
 }
 if ($bad) {
-  Say '  The server is stopped. Start it again from the panel or re-run once' 'Yellow'
-  Say '  whatever is holding those files has let go.' 'Yellow'
+  # A half-moved world never starts (#4196). Started, it came up with the
+  # characters gone and the other registers still the old world's, and a run
+  # again moved that fresh world aside too. So the servers stay stopped and
+  # held, the lines above say what moved and what did not, and the run ends 1.
+  $didMove = @($moved | Where-Object { "$_" -match '^moved  ' }).Count
+  $didNot = @($moved | Where-Object { "$_" -match '^FAILED' }).Count
+  Say ("  {0} moved aside and {1} not, so the servers are left stopped and held: none is started on a half-moved world." -f $didMove, $didNot) 'Red'
+  Say '  Put back what moved (each moved line above says where it went), let go of' 'Yellow'
+  Say '  whatever holds the files that failed, and run this again.' 'Yellow'
+  Die 'The move did not finish, so no server was started.'
 }
 
 Head 'Starting them again'

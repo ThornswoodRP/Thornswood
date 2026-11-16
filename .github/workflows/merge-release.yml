@@ -66,7 +66,7 @@
 #
 # THE NOTES. The Release's body is the note people read: the Release note
 # lines of the pull requests merged since the Release before, joined and held
-# to Note-Rules (Collect-ReleaseNotes.ps1). When every one of them says none,
+# to the release note rules (Collect-ReleaseNotes.ps1). When every one of them says none,
 # the body is the single line in QUIET_NOTE below, and the news announces it
 # like any other: every release is announced (Patrick, 9 Nov: "just put like
 # various bug fixes and improvements and still make an announcement"), so
@@ -121,6 +121,9 @@ on:
     branches: [main]
     paths:
       - 'game/**'
+      # Nor the game's harnesses in game/tests: a change to a check is no
+      # new release.
+      - '!game/tests/**'
       - 'launcher/**'
       # Not its harnesses (plan line 42): a change to a check is no new
       # launcher, as LauncherVersion.ps1 says.
@@ -161,24 +164,15 @@ on:
       - 'scripts/release/MergeRelease.ps1'
       - 'scripts/release/New-SignedManifest.ps1'
       - '.github/workflows/merge-release.yml'
+  # The box's content build (#5191): when a merge's content inputs had no
+  # build yet, the content job asked the deploy agent for one by a
+  # Deployment to Content, and the agent's success there starts this again.
+  # Every other Deployment's status starts a run whose jobs are skipped.
+  deployment_status:
   workflow_dispatch:
 
 permissions:
   contents: read
-
-# THE NEWEST MERGE. The newest merge is the one released (#5398). GitHub
-# refuses the run's own token any tag on a commit whose workflow files
-# differ from main's (it asks for workflows: write, which that token can
-# never hold), so a merge main
-# has moved past with a workflow change can never be tagged. A newer merge
-# cancels the run of the one before it, and its Release carries every part
-# and the notes of every pull request since the Release before, so nothing
-# a superseded merge changed is left out. A merge this workflow does not run
-# for cancels nothing, so a run that main moved past that way starts a run of
-# main's newest merge itself (Is this still main's newest merge).
-concurrency:
-  group: merge-release
-  cancel-in-progress: true
 
 env:
   QUIET_NOTE: 'Various bug fixes and improvements'
@@ -186,10 +180,65 @@ env:
   VPK_VERSION: '1.2.161'
 
 jobs:
+  # THE CONTENT BUILD (#5191, stage 3). Nothing generated is committed
+  # (Patrick's B on #5191): the content plugin, the Last plugin's recipe and
+  # every table read out of the load order are built on the box, where the
+  # whole load order is, and the deploy agent puts each build on a draft
+  # Release named by its inputs (docs/DEPLOY-AGENT.md, "The content build").
+  # This job looks for the draft of this commit's inputs; when there is none
+  # it asks the agent for it by a Deployment to Content, and the release
+  # waits for that Deployment's success, which starts this workflow again.
+  content:
+    name: Find the box's content build
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'deployment_status' || (github.event.deployment.environment == 'Content' && github.event.deployment_status.state == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # A draft Release is listed only to a token that may write Contents.
+      contents: write
+      deployments: write
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+      key: ${{ steps.find.outputs.key }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Find the build, or ask the box for it
+        id: find
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Ask
+
   release:
     name: Build, sign and release the merge
-    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: content
+    if: ${{ needs.content.outputs.found == 'yes' }}
     runs-on: windows-latest
+    # ONE AT A TIME, NEVER CANCELLED (#6008). A run that has started runs to
+    # its end; a newer merge waits, and GitHub keeps only the newest one waiting,
+    # so the merge released next is the newest. Until 13 Nov a newer merge
+    # cancelled the run in progress (#5398). A release takes about 10 minutes, and
+    # once the org had 60 runners merges landed about every 5, so all 22 runs
+    # from 22:00 UTC on 12 Nov to 00:42 UTC on 13 Nov were cancelled and dev got
+    # no build for two and a half hours.
+    #
+    # WHICH MERGE IS TAGGED. GitHub refuses the run's own token any tag on a
+    # commit whose workflow files differ from main's (it asks for workflows:
+    # write, which that token can never hold; probe runs on #5398). So a merge
+    # main has moved past is released when its workflow files are still main's,
+    # and its Release carries every part and the notes of every pull request
+    # since the Release before; the run waiting for main's newest merge releases
+    # the rest after it. When they differ, nothing is released here and a run of
+    # main's newest merge is started, which carries this one's changes (Is this
+    # a merge that can still be tagged).
+    #
+    # On this job, not the workflow (#5191): the content job of a run started
+    # by a Deployment's status waits behind nothing and holds no merge back.
+    concurrency:
+      group: merge-release
+      cancel-in-progress: false
     environment: release
     # The engine package (about 100 MB), dev's last release from the site and
     # the Velopack package are the slow parts; the box taking it, at most 20
@@ -203,7 +252,8 @@ jobs:
       # Main's launcher package, kept on GitHub Packages (MAIN'S PACKAGE).
       packages: write
       # To start a run of main's newest merge when main moved on during
-      # this one (Is this still main's newest merge).
+      # this one with other workflow files (Is this a merge that can still
+      # be tagged).
       actions: write
     steps:
       # The whole history: the launcher's number is the time its sources last
@@ -213,6 +263,29 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # The box's build of this commit's inputs, written over the checkout
+      # before any part is built, each file held to the sha256 its record
+      # names (THE CONTENT BUILD, above).
+      - name: Take the box's content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-kept'
+
+      # What it took, as the artifact the harnesses and every checkout read
+      # the tables from now that they are not committed (#5191, stage 4;
+      # Get-ContentBuild.ps1 -Newest), newest first. Reading it needs Actions
+      # read only, which a pull request's token has.
+      - name: Keep what was taken
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-dev
+          path: |
+            ${{ runner.temp }}/content-kept/content.zip
+            ${{ runner.temp }}/content-kept/content-build.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Name the release and read the one before
         id: names
@@ -717,16 +790,17 @@ jobs:
         with:
           subject-path: ${{ steps.files.outputs.held_subjects }}
 
-      # Main may have moved on while this was built. A newer merge that this
-      # workflow runs for would have cancelled this run (concurrency, above),
-      # so getting here past main means the merges after it touched none of
-      # the paths above and start no run of their own. Until 2 Nov this step
-      # said a newer run would release the change anyway, and none did: the
-      # site fix #5451 (ed6dfc99) was built, then dropped, because a voice
-      # harness and a docs page merged during its build. So it asks for a
-      # run of main's newest merge now, which carries this one's changes,
-      # and that run is the one released (#5398, Patrick's A).
-      - name: Is this still main's newest merge
+      # Main may have moved on while this was built. A merge whose workflow
+      # files are still main's is tagged and released as it is (the header,
+      # WHICH MERGE IS TAGGED): the merges after it that this workflow runs
+      # for are waiting for this run and are released next, and those it
+      # does not run for change nothing it ships. A merge whose workflow files
+      # main has changed cannot be tagged, so it asks for a run of main's
+      # newest merge, which carries this one's changes. Until 2 Nov nothing
+      # asked, and the site fix #5451 (ed6dfc99) was built and then dropped
+      # because a voice harness and a docs page merged during its build
+      # (#5398).
+      - name: Is this a merge that can still be tagged
         id: newest
         if: ${{ steps.changed.outputs.release == 'yes' }}
         shell: pwsh
@@ -736,10 +810,20 @@ jobs:
           $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
           if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
           if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
+          # The files that differ between this merge and main. GitHub lists at
+          # most 300, so a list that long is taken as "workflows may differ".
+          $files = @(gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$($env:GITHUB_SHA)...$head" --jq '.files[].filename')
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub did not say what changed between this merge and main ($head)"; exit 1 }
+          $flows = @($files | Where-Object { $_ -like '.github/workflows/*' })
+          if ($files.Count -lt 300 -and -not $flows.Count) {
+            Write-Host "main is $head now, past this merge, with the same workflow files, so this merge is released and main's newest merge comes after it"
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'
+            exit 0
+          }
           gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge, and the run that releases it could not be started"; exit 1 }
-          Write-Host "main is $head now, past this merge; a run of main's newest merge was started, and it releases this one's changes"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge with other workflow files, and the run that releases it could not be started"; exit 1 }
+          Write-Host ("main is $head now, past this merge, and its workflow files differ (" + ($(if ($flows.Count) { $flows -join ', ' } else { 'over 300 files differ' })) + "), so this merge cannot be tagged; a run of main's newest merge was started, and it releases this one's changes")
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head with other workflow files while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=no'
 
       - name: Publish the Release
@@ -829,7 +913,7 @@ jobs:
 
       # One Deployment for each app that changed, with the part beside the
       # tag (header, THE DEPLOYMENT). The box deploy agent applies each and
-      # the bot posts the Release's news once, in the dev updates channel,
+      # the bot posts the Release's news once, in #staff-news,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
         id: appdeploy

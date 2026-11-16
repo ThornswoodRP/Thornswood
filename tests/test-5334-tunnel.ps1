@@ -211,6 +211,12 @@ function Start-ScheduledTask { param($TaskName) [IO.File]::AppendAllText($env:TW
 function Stop-ScheduledTask { param($TaskName) [IO.File]::AppendAllText($env:TW_ASKED, "STOP`n") }
 function Get-Process { }
 function Start-Sleep { }
+# The box's two web rules (#5351): on, unless TW_WEBOFF names one.
+function Get-NetFirewallRule {
+    param($PolicyStore, $DisplayName, $ErrorAction)
+    if ($PolicyStore -ne 'localhost') { return }
+    [pscustomobject]@{ DisplayName = $DisplayName; Enabled = $(if ("$env:TW_WEBOFF" -eq $DisplayName) { 'False' } else { 'True' }) }
+}
 
 '@
 
@@ -487,6 +493,11 @@ try {
     $all = Tunnel 'Remove'
     Yes '-Remove while the names are on the tunnel is refused' ($all -match 'Run -Back first' -and (Test-Path -LiteralPath $tunnelDir))
 
+    $env:TW_WEBOFF = 'Thornswood Web 443'
+    $all = Tunnel 'Back'
+    Yes '-Back while Set-WebFirewall -Close has the box''s 443 off is refused, says to open it first, and leaves DNS alone (#5351)' (
+        $all -match 'Thornswood Web 443 off' -and $all -match "Box-Run\.ps1 -Line 'Set-WebFirewall'" -and $all -match 'DNS NOT CHANGED' -and @((Cf).dns | Where-Object { $_.type -eq 'CNAME' }).Count -eq 2)
+    Remove-Item Env:\TW_WEBOFF
     $all = Tunnel 'Back'
     $cf = Cf
     Yes '-Back makes both names proxied A records at the box again' ($all -match 'DNS BACK' -and @($cf.dns | Where-Object { $_.name -ne $boxName -and $_.type -eq 'A' -and $_.content -eq '203.0.113.23' -and $_.proxied }).Count -eq 2)
@@ -581,7 +592,7 @@ if ($Line -eq 'Install-Tunnel -SealKey') { 'SEAL KEY ' + $env:TW_PUB; exit 0 }
     $all = Tunnel 'Remove'
     Yes '-Remove once the names are back takes the folder and the token off' ($all -match 'Gone from the box' -and -not (Test-Path -LiteralPath $tunnelDir))
 } finally {
-    foreach ($n in 'TW_CF', 'TW_ASKED', 'TW_COUNT', 'TW_TASK', 'TW_EXE', 'TW_RUN', 'TW_WANT', 'TW_READY', 'TW_HEALTH', 'TW_CARRY', 'TW_PATCH_FAILS') { Remove-Item ('Env:\' + $n) -ErrorAction SilentlyContinue }
+    foreach ($n in 'TW_CF', 'TW_ASKED', 'TW_COUNT', 'TW_TASK', 'TW_EXE', 'TW_RUN', 'TW_WANT', 'TW_READY', 'TW_HEALTH', 'TW_CARRY', 'TW_PATCH_FAILS', 'TW_WEBOFF') { Remove-Item ('Env:\' + $n) -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 Done

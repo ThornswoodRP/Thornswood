@@ -75,9 +75,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The template too: the harness holds that its own notes, left in
+          # a body, are never read as a test task.
           sparse-checkout: |
             bot
             .github/workflows/done-on-merge.yml
+            .github/pull_request_template.md
           sparse-checkout-cone-mode: false
 
       - name: Set up Python

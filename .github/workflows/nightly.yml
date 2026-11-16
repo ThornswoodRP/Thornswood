@@ -115,7 +115,7 @@ jobs:
           # server sends and can load. The build on every pull request has no
           # fork, so this is where the record is read against the fork at the
           # pin: fetched shallow, read from git's objects at that commit by
-          # tests\test-papyrus-event-list.js, and taken out again, the way the
+          # game\tests\test-papyrus-event-list.js, and taken out again, the way the
           # secret scan above does it. A pin that moved over fork work which
           # leaves the list alone passes; one that changed the list fails
           # here, naming what changed and the command that writes the record
@@ -125,7 +125,7 @@ jobs:
           $fetched = ($LASTEXITCODE -eq 0)
           if (-not $fetched) { Write-Host '::error file=.gitmodules::engine/skymp could not be fetched at its pin, so the event list was not checked' }
           $env:THORNSWOOD_FORK_REQUIRED = '1'
-          node tests\test-papyrus-event-list.js
+          node game\tests\test-papyrus-event-list.js
           $code = $LASTEXITCODE
           git -c core.longpaths=true submodule deinit -q -f engine/skymp
           if ($code -ne 0) { Write-Host '::error file=records/papyrus-events.json::the record is not the fork''s event list at the pin; the lines above say what changed. node scripts\dev\PapyrusEventList.js --write writes it again' }
@@ -429,6 +429,10 @@ jobs:
     if: ${{ !cancelled() && needs.harnesses.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Each failed test, with its FAIL lines and the command that runs it
+    # alone, for the board's failure comment (#4178).
+    outputs:
+      failed: ${{ steps.merge.outputs.failed }}
     steps:
       - name: Check out the merge script
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -442,12 +446,23 @@ jobs:
           pattern: harness-report-*
           path: ${{ runner.temp }}/harness-reports
       - name: Merge the shares' reports into one
+        id: merge
         shell: pwsh
         run: |
           $in = Join-Path $env:RUNNER_TEMP 'harness-reports'
           New-Item -ItemType Directory -Path $in -Force | Out-Null
-          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses'
-          exit $LASTEXITCODE
+          $failed = Join-Path $env:RUNNER_TEMP 'harness-failed.md'
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses' -Failed $failed
+          $code = $LASTEXITCODE
+          # The list goes on as this job's output "failed" whether or not
+          # every share's report came: a share that left none is named in
+          # it. A failed test's lines are its own words, so the output ends
+          # at a delimiter made new for this run, which no line can hold.
+          $end = 'FAILED_' + [Guid]::NewGuid().ToString('N')
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('failed<<' + $end)
+          if (Test-Path -LiteralPath $failed) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ([IO.File]::ReadAllText($failed)) }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $end
+          exit $code
       - name: Keep the merged report with the run
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
@@ -563,10 +578,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NIGHTLY_FAILED: ${{ needs.harness-report.outputs.failed }}
         run: |
           # One "Nightly checks failed" issue, never two: added to when one is
           # open (every page read, the oldest kept, any duplicate closed
           # pointing to it), opened when none is. Issues #905 and #1120.
+          # The comment lists each failed test, its FAIL lines and the
+          # command that runs it alone, from the harness report (#4178).
           Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
           .\scripts\dev\Nightly-Issue.ps1 -Result failure
 

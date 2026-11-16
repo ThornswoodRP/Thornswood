@@ -87,7 +87,7 @@ namespace Thornswood
     $asm = $null
     # Built, then loaded: Add-LauncherType takes no resources, and Icons reads
     # its art from its own assembly's. It uses no package, so nothing else loads.
-    try { $asm = [Reflection.Assembly]::LoadFrom((Build-LauncherCode -Source $stub -File $iconsCs, (Join-Path (Split-Path -Parent $iconsCs) 'InstallShortcut.cs') -Resource @{ 'app.ico' = $appIco; 'app-dev.ico' = $devIco })) }
+    try { $asm = [Reflection.Assembly]::LoadFrom((Build-LauncherCode -Source $stub -File $iconsCs, (Join-Path (Split-Path -Parent $iconsCs) 'InstallShortcut.cs'), (Join-Path (Split-Path -Parent $iconsCs) 'Failure.cs') -Resource @{ 'app.ico' = $appIco; 'app-dev.ico' = $devIco })) }
     catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" } }
     Yes 'Icons.cs compiles with the .NET SDK the launcher builds with' ($null -ne $asm)
     if (-not $asm) { Done }
@@ -236,7 +236,7 @@ namespace Thornswood
 
     # ---- 2. Install-Launcher.ps1 names the file after the exe's art -------------
     if (-not $OnWindows) {
-        Write-Host 'SKIP  2, Install-Launcher.ps1 on a scratch root: it runs in Windows PowerShell and the shortcut it makes is read through WScript.Shell, which only Windows has'
+        Write-Host 'SKIP  2, Install-Launcher.ps1 on a scratch root: the shortcut it makes is a Windows shortcut, written and read through WScript.Shell, which only Windows has'
         Done
     }
     $stage = Join-Path $work 'stage'
@@ -260,7 +260,8 @@ namespace Thornswood
     Copy-Item -LiteralPath $devIco -Destination (Join-Path $stage 'app.ico')
     Copy-Item -LiteralPath $appIco -Destination (Join-Path $stage 'app-dev.ico')
     $sroot = Join-Path $work 'scratchroot'
-    $ps = Get-WindowsPowerShell
+    # The PowerShell 7 Ship.ps1 and Install-Thornswood.ps1 run it in (#5356).
+    $ps = Get-BoxPowerShell
     $inst = Join-Path $Repo 'scripts\release\Install-Launcher.ps1'
     $sLauncher = Join-Path $sroot 'Launcher'
     New-Item -ItemType Directory -Force -Path $sLauncher | Out-Null

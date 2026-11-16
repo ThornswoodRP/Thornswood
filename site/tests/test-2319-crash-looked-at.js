@@ -28,7 +28,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -87,9 +86,6 @@ function scratch() {
   return dir;
 }
 
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
 function request(port, method, where, headers, body) {
   return new Promise((ok) => {
     const data = body === undefined ? '' : JSON.stringify(body);
@@ -100,37 +96,18 @@ function request(port, method, where, headers, body) {
     r.end(data);
   });
 }
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) end(null); };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error('the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port + ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 
 (async function main() {
   const dir = scratch();
   const SESSIONS = path.join(dir, 'data', 'sessions.json');
   const rowOf = (key) => { try { return JSON.parse(fs.readFileSync(SESSIONS, 'utf8')).filter((r) => r.session === key)[0] || null; } catch (e) { return null; } };
-  const port = await freePort();
+  let port = 0;
   const srv = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   let up = false;
-  try { await listening(srv, port); up = true; } catch (e) { console.log(e.message); }
+  try { await siteFiles.listening(srv).then((r) => (port = r.port, r)); up = true; } catch (e) { console.log(e.message); }
   try {
     yes('the scratch site starts', up);
     if (!up) return;

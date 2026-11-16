@@ -24,8 +24,15 @@ using System.Text;
 //    (discordAuth, metricsAuth, masterKey, additionalServerSettings), no
 //    master server, offline login, no join pass hold, a password of its own,
 //    and ports from 7900 that nothing else holds;
-//  - never dev's world, its private folder (door.json and the join pass key),
-//    its logs or its deploy records. The world starts empty.
+//  - dev's merchant ledger and its first-start mark (merchant-ledger.json
+//    and merchant-ledger.initialized in its private folder), copies, so the
+//    gamemode's NPC runtime starts as it does on dev and the copy's trades
+//    never touch dev's purses. Without them it says "Saved merchant ledger
+//    or initialization evidence is missing" and stands up no NPC (the load
+//    copy found the same, #5557), so a pass could never reach a trader;
+//  - never the rest of dev's private folder (door.json and the join pass
+//    key, the registers), its world, its logs or its deploy records. The
+//    world starts empty.
 // docs/DEPLOY-AGENT.md has the whole design.
 using System.Diagnostics;
 using System.Net.NetworkInformation;
@@ -222,7 +229,8 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
     /// serverZip, when given, is the server build the Deployment swaps dev
     /// onto (#5219), held to the signed manifest too: the copy runs that
     /// engine and not dev's, so the pass checks what dev will run.</summary>
-    public async Task<Outcome> Run(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, CancellationToken ct, string? serverZip = null, string name = "")
+    public async Task<Outcome> Run(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, CancellationToken ct, string? serverZip = null, string name = "",
+        IReadOnlyDictionary<string, string>? staged = null, IReadOnlyList<string>? order = null)
     {
         if (!bot.Contains(Runs)) return new Outcome("failure", $"not applied: the Release's bot part has no {Runs}, and dev's deploys wait on the bot pass");
         foreach (var n in bot.Concat(Server.ReloadFiles))
@@ -231,7 +239,7 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         using (var turn = TakeTurn(log, out why))
         {
             if (turn == null) return new Outcome("failure", "not applied: " + why);
-            try { why = Prepare(files, bot, log, serverZip, name); }
+            try { why = Prepare(files, bot, log, serverZip, name, staged, order); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidDataException) { why = e.Message; }
         }
         if (why != "") return new Outcome("failure", "not applied: the bot pass copy could not be made: " + why);
@@ -316,8 +324,14 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException) { why = e.Message; return null; }
     }
 
-    /// <summary>The copy, made fresh: "" when it is ready, else why not.</summary>
-    public string Prepare(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, string? serverZip = null, string passName = "")
+    /// <summary>The copy, made fresh: "" when it is ready, else why not.
+    /// staged is what the Deployment puts in beside the gamemode, by its path
+    /// under the server's root ("plugins/Thornswood-Content.esp", ServerPlugins
+    /// and ServerOrder): each plugin of it is read from there, not from dev.
+    /// order, when given, is the load order the Deployment writes (#6209),
+    /// read in place of dev's.</summary>
+    public string Prepare(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, string? serverZip = null, string passName = "",
+        IReadOnlyDictionary<string, string>? staged = null, IReadOnlyList<string>? order = null)
     {
         if (!Directory.Exists(RunDir)) return $"{RunDir} is not there; Install-DeployAgent.ps1 makes it with the task";
         // The folder stays, with the rights the installer gave the task on it;
@@ -373,13 +387,16 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         }
 
         string Resolve(string entry) => Path.IsPathRooted(entry) || entry.Contains(":\\") ? entry : Path.Combine(devData, entry);
-        var order = settings["loadOrder"] is JsonArray lo ? lo.Select(x => x!.GetValue<string>()).ToList() : FiveMasters.ToList();
+        var loads = order?.ToList() ?? (settings["loadOrder"] is JsonArray lo ? lo.Select(x => x!.GetValue<string>()).ToList() : FiveMasters.ToList());
+        if (order != null) log($"the copy loads the {loads.Count} plugins of the order the Deployment writes, not dev's");
         var copied = 0;
         var placed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         string Cache(string entry, string what)
         {
             var from = Resolve(entry);
             var name = Path.GetFileName(from.Replace('\\', '/').TrimEnd('/'));
+            // What the Deployment puts in is read from its stage (#6175, #6209).
+            if (staged != null && staged.TryGetValue(ServerPlugins.Dir + "/" + name, out var put)) from = put;
             if (!File.Exists(from)) throw new InvalidDataException($"{entry} is in dev's {what} but not on disk at {from}");
             if (placed.TryGetValue(name, out var other) && !string.Equals(other, from, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"dev's {what} names two files called {name} ({other} and {from})");
@@ -396,7 +413,7 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
             return to;
         }
         var newOrder = new JsonArray();
-        foreach (var p in order) newOrder.Add(Cache(p, "load order"));
+        foreach (var p in loads) newOrder.Add(Cache(p, "load order"));
         settings["loadOrder"] = newOrder;
         if (settings["archives"] is JsonArray ar)
         {
@@ -422,6 +439,10 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
             if (!reserved.Contains(c) && !tcp.Contains(c)) voice = c;
         if (voice == 0) return $"no free voice port above {port}";
 
+        // Dev's private folder, read before the copy's settings name its own.
+        var privSetting = settings["privDir"]?.GetValue<string>() ?? "private";
+        var devPrivate = Path.IsPathRooted(privSetting) ? privSetting : Path.Combine(dev, privSetting);
+
         foreach (var k in Dropped) settings.Remove(k);
         settings["port"] = port;
         settings["thornswoodVoicePort"] = voice;
@@ -435,11 +456,27 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         settings["databaseDriver"] = "file";
         settings["databaseName"] = "world";
         Directory.CreateDirectory(Path.Combine(ServerDir, "private"));
+        var ledger = 0;
+        foreach (var name in Ledger)
+        {
+            var at = Path.Combine(devPrivate, name);
+            if (!File.Exists(at)) continue;
+            Files.Copy(at, Path.Combine(ServerDir, "private", name));
+            ledger++;
+        }
+        log(ledger == Ledger.Length
+            ? "the copy has dev's merchant ledger and its mark, so its NPC runtime starts as dev's does"
+            : $"dev has {ledger} of the merchant ledger's {Ledger.Length} files in {devPrivate}, so the copy's NPC runtime does not start, as dev's would not");
         Files.WriteWhole(Path.Combine(ServerDir, "server-settings.json"),
             JsonSerializer.SerializeToUtf8Bytes(settings, new JsonSerializerOptions { WriteIndented = true }));
-        log($"the copy is ready in {ServerDir}: game port {port}, resources {port + 1}, voice {voice}, an empty world, no private folder of dev's");
+        log($"the copy is ready in {ServerDir}: game port {port}, resources {port + 1}, voice {voice}, an empty world, and of dev's private folder only the merchant ledger");
         return "";
     }
+
+    /// <summary>The merchant ledger and its first-start mark, the only files
+    /// of dev's private folder the copy gets (npc-merchant-purses.ts,
+    /// requireMerchantEvidence).</summary>
+    public static readonly string[] Ledger = ["merchant-ledger.json", "merchant-ledger.initialized"];
 
     static void CopyTree(string from, string to, Func<string, bool> take)
     {

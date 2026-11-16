@@ -78,7 +78,7 @@ namespace Thornswood
                         {
                             // Gone between the look and the kill, or not ours
                             // to end. Either way it is looked at again below.
-                            if (!p.HasExited) throw new InstallStop("Skyrim (" + p.ProcessName + ") would not close: " + e.Message + ". Restart your PC, then run this again.");
+                            if (!p.HasExited) throw new InstallStop("Skyrim (" + p.ProcessName + ") would not close: " + Failure.Why("InstallSkyrim, closing Skyrim", e, p.ProcessName) + ". Restart your PC, then run this again.");
                         }
                     }
                     foreach (Process p in found) p.WaitForExit(3000);

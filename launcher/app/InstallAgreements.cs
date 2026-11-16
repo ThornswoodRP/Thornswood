@@ -124,7 +124,7 @@ namespace Thornswood
                     try { shas[i] = PageSha(FetchPage(http, Pages[i])); }
                     catch (Exception e) when (e is HttpRequestException || e is System.Threading.Tasks.TaskCanceledException || e is JsonException)
                     {
-                        say("  The site did not answer for the " + Pages[i] + " page (" + e.Message + "), so its version is recorded empty.");
+                        say("  The site did not answer for the " + Pages[i] + " page (" + Failure.Why("InstallAgreements, " + Pages[i], e, "thornswood.net") + "), so its version is recorded empty.");
                         shas[i] = "";
                     }
                 }
@@ -136,7 +136,7 @@ namespace Thornswood
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                say("Could not note what you accepted: " + e.Message);
+                say("Could not note what you accepted: " + Failure.Say("InstallAgreements, noting what was accepted", e));
             }
         }
     }
