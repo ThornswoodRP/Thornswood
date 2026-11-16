@@ -403,7 +403,12 @@ const path = require('path');
 const cp = require('child_process');
 const a = JSON.parse(fs.readFileSync(process.argv[2], 'utf8').replace(/^\uFEFF/, ''));
 const say = (s) => process.stdout.write(s + '\n');
-function stop(m) { say('STOP|' + m); process.exit(2); }
+// A stop is thrown, and the catch at the end of this script says it and
+// ends the run with code 2, rather than calling node's exit function, which
+// can hang on Node 24 (#6036). The try runs to the end of the script.
+class Stop extends Error { }
+function stop(m) { throw new Stop(m); }
+try {
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // One shape for a character's form id (#2870); game\form-id.js is the
@@ -1104,7 +1109,7 @@ for (const [w, q] of asks) {
 for (const w of asks.keys()) say('WRITER|' + w);
 for (const r of results) say('PERSON|' + JSON.stringify(r));
 
-if (a.mode !== 'apply') { say('DONE|plan'); process.exit(0); }
+if (a.mode !== 'apply') { say('DONE|plan'); return; }
 
 // Each file to a file beside it, then swapped in, so a write that fails half
 // way leaves the old file whole. A change that does not take is named.
@@ -1136,6 +1141,11 @@ for (const [p, w] of unlinks) {
 }
 for (const f of failed) say('FAILED|' + f);
 say(failed.length ? 'DONE|failed' : 'DONE|apply');
+} catch (e) {
+  if (!(e instanceof Stop)) throw e;
+  say('STOP|' + e.message);
+  process.exitCode = 2;
+}
 '@
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-delete-person-' + [Guid]::NewGuid().ToString('N'))

@@ -101,4 +101,4 @@ async function main() {
   return fails ? 1 : 0;
 }
 
-main().then((code) => process.exit(code), (e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exit(1); });
+main().then((code) => { process.exitCode = code; }, (e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exitCode = 1; });

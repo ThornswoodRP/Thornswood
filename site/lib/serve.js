@@ -159,6 +159,12 @@ function errorAnswer(req, res, status, plain, headers, lines) {
 
   An unhandled rejection is different: the process is still defined, so it is
   logged and the site keeps answering.
+
+  The exit is process.abort(), not node's exit function: that one tears V8
+  down first and can hang on Node 24 (#6036), which would leave a dead site
+  holding its port. abort ends at once with no teardown, as an unknown state
+  wants. On Windows it ends with code 134 and no dialog (node's
+  ABORT_NO_BACKTRACE), after node writes the stack it was on to the log.
 */
 process.on('unhandledRejection', (e) => {
   console.error('[thornswood-docs] unhandled rejection, carrying on: ' +
@@ -167,7 +173,7 @@ process.on('unhandledRejection', (e) => {
 process.on('uncaughtException', (e) => {
   console.error('[thornswood-docs] uncaught exception, exiting: ' +
                 (e && e.stack ? e.stack : e));
-  process.exit(1);
+  process.abort();
 });
 
 /*

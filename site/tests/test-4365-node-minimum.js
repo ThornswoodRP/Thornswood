@@ -67,7 +67,7 @@ const firstOther = (() => {
 yes('B1 server.js asks node-version.js before it loads any other part of the site, the --strip-metadata start included',
   asks >= 0 && firstOther > asks);
 const stop = asks >= 0 ? server.slice(asks, asks + 300) : '';
-yes('B2 and stops with exit 1 on its line', /console\.error\(/.test(stop) && /process\.exit\(1\)/.test(stop));
+yes('B2 and stops with exit 1 on its line', /console\.error\(/.test(stop) && /process\.exitCode = 1; return;/.test(stop));
 
 // ---- C: a copy on a pretend Node 20
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-4365-'));

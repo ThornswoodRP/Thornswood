@@ -165,9 +165,12 @@
 'use strict';
 const fs = require('fs');
 
+// A stop says why and ends with code 1. It is thrown, and the program's end
+// below says it, rather than calling node's exit function, which can hang on
+// Node 24 (#6036).
+class Stop extends Error { }
 function stop(msg) {
-  process.stderr.write(msg + '\n');
-  process.exit(1);
+  throw new Stop(msg);
 }
 
 // ------------------------------------------- Vortex's mapping, as it is ---
@@ -720,5 +723,12 @@ function main(argv) {
   process.stdout.write(lines.join('\n') + (lines.length ? '\n' : ''));
 }
 
-if (require.main === module) main(process.argv.slice(2));
+if (require.main === module) {
+  try {
+    main(process.argv.slice(2));
+  } catch (e) {
+    if (e instanceof Stop) process.stderr.write(e.message + '\n'); else console.error(e && e.stack || e);
+    process.exitCode = 1;
+  }
+}
 module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, applyPage, filterInfo, toV3CollectionPayload };

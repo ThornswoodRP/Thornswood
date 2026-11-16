@@ -24,8 +24,8 @@ export default [
     },
   },
   { files: ['**/*.mjs'], languageOptions: { sourceType: 'module' } },
-  // A harness is a CommonJS module, and one that cannot go on stops with a
-  // top-level return after setting process.exitCode, since node's exit
+  // A harness or a tool is a CommonJS module, and one that cannot go on stops
+  // with a top-level return after setting process.exitCode, since node's exit
   // function can hang on Node 24 (#6036).
-  { files: ['tests/**/*.js', '**/tests/**/*.js'], languageOptions: { sourceType: 'commonjs' } },
+  { files: ['tests/**/*.js', '**/tests/**/*.js', 'scripts/**/*.js', 'site/server.js'], languageOptions: { sourceType: 'commonjs' } },
 ];

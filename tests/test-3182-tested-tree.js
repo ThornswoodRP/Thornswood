@@ -258,7 +258,7 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     yes('a tree that passed writes run=<its address> for the jobs to read', r2.run !== '' && up === 'run=' + r2.run + '\n');
   } finally { console.log = log; fs.rmSync(scratch, { recursive: true, force: true }); }
   const src = read(path.join(REPO, 'scripts', 'dev', 'Tested-Tree.js'));
-  yes('run as a command it always ends 0, so it can never fail main', /\.then\(\(\) => process\.exit\(0\), \(\) => process\.exit\(0\)\)/.test(src));
+  yes('run as a command it always ends 0, so it can never fail main', /\.then\(\(\) => \{ process\.exitCode = 0; \}, \(\) => \{ process\.exitCode = 0; \}\)/.test(src));
 
   // ---- 2. build.yml's wiring -------------------------------------------------
   const build = read(path.join(REPO, '.github', 'workflows', 'build.yml'));
