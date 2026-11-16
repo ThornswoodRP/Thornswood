@@ -659,6 +659,35 @@ Yes 'box-run.yml is not in this repository, which has no VPS runner once public'
 $br = Text 'scripts/vps/Box-Run.ps1'
 Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
 
+# A live line is Bramble's, on Patrick's tap on its Main card in the Hermes
+# Agents app (#4989): box-run.yml refuses one anybody else started, so
+# Box-Run.ps1 refuses it before anything starts. Checked against a stand-in
+# gh that records what it is asked to start (global, since the stand-in
+# runs in Box-Run.ps1's own script scope).
+$global:twStarted = New-Object System.Collections.Generic.List[string]
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '^api -X POST repos/(\S+)/actions/workflows/(\S+)/dispatches') {
+        $global:twStarted.Add($Matches[1] + ' ' + $Matches[2])
+        return '{"workflow_run_id":77,"html_url":"https://github.com/o/r/actions/runs/77"}'
+    }
+    $global:LASTEXITCODE = 1; return 'HTTP 404'
+}
+$oldScratch = $env:THORNSWOOD_SCRATCH_ROOT
+$env:THORNSWOOD_SCRATCH_ROOT = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-live-' + [Guid]::NewGuid().ToString('N'))
+$liveVerbs = @((Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts/vps/gate/verbs.json')).verbs.PSObject.Properties | Where-Object { $_.Value.PSObject.Properties['build'] -and $_.Value.build -eq $true } | ForEach-Object { $_.Name })
+Yes "  main's verbs.json has live verbs ($($liveVerbs -join ', '))" ($liveVerbs.Count -ge 1)
+foreach ($v in $liveVerbs) {
+    $said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line ($v + ' -Build ' + ('a' * 40)) *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
+    Yes "  a $v line is refused here, nothing starts, and it says to ask Bramble" ($code -eq 1 -and $global:twStarted.Count -eq 0 -and ($said -join ' ') -match 'ask Bramble for it')
+}
+$said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line 'ping' *>&1 | ForEach-Object { "$_" })
+Yes '  and a line that names no build goes to box-run.yml in the ops repository' ($global:twStarted.Count -eq 1 -and $global:twStarted[0] -eq 'ThornswoodRP/Thornswood-Ops box-run.yml')
+Remove-Item -LiteralPath function:\gh
+Remove-Item -LiteralPath $env:THORNSWOOD_SCRATCH_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+$env:THORNSWOOD_SCRATCH_ROOT = $oldScratch
+Remove-Variable -Name twStarted -Scope Global
+
 # ---- 9. the seal, and the ssh it uses -------------------------------------------
 . (Join-Path $Repo 'scripts/ops/Sealed.ps1')
 $rsa = [Security.Cryptography.RSA]::Create(3072)

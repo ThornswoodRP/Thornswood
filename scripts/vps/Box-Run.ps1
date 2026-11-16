@@ -8,7 +8,6 @@
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Docs -Site'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Get-Logs -Dev -Lines 2000'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Rebuild-ContentTables -Server dev'
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Server -GamemodeOnly -Build <main's full commit>'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Watch-Services -Install'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Hold-Server -Service dev -Why "swapping the ledger" -Minutes 45'
       pwsh scripts/vps/Box-Run.ps1 -Line 'ping'
@@ -31,6 +30,14 @@
   (Grant-BoxAccess.ps1 -Deploy puts it there), and asks the gate over the box's own sshd on 127.0.0.1 with
   this script's -OnTheBox half. The key logs in as thornswood-deploy and can
   only hand the gate a line (scripts\vps\gate\Gate.ps1).
+
+  A LIVE LINE IS BRAMBLE'S, ON PATRICK'S TAP (#4989). A verb verbs.json
+  marks "build" changes what people play on, so its line goes to the box
+  only when Bramble starts it, on Patrick's tap on its Main card in the
+  Hermes Agents app, which names main's commit and that exact line and is
+  used once. box-run.yml sends a live line on only when Bramble's App
+  started the run. A session works under a person's sign-in, so this
+  refuses a live line before anything starts: ask Bramble for it.
 
   WHAT COMES BACK, AND TO WHOM. A deploy prints paths and a Get-Logs run
   brings back the servers' logs, and a run's log and files are readable by
@@ -235,6 +242,7 @@ $minutes = 30
 if (-not $Run) {
     $req = Test-ThornswoodGateRequest -Line $Line -Verbs (Read-ThornswoodGateVerbs (Join-Path $Here 'gate\verbs.json'))
     if (-not $req.Ok) { Die $req.Why }
+    if ($req.Build) { Die ($req.Verb + ' changes what people play on, so only Bramble starts it, on Patrick''s tap on its Main card in the Hermes Agents app naming main''s commit and this exact line. The box run refuses a live line anybody else starts, so ask Bramble for it. Nothing was run.') }
     if ($req.Minutes) { $minutes = $req.Minutes }
     # A key for this run alone. Its public half goes with the run; its
     # private half stays here.
