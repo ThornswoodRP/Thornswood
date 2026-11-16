@@ -148,11 +148,16 @@ function ensureIndexes(db) {
 
 function exportWorld(plan) {
   const db = connect(plan.uri, plan.db);
-  if (fs.existsSync(plan.to)) fail(plan.to + ' is there already; nothing was written');
-  if (fs.existsSync(plan.manifest)) fail(plan.manifest + ' is there already; nothing was written');
-  const part = plan.to + '.part';
-  if (fs.existsSync(part)) fail(part + ' is there from an export that did not finish; nothing was written');
-  fs.mkdirSync(part, { recursive: true });
+  // The folder is claimed by making it, which fails when it is there, so no
+  // other export or tool can be writing into it. The manifest is written
+  // last, the same way, and is what says the export finished: apply reads
+  // nothing without it.
+  fs.mkdirSync(path.dirname(plan.to), { recursive: true });
+  try {
+    fs.mkdirSync(plan.to);
+  } catch (e) {
+    fail(plan.to + (e.code === 'EEXIST' ? ' is there already' : ' could not be made: ' + e.message) + '; nothing was written');
+  }
   const forms = {};
   let n = 0;
   const cursor = db.getCollection(kCollection).find({}, { _id: 0 }, { promoteValues: false }).sort({ formDesc: 1 }).batchSize(1000);
@@ -161,14 +166,17 @@ function exportWorld(plan) {
     const name = fileOf(doc.formDesc);
     if (forms[name]) fail('two forms are kept as ' + name);
     const bytes = Buffer.from(canon(doc), 'utf8');
-    fs.writeFileSync(path.join(part, name), bytes);
+    fs.writeFileSync(path.join(plan.to, name), bytes, { flag: 'wx' });
     forms[name] = sha(bytes);
     n++;
   }
   const counted = db.getCollection(kCollection).countDocuments({});
   if (counted !== n && !plan.live) fail('read ' + n + ' forms where the collection counts ' + counted + '; the server must not be writing while a tool reads its world');
-  fs.renameSync(part, plan.to);
-  fs.writeFileSync(plan.manifest, JSON.stringify({ db: plan.db, count: n, exported: new Date().toISOString(), forms }, null, 1));
+  try {
+    fs.writeFileSync(plan.manifest, JSON.stringify({ db: plan.db, count: n, exported: new Date().toISOString(), forms }, null, 1), { flag: 'wx' });
+  } catch (e) {
+    fail(plan.manifest + (e.code === 'EEXIST' ? ' is there already' : ' could not be written: ' + e.message) + ', so this export is not one a tool may save back');
+  }
   print('EXPORTED|' + n);
 }
 
@@ -176,9 +184,23 @@ function exportWorld(plan) {
 function readFolder(dir) {
   const out = {};
   for (const name of fs.readdirSync(dir)) {
-    const full = path.join(dir, name);
-    if (!name.endsWith('.json') || !fs.statSync(full).isFile()) continue;
-    const bytes = fs.readFileSync(full);
+    if (!name.endsWith('.json')) continue;
+    // Opened once, and what was opened is what is checked and read, so the
+    // file cannot change between the look and the read.
+    let fd;
+    try {
+      fd = fs.openSync(path.join(dir, name), 'r');
+    } catch (e) {
+      if (e.code === 'EISDIR') continue; // a folder named like a form is not one
+      throw e;
+    }
+    let bytes;
+    try {
+      if (!fs.fstatSync(fd).isFile()) continue;
+      bytes = fs.readFileSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     let doc;
     try {
       doc = parseForm(bytes.toString('utf8'));

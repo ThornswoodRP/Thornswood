@@ -2928,6 +2928,33 @@
                       "does":  "locks C:\\Thornswood-Agent, downloads and checks the newest signed agent-v Release, writes agent.json, and makes, sets and starts the LocalSystem service ThornswoodDeployAgent, or puts the old program back (#5180)",
                       "class":  "admin",
                       "reason":  "ACLs and sc.exe create"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Backup.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "try { Invoke-ThornswoodNative { \u0026 scp @ssh $worldTmp \"${target}:$($Root.Replace(\u0027\\\u0027,\u0027/\u0027))/world.ps1\" } }",
+                      "does":  "uploads world.ps1, which the nightly backup reads a world in MongoDB with (#6237)",
+                      "class":  "admin",
+                      "reason":  "script a SYSTEM task runs"
+                  },
+                  {
+                      "script":  "scripts/ops/Move-World.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "Head \u0027What a move would do (nothing changes)\u0027",
+                      "does":  "says what a move of a server\u0027s world into MongoDB would do, and changes nothing (#6237)",
+                      "class":  "read-status",
+                      "reason":  "reads files, settings, logs or status only"
+                  },
+                  {
+                      "script":  "scripts/ops/Move-World.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "Head \u0027Moving\u0027",
+                      "does":  "stops a server, moves its world into its MongoDB database with the engine\u0027s checked move, rewrites its settings and starts it (#6237)",
+                      "class":  "admin",
+                      "reason":  "stops and starts a server and rewrites its settings, outside the deploy stages"
                   }
               ]
 }

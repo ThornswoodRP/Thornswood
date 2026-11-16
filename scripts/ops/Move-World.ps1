@@ -163,7 +163,8 @@ if ([int](($c -split '\|')[1]) -ne 0) { 'STOP|' + $Db + ' already holds ' + ($c 
 # An engine with the move as engine PR #161 made it: it reads databaseUriFile.
 $addon = Join-Path $Root 'scam_native.node'
 $knows = $false
-try { $knows = ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($addon))).Contains('databaseUriFile') } catch { }
+try { $knows = ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($addon))).Contains('databaseUriFile') }
+catch { 'STOP|' + $addon + ' could not be read (' + $_.Exception.Message + '), so the engine is not known. Nothing was touched.'; exit 1 }
 if (-not $knows) { 'STOP|' + $addon + ' does not read databaseUriFile, so it is an engine from before PR #161, whose move does not check what it moved. Deploy an engine with it first. Nothing was touched.'; exit 1 }
 'ENGINE|knows databaseUriFile'
 if ($Survey) { 'SURVEY|' + $before + '|' + $Db; exit 0 }

@@ -83,6 +83,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/StopAndMove.ps1](deploy/StopAndMove.ps1) | Stopping what runs from a folder, and then moving its files, on the box: each process waited for until it has exited, and each move tried once. |
 | [deploy/Swap.ps1](deploy/Swap.ps1) | Stages a deploy beside what is running, checks it there, and only then swaps it in, keeping what it replaced for a one-command put-back. |
 | [deploy/VoiceSite.ps1](deploy/VoiceSite.ps1) | Says whether a voice service's site address is one it can let people in with, and whether a join gets through on a running service. |
+| [deploy/World.ps1](deploy/World.ps1) | Where a game server keeps its world, and how a tool works on it (#6237). |
 | [dev/Allow-Claude.ps1](dev/Allow-Claude.ps1) | Adds the folders and the script paths a Claude working in this repo needs, to the Claude Code settings file, and reports exactly what it changed. |
 | [dev/Build-HarvestTable.ps1](dev/Build-HarvestTable.ps1) | Builds game\data\harvests.json: the table the server needs to say who may pick which plant. |
 | [dev/Build-HuntTable.ps1](dev/Build-HuntTable.ps1) | Builds game\data\hunts.json: the table the server needs to answer a carcass. |
@@ -169,6 +170,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Discord-Hook.ps1](ops/Discord-Hook.ps1) | The Discord webhooks releases post through, kept in one place on the VPS instead of a file on each machine that ships. |
 | [ops/List-Untouched.ps1](ops/List-Untouched.ps1) | Lists the open issues nobody has touched for a month, oldest first, for the weekly board review to re-rank (#5185). |
 | [ops/Mark-Spot.ps1](ops/Mark-Spot.ps1) | Reads the spots you marked in game and prints them in the shape the content table wants. |
+| [ops/Move-World.ps1](ops/Move-World.ps1) | Moves one game server's world out of the file driver and into its own database in the box's MongoDB (#6237), with the engine's own move, and starts the server on it. |
 | [ops/New-Character.ps1](ops/New-Character.ps1) | Throws the test character away so the next connect builds a fresh one. |
 | [ops/NpcReset.ps1](ops/NpcReset.ps1) | The box half of Reset-Npcs.ps1 (#4595): which saved change forms are NPCs, and moving those aside so each NPC starts again from its plugin record. |
 | [ops/Publish-Discord.ps1](ops/Publish-Discord.ps1) | Posts the newest release into the Discord #news channel. |

@@ -329,8 +329,11 @@ function TakeWorld($root, $to) {
     # is taken as before, and one in MongoDB is said below.
     $w = @{ Stop = ''; Driver = 'file'; Forms = (Join-Path $root 'world\changeForms') }
     $cfgText = ''
-    try { $cfgText = [IO.File]::ReadAllText($settings) } catch { }
-    if ($cfgText -match '"databaseDriver"\s*:\s*"mongodb"') { $w = @{ Stop = ('world.ps1 is not beside this script, so ' + $root + '''s world in MongoDB could not be read out. Run Install-Backup.ps1 again') } }
+    if (Test-Path -LiteralPath $settings) {
+      try { $cfgText = [IO.File]::ReadAllText($settings) }
+      catch { $w = @{ Stop = ($settings + ' could not be read (' + $_.Exception.Message + '), so where the world is kept is not known') } }
+    }
+    if (-not $w.Stop -and $cfgText -match '"databaseDriver"\s*:\s*"mongodb"') { $w = @{ Stop = ('world.ps1 is not beside this script, so ' + $root + '''s world in MongoDB could not be read out. Run Install-Backup.ps1 again') } }
   } else { $w = Get-ThornswoodWorld $root }
   if ($w.Stop) { Note ('  WORLD NOT TAKEN ' + $to + ': ' + $w.Stop); $script:worldsNotTaken += $to; return }
   if ($w.Driver -eq 'file') {
