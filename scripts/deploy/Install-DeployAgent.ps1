@@ -199,7 +199,17 @@ foreach (`$tail in @(@((Join-Path `$from 'bot-pass.log'), 40), @((Join-Path `$fr
     Get-Content -LiteralPath `$tail[0] -Tail `$tail[1] | ForEach-Object { `$_ -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' }
   } else { 'no ' + `$tail[0] }
 }
-`$kept = @(Get-ChildItem -LiteralPath '$passRoot\passes' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 10)
+# What the copy's server threw, which the tail above misses once the world
+# loads around a character and its script warnings fill the last lines: each
+# "in server.tick" error (ts/index.ts, the tick's catch) with its message and
+# first frames.
+`$srv = Join-Path `$from `$(if ('$Pass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })
+if (Test-Path -LiteralPath `$srv) {
+  `$thrown = @(Select-String -LiteralPath `$srv -SimpleMatch 'in server.tick' -Context 0,8)
+  '--- what the copy''s server threw: ' + `$thrown.Count + ' tick error(s), the first 5 ---'
+  foreach (`$m in @(`$thrown | Select-Object -First 5)) { foreach (`$c in @(`$m.Line) + @(`$m.Context.PostContext)) { `$c -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' } }
+}
+`$kept =@(Get-ChildItem -LiteralPath '$passRoot\passes' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 10)
 if (`$kept.Count) { '--- kept passes, newest 10 (-Status -Pass <name> prints one) ---'; foreach (`$k in `$kept) { '  ' + `$k.Name } } else { 'no kept passes yet in $passRoot\passes' }
 '--- agent.log, last 30 ---'
 `$log = '$Root\logs\agent.log'

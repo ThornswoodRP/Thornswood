@@ -127,6 +127,30 @@ const MERCHANT = /npc|merchant|trader/i;
 // The character block's lines (clog), which say whether a pick was taken,
 // and which a FAIL at stations carries.
 const PICKS = '[thornswood character] ';
+// The tick's catch in the engine (skymp5-server ts/index.ts) writes this line
+// and then the error's stack, one line each. A throw there drops the rest of
+// that tick's work, so what a step waited for may never come, and the world
+// loading around a character fills the log's last lines with script warnings
+// long before the step runs out: the 1.3.82 and 1.3.83 passes lost the error
+// behind their login FAIL that way (#6346). A FAIL carries what was thrown
+// while its step ran.
+const TICK_THREW = 'in server.tick';
+
+// What the server's tick threw in lines[from..]: each throw's message and its
+// first two frames, at most three throws, each one line.
+function thrown(lines, from) {
+  const out = [];
+  for (let i = from; i < lines.length && out.length < 3; i++) {
+    if (lines[i].indexOf(TICK_THREW) < 0) { continue; }
+    const what = [];
+    for (let j = i + 1; j < lines.length && j <= i + 6 && what.length < 3; j++) {
+      const t = lines[j].trim();
+      if (t) { what.push(t); }
+    }
+    out.push((what.length ? what.join(' ') : '(no message)').slice(0, 400));
+  }
+  return out;
+}
 // What a door says to the person who opened it (property.ts doorLine,
 // DOOR_LINE_PROPERTY, visible by its owner): x is what the lock key does
 // there, claim, lock or unlock, and n the building.
@@ -439,8 +463,18 @@ async function pass(opts) {
     const c = server.lines.filter((l) => l.indexOf(which[0]) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
     return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about ' + which[1];
   };
+  // Where the server's output stood when the step before this one ended (a
+  // restart starts a new list of lines, read from its first).
+  let stepLines = null;
+  let stepFrom = 0;
   const say = (step, ok, detail) => {
-    if (!ok) { detail += said(step); }
+    if (!ok) {
+      detail += said(step);
+      const t = thrown(server.lines, server.lines === stepLines ? stepFrom : 0);
+      if (t.length) { detail += '. The server\'s tick threw: ' + t.join(' | '); }
+    }
+    stepLines = server.lines;
+    stepFrom = server.lines.length;
     lines.push({ step, ok, detail }); log((ok ? 'PASS  ' : 'FAIL  ') + step + ': ' + detail); return ok;
   };
   const settings = readJson(path.join(root, 'server-settings.json'));
