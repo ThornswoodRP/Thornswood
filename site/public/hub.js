@@ -24,7 +24,7 @@ var S = {
 var ROUTES = {
   '/hub':'home',
   '/uploads':'uploads', '/linked':'linked', '/sessions':'sessions', '/inbox':'inbox',
-  '/economy':'economy'
+  '/economy':'economy', '/ledger':'ledger'
 };
 var PATHS = {};
 Object.keys(ROUTES).forEach(function (u) { PATHS[ROUTES[u]] = u; });
@@ -41,7 +41,8 @@ var ABOUT = {
   sessions:    'One card a person, newest first by when they last played. ' +
                'Open one for every session they have had, with its logs and ' +
                'what they said in it.',
-  economy:     'What each hold gathers, makes and trades, counted in pieces, so a hold out of balance shows.'
+  economy:     'What each hold gathers, makes and trades, counted in pieces, so a hold out of balance shows.',
+  ledger:      'Every trade and every move of gold between people, by Discord account and character. Big moves are flagged.'
 };
 
 /* Hub trimmed (#433): Gallery, Sessions, Linked Accounts, Inbox. Issue
@@ -49,7 +50,7 @@ var ABOUT = {
    No site theme/appearance prefs. */
 var GROUPS = [
   { label:'',     keys:['home'] },
-  { label:'Hub',  keys:['uploads','sessions','linked','inbox','economy'] }
+  { label:'Hub',  keys:['uploads','sessions','linked','inbox','economy','ledger'] }
 ];
 
 var el = function (id) { return document.getElementById(id); };
@@ -65,6 +66,7 @@ function label(k) {
   if (k === 'linked') return 'Linked accounts';
   if (k === 'sessions') return 'Play sessions';
   if (k === 'economy') return 'Hold economy';
+  if (k === 'ledger') return 'Gold and trades';
   return S.titles[k] || k;
 }
 /* The level the server sent for this page, against who the server says we are.
@@ -373,6 +375,19 @@ function charLine(pid, rec, now) {
 /* The Notes line under one account (#412, #1010): the account's ban if there
    is one, each of its characters with a PK or a ban of its own, then every
    staff note, newest first, each with who wrote it and when. */
+/* The other accounts that played from one of this account's PCs in the
+   last 30 days (the site's pcs.js), by name where the list has one. A
+   shared family PC looks the same, so it is said, never acted on. */
+function pcLine(u) {
+  var others = (u && u.sharesPc) || [];
+  if (!others.length) return '';
+  var names = others.map(function (id) {
+    var o = (S.linked || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return esc((o && (o.name || o.handle)) || 'not linked now') + ' (<code>' + esc(id) + '</code>)';
+  });
+  return '<div class="said">Played from the same PC as ' + names.join(', ') + ' in the last 30 days.</div>';
+}
+
 function linkedNotes(u, rec, now) {
   rec = rec || { bans: {}, notes: {} };
   var id = String(u && u.id || '');
@@ -388,6 +403,7 @@ function linkedNotes(u, rec, now) {
       ' (by ' + esc(b.by || 'staff') + ')</div>';
   }
   chars.forEach(function (pid) { out += charLine(pid, rec, now); });
+  out += pcLine(u);
   if (!notes.length && !b) out += ' <span class="said">no notes yet</span>';
   notes.forEach(function (n) {
     out += '<div class="note">' + esc(n.text || '') + ' <span class="said">(' +
@@ -1625,6 +1641,7 @@ function draw() {
   if (S.at === 'linked')  return drawLinked();
   if (S.at === 'sessions') return drawSessions();
   if (S.at === 'economy') return drawEconomy();
+  if (S.at === 'ledger')  return drawLedger();
   if (S.editing)          return drawEdit();
   drawDoc();
 }
@@ -1909,6 +1926,223 @@ function wireEconomy() {
   }
 }
 
+/* -------------------------------------------------------------- ledger -- */
+/*
+  GOLD AND TRADES (#6270). Every trade and every move of gold between
+  people, which each game server sends here as it happens; GET /api/ledger
+  hands staff what matches. Searched the way a staff member asks: a Discord
+  account (copied from Linked accounts), a profile number, or a character's
+  name. Flagged only narrows it to the moves of 1000 gold or more that the
+  staff channel was told about.
+
+  Asked of the site on every search rather than loaded whole: 90 days of
+  every trade on both servers is far more than one page should hold.
+*/
+var LFIND = { srv: 'main', q: '', flagged: false };
+var LEDG = null;
+/*
+  TAKE BACK (#6271), admins only, under the log: gold or a thing taken back
+  out of a character, online or not, by the game server that holds it. A
+  row's Take back fills the form with whoever received it and what they
+  got. The asks and what each game server did with them are listed under
+  the form; a game server takes its asks every 30 seconds.
+*/
+var TB = { pid: '', record: 'gold', count: '', why: '', said: '' };
+var TBROWS = null;
+
+function ledgerWho(p) {
+  if (!p) return '<span class="faint">nobody</span>';
+  return esc(p.name || 'somebody') +
+    (p.pid ? ' <span class="faint">profile ' + esc(String(p.pid)) + '</span>' : '') +
+    (p.account ? ' <span class="faint">account ' + esc(p.account) + '</span>' : '');
+}
+function ledgerWhat(gold, things) {
+  var bits = [];
+  if (gold) bits.push(gold + ' gold');
+  (things || []).forEach(function (t) { bits.push(t.c + ' ' + (t.n || t.desc || 'something')); });
+  return bits.length ? esc(bits.join(', ')) : '<span class="faint">nothing</span>';
+}
+var LEDGER_KIND = { trade: 'Trade', halftrade: 'Trade, half through', sale: 'Sale to the company',
+                    take: 'Took gold', drop: 'Dropped gold', put: 'Put gold away',
+                    takeback: 'Taken back by staff' };
+
+function loadLedger() {
+  LEDG = { loading: true };
+  var q = '/api/ledger?server=' + encodeURIComponent(LFIND.srv) + '&q=' + encodeURIComponent(LFIND.q.trim()) +
+          (LFIND.flagged ? '&flagged=1' : '');
+  api(q).then(function (r) {
+    if (!r.ok) throw new Error('the site answered ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    LEDG = { rows: (d && d.rows) || [], more: !!(d && d.more), keepDays: (d && d.keepDays) || 90 };
+    if (S.at === 'ledger') drawLedger();
+  }).catch(function (e) {
+    // Said in the page, never shown as an empty log (#2736).
+    LEDG = { failed: String((e && e.message) || e) };
+    if (S.at === 'ledger') drawLedger();
+  });
+}
+
+function drawLedger() {
+  if (!LEDG) loadLedger();
+  var out = head('<button class="btn" id="lreload">Read again</button>') +
+    '<div class="bar bar-mb-16">' +
+      '<select id="lsrv" aria-label="Server">' +
+        [['main', 'Main server'], ['dev', 'Dev server']].map(function (o) {
+          return '<option value="' + o[0] + '"' + (LFIND.srv === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('') +
+      '</select>' +
+      '<input type="search" id="lfind" value="' + esc(LFIND.q) + '" aria-label="Find an account, a profile or a character" placeholder="A Discord account, a profile number or a character\'s name">' +
+      '<label class="check"><input type="checkbox" id="lflag" aria-label="Flagged only"' + (LFIND.flagged ? ' checked' : '') + '> Flagged only</label>' +
+    '</div>';
+  if (!LEDG || LEDG.loading) {
+    el('page').innerHTML = out + '<div class="empty">Reading the log.</div>' + takeBackPanel();
+    return wireLedger();
+  }
+  if (LEDG.failed) {
+    el('page').innerHTML = out + '<div class="empty">The log could not be read: ' + esc(LEDG.failed) +
+      '. Read again, or reload the page if you were signed out.</div>' + takeBackPanel();
+    return wireLedger();
+  }
+  if (!LEDG.rows.length) {
+    el('page').innerHTML = out + '<div class="empty">' + (LFIND.q.trim() || LFIND.flagged
+      ? 'Nothing matches that in the last ' + esc(String(LEDG.keepDays)) + ' days.'
+      : 'Nothing logged on the ' + (LFIND.srv === 'dev' ? 'dev' : 'main') + ' server in the last ' +
+        esc(String(LEDG.keepDays)) + ' days.') + '</div>' + takeBackPanel();
+    return wireLedger();
+  }
+  out += '<div class="said said-show">Newest first, ' + LEDG.rows.length + (LEDG.more ? ' shown, and there are more: search narrower to see them.' : ' found.') +
+    ' Kept ' + esc(String(LEDG.keepDays)) + ' days.</div>';
+  out += '<div class="tablewrap"><table class="board ledger"><thead><tr><th>When</th><th>What</th>' +
+    '<th>From</th><th>Gave</th><th>To</th><th>Gave back</th><th>Where</th></tr></thead><tbody>' +
+    LEDG.rows.map(function (r) {
+      var back = (r.kind === 'trade' || r.kind === 'halftrade' || r.kind === 'sale');
+      return '<tr' + (r.flagged ? ' class="flagged"' : '') + '>' +
+        '<td data-label="When"><div class="cell">' + esc(new Date(r.at).toLocaleString()) + '</div></td>' +
+        '<td data-label="What"><div class="cell">' + esc(LEDGER_KIND[r.kind] || r.kind) +
+          (r.flagged ? ' <strong>flagged</strong>' : '') + '</div></td>' +
+        '<td data-label="From"><div class="cell">' + (r.from ? ledgerWho(r.from) : esc(r.source || 'nobody')) + '</div></td>' +
+        '<td data-label="Gave"><div class="cell">' + ledgerWhat(r.gold, r.things) + '</div></td>' +
+        '<td data-label="To"><div class="cell">' + (r.to ? ledgerWho(r.to) : esc(r.source || 'nobody')) + '</div></td>' +
+        '<td data-label="Gave back"><div class="cell">' + (back ? ledgerWhat(r.backGold, r.backThings) : '') + '</div></td>' +
+        '<td data-label="Where"><div class="cell">' + esc(r.where || '') +
+          (S.me.admin && r.to && r.to.pid && (r.gold || (r.things || []).length)
+            ? ' <button class="btn" data-tb="' + esc(String(r.to.pid)) + '" data-tbrec="' +
+              esc(r.gold ? 'gold' : (r.things[0].desc || '')) + '" data-tbn="' +
+              esc(String(r.gold || r.things[0].c)) + '">Take back</button>' : '') +
+          '</div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+  el('page').innerHTML = out + takeBackPanel();
+  wireLedger();
+}
+
+function loadTakeBack() {
+  TBROWS = { loading: true };
+  api('/api/staff/takeback').then(function (r) {
+    if (!r.ok) throw new Error('the site answered ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    TBROWS = { rows: (d && d.rows) || [] };
+    if (S.at === 'ledger') drawLedger();
+  }).catch(function (e) {
+    TBROWS = { failed: String((e && e.message) || e) };
+    if (S.at === 'ledger') drawLedger();
+  });
+}
+
+function takeBackPanel() {
+  if (!S.me.admin) return '';
+  if (!TBROWS) loadTakeBack();
+  var out = '<div class="section-label">Take back</div>' +
+    '<p class="lede">Takes gold or a thing out of a character on the ' + (LFIND.srv === 'dev' ? 'dev' : 'main') +
+    ' server, online or not. The game server does it within 30 seconds, takes what they hold up to the count, ' +
+    'and the staff channel is told. Admins only.</p>' +
+    '<div class="bar bar-mb-16">' +
+      '<input id="tbpid" inputmode="numeric" aria-label="Profile number" placeholder="Profile number" value="' + esc(TB.pid) + '">' +
+      '<input id="tbrec" aria-label="Gold, or the thing\'s record" placeholder="gold, or a record like 12eb7:Skyrim.esm" value="' + esc(TB.record) + '">' +
+      '<input id="tbn" inputmode="numeric" aria-label="How many" placeholder="How many" value="' + esc(TB.count) + '">' +
+      '<input id="tbwhy" aria-label="Why" placeholder="Why: it goes in the staff log" value="' + esc(TB.why) + '">' +
+      '<button class="btn" id="tbgo">Take back</button>' +
+    '</div>' + (TB.said ? '<div class="said said-show">' + esc(TB.said) + '</div>' : '');
+  if (!TBROWS || TBROWS.loading) return out + '<div class="empty">Reading the asks.</div>';
+  if (TBROWS.failed) return out + '<div class="empty">The asks could not be read: ' + esc(TBROWS.failed) + '.</div>';
+  if (!TBROWS.rows.length) return out + '<div class="empty">Nothing has been taken back.</div>';
+  return out + '<div class="tablewrap"><table class="board ledger"><thead><tr><th>Asked</th><th>Server</th>' +
+    '<th>From</th><th>What</th><th>By</th><th>Why</th><th>Done</th></tr></thead><tbody>' +
+    TBROWS.rows.map(function (r) {
+      var done = r.state === 'waiting' ? 'Waiting for the game server'
+        : r.state === 'done' ? 'Took ' + r.took + ' of ' + r.count + (r.answer ? ' (' + r.answer + ')' : '')
+        : 'Not done: ' + (r.answer || 'no reason given');
+      return '<tr><td data-label="Asked"><div class="cell">' + esc(new Date(r.at).toLocaleString()) + '</div></td>' +
+        '<td data-label="Server"><div class="cell">' + esc(r.server) + '</div></td>' +
+        '<td data-label="From"><div class="cell">' + esc(r.whoName || 'somebody') + ' <span class="faint">profile ' + esc(String(r.pid)) + '</span></div></td>' +
+        '<td data-label="What"><div class="cell">' + esc(r.count + ' ' + r.name) + '</div></td>' +
+        '<td data-label="By"><div class="cell">' + esc(r.byName) + '</div></td>' +
+        '<td data-label="Why"><div class="cell">' + esc(r.why) + '</div></td>' +
+        '<td data-label="Done"><div class="cell">' + esc(done) + '</div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function wireTakeBack() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tb]'), function (b) {
+    b.onclick = function () {
+      TB.pid = b.getAttribute('data-tb'); TB.record = b.getAttribute('data-tbrec');
+      TB.count = b.getAttribute('data-tbn'); TB.said = '';
+      drawLedger();
+      var why = el('tbwhy');
+      if (why) why.focus();
+    };
+  });
+  var go = el('tbgo');
+  if (!go) return;
+  ['tbpid', 'tbrec', 'tbn', 'tbwhy'].forEach(function (id) {
+    var f = el(id);
+    if (f) f.oninput = function () { TB[{ tbpid: 'pid', tbrec: 'record', tbn: 'count', tbwhy: 'why' }[id]] = f.value; };
+  });
+  go.onclick = function () {
+    go.disabled = true;
+    api('/api/staff/takeback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: LFIND.srv, profileId: Number(TB.pid), record: TB.record,
+                             count: Number(TB.count), why: TB.why })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error(j.message || j.error || ('the site answered ' + r.status));
+        TB = { pid: '', record: 'gold', count: '', why: '', said: 'Asked. The game server takes it within 30 seconds.' };
+        TBROWS = null;
+        drawLedger();
+      });
+    }).catch(function (e) {
+      // Said in the page, never lost (#4187).
+      TB.said = 'Not asked: ' + String((e && e.message) || e);
+      drawLedger();
+    });
+  };
+}
+
+function wireLedger() {
+  wireTakeBack();
+  var r = el('lreload');
+  if (r) r.onclick = function () { LEDG = null; TBROWS = null; drawLedger(); };
+  var s = el('lsrv');
+  if (s) s.onchange = function () { LFIND.srv = s.value; LEDG = null; drawLedger(); };
+  var c = el('lflag');
+  if (c) c.onchange = function () { LFIND.flagged = c.checked; LEDG = null; drawLedger(); };
+  var f = el('lfind');
+  if (f) {
+    f.oninput = function () {
+      LFIND.q = f.value;
+      clearTimeout(wireLedger.t);
+      wireLedger.t = setTimeout(function () {
+        LEDG = null;
+        drawLedger();
+        var again = el('lfind');
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      }, 400);
+    };
+  }
+}
+
 /* ---------------------------------------------------------------- home -- */
 function tallyOf() {
   var n = { pass:0, fail:0, skip:0 };
@@ -1967,7 +2201,7 @@ function drawHome() {
   // a Gamemaster lands on a home page with Gallery on it and nothing else.
   if (inHub()) {
     out += '<div class="cards">' +
-      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') +
+      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') + card('ledger') +
       '</div>';
   } else {
     out += '<p class="lede">Signing in with Discord opens the hub.</p>' +

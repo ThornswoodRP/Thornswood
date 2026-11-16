@@ -114,9 +114,14 @@ try {
   // ---- #2976: the door, cast and well builders ---------------------------
   if (py) {
     const out = path.join(tmp, "out.json");
+    // The door and cast builders take what Thornswood-Last.esp opens and
+    // places from its policy (#5191); this folder has none of those forms.
+    const policy = path.join(tmp, "policy.json");
+    fs.writeFileSync(policy, JSON.stringify({ gatesUnlocked: { gates: [] }, placeHolds: { locations: [], cells: [] } }));
     for (const b of ["Build-DoorTable.py", "Build-CastTable.py", "Build-WellTable.py"]) {
       const a = [path.join(REPO_DIR, "scripts", "dev", b), "--data", data, "--plugins", pluginsTxt, "--out", out, "--check"];
       if (b !== "Build-CastTable.py") { a.push("--tables", tables); }
+      if (b !== "Build-WellTable.py") { a.push("--policy", policy); }
       const r = run(py.c, a);
       // The well builder stops later, on well bases this folder has none of.
       if (b !== "Build-WellTable.py") {

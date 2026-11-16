@@ -22,7 +22,15 @@
        held to its server, and -Keep keeps what -Take took;
     5. merge-release.yml asks for the build before it releases, takes it
        before any part is built, and starts again on a Content Deployment's
-       success, with the release's concurrency on its job.
+       success, with the release's concurrency on its job;
+    3c. -Newest says SAME KEY or OTHER KEY against this checkout's inputs,
+       with same=, key= and commit= for the gate's pick, and -BuildKey
+       holds it to a key;
+    6. the merge release runs the content checks over the build it took, in
+       shares, and releases (and keeps it as content-dev) only when they
+       pass; the gate's pick lays the newest build and hands it to its
+       shares, which hold no token, and the nightly, the named harnesses and
+       the gate map's runs lay it after their checkout.
 
   Writes only under its own folder in TEMP, which it removes. Exit 1 when
   any check fails.
@@ -142,13 +150,33 @@ try {
 
     # ----------------------------------------------------- 3b. -Newest
     # Whatever its key: a pull request's checkout has inputs of its own.
-    $other = Plant $built $null ('a' * 64)
-    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', $other, '-Output', '')
-    $same = @($built.Keys | Where-Object { (Sha ([IO.File]::ReadAllBytes((Join-Path $repo $_)))) -ne (Sha $built[$_]) }).Count -eq 0
-    Check '3 -Newest writes the newest build over the checkout, whatever its key' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $('a' * 64) FROM $head`: 3 files")
+    # An older build can carry what this checkout's chain no longer writes
+    # (#6195: gamemode code); -Newest lays only what the chain writes.
+    $newest = @{
+        'game/content/Thornswood-Content.esp' = $built['game/content/Thornswood-Content.esp']
+        'game/data/last-plugin.recipe'        = $built['game/data/last-plugin.recipe']
+        'game/gamemode.js'                    = $enc.GetBytes('old gamemode code')
+    }
+    $gmBefore = Sha ([IO.File]::ReadAllBytes((Join-Path $repo 'game/gamemode.js')))
+    $other = Plant $newest $null ('a' * 64)
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', $other, '-Output', $out)
+    $same = @('game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe' | Where-Object { (Sha ([IO.File]::ReadAllBytes((Join-Path $repo $_)))) -ne (Sha $newest[$_]) }).Count -eq 0
+    Check '3 -Newest writes the newest build over the checkout, whatever its key' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $('a' * 64) FROM $head`: 2 files")
+    Check '3 and only what this checkout''s chain writes, saying what it left' ((Sha ([IO.File]::ReadAllBytes((Join-Path $repo 'game/gamemode.js')))) -eq $gmBefore -and
+        $r.Text -match "left 1 file\(s\) of the build that this checkout's chain does not write: game/gamemode\.js")
+    $said = @(Get-Content -LiteralPath $out)
+    Check '3 and says OTHER KEY when it is not of this checkout''s inputs, with same=no, the build''s key and commit' (
+        $r.Text -match "OTHER KEY: this checkout's content inputs are $key" -and $said -contains 'same=no' -and $said -contains "key=$('a' * 64)" -and $said -contains "commit=$head")
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
     TGit $repo @('clean', '--quiet', '-fd') | Out-Null
-    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $built $null $key 'main'), '-Output', '')
+    Remove-Item -LiteralPath $out -Force
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $newest), '-Output', $out)
+    Check '3 and SAME KEY, same=yes, when it is' ($r.Code -eq 0 -and $r.Text -match 'SAME KEY' -and @(Get-Content -LiteralPath $out) -contains 'same=yes')
+    TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
+    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', $other, '-BuildKey', $key, '-Output', '')
+    Check '3 -BuildKey holds it to that key, writing nothing' ($r.Code -eq 1 -and $r.Text -match "is for dev $('a' * 64), not dev $key" -and -not (Test-Path -LiteralPath (Join-Path $repo 'game\gamemode-tables\NewTable.json')))
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $newest $null $key 'main'), '-Output', '')
     Check '3 -Newest still holds the build to its server' ($r.Code -eq 1 -and $r.Text -match 'is for the main server, not dev')
     $arts = Join-Path $tmp 'artifacts.json'
     @{ artifacts = @(
@@ -188,13 +216,44 @@ try {
     Check '5 a content job asks for the build, on main only, on a push or a Content Deployment''s success' (
         $wf -match "(?s)  content:.*?if: \$\{\{ github\.ref == 'refs/heads/main' && \(github\.event_name != 'deployment_status' \|\| \(github\.event\.deployment\.environment == 'Content' && github\.event\.deployment_status\.state == 'success'\)\) \}\}" -and
         $wf -match 'Get-ContentBuild\.ps1 -Server dev -Ask')
-    Check '5 the release waits on it and runs only when the build is found' ($job -match 'needs: content' -and $job -match "if: \$\{\{ needs\.content\.outputs\.found == 'yes' \}\}")
+    Check '5 the release waits on it and runs only when the build is found' ($job -match 'needs: \[content, ' -and $job -match "if: \$\{\{ !cancelled\(\) && needs\.content\.outputs\.found == 'yes' && ")
     $takeAt = $job.IndexOf('Get-ContentBuild.ps1 -Server dev -Take')
     Check '5 it takes the build right after the checkout, before any part is built' ($takeAt -gt 0 -and $takeAt -lt $job.IndexOf('- name: Name the release and read the one before'))
     $keepAt = $job.IndexOf('- name: Keep what was taken')
     Check '5 it keeps what it took as the artifact content-dev, for 90 days, for the harnesses and checkouts that read the tables (-Newest)' (
         $job -match 'Get-ContentBuild\.ps1 -Server dev -Take -Keep' -and $keepAt -gt $takeAt -and
         $job.Substring($keepAt) -match '(?s)^- name: Keep what was taken.*?uses: actions/upload-artifact@[0-9a-f]{40}.*?name: content-dev\s.*?retention-days: 90')
+    # ------------------------------------------- 6. the content checks (4d)
+    $pre = $wf.Substring(0, $wf.IndexOf("`n  release:"))
+    Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (
+        $pre -match "(?s)- name: Take the build for the content checks\s+if: \$\{\{ steps\.find\.outputs\.found == 'yes' \}\}.*?Get-ContentBuild\.ps1 -Server dev -Take -Keep" -and
+        $pre -match '(?s)- name: Hand the build to the content checks.*?name: content-taken\s.*?retention-days: 1')
+    Check '6 a pick picks the content checks from main''s map, as the gate''s pick does' ($pre -match '(?s)  checks-pick:.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
+    foreach ($j in 'checks', 'checks-linux') {
+        $at = $pre.IndexOf("`n  ${j}:")
+        $body = if ($at -ge 0) { $pre.Substring($at + 1) } else { '' }
+        $next = $body.IndexOf("`n  checks-linux:"); if ($j -eq 'checks' -and $next -gt 0) { $body = $body.Substring(0, $next) }
+        Check "6 $j lays that build, held to the key, before it runs its share of the plan" ($at -ge 0 -and
+            $body -match '(?s)name: content-taken.*?Get-ContentBuild\.ps1 -Server dev -Newest -ArtifactDir .*?-BuildKey \$env:CONTENT_KEY.*?GATE_PLAN: \$\{\{ needs\.checks-pick\.outputs\.plan \}\}.*?Run-Gate\.ps1 -Shard')
+    }
+    Check '6 the release runs only when every content check passed, so a build kept as content-dev passed its checks' (
+        $job -match 'needs: \[content, checks-pick, checks, checks-linux\]' -and $job -match "needs\.checks-pick\.result == 'success'" -and
+        $job -match "\(needs\.checks\.result == 'success' \|\| needs\.checks\.result == 'skipped'\)" -and $job -match "\(needs\.checks-linux\.result == 'success' \|\| needs\.checks-linux\.result == 'skipped'\)")
+    # Every other run of the harnesses lays the newest build first.
+    foreach ($f in 'build.yml', 'build-pr.yml') {
+        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$f"))
+        Check "6 $f`: the pick lays the newest build, hands its same and commit to the pick, and the build to the shares" (
+            $b -match '(?s)  pick:.*?id: content.*?Get-ContentBuild\.ps1 -Newest -Keep .*?- name: Hand the build to the shares.*?name: content-laid\s.*?retention-days: 1.*?CONTENT_SAME: \$\{\{ steps\.content\.outputs\.same \}\}\s+CONTENT_COMMIT: \$\{\{ steps\.content\.outputs\.commit \}\}.*?Run-Gate\.ps1 -Pick')
+        foreach ($j in 'gate', 'gate-linux') {
+            $at = $b.IndexOf("`n  ${j}:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
+            Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
+        }
+    }
+    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
+        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])"))
+        $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
+        Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build.*?Get-ContentBuild\.ps1 -Newest')
+    }
     Check '5 one release at a time on the release job, not the whole workflow, so a run a Deployment''s status starts holds no merge back (#6008)' (
         $wf -notmatch '(?m)^concurrency:' -and $job -match '(?s)concurrency:\s+group: merge-release\s+cancel-in-progress: false')
 }

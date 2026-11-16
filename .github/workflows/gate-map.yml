@@ -118,6 +118,10 @@ jobs:
     name: Trace the gate and keep its map
     runs-on: windows-2022
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # The content build, an artifact of a merge release.
+      actions: read
     steps:
       # The gate's own checkout (build.yml's gate job): every commit and tree,
       # no old file contents. The harnesses run the release scripts, which
@@ -130,6 +134,16 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # The content build (#5191, stage 4): the newest a merge release kept,
+      # laid over the checkout as the gate's shares lay it (build.yml, "Lay
+      # the newest content build"), since nothing it writes is committed.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -243,6 +257,10 @@ jobs:
     name: Run the whole gate on Linux
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # The content build, an artifact of a merge release.
+      actions: read
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -250,6 +268,16 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # The content build (#5191, stage 4): the newest a merge release kept,
+      # laid over the checkout as the gate's shares lay it (build.yml, "Lay
+      # the newest content build"), since nothing it writes is committed.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

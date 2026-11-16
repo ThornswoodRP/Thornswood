@@ -184,10 +184,10 @@ try {
   Step ('3. the ' + $Which + ' server''s program and plugins')
   if (-not (Test-Path -LiteralPath (Join-Path $Source 'server-settings.json'))) { Fail ($Source + ' has no server-settings.json.') }
   $free = (Get-PSDrive -Name ($Root.Substring(0, 1))).Free
-  $need = (Get-ChildItem -LiteralPath $Source -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\(world|private|world-before-[^\\]*|logs)\\' -and $_.Name -notmatch '\.log(\.\d+)?$' } | Measure-Object Length -Sum).Sum
+  $need = (Get-ChildItem -LiteralPath $Source -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\(world|private|world-before-[^\\]*|world-mongo-[^\\]*|logs)\\' -and $_.Name -notmatch '\.log(\.\d+)?$' } | Measure-Object Length -Sum).Sum
   Say ('  ' + [math]::Round($need / 1MB) + ' MB to copy, ' + [math]::Round($free / 1MB) + ' MB free')
   if ($need * 1.2 + 2GB -gt $free) { Fail 'not enough free disk for the copy, the world and 2 GB to spare.' }
-  & robocopy $Source $Root /E /XD world private "world-before-*" logs /XF *.log *.log.* /NFL /NDL /NJH /NJS /NP | Out-Null
+  & robocopy $Source $Root /E /XD world private "world-before-*" "world-mongo-*" logs /XF *.log *.log.* /NFL /NDL /NJH /NJS /NP | Out-Null
   $rc = $LASTEXITCODE
   if ($rc -ge 8) { Fail ('robocopy ended ' + $rc + ' copying ' + $Source + '.') }
   Say ('  copied (robocopy ' + $rc + ')')
@@ -266,6 +266,20 @@ finally {
     $log = Join-Path $Root 'thornswood.log'
     if (Test-Path -LiteralPath $log) { Say '  the end of its thornswood.log:'; Get-Content -LiteralPath $log -Tail 15 -ErrorAction SilentlyContinue | ForEach-Object { Say ('  | ' + $_) } }
   } catch { Say ('  its log could not be read: ' + $_.Exception.Message) }
+  # A world in MongoDB went into the rehearsal's own database (#6237,
+  # Restore-Server.ps1), a copy of everybody's characters: emptied here as
+  # the folders are deleted.
+  try {
+    if (Test-Path -LiteralPath (Join-Path $Root 'server-settings.json')) {
+      . (Join-Path $Here '..\deploy\World.ps1')
+      $rw = Get-ThornswoodWorld $Root
+      if ($rw.Driver -eq 'mongodb') {
+        $e = Clear-ThornswoodScratchWorld $rw
+        if ($e -like 'STOP|*') { $result = 1; Say ('  ' + $e.Substring(5) + '. It holds the restored world; empty it.') }
+        else { Say ('  ' + $rw.Db + ' emptied, ' + ($e -split '\|')[1] + ' form(s)') }
+      }
+    }
+  } catch { $result = 1; Say ('  the rehearsal''s database could not be emptied: ' + $_.Exception.Message) }
   foreach ($d in $Root, $Work) {
     try { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force }; Say ('  ' + $d + ' deleted') }
     catch { $result = 1; Say ('  ' + $d + ' could not be deleted: ' + $_.Exception.Message + ' It holds the unpacked world; delete it.') }

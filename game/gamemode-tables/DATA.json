@@ -1723,6 +1723,7 @@
 "riften":{"temple":{"cell":"RiftenTempleofMara","desc":"16bd7:Skyrim.esm","pos":[-1408,-384,68],"rot":[0.0,0.0,0.0],"entrancePos":[176376,-97022],"entranceWorld":"0x00016BB4"}},
 "ravenrock":{"temple":{"cell":"DLC2RRTemple","desc":"17ec3:Dragonborn.esm","pos":[1.4,-542.8,0],"rot":[0.0,0.0,-1.28],"entrancePos":[32848.4,35142],"entranceWorld":"0x02000800"}}
 },
+"solstheim":"2000800",
 "worldspaces":[
 "104217:Skyrim.esm",
 "1408:Dawnguard.esm",
@@ -1790,7 +1791,6 @@
 "dfd:Solitude Arena.esp",
 "dff:Solitude Arena.esp"
 ],
-"solstheim":"2000800",
 "ownWorlds":{
 "104217:Skyrim.esm":[],
 "1408:Dawnguard.esm":[],

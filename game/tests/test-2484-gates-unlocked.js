@@ -9,8 +9,8 @@
   winning records without their lock (XLOC) and without their script (VMAD),
   so they load unlocked, and the timer is gone.
 
-  This reads Thornswood-Last.esp, its manifest, the builder and the front
-  plugin. No repository holds the plugin since #2791 step 3, so it is made
+  This reads Thornswood-Last.esp, its manifest, the builder, the policy it
+  takes the gates from and the front plugin. No repository holds the plugin since #2791 step 3, so it is made
   from its recipe out of the game's plugins (tests/last-plugin-made.js);
   without the game, M and R print SKIP and the rest still run.
 */
@@ -88,8 +88,12 @@ yes('J1 the manifest names the three gates', JSON.stringify(man.gatesUnlocked) =
     JSON.stringify(['1b1f1:Skyrim.esm', '42284:Skyrim.esm', '42286:Skyrim.esm']) && man.counts.gatesUnlocked === 3);
 
 const tool = fs.readFileSync(TOOL, 'utf8');
-yes('B1 the builder lists the gates, drops XLOC and VMAD, and its verify refuses a gate left locked',
-    /GATES = \(\('skyrim\.esm', 0x01B1F1\), \('skyrim\.esm', 0x042284\), \('skyrim\.esm', 0x042286\)\)/.test(tool) &&
+// The list is the policy's gatesUnlocked, which the door table reads too
+// (#5191, tests/test-5191-door-gates.py holds both).
+const policy = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-plugin-policy.json'), 'utf8'));
+yes('B1 the builder takes the gates from the policy, drops XLOC and VMAD, and its verify refuses a gate left locked',
+    JSON.stringify((policy.gatesUnlocked || {}).gates) === JSON.stringify(['1b1f1:Skyrim.esm', '42284:Skyrim.esm', '42286:Skyrim.esm']) &&
+    /GATES = policy_gates\(json\.load\(_policy\)\)/.test(tool) &&
     /GATE_DROP = \{b'XLOC', b'VMAD'\}/.test(tool) && /town gate %s is left locked/.test(tool));
 const front = fs.readFileSync(FRONT, 'utf8');
 yes('F1 the front plugin no longer opens gates on a timer', !/openTheGates|TOWN_GATES|GATE_EVERY_MS/.test(front));

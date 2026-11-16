@@ -293,7 +293,18 @@ try {
     Remove-Item -LiteralPath $live -Recurse -Force
     Yes 'the original server folder is gone before the restore' (-not (Test-Path -LiteralPath $live))
 
-    $code = Run $Restore @('-Backup', $encPath, '-KeyFile', $key, '-Root', $restored, '-Expect', $liveWho, '-NoPause')
+    # Restore-Server.ps1 unpacks into %TEMP% when -Work is left out, and the
+    # check below asks that it leaves nothing there. Other harnesses run
+    # Restore-Server.ps1 beside this one with the runner's own TEMP
+    # (test-1046-restore-rehearse.ps1 does), so this run gets a TEMP of its
+    # own and the check reads only that: on 16 Nov 2026 it read the shared
+    # one and failed on the other harness's folder (#6285's gate, shard 4).
+    $ownTemp = Join-Path $work 'temp-of-this-restore'
+    New-Item -ItemType Directory -Force -Path $ownTemp | Out-Null
+    $tempWas = $env:TEMP; $tmpWas = $env:TMP
+    $env:TEMP = $ownTemp; $env:TMP = $ownTemp
+    try { $code = Run $Restore @('-Backup', $encPath, '-KeyFile', $key, '-Root', $restored, '-Expect', $liveWho, '-NoPause') }
+    finally { $env:TEMP = $tempWas; $env:TMP = $tmpWas }
     Yes "Restore-Server.ps1 puts it back (exit $code)" ($code -eq 0 -and (Said 'RESTORE OK: 2 character'))
     if ($code -ne 0) { Show }
     Yes '  counting the two living characters and not the three deleted slots' (Said '3 slot\(s\) a deleted character left behind')
@@ -332,8 +343,8 @@ try {
     Yes '  with no value printed' (
         $passLines.Count -eq 3 -and @($passLines | Where-Object { $_ -match 'true|false|440[0-9]' }).Count -eq 0)
     Yes '  and the decrypted copy is not left in the temp folder' (
-        @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'thornswood-restore-*' -EA SilentlyContinue |
-          Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-2) }).Count -eq 0)
+        (Test-Path -LiteralPath $ownTemp) -and
+        @(Get-ChildItem -LiteralPath $ownTemp -Filter 'thornswood-restore-*' -Force -EA SilentlyContinue).Count -eq 0)
 
     $code = Run $Restore @('-Backup', $encPath, '-KeyFile', $key, '-Root', $restored, '-NoPause')
     $aside = @(Get-ChildItem -LiteralPath $restored -Directory -Filter 'world-before-restore-*')

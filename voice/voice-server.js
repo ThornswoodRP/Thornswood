@@ -3270,7 +3270,10 @@ server.on('upgrade', (req, socket, head) => {
 const BIND = String(process.env.THORNSWOOD_VOICE_BIND || '127.0.0.1').trim() || '127.0.0.1';
 
 server.listen(PORT, BIND, () => {
-  console.log('[voice] listening on ' + BIND + ':' + PORT +
+  // The port it is listening on, not the one it was handed: given 0, the
+  // system picks a free one as it binds, and whoever started it reads the
+  // port off this line (#6050), so no other socket can take it in between.
+  console.log('[voice] listening on ' + BIND + ':' + server.address().port +
               (BIND === '127.0.0.1' ? ' (loopback only, so something must be proxying to it)' : ''));
   console.log('[voice] positions accepted from loopback at POST /positions');
 });

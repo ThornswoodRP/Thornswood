@@ -203,10 +203,39 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
+      # THE CONTENT BUILD (#5191, stage 4). The content plugin and the tables
+      # out of the load order are not committed: the box builds them, and
+      # each merge release keeps the build it took as the artifact
+      # content-dev once its content checks pass. This lays the newest over
+      # the checkout and says whether it is of this checkout's content
+      # inputs, and hands that same build to every share as an artifact of
+      # this run, so the shares hold no token (#4079). The pick leaves out
+      # the content checks a change to those inputs leaves saying nothing
+      # (scripts\dev\Run-Gate.ps1, -Content says why).
+      - name: Lay the newest content build
+        id: content
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest -Keep (Join-Path $env:RUNNER_TEMP 'content-laid')
+          exit $LASTEXITCODE
+      - name: Hand the build to the shares
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-laid
+          path: |
+            ${{ runner.temp }}/content-laid/content.zip
+            ${{ runner.temp }}/content-laid/content-build.json
+          if-no-files-found: error
+          # Read by this run's shares, minutes later, and by nothing after it.
+          retention-days: 1
       - name: Pick and split the gate harnesses
         id: pick
         shell: pwsh
         env:
+          CONTENT_SAME: ${{ steps.content.outputs.same }}
+          CONTENT_COMMIT: ${{ steps.content.outputs.commit }}
           SHARES: '5'
           # #5293: the harnesses the nightly map says run as fully on Linux
           # as on Windows go to this many shares on ubuntu-latest instead.
@@ -260,6 +289,18 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # The content build the pick laid and measured, and no newer one a
+      # merge release kept meanwhile (the job "pick" says why).
+      - name: Fetch the content build the pick laid
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-laid
+          path: ${{ runner.temp }}/content-laid
+      - name: Lay the content build the pick laid
+        shell: pwsh
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-laid')
+          exit $LASTEXITCODE
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -402,6 +443,18 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # The content build the pick laid and measured, and no newer one a
+      # merge release kept meanwhile (the job "pick" says why).
+      - name: Fetch the content build the pick laid
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-laid
+          path: ${{ runner.temp }}/content-laid
+      - name: Lay the content build the pick laid
+        shell: pwsh
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-laid')
+          exit $LASTEXITCODE
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
