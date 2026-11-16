@@ -33,12 +33,18 @@
   Get-ThornswoodContentOrder). The first build on the box, 12 Nov, read the
   dev server's folder and order, which are revision 7's, so it stopped at
   Build-BuildingHolds.py naming revision 8's Improved Eyes Skyrim.esp: no
-  machine but One's Vortex game could move the recorded order (#5648). When
-  the order moves, the catalogue is built from it first, as content-tables.json's
-  notInChain says it is when the collection's order moves:
-  scripts\dev\Build-NpcPopulation.py, then scripts\dev\Build-ResourceLocations.py
-  (game\data\resource-locations.json; the docs' CSV lists it also writes are
-  not brought back). The chain then reads that order.
+  machine but One's Vortex game could move the recorded order (#5648).
+
+  ORDER. The order is records\load-order.json's, which the pull request that
+  moves the records to a new revision moves too (Set-LoadOrder.ps1). Until
+  16 Nov 2026 it was game\data\npc-population.json's, a table this build
+  writes, so a build read its order back from the build before it. So the
+  catalogue is built from the order first in every build, as
+  content-tables.json's notInChain says it is when the collection's order
+  moves: scripts\dev\Build-NpcPopulation.py, then
+  scripts\dev\Build-ResourceLocations.py (game\data\resource-locations.json;
+  the docs' CSV lists it also writes are not brought back). The chain then
+  reads that order.
 
   WHAT A BUILD IS KEPT BY. Its inputs: the server it was built against and
   every file Run-OnBox.ps1 sends for the chain (ContentPaths.ps1), by the
@@ -186,7 +192,7 @@ if ($built) {
         }
     } catch { Stop-Build ('the record''s plugins are not on the box: ' + $_.Exception.Message + ' Nothing was built.') }
     Write-Host ("the load order: collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +
-        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' the catalogue records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as the catalogue records it' }) +
+        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' records\load-order.json records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as records\load-order.json records it' }) +
         "; the collection's plugins from $Store")
     # Quoted, so each goes to the runner as one of the tool's words and never
     # as a parameter of its own.
@@ -212,14 +218,13 @@ if ($built) {
         Invoke-Step 'scripts/dev/Build-StationSites.py' @('--data', '{data}') 'The plugin was not built and nothing was measured.'
     }
     Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
-    $moves = @()
-    if ($order.Moved) {
-        # The catalogue first, in the order it moves to; the chain holds its
-        # plugin list to the catalogue's order (Rebuild-ContentTables.ps1).
-        Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The order did not move, the chain did not run and nothing was kept.'
-        Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
-        $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
-    }
+    # The catalogue first, in the build's order; the chain holds its plugin
+    # list to the catalogue's order (Rebuild-ContentTables.ps1). Every build,
+    # since the order is records\load-order.json's and not the last build's
+    # catalogue (ORDER, above).
+    Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The chain did not run and nothing was kept.'
+    Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
+    $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
     Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' @('-Data', '{data}', '-PluginsTxt', '{plugins}') 'Nothing was kept.'
 
     # The build: the plugin and every file the chain writes, a folder it

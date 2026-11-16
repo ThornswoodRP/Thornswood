@@ -26,14 +26,16 @@
      inputs (a harness) changes no key.
   7. Every tool runs from the commit's record: the runner is given the
      collection's store (-Collection), never the server's plugins alone.
-  8. A record whose revision adds a plugin the catalogue's order does not
-     load moves the order first: the catalogue's two builders run between
-     the plugin's tool and the chain, with the moved order as their
-     settings, and the build keeps what they wrote. The order is moved by
+  8. The catalogue's two builders run in every build, between the plugin's
+     tool and the chain, with the build's order as their settings, and the
+     build keeps what they wrote. A record whose revision adds a plugin
+     records\load-order.json does not load moves the order. The order is moved by
      ContentPaths.ps1's rule: the new plugin on the end of its kind, a
      master on the end of the masters, a dropped plugin taken out only for
      its revision, Thornswood-Last.esp last.
   9. Records of two revisions stop the build before any tool runs.
+  11. The order is records\load-order.json's: a catalogue in the checkout
+      that records another order moves nothing (#5191, 4e).
   10. -Stations (#6192) lays the newest whole build of the server kept here
       over the checkout, measures the stations over its tables, then builds
       the plugin from the new sites and runs the chain, keeps nothing, and
@@ -113,10 +115,9 @@ try {
     Put 'game/gamemode-tables/X.json' 'as committed'
     Put 'docs/systems/lists/a.md' 'as committed'
     Put 'records/r.json' '{}'
-    # The records of a revision whose order the catalogue already loads.
-    $catalogue = '{"loadOrder":[' + ((@('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp') | ForEach-Object { '{"name":"' + $_ + '","sha256":"0"}' }) -join ',') + ']}'
-    Put 'game/data/npc-population.json' $catalogue
-    Put 'game/data/resource-locations.json' 'resources as committed'
+    # The records of a revision whose order records\load-order.json already is.
+    $loadOrder = '{"collection":"abc","revision":3,"loadOrder":[' + ((@('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp') | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']}'
+    Put 'records/load-order.json' $loadOrder
     Put 'records/collection.json' '{"collection":"abc","revision":3,"plugins":[{"name":"A.esm","master":true},{"name":"B.esp","master":false},{"name":"Off.esp","master":false,"enabled":false}]}'
     Put 'records/collection-plugins.json' '{"collection":"abc","revision":3,"plugins":[]}'
     $store = Join-Path $root 'store'
@@ -130,6 +131,7 @@ try {
     $env:TS5191_CHECKOUT = $co
     $env:TS5191_CALLS = $calls
     $env:TS5191_FAIL = ''
+    $env:TS5191_MOVED = 'the catalogue'
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
     function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations) {
@@ -150,13 +152,15 @@ try {
     $r1 = Run
     if ($r1.Code -ne 0) { Write-Host $r1.Text }
     Yes '1 a first build ends 0 and says BUILT with its key, and the commit it is from' ($r1.Code -eq 0 -and $r1.Key -and ($r1.Lines -contains "FROM $base"))
-    Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, then the chain' (
-        $r1.Calls.Count -eq 2 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
-        $r1.Calls[1] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
+    Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, the catalogue''s builders in that order, then the chain' (
+        $r1.Calls.Count -eq 4 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
+        $r1.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
+        $r1.Calls[2] -eq 'dev scripts/dev/Build-ResourceLocations.py --settings {settings} --strings-dir {data}' -and
+        $r1.Calls[3] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
     $kept = Join-Path (Join-Path $cache 'dev') $r1.Key
     $rec = [IO.File]::ReadAllText((Join-Path $kept 'build.json')) | ConvertFrom-Json
     $names = @($rec.files.PSObject.Properties | ForEach-Object { $_.Name })
-    $want = @('game/content/Thornswood-Content.esp', 'game/data/x.json', 'game/gamemode-tables/X.json', 'docs/systems/lists/a.md', 'docs/systems/lists/deep/b.md')
+    $want = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/resource-locations.json', 'game/data/x.json', 'game/gamemode-tables/X.json', 'docs/systems/lists/a.md', 'docs/systems/lists/deep/b.md')
     Yes ('1 the build keeps the plugin and every file the chain writes, a folder whole: ' + ($names -join ', ')) (
         $names.Count -eq $want.Count -and -not @($want | Where-Object { $names -notcontains $_ }).Count)
     Yes '1 the plugin kept is the one the tool wrote, not the one committed' (
@@ -167,8 +171,8 @@ try {
     Yes '1 -Out gets every file of the build and build.json as content-build.json' (
         -not @($want | Where-Object { -not (Test-Path -LiteralPath (Join-Path $out $_)) }).Count -and
         (Sha (Join-Path $out 'content-build.json')) -eq (Sha (Join-Path $kept 'build.json')))
-    Yes '7 every tool is given the collection''s store' ($script:stores.Count -eq 2 -and -not @($script:stores | Where-Object { $_ -ne $store }).Count)
-    Yes '7 an order the catalogue already loads is not moved: no catalogue builder runs, and the line says so' ($r1.Text -match 'collection abc revision 3, 9 plugins, as the catalogue records it' -and $names -notcontains 'game/data/resource-locations.json')
+    Yes '7 every tool is given the collection''s store' ($script:stores.Count -eq 4 -and -not @($script:stores | Where-Object { $_ -ne $store }).Count)
+    Yes '7 an order records\load-order.json already is is not moved, and the line says so' ($r1.Text -match 'collection abc revision 3, 9 plugins, as records\\load-order\.json records it' -and $rec.collection.moved -eq $false)
     Yes '1 no .part folder is left' (-not @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | Where-Object { $_.Name -like '*.part' }).Count)
 
     # ---- 2. the same commit again ------------------------------------------
@@ -182,7 +186,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $kept 'files/game/data/x.json'), 'tampered')
     Fresh
     $r3 = Run
-    Yes '3 a kept build whose file is not its sha256 is built again' ($r3.Code -eq 0 -and $r3.Key -eq $r1.Key -and ($r3.Lines -contains "BUILT $($r1.Key)") -and $r3.Calls.Count -eq 2)
+    Yes '3 a kept build whose file is not its sha256 is built again' ($r3.Code -eq 0 -and $r3.Key -eq $r1.Key -and ($r3.Lines -contains "BUILT $($r1.Key)") -and $r3.Calls.Count -eq 4)
     Yes '3   and the file is right again' ([IO.File]::ReadAllText((Join-Path $kept 'files/game/data/x.json')) -eq 'table of plugin for dev from {"v":1}')
 
     # ---- 6. a file outside the inputs ---------------------------------------
@@ -199,14 +203,14 @@ try {
     TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'source v2') | Out-Null
     $v2 = (TGit @('rev-parse', 'HEAD')) -join ''
     $r4 = Run -Keep 1
-    Yes '4 a changed input is a new key and a new build' ($r4.Code -eq 0 -and $r4.Key -and $r4.Key -ne $r1.Key -and $r4.Calls.Count -eq 2 -and ($r4.Lines -contains "FROM $v2"))
+    Yes '4 a changed input is a new key and a new build' ($r4.Code -eq 0 -and $r4.Key -and $r4.Key -ne $r1.Key -and $r4.Calls.Count -eq 4 -and ($r4.Lines -contains "FROM $v2"))
     Yes '4   built from the new source' ([IO.File]::ReadAllText((Join-Path $out 'game/content/Thornswood-Content.esp')) -eq 'plugin for dev from {"v":2}')
     Yes '4 with -Keep 1, only the newest build of the server stays' (
         @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name }) -join ',' -eq $r4.Key)
     Fresh $v2
     $r4m = Run -Server main
     Yes '4 the main server''s build of the same commit has a key of its own, built against main''s plugins' (
-        $r4m.Code -eq 0 -and $r4m.Key -ne $r4.Key -and $r4m.Calls.Count -eq 2 -and $r4m.Calls[0] -like 'main *' -and
+        $r4m.Code -eq 0 -and $r4m.Key -ne $r4.Key -and $r4m.Calls.Count -eq 4 -and $r4m.Calls[0] -like 'main *' -and
         (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'main') $r4m.Key)) -and (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'dev') $r4.Key)))
 
     # ---- 5. a failing tool, and an uncommitted change -----------------------
@@ -233,12 +237,12 @@ try {
     $rev4 = (TGit @('rev-parse', 'HEAD')) -join ''
     $r8 = Run
     if ($r8.Code -ne 0) { Write-Host $r8.Text }
-    Yes '8 a revision that adds plugins moves the order: the catalogue''s builders run between the plugin''s tool and the chain' (
+    Yes '8 a revision that adds plugins moves the order, and the catalogue''s builders run in it between the plugin''s tool and the chain' (
         $r8.Code -eq 0 -and $r8.Calls.Count -eq 4 -and $r8.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
         $r8.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
         $r8.Calls[2] -eq 'dev scripts/dev/Build-ResourceLocations.py --settings {settings} --strings-dir {data}' -and
         $r8.Calls[3] -like 'dev scripts/mods/Rebuild-ContentTables.ps1 *')
-    Yes '8   and says what it adds' ($r8.Text -match 'revision 4, 11 plugins, moved from the 9 the catalogue records, adding M\.esp, New\.esp')
+    Yes '8   and says what it adds' ($r8.Text -match 'revision 4, 11 plugins, moved from the 9 records\\load-order\.json records, adding M\.esp, New\.esp')
     $k8 = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $cache 'dev') $r8.Key) 'build.json')) | ConvertFrom-Json
     Yes '8   and keeps what the catalogue''s builders wrote' (
         [IO.File]::ReadAllText((Join-Path $out 'game/data/npc-population.json')) -eq 'the moved catalogue' -and
@@ -278,6 +282,15 @@ try {
     Remove-Item -LiteralPath (Join-Path $cache 'main') -Recurse -Force
     $r10b = Run -Server main -Stations
     Yes '10 with no build of the server kept, -Stations stops before any tool runs' ($r10b.Code -ne 0 -and $r10b.Text -match 'no whole build of the main server is kept here' -and $r10b.Calls.Count -eq 0)
+    Fresh $rev4
+
+    # ---- 11. the order is load-order.json's, not a catalogue's --------------
+    Fresh $rev4
+    $other = '{"loadOrder":[' + ((@('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'M.esp', 'New.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp') | ForEach-Object { '{"name":"' + $_ + '","sha256":"0"}' }) -join ',') + ']}'
+    Put 'game/data/npc-population.json' $other
+    $o11 = Get-ThornswoodContentOrder -Repo $co
+    Yes '11 a catalogue in the checkout with another order moves nothing: the order is records\load-order.json''s, moved to the record' (
+        ($o11.Names -join ',') -eq ($o8.Names -join ',') -and ($o11.Recorded -join ',') -eq 'Skyrim.esm,Update.esm,Dawnguard.esm,HearthFires.esm,Dragonborn.esm,A.esm,B.esp,Thornswood-Content.esp,Thornswood-Last.esp')
     Fresh $rev4
 
     # ---- 9. records of two revisions ---------------------------------------
