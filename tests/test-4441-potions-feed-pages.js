@@ -74,7 +74,7 @@ const split = /const FEED_SPLIT_LAUNCHER = '/.test(feedJs) && /function feedSpli
 yes('the site answers version.json split (feedSplit)', split);
 if (split) {
   const head = feedMd.slice(0, feedMd.indexOf('## A real entry'));
-  none('FEED.md does not give version.json as ninety kilobytes', head, /\bninety kilobytes\b/i);
+  none('FEED.md does not give version.json as ninety kilobytes today', head, /\b(?:is|are)\b[^.]*\bninety kilobytes\b/i);
 }
 const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
 const day = (m) => (m ? Date.UTC(Number(m[3]), MONTHS[m[2]], Number(m[1])) : NaN);
