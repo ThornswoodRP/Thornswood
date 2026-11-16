@@ -36,6 +36,16 @@
 
       pwsh scripts/release/Get-ContentBuild.ps1 -Newest
 
+  It says whether that build is of this checkout's content inputs: SAME KEY,
+  or OTHER KEY when the checkout changed one (a source, a builder, a script
+  a builder loads), and writes same=yes|no, commit= (the commit the build
+  was made of) and key= to -Output. Run-Gate.ps1's pick reads them (its
+  -Content says why). -Keep keeps the two files it took, which the pick
+  hands to the gate's shares, so every share of one run lays the build its
+  pick measured, even when a merge release keeps a newer one meanwhile, and
+  no share holds a token. -BuildKey holds the build to that key, as the
+  merge release's content checks lay the one it took.
+
   -Keep <folder> keeps the two files TAKE took there, for the artifact.
 
   A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
@@ -59,7 +69,8 @@ param(
     [string]$AssetDir = '',
     [string]$DeploymentFile = '',
     [string]$ArtifactsFile = '',
-    [string]$ArtifactDir = ''
+    [string]$ArtifactDir = '',
+    [string]$BuildKey = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,7 +89,7 @@ function Get-Sha256Bytes([byte[]]$B) { return [Convert]::ToHexString([Security.C
 # and every file in content.zip to the sha256 it names, none more and none
 # fewer, each at a repository path; then writes each over this checkout.
 # Writes nothing unless everything held. -Keep keeps the two files it took.
-function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
+function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]$Only = $null) {
     try { $rec = [IO.File]::ReadAllText((Join-Path $Work 'content-build.json')) | ConvertFrom-Json -AsHashtable } catch { Stop-Take "content-build.json in $From does not read: $($_.Exception.Message)" }
     if ([string]$rec.server -cne $Server) { Stop-Take "content-build.json in $From is for the $($rec.server) server, not $Server" }
     if ($Key -and [string]$rec.key -cne $Key) { Stop-Take "content-build.json in $From is for $($rec.server) $($rec.key), not $Server $Key" }
@@ -107,6 +118,15 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
     if ($lack.Count) { Stop-Take ("content.zip in $From lacks " + ($lack -join ', ')) }
 
     # Held whole, then written: nothing is written unless everything held.
+    # With -Only (-Newest), only what this checkout's chain says a build
+    # writes: an older build can carry a file a later change took out of the
+    # chain (#6195: builds before 6d2cf9d carry gamemode code), and laying it
+    # would put that file back as it was.
+    if ($null -ne $Only) {
+        $left = @($got.Keys | Where-Object { $n = $_; -not @($Only | Where-Object { $n -ceq $_ -or $n.StartsWith($_ + '/') }).Count })
+        foreach ($n in $left) { $got.Remove($n) }
+        if ($left.Count) { Write-Host ("left $($left.Count) file(s) of the build that this checkout's chain does not write: " + (@($left | Select-Object -First 5) -join ', ') + $(if ($left.Count -gt 5) { ', ...' } else { '' })) }
+    }
     foreach ($n in $got.Keys) {
         $to = Join-Path $Repo $n
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
@@ -118,11 +138,21 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
     }
     Write-Host "TOOK $($rec.key) FROM $($rec.commit): $($got.Count) files over this checkout"
     if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The content plugin and tables are the box's build $(([string]$rec.key).Substring(0, 12)) of $($rec.commit) ($($got.Count) files), from $From." }
+    return $rec
 }
 
 # ---- the newest build main took, for a harness or a developer's checkout ----
 if ($Newest) {
     if ($Take -or $Ask) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take and -Ask' }
+    # This checkout's key, from git, before anything is written over it.
+    $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
+    if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "there is no commit $Commit in $Repo" }
+    $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+    try { $mine = (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key } catch { Stop-Take $_.Exception.Message }
+    # What a build of this checkout writes (Build-ContentOnBox.ps1): the
+    # plugin, the catalogue and the places when the order moves, and every
+    # path the chain writes.
+    $writes = [string[]]@(@('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/resource-locations.json') + @($chain.Writes))
     $work = Join-Path ([IO.Path]::GetTempPath()) ('content-newest-' + [Guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $work | Out-Null
     try {
@@ -151,7 +181,14 @@ if ($Newest) {
             }
             $from = "artifact $($a.id) of run $($a.workflow_run.id)"
         }
-        Use-ContentFiles $work '' $from
+        $rec = Use-ContentFiles $work $BuildKey $from $writes
+        Say-Output "key=$($rec.key)"
+        Say-Output "commit=$($rec.commit)"
+        if ($rec.key -ceq $mine) { Write-Host "SAME KEY: the build is of this checkout's content inputs"; Say-Output 'same=yes' }
+        else {
+            Write-Host "OTHER KEY: this checkout's content inputs are $mine, and the build's $($rec.key) of $($rec.commit); a harness that holds a table to a source this checkout changed is held to the old table until the box builds these inputs"
+            Say-Output 'same=no'
+        }
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
     exit 0
 }
@@ -221,6 +258,6 @@ try {
         }
         if ((Get-Item -LiteralPath $to).Length -ne [long]$a.size) { Stop-Take "$($a.name) on $tag is not the $($a.size) bytes the Release says" }
     }
-    Use-ContentFiles $work $key "the draft $tag"
+    $null = Use-ContentFiles $work $key "the draft $tag"
 } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 exit 0
