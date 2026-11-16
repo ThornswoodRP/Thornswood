@@ -161,8 +161,14 @@ const opened = [];
   handshake, with what it was sent from then on: { welcomed, closed, code,
   peer, chat, rosters, sdp, ws }. A refused handshake is told by error before
   open, since Node 22's WebSocket never follows it with close (#2818).
+
+  rosterLag (ms) records each roster this socket is sent that much later,
+  in the order sent. Each socket gets its own roster message, so one can
+  arrive after another's, and a check that waits for one socket's roster
+  and reads a second one's fails now and then (#6049). One socket here
+  always lags, so a check like that fails every run, not one in four.
 */
-async function page(s, pid) {
+async function page(s, pid, rosterLag) {
   const token = await joinToken(s, pid);
   return new Promise((ok) => {
     const ws = new WebSocket('ws://127.0.0.1:' + s.port + '/', ['thornswood', token]);
@@ -176,7 +182,10 @@ async function page(s, pid) {
       try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
       if (m.t === 'welcome') { me.welcomed = true; me.peer = m.peer; clearTimeout(late); ok(me); }
       if (m.t === 'chat') me.chat.push(m);
-      if (m.t === 'peers') me.rosters.push(m.peers || []);
+      if (m.t === 'peers') {
+        const roster = m.peers || [];
+        if (rosterLag) { setTimeout(() => me.rosters.push(roster), rosterLag).unref(); } else { me.rosters.push(roster); }
+      }
       if (m.t === 'sdp') me.sdp.push(m);
     };
     ws.onclose = (ev) => { me.closed = true; me.code = ev.code; clearTimeout(late); ok(me); };
@@ -231,7 +240,9 @@ function finish() {
 
   // ---------------------------------------- two seated, one waiting: full
   // Seated people have the launcher's voice page and the game's chat open.
-  const a = await page(s, 101);
+  // a's rosters come in late on purpose (page, rosterLag): every check that
+  // reads a's roster has to wait for it.
+  const a = await page(s, 101, 300);
   const a2 = await page(s, 101);
   const b = await page(s, 102);
   await inWorld(s, [101, 102]);
