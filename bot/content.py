@@ -157,7 +157,10 @@ It lives on the site, so it can't go stale in here.
 **<https://thornswood.net/roadmap>** what's being built
 **<https://thornswood.net/credits>** who made what
 
-Say hello in <#GENERAL>.
+Questions before you apply go in <#QUESTIONS>, where staff answer them: react
+to the rules in <#RULES> for the Member role, and you can ask there and apply.
+You can read <#GENERAL> now, and talk there once your playtest application is
+accepted.
 """
 
 # The bot's own message in this channel, which starts "React here for the
@@ -599,6 +602,7 @@ CHANGES = {
         ('2026-11-11', 'What happens to your own Skyrim now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', '575fb40b672c'),
         ('2026-11-12', 'The first step to getting in is reacting to the rules, which gives you the Member role.', '336327ab9a7a'),
         ('2026-11-12', "What happens to your own Skyrim: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking.", 'f303cd7c00ca'),
+        ('2026-11-16', 'Questions before you apply go in #travelers-questions, where staff answer them; reacting to the rules gives you the Member role, which lets you ask there and apply. You can read #general-chat before your playtest application is accepted, and talk there once it is.', '932e5a437039'),
     ],
     'START': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Logs and crash files now go in #test-findings, since #logs-and-crashes is gone.', '8a49f1c3335b'),
