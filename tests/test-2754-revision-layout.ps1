@@ -20,7 +20,9 @@
        file, and leaves nothing of it in the cache; a free account's 403 on
        download-link stops it the same way;
     4. the cache: a second run downloads nothing, and a cached archive that
-       changed is downloaded again, that one only;
+       changed is downloaded again, that one only; once a run has every
+       archive, the folder of a file id the revision does not list leaves
+       the cache, and nothing else in it does (#4324);
     5. with 7-Zip: the layout itself. A plain archive cut at its first stop
        pattern, a hashes list, a FOMOD run with the collection's choices, a
        script extender to the game folder, a bsdiff patch, a file two mods
@@ -295,6 +297,11 @@ YesR 'an optional mod and a later phase are refused, each named, and nothing is 
 
 # ---- 3: a download that is not the revision's -----------------------------------------------
 $cache = P $T 'cache'
+# An archive an older revision listed, under a file id this one does not
+# (#4324), and two things in the cache that are not a file id's folder.
+Put (P $cache '900099\Old Mod 900099.zip') 'an archive an older revision listed'
+Put (P $cache 'notes\kept.txt') 'not a file id''s folder'
+Put (P $cache 'readme.txt') 'not a folder'
 Control @{ corrupt = @('900002') }
 $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
@@ -308,6 +315,7 @@ Control @{ premium = $false }
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
 Control @{ premium = $true }
 YesR 'a free account''s 403 on download-link stops it naming the file' ($r.Code -eq 1 -and $r.Out -match 'Asking for the download of Beta \(mod 102, file 900002\) was refused: HTTP 403' -and $r.Out -match 'Premium') $r
+Yes 'a run that stops before it has every archive takes nothing else out of the cache' (Test-Path -LiteralPath (P $cache '900099\Old Mod 900099.zip'))
 
 # ---- 4: the cache ----------------------------------------------------------------------
 # A whole run that places nothing: -WhatIf on Windows, a -Record of its own off it.
@@ -317,6 +325,8 @@ $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (Look))
 $first4 = @(Since $n0)
 YesR 'the first whole run downloads what the cache lacks' ((Cdn $first4).Count -eq 3 -and $r.Out -match '1 from the cache, 3 downloaded') $r
+YesR 'once it has every archive, the folder of a file id the revision does not list leaves the cache, and the run says so (#4324)' (-not (Test-Path -LiteralPath (P $cache '900099')) -and $r.Out -match 'file id 900099') $r
+Yes 'and what is not a file id''s folder stays, with every archive the revision lists' ((Test-Path -LiteralPath (P $cache 'notes\kept.txt')) -and (Test-Path -LiteralPath (P $cache 'readme.txt')) -and @(Get-ChildItem -LiteralPath (P $cache '900001') -File).Count -eq 1 -and @(Get-ChildItem -LiteralPath (P $cache '900003') -File).Count -eq 1)
 $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (Look))
 YesR 'a second run downloads nothing and asks for no link' ((Cdn @(Since $n0)).Count -eq 0 -and @((Since $n0) | Where-Object { $_.path -like '*/download-link' }).Count -eq 0 -and $r.Out -match '4 from the cache, 0 downloaded') $r
