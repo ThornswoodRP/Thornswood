@@ -417,6 +417,5 @@ const modlog = () => { try { return fs.readFileSync(path.join(gameDir, 'for-bot'
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');
     process.exitCode = fail ? 1 : 0;
-    setTimeout(() => process.exit(process.exitCode), 1000).unref();
   }
 })();

@@ -59,7 +59,7 @@ function yes(what, cond) {
 function section(fn) {
   try { fn(); } catch (e) { yes('a section ran to its end (' + String(e && e.message || e).slice(0, 120) + ')', false); }
 }
-function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
+function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0; }
 
 /* A function's whole text, from its header to its closing brace. */
 function fnText(code, header, from) {
@@ -92,7 +92,7 @@ fs.writeFileSync(path.join(PRIV, 'door.json'), JSON.stringify({ site: 'https://d
 const a = src.indexOf('// ==== thornswood join pass ====');
 const b = src.indexOf('// ==== end thornswood join pass ====');
 yes('the join pass block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) done();
+if (!(a >= 0 && b > a)) { done(); return; }
 
 function rig(requirePass) {
   const r = { told: [], logged: [], online: [] };

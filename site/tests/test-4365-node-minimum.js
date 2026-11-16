@@ -113,4 +113,4 @@ yes('E1 this Node (' + process.version + ') passes and has both calls',
   typeof tls.getCACertificates === 'function' && typeof tls.setDefaultCACertificates === 'function');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

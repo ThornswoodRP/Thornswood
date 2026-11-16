@@ -66,7 +66,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end, includeEnd) {
   const a = src.indexOf(start);
@@ -101,7 +101,7 @@ let tuning = null;
 try { tuning = eval('({' + gm.slice(tstart, tend + 6) + '})').farming; } catch (e) { tuning = null; }
 yes('the crop table, the farming and property blocks and the farming tuning are in the gamemode',
     !!cropCode && !!farmBlock && !!propBlock && !!tuning);
-if (!cropCode || !farmBlock || !propBlock || !tuning) { done(); }
+if (!cropCode || !farmBlock || !propBlock || !tuning) { done(); } else {
 
 // ================================================================ the server
 const clock = { t: Date.UTC(2026, 9, 4, 20, 0, 0) };
@@ -196,7 +196,7 @@ box.__thornswoodProgression = { has: function (o, k) { return Object.prototype.h
 inDir(function () { vm.runInNewContext(cropCode + '\n' + farmBlock, box, { filename: 'gamemode.js farming' }); });
 const F = box.__thornswoodFarming;
 yes('the farming block runs and publishes itself', !!F && typeof F.command === 'function');
-if (!F) { done(); }
+if (!F) { done(); } else {
 const CROPS = box.CROPS;
 
 const said = [];
@@ -543,3 +543,4 @@ try {
 }
 
 done();
+}}

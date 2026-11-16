@@ -197,11 +197,11 @@ async function join(svc, profileId, name) {
     ws.onmessage = (ev) => {
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'welcome') { ok = true; svc.socks.push(c); done(c); }
+      if (m.t === 'welcome') { ok = true; svc.socks.push(c); clearTimeout(late); done(c); }
       if (m.t === 'chat') { c.got.push(m); }
     };
     ws.onerror = () => { if (!ok) { failed(new Error('socket error joining ' + name)); } };
-    setTimeout(() => { if (!ok) { failed(new Error('no welcome for ' + name)); } }, 4000);
+    const late = setTimeout(() => { if (!ok) { failed(new Error('no welcome for ' + name)); } }, 4000);
   });
 }
 
@@ -527,5 +527,5 @@ function page() {
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

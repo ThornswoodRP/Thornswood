@@ -107,4 +107,4 @@ yes('E2 and tellServer sends through say, which marks it a press, quiet', /windo
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

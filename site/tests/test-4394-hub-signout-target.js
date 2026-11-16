@@ -199,4 +199,4 @@ const navGround = declsFor('nav', 375).background || '';
 yes('C3 the cover is the colour of the nav it sits on (' + navGround + ')', /var\(--panel\)/.test(navGround));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -426,5 +426,5 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   for (const f of Object.keys(ALLOWED)) { yes('  ' + f + ' is still one (' + ALLOWED[f] + ')', found.indexOf(f) >= 0); }
 
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch(e => { console.log('  FAIL ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch(e => { console.log('  FAIL ' + (e && e.stack || e)); process.exitCode = 1; });

@@ -54,4 +54,4 @@ yes('3 and both comments say no freight is charged on a load', /Nothing calls fr
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

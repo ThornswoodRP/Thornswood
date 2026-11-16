@@ -73,8 +73,8 @@ yes('craftAnswer and what it calls are in the gamemode',
 if (RULES === null || CHARACTER === null || STAFF === null || TOMES === null ||
     !GATE_PARTS.every(function (p) { return p !== null; })) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // The generated recipe table, read as it is.
 let TABLE = {};
@@ -431,4 +431,5 @@ function chat(srv, actor) {
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

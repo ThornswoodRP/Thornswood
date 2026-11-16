@@ -320,4 +320,4 @@ yes("and nothing in the build or recipes.json still says the stone is advanced m
   ps.indexOf("which Patrick made advanced mining") < 0 && JSON.stringify(recipes).indexOf("advanced mining") < 0);
 
 console.log(pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

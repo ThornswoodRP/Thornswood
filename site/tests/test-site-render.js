@@ -53,17 +53,17 @@ function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what); }
 }
-// Before the server is started, exit at once. After it, stop it and let the
-// loop drain: process.exit while the child's pipes are still closing trips a
-// libuv assertion on Windows, which the voice harnesses found first.
-let started = false, finished = false, watchdog = null;
+// Set the code, stop the server if it was started, and let the loop drain:
+// calling node's exit while the child's pipes are still closing trips a libuv
+// assertion on Windows, which the voice harnesses found first, and on Node 24
+// it can hang (#6036).
+let finished = false, watchdog = null;
 function done() {
   if (finished) return;
   finished = true;
   if (watchdog) clearTimeout(watchdog);
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  if (!started) process.exit(fail ? 1 : 0);
   process.exitCode = fail ? 1 : 0;
   stop();
 }
@@ -140,7 +140,7 @@ console.log('THE RENDERER');
 const a = serverText.indexOf('// ==== thornswood page render ====');
 const b = serverText.indexOf('// ==== end thornswood page render ====');
 yes('the page render block is in server.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a) || markedText === null) { done(); }
+if (!(a >= 0 && b > a) || markedText === null) { done(); return; }
 eval(serverText.slice(a, b));
 // The pages are served through the open switch (#428), which takes out the
 // <!-- alpha --> and <!-- open --> marker lines and the other mode's words,
@@ -281,6 +281,10 @@ const KNOWN_PAGE = require('../../tests/fixtures/known-page').knownPage(null, LI
 // compared with it below is written from words with none in them.
 const KNOWN_PLAIN = require('../../tests/fixtures/known-page').knownPage(null, {
   at: LISTS.at, known: [{ title: 'Doors stick', text: 'A door sticks shut. Push it **twice**.', where: ['Main'] }] });
+// The page's own timers (a request's give-up timer, a line's fade) are
+// unref'd, as a page's timers never hold a process open: node ends when
+// the harness is done, not when a page timer it never waits on fires (#6036).
+const pageTimeout = (fn, ms, ...args) => setTimeout(fn, ms, ...args).unref();
 pages.push('known page');
 yes('there are real pages to draw, ' + pages.length + ' of them', pages.length >= 9);
 pages.forEach(function (p) {
@@ -335,7 +339,7 @@ function runRouter(pathname, prefilled, answers) {
       return a ? Promise.resolve({ ok: true, json: function () { return Promise.resolve(a); } })
                : new Promise(noop);
     },
-    setTimeout: setTimeout,
+    setTimeout: pageTimeout,
     clearTimeout: clearTimeout,
     requestAnimationFrame: function (f) { f(); },
     matchMedia: function () { return { matches: false }; },
@@ -414,7 +418,6 @@ async function boot() {
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1'
     })
   });
-  started = true;
   srv.stdout.on('data', function (d) { out.log += d; });
   srv.stderr.on('data', function (d) { out.log += d; });
   try { out.port = (await siteFiles.listening(srv)).port; out.up = true; } catch (e) { out.log = e.message; }

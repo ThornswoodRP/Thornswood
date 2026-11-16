@@ -62,8 +62,8 @@ yes('the menus it names are kept from menuOpen and menuClose',
     !!code && code.indexOf("sp.on('menuOpen'") >= 0 && code.indexOf("sp.on('menuClose'") >= 0);
 if (code === null) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // A native call, at the audit's measured cost.
 const CALL_MS = 1 / 3;
@@ -192,4 +192,5 @@ function rig(opts) {
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail === 0 ? 0 : 1);
+process.exitCode = fail === 0 ? 0 : 1;
+}

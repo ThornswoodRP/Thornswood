@@ -292,7 +292,7 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
     console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));
   }
 
-  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
+  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 
   // ---- the three clients -----------------------------------------------------
@@ -326,5 +326,5 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

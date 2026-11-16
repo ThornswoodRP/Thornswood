@@ -40,7 +40,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ------------------------------------------------------- A. the builder --
@@ -59,7 +59,7 @@ const front = read('game', 'plugins', 'thornswood-front.js');
 yes('A4 the front injects it with the overlays, and the K panel holds no copy and reads it with guidesNow()',
     /'thornswood-profession-guides\.js', 'thornswood-skills\.js'/.test(front) && !/var GUIDES = /.test(ui) &&
     ui.indexOf('PROFESSION_GUIDES ====') < 0 && /function guidesNow\(\) \{/.test(ui) && !/typeof GUIDES/.test(ui));
-if (!G) { done(); }
+if (!G) { done(); } else {
 
 // ------------------------------------------------- B. against the server --
 // The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
@@ -183,7 +183,7 @@ try { vm.runInContext(guidesFile, box, { filename: 'thornswood-profession-guides
       vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
 const api = win.thornswoodSkills;
 yes('C0 the K panel runs in a stand-in document', ran && !!api);
-if (!api) { done(); }
+if (!api) { done(); } else {
 const root = docu.body.children[0];
 const nav = root._q['.nav'], body = root._q['.body'], confirmBtn = root._q['[data-act="confirm"]'], status = root._q['.status'];
 const navRows = function () { return nav.children.filter(function (r) { return /navrow/.test(r.className); }); };
@@ -276,3 +276,4 @@ yes('D1 no em dash on any page', words.indexOf('—') < 0 && !/&mdash;/.test(wor
 yes('D1 no banned word on any page', !/\bplayers?\b/i.test(words));
 yes('D1 no number left unfilled, and nothing undefined', !/\{\w+\}/.test(words) && !/undefined|NaN/.test(words));
 done();
+}}

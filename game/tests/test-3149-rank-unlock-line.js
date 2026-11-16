@@ -32,7 +32,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -47,7 +47,7 @@ const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let TABLE = null;
 try { TABLE = require('../../tests/gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID'); } catch (e) { TABLE = null; }
 yes('the rules, the character store and the recipe table are in the gamemode', !!(RULES && CHARACTER && TABLE));
-if (!(RULES && CHARACTER && TABLE)) { done(); }
+if (!(RULES && CHARACTER && TABLE)) { done(); } else {
 
 function server(race) {
   const store = {};
@@ -205,3 +205,4 @@ function count(half, rank, race) {
 }
 
 done();
+}

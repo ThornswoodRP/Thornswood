@@ -180,7 +180,7 @@ function grab(name) {
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 
   // The count, with the function lifted out of the same server.js.
@@ -206,5 +206,5 @@ function grab(name) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();
