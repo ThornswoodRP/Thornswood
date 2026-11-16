@@ -9,9 +9,12 @@
 // reads from its table file, game\gamemode-tables\DATA.json (#5191); the
 // other three are const lines in gamemode.js.
 //
-// Except DATA.worldspaces, which scripts\dev\Build-WorldspaceTable.js reads
-// out of the WRLD records of the load order and writes into data.json and the
-// DATA table (#1896). Do not edit that list by hand.
+// The DATA table is data.json with what two builders read out of the load
+// order after it: DATA.worldspaces (scripts\dev\Build-WorldspaceTable.js,
+// game\data\worldspaces.json, #1896) and DATA.ownWorlds and ownWorldDoors
+// (scripts\dev\Build-WakeTable.js, game\data\own-worlds.json, #1909), put
+// together by scripts\dev\DataTable.js. Those two files are the content
+// build's; data.json holds neither list (#5191).
 //
 // Does not invent content. Edit the JSON, then run this to write the const
 // lines. --check verifies the gamemode matches the JSON (by value) and writes
@@ -29,6 +32,7 @@ const root = path.join(__dirname, '..', '..');
 const gmPath = path.join(root, 'game', 'gamemode');
 const dataDir = path.join(root, 'game', 'data');
 const GT = require('./GamemodeTables.js');
+const DT = require('./DataTable.js');
 
 const TABLES = [
   { name: 'DATA', file: 'data.json', table: true },
@@ -81,8 +85,15 @@ for (const t of TABLES) {
   const obj = loadJson(t.file);
   if (obj === null) continue;
   if (t.table) {
-    // Laid out from the file's own text, as Build-WorldspaceTable.js writes it.
-    const text = fs.readFileSync(path.join(dataDir, t.file), 'utf8');
+    // data.json's own text with the built parts after it, laid out, as
+    // Build-WorldspaceTable.js and Build-WakeTable.js write it (DataTable.js).
+    const composed = DT.tableText(fs.readFileSync(path.join(dataDir, t.file), 'utf8'), DT.readParts(dataDir));
+    if (composed.error) {
+      console.error('FAIL  ' + t.name + ': ' + composed.error);
+      process.exitCode = 1;
+      continue;
+    }
+    const text = composed.text;
     if (GT.isCurrent(t.name, text)) {
       console.log('ok    ' + t.name + ' matches game\\data\\' + t.file);
       matched++;

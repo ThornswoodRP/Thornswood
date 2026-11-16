@@ -261,6 +261,16 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `load-order.json`: the load order the servers run and every content
+  build reads, at the revision `collection-plugins.json` names, the five
+  masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
+  revision adds goes on the end of its kind and none moves to another index
+  (`docs\LIGHT-ORDER-DRIFT.md`). Until 16 Nov 2026 the order was
+  `game\data\npc-population.json`'s, a table the box's build writes, so a
+  build read it back from the build before. `scripts\mods\Set-LoadOrder.ps1`
+  writes it in the pull request that moves the records to a new revision,
+  and `tests\test-5191-load-order.ps1` fails while it is another
+  revision's.
 
 ## The box, GitHub and Cloudflare
 
