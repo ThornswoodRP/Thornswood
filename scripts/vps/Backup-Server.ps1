@@ -42,6 +42,13 @@
     public folder is the big one, and it is already on GitHub and rebuildable
     from the repo. Taking it would turn a two minute backup into a long one.
 
+  What it could not copy: a file the server holds open, or one it may not
+  read, is said on the box by name with why (NOT TAKEN, in red here), and is
+  not counted as taken. The rest is still brought down, since it may be the
+  only copy, and the run ends 1 (#4209). Until then each copy's error was
+  silenced and the file counted either way, so a locked world file was
+  missing from the zip with nothing said.
+
   The zip has the bot token, the Discord client secret and the server password
   in it, because a backup without them is not a backup, and the site's
   sign-ins with their addresses, voice chat and every character besides.
@@ -150,20 +157,24 @@ function Grab(`$from, `$asName) {
     # Listed from the long path. `$from may be a short 8.3 path, and
     # FullName is not (issue #1156).
     `$listed = (Get-Item -LiteralPath `$from).FullName
-    foreach (`$f in (Get-ChildItem -LiteralPath `$listed -Recurse -File -EA SilentlyContinue)) {
+    # A file not copied (one the server holds open, one this may not read)
+    # is said by name with why, and only what was copied is counted (#4209).
+    `$listErr = `$null
+    foreach (`$f in @(Get-ChildItem -LiteralPath `$listed -Recurse -File -EA SilentlyContinue -ErrorVariable listErr)) {
       if (`$f.FullName -like '*\node_modules\*') { continue }
       if (`$f.Length -gt 200MB) { continue }
       `$rel = `$f.FullName.Substring(`$listed.Length).TrimStart('\')
       `$dest = Join-Path `$to `$rel
       `$null = New-Item -ItemType Directory -Path (Split-Path -Parent `$dest) -Force -EA SilentlyContinue
-      Copy-Item `$f.FullName `$dest -Force -EA SilentlyContinue
-      `$n = `$n + 1
+      try { Copy-Item -LiteralPath `$f.FullName -Destination `$dest -Force -ErrorAction Stop; `$n = `$n + 1 }
+      catch { 'NOT TAKEN ' + `$f.FullName + '   ' + `$_.Exception.Message }
     }
+    foreach (`$e in @(`$listErr)) { 'NOT TAKEN ' + `$e.TargetObject + '   ' + `$e.Exception.Message }
     'took      ' + `$asName + '   ' + `$n + ' file(s)'
   }
   else {
-    Copy-Item `$from `$to -Force -EA SilentlyContinue
-    'took      ' + `$asName
+    try { Copy-Item -LiteralPath `$from -Destination `$to -Force -ErrorAction Stop; 'took      ' + `$asName }
+    catch { 'NOT TAKEN ' + `$from + '   ' + `$_.Exception.Message }
   }
 }
 
@@ -332,9 +343,10 @@ try {
     $c = 'Gray'
     if ("$l" -match '^missing') { $c = 'Yellow' }
     if ("$l" -match '^zip') { $c = 'Green' }
-    if ("$l" -match '^STOP') { $c = 'Red' }
+    if ("$l" -match '^(STOP|NOT TAKEN)') { $c = 'Red' }
     Say "  $l" $c
   }
+  $notTaken = @($lines | Where-Object { "$_" -match '^NOT TAKEN' }).Count
   if (-not ($lines | Where-Object { "$_" -match '^zip' })) {
     Die 'The server did not finish making the zip. Nothing has been brought down.'
   }
@@ -349,6 +361,14 @@ if (-not (Test-Path -LiteralPath $localZip)) { Die "scp did not leave a file at 
 $mb = [math]::Round((Get-Item -LiteralPath $localZip).Length / 1MB, 1)
 Say "  $localZip   $mb MB" 'Green'
 
+# Brought down all the same, since the rest of it is still the only copy,
+# but the run ends 1 so nobody takes it for whole (#4209).
+if ($notTaken) {
+  Write-Host ''
+  Say ("  $notTaken file(s) could not be copied on the server and are not in this backup.") 'Red'
+  Say '  Each is named above in red, with why. Run this again when the server is not writing them.' 'Red'
+}
+
 Head 'Keep this somewhere sensible'
 Say '  It is encrypted with the backup passphrase. Restore-Backup.ps1 opens it.' 'DarkGray'
 Say '  Fetch-Backups.ps1 deletes it here 30 days after it was taken, as the' 'DarkGray'
@@ -356,3 +376,5 @@ Say '  privacy page says of every copy on this machine.' 'DarkGray'
 
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+if ($notTaken) { exit 1 }
+exit 0

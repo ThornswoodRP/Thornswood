@@ -23,7 +23,7 @@ buy, sell or supply permissions.
 
 - [First playable scenes](#first-playable-scenes)
 - [Targets and their existing returns](#targets-and-their-existing-returns)
-- [Finite-purse commissions](#finite-purse-commissions)
+- [Guild commissions](#guild-commissions)
 - [Reward and activation limits](#reward-and-activation-limits)
 - [Commission persistence and admission](#commission-persistence-and-admission)
 - [Runtime admission and recovery](#runtime-admission-and-recovery)
@@ -79,7 +79,7 @@ identity, species, authored leash, kill attribution and original conversation
 and transaction fences. A similarly named bandit or skeever elsewhere does
 not count. Existing camp difficulty and animal habitat remain unchanged.
 
-## Finite-purse commissions
+## Guild commissions
 
 The [regional delivery catalogue](merchant-regional-deliveries.md) lists the 69 additions in the Rift, Reach and Haafingar, with their exact references, source records, counts, gates and personal rest periods. The [remaining-hold catalogue](merchant-all-hold-deliveries.md) lists the final 141 additions and complete Master-half/school allocation. Whiterun's first complete set is below.
 
@@ -108,9 +108,9 @@ are pinned in `merchant-ranked-quests.json`. No existing published terms change.
 
 These additions also bring each class and each profession to at least two
 distinct authored jobs across the catalogue. Source checks enforce both that
-coverage and all 24 Whiterun merchant/rank slots. The full catalogue now covers all 240 slots, every 14 non-Mage mastered half, all five Master schools and each Master class. Displayed payments use the offering
-hold's submitted buy prices and existing finite purse; no default quote,
-additional money, stock refill, source placement or yield is added.
+coverage and all 24 Whiterun merchant/rank slots. The full catalogue now covers all 240 slots, every 14 non-Mage mastered half, all five Master schools and each Master class. Displayed payments use the guild's
+reward prices, which staff set (#6180); no stock refill, source placement or
+yield is added.
 
 Each new item set differs from every earlier commission, independent of
 quantities or titles. Recipe quantities align with finished goods; a single
@@ -137,13 +137,12 @@ producer ranks. No location or return rate changes.
 | A field medic's travelling case | Alchemist `1a66d:Skyrim.esm` | Expert Physicker half | 2 Physicker's Remedies, 4 Nirnroots | 24 hours |
 | Clothes for the commission rack | Enchanter `1a672:Skyrim.esm` | Novice Wardweaver half | 1 Clothes, 1 Shoes | 6 hours |
 
-Payment is the sum of each required count times that item's submitted buy
-price in Whiterun. No number is invented when a price is missing or ambiguous;
-that offer explains why it cannot be accepted. Zero submitted prices remain
-valid. Other shelf stock remains for sale. Acceptance sets aside the whole
-sum from the finite purse, and a partial parcel transfers nothing. Original
-payments and per-job rest periods survive price/rank changes and restart.
-The rest begins when the final ledger settlement succeeds.
+Payment is the sum of each required count times that item's guild reward
+price (see "Commission pay" below). A zero reward price is valid. Other shelf
+stock remains for sale. Acceptance holds none of the trader's purse back, and
+a partial parcel transfers nothing. Original payments and per-job rest
+periods survive price/rank changes and restart. The rest begins when the
+final ledger settlement succeeds.
 
 Ebony and ash supplies are Master producer sources; Nirnroot is Expert.
 The pole and arrows are two Master batches. The Tailor order is six
@@ -240,20 +239,39 @@ changed for these offers. Potato Soup also retains its requirement for
 Farmer standing alone does not establish those recipe conditions; this is
 a delivery request and does not require personal crafting.
 
-Commission payment is the accepted submitted hold price multiplied
-by the original quantity, from the merchant's finite purse. No default price,
-fixed bonus or new gold is granted here. Missing price, unsupported goods or
-insufficient unreserved purse must explain why new acceptance is refused.
+### Commission pay
+
+Guild work is set by staff (#6180; Patrick, 15 Nov 2026, on
+q-6180-guild-prices: "Guild work should be set by staff, give them all
+starting reward prices. The NPCs still wont buy or sell until ledgers are
+submitted"). A commission pays each good's count times the good's reward
+price. Every good a commission asks for has a starting reward price in the
+gamemode table `COMMISSION_REWARD_PRICES`, which `Build-MerchantTables.js`
+works out from the commissions themselves: each good starts at the median,
+over the commissions that ask for it, of its share of a tier's pay spread
+evenly over that commission's goods (about 15 gold for Novice work, 30 for
+Advanced, 60 for Expert and 120 for Master), at least 1 gold. Staff read
+and change one in the game with `/book reward <good>`,
+`/book reward <good> <gold>` and `/book reward <good> start`; what they set
+is kept in the server's private `commission-rewards.json`. A hold's
+submitted price list sets only what its traders buy and sell, never what
+guild work pays.
+
+The pay is new gold, never the trader's (Patrick, 16 Nov 2026: "no dont
+make it come out of the purse", "othwerwise the economy would have like 0
+gold people only start with 40"). Taking work holds none of the purse back,
+the trader's purse is the same after a turn-in, and ordinary trades spend
+the whole purse. A turn-in saved before this change, which took the pay
+from the purse, still finishes as it was saved.
+
 Customers need not own the goods when accepting work. Existing and traded
-goods are valid; acceptance does not claim they were freshly crafted or harvested.
-The transaction reserves the promised purse amount and preserves the accepted quote
-through its exact conserved pending-transfer protocol. At delivery, missing
-matching inventory refuses completion while keeping the work and its purse
-reservation. A changed current price or lack of other spendable purse money
-must not invalidate that accepted promise. Ordinary stock for sale remains
-visible. The panel shows promised purse money separately; ordinary purchases
-and supplies use only the remainder. A submitted zero price remains valid;
-there is no invented fallback price or reward bonus.
+goods are valid; acceptance does not claim they were freshly crafted or
+harvested. The transaction keeps the accepted quote through its exact
+conserved pending-transfer protocol. At delivery, missing matching
+inventory refuses completion while keeping the work. A changed reward price
+does not change work already taken: it pays what it was taken at. A good
+with no reward price, or a changed price at the moment of taking, explains
+why the work cannot be taken.
 
 Authored commissions have an explicit source-derived authority keyed by
 their exact reviewed quest and merchant, plus their own conserved transfer
@@ -261,7 +279,7 @@ kind, cooldown persistence and recovery. Several finished goods are absent
 from ordinary supply. This does not widen that table, treat all buy goods as approved
 commissions or pass these rows as legacy supply. Its existing five-good and
 six-hour dynamic rules remain intact. The scene reward allowance does not
-apply to these transfers of existing purse gold.
+apply to commission pay.
 
 ## Reward and activation limits
 
@@ -275,9 +293,8 @@ purchases from a finite purse. The bundled scene-accounting
 reserves rewards within 150 gold per character per rolling 24 hours.
 That additional limit is not a reason
 to call the 400-gold cooldown bound actual earnings or an account/world cap.
-The ten commissions transfer existing purse
-money at their accepted submitted prices, which are not invented or
-included as newly created gold in that bound.
+Commission pay is new gold at the staff's reward prices (see "Commission
+pay" above) and is not counted in that bound.
 
 Further definitions need their own source evidence, reward/cadence review,
 bounded state, exact bindings and explicit pinned admission. Two remaining scarce-resource interactions and seven retrieval interactions are unfinished; aggregate authoring flags remain false. Existing

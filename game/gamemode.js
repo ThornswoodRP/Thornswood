@@ -34028,12 +34028,23 @@ return module.exports;
     var SESSION_MS = 10 * 60 * 1000;   // a dock panel left open this long asks for the crate again
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a dock crate, the same as a hold's box
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0, timer = null;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, timer = null;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return kind + ':' + RUN + ':' + (++receiptN); }
+    /*
+      A RECEIPT'S NAME is kind:RUN:n (#4928). RUN is the server's run, kept on
+      globalThis, which a gamemode reload keeps, and the register on disk keeps
+      every name used. So n is kept on globalThis beside the run: a reload
+      carries on counting where the last load stopped, and a restart, a new
+      run, starts again at 1 under a run no name has used yet.
+    */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodShipReceiptN) || 0) + 1;
+      g.__thornswoodShipReceiptN = n;
+      return kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -35748,12 +35759,17 @@ return module.exports;
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a stop's crate, the same as a dock's
     var RAID_REACH = 700;              // how close a raider stands to the driver: a trade's 10 metres
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return 'cart-' + kind + ':' + RUN + ':' + (++receiptN); }
+    /* A cart receipt's name is cart-kind:RUN:n, n kept on globalThis beside the run, as the ships keep theirs (#4928). */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodCartReceiptN) || 0) + 1;
+      g.__thornswoodCartReceiptN = n;
+      return 'cart-' + kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -42835,6 +42851,111 @@ function thornswoodBooks(env) {
 
   loadStore();
 
+  /*
+    THE GUILD'S REWARD PRICES (#6180). Patrick, 15 Nov 2026, on the page
+    (q-6180-guild-prices): "Guild work should be set by staff, give them all
+    starting reward prices. The NPCs still wont buy or sell until ledgers are
+    submitted". A guild commission pays each good it asks for at the good's
+    reward price, never at a hold's ledger price; the ledgers above still set
+    what a trader buys and sells. Every good a commission asks for has a
+    starting price in the gamemode table COMMISSION_REWARD_PRICES
+    (Build-MerchantTables.js says how it is worked out). Staff change one in
+    the game with /book reward, and what they set is kept here, in the
+    private folder beside the books, by the good's record; a good staff
+    never changed pays its starting price.
+  */
+  // The gamemode hands the table in when it starts the books; a harness that
+  // runs the books block alone gives none, and no good has a reward price.
+  var REWARD_START = env.rewardPrices || { version: 1, items: [] };
+  var rewardStart = {};
+  var rewardOrder = [];
+  (function () {
+    var items = (REWARD_START && Array.isArray(REWARD_START.items)) ? REWARD_START.items : null;
+    if (!items) { throw new Error('The guild\'s starting reward prices cannot be verified.'); }
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      if (!row || typeof row.item !== 'string' || !/^[0-9a-f]{1,8}:[^:]+$/i.test(row.item) ||
+          typeof row.name !== 'string' || !row.name.trim() || !validGold(row.gold) || row.gold === null ||
+          Object.prototype.hasOwnProperty.call(rewardStart, row.item.toLowerCase())) {
+        throw new Error('The guild\'s starting reward prices cannot be verified.');
+      }
+      rewardStart[row.item.toLowerCase()] = { item: row.item, name: row.name, gold: row.gold };
+      rewardOrder.push(row.item.toLowerCase());
+    }
+  })();
+  var rewardSet = {};
+  function rewardsFile() { return path.join(privDir, 'commission-rewards.json'); }
+  (function loadRewards() {
+    if (!fs.existsSync(rewardsFile())) { return; }
+    var doc;
+    try { doc = JSON.parse(fs.readFileSync(rewardsFile(), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { throw new Error('Saved guild reward prices cannot be verified: ' + e.message); }
+    if (!doc || doc.version !== 1 || !doc.items || typeof doc.items !== 'object' || Array.isArray(doc.items)) {
+      throw new Error('Saved guild reward prices cannot be verified.');
+    }
+    for (var key in doc.items) {
+      if (!Object.prototype.hasOwnProperty.call(doc.items, key)) { continue; }
+      // A good no commission asks for any more is kept, so a price staff set
+      // is never lost, and asked for by nothing.
+      if (!/^[0-9a-f]{1,8}:[^:]+$/i.test(key) || key !== key.toLowerCase() ||
+          !validGold(doc.items[key]) || doc.items[key] === null) {
+        throw new Error('Saved guild reward prices cannot be verified.');
+      }
+      rewardSet[key] = doc.items[key];
+    }
+  })();
+
+  function rewardPrice(desc) {
+    var key = String(desc || '').toLowerCase();
+    if (!active || !Object.prototype.hasOwnProperty.call(rewardStart, key)) { return null; }
+    var start = rewardStart[key];
+    var gold = Object.prototype.hasOwnProperty.call(rewardSet, key) ? rewardSet[key] : start.gold;
+    return { item: start.item, name: start.name, gold: gold, start: start.gold };
+  }
+
+  // The good a staff member named: by its name or its record, whole, any case.
+  function rewardGood(words) {
+    var said = words.join(' ').trim().toLowerCase();
+    if (!said) { return null; }
+    if (Object.prototype.hasOwnProperty.call(rewardStart, said)) { return rewardStart[said]; }
+    var hit = null;
+    for (var i = 0; i < rewardOrder.length; i++) {
+      var row = rewardStart[rewardOrder[i]];
+      if (row.name.toLowerCase() === said) {
+        if (hit) { return 'two'; }
+        hit = row;
+      }
+    }
+    return hit;
+  }
+
+  function reward(pid, words) {
+    var r = rolesOf(pid);
+    if (!r.staff && !r.dev) { return 'Only staff set what guild work pays.'; }
+    var last = String(words[words.length - 1] || '').toLowerCase();
+    var setting = words.length >= 2 && (/^(0|[1-9][0-9]{0,9})$/.test(last) || last === 'start');
+    var good = rewardGood(setting ? words.slice(0, -1) : words);
+    if (!good) {
+      return 'Name a good guild work asks for to read its price; add a price in gold to set it, ' +
+             'or start to put it back on its starting price.';
+    }
+    if (good === 'two') { return 'Two goods have that name. Name it by its record instead.'; }
+    var key = good.item.toLowerCase();
+    if (!setting) {
+      var now = rewardPrice(key);
+      return good.name + ' pays ' + now.gold + ' gold each in guild work (it started at ' + now.start + ').';
+    }
+    var gold = last === 'start' ? null : Number(last);
+    if (gold !== null && !validGold(gold)) { return 'That is not a price in gold.'; }
+    var next = JSON.parse(JSON.stringify(rewardSet));
+    if (gold === null || gold === good.gold) { delete next[key]; } else { next[key] = gold; }
+    try { writeJson(rewardsFile(), { version: 1, items: next }); }
+    catch (e) { return 'The server could not save the reward price. Nothing changed.'; }
+    rewardSet = next;
+    return good.name + ' now pays ' + rewardPrice(key).gold + ' gold each in guild work. ' +
+           'Work already taken keeps the pay it was taken at.';
+  }
+
   function byId(id) {
     var want = String(id || '');
     for (var i = 0; i < store.length; i++) {
@@ -43539,6 +43660,7 @@ function thornswoodBooks(env) {
       }
       return said;
     }
+    if (sub === 'reward') { return reward(pid, words); }
     if (sub === 'leave') { return leave(pid, words); }
     if (sub === 'invite') { return invite(actorId, pid, words); }
     if (sub === 'say') { return sayLine(pid, actorId, words); }
@@ -43764,6 +43886,7 @@ function thornswoodBooks(env) {
     books: function () { return active ? JSON.parse(JSON.stringify(store)) : []; },
     guildPrice: guildPrice,
     catalog: catalog,
+    rewardPrice: rewardPrice,
     ledgers: function () { return active ? JSON.parse(JSON.stringify(ledgers)) : {}; }
   };
 }
@@ -43787,7 +43910,7 @@ function thornswoodBooks(env) {
       var cfg = JSON.parse(fs.readFileSync('server-settings.json', 'utf8'));
       if (cfg && cfg.privDir) { privDir = String(cfg.privDir); }
     } catch (e) { }
-    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir });
+    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir, rewardPrices: table('COMMISSION_REWARD_PRICES') });
     g.__thornswoodBooks = api;
     if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('books', api.release); }
     g.__thornswoodBooksTimer = setInterval(function () {
@@ -65204,10 +65327,14 @@ function read(raw) {
  return copy(raw);
 }
 function reserved(raw){return Object.values(read(raw).held).reduce((sum,row)=>sum+row.gold,0);}
+// A commission's pay is new gold, never the trader's (#6180, Patrick, 16 Nov
+// 2026: "no dont make it come out of the purse", "othwerwise the economy would
+// have like 0 gold people only start with 40"), so work taken holds none of
+// the purse back and the whole purse is the trader's to trade with.
 function spendable(state) {
- const promised=reserved(state.commissions);
- if(!integer(state.purse,0,MAX_GOLD)||promised>state.purse)throw Error('Commission promises exceed the merchant purse.');
- return state.purse-promised;
+ reserved(state.commissions);
+ if(!integer(state.purse,0,MAX_GOLD))throw Error('The merchant purse cannot be verified.');
+ return state.purse;
 }
 function openCount(states,human) {
  const who=owner(human);if(!who)throw Error('Commission owner cannot be verified.');
@@ -65219,7 +65346,7 @@ function prepare(raw,at) {
  for(const name of Object.keys(next.cool))if(at-cooldownAt(next.cool[name])>=cooldownWait(next.cool[name]))delete next.cool[name];
  return next;
 }
-function reserve(raw,human,id,terms,at,purse) {
+function reserve(raw,human,id,terms,at) {
  const next=prepare(raw,at),name=key(human,id);
  if(!name)return {ok:false,why:'session'};
  const bundle=terms&&owns(terms,'goods');
@@ -65231,7 +65358,6 @@ function reserve(raw,human,id,terms,at,purse) {
  if(owns(next.cool,name))return {ok:false,why:'cooldown'};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
- if(spendable({purse,commissions:next})<gold)return {ok:false,why:'purse'};
  const token=++next.serial;
  if(bundle){next.v=2;next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,goods:copy(terms.goods),hours:terms.hours,gold,at};}
  else next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,item:copy(terms.item),count:terms.count,unit:terms.unit,gold,at};
@@ -65508,7 +65634,12 @@ function createSettlement(deps) {
     var moved=pending.kind==='buy'?difference(stockRows(previous.stock),stockRows(next.stock),true):
       difference(stockRows(next.stock),stockRows(previous.stock),true);
     if(!moved.length || moved.some(function(row) {return row.entry.baseId===15;})) throw new Error('Merchant goods cannot be verified.');
-    var gold=pending.kind==='buy'?next.purse-previous.purse:previous.purse-next.purse;
+    // A commission's pay is new gold (#6180): the trader's purse stays as it
+    // was, and the person is paid the promise's gold. A turn-in saved before
+    // that took the pay from the purse, and it finishes as it was saved.
+    var gold=pending.kind==='buy'?next.purse-previous.purse:pending.kind==='commission'?goldCount(credit):previous.purse-next.purse;
+    if(pending.kind==='commission'&&next.purse!==previous.purse&&next.purse!==previous.purse-gold)
+      throw new Error('Merchant transfer does not conserve goods and gold.');
     if(gold<0 || gold>MAX_COUNT || (pending.kind==='buy'?
       goldCount(removed)!==gold || goodsDigest(credit)!==goodsDigest(moved):
       removed.some(function(row) {return row.entry.baseId===15;}) || goodsDigest(removed)!==goodsDigest(moved) || goldCount(credit)!==gold))
@@ -65849,7 +65980,7 @@ function createSettlement(deps) {
       if(!equal(canonical(prior),canonical(replacement))||!action||!['reserve','cancel'].includes(action.kind)||
         !Number.isSafeInteger(action.at)||action.at<=0||action.at>now())throw new Error('Commission metadata action cannot be verified.');
       var changed=action.kind==='reserve'?
-        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at,state.purse):
+        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at):
         COMMISSION_STATE.cancel(state.commissions,human,action.job,action.token,action.at);
       if(!changed.ok||!equal(canonical(changed.next),canonical(next.commissions)))
         throw new Error('Commission metadata transition cannot be verified.');
@@ -66169,19 +66300,15 @@ function createCommissions(deps) {
     new Set(all.map(row=>row.reference)).size!==size)throw Error('The complete commission ledger cannot be verified.');
   return all.filter(row=>row.state!==null).map(row=>{STATE.spendable(row.state);return row.state;});
  }
+ // The staff's reward price for the good (#6180, Patrick, 15 Nov 2026,
+ // q-6180-guild-prices): guild work is set by staff, every good it asks for has
+ // a starting reward price, and staff change it in the game. The hold ledgers
+ // (deps.prices) set only what the trader itself buys and sells.
  function quoteGood(row,good) {
-  const catalog=deps.prices.catalog(row.bookHold)||[],matches=[];
-  for(const item of catalog) {
-   const resolved=deps.resolve(item.name);
-   if(resolved&&!resolved.error&&resolved.baseId===good.itemId) {
-    const price=deps.prices.quote(row.bookHold,item.name);
-    if(price&&Number.isSafeInteger(price.buy)&&price.buy>=0&&price.buy<=2147483647&&
-      Number.isSafeInteger(price.buy*good.count)&&price.buy*good.count<=2147483647)
-     matches.push({unit:price.buy,name:resolved.name||item.name});
-   }
-  }
-  // Ambiguous names or two aliases are never a guess at an accepted promise.
-  return matches.length===1?matches[0]:null;
+  const price=deps.rewards&&typeof deps.rewards.price==='function'?deps.rewards.price(good.itemDesc):null;
+  if(!price||!Number.isSafeInteger(price.gold)||price.gold<0||price.gold>2147483647||
+    !Number.isSafeInteger(price.gold*good.count)||price.gold*good.count>2147483647||typeof price.name!=='string'||!price.name)return null;
+  return {unit:price.gold,name:price.name};
  }
  function quoted(row) {
   const parts=row.deliveryVersion===2?row.goods:[row],goods=[];
@@ -66226,12 +66353,10 @@ function createCommissions(deps) {
    const activeCool=Object.keys(jobs.cool).filter(key=>at-STATE.cooldownAt(jobs.cool[key])<STATE.cooldownWait(jobs.cool[key])).length;
    const room=jobs.serial<Number.MAX_SAFE_INTEGER&&Object.keys(jobs.held).length<STATE.MAX_HELD&&
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
-   const funds=quote&&STATE.spendable(state)>=quote.gold;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'No submitted buy price is available for this work.':
-     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':
-     !open&&!funds?'The trader cannot reserve this payment.':'';
+     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
     state:open?'open':cooldown?'cooldown':!gate?'locked':reason?'unavailable':'available',
@@ -66267,7 +66392,7 @@ function createCommissions(deps) {
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
      {hash:row.sourceHash,...quote.goods[0]},at=now();
-   const accepted=STATE.reserve(jobs,human,id,terms,at,state.purse);
+   const accepted=STATE.reserve(jobs,human,id,terms,at);
    if(!accepted.ok)return accepted;
    const next=Object.assign({},state,{commissions:accepted.next});
    const saved=deps.settlement.changeCommissions(merchant,state,next,human,()=>current(true,quote),{kind:'reserve',job:id,terms,at});
@@ -66292,7 +66417,8 @@ function createCommissions(deps) {
     debit=outgoing.inventory;stock=deps.addStock(stock,outgoing.entries,good.item.name);
    }
   }catch(error){return {ok:false,why:'short'};}
-  const next={purse:state.purse-held.gold,stock,supply:copy(state.supply||{}),commissions:completed.next};
+  // The pay is new gold: the trader's purse is the same after (#6180).
+  const next={purse:state.purse,stock,supply:copy(state.supply||{}),commissions:completed.next};
   const moved=deps.settlement.begin({merchantId:merchant,humanId:actor,profileId:human.profileId,kind:'commission',
    previous:state,next,expected,debit,credit:held.gold?[{baseId:15,count:held.gold}]:[],caller:()=>current(false)});
   // A turn-in finishes once the save storage acknowledges it, a later tick (#5419): the trader says it then.
@@ -67518,8 +67644,8 @@ function createMerchantTrading(deps) {
   var settlement = SETTLEMENT.createSettlement({purses:purses,transfer:transfer,world:deps.namespace || purses.namespace,log:deps.log,now:now});
   var retirementRequired=deps.retirementRequired===true;
   var active = deps.suspended !== true && !retirementRequired, closed = false;
-  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,prices:prices,
-    resolve:deps.resolve,eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
+  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,rewards:deps.rewards,
+    eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
 
   function placeOf(reference) {
     return places[reference] || null;
@@ -67904,8 +68030,8 @@ function createMerchantTrading(deps) {
         unbound:'This work has no appointed place yet.',unwritten:'The work could not be committed just now.',
         unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',
         allowance:'Your new scene work has reached its shared daily gold allowance.',
-        price:'The submitted price changed or is missing. Choose the work again.',
-        purse:'This trader cannot reserve the quoted payment.',capacity:'This trader cannot accept more work yet.',
+        price:'The reward price changed or is missing. Choose the work again.',
+        capacity:'This trader cannot accept more work yet.',
         counter:'This trader cannot accept more work yet.',waiting:'The transfer is waiting for its saved inventory.',
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
@@ -67985,7 +68111,7 @@ function createMerchantTrading(deps) {
       var last = lastSupply(state, completedSupplyKey, itemName);
       if (last && now() - last < SUPPLY_WAIT) return fail('That supply is not due.');
     }
-    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay from its unreserved purse.');
+    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay that much from its purse.');
     if (!npcBuys && gold > 0 && world.carry(actorId, GOLD_BASE) < gold) return fail('You cannot pay.');
     if (npcBuys && world.carry(actorId, resolved.baseId) < asked.count) return fail('You are not carrying that.');
     if (!settlement.available()) {
@@ -68191,6 +68317,15 @@ function installMerchantTrading(env) {
     places: doc.byRef || {},
     roleTables: env.roleTables,
     commissions: env.commissions,
+    // What a commission pays for each good: the staff's reward prices, kept
+    // with the books (#6180).
+    rewards: {
+      price: function (desc) {
+        var books = g.__thornswoodBooks;
+        if (!books || typeof books.rewardPrice !== 'function') return null;
+        return books.rewardPrice(desc);
+      }
+    },
     commissionEligible:function(actor,gate) {
       var progression=g.__thornswoodProgression,character=g.__thornswoodCharacter;
       if(!progression||!character||!character.PROPERTY)return false;

@@ -164,8 +164,7 @@ const QUEST_SAID = {
   'The work could not be committed just now.': 'questRefused:unwritten',
   'Quest work is unavailable.': 'questRefused:unavailable',
   'This trader does not handle that work.': 'questRefused:role',
-  'The submitted price changed or is missing. Choose the work again.': 'questRefused:price',
-  'This trader cannot reserve the quoted payment.': 'questRefused:purse',
+  'The reward price changed or is missing. Choose the work again.': 'questRefused:price',
   'This trader cannot accept more work yet.': 'questRefused:capacity',
   'The transfer is waiting for its saved inventory.': 'questRefused:waiting',
   'Finish or leave one of your three open jobs of this kind first.': 'questRefused:open-limit',
@@ -181,10 +180,9 @@ const QUEST_ROW_WHY = {
   'Trading is waiting for a saved inventory.': 'inventory',
   'You do not meet this work\'s requirements.': 'requirements',
   'This work is still resting.': 'resting',
-  'No submitted buy price is available for this work.': 'noPrice',
+  'Staff have set no reward for this work.': 'noReward',
   'You already hold three commissions.': 'threeHeld',
   'This trader cannot accept more work yet.': 'traderFull',
-  'The trader cannot reserve this payment.': 'purse'
 };
 
 function distance(a, b) {

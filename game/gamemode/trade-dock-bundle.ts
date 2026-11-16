@@ -614,12 +614,23 @@ return module.exports;
     var SESSION_MS = 10 * 60 * 1000;   // a dock panel left open this long asks for the crate again
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a dock crate, the same as a hold's box
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0, timer = null;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, timer = null;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return kind + ':' + RUN + ':' + (++receiptN); }
+    /*
+      A RECEIPT'S NAME is kind:RUN:n (#4928). RUN is the server's run, kept on
+      globalThis, which a gamemode reload keeps, and the register on disk keeps
+      every name used. So n is kept on globalThis beside the run: a reload
+      carries on counting where the last load stopped, and a restart, a new
+      run, starts again at 1 under a run no name has used yet.
+    */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodShipReceiptN) || 0) + 1;
+      g.__thornswoodShipReceiptN = n;
+      return kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];

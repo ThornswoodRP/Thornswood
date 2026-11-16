@@ -218,6 +218,16 @@ folder here is named below, under the heading it belongs to.
   revision's plugins, in the pull request that moves the records to a new
   revision. The content table builders and `game\data\last-plugin.json` are
   held to it, and `docs\COLLECTION-REVISIONS.md` names its revision.
+- `collection-page.json`: the text of the collection's page on Nexus Mods,
+  its summary, description and install steps (issue #4537). Each mod it
+  names is written `[[the words|its Nexus mod id]]`, and `notSaid` is what
+  the build has made untrue, each with why. `New-NexusRevision.ps1` sends it
+  with every revision in place of the text the revision before carried;
+  `scripts\release\collection-page.js` holds it to `collection.json` (every
+  mod it names installed, nothing `notSaid` lists, real headings, the same
+  `revision`), and `tests\test-4537-collection-page.js` runs that in the
+  gate. Changed by hand, and read again in the pull request that moves
+  `collection.json` to a new revision.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with

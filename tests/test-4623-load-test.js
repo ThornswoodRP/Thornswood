@@ -403,9 +403,9 @@ function questChecks() {
   b.pump();
   yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
   yes('  each row by its kind and state', b.played['questRow:commission:locked'] === 2);
-  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. No submitted buy price is available for this work.' })]);
+  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. Staff have set no reward for this work.' })]);
   b.pump();
-  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noPrice'] === 1);
+  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noReward'] === 1);
   view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
   b.pump();
   step();
@@ -457,6 +457,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
     const BOOKS = JSON.stringify({ books: [{ id: 'b1' }, { id: 'b2' }], ledgers: { winterhold: { b1: {}, b2: {} }, whiterun: { b1: {} }, riften: {} } });
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
+    const REWARDS = JSON.stringify({ version: 1, items: { '5b6a0:skyrim.esm': 9, 'db5d2:skyrim.esm': 4 } });
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -473,13 +475,19 @@ async function boxChecks() {
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
       !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() &&
-      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,commission-rewards.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('  and the guild reward prices staff set, counted (#6180)',
+      fs.readFileSync(path.join(out, 'private', 'commission-rewards.json'), 'utf8') === REWARDS && r.rewardsSet === 2);
     yes('  and a copy of the hold price lists the traders quote every commission from, counted by hold and naming nobody (#6180)',
       fs.readFileSync(path.join(out, 'private', 'books.json'), 'utf8') === BOOKS && r.prices.lists === 3 && r.prices.holds.join(',') === 'whiterun 1,winterhold 2' &&
       !fs.lstatSync(path.join(out, 'private', 'books.json')).isSymbolicLink());
     fs.unlinkSync(path.join(inst, 'private', 'books.json'));
     const bare = server.fromInstalled({ from: inst, out: path.join(tmp, 'c8'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
     yes('  a server nobody has submitted a price list to gives a copy with none, and says so', bare.prices.lists === 0 && !fs.existsSync(path.join(tmp, 'c8', 'private', 'books.json')));
+    fs.unlinkSync(path.join(inst, 'private', 'commission-rewards.json'));
+    const unset = server.fromInstalled({ from: inst, out: path.join(tmp, 'c9'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
+    yes('  and one where staff set no reward price keeps the starting prices, with no file of its own', unset.rewardsSet === 0 && !fs.existsSync(path.join(tmp, 'c9', 'private', 'commission-rewards.json')));
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
