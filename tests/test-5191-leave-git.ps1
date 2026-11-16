@@ -220,7 +220,7 @@ try {
 # ------------------------------------- 5. workflows and cloud sessions lay it
 foreach ($wf in @('collection-record.yml', 'nexus-run.yml')) {
     $y = Src ".github/workflows/$wf"
-    Check "5 $wf lays the newest build, with the Actions read it takes" ($y -match '(?m)^\s+- name: Lay the newest content build' -and $y -match '\./scripts/release/Get-ContentBuild\.ps1 -Newest' -and $y -match '(?m)^\s+actions: read')
+    Check "5 $wf lays the newest build, with the Actions read it takes" ($y -match '(?m)^\s+- name: Lay the newest content build' -and $y -match '(?m)^\s+uses: \./\.github/actions/lay-content\s*$' -and $y -match '(?m)^\s+actions: read')
 }
 # Check-CollectionRevisions.ps1 reads only records\collection-plugins.json
 # (committed), Nexus and the two Releases, so its hourly job lays nothing and
