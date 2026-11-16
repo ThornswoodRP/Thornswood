@@ -35,9 +35,11 @@
     G  Supply: five ingots for 35, then the same supply is not due again.
     H  The server restarts: the purse, the shelf and the price list are what
        they were, and the panel opens on them.
-    I  A commission: with Fur Boots and Stormcloak Officer Bracers priced,
-       the Smith's novice parcel pays 21; she takes it and turns the goods
-       in, the purse pays once the save lands, and the panel says so.
+    I  A commission: Fur Boots and Stormcloak Officer Bracers start at 8
+       and 9 gold of reward, set by staff, not by the hold's list, which
+       prices them at 12 and 9 (#6180). The Smith's novice parcel pays 17;
+       she takes it and turns the goods in, the 17 is paid once the save
+       lands as new gold, the trader's purse the same, and the panel says so.
     Z  No handler threw, no engine call the engine does not have was made,
        and no timer threw.
 
@@ -159,7 +161,7 @@ answer = say('/merchant sell 1 Garlic');
 yes('E3 an item the Smith does not trade is refused (' + answer + ')', answer === 'This trader does not buy that item.');
 w.give(BRENNA, IRON, 30);
 answer = say('/merchant sell 34 Iron Ingot');
-yes('E4 more than the purse can pay is refused (' + answer + ')', answer === 'The trader cannot pay from its unreserved purse.');
+yes('E4 more than the purse can pay is refused (' + answer + ')', answer === 'The trader cannot pay that much from its purse.');
 w.row(BRENNA).inventory.entries.find(function (e) { return e.baseId === IRON; }).count -= 30;
 after = pack();
 yes('E5 none of those moved a coin or an ingot', after.iron === before.iron && after.gold === before.gold && view().purse === 235 && iron().stock === 3);
@@ -224,8 +226,8 @@ w.give(BRENNA, BOOTS, 1);
 w.give(BRENNA, BRACERS, 1);
 w.activate(SMITH, BRENNA);
 w.run(500);
-yes('I1 with the parcel\'s goods priced, the Smith offers its novice parcel for 21 gold (' + parcel().state + ', ' + parcel().gold + ')',
-  parcel().state === 'available' && parcel().gold === 21 && typeof parcel().quoteToken === 'string');
+yes('I1 the Smith offers its novice parcel at the staff\'s starting reward, 17 gold, not the list\'s 21 (' + parcel().state + ', ' + parcel().gold + ')',
+  parcel().state === 'available' && parcel().gold === 17 && typeof parcel().quoteToken === 'string');
 answer = say('/merchant quest take ' + PARCEL + ' @' + parcel().quoteToken);
 yes('I2 she takes it (' + answer + ')', answer === 'You take the work.' && parcel().state === 'open' && parcel().canReturn === true);
 before = pack();
@@ -233,9 +235,9 @@ const parcelPurse = view().purse;
 answer = say('/merchant quest return ' + PARCEL + ' @' + parcel().token);
 yes('I3 she turns it in, and the transfer waits on the save (' + answer + ')', answer === 'The transfer is waiting for its saved inventory.');
 w.run(2000);
-yes('I4 the boots and bracers left her pack and 21 gold came in (' + JSON.stringify([w.count(BRENNA, BOOTS), w.count(BRENNA, BRACERS), pack().gold - before.gold]) + ')',
-  w.count(BRENNA, BOOTS) === 0 && w.count(BRENNA, BRACERS) === 0 && pack().gold === before.gold + 21);
-yes('I5 the purse paid it, and the panel says the turn-in went through (#5419) (' + view().note + ')',
-  view().purse === parcelPurse - 21 && view().note === 'The work is turned in. Paid 21 gold.' && parcel().state === 'cooldown');
+yes('I4 the boots and bracers left her pack and 17 gold came in (' + JSON.stringify([w.count(BRENNA, BOOTS), w.count(BRENNA, BRACERS), pack().gold - before.gold]) + ')',
+  w.count(BRENNA, BOOTS) === 0 && w.count(BRENNA, BRACERS) === 0 && pack().gold === before.gold + 17);
+yes('I5 the pay is new gold, the trader\'s purse the same, and the panel says the turn-in went through (#5419) (' + view().note + ')',
+  view().purse === parcelPurse && view().note === 'The work is turned in. Paid 17 gold.' && parcel().state === 'cooldown');
 
 t.done(w);

@@ -180,14 +180,21 @@ for (const tool of ['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Bu
   const none = ask(load(path.join(tmp, 'nowhere')), 'ONE');
   yes('no folder at all stops the load and names both places it looked',
       !!none.error && none.error.indexOf(path.join(tmp, 'nowhere', 'gamemode-tables')) >= 0 && none.error.indexOf(path.join(tmp, 'nowhere', 'game', 'gamemode-tables')) >= 0);
-  // The id the load logs is git's own tree id for the folder.
-  const clean = cp.spawnSync('git', ['status', '--porcelain', '--', 'game/gamemode-tables'], { cwd: REPO, encoding: 'utf8' });
-  const want = cp.spawnSync('git', ['rev-parse', 'HEAD:game/gamemode-tables'], { cwd: REPO, encoding: 'utf8' });
-  if (clean.status === 0 && clean.stdout.trim() === '' && want.status === 0) {
+  // The id the load logs is git's own tree id for the folder. The tables are
+  // the box's build and never committed (#5191, stage 4e), so git is asked
+  // for the tree of the folder as it is: each file's blob id, then mktree.
+  const dir = path.join(REPO, 'game', 'gamemode-tables');
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(n => /^[A-Z][A-Z0-9_]*\.json$/.test(n)).sort() : [];
+  const blobs = names.length ? cp.spawnSync('git', ['hash-object', '--'].concat(names.map(n => path.join(dir, n))), { cwd: REPO, encoding: 'utf8' }) : null;
+  const ids = blobs && blobs.status === 0 ? blobs.stdout.trim().split(/\r?\n/) : [];
+  const want = ids.length === names.length && names.length
+    ? cp.spawnSync('git', ['mktree', '--missing'], { cwd: REPO, encoding: 'utf8', input: names.map((n, i) => '100644 blob ' + ids[i] + '\t' + n + '\n').join('') })
+    : null;
+  if (want && want.status === 0) {
     const got = load(REPO).tableFolder();
-    yes('the load names the folder by the tree id git gives it at this commit (' + got.tree.slice(0, 12) + ', ' + got.count + ' files)',
-        got.tree === want.stdout.trim() && got.count === files.length);
-  } else { skip('the tree id against git: game/gamemode-tables differs from HEAD or git is not here'); }
+    yes('the load names the folder by the tree id git gives it (' + got.tree.slice(0, 12) + ', ' + got.count + ' files)',
+        got.tree === want.stdout.trim() && got.count === names.length);
+  } else { skip('the tree id against git: no table is laid in game/gamemode-tables, or git is not here'); }
   yes('the load logs that id beside the gamemode\'s blob',
       /log\('gamemode tables are git tree ' \+ t\.tree \+ ', ' \+ t\.count \+ ' files, in ' \+ t\.dir\);/.test(GM) &&
       GM.indexOf("log('gamemode tables are git tree ") > GM.indexOf("log('gamemode.js is git blob "));

@@ -65,6 +65,7 @@
         "scripts/release/RecordShape.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Where.ps1",
+        "scripts/release/collection-page.js",
         "scripts/release/collection-permissions.js",
         "scripts/release/nexus-collection.js"
       ],
@@ -90,6 +91,7 @@
     "Install-NexusRevision": {
       "script": "scripts/release/Install-NexusRevision.ps1",
       "reads": [
+        "launcher/app/XxHash64.cs",
         "scripts/dev/OwnPlugins.js",
         "scripts/mods/Audit-ModMenus.js",
         "scripts/mods/Check-SkyUIMenus.js",
@@ -144,13 +146,18 @@
     "Read-NexusFile": {
       "script": "scripts/release/Read-NexusFile.ps1",
       "reads": [
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/PluginRuleLoops.ps1",
+        "scripts/mods/last_recipe.py",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/CollectionRecord.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
+        "scripts/release/MergeRelease.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/NexusLayout.cs",
         "scripts/release/NexusModPlan.ps1",

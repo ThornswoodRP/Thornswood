@@ -295,6 +295,12 @@
   otherwise: the plugins it installs off its list, and each plugin's masters
   for -Remove, when it follows the revision this starts from.
 
+.PARAMETER PageRecord
+  The collection page's text, records\collection-page.json unless said
+  otherwise: the summary, the description and the install steps the new
+  revision carries in place of the ones before it (#4537). A run that
+  builds stops without it.
+
 .PARAMETER PluginRecord
   The collection's plugin bytes, records\collection-plugins.json unless said
   otherwise, which -SetLight and -ClearLight hold the plugin they make to. It
@@ -331,6 +337,7 @@ param(
   [int]$Discard = 0,
   [string]$Permissions,
   [string]$CollectionRecord,
+  [string]$PageRecord,
   [string]$PluginRecord,
   [int]$WaitSeconds = 600,
   [switch]$WhatIf,
@@ -359,6 +366,7 @@ function Die($m) {
 function Step([scriptblock]$b) { try { return (& $b) } catch { Die $_.Exception.Message } }
 if (-not $Permissions) { $Permissions = Join-Path $Here '..\..\records\collection-permissions.json' }
 if (-not $CollectionRecord) { $CollectionRecord = Join-Path $Here '..\..\records\collection.json' }
+if (-not $PageRecord) { $PageRecord = Join-Path $Here '..\..\records\collection-page.json' }
 if (-not $PluginRecord) { $PluginRecord = Join-Path $Here '..\..\records\collection-plugins.json' }
 
 # A program run with its output kept apart from its errors, the same in
@@ -1035,6 +1043,15 @@ if ($adds.Count -or $rules.Count -or $Remove.Count) {
   if ($unlisted.Count) { $swaps.Add([ordered]@{ unlisted = [string[]]$unlisted }) }
   if ($null -ne $masters) { $swaps.Add([ordered]@{ masters = $masters }) }
 }
+# THE PAGE (#4537). The summary, the description and the install steps go
+# out from records\collection-page.json, never as the revision this starts
+# from had them: carried forward, they kept naming Start On Save after the
+# build took it out. nexus-collection.js holds each mod the page names to the
+# mods this revision installs, and stops when one is not.
+if (-not (Test-Path -LiteralPath $PageRecord)) { Die ('There is no page record at ' + $PageRecord + ', so the revision would go out with the text of the one before it. Nothing was built.') }
+$pageDoc = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($PageRecord)) $PageRecord }
+$swaps.Add([ordered]@{ page = $pageDoc })
+Say ('  the page''s text, from ' + $PageRecord) 'DarkGray'
 $swapsJson = Join-Path $scratch 'swaps.json'
 $payloadJson = Join-Path $scratch 'payload.json'
 # Deep enough for an added mod's choices: steps, groups, choices.

@@ -11,6 +11,10 @@
   the start point to 0x5E19BAD4 (Unbound 94th in the list, 45th among full
   plugins), and at 11:00 PM a new character died at login with
     Error: FromFormId failed due to invalid file index 94 (5e19bad4)
+  It came back on 16 Nov 2026 (#6346) by another road: -OrderOnly never set
+  the flag the block reads, so the block got "$loadsLight = $" and counted
+  the list again (index 97, 6119bad4). The flag is read for every run now,
+  and a check here runs that part as -OrderOnly does.
 
   HOW. The same as test-dev-deploy-pass.ps1: the settings block is lifted out
   of the script, expanded here with the values the script would have (its
@@ -151,6 +155,25 @@ try {
     # #2711: the block read the box's record itself, in a try with an empty
     # catch, so a record that did not read counted as no light plugins.
     Yes '  and the block reads no record on the box, so there is none to misread' ($body -notmatch 'server-build\.json' -and $body.Contains('$loadsLight = `$$devRecordLight'))
+
+    # #6346: the flag was set only beside the gamemode's server build check,
+    # which -OrderOnly skips, so the order step after build-1.3.80's
+    # Deployment sent "$loadsLight = $", counted the list, and moved dev's
+    # start point from 0x2F19BAD4 to 0x6119BAD4.
+    $lightAt = [regex]::Match($text, '(?s)# ==== thornswood dev engine light ====(.*?)# ==== end thornswood dev engine light ====')
+    $gmOnly = $text.IndexOf('if (-not $PutBack -and -not $OrderOnly) {')
+    Yes 'the light flag is read for every run, -OrderOnly too: before the gamemode-only branch, and set nowhere else' (
+        $lightAt.Success -and $gmOnly -gt $lightAt.Index -and ([regex]::Matches($text, '\$devRecordLight = ')).Count -eq 1)
+    Yes '  by Test-ThornswoodEngineLoadsLight, from the -At commit''s record when there is one' (
+        $lightAt.Groups[1].Value.Contains('Test-ThornswoodEngineLoadsLight $devLightRecord') -and $lightAt.Groups[1].Value.Contains('show "${At}:records/server-build.json"'))
+    $Here = Join-Path $repo 'scripts\deploy'
+    $At = ''
+    $devRecordLight = $null
+    . ([ScriptBlock]::Create($lightAt.Groups[1].Value)) 6>$null
+    Yes ('  and run as -OrderOnly runs it, it reads this checkout''s record: ' + $devRecordLight) (
+        $devRecordLight -is [bool] -and $devRecordLight -eq (Test-ThornswoodEngineLoadsLight (Join-Path $repo 'records\server-build.json')))
+    $expanded = & { Set-StrictMode -Off; $ExecutionContext.InvokeCommand.ExpandString($body) }
+    Yes '  so the block it sends sets $loadsLight to $True or $False, never a bare $' ($expanded -match '\$loadsLight = \$(True|False)\r?\n')
 
     $odd = @('Skyrim.esm', 'Mystery.esp', 'Skyrim Unbound.esp')
     $r = Run-Block (Settings $odd '0x0919BAD4') $light $true

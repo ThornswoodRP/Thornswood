@@ -164,6 +164,10 @@ async function build(o) {
   const shape = o.shape || 'crowd';
   if (!['crowd', 'spread'].includes(shape)) { throw new Error('--shape is crowd or spread, not ' + shape); }
   const seats = Number(o.seats) || 100;
+  // --npcs yes: the engine keeps the masters' placed NPCs alive near the
+  // bots, guards and named people too, so bots that host (load-bots.js
+  // --play host) have NPCs to run (#6252). Off unless asked, as before.
+  const npcs = o.npcs === 'yes';
   const record = readJson(path.join(REPO, 'records', 'server-build.json'));
   const commit = String(record.source && record.source.commit || '');
   const dist = path.resolve(o.build);
@@ -206,8 +210,10 @@ async function build(o) {
     offlineMode: true,
     port: Number(o.port) || 7777,
     maxPlayers: seats,
-    npcEnabled: false,
+    npcEnabled: npcs,
     npcSettings: {},
+    npcAllowCrimeFaction: npcs,
+    npcAllowEssential: npcs,
     startPoints: startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
@@ -219,7 +225,7 @@ async function build(o) {
   fs.writeFileSync(path.join(out, 'server-settings.json'), JSON.stringify(settings, null, 2) + '\n');
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
-  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins');
+  console.log('the load server is in ' + out + ': fork ' + commit + ', ' + shape + ', ' + seats + ' seats, ' + order.length + ' plugins, engine NPCs ' + (npcs ? 'on' : 'off'));
   return { out, commit, settings };
 }
 
@@ -243,12 +249,14 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
 // The hold price lists the factions and businesses submitted at the drop
-// boxes, kept in the books file (staff-spells.ts). A guild trader quotes its
-// buys, sells and the pay of every commission from them, and with no list
-// there is no quote, by design (docs/systems/merchants-guild.md). The copy
-// once left this file out, so every commission on it said "No submitted buy
-// price" whatever dev held, and the crowd could take no work (#6180).
+// boxes, kept in the books file (staff-spells.ts), which set what a guild
+// trader buys and sells, and the reward prices staff set for guild work
+// beside it (#6180), which set what a commission pays; a good staff never
+// changed pays its starting price from the gamemode's tables. The copy once
+// left the books file out, and every commission on it said "No submitted buy
+// price" whatever dev held (#6180).
 const PRICE_BOOKS = 'books.json';
+const REWARD_PRICES = 'commission-rewards.json';
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
@@ -374,12 +382,16 @@ function fromInstalled(o) {
   const books = path.join(theirPrivate, PRICE_BOOKS);
   const prices = fs.existsSync(books) ? priceLists(books) : { lists: 0, holds: [] };
   if (fs.existsSync(books)) { fs.copyFileSync(books, path.join(out, 'private', PRICE_BOOKS)); }
+  const rewards = path.join(theirPrivate, REWARD_PRICES);
+  const rewardsSet = fs.existsSync(rewards) ? Object.keys((readJson(rewards) || {}).items || {}).length : 0;
+  if (fs.existsSync(rewards)) { fs.copyFileSync(rewards, path.join(out, 'private', REWARD_PRICES)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
     ' seats, ' + order.length + ' plugins, its world in ' + (settings.databaseDriver === 'mongodb' ? settings.databaseName : 'a folder of its own') + ', engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
     ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : '') +
-    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list'));
-  return { out, engine, settings, prices };
+    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list') +
+    ', ' + (rewardsSet ? rewardsSet + ' guild reward price(s) set by staff' : 'the starting guild reward prices'));
+  return { out, engine, settings, prices, rewardsSet };
 }
 
 async function main() {
@@ -388,7 +400,7 @@ async function main() {
   for (let i = 0; i < argv.length; i += 2) { o[String(argv[i]).replace(/^--/, '')] = argv[i + 1]; }
   if (o.from && o.out) { fromInstalled(o); return 0; }
   if (!o.build || !o.masters || !o.out) {
-    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes]');
+    console.log('node New-LoadServer.js --build <unpacked server zip> --masters <folder> --out <server folder> [--shape crowd|spread] [--seats 100] [--download yes] [--npcs yes]');
     console.log('node New-LoadServer.js --from <server installed on the box> --out <folder> --port <n> --voice-port <n> [--shape crowd|spread] [--seats 100]');
     return 2;
   }

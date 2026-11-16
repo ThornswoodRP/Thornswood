@@ -154,6 +154,12 @@ namespace Thornswood
         /// </summary>
         static byte[] Get(string url, string accept)
         {
+            return Ask(url, accept, delegate (HttpResponseMessage res) { return Http.Body(res, Http.DefaultReadMs); });
+        }
+
+        // One call to the API, its 2xx answer handed to read; throws as Get does.
+        static T Ask<T>(string url, string accept, Func<HttpResponseMessage, T> read)
+        {
             string no = Refusal();
             if (no.Length > 0) throw new Exception(no);
             using (var req = new HttpRequestMessage(HttpMethod.Get, url))
@@ -170,7 +176,7 @@ namespace Thornswood
                         no = Refusal();
                         throw new Exception(no.Length > 0 ? no : "GitHub answered " + (int)res.StatusCode + " " + res.ReasonPhrase + " for " + url + ".");
                     }
-                    return Http.Body(res, Http.DefaultReadMs);
+                    return read(res);
                 }
             }
         }
@@ -356,6 +362,75 @@ namespace Thornswood
                 !Regex.IsMatch(url.Substring(want.Length), @"^\d{1,19}$"))
                 throw new Exception("GitHub's list named " + (url ?? "nothing") + " for " + (a == null ? "a file" : a.Name) + ", which is not one of this repository's Release files.");
             return url;
+        }
+
+        // ---------------------------------------------------------------- another repository's Releases
+
+        /// <summary>
+        /// The API address every other repository's Releases are read under
+        /// (7-Zip's and Mod Organizer 2's, for the modlist install, #6244). A
+        /// harness points it at a server of its own.
+        /// </summary>
+        internal static string OtherApi = "https://api.github.com/repos/";
+
+        static readonly Regex RepoName = new Regex(@"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$");
+
+        /// <summary>
+        /// The published Release <paramref name="tag"/> of the repository
+        /// <paramref name="repo"/> (owner/name), one of the hour's calls, the
+        /// same sixty as this repository's. Throws when it is not there or
+        /// GitHub could not be read.
+        /// </summary>
+        internal static Release TagOf(string repo, string tag)
+        {
+            if (string.IsNullOrEmpty(repo) || !RepoName.IsMatch(repo)) throw new Exception("\"" + repo + "\" is not a repository on GitHub.");
+            if (string.IsNullOrEmpty(tag) || !SafeName.IsMatch(tag)) throw new Exception("\"" + tag + "\" is not a Release tag.");
+            Release got;
+            try { got = JsonSerializer.Deserialize(Get(OtherApi + repo + "/releases/tags/" + Uri.EscapeDataString(tag), "application/vnd.github+json"), GitHubJson.Default.Release); }
+            catch (NotThere) { throw new Exception("GitHub has no Release " + tag + " of " + repo + "."); }
+            if (got == null || got.Draft || got.TagName != tag) throw new Exception("GitHub has no published Release " + tag + " of " + repo + ".");
+            return got;
+        }
+
+        /// <summary>
+        /// One file of a Release of <paramref name="repo"/>, through the API
+        /// (one of the hour's calls), written to <paramref name="file"/>
+        /// through a .part beside it as it arrives, so a large one is never
+        /// held in memory, and held to its size and to GitHub's sha256 of it
+        /// before it takes the name. Says each time how many bytes have
+        /// arrived. Throws with the reason, and leaves no .part.
+        /// </summary>
+        internal static void SaveTo(string repo, Asset a, string file, Action<long> onBytes)
+        {
+            if (string.IsNullOrEmpty(repo) || !RepoName.IsMatch(repo)) throw new Exception("\"" + repo + "\" is not a repository on GitHub.");
+            string want = OtherApi + repo + "/releases/assets/";
+            string url = a == null ? null : a.Url;
+            if (string.IsNullOrEmpty(url) || !url.StartsWith(want, StringComparison.OrdinalIgnoreCase) ||
+                !Regex.IsMatch(url.Substring(want.Length), @"^\d{1,19}$"))
+                throw new Exception("GitHub's list named " + (url ?? "nothing") + " for " + (a == null ? "a file" : a.Name) + ", which is not one of " + repo + "'s Release files.");
+            string part = file + ".part";
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file)));
+                string got = Ask(url, "application/octet-stream", delegate (HttpResponseMessage res)
+                {
+                    using (var fs = new FileStream(part, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        Http.CopyBody(res, fs, Http.DefaultReadMs, onBytes);
+                        if (fs.Length != a.Size) throw new Exception(a.Name + " arrived from GitHub as " + fs.Length + " bytes, and GitHub lists it as " + a.Size + ".");
+                        fs.Position = 0;
+                        return Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
+                    }
+                });
+                string sha = a.Sha256;
+                if (sha.Length > 0 && got != sha) throw new Exception(a.Name + " arrived from GitHub as " + got + ", and GitHub lists it as " + sha + ".");
+                System.IO.File.Move(part, file, true);
+            }
+            finally
+            {
+                try { if (System.IO.File.Exists(part)) System.IO.File.Delete(part); }
+                catch (Exception ex) { Swallow.Note("GitHub.SaveTo, take away " + part, ex); }
+            }
         }
     }
 
