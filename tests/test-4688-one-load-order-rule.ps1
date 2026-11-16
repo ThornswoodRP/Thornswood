@@ -159,6 +159,7 @@ try {
         'scripts/mods/Fix-QuickLoot.ps1'           = 'retired by #1179, refuses to run'
         'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
         'tools/DeployAgent/ServerOrder.cs'         = 'the order a Release was built for, from its catalogue, pointed at the server''s plugins (#6209)'
+        'scripts/bot/Check-Character.js'           = 'the restore rehearsal''s own folder only: -Reorder moves one plugin on purpose to check ids by plugin across a load order change (#6237)'
     }
     $writeRx = [regex]'(?i)(NotePropertyName\s+loadOrder\b|\.loadOrder\s*=(?!=)|\[\s*[''"]loadOrder[''"]\s*\]\s*=(?!=))'
     $found = [ordered]@{}

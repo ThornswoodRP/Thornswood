@@ -1,10 +1,17 @@
 <#
   OnBox.ps1
 
-  The two scripts Run-OnBox.ps1 sends to the box (issue #2899): the keeper,
-  which makes the run's folder and removes it, and the run. Kept apart so
-  tests\test-2899-run-on-box.ps1 runs the same text under PowerShell 7, as
-  the box does, against a stand-in folder. Defines functions and nothing else.
+  The four script texts that run on the box (issue #2899), for Run-OnBox.ps1
+  and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper
+  that makes the run's folder and removes it, in three parts (its hold, keep
+  and end scripts). Kept apart so tests\test-2899-run-on-box.ps1 runs the same
+  text under PowerShell 7, as the box does, against a stand-in folder.
+
+  Besides the functions it sets three variables: $ThornswoodGameArchiveStore,
+  the box's folder of Skyrim's own archives, $ThornswoodGameArchives, the
+  archives in it, and $ThornswoodScriptPack, the script pack beside them.
+  Dot-sourced by Run-OnBox.ps1 and Send-GameArchives.ps1 in scripts\mods,
+  Backup-Server.ps1 in scripts\vps and LastPluginOnBox.ps1 in scripts\deploy.
 
   The keeper's folder is the one way a script here lands files on the box or
   makes them there to bring back (#3035): Open-ThornswoodOnBoxFolder and

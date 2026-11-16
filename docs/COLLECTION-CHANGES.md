@@ -156,7 +156,12 @@ and which of them the Last plugin's recipe reads.
 2. the published revision and the record give the change; no change, and
    it stops with nothing written;
 3. `New-NexusRevision.ps1` drafts the next revision with all of it;
-4. `Install-NexusRevision.ps1` lays the draft out;
+4. `Install-NexusRevision.ps1` lays the draft out. It keeps each mod's
+   archive in its download cache on the runner, one folder per Nexus file
+   id (`%LOCALAPPDATA%\Thornswood\nexus-cache`, or
+   `~/.cache/thornswood/nexus-cache` off Windows). Once it has every archive
+   the draft lists, it takes the folders of other file ids out, so the cache
+   holds one revision's archives and no more;
 5. the record that layout makes, read from each plugin's own header, is held
    to the merged record. Where they part the draft is discarded and the run
    stops, naming each difference;

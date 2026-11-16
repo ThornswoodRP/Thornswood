@@ -1,6 +1,5 @@
 {
   "builtBy": "scripts\\dev\\Build-WarmthTable.js",
-  "builtAt": "2026-10-31T21:14:54.880Z",
   "source": "the ARMO records of 106 plugins in load order, and the KYWD records their keywords point at",
   "readFrom": "BOD2 for what it covers, KWDA for the material, DATA for the weight",
   "note": "what a material is WORTH is balance and lives in NEEDS.wear in gamemode.js",

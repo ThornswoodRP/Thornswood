@@ -60,7 +60,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS, STAND_CYCLE_MS, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { LoadBot, MOVE_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
 const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
@@ -304,6 +304,44 @@ function playChecks() {
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'That is not a guild trader.' }));
   yes('the answers are counted by what they say', b.played.tradeOpened === 1 && b.played.notATrader === 1 && b.played.tradeAsks === 1);
   yes('the play counts of every worker add up', JSON.stringify(playCounts([{ play: { hits: 2 } }, { play: { hits: 3, tradeAsks: 1 } }, {}])) === '{"hits":5,"tradeAsks":1}');
+  // Two bots trade gold with each other, so the gold and trade log (#6270)
+  // has rows in a crowd run.
+  const q = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'q' });
+  q.profileId = 1900000501; q.play = ['trade']; q.state = 'connected'; q.step = 'moving'; q.welcomed = true;
+  q.character = { idx: 8, refrId: 0xff000a01 }; q.center = [1000, 0, 0]; q.cell = 0x3c; q.radius = 300; q.angle = 0;
+  q.ws = { send: (t) => { q.wsSent = (q.wsSent || []).concat([t]); } };
+  b.character.refrId = 0xff000a00; b.wsSent = []; q.wsSent = [];
+  let lone = pairUp(null, b);
+  lone = pairUp(lone, q);
+  yes('the bots of a process trade in pairs, the first leading', lone === null && b.payWith === q && q.payWith === b && b.payGives && !q.payGives);
+  const lines = (x) => (x.wsSent || []).map((t) => JSON.parse(t).text);
+  let at = now + 10000;
+  b.nextTrade = at + 999999; b.nextPay = at; b.advance(at);
+  yes('it meets the other: both stand still, side by side', b.payAt && q.payAt && Math.abs(q.payAt[0] - b.payAt[0]) === 80 && b.played.payMeets === 1);
+  c.sent.length = 0; b.lastMove = at; b.advance(at + MOVE_MS + 1);
+  const standing = c.sent.find((x) => x.m.t === 2 && x.m.idx === 7);
+  yes('  and its moves say it stands where it met', standing && standing.m.data.runMode === 'Standing' && standing.m.data.pos[0] === b.payAt[0]);
+  at += PAY_STEP_MS; b.advance(at);
+  yes('it asks the other to trade by its actor id, as the panel\'s Trade does', lines(b).indexOf('/trade ff000a01') >= 0 && b.played.payAsks === 1);
+  at += PAY_STEP_MS; b.advance(at);
+  yes('the other says yes', lines(q).indexOf('/yes') >= 0);
+  at += PAY_STEP_MS; b.advance(at);
+  const gold = (x) => lines(x).find((t) => /^\/trade gold [1-5]$/.test(t));
+  yes('each puts up 1 to 5 gold', !!gold(b) && !!gold(q));
+  at += PAY_STEP_MS; b.advance(at);
+  yes('both agree, then both walk on', lines(b).indexOf('/trade ok') >= 0 && lines(q).indexOf('/trade ok') >= 0 &&
+    !b.payAt && !q.payAt && b.played.payAgrees === 1 && b.nextPay > at + 30000);
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Traded. You gave 3 gold and got 2 gold.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Asked Load 1900000501. They have 30 seconds.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You only have 2.' }));
+  yes('what the server says back is counted by what it says', b.played.payTraded === 1 && b.played.payAsked === 1 && b.played.payNoGold === 1 && b.played.tradeOtherAnswer === undefined);
+  const TRADE_TS = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'trade.ts'), 'utf8');
+  const TP_TS = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'teleport.ts'), 'utf8');
+  yes('  every answer it counts is a line the trading and social blocks say',
+    /'Traded\. You gave '/.test(TRADE_TS) && /'You only have ' \+ have/.test(TRADE_TS) && /'The trade timed out\.'/.test(TRADE_TS) &&
+    /'Asked ' \+ theirName \+ '\. They have '/.test(TP_TS) && /'Nobody has asked you anything\.'/.test(TP_TS) && PAY_SAID.length === 11);
+  q.step = 'failed'; b.nextPay = at; b.advance(at + 1);
+  yes('with its partner gone it says so and tries again later', b.played.payNoPartner === 1 && !b.payAt);
   const w = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'w' });
   w.play = [];
   w.client = addon.createBotClient('127.0.0.1', 5000);
@@ -365,9 +403,9 @@ function questChecks() {
   b.pump();
   yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
   yes('  each row by its kind and state', b.played['questRow:commission:locked'] === 2);
-  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. No submitted buy price is available for this work.' })]);
+  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. Staff have set no reward for this work.' })]);
   b.pump();
-  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noPrice'] === 1);
+  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noReward'] === 1);
   view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
   b.pump();
   step();
@@ -419,6 +457,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
     const BOOKS = JSON.stringify({ books: [{ id: 'b1' }, { id: 'b2' }], ledgers: { winterhold: { b1: {}, b2: {} }, whiterun: { b1: {} }, riften: {} } });
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
+    const REWARDS = JSON.stringify({ version: 1, items: { '5b6a0:skyrim.esm': 9, 'db5d2:skyrim.esm': 4 } });
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -435,13 +475,19 @@ async function boxChecks() {
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
       !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() &&
-      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,commission-rewards.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('  and the guild reward prices staff set, counted (#6180)',
+      fs.readFileSync(path.join(out, 'private', 'commission-rewards.json'), 'utf8') === REWARDS && r.rewardsSet === 2);
     yes('  and a copy of the hold price lists the traders quote every commission from, counted by hold and naming nobody (#6180)',
       fs.readFileSync(path.join(out, 'private', 'books.json'), 'utf8') === BOOKS && r.prices.lists === 3 && r.prices.holds.join(',') === 'whiterun 1,winterhold 2' &&
       !fs.lstatSync(path.join(out, 'private', 'books.json')).isSymbolicLink());
     fs.unlinkSync(path.join(inst, 'private', 'books.json'));
     const bare = server.fromInstalled({ from: inst, out: path.join(tmp, 'c8'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
     yes('  a server nobody has submitted a price list to gives a copy with none, and says so', bare.prices.lists === 0 && !fs.existsSync(path.join(tmp, 'c8', 'private', 'books.json')));
+    fs.unlinkSync(path.join(inst, 'private', 'commission-rewards.json'));
+    const unset = server.fromInstalled({ from: inst, out: path.join(tmp, 'c9'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
+    yes('  and one where staff set no reward price keeps the starting prices, with no file of its own', unset.rewardsSet === 0 && !fs.existsSync(path.join(tmp, 'c9', 'private', 'commission-rewards.json')));
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
@@ -455,7 +501,20 @@ async function boxChecks() {
     yes('the server\'s program and gamemode are copied, its gamemode tables too, and not its world', fs.existsSync(path.join(out, 'dist_back', 'skymp5-server.js')) && fs.existsSync(path.join(out, 'gamemode.js')) &&
       fs.existsSync(path.join(out, 'gamemode-tables', 'ADMIN_ITEMS.json')) &&
       !fs.existsSync(path.join(out, 'world')) && /^[0-9a-f]{64}$/.test(r.engine));
+    yes('a copy with no world database named keeps its world in a folder of its own (#6237)', st.databaseDriver === undefined && st.databaseName === undefined);
+    const uriFile = path.join(tmp, 'load.uri');
+    fs.writeFileSync(uriFile, 'mongodb://127.0.0.1:27017/');
+    server.fromInstalled({ from: inst, out: path.join(tmp, 'cm'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-load', 'world-uri': uriFile });
+    const sm = JSON.parse(fs.readFileSync(path.join(tmp, 'cm', 'server-settings.json'), 'utf8'));
+    yes('  and with the load test\'s database named keeps it there, signed in with its connection file (#6237)',
+      sm.databaseDriver === 'mongodb' && sm.databaseName === 'thornswood-load' && sm.databaseUriFile === path.resolve(uriFile));
     let err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'cd'), port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-dev', 'world-uri': uriFile }); } catch (e) { err = e.message; }
+    yes('  a server\'s own database is refused, and nothing is laid out', /never a server's/.test(err) && !fs.existsSync(path.join(tmp, 'cd')));
+    err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'cu'), port: '7797', 'voice-port': '7799', 'world-db': 'thornswood-load', 'world-uri': path.join(tmp, 'none.uri') }); } catch (e) { err = e.message; }
+    yes('  and so is a connection file that is not there', /names no connection file/.test(err) && !fs.existsSync(path.join(tmp, 'cu')));
+    err = '';
     try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c2'), port: '7787', 'voice-port': '7799' }); } catch (e) { err = e.message; }
     yes('the server\'s own port is refused', /port 7787 is one .* uses/.test(err) && !fs.existsSync(path.join(tmp, 'c2')));
     err = '';

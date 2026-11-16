@@ -98,6 +98,7 @@ These name an install file or this read me without testing the install.
 - `test-5197-real-client.js`: reads InstallPlace.cs for the record that says where the launcher is installed, so the real game run finds it; it tests that run, not the install.
 - `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
 - `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
+- `test-3682-github-front.js`: names InstallWindow.cs to say where the install's log is written; it checks only that the crash form names that log.
 
 
 ## Why the install is in the launcher

@@ -38,6 +38,17 @@
   world-before-restore-<stamp> inside it, kept 30 days so the restore can be
   undone, then deleted by the server's server-log.js (#3620).
 
+  A WORLD IN MONGODB (#6237). When the folder's server-settings.json (or
+  the backup's, for a folder with none) says databaseDriver mongodb, the
+  world goes into its database instead (World.ps1): what the database held
+  is read out into world-before-restore-<stamp>\world\changeForms first,
+  then the database is made to hold exactly the backup's forms, and the
+  characters are checked by reading the database back out. A rehearsal's
+  world goes into the rehearsal's own database (records\mongodb.json),
+  never the server's whose settings the folder was copied with, and a
+  restore whose settings name another server folder's database is refused
+  before anything is put back.
+
   -Root must already hold the server program and its plugins: on a new box,
   Install-ThornswoodServer.ps1 -Zip <payload> -Root <it> -NoTask first. The
   backup does not carry them; they come from the repo.
@@ -130,6 +141,9 @@ if ($Work) { $WorkRoot = $Work } else { $WorkRoot = $env:TEMP }
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
+# Where a server keeps its world (#6237): its world folder, or MongoDB.
+. (Join-Path $Here '..\deploy\World.ps1')
+. (Join-Path $Here '..\deploy\Mongo.ps1')
 $work = $null
 function Die($m) {
   Write-Host ''
@@ -344,6 +358,40 @@ Say ("  {0} character(s) in the backup's {1}\world" -f $had.Count, $tag) 'Green'
 Head 'Putting it back'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $aside = Join-Path $Root ('world-before-restore-' + $stamp)
+# Where the world goes is what the folder's own server-settings.json says, or
+# the backup's when the folder has none, which is then the folder's (#6237).
+if (-not (Test-Path -LiteralPath $settingsPath) -and (Test-Path -LiteralPath (Join-Path $src 'server-settings.json'))) {
+  Copy-Item -LiteralPath (Join-Path $src 'server-settings.json') -Destination $settingsPath
+  Say '  server-settings.json from the backup, because the folder had none' 'Yellow'
+}
+$world = Get-ThornswoodWorld $Root
+if ($world.Stop) { Die ($world.Stop + '. Nothing was put back.') }
+if ($world.Driver -eq 'mongodb') {
+  # A rehearsal's world is the rehearsal's database, never the server's it
+  # was copied from (records\mongodb.json, rehearsal).
+  if ($Rehearse) {
+    $mrec = Read-ThornswoodMongoRecord (Join-Path $Here '..\..\records\mongodb.json')
+    $ru = @(Get-ThornswoodMongoUsers $mrec | Where-Object { $_.User -eq [string]$mrec.rehearsal.user })[0]
+    $rs0 = [IO.File]::ReadAllText($settingsPath) -replace '^\uFEFF', '' | ConvertFrom-Json
+    $rs0.databaseName = $ru.Db
+    $rs0.databaseUriFile = $ru.File
+    [IO.File]::WriteAllText($settingsPath, ($rs0 | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
+    Say ("  the world goes into {0}, the rehearsal's own database" -f $ru.Db) 'Green'
+    $world = Get-ThornswoodWorld $Root
+    if ($world.Stop) { Die ($world.Stop + '. Nothing was put back.') }
+  }
+  # Never into another server's world: a folder copied from a server keeps
+  # its settings, and with them that server's database.
+  foreach ($sr in $ServerRoots) {
+    if ([string]::Equals($sr.TrimEnd('\'), $Root.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) { continue }
+    $ow = $null
+    try { if (Test-Path -LiteralPath (Join-Path $sr 'server-settings.json') -EA Stop) { $ow = Get-ThornswoodWorld $sr } } catch { $ow = $null }
+    if ($ow -and $ow.Driver -eq 'mongodb' -and $ow.Db -eq $world.Db) {
+      Die ("$settingsPath names $($world.Db), the world of the server at $sr. Give this folder its own database (databaseName and databaseUriFile) first. Nothing was put back.")
+    }
+  }
+  Say ("  the world goes into {0} in MongoDB" -f $world.Db) 'DarkGray'
+}
 foreach ($n in 'world', 'private') {
   $d = Join-Path $Root $n
   if ((Test-Path -LiteralPath $d) -and @(Get-ChildItem -LiteralPath $d -Force -EA SilentlyContinue).Count) {
@@ -354,8 +402,24 @@ foreach ($n in 'world', 'private') {
     Remove-Item -LiteralPath $d -Recurse -Force
   }
 }
-Copy-Item -LiteralPath $srcWorld -Destination (Join-Path $Root 'world') -Recurse -Force
-Say ("  world      {0} file(s)" -f @(Get-ChildItem -LiteralPath (Join-Path $Root 'world') -Recurse -File).Count)
+if ($world.Driver -eq 'mongodb') {
+  # What the database held goes aside first, read out the way a backup holds
+  # a world, so the restore can be undone as one of files can (World.ps1).
+  $was = Open-ThornswoodWorld $Root $stamp
+  if ($was.Stop) { Die ($was.Stop + '. The world in ' + $world.Db + ' was not touched.') }
+  if ($was.Exported) {
+    [void](New-Item -ItemType Directory -Path (Join-Path $aside 'world') -Force)
+    Move-Item -LiteralPath $was.Forms -Destination (Join-Path $aside 'world\changeForms')
+    Say ("  the {0} form(s) {1} held are kept at {2}\world" -f $was.Exported, $world.Db, $aside) 'Yellow'
+  }
+  Remove-Item -LiteralPath (Split-Path -Parent $was.Forms) -Recurse -Force -EA SilentlyContinue
+  $put = Restore-ThornswoodWorld $world (Join-Path $srcWorld 'changeForms')
+  if ($put -like 'STOP|*') { Die ($put.Substring(5) + '. What it held is kept at ' + $aside + '\world.') }
+  Say ("  world      {0} form(s) into {1} in MongoDB" -f ($put -split '\|')[5], $world.Db)
+} else {
+  Copy-Item -LiteralPath $srcWorld -Destination (Join-Path $Root 'world') -Recurse -Force
+  Say ("  world      {0} file(s)" -f @(Get-ChildItem -LiteralPath (Join-Path $Root 'world') -Recurse -File).Count)
+}
 
 $srcPriv = Join-Path $src 'private'
 if (Test-Path -LiteralPath $srcPriv) {
@@ -479,8 +543,15 @@ Say ("  load order: all {0} plugins present" -f $order.Count) 'Green'
 
 # ------------------------------------------------------------ characters ---
 Head 'Are the characters there'
-$now = @(People (Join-Path $Root 'world'))
-if (-not $now.Count) { Die 'world\changeForms holds no characters after the restore.' }
+if ($world.Driver -eq 'mongodb') {
+  # Read back out of the database, so what is checked is what the server
+  # will load, not the backup's copy of it.
+  $check = Join-Path $work 'restored'
+  $said = @(Invoke-ThornswoodWorldJs @{ op = 'export'; uri = $world.UriFile; db = $world.Db; to = (Join-Path $check 'changeForms'); manifest = (Join-Path $work 'restored.json') })
+  if (-not @($said | Where-Object { $_ -like 'EXPORTED|*' }).Count) { Die ($world.Db + ' could not be read back: ' + (($said | Where-Object { $_ }) -join ' ')) }
+  $now = @(People $check)
+} else { $now = @(People (Join-Path $Root 'world')) }
+if (-not $now.Count) { Die 'the restored world holds no characters.' }
 Say ("  {0} character(s), profile ids {1}{2}" -f $now.Count, (($now | Select-Object -First 5 | ForEach-Object { $_.Id }) -join ', '),
      $(if ($now.Count -gt 5) { ', ...' } else { '' })) 'Green'
 if ($deleted) { Say "  and $deleted slot(s) a deleted character left behind, not counted" 'DarkGray' }

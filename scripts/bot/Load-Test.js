@@ -258,6 +258,17 @@ function markdown(doc) {
     for (const st of doc.steps) { if (st.window) { out.push('- ' + st.people + ' people: ' + JSON.stringify(st.play || {})); } }
     out.push('');
   }
+  if (doc.world) {
+    const saves = doc.world.saves || [];
+    out.push('The world was kept in ' + (doc.world.world || 'a store the log did not name') + '. Its saves, as the engine says them once a minute' + (saves.length ? ':' : ': no line, so no minute had a save.'));
+    out.push('');
+    if (saves.length) {
+      out.push('| Time | Seconds | Batches | Forms | ms writing | Slowest batch ms | Most batches waiting |');
+      out.push('|---|---|---|---|---|---|---|');
+      for (const s of saves) { out.push('| ' + [s.at, s.seconds, s.batches, s.forms, fixed(s.writingMs, 1), fixed(s.slowestMs, 1), s.waiting].join(' | ') + ' |'); }
+      out.push('');
+    }
+  }
   for (const st of doc.steps) { if (st.stopped) { out.push('Stopped at ' + st.people + ': ' + st.stopped); } }
   if (doc.problem) { out.push('Problem: ' + doc.problem); }
   return out.join('\n') + '\n';
@@ -332,6 +343,28 @@ function gameLines(file) {
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return ['the server log could not be read: ' + e.message]; }
   return text.split(/\r?\n/).filter((l) => /npc|merchant|quest|load order|loadorder/i.test(l)).slice(0, 60).map((l) => l.slice(0, 300));
+}
+
+// How the world kept up (#6237): where the engine keeps it ("Using file
+// with name" or "Using mongodb with name") and the saver's line a minute,
+// "Saves in the last 60 s: 12 batch(es), 340 form(s), 85.3 ms writing,
+// slowest batch 21.4 ms, most batches waiting 2" (the fork's
+// AsyncSaveStorage.h), each with the time the log gives it.
+const SAVES = /Saves in the last (\d+) s: (\d+) batch\(es\), (\d+) form\(s\), ([\d.]+) ms writing, slowest batch ([\d.]+) ms, most batches waiting (\d+)/;
+function saveLines(file) {
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return { world: '', saves: [], problem: 'the server log could not be read: ' + e.message }; }
+  let world = '';
+  const saves = [];
+  for (const l of text.split(/\r?\n/)) {
+    const w = /Using (file|mongodb) with name '([^']*)'/.exec(l);
+    if (w && !world) { world = w[1] + ' ' + w[2]; }
+    const m = SAVES.exec(l);
+    if (!m) { continue; }
+    const at = /^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/.exec(l);
+    saves.push({ at: at ? at[1] : '', seconds: +m[1], batches: +m[2], forms: +m[3], writingMs: +m[4], slowestMs: +m[5], waiting: +m[6] });
+  }
+  return { world, saves };
 }
 
 async function run(o) {
@@ -477,6 +510,7 @@ async function run(o) {
     if (site) { site.server.close(); }
     doc.tail = server.tail.slice(-30);
     doc.gameLines = gameLines(path.join(root, 'load-test-server.log'));
+    doc.world = saveLines(path.join(root, 'load-test-server.log'));
     doc.ended = new Date().toISOString();
   }
 }
@@ -502,4 +536,4 @@ if (require.main === module) {
   main().then((code) => process.exit(code), (e) => { console.log('LOAD TEST FAILED: ' + (e && e.stack || e)); process.exit(1); });
 }
 
-module.exports = { windowOf, perPerson, markdown, samples, run, startVoice, siteThatSaysYes, someoneOn, playCounts, gameLines, PLAYS };
+module.exports = { windowOf, perPerson, markdown, samples, run, startVoice, siteThatSaysYes, someoneOn, playCounts, gameLines, saveLines, PLAYS };

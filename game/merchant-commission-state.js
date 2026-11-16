@@ -90,10 +90,14 @@ function read(raw) {
  return copy(raw);
 }
 function reserved(raw){return Object.values(read(raw).held).reduce((sum,row)=>sum+row.gold,0);}
+// A commission's pay is new gold, never the trader's (#6180, Patrick, 16 Nov
+// 2026: "no dont make it come out of the purse", "othwerwise the economy would
+// have like 0 gold people only start with 40"), so work taken holds none of
+// the purse back and the whole purse is the trader's to trade with.
 function spendable(state) {
- const promised=reserved(state.commissions);
- if(!integer(state.purse,0,MAX_GOLD)||promised>state.purse)throw Error('Commission promises exceed the merchant purse.');
- return state.purse-promised;
+ reserved(state.commissions);
+ if(!integer(state.purse,0,MAX_GOLD))throw Error('The merchant purse cannot be verified.');
+ return state.purse;
 }
 function openCount(states,human) {
  const who=owner(human);if(!who)throw Error('Commission owner cannot be verified.');
@@ -105,7 +109,7 @@ function prepare(raw,at) {
  for(const name of Object.keys(next.cool))if(at-cooldownAt(next.cool[name])>=cooldownWait(next.cool[name]))delete next.cool[name];
  return next;
 }
-function reserve(raw,human,id,terms,at,purse) {
+function reserve(raw,human,id,terms,at) {
  const next=prepare(raw,at),name=key(human,id);
  if(!name)return {ok:false,why:'session'};
  const bundle=terms&&owns(terms,'goods');
@@ -117,7 +121,6 @@ function reserve(raw,human,id,terms,at,purse) {
  if(owns(next.cool,name))return {ok:false,why:'cooldown'};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
- if(spendable({purse,commissions:next})<gold)return {ok:false,why:'purse'};
  const token=++next.serial;
  if(bundle){next.v=2;next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,goods:copy(terms.goods),hours:terms.hours,gold,at};}
  else next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,item:copy(terms.item),count:terms.count,unit:terms.unit,gold,at};

@@ -50,7 +50,13 @@
 //         [--download yes]
 //     node New-LoadServer.js --from <server installed on the box> --out <folder>
 //         --port <n> --voice-port <n> [--shape crowd|spread] [--seats 100]
+//         [--world-db thornswood-load --world-uri <connection file>]
 // The second lays out the collection's world on the box (fromInstalled).
+// Its world is a folder of its own, or with --world-db and --world-uri the
+// load test's own database in the box's MongoDB (#6237, records\mongodb.json
+// "load"), for a server whose world is kept there: Load-Box.ps1 passes them
+// then and empties that database before and after, so the test saves the
+// way the server does and never into the server's database.
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
@@ -237,12 +243,14 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
 // The hold price lists the factions and businesses submitted at the drop
-// boxes, kept in the books file (staff-spells.ts). A guild trader quotes its
-// buys, sells and the pay of every commission from them, and with no list
-// there is no quote, by design (docs/systems/merchants-guild.md). The copy
-// once left this file out, so every commission on it said "No submitted buy
-// price" whatever dev held, and the crowd could take no work (#6180).
+// boxes, kept in the books file (staff-spells.ts), which set what a guild
+// trader buys and sells, and the reward prices staff set for guild work
+// beside it (#6180), which set what a commission pays; a good staff never
+// changed pays its starting price from the gamemode's tables. The copy once
+// left the books file out, and every commission on it said "No submitted buy
+// price" whatever dev held (#6180).
 const PRICE_BOOKS = 'books.json';
+const REWARD_PRICES = 'commission-rewards.json';
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
@@ -272,6 +280,15 @@ function fromInstalled(o) {
   const port = Number(o.port) || 0;
   const voicePort = Number(o['voice-port']) || 0;
   if (!port || !voicePort) { throw new Error('--port and --voice-port are needed on the box, so the copy keeps off the servers\' own'); }
+  // Its world: a folder of its own, or the load test's own database (#6237).
+  const world = {};
+  if (o['world-db'] !== undefined || o['world-uri'] !== undefined) {
+    if (o['world-db'] !== 'thornswood-load') { throw new Error('--world-db is the load test\'s own database, thornswood-load, never a server\'s'); }
+    if (!o['world-uri'] || !fs.existsSync(o['world-uri'])) { throw new Error('--world-uri names no connection file that is there: ' + o['world-uri']); }
+    world.databaseDriver = 'mongodb';
+    world.databaseName = o['world-db'];
+    world.databaseUriFile = path.resolve(o['world-uri']);
+  }
   const from = path.resolve(o.from);
   const out = path.resolve(o.out);
   if (fs.existsSync(out)) { throw new Error(out + ' is there already'); }
@@ -332,6 +349,7 @@ function fromInstalled(o) {
     thornswoodChargen: false,
     thornswoodVoicePort: voicePort
   };
+  Object.assign(settings, world);
   const kept = [];
   for (const k of GAMEPLAY_KEYS) {
     if (Object.prototype.hasOwnProperty.call(theirs, k) && plain(theirs[k])) { settings[k] = theirs[k]; kept.push(k); }
@@ -358,12 +376,16 @@ function fromInstalled(o) {
   const books = path.join(theirPrivate, PRICE_BOOKS);
   const prices = fs.existsSync(books) ? priceLists(books) : { lists: 0, holds: [] };
   if (fs.existsSync(books)) { fs.copyFileSync(books, path.join(out, 'private', PRICE_BOOKS)); }
+  const rewards = path.join(theirPrivate, REWARD_PRICES);
+  const rewardsSet = fs.existsSync(rewards) ? Object.keys((readJson(rewards) || {}).items || {}).length : 0;
+  if (fs.existsSync(rewards)) { fs.copyFileSync(rewards, path.join(out, 'private', REWARD_PRICES)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
-    ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
+    ' seats, ' + order.length + ' plugins, its world in ' + (settings.databaseDriver === 'mongodb' ? settings.databaseName : 'a folder of its own') + ', engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
     ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : '') +
-    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list'));
-  return { out, engine, settings, prices };
+    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list') +
+    ', ' + (rewardsSet ? rewardsSet + ' guild reward price(s) set by staff' : 'the starting guild reward prices'));
+  return { out, engine, settings, prices, rewardsSet };
 }
 
 async function main() {

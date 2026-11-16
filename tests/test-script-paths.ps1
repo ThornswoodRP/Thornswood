@@ -56,6 +56,7 @@ $notInGit = @{
     'bot/dev-webhook.txt' = 'a webhook, a secret kept out of git'
     'bot/news-webhook.txt'= 'a webhook, a secret kept out of git'
     'scripts/vps/runner-logs.log'      = 'what vps-runner-logs.ps1 writes beside its copy on the box, C:\Thornswood-Watch\runner-logs.log (#3184), never in this repository'
+    'scripts/vps/world.ps1'            = 'World.ps1 with world.js in it, which Install-Backup.ps1 writes beside the nightly backup on the box (#6237), never in this repository'
     'scripts/vps/watch-outside.json'   = 'what Watch-Outside.ps1 -Export writes beside its copy in the public repository it runs from (#2755), never in this one'
     'Thornswood-Ops'                   = 'the private ops repo, checked out beside this one (#3693): Check-RehearsalDue.ps1 reads RESTORING.md there, and the path climbs above this root, so it is named here without the ..'
 }

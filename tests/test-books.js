@@ -67,7 +67,8 @@ function make(dir, extra) {
       offer: function () { return ''; },
       refresh: function () { extra.pushes = (extra.pushes || 0) + 1; },
       online: function () { return extra.online ? extra.online() : {}; },
-      atBox: extra.atBox || function () { return ''; }
+      atBox: extra.atBox || function () { return ''; },
+      rewardPrices: extra.rewardPrices
     }
   };
   box.globalThis = box;
@@ -503,6 +504,43 @@ if (block) {
       !!back2 && back2.owner === true &&
       reread.books().filter(function (b) { return b.name === 'The Companions'; })[0].owner === 1);
   try { fs.rmSync(moveDir, { recursive: true, force: true }); } catch (e3) { }
+}
+
+// The guild's reward prices (#6180, Patrick, 15 Nov 2026): every good guild
+// work asks for has a starting price, and staff change it with /book reward.
+if (block) {
+  const rdir = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-books-'));
+  const START = { version: 1, items: [
+    { item: 'a6d7f:Skyrim.esm', name: 'Fur Boots', gold: 8 },
+    { item: '86983:Skyrim.esm', name: 'Stormcloak Officer Bracers', gold: 9 }] };
+  const rw = make(rdir, { rewardPrices: START });
+  const say = function (pid, line) { return rw.command({ actorId: 1, profileId: pid, parts: parts(line) }); };
+  yes('R1 a good pays its starting reward price until staff change it',
+      rw.rewardPrice('A6D7F:Skyrim.esm').gold === 8 && rw.rewardPrice('86983:Skyrim.esm').gold === 9 &&
+      rw.rewardPrice('12:Skyrim.esm') === null);
+  yes('R2 only staff set what guild work pays', say(1, '/book reward Fur Boots 20') === 'Only staff set what guild work pays.' &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 8);
+  yes('R3 staff read a good\'s price by its name', say(9, '/book reward fur boots') === 'Fur Boots pays 8 gold each in guild work (it started at 8).');
+  yes('R4 staff set a price, and it is saved in the private folder',
+      /^Fur Boots now pays 12 gold each in guild work\. Work already taken keeps the pay it was taken at\.$/.test(say(9, '/book reward Fur Boots 12')) &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 12 &&
+      JSON.parse(fs.readFileSync(path.join(rdir, 'commission-rewards.json'), 'utf8')).items['a6d7f:skyrim.esm'] === 12);
+  yes('R5 a good is named by its record too', /now pays 0 gold/.test(say(9, '/book reward 86983:Skyrim.esm 0')) &&
+      rw.rewardPrice('86983:Skyrim.esm').gold === 0);
+  yes('R6 the price staff set is still there after a restart',
+      make(rdir, { rewardPrices: START }).rewardPrice('a6d7f:Skyrim.esm').gold === 12);
+  yes('R7 start puts a good back on its starting price, and the saved file forgets it',
+      /now pays 8 gold/.test(say(9, '/book reward Fur Boots start')) &&
+      !('a6d7f:skyrim.esm' in JSON.parse(fs.readFileSync(path.join(rdir, 'commission-rewards.json'), 'utf8')).items));
+  yes('R8 a good no guild work asks for, or a price that is not gold, changes nothing',
+      /^Name a good guild work asks for/.test(say(9, '/book reward Iron Ingot 5')) &&
+      /^Name a good guild work asks for/.test(say(9, '/book reward Fur Boots -3')) &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 8);
+  fs.writeFileSync(path.join(rdir, 'commission-rewards.json'), JSON.stringify({ version: 1, items: { 'a6d7f:skyrim.esm': -1 } }));
+  let refused = '';
+  try { make(rdir, { rewardPrices: START }); } catch (e) { refused = e.message; }
+  yes('R9 a damaged saved price is never read as a price', /Saved guild reward prices cannot be verified/.test(refused));
+  try { fs.rmSync(rdir, { recursive: true, force: true }); } catch (e) { }
 }
 
 console.log('');

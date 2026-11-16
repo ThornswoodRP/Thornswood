@@ -30,7 +30,11 @@
        kept between runs. A cached archive is used only when its size and md5
        are the revision's; any other file there is replaced. Every archive is
        checked against the revision before it is used. A failed download
-       stops the run and says which file; nothing is tried again;
+       stops the run and says which file; nothing is tried again. Once the
+       cache holds every archive the revision lists, the folder of any file
+       id the revision does not list is taken out (#4324), so the cache holds
+       one revision's archives and no more; anything in it that is not a file
+       id's folder is left;
     4. unpacks each archive (7-Zip, as Vortex does) and works out its files
        with the installer Vortex would pick, the FOMOD choices the revision
        gives, and its patches (NexusLayout.cs says how each is read from
@@ -147,7 +151,8 @@
 
 .PARAMETER Cache
   Where downloaded archives are kept. %LOCALAPPDATA%\Thornswood\nexus-cache
-  unless said otherwise.
+  unless said otherwise. A run that has every archive of its revision takes
+  the folders of other file ids out of it, so give a folder of its own.
 
 .PARAMETER WhatIf
   Downloads and works everything out, and changes nothing in -Game.
@@ -422,7 +427,7 @@ foreach ($e in $col.Entries) {
   $got = Step { Receive-NexusPresigned $url $dir $what ([string]$e.FileId + '.archive') }
   if ($got.Size -ne $e.Size -or $got.Md5Hex -ne $e.Md5) {
     [IO.File]::Delete($got.Path)
-    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there.')
+    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there. Run it again to tell which: if the second download is the same ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', Nexus now serves other bytes as file ' + $e.FileId + ' and the revision is made again in Vortex on One; if it is the revision''s, the first broke on the way and the run carries on.')
   }
   # Measured on 20 Oct: the CDN sends no Content-Disposition for some files
   # (Crafting Categories for SkyUI, file 493920). Then the archive is named
@@ -442,6 +447,23 @@ foreach ($e in $col.Entries) {
   Say ('  ' + $got.Name + ', ' + ([double]$got.Size / 1MB).ToString('N1') + ' MB in ' + [Math]::Round($sw.Elapsed.TotalSeconds) + ' s') 'DarkGray'
 }
 Say ('  ' + $reused + ' from the cache, ' + $fetched + ' downloaded, every one the revision''s size and md5') 'Green'
+# The cache keeps one folder per file id, and until #4324 only the folders of
+# the file ids a run's revision lists were ever read, so an archive no
+# revision lists any more stayed for good. Now that this run holds every
+# archive its revision lists, the folder of any other file id is an older
+# revision's, and it goes. What in the cache is not a file id's folder is not
+# this script's, and stays.
+$listed = New-Object 'System.Collections.Generic.HashSet[string]'
+foreach ($e in $col.Entries) { [void]$listed.Add([string]$e.FileId) }
+$gone = New-Object System.Collections.Generic.List[string]
+if (Test-Path -LiteralPath $Cache -PathType Container) {
+  foreach ($d in @(Get-ChildItem -LiteralPath $Cache -Directory -Force)) {
+    if ($d.Name -notmatch '^\d+$' -or $listed.Contains($d.Name) -or ($d.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+    Step { Remove-Tree $d.FullName }
+    $gone.Add($d.Name)
+  }
+}
+if ($gone.Count) { Say ('  taken out of the cache, as no file of this revision: file id ' + ($gone -join ', file id ')) 'DarkGray' }
 # -Modlist names every archive by its xxHash64, as Wabbajack does.
 $script:ArchXx = @{}
 if ($Modlist) { foreach ($e in $col.Entries) { $script:ArchXx[$e.Index] = [Thornswood.Layout.XxHash64]::OfFile($archives[$e.Index]) } }
@@ -583,7 +605,7 @@ Head 'Deploying, as Vortex would'
 $edges = [Thornswood.Layout.NexusLayout]::Edges($col)
 $cycle = $null
 $before = [Thornswood.Layout.NexusLayout]::Before($edges, [ref]$cycle)
-if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy.') }
+if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy. Take one of those rules out in Vortex on One, and lay out the revision that publishes.') }
 $claims = @{}
 foreach ($plan in $plans) {
   $e = $plan.Entry
@@ -615,7 +637,7 @@ foreach ($key in $claims.Keys) {
   }
   $placed.Add([pscustomobject]@{ Rel = $win.Rel; Full = $win.Staged.Full; Entry = $win.Entry; Over = @($c | Where-Object { $_ -ne $win } | ForEach-Object { $_.Entry }); Size = 0; Sha256 = '' })
 }
-if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ")) }
+if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ") + "`nGive each pair a mod rule in Vortex on One, one of the two loading after the other, and lay out the revision that publishes.") }
 Say ('  ' + $placed.Count + ' files; ' + $won + ' copies lost to a mod the rules deploy later')
 
 # Plugins: the collection's list first, in its order (gamebryo.tsx, the
@@ -633,7 +655,7 @@ foreach ($p in $col.Plugins) {
   if (-not $present.ContainsKey($k)) { $missingPlugins += $p.Name; continue }
   $order.Add([pscustomobject]@{ Name = $p.Name; Enabled = $p.Enabled })
 }
-if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '.') }
+if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '. Put in the mod that has them, or take them off the plugin list, in Vortex on One, and lay out the revision that publishes.') }
 $unlisted = @($present.Keys | Where-Object { -not $seen.ContainsKey($_) } | Sort-Object | ForEach-Object { $present[$_] })
 foreach ($n in $unlisted) { $order.Add([pscustomobject]@{ Name = $n; Enabled = $false }) }
 # The rules are held over the plugins the game loads, the enabled ones. A

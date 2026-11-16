@@ -218,6 +218,16 @@ folder here is named below, under the heading it belongs to.
   revision's plugins, in the pull request that moves the records to a new
   revision. The content table builders and `game\data\last-plugin.json` are
   held to it, and `docs\COLLECTION-REVISIONS.md` names its revision.
+- `collection-page.json`: the text of the collection's page on Nexus Mods,
+  its summary, description and install steps (issue #4537). Each mod it
+  names is written `[[the words|its Nexus mod id]]`, and `notSaid` is what
+  the build has made untrue, each with why. `New-NexusRevision.ps1` sends it
+  with every revision in place of the text the revision before carried;
+  `scripts\release\collection-page.js` holds it to `collection.json` (every
+  mod it names installed, nothing `notSaid` lists, real headings, the same
+  `revision`), and `tests\test-4537-collection-page.js` runs that in the
+  gate. Changed by hand, and read again in the pull request that moves
+  `collection.json` to a new revision.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with
@@ -345,6 +355,14 @@ named. Names only: no secret or token is in any of them.
   `scripts\deploy\Install-Tunnel.ps1` reads it and makes Cloudflare and the
   box match it; nothing writes it. A new cloudflared is its version, URL and
   SHA-256 changed together, from the release page.
+- `mongodb.json`: the MongoDB the game servers keep their worlds in (#6237):
+  mongod, the database tools and mongosh, each by version, URL and SHA-256
+  from MongoDB's own download records, the address and port mongod listens
+  on (loopback only), its cache, and the user each game server, the backup
+  and the admin signs in as. `scripts\deploy\Install-Mongo.ps1` reads it and
+  makes the box match it; nothing writes it. A new version is its URL and
+  SHA-256 changed together, and the server stays on the 8.0 series the
+  engine's driver is held to.
 
 ## Provenance notes
 

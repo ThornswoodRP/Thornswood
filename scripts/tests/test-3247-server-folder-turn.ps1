@@ -144,7 +144,7 @@ $passAt = $swapBody.IndexOf("'PASS: the server is answering on '")
 Yes 'every refusal before the swap leaves a put-back''s .prev folder where it is ($KeepStage)' (
     $clears.Count -ge 4 -and $bare.Count -eq 1 -and $passAt -ge 0 -and $bare[0].Index -gt $passAt)
 
-$grabGame = $backup.IndexOf("Grab (Join-Path `$sv.Root 'world')")
+$grabGame = $backup.IndexOf("TakeWorld `$sv.Root ")
 $enter = $backup.IndexOf("`$serverTurn = Enter-ThornswoodServerFolderTurn `$Out 'the nightly backup'")
 $give = After $backup "Grab (Join-Path `$sv.Root 'gamemode.js')" 'finally {'
 $given = After $backup "Grab (Join-Path `$sv.Root 'gamemode.js')" '$serverTurn.Dispose()'

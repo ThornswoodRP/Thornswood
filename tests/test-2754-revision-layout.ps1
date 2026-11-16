@@ -20,7 +20,9 @@
        file, and leaves nothing of it in the cache; a free account's 403 on
        download-link stops it the same way;
     4. the cache: a second run downloads nothing, and a cached archive that
-       changed is downloaded again, that one only;
+       changed is downloaded again, that one only; once a run has every
+       archive, the folder of a file id the revision does not list leaves
+       the cache, and nothing else in it does (#4324);
     5. with 7-Zip: the layout itself. A plain archive cut at its first stop
        pattern, a hashes list, a FOMOD run with the collection's choices, a
        script extender to the game folder, a bsdiff patch, a file two mods
@@ -304,11 +306,17 @@ YesR 'an optional mod and a later phase are refused, each named, and nothing is 
 
 # ---- 3: a download that is not the revision's -----------------------------------------------
 $cache = P $T 'cache'
+# An archive an older revision listed, under a file id this one does not
+# (#4324), and two things in the cache that are not a file id's folder.
+Put (P $cache '900099\Old Mod 900099.zip') 'an archive an older revision listed'
+Put (P $cache 'notes\kept.txt') 'not a file id''s folder'
+Put (P $cache 'readme.txt') 'not a folder'
 Control @{ corrupt = @('900002') }
 $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
 Control @{ corrupt = @() }
 YesR 'a download whose md5 is not the revision''s stops the run, naming the file' ($r.Code -eq 1 -and $r.Out -match 'The download of Beta \(mod 102, file 900002\) is not the archive the revision lists' -and $r.Out -match 'deleted from the cache') $r
+YesR '  and it says how to tell a broken download from a changed file, and what to do for each (#4215)' ($r.Out -match 'Run it again to tell which' -and $r.Out -match 'made again in Vortex on One' -and $r.Out -match 'broke on the way') $r
 Yes 'and nothing of it stays in the cache, while the one before it does' (@(Get-ChildItem -LiteralPath (P $cache '900002') -File -ErrorAction SilentlyContinue).Count -eq 0 -and @(Get-ChildItem -LiteralPath (P $cache '900001') -File).Count -eq 1)
 Yes 'and -Game (or -Record) was not made' (-not (Test-Path -LiteralPath (P $T 'game')))
 $got = @(Since $n0)
@@ -317,6 +325,7 @@ Control @{ premium = $false }
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
 Control @{ premium = $true }
 YesR 'a free account''s 403 on download-link stops it naming the file' ($r.Code -eq 1 -and $r.Out -match 'Asking for the download of Beta \(mod 102, file 900002\) was refused: HTTP 403' -and $r.Out -match 'Premium') $r
+Yes 'a run that stops before it has every archive takes nothing else out of the cache' (Test-Path -LiteralPath (P $cache '900099\Old Mod 900099.zip'))
 
 # ---- 4: the cache ----------------------------------------------------------------------
 # A whole run that places nothing: -WhatIf on Windows, a -Record of its own off it.
@@ -326,6 +335,8 @@ $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (Look))
 $first4 = @(Since $n0)
 YesR 'the first whole run downloads what the cache lacks' ((Cdn $first4).Count -eq 3 -and $r.Out -match '1 from the cache, 3 downloaded') $r
+YesR 'once it has every archive, the folder of a file id the revision does not list leaves the cache, and the run says so (#4324)' (-not (Test-Path -LiteralPath (P $cache '900099')) -and $r.Out -match 'file id 900099') $r
+Yes 'and what is not a file id''s folder stays, with every archive the revision lists' ((Test-Path -LiteralPath (P $cache 'notes\kept.txt')) -and (Test-Path -LiteralPath (P $cache 'readme.txt')) -and @(Get-ChildItem -LiteralPath (P $cache '900001') -File).Count -eq 1 -and @(Get-ChildItem -LiteralPath (P $cache '900003') -File).Count -eq 1)
 $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (Look))
 YesR 'a second run downloads nothing and asks for no link' ((Cdn @(Since $n0)).Count -eq 0 -and @((Since $n0) | Where-Object { $_.path -like '*/download-link' }).Count -eq 0 -and $r.Out -match '4 from the cache, 0 downloaded') $r
@@ -436,6 +447,21 @@ $colNoRule = P $T 'col-norule'
 Write-Col $colNoRule (Collection @($alphaE, $gammaE) @())
 $r = Run (@('-CollectionArchive', $colNoRule, '-Revision', '5', '-Cache', $cache) + (To 'game3'))
 YesR 'two mods that share a file with no rule between them stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'No mod rule says which' -and $r.Out -match 'Alpha and Gamma \(1 files\)' -and -not (Test-Path -LiteralPath (P $T 'game3'))) $r
+YesR '  and it says what to do: a mod rule for each pair, in Vortex on One (#4215)' ($r.Out -match 'Give each pair a mod rule in Vortex on One') $r
+
+# #4215: mod rules that go round in a circle, and plugins no mod has, each
+# stop with the next step, not only what is wrong.
+$ruleBack = [ordered]@{ type = 'after'; reference = [ordered]@{ fileMD5 = (Md5 $arc.gamma); versionMatch = '1.0.0'; logicalFileName = 'Gamma' }; source = [ordered]@{ fileMD5 = (Md5 $arc.alpha); versionMatch = '1.0.0'; logicalFileName = 'Alpha' } }
+$colCircle = P $T 'col-circle'
+Write-Col $colCircle (Collection @($alphaE, $gammaE) @($rule, $ruleBack))
+$r = Run (@('-CollectionArchive', $colCircle, '-Revision', '5', '-Cache', $cache) + (To 'game-circle'))
+YesR 'mod rules that go round in a circle stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'mod rules go round in a circle' -and -not (Test-Path -LiteralPath (P $T 'game-circle'))) $r
+YesR '  and it says what to do: take one of them out in Vortex on One (#4215)' ($r.Out -match 'Take one of those rules out in Vortex on One') $r
+$colGhost = P $T 'col-ghost'
+Write-Col $colGhost (Collection @($alphaE, $gammaE) @($rule))
+$r = Run (@('-CollectionArchive', $colGhost, '-Revision', '5', '-Cache', $cache) + (To 'game-ghost'))
+YesR 'plugins on the list that no mod has stop the run, naming them, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'lists plugins no mod in it has' -and $r.Out -match 'Beta\.esp' -and -not (Test-Path -LiteralPath (P $T 'game-ghost'))) $r
+YesR '  and it says what to do: put the mod in or take them off the list, in Vortex on One (#4215)' ($r.Out -match 'Put in the mod that has them, or take them off the plugin list, in Vortex on One') $r
 
 # 27 Oct: revision 5 ruled cheddars_mashups.esl, which the game loads as a
 # master, to load after plugins that are not, and the list had it at the end,

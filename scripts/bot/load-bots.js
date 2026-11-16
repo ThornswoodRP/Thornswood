@@ -63,6 +63,15 @@
 //          trade with the nearest NPC within TRADE_REACH: "/merchant <id>",
 //          the guild trader command the panel's E press is (gamemode.js,
 //          createMerchantTrading). The answers are counted by what they say.
+//          And the bots trade gold with each other, as two people do on the
+//          trade panel (game/ui, the panel's lines go out as /trade), so the
+//          gold and trade log (#6270) has rows to keep: the bots of one
+//          process go in pairs, and every minute or so the first of a pair
+//          meets the second (both stand still, side by side), asks it
+//          ("/trade <its actor id>"), the second says yes ("/yes"), each puts
+//          up 1 to 5 of the 40 gold every person is handed ("/trade gold
+//          <n>") and both agree ("/trade ok"). Two seconds between steps.
+//          What the server says back is counted by what it says (PAY_SAID).
 //   quest  takes guild work the way the trader panel's buttons ask for it
 //          (game/ui/thornswood-merchant.js): every 30 s or so it stands still
 //          beside the nearest NPC within the trade block's REACH, opens the
@@ -112,6 +121,25 @@ const UNARMED = 0x1f4;         // ActionListener.cpp IsUnarmedAttack
 const FIGHT_REACH = 1000;      // units: who a bot swings at
 const TRADE_REACH = 600;       // units: which NPC a bot asks to trade with
 const TRADE_EVERY_MS = 30000;
+const PAY_EVERY_MS = 60000;    // from one trade between two bots to the next
+const PAY_STEP_MS = 2000;      // between the steps of one
+const PAY_MOST = 5;            // the most gold one side puts up
+// What the trading and social blocks say back to a trade between people
+// (trade.ts, teleport.ts), by the count it adds to; anything else about a
+// trade is payOtherAnswer.
+const PAY_SAID = [
+  [/^Traded\. You gave /, 'payTraded'],
+  [/^Asked .+\. They have \d+ seconds\.$/, 'payAsked'],
+  [/ is offering to trade\. /, 'payOffered'],
+  [/^You only have \d+\.$/, 'payNoGold'],
+  [/too far apart/, 'payTooFar'],
+  [/^Nobody here by that name\.$/, 'payNotFound'],
+  [/^Nobody has asked you anything\.$/, 'payNoOffer'],
+  [/^You are not trading\.$/, 'payNotTrading'],
+  [/already trading|already in a trade/, 'payBusy'],
+  [/^The trade timed out\.$/, 'payTimedOut'],
+  [/went only half through/, 'payHalf']
+];
 const PLAYER_IDS = 0xff000000; // a person's character; an NPC's refrId is its form id plus 2^32 (PartOne.cpp)
 const QUEST_REACH = 400;       // merchant-trading-bundle.ts REACH: the panel answers somebody this near
 const QUEST_EVERY_MS = 30000;  // from one Step back to the next panel
@@ -136,8 +164,7 @@ const QUEST_SAID = {
   'The work could not be committed just now.': 'questRefused:unwritten',
   'Quest work is unavailable.': 'questRefused:unavailable',
   'This trader does not handle that work.': 'questRefused:role',
-  'The submitted price changed or is missing. Choose the work again.': 'questRefused:price',
-  'This trader cannot reserve the quoted payment.': 'questRefused:purse',
+  'The reward price changed or is missing. Choose the work again.': 'questRefused:price',
   'This trader cannot accept more work yet.': 'questRefused:capacity',
   'The transfer is waiting for its saved inventory.': 'questRefused:waiting',
   'Finish or leave one of your three open jobs of this kind first.': 'questRefused:open-limit',
@@ -153,10 +180,9 @@ const QUEST_ROW_WHY = {
   'Trading is waiting for a saved inventory.': 'inventory',
   'You do not meet this work\'s requirements.': 'requirements',
   'This work is still resting.': 'resting',
-  'No submitted buy price is available for this work.': 'noPrice',
+  'Staff have set no reward for this work.': 'noReward',
   'You already hold three commissions.': 'threeHeld',
   'This trader cannot accept more work yet.': 'traderFull',
-  'The trader cannot reserve this payment.': 'purse'
 };
 
 function distance(a, b) {
@@ -201,6 +227,11 @@ class LoadBot extends Bot {
     this.played = {};          // what it did and what came back, since the last report
     this.nextHit = 0;
     this.nextTrade = 0;
+    this.payWith = null;       // the bot it trades gold with (pairUp)
+    this.payGives = false;     // the first of the pair, which leads each trade
+    this.payPhase = 'idle';    // idle, met, asked, open, agree
+    this.payAt = null;         // [x, y, z] it stands at while trading
+    this.nextPay = 0;
     this.anim = 0;
     this.nextQuest = 0;
     this.questPhase = 'idle';  // idle, asked (the panel), held (work taken), leaving
@@ -216,6 +247,7 @@ class LoadBot extends Bot {
   // The position the bot's own character is at now.
   here() {
     if (this.atPanel) { return this.atPanel; }
+    if (this.payAt) { return this.payAt; }
     const c = this.center || [0, 0, 0];
     return [c[0] + Math.cos(this.angle) * this.radius, c[1] + Math.sin(this.angle) * this.radius, c[2]];
   }
@@ -223,7 +255,7 @@ class LoadBot extends Bot {
   // Whether it stands still now: at an open trader panel, or in the standing
   // share of its own 20 s.
   standing(now) {
-    if (this.atPanel) { return true; }
+    if (this.atPanel || this.payAt) { return true; }
     return this.stand > 0 && ((now + this.standPhase) % STAND_CYCLE_MS) < this.stand * STAND_CYCLE_MS;
   }
 
@@ -302,7 +334,45 @@ class LoadBot extends Bot {
       return;
     }
     if (!trade) { return; }
+    const pay = PAY_SAID.find((p) => p[0].test(said));
+    if (pay) { this.did(pay[1]); return; }
     if (/Trading with/.test(said)) { this.did('tradeOpened'); } else if (/not a guild trader/.test(said)) { this.did('notATrader'); } else if (/trade|trader/i.test(said)) { this.did('tradeOtherAnswer'); }
+  }
+
+  // One step of a trade with the other bot of its pair, led by the first of
+  // the pair and said over each bot's own chat socket; now is Date.now().
+  // See trade in the header.
+  payStep(now) {
+    const p = this.payWith;
+    const mine = (line) => this.wsSend({ t: 'chat', text: line });
+    const theirs = (line) => p.wsSend({ t: 'chat', text: line });
+    const end = (why) => {
+      if (why) { this.did(why); }
+      this.payAt = null; if (p) { p.payAt = null; }
+      this.payPhase = 'idle'; this.nextPay = now + PAY_EVERY_MS;
+    };
+    this.nextPay = now + PAY_STEP_MS;
+    if (this.payPhase === 'idle') {
+      if (!p || p.step !== 'moving' || !p.welcomed || !p.character || p.cell !== this.cell) { end('payNoPartner'); return; }
+      if (!(Number(p.character.refrId) > 0)) { end('payNoActorId'); return; }
+      const here = this.here();
+      this.payAt = here.slice();
+      p.payAt = [here[0] + 80, here[1], here[2]];
+      this.payPhase = 'met';
+      this.did('payMeets');
+      return;
+    }
+    if (this.payPhase === 'met') { mine('/trade ' + Number(p.character.refrId).toString(16)); this.payPhase = 'asked'; this.did('payAsks'); return; }
+    if (this.payPhase === 'asked') { theirs('/yes'); this.payPhase = 'open'; return; }
+    if (this.payPhase === 'open') {
+      mine('/trade gold ' + (1 + Math.floor(Math.random() * PAY_MOST)));
+      theirs('/trade gold ' + (1 + Math.floor(Math.random() * PAY_MOST)));
+      this.payPhase = 'agree';
+      return;
+    }
+    mine('/trade ok');
+    theirs('/trade ok');
+    end('payAgrees');
   }
 
   // One press at the trader panel, the way the panel's buttons send them;
@@ -516,6 +586,7 @@ class LoadBot extends Bot {
       }
       this.step = 'moving'; this.deadline = 0; this.lastMove = now - Math.random() * MOVE_MS;
       this.nextHit = now + 5000 + Math.random() * 3000; this.nextTrade = now + 10000 + Math.random() * TRADE_EVERY_MS;
+      this.nextPay = now + 20000 + Math.random() * PAY_EVERY_MS;
       this.nextQuest = now + 10000 + Math.random() * QUEST_EVERY_MS;
       if (this.voicePort) { this.voiceBy = now + STEP_MS; this.openVoice(); }
       return;
@@ -527,7 +598,8 @@ class LoadBot extends Bot {
       // the beat again from now rather than sending the missed ones at once.
       this.lastMove = now - this.lastMove >= 2 * MOVE_MS ? now : this.lastMove + MOVE_MS;
       // At an open trader panel it stands where it opened it, as a person
-      // does, and in its standing share it stands wherever it got to.
+      // does, beside the bot it is trading gold with, and in its standing
+      // share it stands wherever it got to.
       const still = this.standing(now);
       if (!still) { this.angle += (WALK * dt) / this.radius; }
       const pos = this.here();
@@ -547,8 +619,18 @@ class LoadBot extends Bot {
     }
     if (this.step === 'moving' && this.play.indexOf('fight') >= 0 && now >= this.nextHit) { this.swing(now); }
     if (this.step === 'moving' && this.welcomed && this.play.indexOf('trade') >= 0 && now >= this.nextTrade) { this.askTrade(now); }
+    if (this.step === 'moving' && this.welcomed && this.play.indexOf('trade') >= 0 && this.payGives && now >= this.nextPay) { this.payStep(now); }
     if (this.step === 'moving' && this.welcomed && this.play.indexOf('quest') >= 0 && now >= this.nextQuest) { this.questStep(now); }
   }
+}
+
+// Pairs the bots of one process for trading gold, in the order they are
+// added: lone is the one still without a partner, or null. Returns the one
+// left without a partner after b.
+function pairUp(lone, b) {
+  if (!lone) { return b; }
+  lone.payWith = b; b.payWith = lone; lone.payGives = true;
+  return null;
 }
 
 // The load copy's own pass key and the name its passes carry: door.json in
@@ -581,6 +663,7 @@ function main() {
   if (!(stand >= 0 && stand <= 1)) { console.log('--stand is a share from 0 to 1, not ' + a.stand); process.exit(2); }
   const { passKey, server } = passKeyOf(a.root);
   const bots = [];
+  let lone = null;
   let cpu0 = process.cpuUsage();
   let at0 = Date.now();
   process.on('message', (msg) => {
@@ -593,6 +676,7 @@ function main() {
           b.state = 'connecting'; b.step = 'connecting'; b.deadline = Date.now() + STEP_MS;
         } catch (e) { b.fail('createBotClient: ' + e.message); }
         bots.push(b);
+        if (playing.indexOf('trade') >= 0) { lone = pairUp(lone, b); }
       }
     }
     if (msg && msg.report) {
@@ -653,4 +737,4 @@ function main() {
 
 if (require.main === module) { main(); }
 
-module.exports = { LoadBot, MOVE_MS, MOVES, STAND_CYCLE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };
+module.exports = { LoadBot, MOVE_MS, MOVES, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };

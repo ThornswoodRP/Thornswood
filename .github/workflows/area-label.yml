@@ -50,23 +50,44 @@ jobs:
           $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
           $triage = 'area: triage'
           # Words in a title that name one part of the project, matched as
-          # whole words without regard to case. Only words that mean that part
-          # and nothing else; an ordinary word that could be any part stays out.
+          # whole words in any case, in the plural too (s or es), with a space
+          # or a hyphen between the words of a phrase. Only words that mean that
+          # part and nothing else; an ordinary word that could be any part stays
+          # out. The labels are exactly the areas docs/guide/the-board.md lists
+          # under "Area labels", and tests/test-4144-area-labels.ps1 holds this
+          # table to that list and to real titles with the areas people gave
+          # them (#4144).
+          function Words {
+            $w = @($args | ForEach-Object { [regex]::Escape([string]$_) -replace '\\ ', '[\s-]+' })
+            return '\b(?:' + ($w -join '|') + ')(?:s|es)?\b'
+          }
           $areas = [ordered]@{
-            'area: Launcher'      = '\b(launcher|installer)\b'
-            'area: Website'       = '\b(website|site page|site pages|thornswood\.net|lighthouse)\b'
-            'area: Discord'       = '\b(discord|bot)\b'
-            'area: Voice'         = '\bvoice\b'
-            'area: Gamemode'      = '\bgamemode\b'
-            'area: Engine'        = '\b(engine|skymp)\b'
-            'area: GitHub & CI'   = '\b(workflow|workflows|harness|harnesses|github|ci)\b'
-            'area: Operations'    = '\b(vps|the box|watchdog|backup|backups|runner|runners)\b'
-            'area: Security'      = '\b(security|dnssec|cloudflare)\b'
-            'area: Mods'          = '\b(nexus|vortex|collection)\b'
-            'area: Release'       = '\b(ship|release|releases)\b'
-            'area: Legal'         = '\b(licence|license|licences|licenses|legal|privacy)\b'
-            'area: Accessibility' = '\baccessibility\b'
-            'area: In-game'       = '\b(crafting|recipe|recipes|bench|benches|forge|alchemy|harvest|cooking)\b'
+            'area: Accessibility' = (Words 'accessibility' 'accessible' 'keyboard' 'screen reader' 'high contrast' 'text size' 'reduced motion' 'skip link' 'image description')
+            'area: Client'        = (Words 'in-game panel' 'front plugin' 'emote plugin' 'main menu' 'start screen' 'look prompt')
+            'area: Content'       = (Words 'content' 'esp' 'npc catalogue' 'record count' 'masters check')
+            'area: Discord'       = (Words 'discord' 'bot' 'ticket' 'welcome card' 'join card' 'slash command' 'forum post')
+            'area: Docs'          = (Words 'doc' 'docs' 'documentation' 'readme' 'developer guide' 'table of contents' 'help text')
+            'area: Engine'        = (Words 'engine' 'skymp' 'upstream' 'enchant' 'enchantment' 'enchanted')
+            'area: Gamemode'      = (Words 'gamemode' 'quest' 'trade' 'guild' 'perk' 'killmove' 'join pass' 'drop box')
+            'area: GitHub & CI'   = (Words 'github' 'ci' 'workflow' 'harness' 'nightly' 'dependabot' 'merge queue' 'gate share' 'artifact' 'action pin' 'labeller' 'pull request' 'runner')
+            'area: In-game'       = (Words 'in-game help' 'craft' 'crafting' 'recipe' 'bench' 'forge' 'alchemy' 'harvest' 'cooking' 'mining' 'pickaxe' 'courier' 'parcel' 'contract' 'apprentice' 'profession')
+            'area: Launcher'      = (Words 'launcher' 'installer' 'setup' 'setup window' 'uninstall' 'reinstall' 'downgrade' 'play now' 'scan and fix')
+            'area: Legal'         = (Words 'legal' 'licence' 'license' 'privacy' 'permission' 'terms page' 'third-party' 'provenance')
+            'area: Load order'    = (Words 'load order' 'plugins.txt' 'light plugin' 'light flag' 'esl' 'missing masters' 'check-manifest')
+            'area: Moderation'    = (Words 'moderation' 'ban' 'banned' 'silence' 'silenced' 'frozen')
+            'area: Mods'          = (Words 'mod' 'nexus' 'vortex' 'collection')
+            'area: Operations'    = (Words 'vps' 'the box' 'watchdog' 'backup' 'restore' 'bridge' 'outage' 'availability' 'build machine')
+            'area: Packaging'     = (Words 'packaging' 'unpack' 'zip' 'virustotal')
+            'area: Performance'   = (Words 'performance' 'every frame' 'lag' 'stylesheet' 'kb' 'ms')
+            'area: Release'       = (Words 'release' 'ship' 'rollback' 'scrub')
+            'area: Security'      = (Words 'security' 'secure' 'dnssec' 'cloudflare' 'advisory' 'advisories' 'vulnerability' 'secret' 'token' 'noreply')
+            'area: Server'        = (Words 'merchant session' 'tick')
+            # A test, but not a test task, which is how a fix is checked in game.
+            'area: Testing'       = '\b(?:tests?|untested|flaky)\b(?![\s-]+tasks?\b)'
+            'area: Tools'         = (Words 'script' 'lint' 'one-off' 'builder' 'run-onbox')
+            'area: Voice'         = (Words 'voice' 'websocket' 'emote' 'caption' 'voice-server')
+            'area: Website'       = (Words 'website' 'site' 'hub' 'staff hub' 'sign-in' 'sign out' 'gallery' 'downloads page' 'home page' 'front page' 'visitor' 'thornswood.net' 'api')
+            'area: World'         = (Words 'npc' 'carriage' 'ferry' 'storm' 'weather' 'horse' 'guard' 'bounty' 'bounties')
           }
           function Has($o, [string]$n) { return ($null -ne $o -and $o.PSObject.Properties[$n] -and $null -ne $o.$n) }
           function Pick([string]$title) {

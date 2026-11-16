@@ -63,6 +63,8 @@ const { discordGet, roleNames } = require('./lib/discord');
 require('./lib/roster');
 require('./lib/signins');
 require('./lib/ledger');
+require('./lib/takeback');
+require('./lib/pcs');
 require('./lib/sessions');
 const { retentionSweep } = require('./lib/retention');
 const { rereadTrouble } = require('./lib/trouble');

@@ -54,12 +54,14 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
         "scripts/mods/last_recipe.py",
         "scripts/ops/Discord-Hook.ps1",
         "scripts/ops/Publish-Discord.ps1",
         "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
         "scripts/ops/WorkflowRun.ps1",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/BuildStamp.ps1",
@@ -77,6 +79,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
@@ -381,6 +384,7 @@
     "Load-Test": {
       "script": "scripts/bot/Load-Box.ps1",
       "reads": [
+        "records/mongodb.json",
         "scripts/bot/Bot-Pass.js",
         "scripts/bot/Load-Test.js",
         "scripts/bot/New-LoadServer.js",
@@ -389,7 +393,10 @@
         "scripts/bot/load-bots.js",
         "scripts/bot/load-proxy.js",
         "scripts/bot/load-sampler.js",
-        "scripts/bot/relay.js"
+        "scripts/bot/relay.js",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 45,
       "fixed": [],
@@ -554,10 +561,12 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
         "scripts/mods/last_recipe.py",
         "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
         "scripts/ops/WorkflowRun.ps1",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/BuildStamp.ps1",
@@ -579,6 +588,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
@@ -629,6 +639,7 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
         "scripts/mods/last_recipe.py",
@@ -704,10 +715,12 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
         "scripts/mods/last_recipe.py",
         "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
         "scripts/ops/WorkflowRun.ps1",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/BuildStamp.ps1",
@@ -729,6 +742,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
@@ -762,10 +776,12 @@
     "Wipe-Dev": {
       "script": "scripts/ops/Wipe-Saves.ps1",
       "reads": [
+        "scripts/deploy/World.ps1",
         "scripts/ops/Release-List.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
@@ -776,10 +792,12 @@
       "reads": [
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/ops/NpcReset.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
       "afterDeploy": ["dev"],
@@ -793,12 +811,54 @@
       "reads": [
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/ops/NpcReset.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
+      "build": true,
+      "fixed": ["-Server", "main", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Move-World-Dev": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Move-World-Main": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
       "build": true,
       "fixed": ["-Server", "main", "-Yes", "-NoPause"],
       "params": {
@@ -845,7 +905,6 @@
         "scripts/dev/Build-CastTable.py",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
-        "scripts/dev/Build-ResourceLocations.py",
         "scripts/dev/Build-StationSites.py",
         "scripts/dev/Build-WoodworkingBenches.py",
         "scripts/dev/MerchantRoster.py",
@@ -1125,17 +1184,22 @@
     "Rehearse-Restore": {
       "script": "scripts/vps/Rehearse-OnBox.ps1",
       "reads": [
+        "records/mongodb.json",
         "scripts/bot/Check-Character.js",
         "scripts/bot/bot.js",
         "scripts/bot/character.js",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/vps/Restore-Backup.ps1",
-        "scripts/vps/Restore-Server.ps1"
+        "scripts/vps/Restore-Server.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 40,
       "fixed": ["-NoPause"],
       "params": {
         "Which": "^(live|dev)$",
-        "ProfileId": "^[0-9]{1,10}$"
+        "ProfileId": "^[0-9]{1,10}$",
+        "Reorder": "switch"
       },
       "out": "-Out"
     },
@@ -1219,13 +1283,31 @@
         "NetworkOnly": "switch"
       }
     },
+    "Install-Mongo": {
+      "script": "scripts/deploy/Install-Mongo.ps1",
+      "reads": [
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/mongo-users.js"
+      ],
+      "timeoutMinutes": 30,
+      "fixed": ["-FromGate", "-NoPause"],
+      "params": {
+        "Status": "switch"
+      }
+    },
     "Install-Backup": {
       "script": "scripts/deploy/Install-Backup.ps1",
       "reads": [
         "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/World.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/Vps.ps1",
-        "scripts/vps/vps-nightly-backup.ps1"
+        "scripts/vps/vps-nightly-backup.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 20,
       "fixed": ["-FromGate", "-NoPause"],

@@ -17,25 +17,52 @@
 //
 // Prints a PASS, FAIL or SKIP line for each thing it compares and exits 1
 // when any FAIL, or when the bot could not connect or was sent no
-// character. --out writes the same as JSON for the run's record.
+// character. --out writes the same as JSON for the run's record, with the
+// slot of each plugin the character's ids name ("plugins").
+//
+//     node scripts/bot/Check-Character.js --root <server folder> --reorder
+//
+// changes the folder's load order for the rehearsal's check of ids by plugin
+// (#6237, Rehearse-OnBox.ps1 -Reorder): the earliest full plugin no other
+// plugin needs as a master goes to the end, server-settings.json is written
+// with that order (the one before is kept as
+// server-settings.json.before-reorder), and it prints
+// REORDERED <plugin> from slot <a> to <b>. A server started on the folder
+// afterwards loads every full plugin after that one a slot earlier, so a
+// check that still passes read each id by its plugin.
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const { Bot, loadAddon } = require('./bot.js');
-const { expected, compare } = require('./character.js');
+const { expected, compare, pluginPaths, reorder } = require('./character.js');
 
 function args(argv) {
   const o = {};
   for (let i = 0; i < argv.length; i++) {
     const m = /^--([a-z]+)$/.exec(argv[i]);
-    if (!m) { throw new Error('what is "' + argv[i] + '"? Use --root, --profile, --host, --port and --out.'); }
-    o[m[1]] = argv[++i];
+    if (!m) { throw new Error('what is "' + argv[i] + '"? Use --root, --profile, --host, --port, --out and --reorder.'); }
+    o[m[1]] = m[1] === 'reorder' ? true : argv[++i];
   }
   return o;
 }
 
+function reorderFolder(root) {
+  const file = path.join(root, 'server-settings.json');
+  const text = fs.readFileSync(file, 'utf8');
+  const settings = JSON.parse(text.replace(/^\uFEFF/, ''));
+  if (!Array.isArray(settings.loadOrder)) { throw new Error(file + ' names no loadOrder, so there is no order to change'); }
+  const r = reorder(settings.loadOrder, pluginPaths(root, settings));
+  const before = file + '.before-reorder';
+  fs.writeFileSync(before, text, { flag: 'wx' });
+  settings.loadOrder = r.order;
+  fs.writeFileSync(file, JSON.stringify(settings, null, 2));
+  const hex = (n) => '0x' + n.toString(16).padStart(2, '0');
+  console.log('REORDERED ' + r.moved + ' from slot ' + hex(r.from) + ' to ' + hex(r.to));
+}
+
 async function main() {
   const a = args(process.argv.slice(2));
+  if (a.root && a.reorder) { reorderFolder(path.resolve(a.root)); return 0; }
   if (!a.root || !a.profile) {
     console.log('node scripts/bot/Check-Character.js --root <server folder> --profile <id> [--host 127.0.0.1] [--port <port>] [--out <file>]');
     return 1;
@@ -47,6 +74,9 @@ async function main() {
   try {
     const want = expected(root, a.profile);
     console.log('character ' + want.profileId + ' is ' + want.file + ' in the world, read before the login');
+    result.plugins = want.plugins;
+    const named = Object.keys(want.plugins);
+    console.log(named.length ? 'its ids name ' + named.map((n) => n + ' at slot ' + want.plugins[n]).join(', ') : 'its ids name no plugin');
     const addon = loadAddon(root);
     const port = Number(a.port) || want.port;
     bot = new Bot(addon, { host: a.host || '127.0.0.1', port, password: want.password,

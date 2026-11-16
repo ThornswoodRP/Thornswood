@@ -30,8 +30,10 @@
   listed. -Data is handed to every builder that takes it; left out, each
   builder uses its own default, which on One is the game at C:\Thornswood.
   A step that changes a file an earlier step reads back (readsBack) runs the
-  chain again from that earlier step, once (#4087): Write-CutItems.js sorts a
-  new plugin's recipes into the cut file, and the recipe build applies it.
+  chain again from that earlier step, once for each file (#4087):
+  Write-CutItems.js sorts a new plugin's recipes into the cut file, and
+  Build-Recost.py re-costs a recipe in recost.json (#5191), and the recipe
+  build applies each.
 
   THE LOAD ORDER IS THE ONE THE COMMIT RECORDS (#3105). Every builder that
   takes a plugin list is given the load order game\data\npc-population.json
@@ -153,7 +155,7 @@ if ($PluginsTxt) {
     if ($at -ge 0) {
         $g = $(if ($at -lt $given.Count) { $given[$at] } else { 'nothing' })
         $r = $(if ($at -lt $recorded.Count) { $recorded[$at] } else { 'nothing' })
-        throw ("$PluginsTxt is not the load order game\data\npc-population.json records: $($given.Count) plugins against $($recorded.Count), and at place $($at + 1) it has $g where the record has $r. When the servers' load order moved, rebuild the record first (Build-NpcPopulation.py, then Build-ResourceLocations.py, content-tables.json's notInChain says why). Nothing was run.")
+        throw ("$PluginsTxt is not the load order game\data\npc-population.json records: $($given.Count) plugins against $($recorded.Count), and at place $($at + 1) it has $g where the record has $r. When the servers' load order moved, rebuild the record first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.")
     }
 }
 $orderFolder = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-loadorder-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
@@ -211,8 +213,10 @@ if ($WithoutLast) {
 # later step. When that step changes it, the reader built from the old one, so
 # the chain runs again from the reader, once (#4087): Build-RecipeTable.ps1
 # reads docs\systems\cut-items.json, and Write-CutItems.js sorts a row a new
-# plugin added into it, which the recipe build has to apply. A second change
-# is a builder that never settles, and stops the chain.
+# plugin added into it, which the recipe build has to apply; it reads
+# game\data\recost.json too, which Build-Recost.py writes from it (#5191).
+# Each file read back may change once: a second change of the same file is a
+# builder that never settles, and stops the chain.
 function Get-FileSha([string]$rel) {
     $f = Join-Path $repo $rel
     if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { return '' }
@@ -243,8 +247,8 @@ try {
             if (-not $readBackBy.ContainsKey($w) -or $readBackBy[$w] -ge $i) { continue }
             if ((Get-FileSha $w) -eq $readBackAt[$w]) { continue }
             $j = $readBackBy[$w]
-            if ($againFrom.ContainsKey($j)) { $stopped = '{0} changed {1} again after {2} ran on it a second time' -f $steps[$i].tool, $w, $steps[$j].tool; break }
-            $againFrom[$j] = $true
+            if ($againFrom.ContainsKey($w)) { $stopped = '{0} changed {1} again after {2} ran on it a second time' -f $steps[$i].tool, $w, $steps[$j].tool; break }
+            $againFrom[$w] = $true
             Say ('{0} changed {1}, which {2} read, so the chain runs again from step {3}' -f $steps[$i].tool, $w, $steps[$j].tool, ($j + 1)) 'Yellow'
             if ($from -lt 0 -or $j -lt $from) { $from = $j }
         }
