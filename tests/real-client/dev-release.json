@@ -39,7 +39,7 @@
       "menu": "RaceSex Menu",
       "open": true,
       "timeout": 90000,
-      "skip": 8,
+      "skip": 11,
       "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the creation steps are skipped"
     },
     {
@@ -57,13 +57,32 @@
       "menu": "MessageBoxMenu",
       "open": true,
       "timeout": 5000,
-      "skip": 1,
-      "why": "a question before the face is kept, when there is one"
+      "skip": 2,
+      "why": "the question whether the face is done, when there is one"
     },
     {
       "do": "key",
       "code": 28,
       "why": "Enter takes the box's first answer"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "MessageBoxMenu",
+      "open": false,
+      "timeout": 5000,
+      "why": "the question is answered"
+    },
+    {
+      "do": "page",
+      "why": "a second and a half for the name box, which is inside the race menu and says no menu of its own",
+      "timeout": 15000,
+      "js": "(function(){var k='__ts5197name';window[k]=window[k]||Date.now();return Date.now()-window[k]>1500;})()"
+    },
+    {
+      "do": "key",
+      "code": 28,
+      "why": "Enter accepts the name the box holds"
     },
     {
       "do": "wait",
