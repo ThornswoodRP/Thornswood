@@ -17,6 +17,12 @@
   holds to the launcher's) and the plugins Skyrim.ccc beside Data names. A
   master in Data that is neither is reported against each enabled plugin
   that needs it, as switched off.
+
+  Exit 0 when every plugin plugins.txt enables has its masters in Data. Exit 1
+  when an enabled plugin has a missing master, or when Data or plugins.txt is
+  missing or cannot be read (#4760). A plugin with a missing master that
+  plugins.txt leaves disabled is listed but does not fail the run, because
+  nothing loads it.
 #>
 #Requires -Version 7
 param(
@@ -57,9 +63,13 @@ Get-ChildItem -LiteralPath $Data -File |
 
 $enabled = @{}
 $pl = $Plugins
+# Whether plugins.txt was read whole. Without it every plugin counts as
+# disabled, so the verdict below means nothing and the run cannot pass.
+$pluginsRead = $false
 if (Test-Path $pl) {
-    Get-Content $pl | Where-Object { $_ -match '^\*' } |
+    Get-Content $pl -ErrorVariable plError | Where-Object { $_ -match '^\*' } |
         ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
+    $pluginsRead = -not $plError
 }
 
 # What the game loads: what plugins.txt switches on, the five base masters,
@@ -118,6 +128,7 @@ if ($present.Count -eq 0) {
     if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
     exit 1
 }
+$crashes = 0
 if (-not $problems) {
     # THE COUNT IS THE POINT. The old line said everything was fine whether it
     # had read ninety nine plugins or none, which is how it spent weeks
@@ -126,6 +137,7 @@ if (-not $problems) {
                 "$($enabled.Count) of them enabled, every dependency present.") -ForegroundColor Green
 } else {
     $live = @($problems | Where-Object State -eq 'ENABLED')
+    $crashes = $live.Count
     $problems | Sort-Object State, Plugin | Format-Table -AutoSize
     if ($live) {
         Write-Host ("{0} ENABLED plugin(s) have a missing master. That crashes at load." -f $live.Count) -ForegroundColor Red
@@ -136,3 +148,9 @@ if (-not $problems) {
         Write-Host "all affected plugins are already disabled. nothing will crash." -ForegroundColor Yellow
     }
 }
+
+# What it found is the exit code (#4760). Until then a crash at load was
+# printed in red and the run still exited 0, so a script or harness that ran
+# this read a pass.
+if ($crashes -or -not $pluginsRead) { exit 1 }
+exit 0
