@@ -2,8 +2,8 @@
   LoadOrder.ps1
 
   The load order as the game counts it, and how to put a plugin list into the
-  server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1
-  and Check-Manifest.ps1 in scripts\mods, and by Check-ShipReady.ps1,
+  server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1,
+  Check-Manifest.ps1 and Find-MissingMasters.ps1 in scripts\mods, and by Check-ShipReady.ps1,
   Publish-Update.ps1, Scrub-Feed.ps1 and Ship.ps1 in scripts\release, and by
   the harnesses test-4735-revision-readers.ps1, test-bad-json-records.ps1 and
   test-collection-export.ps1 in scripts\tests; for
