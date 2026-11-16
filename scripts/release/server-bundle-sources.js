@@ -86,8 +86,7 @@ function readText(p) {
 module.exports = { bundleSourceProblems: bundleSourceProblems };
 
 if (require.main === module) {
-  const code = cli();
-  if (code !== undefined) process.exitCode = code;
+  process.exitCode = cli();
 }
 // Run as a program. A function, so a stop is a return and not node's exit
 // function, which can hang on Node 24 (#6036).
