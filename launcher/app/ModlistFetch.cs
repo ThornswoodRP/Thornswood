@@ -32,6 +32,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
@@ -103,9 +104,7 @@ namespace Thornswood
         {
             string dir = Path.Combine(tools, Folder);
             string exe = Path.Combine(dir, Kept[0].Name);
-            bool all = true;
-            foreach (Pin k in Kept) if (!Holds(Path.Combine(dir, k.Name), k)) all = false;
-            if (all) return exe;
+            if (Kept.All(k => Holds(Path.Combine(dir, k.Name), k))) return exe;
 
             string work = Path.Combine(tools, Folder + ".fetch");
             if (Directory.Exists(work)) Directory.Delete(work, true);
