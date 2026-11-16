@@ -162,8 +162,8 @@ namespace Thornswood.Layout
                 if (!index.TryGetValue(w, out list)) index[w] = list = new List<int>();
                 list.Add(at);
             }
-            var ms = new MemoryStream();
-            var bw = new BinaryWriter(ms, Encoding.UTF8);
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
             bw.Write(Encoding.ASCII.GetBytes("OCTODELTA"));
             bw.Write((byte)1);
             bw.Write("SHA1");
