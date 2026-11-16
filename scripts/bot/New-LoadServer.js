@@ -243,12 +243,14 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
 // The hold price lists the factions and businesses submitted at the drop
-// boxes, kept in the books file (staff-spells.ts). A guild trader quotes its
-// buys, sells and the pay of every commission from them, and with no list
-// there is no quote, by design (docs/systems/merchants-guild.md). The copy
-// once left this file out, so every commission on it said "No submitted buy
-// price" whatever dev held, and the crowd could take no work (#6180).
+// boxes, kept in the books file (staff-spells.ts), which set what a guild
+// trader buys and sells, and the reward prices staff set for guild work
+// beside it (#6180), which set what a commission pays; a good staff never
+// changed pays its starting price from the gamemode's tables. The copy once
+// left the books file out, and every commission on it said "No submitted buy
+// price" whatever dev held (#6180).
 const PRICE_BOOKS = 'books.json';
+const REWARD_PRICES = 'commission-rewards.json';
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
@@ -374,12 +376,16 @@ function fromInstalled(o) {
   const books = path.join(theirPrivate, PRICE_BOOKS);
   const prices = fs.existsSync(books) ? priceLists(books) : { lists: 0, holds: [] };
   if (fs.existsSync(books)) { fs.copyFileSync(books, path.join(out, 'private', PRICE_BOOKS)); }
+  const rewards = path.join(theirPrivate, REWARD_PRICES);
+  const rewardsSet = fs.existsSync(rewards) ? Object.keys((readJson(rewards) || {}).items || {}).length : 0;
+  if (fs.existsSync(rewards)) { fs.copyFileSync(rewards, path.join(out, 'private', REWARD_PRICES)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
     ' seats, ' + order.length + ' plugins, its world in ' + (settings.databaseDriver === 'mongodb' ? settings.databaseName : 'a folder of its own') + ', engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
     ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : '') +
-    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list'));
-  return { out, engine, settings, prices };
+    ', ' + (prices.lists ? prices.lists + ' submitted price list(s) at ' + prices.holds.join(' ') : 'no submitted price list') +
+    ', ' + (rewardsSet ? rewardsSet + ' guild reward price(s) set by staff' : 'the starting guild reward prices'));
+  return { out, engine, settings, prices, rewardsSet };
 }
 
 async function main() {

@@ -9,16 +9,16 @@ const terms={hash:'b'.repeat(64),hours:12,goods:[
  {item:{baseId:100,name:'Iron Ingot'},count:2,unit:3},
  {item:{baseId:101,name:'Silver Ingot'},count:1,unit:4}
 ]};
-const accepted=state.reserve(undefined,human,job,terms,at,250);
+const accepted=state.reserve(undefined,human,job,terms,at);
 assert.equal(accepted.ok,true);assert.equal(accepted.next.v,2);assert.equal(state.reserved(accepted.next),10);
 assert.deepEqual(accepted.next.held[state.key(human,job)].goods,terms.goods);
 const done=state.finish(accepted.next,human,job,accepted.token,at+1);
 assert.deepEqual(done.next.cool[state.key(human,job)],[at+1,12]);
-assert.equal(state.reserve(done.next,human,job,terms,at+12*3600000,250).why,'cooldown');
-assert.equal(state.reserve(done.next,human,job,terms,at+1+12*3600000,250).ok,true);
+assert.equal(state.reserve(done.next,human,job,terms,at+12*3600000).why,'cooldown');
+assert.equal(state.reserve(done.next,human,job,terms,at+1+12*3600000).ok,true);
 const legacyJob='q-whiterun-smith-straps',legacyTerms={hash:'a'.repeat(64),item:{baseId:100,name:'Iron Ingot'},count:1,unit:3};
-const old=state.reserve(undefined,human,legacyJob,legacyTerms,at,250);
-const mixed=state.reserve(old.next,human,job,terms,at,250);
+const old=state.reserve(undefined,human,legacyJob,legacyTerms,at);
+const mixed=state.reserve(old.next,human,job,terms,at);
 assert.equal(mixed.next.v,2);assert.deepEqual(mixed.next.held[state.key(human,legacyJob)],old.next.held[state.key(human,legacyJob)]);
 const oldPaid=state.finish(mixed.next,human,legacyJob,old.token,at);
 assert.equal(oldPaid.next.cool[state.key(human,legacyJob)],at,'old jobs retain their original six-hour timestamp representation');
@@ -31,11 +31,11 @@ for(const defect of ['duplicate','gold','hours','item','unit','sparse']) {
  if(defect==='item')invalid.goods[0].item.baseId=15;
  if(defect==='unit')invalid.goods[0].unit=null;
  if(defect==='sparse')delete invalid.goods[0];
- assert.equal(state.reserve(undefined,human,job,invalid,at,250).ok,false,defect);
+ assert.equal(state.reserve(undefined,human,job,invalid,at).ok,false,defect);
 }
 const golden=require('../../tests/fixtures/merchant-prebundle-transfers.json');
 {
- const f=ctx.fixture(),made=state.reserve(undefined,human,legacyJob,legacyTerms,at,250);
+ const f=ctx.fixture(),made=state.reserve(undefined,human,legacyJob,legacyTerms,at);
  f.states.get(1).commissions=made.next;
  const offer=f.offer();offer.kind='commission';offer.next.commissions=state.finish(made.next,human,legacyJob,made.token,at).next;
  const s=settlement.createSettlement({purses:f.purses,transfer:f.transfer,world:'dev:test-ledger',now:()=>at});
@@ -48,7 +48,7 @@ function fixture(){
  const expected=copy(f.inv),first=settlement.takeEntries(expected,100,2),second=settlement.takeEntries(first.inventory,101,1);
  const next=state.finish(accepted.next,human,job,accepted.token,at);
  const offer={merchantId:1,humanId:10,profileId:7,kind:'commission',previous:copy(f.states.get(1)),expected,debit:second.inventory,
-  credit:[{baseId:15,count:10}],next:{purse:240,supply:{},commissions:next.next,
+  credit:[{baseId:15,count:10}],next:{purse:250,supply:{},commissions:next.next,
    stock:first.entries.concat(second.entries).map(entry=>({baseId:entry.baseId,count:entry.count,
     name:entry.baseId===100?'Iron Ingot':'Silver Ingot',entry}))}};
  let time=at;const make=()=>settlement.createSettlement({purses:f.purses,transfer:f.transfer,world:'dev:test-ledger',now:()=>time});
@@ -68,7 +68,7 @@ for(const defect of ['missing-part','wrong-label','wrong-quantity','wrong-total'
  if(defect==='missing-part'){w.offer.debit.entries.find(row=>row.baseId===101).count=2;w.offer.next.stock.pop();}
  if(defect==='wrong-label')w.offer.next.stock[1].name='Another metal';
  if(defect==='wrong-quantity'){w.offer.debit.entries=w.offer.debit.entries.filter(row=>row.baseId!==101);w.offer.next.stock[1].count=2;w.offer.next.stock[1].entry.count=2;}
- if(defect==='wrong-total'){w.offer.credit[0].count=11;w.offer.next.purse=239;}
+ if(defect==='wrong-total')w.offer.credit[0].count=11;
  if(defect==='changed-cadence')w.offer.next.commissions.cool[state.key(human,job)][1]=6;
  assert.throws(()=>w.make().begin(w.offer),/commission|conserve/i,defect);
  assert.deepEqual(copy(w.f.calls),[],'bad bundles never partially charge');
