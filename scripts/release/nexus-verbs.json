@@ -91,6 +91,7 @@
     "Install-NexusRevision": {
       "script": "scripts/release/Install-NexusRevision.ps1",
       "reads": [
+        "launcher/app/XxHash64.cs",
         "scripts/dev/OwnPlugins.js",
         "scripts/mods/Audit-ModMenus.js",
         "scripts/mods/Check-SkyUIMenus.js",
