@@ -126,7 +126,7 @@
           '(profile ' + ask.pid + '):', String(ask.why || ''));
     var l = g.__thornswoodLedger;
     if (took > 0 && l && typeof l.takeBack === 'function') {
-      try { l.takeBack(actorId, ask.record, took, String(ask.byName || '')); }
+      try { l.takeBack(actorId, ask.record, took, String(ask.byName || ''), baseId); }
       catch (e4) { tblog('the gold and trade log would not take the take back:', String((e4 && e4.message) || e4)); }
     }
     return { id: id, ok: true, took: took, why: took < count ? 'they held ' + took : '' };

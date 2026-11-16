@@ -211,11 +211,13 @@
   /*
     Gold or a thing an admin took back out of a character (#6271, the take
     back block), so a search of the person shows it beside what it undid.
+    Gold is told by the base id the take back resolved, as every other row
+    here tells it (GOLD), so any spelling of gold's record counts as gold.
   */
-  function takeBack(actorId, record, count, byName) {
+  function takeBack(actorId, record, count, byName, baseId) {
     var n = Math.floor(Number(count) || 0);
     if (!(n > 0)) { return null; }
-    var isGold = String(record || '').toLowerCase() === 'f:skyrim.esm';
+    var isGold = (Number(baseId) || 0) === GOLD;
     return add({ kind: 'takeback', from: person(actorId), to: null, gold: isGold ? n : 0,
                  things: isGold ? [] : [{ n: String(record || ''), desc: String(record || ''), c: n }],
                  source: 'staff' + (byName ? ': ' + byName : ''), where: cellOf(actorId), flagged: false });
