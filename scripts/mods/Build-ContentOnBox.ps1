@@ -243,9 +243,16 @@ if ($built) {
         "; the collection's plugins from $Store")
     # Quoted, so each goes to the runner as one of the tool's words and never
     # as a parameter of its own.
+    # A step that ends other than 0 stops the build with the step's own
+    # reason: the runner's last STOP line (Run-OnBox.ps1 says the tool's
+    # last, #6351). What the runner says is passed on as it is said.
     function Invoke-Step([string]$Tool, [string[]]$Words, [string]$Then) {
-        & $Runner $Tool @Words -Server $Server -Collection $Store
-        if ($LASTEXITCODE -ne 0) { Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $LASTEXITCODE. $Then") }
+        $said = @(& $Runner $Tool @Words -Server $Server -Collection $Store 6>&1 | ForEach-Object { $t = [string]$_; Write-Host $t; $t })
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            $why = @($said | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+            Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $code" + $(if ($why) { ': ' + $why.Substring(6).TrimEnd('.') } else { '' }) + ". $Then")
+        }
         Save-Step (Split-Path -Leaf $Tool)
     }
     if ($Stations) {
@@ -264,7 +271,9 @@ if ($built) {
         Write-Host ("the stations are measured over the build $($from[0].Build.key) of $($from[0].Build.commit), $(@($from[0].Build.files.PSObject.Properties).Count) files")
         Invoke-Step 'scripts/dev/Build-StationSites.py' @('--data', '{data}') 'The plugin was not built and nothing was measured.'
     }
-    Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
+    # The plugin names its fine dishes from the load order (#6351), so it is
+    # given the order's plugin list as well as its data folder.
+    Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}', '--plugins', '{plugins}') 'The chain did not run and nothing was kept.'
     # The catalogue first, in the build's order; the chain holds its plugin
     # list to the catalogue's order (Rebuild-ContentTables.ps1). Every build,
     # since the order is records\load-order.json's and not the last build's

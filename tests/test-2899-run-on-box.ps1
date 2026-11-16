@@ -236,6 +236,18 @@ Yes 'a plugin the build makes that the commit does not hold yet is left out of t
 Yes 'an error the run does not catch ends it on a STOP line (#6351)' ($far.Contains("trap { 'STOP. ' + `$_.Exception.Message"))
 $runSrc = Get-Content -LiteralPath $runOnBox -Raw
 Yes 'and Run-OnBox.ps1 hands that STOP line on when the run ends with no EXIT' ($runSrc.Contains("the run on the box stopped before the tool ended, so nothing was brought back: ") -and $runSrc.Contains("-Own `$own"))
+# A tool that ends other than 0 says why on a last STOP line of Run-OnBox's
+# own (#6351): its last STOP line, else the last line it printed, which for a
+# Python tool that died is its error. Add-ContentRecords.py's on 16 Nov 2026
+# said only "ended with exit 1".
+$died = @('the run''s folder', '-------- scripts/mods/Add-ContentRecords.py --------', 'Thornswood-Content.esp, from its sources (#5191)',
+    'Traceback (most recent call last):', '  File "x.py", line 1, in <module>', "FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'", '', '-------- end --------', 'CHANGED x', 'EXIT 1')
+Yes 'Get-ThornswoodToolReason takes the last line a tool printed when it printed no STOP line' ((Get-ThornswoodToolReason $died) -ceq "FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'")
+$said = @('STOP. not this one, the run''s', '-------- t --------', 'STOP. the first', 'STOP. the second. Nothing was written.', 'a line after', '-------- end --------', 'EXIT 1')
+Yes 'and its last STOP line, without the STOP, when it printed one, and nothing from outside its own lines' ((Get-ThornswoodToolReason $said) -ceq 'the second. Nothing was written.')
+Yes 'and nothing when it printed nothing' ((Get-ThornswoodToolReason @('-------- t --------', '', '-------- end --------', 'EXIT 2')) -ceq '')
+Yes 'Run-OnBox.ps1 says that reason on a STOP line, last, when the tool ended other than 0' (
+    $runSrc -match "(?s)if \(\`$code -ne 0\) \{\s*\`$why = Get-ThornswoodToolReason \`$lines\s*if \(\`$why\) \{ Say \('STOP\. ' \+ \`$why\) 'Yellow' \}\s*\}\s*exit \`$code\s*$")
 $runText = Get-Content -LiteralPath $runOnBox -Raw
 # The keeper is started and told the run is over in OnBox.ps1, for every
 # script that lands files on the box (#3035), and Run-OnBox.ps1 goes through it.

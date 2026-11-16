@@ -87,6 +87,28 @@ catch { 'STOP. the run''s folder could not be held through its lock, so nothing 
 "@
 }
 
+# Why a tool ended with an exit other than 0, from what the run said (#6351):
+# the last STOP line the tool printed between the run's '-------- <tool>
+# --------' and '-------- end --------' lines, else the last line it printed
+# at all, which for a Python tool that died is its error's own line (the run
+# prints the tool's output, then its errors). '' when it printed nothing. On
+# 16 Nov 2026 Add-ContentRecords.py died on a file the box's checkout no longer
+# had, and the content build's status said only "ended with exit 1".
+function Get-ThornswoodToolReason([string[]]$Lines) {
+    $in = $false
+    $said = New-Object 'Collections.Generic.List[string]'
+    foreach ($l in @($Lines)) {
+        $t = ([string]$l).Trim()
+        if ($t -ceq '-------- end --------') { $in = $false; continue }
+        if ($t -cmatch '^-------- .+ --------$') { $in = $true; $said.Clear(); continue }
+        if ($in -and $t) { $said.Add($t) }
+    }
+    $stop = @($said | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+    if ($stop) { return $stop.Substring(6) }
+    if ($said.Count) { return $said[$said.Count - 1] }
+    return ''
+}
+
 # -Run is the run's own folder on the box, holding tools.zip; -ServerRoot the
 # game server whose plugins folder is copied; -Tool the repository path of
 # the tool, a .py run by Python, a .js by node or a .ps1 by PowerShell 7
