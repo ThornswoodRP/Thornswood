@@ -201,6 +201,23 @@ function Remote($script) {
   return Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $script
 }
 
+# What the box said for -Install and -SetWebhook, a line each, and whether it
+# failed: a FAILED line, or nothing back at all. Each of their steps on the
+# box says FAILED with why when it does not work, so this is the one place
+# that turns that into the exit code (#5155, #4207). Called with @(...), so
+# an answer of nothing stays empty and is not taken for one empty line.
+function Show-BoxLines([object[]]$out) {
+  $failed = -not @($out).Count
+  if ($failed) { Say '  FAILED    the box said nothing back' 'Red' }
+  foreach ($l in $out) {
+    $c = 'Gray'
+    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
+    if ("$l" -match '^(wrote|made|ran|saved|posted)') { $c = 'Green' }
+    Say "  $l" $c
+  }
+  return $failed
+}
+
 Write-Host ''
 Write-Host '  THORNSWOOD  -  keep the services up' -ForegroundColor White
 
@@ -1325,13 +1342,9 @@ try {
   $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($put))
   $out = $url | Invoke-ThornswoodNative { $input | & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" } 2>&1
   $url = $null
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red' }
-    if ("$l" -match '^(saved|posted)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  $failed = Show-BoxLines @($out)
   Write-Host ''
+  if ($failed) { Die 'The webhook is not set as it should be: the FAILED line above says which step. Run -SetWebhook again once that is mended.' }
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
@@ -1349,10 +1362,14 @@ if ($Install) {
   $out = Remote @"
 `$ErrorActionPreference = 'Continue'
 $(Get-ThornswoodLockedFolderScript $Root)
-[IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
-'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
-[IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
-'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+try {
+  [IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
+  'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
+} catch { 'FAILED    $Root\watch.ps1 could not be written: ' + `$_.Exception.Message }
+try {
+  [IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
+  'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+} catch { 'FAILED    $Root\say-staff.ps1 could not be written: ' + `$_.Exception.Message }
 
 # Every five minutes, as SYSTEM, so it keeps going when nobody is logged in.
 #
@@ -1370,12 +1387,18 @@ $(Get-ThornswoodLockedFolderScript $Root)
 `$p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 try {
   Register-ScheduledTask -TaskName '$Task' -Action `$a -Trigger `$tr -Settings `$s -Principal `$p -Force -ErrorAction Stop | Out-Null
-  'made      the task, every five minutes, at priority ' + (Get-ScheduledTask -TaskName '$Task').Settings.Priority
+  # Read back, so a task the scheduler did not keep is said and not taken
+  # for registered (#4207).
+  `$made = Get-ScheduledTask -TaskName '$Task' -ErrorAction SilentlyContinue
+  if (`$made) { 'made      the task, every five minutes, at priority ' + `$made.Settings.Priority }
+  else { 'FAILED    the task is not there after registering it' }
 } catch { 'FAILED    the task could not be registered: ' + `$_.Exception.Message }
 
 # Run it once now so the log has something in it and any problem shows up
 # here rather than in five minutes when nobody is watching.
-`$null = & schtasks /run /tn '$Task' 2>&1
+`$said = & schtasks /run /tn '$Task' 2>&1
+if (`$LASTEXITCODE -ne 0) { 'FAILED    its first run was refused: ' + ((@(`$said) | ForEach-Object { "`$_" }) -join ' ') }
+else { 'ran       the task once' }
 Start-Sleep -Seconds 8
 if (Test-Path '$Root\watch.log') {
   'first run:'
@@ -1389,14 +1412,10 @@ if (Test-Path '$Root\alerts-webhook.txt') {
 "@
 
   # A FAILED line, or nothing back, is exit 1, so a run through the gate
-  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work (#5155).
-  $failed = -not @($out).Count
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
-    if ("$l" -match '^(wrote|made)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work
+  # (#5155), and nothing here says the watchdog runs when it may not (#4207).
+  $failed = Show-BoxLines @($out)
+  if ($failed) { Die 'The watchdog is not set up as it should be: the FAILED line above says which step. Run -Install again once that is mended.' }
 
   Head 'From now on'
   Say '  Anything that stops gets started again within five minutes,' 'DarkGray'
@@ -1405,7 +1424,6 @@ if (Test-Path '$Root\alerts-webhook.txt') {
   Say '  Run this script with no switches to see what it has been doing.' 'DarkGray'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
-  if ($failed) { exit 1 }
   exit 0
 }
 
