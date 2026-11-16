@@ -121,8 +121,18 @@ function Get-ThornswoodOnBoxScript {
         # every file a step of the content chain writes outside these (#3425).
         [string[]]$Watch = @('game', 'records', 'docs/systems'),
         [string[]]$Order = @(),
-        [string]$Collection = ''
+        [string]$Collection = '',
+        # The plugins this repository makes in game\content. The server's copy
+        # of each is left out of the run's Data folder whether or not the
+        # commit holds one yet: nothing generated is committed (#5191), so the
+        # first step of a content build, which makes the plugin, runs from a
+        # commit with no game\content at all (#6351).
+        [string[]]$Own = @('Thornswood-Content.esp')
     )
+    foreach ($n in $Own) {
+        if ($n -notmatch '^[^\\/:*?"<>|'' \r\n][^\\/:*?"<>|''\r\n]*\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
+    }
+    $ownText = (@($Own | ForEach-Object { "'" + $_.ToLowerInvariant() + "'" }) -join ', ')
     if ([bool]$Order.Count -ne [bool]$Collection) { throw '-Order and -Collection go together: the record''s order is run with the record''s plugins.' }
     foreach ($n in $Order) {
         if ($n -notmatch '^[^\\/:*?"<>|\r\n]+\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
@@ -142,6 +152,10 @@ function Get-ThornswoodOnBoxScript {
     return @"
 `$ErrorActionPreference = 'Stop'
 `$ProgressPreference = 'SilentlyContinue'
+# An error nothing below catches says what it was on a STOP line, which
+# Run-OnBox.ps1 hands on, instead of ending the run with no EXIT and no
+# reason (#6351).
+trap { 'STOP. ' + `$_.Exception.Message + ' (run.ps1 line ' + `$_.InvocationInfo.ScriptLineNumber + ')'; exit 2 }
 $(Get-ThornswoodOnBoxHoldScript -Run $Run)
 `$repo = Join-Path `$run 'repo'
 `$data = Join-Path `$run 'data'
@@ -150,7 +164,9 @@ if (-not (Test-Path -LiteralPath `$plugins)) { 'STOP. there is no ' + `$plugins 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path `$run 'tools.zip'), `$repo)
 New-Item -ItemType Directory -Force -Path `$data | Out-Null
-`$ours = @(Get-ChildItem -LiteralPath (Join-Path `$repo 'game\content') -File | ForEach-Object { `$_.Name.ToLowerInvariant() })
+`$ownDir = Join-Path `$repo 'game\content'
+`$ownHere = @(if (Test-Path -LiteralPath `$ownDir -PathType Container) { Get-ChildItem -LiteralPath `$ownDir -File })
+`$ours = @(@($ownText) + @(`$ownHere | ForEach-Object { `$_.Name.ToLowerInvariant() }))
 foreach (`$f in @(Get-ChildItem -LiteralPath `$plugins -File)) {
   if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 }
@@ -162,7 +178,7 @@ if (`$collection) {
     if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data -Force; `$laid++ }
   }
 }
-foreach (`$f in @(Get-ChildItem -LiteralPath (Join-Path `$repo 'game\content') -File)) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
+foreach (`$f in `$ownHere) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 if (`$collection) { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with the ' + `$laid + ' of the collection''s store at ' + `$collection + ' over them and this commit''s own in place of the server''s' }
 else { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with this commit''s own in place of the server''s' }
 `$store = '$ArchiveStore'

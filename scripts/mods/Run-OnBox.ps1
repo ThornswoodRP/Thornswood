@@ -159,6 +159,9 @@ if ($Collection) {
 # still to make, and goes up only once that step's run committed it
 # (Build-ContentOnBox.ps1, Save-Step).
 $paths = Select-ThornswoodSentPaths -Repo $repo -Commit 'HEAD' -Paths $paths
+# The plugins the build makes, whose server copies the run leaves out of its
+# Data folder even while the commit has none of them yet (OnBox.ps1, #6351).
+$own = @(Get-ThornswoodBuiltPaths -Repo $repo | Where-Object { $_ -cmatch '^game/content/[^/]+\.(esp|esm|esl)$' } | ForEach-Object { $_.Substring('game/content/'.Length) })
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
@@ -175,7 +178,7 @@ try {
     $runFar = $box.Far
     foreach ($l in $box.Said) { Say ('box  ' + $l) 'DarkGray' }
     if (-not $box.Made) { throw ('could not make ' + $run + ' on the box. What ssh said is above.') }
-    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection
+    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection -Own $own
     # The run's own script goes into its folder, so it goes with the folder.
     $farFile = Join-Path $local 'run.ps1'
     [IO.File]::WriteAllText($farFile, $farRun, (New-Object Text.UTF8Encoding($true)))
@@ -192,7 +195,14 @@ try {
         if ($l -cmatch '^EXIT (-?\d+)\s*$') { $exit = [int]$Matches[1]; continue }
         Write-Host $l
     }
-    if ($null -eq $exit) { throw 'the box did not say how the tool ended, so nothing was brought back.' }
+    if ($null -eq $exit) {
+        # The run stopped before the tool ended; its STOP line says why
+        # (OnBox.ps1), and goes on in what this throws, so a content build's
+        # status carries it (#6351).
+        $why = @($lines | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+        if ($why) { throw ('the run on the box stopped before the tool ended, so nothing was brought back: ' + $why.Substring(6)) }
+        throw 'the box did not say how the tool ended, so nothing was brought back.'
+    }
     $code = $exit
 
     if ($changed.Count) {
