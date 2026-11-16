@@ -121,6 +121,8 @@ function New-Sandbox([string]$chainText = $chain, [string[]]$order = @('A.esp', 
     [void][IO.Directory]::CreateDirectory((Join-Path $root 'game/content'))
     return $root
 }
+# Out is the run's whole output as one string, which Windows wraps at the
+# console's width, so a check reads it with its white space taken out.
 function Invoke-Chain([string]$root, [string[]]$more = @()) {
     $shell = (Get-Process -Id $PID).Path
     $out = & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts/mods/Rebuild-ContentTables.ps1') @more 2>&1 | Out-String
@@ -161,15 +163,15 @@ try {
     Put $e 'game/data/npc-population.json' (Population @('A.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp'))
     $r = Invoke-Chain $e
     Yes '4 a catalogue built in another order than the record stops the run before any builder, naming where they part' (
-        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'npc-population\.json is not built in the load order the commit records' -and
-        $r.Out -match 'at place 8 it has Thornswood-Last\.esp where the record has B\.esp')
+        $r.Code -ne 0 -and $r.Ran -eq '' -and ($r.Out -replace '\s', '') -match 'npc-population\.jsonisnotbuiltintheloadorderthecommitrecords' -and
+        ($r.Out -replace '\s', '') -match 'atplace8ithasThornswood-Last\.espwheretherecordhasB\.esp')
     $f = New-Sandbox
     $roots += $f
     $other = Join-Path $f 'other.txt'
     [IO.File]::WriteAllText($other, "*A.esp`r`n*B.esp`r`n*Thornswood-Content.esp`r`n*Thornswood-Last.esp`r`n")
     $r = Invoke-Chain $f @('-PluginsTxt', $other)
     Yes '4 and so does a -PluginsTxt that is not the record''s order' (
-        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'is not the load order the commit records')
+        $r.Code -ne 0 -and $r.Ran -eq '' -and ($r.Out -replace '\s', '') -match 'isnottheloadorderthecommitrecords')
     $g = New-Sandbox
     $roots += $g
     Put-Record $g @('A.esp', 'Thornswood-Content.esp', 'B.esp', 'New.esp', 'Thornswood-Last.esp')
