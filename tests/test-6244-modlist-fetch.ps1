@@ -33,7 +33,23 @@
        whose size GitHub lists as other than the modlist's (before asking for
        the file), one GitHub's sha256 does not match (leaving no .part), an
        address that is not a file of a GitHub Release, and a list that names
-       an asset address outside that repository.
+       an asset address outside that repository;
+    P  ModlistFetch.FromPlaces takes an archive already on this PC, under any
+       name, into downloads under its own name once its size and xxHash64 are
+       the modlist's: kept where it was in another manager's folder (Vortex's),
+       moved out of the person's Downloads; a file of the size with other bytes
+       is left alone, a folder that is not there is passed over, and what is
+       still missing comes back in its order;
+    V  ModlistFetch.VortexDownloads works out Vortex's downloads folder for
+       Skyrim Special Edition the way Vortex does (its default, {USERDATA}
+       and {USERNAME} in any case, a relative setting under Vortex's folder),
+       and VortexProfileState.DownloadsSetting reads the setting out of a
+       state.v2 that tests\fixtures\vortex-state-rows.py writes, or nothing
+       when Vortex never changed it;
+    H  ModlistFetch.ByHand opens the Nexus page of the first file still
+       missing, takes each as it lands in the folder, then opens the next,
+       until none is missing; a stop ends it with what is left, and an
+       archive that is not a Nexus file is refused before any page opens.
 
   Builds the launcher from launcher\app\Thornswood.csproj with the modlist
   writer beside it (tests\Launcher-Csc.ps1) and calls these by reflection, with GitHub.OtherApi at the stand-in.
@@ -331,6 +347,113 @@ try {
     Forget; Serve-Mo2 $mo2B -1 '' 'http://127.0.0.1:9/elsewhere/21'
     $why = Stop-Of { By $a $dlA }
     Yes 'A7 a list naming an asset address outside that repository is refused' ($why.Contains('which is not one of ModOrganizer2/modorganizer''s Release files') -and @(Get-ChildItem -LiteralPath $dlA).Count -eq 0) $why
+
+    # ------------------------------------------------------------------ P ----
+    function New-Nexus([string]$name, [byte[]]$b, [long]$mod, [long]$file) {
+        $a = New-Object Thornswood.ModlistArchive
+        $a.Name = $name; $a.Size = $b.Length; $a.Hash = [Thornswood.XxHash64]::OfBytes($b); $a.Kind = 'nexus'; $a.Game = 'SkyrimSpecialEdition'; $a.ModId = $mod; $a.FileId = $file; $a.ModName = $name
+        return $a
+    }
+    function Page-Of($a) { return [string]$MF.GetMethod('Page').Invoke($null, [object[]]@($a.psobject.BaseObject)) }
+    $PlaceT = $asm.GetType('Thornswood.ModlistFetch+Place')
+    function New-Place([string]$folder, [bool]$move) {
+        $p = [Activator]::CreateInstance($PlaceT)
+        $p.Folder = $folder; $p.Move = $move
+        return $p
+    }
+    function Archives($list) {
+        $l = New-Object 'Collections.Generic.List[Thornswood.ModlistArchive]'
+        foreach ($x in $list) { $l.Add($x) }
+        return ,$l.psobject.BaseObject
+    }
+    function Places($list) {
+        $l = [Activator]::CreateInstance([Collections.Generic.List`1].MakeGenericType($PlaceT))
+        foreach ($x in $list) { $l.Add($x) }
+        return ,$l.psobject.BaseObject
+    }
+    $fromPlaces = $MF.GetMethods($flags) | Where-Object { $_.Name -eq 'FromPlaces' -and $_.IsPublic } | Select-Object -First 1
+    function Take-From($missing, $places, [string]$dl) { $argv = [object[]]@((Archives $missing).psobject.BaseObject, (Places $places).psobject.BaseObject, [string]$dl, $null)
+        return ,($fromPlaces.Invoke($null, $argv)) }
+
+    $oneB = [byte[]](1..90 | ForEach-Object { [byte]($_ * 3 % 256) })
+    $twoB = [byte[]](1..70 | ForEach-Object { [byte]($_ * 5 % 256) })
+    $sameSizeB = [byte[]]$oneB.Clone(); $sameSizeB[0] = 9
+    $threeB = [byte[]](1..50 | ForEach-Object { [byte]($_ * 7 % 256) })
+    $one = New-Nexus 'One-100-1-0.7z' $oneB 100 1000
+    $two = New-Nexus 'Two-200-2-0.zip' $twoB 200 2000
+    $three = New-Nexus 'Three-300-3-0.rar' $threeB 300 3000
+    $vx = Join-Path $T 'vortex-downloads'; $mydl = Join-Path $T 'my-downloads'; $dlP = Join-Path $T 'dl-places'
+    New-Item -ItemType Directory -Path $vx, $mydl -Force | Out-Null
+    [IO.File]::WriteAllBytes((Join-Path $vx 'One renamed by Vortex.7z'), $oneB)
+    [IO.File]::WriteAllBytes((Join-Path $vx 'not-one.7z'), $sameSizeB)
+    [IO.File]::WriteAllBytes((Join-Path $mydl 'Two-200-2-0.zip'), $twoB)
+    [IO.File]::WriteAllBytes((Join-Path $mydl 'unrelated.txt'), (Bytes 'something else'))
+    $left = Take-From @($one, $two, $three) @((New-Place (Join-Path $T 'not-there') $false), (New-Place $vx $false), (New-Place $mydl $true)) $dlP
+    $oneTo = Join-Path $dlP 'One-100-1-0.7z'; $twoTo = Join-Path $dlP 'Two-200-2-0.zip'
+    Yes 'P1 an archive in Vortex''s folder under another name is taken into downloads under its own name, and Vortex keeps its copy' ((Test-Path -LiteralPath $oneTo) -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($oneTo), $oneB) -and (Test-Path -LiteralPath (Join-Path $vx 'One renamed by Vortex.7z')))
+    Yes 'P2 an archive in the person''s Downloads is moved into downloads' ((Test-Path -LiteralPath $twoTo) -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($twoTo), $twoB) -and -not (Test-Path -LiteralPath (Join-Path $mydl 'Two-200-2-0.zip')))
+    Yes 'P3 a file of the size with other bytes, and files of other sizes, are left where they are' ((Test-Path -LiteralPath (Join-Path $vx 'not-one.7z')) -and (Test-Path -LiteralPath (Join-Path $mydl 'unrelated.txt')) -and @(Get-ChildItem -LiteralPath $dlP).Count -eq 2)
+    Yes 'P4 what is still missing comes back, and a folder that is not there is passed over' ($left.Count -eq 1 -and $left[0].Name -eq 'Three-300-3-0.rar')
+    $wp = New-Object Thornswood.Layout.Modlist
+    foreach ($x in @(@($one, $oneB), @($two, $twoB))) { $wp.AddNexusArchive($x[0].Name, $x[1].Length, $x[0].Hash, 'skyrimspecialedition', $x[0].ModId, $x[0].FileId, $x[0].Name, '1.0') }
+    $wp.Inline((Bytes 'x'), 'portable.txt', $false)
+    $wpf = Join-Path $T 'places.wabbajack'; $wp.Save($wpf)
+    Yes 'P5 so the install finds them there' ([Thornswood.ModlistInstall]::Missing([Thornswood.CollectionModlist]::Read($wpf), $dlP).Count -eq 0)
+
+    # ------------------------------------------------------------------ V ----
+    $vd = $MF.GetMethod('VortexDownloads', $flags)
+    $ud = Join-Path $T 'AppData-Vortex'
+    function Vd($setting) { return @($vd.Invoke($null, [object[]]@([string]$setting, [string]$ud, 'Ada'))) }
+    $default = [IO.Path]::Combine($ud, 'downloads', 'skyrimse')
+    $got = @(Vd $null)
+    Yes 'V1 with no setting, Vortex''s own default: its folder, downloads, skyrimse' ($got.Count -eq 1 -and $got[0] -eq $default) ($got -join ' | ')
+    $got = @(Vd ([IO.Path]::Combine('{UserData}', 'Mods for {USERNAME}')))
+    Yes 'V2 a setting with {UserData} and {USERNAME} in it, any case, then the default' ($got.Count -eq 2 -and $got[0] -eq [IO.Path]::Combine($ud, 'Mods for Ada', 'skyrimse') -and $got[1] -eq $default) ($got -join ' | ')
+    $got = @(Vd 'relative')
+    Yes 'V3 a relative setting is under Vortex''s own folder' ($got[0] -eq [IO.Path]::GetFullPath([IO.Path]::Combine($ud, 'relative', 'skyrimse'))) ($got -join ' | ')
+    $vcases = Join-Path $T 'vortex-cases'
+    $vspec = Join-Path $T 'vortex-cases.json'
+    $settingText = 'D:\Mods\{game}'
+    [IO.File]::WriteAllText($vspec, (ConvertTo-Json -Depth 6 -InputObject ([ordered]@{
+        'moved' = [ordered]@{ table = @([pscustomobject]@{ key = 'settings###downloads###path'; value = (ConvertTo-Json $settingText) }); log = @() }
+        'never' = [ordered]@{ table = @([pscustomobject]@{ key = 'settings###interface###language'; value = '"en"' }); log = @() }
+    })), $utf8)
+    $python = @('python', 'python3') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
+    if ($python) {
+        & $python (Join-Path $Repo 'tests/fixtures/vortex-state-rows.py') $vcases $vspec
+        $wrote = $LASTEXITCODE -eq 0
+        $VP = $asm.GetType('Thornswood.VortexProfileState')
+        $moved = $VP.GetMethod('DownloadsSetting').Invoke($null, @([IO.Path]::Combine($vcases, 'moved', 'Vortex', 'state.v2')))
+        $unset = $VP.GetMethod('DownloadsSetting').Invoke($null, @([IO.Path]::Combine($vcases, 'never', 'Vortex', 'state.v2')))
+        Yes 'V4 Vortex''s download folder setting is read out of its state, and is nothing when Vortex never changed it' ($wrote -and $moved -eq $settingText -and $null -eq $unset) "$moved | $unset"
+    } else { Skip 'V4 Vortex''s download folder setting is read out of its state (no python here for tests/fixtures/vortex-state-rows.py)' }
+
+    # ------------------------------------------------------------------ H ----
+    $byHand = $MF.GetMethod('ByHand', $flags)
+    function Hand($list, [string]$dl, $open, $stop) {
+        $argv = [object[]]@((Archives $list).psobject.BaseObject, [string]$watch, $dl, $open, $null, $stop, 10)
+        return ,($byHand.Invoke($null, $argv))
+    }
+    $watch = Join-Path $T 'watched'; $dlH = Join-Path $T 'dl-hand'
+    New-Item -ItemType Directory -Path $watch -Force | Out-Null
+    $script:opened = @()
+    $bytesOf = @{ (Page-Of $one) = @($one.Name, $oneB); (Page-Of $two) = @('Two (1).zip', $twoB); (Page-Of $three) = @($three.Name, $threeB) }
+    # The person: presses Manual Download on each page as it opens, and the
+    # browser saves it in the watched folder, the second under a name of its own.
+    $open = [Action[string]] { param($page) $script:opened += $page; $f = $bytesOf[$page]; [IO.File]::WriteAllBytes((Join-Path $watch $f[0]), [byte[]]$f[1]) }
+    $never = [Func[bool]] { $false }
+    $left = Hand @($one, $two, $three) $dlH $open $never
+    Yes 'H1 each Nexus page opens in turn, and each file is taken from the folder as it lands' ($left.Count -eq 0 -and ($script:opened -join ' ') -eq ((@($one, $two, $three) | ForEach-Object { Page-Of $_ }) -join ' ') -and @(Get-ChildItem -LiteralPath $dlH).Count -eq 3 -and @(Get-ChildItem -LiteralPath $watch).Count -eq 0) ($script:opened -join ' ')
+    Yes 'H2 the page is the file''s own on Nexus, with its Manual Download' ((Page-Of $one) -eq 'https://www.nexusmods.com/skyrimspecialedition/mods/100?tab=files&file_id=1000')
+    $script:opened = @()
+    $script:looks = 0
+    $soon = [Func[bool]] { $script:looks++; return $script:looks -gt 3 }
+    $nothing = [Action[string]] { param($page) $script:opened += $page }
+    $left = Hand @($one, $two) (Join-Path $T 'dl-hand-2') $nothing $soon
+    Yes 'H3 a stop ends it with what is left, the first page opened once' ($left.Count -eq 2 -and $script:opened.Count -eq 1)
+    $script:opened = @()
+    $why = Stop-Of { Hand @($one, (New-Http $mo2Url $mo2B)) $dlH $nothing $never }
+    Yes 'H4 an archive that is not a Nexus file is refused before any page opens' ($why.Contains('is not a Nexus file') -and $script:opened.Count -eq 0) $why
 }
 finally {
     $srv.Stop()
