@@ -124,7 +124,6 @@ launcher/tests/test-downgrade-says-why.ps1  not sorted yet, runs in the nightly 
 launcher/tests/test-downgrade-steam-log.ps1  not sorted yet, runs in the nightly (#2513)
 launcher/tests/test-feed-channel.js  not sorted yet, runs in the nightly (#2513)
 launcher/tests/test-header-video.js  not sorted yet, runs in the nightly (#2513)
-launcher/tests/test-must-be-light.js  not sorted yet, runs in the nightly (#2513)
 launcher/tests/test-play-progress.ps1  not sorted yet, runs in the nightly (#2513)
 launcher/tests/test-play-strip-art.js  not sorted yet, runs in the nightly (#2513)
 launcher/tests/test-play-stuck-game.ps1  not sorted yet, runs in the nightly (#2513)
