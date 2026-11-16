@@ -420,11 +420,11 @@ const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== en
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
 new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS', 'TROUBLE_FILE', 'ROSTER', 'INBOX',
-  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
+  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', 'PCS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
   path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
   path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
   path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
-  path.join(D, 'settings.json'));
+  path.join(D, 'settings.json'), path.join(D, 'pcs.json'));
 '@
     $siteSaid = @(& $node $driver $Repo $Site 2>&1 | ForEach-Object { "$_" }) -join "`n"
     Yes 'the site took its request as it started, and said so with counts' ($siteSaid -match 'deletion requests: 1 person\(s\): .*done, and the request is gone' -and -not (Test-Path (Join-Path $Site 'data\deletion-requests.json')))

@@ -55,6 +55,7 @@ const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
 const { searchLedger, takeLedger } = require('./ledger');
 const { askTakeBack, cleanTakeBackAsk, takeBackRows, takeBackTurn } = require('./takeback');
+const { notePc, pcsSharedBy, withSharedPcs } = require('./pcs');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
@@ -2945,6 +2946,10 @@ async function handle(req, res) {
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link', message:
       'This copy is not linked to a Discord account yet.' });
+    // The PC it asks from, before any refusal, so a banned account's PC is
+    // known too (pcs.js). A write that fails is said there and lets the
+    // pass go on: who shares a PC is for staff, not a door.
+    notePc(t.d, o.pc, Date.now());
     const pid = Number(o.profileId) || 0;
     if (!(pid > 0) || Math.floor(pid) !== pid) return sendJson(res, 400, { ok: false, why: 'profile', message:
       'No character was named.' });
@@ -3166,7 +3171,9 @@ async function handle(req, res) {
         // can do it), so the accounts and the records go to staff (w.dev,
         // which folds admin in). Notes, bans and PKs are staff's to read and
         // nobody else's: a hub member without a staff role gets none.
-        linked: w.dev ? Object.values(jsonFile(LINKED, {})) : [],
+        // With each account, the other accounts seen on one of its PCs in
+        // the last 30 days (pcs.js), for staff only like the rest.
+        linked: w.dev ? withSharedPcs(Object.values(jsonFile(LINKED, {})), pcsSharedBy(Date.now())) : [],
         records: w.dev ? staffRecords(Date.now()) : { bans: {}, notes: {}, pk: {}, names: {} },
         sessions: w.admin ? sessionRows() : [],
         inbox: w.admin ? trimInbox(jsonFile(INBOX, []), Date.now()) : []
