@@ -14,13 +14,24 @@
 //      character (createActor with isMe);
 //   3. send a face (UpdateAppearance), which closes the race menu the engine
 //      opens for a new character;
-//   4. walk: an UpdateMovement every 130 ms, unreliable, the rate and the
-//      reliability skymp5-client's SendInputsService.sendMovement uses, in a
-//      slow circle around where it was put, at a walk. A teleport the server
-//      sends (Teleport, Teleport2) is carried out and its teleportSeq echoed,
-//      as the game's RemoteServer does. Moves keep to their 130 ms beat
-//      (the next is due 130 ms after the last was due), so Windows' timer
-//      steps of about 15.6 ms do not slow a bot below the game's rate.
+//   4. walk and stand: in a slow circle around where it was put, at a walk,
+//      and for a share of every 20 s (--stand, 0 to 1) standing still, as
+//      people in a town mostly do. It looks at its place every 130 ms, the
+//      beat skymp5-client's SendInputsService.sendMovement looks on, and
+//      sends what the game sends (--moves):
+//        change  the game since #6247: a move only when what anybody could
+//                see changed (a whole unit of place, a whole degree of
+//                facing, the run mode and flags), unreliable; the first
+//                unchanged look sends that move once more as settled,
+//                reliably; then nothing until it changes. Every move
+//                carries moveSeq, one more each time;
+//        beat    the game before it: an UpdateMovement every 130 ms,
+//                unreliable, standing or not.
+//      A teleport the server sends (Teleport, Teleport2) is carried out and
+//      its teleportSeq echoed, as the game's RemoteServer does. The looks
+//      keep to their 130 ms beat (the next is due 130 ms after the last was
+//      due), so Windows' timer steps of about 15.6 ms do not slow a bot
+//      below the game's rate.
 //   5. hold the game's chat socket on the voice service, as a person in the
 //      world does: a join token (POST /token, as the launcher asks for it),
 //      the socket with it, a join with voice off, and over it the join pass
@@ -41,10 +52,13 @@
 //          both reliable, as skymp5-client sends them. What the server makes
 //          of it (ChangeValues, death, respawn) shows in the message counts;
 //   host   carries out HostStart: the actor it is handed (an NPC near it,
-//          whose AI a game runs and the server only passes on) is sent an
-//          UpdateMovement on the same 130 ms beat as its own character,
-//          standing where the server put it, until HostStop. Without this the
-//          bots would leave every NPC's moves out of the load;
+//          whose AI a game runs and the server only passes on) is looked at
+//          on the same 130 ms beat as its own character and sent by the same
+//          rule, standing where the server put it, until HostStop. Without
+//          this the bots would leave every NPC's moves out of the load. An
+//          NPC a bot hosts never walks, so under --moves change it costs one
+//          move and one settled move, where a game's NPC that walks about
+//          costs more;
 //   trade  every 30 s asks, over the chat socket as a person types it, to
 //          trade with the nearest NPC within TRADE_REACH: "/merchant <id>",
 //          the guild trader command the panel's E press is (gamemode.js,
@@ -83,6 +97,8 @@ const { Bot, MSG, loadAddon, mintPass, passLoginKey } = require('./bot.js');
 const { face } = require('./Bot-Pass.js');
 
 const MOVE_MS = 130;           // SendInputsService.sendMovement's sendMovementRateMs
+const MOVES = ['change', 'beat']; // see step 4 above; change is the game's own since #6247
+const STAND_CYCLE_MS = 20000;  // --stand is a share of this, at a phase of each bot's own
 const STEP_MS = 60000;         // how long each login step may take
 const WALK = 100;              // units a second, a walk
 const TELEPORT = 20;
@@ -165,6 +181,13 @@ class LoadBot extends Bot {
     this.angle = Math.random() * Math.PI * 2;
     this.radius = 200 + Math.random() * 300;
     this.lastMove = 0;
+    this.moves = 'change';     // what it sends on each look: see step 4 above
+    this.stand = 0;            // the share of every STAND_CYCLE_MS it stands still
+    this.standPhase = Math.random() * STAND_CYCLE_MS;
+    this.moveSeq = 0;          // the moveSeq of its newest move, for itself and what it hosts
+    this.lastSent = new Map(); // idx -> { key, settled }, the move it sent last for each
+    this.movesSent = 0;        // moves it sent, since the last report
+    this.settledSent = 0;      // of those, settled moves, since the last report
     this.teleports = 0;
     this.voicePort = 0;
     this.ws = null;            // the chat socket on the voice service
@@ -195,6 +218,37 @@ class LoadBot extends Bot {
     if (this.atPanel) { return this.atPanel; }
     const c = this.center || [0, 0, 0];
     return [c[0] + Math.cos(this.angle) * this.radius, c[1] + Math.sin(this.angle) * this.radius, c[2]];
+  }
+
+  // Whether it stands still now: at an open trader panel, or in the standing
+  // share of its own 20 s.
+  standing(now) {
+    if (this.atPanel) { return true; }
+    return this.stand > 0 && ((now + this.standPhase) % STAND_CYCLE_MS) < this.stand * STAND_CYCLE_MS;
+  }
+
+  // One look at idx's move, sent by --moves. Under change, the key is
+  // skymp5-client's movementKey (sendInputsService.ts): what anybody could
+  // see, rounded the same way.
+  sendMove(idx, data) {
+    if (this.moves === 'beat') {
+      this.send({ t: MSG.UpdateMovement, idx, data }, false);
+      this.movesSent++;
+      return true;
+    }
+    const r = Math.round;
+    const key = [idx, data.worldOrCell, r(data.pos[0]), r(data.pos[1]), r(data.pos[2]), r(data.rot[0]), r(data.rot[1]), r(data.rot[2]),
+      data.runMode, r(data.direction), r(data.speed), r(data.healthPercentage * 100),
+      data.isInJumpState, data.isSneaking, data.isBlocking, data.isWeapDrawn, data.isDead, '', data.teleportSeq === undefined ? '' : data.teleportSeq].join('|');
+    const last = this.lastSent.get(idx);
+    const settled = !!last && last.key === key;
+    if (settled && last.settled) { return false; }
+    const out = Object.assign({}, data, { moveSeq: ++this.moveSeq });
+    if (settled) { out.settled = true; this.settledSent++; }
+    this.send({ t: MSG.UpdateMovement, idx, data: out }, settled);
+    this.lastSent.set(idx, { key, settled });
+    this.movesSent++;
+    return true;
   }
 
   // The nearest actor it knows that keep(actor) holds for, within reach.
@@ -403,7 +457,7 @@ class LoadBot extends Bot {
         const o = this.others.get(m.idx);
         if (o) { o.pos = m.data.pos.map(Number); if (typeof m.data.worldOrCell === 'number') { o.cell = m.data.worldOrCell; } }
       }
-      if (m.t === MSG.DestroyActor && this.play.length) { this.others.delete(m.idx); this.hosted.delete(m.idx); }
+      if (m.t === MSG.DestroyActor && this.play.length) { this.others.delete(m.idx); this.hosted.delete(m.idx); this.lastSent.delete(m.idx); }
       if (m.t === HOST_START && this.play.indexOf('host') >= 0) {
         let found = false;
         for (const [idx, o] of this.others) {
@@ -412,7 +466,7 @@ class LoadBot extends Bot {
         this.did(found ? 'hostStarts' : 'hostStartsNotSeen');
       }
       if (m.t === HOST_STOP && this.play.indexOf('host') >= 0) {
-        for (const [idx, o] of this.others) { if (o.refrId === Number(m.target)) { this.hosted.delete(idx); } }
+        for (const [idx, o] of this.others) { if (o.refrId === Number(m.target)) { this.hosted.delete(idx); this.lastSent.delete(idx); } }
         this.did('hostStops');
       }
       if (m.t === MSG.CustomPacket && typeof m.contentJsonDump === 'string' && m.contentJsonDump.indexOf('thornswoodLoginChallenge') >= 0) {
@@ -472,21 +526,23 @@ class LoadBot extends Bot {
       // On the beat, unless the bot fell a whole beat behind, which starts
       // the beat again from now rather than sending the missed ones at once.
       this.lastMove = now - this.lastMove >= 2 * MOVE_MS ? now : this.lastMove + MOVE_MS;
-      // At an open trader panel it stands where it opened it, as a person does.
-      if (!this.atPanel) { this.angle += (WALK * dt) / this.radius; }
+      // At an open trader panel it stands where it opened it, as a person
+      // does, and in its standing share it stands wherever it got to.
+      const still = this.standing(now);
+      if (!still) { this.angle += (WALK * dt) / this.radius; }
       const pos = this.here();
       const heading = ((this.angle * 180 / Math.PI) + 90) % 360;
-      this.send({ t: MSG.UpdateMovement, idx: this.character.idx, data: {
-        worldOrCell: this.cell, pos, rot: [0, 0, heading], direction: 0, healthPercentage: 1, speed: this.atPanel ? 0 : WALK,
-        runMode: this.atPanel ? 'Standing' : 'Walking', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: this.play.indexOf('fight') >= 0, isDead: false,
+      this.sendMove(this.character.idx, {
+        worldOrCell: this.cell, pos, rot: [0, 0, heading], direction: 0, healthPercentage: 1, speed: still ? 0 : WALK,
+        runMode: still ? 'Standing' : 'Walking', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: this.play.indexOf('fight') >= 0, isDead: false,
         teleportSeq: this.seq
-      } }, false);
+      });
       for (const [idx, h] of this.hosted) {
-        this.send({ t: MSG.UpdateMovement, idx, data: {
+        const sent = this.sendMove(idx, {
           worldOrCell: h.cell, pos: h.pos, rot: h.rot, direction: 0, healthPercentage: 1, speed: 0,
           runMode: 'Standing', isInJumpState: false, isSneaking: false, isBlocking: false, isWeapDrawn: false, isDead: false
-        } }, false);
-        this.did('hostMoves');
+        });
+        if (sent) { this.did('hostMoves'); }
       }
     }
     if (this.step === 'moving' && this.play.indexOf('fight') >= 0 && now >= this.nextHit) { this.swing(now); }
@@ -514,11 +570,15 @@ function args(argv) {
 function main() {
   const a = args(process.argv.slice(2));
   if (!a.root || !a.port || !process.send) {
-    console.log('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade,quest], started by Load-Test.js with IPC');
+    console.log('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade,quest] [--moves change|beat] [--stand <0 to 1>], started by Load-Test.js with IPC');
     process.exit(2);
   }
   const addon = loadAddon(a.root);
   const playing = String(a.play || '').split(',').filter(Boolean);
+  const moves = a.moves || 'change';
+  if (!MOVES.includes(moves)) { console.log('--moves takes ' + MOVES.join(' or ') + ', not ' + moves); process.exit(2); }
+  const stand = Number(a.stand) || 0;
+  if (!(stand >= 0 && stand <= 1)) { console.log('--stand is a share from 0 to 1, not ' + a.stand); process.exit(2); }
   const { passKey, server } = passKeyOf(a.root);
   const bots = [];
   let cpu0 = process.cpuUsage();
@@ -527,7 +587,7 @@ function main() {
     if (msg && Array.isArray(msg.add)) {
       for (const id of msg.add) {
         const b = new LoadBot(addon, { host: '127.0.0.1', port: Number(a.port), password: a.password || '', name: 'load ' + id });
-        b.profileId = id; b.passKey = passKey; b.server = server; b.voicePort = Number(a.voice) || 0; b.play = playing;
+        b.profileId = id; b.passKey = passKey; b.server = server; b.voicePort = Number(a.voice) || 0; b.play = playing; b.moves = moves; b.stand = stand;
         try {
           b.client = addon.createBotClient(b.host, b.port, b.password, b.timeoutMs);
           b.state = 'connecting'; b.step = 'connecting'; b.deadline = Date.now() + STEP_MS;
@@ -545,6 +605,8 @@ function main() {
       let wsDown = 0; let wsUp = 0; let inVoice = 0;
       let all = 0;
       const perBot = [];
+      const sentPerBot = [];
+      let settled = 0;
       const play = {};
       let hostedNow = 0;
       // The NPCs the bots hold as sent to them at the report, and how many of
@@ -556,7 +618,8 @@ function main() {
         steps[b.step] = (steps[b.step] || 0) + 1;
         if (b.step === 'failed') { failed.push({ profileId: b.profileId, why: b.why }); }
         for (const k of Object.keys(b.counts)) { counts[k] = (counts[k] || 0) + b.counts[k]; }
-        if (b.step === 'moving') { perBot.push(b.counts[MSG.UpdateMovement] || 0); }
+        if (b.step === 'moving') { perBot.push(b.counts[MSG.UpdateMovement] || 0); sentPerBot.push(b.movesSent); settled += b.settledSent; }
+        b.movesSent = 0; b.settledSent = 0;
         b.counts = {};
         teleports += b.teleports; all += b.all;
         wsDown += b.wsDown; wsUp += b.wsUp; b.wsDown = 0; b.wsUp = 0;
@@ -568,7 +631,7 @@ function main() {
           if (o.refrId >= 0x100000000) { npcsKnown++; if (o.cell === b.cell) { npcsInCell++; } }
         }
       }
-      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
+      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, movesSentPerBot: sentPerBot, settledSent: settled, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
       cpu0 = process.cpuUsage(); at0 = now;
     }
     if (msg && msg.stop) {
@@ -590,4 +653,4 @@ function main() {
 
 if (require.main === module) { main(); }
 
-module.exports = { LoadBot, MOVE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };
+module.exports = { LoadBot, MOVE_MS, MOVES, STAND_CYCLE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };

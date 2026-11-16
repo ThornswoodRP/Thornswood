@@ -264,11 +264,13 @@ Object.keys(TREAT).forEach(function (name) {
 });
 
 // Patrick, 4 October, on #1622: "B, each college book staff at its spell's
-// rank". The college book is the mage school pages; each staff's spell is the
-// HasSpell its recipe carries.
+// rank". The college book is the mage schools' books, which
+// Write-SystemLists.js writes beside the lists (docs/systems/lists, since
+// #5191 no longer into the school pages); each staff's spell is the HasSpell
+// its recipe carries.
 const bookRank = {};
 ["destruction", "restoration", "alteration", "conjuration", "illusion"].forEach(function (school) {
-  read("docs/systems/professions/mage/" + school + ".md").split("\n").forEach(function (line) {
+  read("docs/systems/lists/mage-" + school + ".md").split("\n").forEach(function (line) {
     const m = /^\| ([^|]+?) \| (novice|advanced|expert|master) \| `([^`]+)` \|$/.exec(line);
     if (m) { bookRank[m[3]] = { name: m[1], rank: m[2] }; }
   });
