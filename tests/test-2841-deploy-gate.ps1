@@ -649,39 +649,30 @@ Yes 'box-run.yml is not in this repository, which has no VPS runner once public'
 $br = Text 'scripts/vps/Box-Run.ps1'
 Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
 
-# Patrick's click for a live line (Ops #289): it lives in live-word.yml here,
-# because GitHub holds a job to a required reviewer only in a public
-# repository on the organization's plan.
-$lw = (Text '.github/workflows/live-word.yml') -replace "`r`n", "`n"
-$lwCode = (@($lw -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n")
-Yes 'live-word.yml is started by hand alone, with the line, and titled with it' ($lwCode -match '(?ms)^on:\n  workflow_dispatch:\n    inputs:\n      line:\n' -and @([regex]::Matches(($lwCode -split '\njobs:')[0], '(?m)^  [a-z_]+:')).Count -eq 1 -and $lwCode.Contains("run-name: 'Live box run: `${{ inputs.line }}'"))
-Yes '  its one job waits in the environment "Live box run", from main only' ($lwCode -match '(?m)^    environment: Live box run$' -and $lwCode -match "(?m)^    if: github\.ref == 'refs/heads/main'$" -and @([regex]::Matches($lwCode, '(?m)^  [a-z][a-z0-9-]*:\s*$')).Count -eq 1)
-Yes '  and holds no token, no secret and no checkout' ($lwCode -match '(?m)^permissions: \{\}$' -and $lwCode -notmatch 'secrets\.' -and $lwCode -notmatch 'uses:' -and $lwCode -notmatch '(?m)^    permissions:')
-# Box-Run.ps1 against a stand-in gh that records what it is asked to start
-# (global, since the stand-in runs in Box-Run.ps1's own script scope).
+# A live line is Bramble's, on Patrick's tap on its Main card in the Hermes
+# Agents app (#4989): box-run.yml refuses one anybody else started, so
+# Box-Run.ps1 refuses it before anything starts. Checked against a stand-in
+# gh that records what it is asked to start (global, since the stand-in
+# runs in Box-Run.ps1's own script scope).
 $global:twStarted = New-Object System.Collections.Generic.List[string]
 function gh {
     $global:LASTEXITCODE = 0
     if ("$args" -match '^api -X POST repos/(\S+)/actions/workflows/(\S+)/dispatches') {
-        $global:twStarted.Add($Matches[1] + ' ' + $Matches[2] + ' ' + (@($input) -join ''))
+        $global:twStarted.Add($Matches[1] + ' ' + $Matches[2])
         return '{"workflow_run_id":77,"html_url":"https://github.com/o/r/actions/runs/77"}'
     }
     $global:LASTEXITCODE = 1; return 'HTTP 404'
 }
-$liveLine = 'Deploy-Server -GamemodeOnly -Build ' + ('a' * 40) + ' -Mode restart'
 $oldScratch = $env:THORNSWOOD_SCRATCH_ROOT
-$env:THORNSWOOD_SCRATCH_ROOT = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-word-' + [Guid]::NewGuid().ToString('N'))
-$said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line $liveLine *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
-Yes 'a live line without -Word starts live-word.yml here with the line alone, sends nothing to the box and ends 2' ($code -eq 2 -and $global:twStarted.Count -eq 1 -and $global:twStarted[0] -like 'ThornswoodRP/Thornswood live-word.yml *' -and $global:twStarted[0].Contains('"inputs":{"line":"' + $liveLine + '"}'))
-Yes '  and says how to send it once Patrick approved run 77' (($said -join "`n").Contains("pwsh scripts/vps/Box-Run.ps1 -Line '" + $liveLine + "' -Word 77"))
-$global:twStarted.Clear()
-$said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line 'ping' -Word 77 *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
-Yes '  -Word with a line that names no build is refused, and nothing starts' ($code -eq 1 -and $global:twStarted.Count -eq 0 -and ($said -join ' ') -match '-Word goes only with a line that names a build')
-$said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line $liveLine -Word 77 *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
-Yes '  the live line with -Word starts box-run.yml in the ops repository, naming that run' ($global:twStarted.Count -eq 1 -and $global:twStarted[0] -like 'ThornswoodRP/Thornswood-Ops box-run.yml *' -and $global:twStarted[0].Contains('"line":"' + $liveLine + '"') -and $global:twStarted[0].Contains('"word":"77"'))
-$global:twStarted.Clear()
+$env:THORNSWOOD_SCRATCH_ROOT = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-live-' + [Guid]::NewGuid().ToString('N'))
+$liveVerbs = @((Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts/vps/gate/verbs.json')).verbs.PSObject.Properties | Where-Object { $_.Value.PSObject.Properties['build'] -and $_.Value.build -eq $true } | ForEach-Object { $_.Name })
+Yes "  main's verbs.json has live verbs ($($liveVerbs -join ', '))" ($liveVerbs.Count -ge 1)
+foreach ($v in $liveVerbs) {
+    $said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line ($v + ' -Build ' + ('a' * 40)) *>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE
+    Yes "  a $v line is refused here, nothing starts, and it says to ask Bramble" ($code -eq 1 -and $global:twStarted.Count -eq 0 -and ($said -join ' ') -match 'ask Bramble for it')
+}
 $said = @(& (Join-Path $Repo 'scripts/vps/Box-Run.ps1') -Line 'ping' *>&1 | ForEach-Object { "$_" })
-Yes '  and a line that names no build goes to box-run.yml at once, naming no run' ($global:twStarted.Count -eq 1 -and $global:twStarted[0] -like 'ThornswoodRP/Thornswood-Ops box-run.yml *' -and -not $global:twStarted[0].Contains('"word"'))
+Yes '  and a line that names no build goes to box-run.yml in the ops repository' ($global:twStarted.Count -eq 1 -and $global:twStarted[0] -eq 'ThornswoodRP/Thornswood-Ops box-run.yml')
 Remove-Item -LiteralPath function:\gh
 Remove-Item -LiteralPath $env:THORNSWOOD_SCRATCH_ROOT -Recurse -Force -ErrorAction SilentlyContinue
 $env:THORNSWOOD_SCRATCH_ROOT = $oldScratch
