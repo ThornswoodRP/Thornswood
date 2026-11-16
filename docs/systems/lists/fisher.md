@@ -1,6 +1,6 @@
 # Fisher
 
-Generated from `game/data/harvests.json` by `scripts/dev/Write-SystemLists.js`. 12 rows, 21 placed records. Pressed at the water. No rod. A fish has no gold price.
+Generated from `game/data/harvests.json` by `scripts/dev/Write-SystemLists.js`. 12 rows, 21 placed records. Pressed at the water with a fishing pole in the pack: the server refuses a fisher who carries none. A fish has no gold price.
 
 | Name | Rank | Records | You receive | In the world |
 | --- | --- | --- | --- | --- |

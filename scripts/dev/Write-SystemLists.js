@@ -358,7 +358,7 @@ const classFiles = [
     'Ranked by how hard the crop is to grow. A crop has no gold price. Grow minutes are the novice wait, before the rank multiplier.',
     {}],
   ['fisher.md', 'Fisher', 'game/data/harvests.json', harvests.fish,
-    'Pressed at the water. No rod. A fish has no gold price.',
+    'Pressed at the water with a fishing pole in the pack: the server refuses a fisher who carries none. A fish has no gold price.',
     {}],
   ['hunter.md', 'Hunter', 'game/data/hunts.json', hunts.hunts,
     'Only a hunter loots the body. Yield is least-most of each part. The rank is the rank on the row. A part has no gold price.',
