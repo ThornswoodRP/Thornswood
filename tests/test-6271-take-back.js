@@ -290,6 +290,7 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
     r = await ask('POST', '/api/takeback', key, JSON.stringify({ done: [{ id: id, ok: true, took: 4200, why: 'they held 4200' }] }));
     yes('the main server closes its ask with what it took, and nothing waits after', r.status === 200 && r.json.waiting.length === 0);
     r = await ask('POST', '/dev/api/takeback', key, JSON.stringify({ done: [{ id: devId, ok: false, took: 0, why: 'this server holds no character with profile 7' }] }));
+    yes('the dev server closes its ask as not done, with why, and nothing waits after', r.status === 200 && r.json.waiting.length === 0);
 
     r = await ask('GET', '/api/staff/takeback', { cookie: cookieFor(OWNER_ID, 'Owner') });
     const rows = (r.json && r.json.rows) || [];
