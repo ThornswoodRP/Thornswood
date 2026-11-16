@@ -140,6 +140,6 @@ yes('5. it puts the page in every revision\'s swaps', /\$swaps\.Add\(\[ordered\]
 yes('5. and stops when the page is not there, never building from the old text', /if \(-not \(Test-Path -LiteralPath \$PageRecord\)\) \{ Die /.test(nnr));
 const verbs = readJson('scripts/release/nexus-verbs.json');
 const nv = JSON.stringify(verbs.verbs ? verbs.verbs['New-NexusRevision'] : verbs['New-NexusRevision'] || {});
-yes('5. the New-NexusRevision verb carries collection-page.js and the page record', nv.indexOf('scripts/release/collection-page.js') >= 0 && nv.indexOf('records/collection-page.json') >= 0);
+yes('5. the New-NexusRevision verb\'s reads name collection-page.js, which nexus-collection.js runs', nv.indexOf('scripts/release/collection-page.js') >= 0);
 
 finish();

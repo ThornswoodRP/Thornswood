@@ -65,6 +65,7 @@
         "scripts/release/RecordShape.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Where.ps1",
+        "scripts/release/collection-page.js",
         "scripts/release/collection-permissions.js",
         "scripts/release/nexus-collection.js"
       ],
