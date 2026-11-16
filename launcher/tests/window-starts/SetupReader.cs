@@ -17,8 +17,8 @@ namespace Thornswood.Tests
     /// <summary>
     /// The install window as a screen reader finds it (#4693), for
     /// launcher\tests\test-4693-setup-reader.ps1. Its drive buttons were
-    /// named "Avalonia.Controls.StackPanel", the chosen one was shown by
-    /// colour only, the bar and the log had no name, two links were both
+    /// read as their letter alone, as plain buttons, the chosen one was shown
+    /// by colour only, the bar and the log had no name, two links were both
     /// "Read them", and the status line changed with nothing told to Windows.
     ///
     /// The real window, out of the launcher's own Thornswood.dll, on

@@ -32,6 +32,16 @@ namespace Thornswood
             "I have read and agree to the Rules",
         };
 
+        /// <summary>The words on each page's link, in the order of Pages.</summary>
+        public static readonly string[] LinkWords = { "Read them", "Read it", "Read them" };
+
+        /// <summary>
+        /// What a screen reader says for each link, which names its page: the
+        /// words alone are "Read them" twice (#4693), as they were in the
+        /// launcher's own terms window before #4329.
+        /// </summary>
+        public static readonly string[] LinkNames = { "Read the Terms and Conditions", "Read the Privacy Policy", "Read the Rules" };
+
         /// <summary>The age box, which sits above the three.</summary>
         public const string AgeWords = "I am 18 or over. Thornswood is an adult server.";
 

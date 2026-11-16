@@ -4,11 +4,11 @@
       pwsh -NoProfile -File .\launcher\tests\test-4693-setup-reader.ps1
 
   A screen reader can use the setup window (#4693). Its drive buttons were
-  read as "Avalonia.Controls.StackPanel", the chosen drive was shown by
+  read as their letter alone, as buttons, with the chosen drive shown by
   colour only, the progress bar and the install's log had no name, two links
   were both "Read them", and each new status line was never told to Windows.
   The cause: launcher\app\InstallWindow.cs gave UI Automation nothing of its
-  own. A button whose content is a panel is named by the panel's type, a
+  own. A button whose content is a panel is named by its first line, a
   plain Button has no selected state, and a control's live setting is Off
   until it is set.
 

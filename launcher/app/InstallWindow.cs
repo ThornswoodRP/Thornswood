@@ -7,6 +7,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -66,7 +69,7 @@ namespace Thornswood
         Button btnGo, btnClose, btnPick, btnVortexPick, btnVortexForget;
         CheckBox chkOwn, chkAge;
         CheckBox[] agree;
-        readonly List<Button> driveButtons = new List<Button>();
+        readonly List<DriveButton> driveButtons = new List<DriveButton>();
 
         string installRoot;
         string vortexGame = "";
@@ -243,6 +246,9 @@ namespace Thornswood
                 Padding = new Thickness(10, 8), Background = B("Deep"), Foreground = B("Muted"), BorderBrush = B("Line"), BorderThickness = new Thickness(1),
             };
             body.Children.Add(txtLog);
+            // A screen reader names the log by what it is, not by nothing
+            // (#4693).
+            AutomationProperties.SetName(txtLog, "What the install says");
 
             scroll.Content = body;
             middle.Children.Add(scroll);
@@ -250,8 +256,14 @@ namespace Thornswood
             var statStack = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
             bar = new ProgressBar { Height = 5, Minimum = 0, Maximum = 1000, Foreground = B("Accent"), Background = B("Deep"), Margin = new Thickness(0, 20, 0, 0), IsVisible = false };
             statStack.Children.Add(bar);
+            AutomationProperties.SetName(bar, "Install progress");
             txtStat = new TextBlock { Foreground = B("Faint"), FontSize = 11.5, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 11, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             statStack.Children.Add(txtStat);
+            // The status line is a live region: each new line of the install
+            // is said when it comes, without moving focus. With it off, as
+            // Avalonia leaves every control, Windows is told nothing changed
+            // (#4693).
+            AutomationProperties.SetLiveSetting(txtStat, AutomationLiveSetting.Polite);
             Grid.SetRow(statStack, 1);
             middle.Children.Add(statStack);
             Grid.SetRow(middle, 1);
@@ -269,7 +281,7 @@ namespace Thornswood
             chkAge.IsCheckedChanged += delegate { Gate(); };
             boxes.Children.Add(chkAge);
             agree = new CheckBox[InstallAgreements.Pages.Length];
-            string[] linkWords = { "Read them", "Read it", "Read them" };
+            string[] linkWords = InstallAgreements.LinkWords;
             for (int i = 0; i < agree.Length; i++)
             {
                 string page = InstallAgreements.Pages[i];
@@ -280,6 +292,7 @@ namespace Thornswood
                 row.Children.Add(agree[i]);
                 var link = new HyperlinkButton { Content = linkWords[i], Foreground = B("Accent"), FontSize = 12.5, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 ToolTip.SetTip(link, "Opens thornswood.net/" + page + " in your browser");
+                AutomationProperties.SetName(link, InstallAgreements.LinkNames[i]);
                 link.Click += delegate { OpenPage(InstallAgreements.Site + "/" + page); };
                 row.Children.Add(link);
                 boxes.Children.Add(row);
@@ -364,26 +377,103 @@ namespace Thornswood
                 if (d.DriveType != DriveType.Fixed || !d.IsReady) continue;
                 try { free = d.AvailableFreeSpace; }
                 catch (IOException) { continue; }
+                AddDrive(d.Name, free);
+            }
+        }
 
-                var sp = new StackPanel();
-                sp.Children.Add(new TextBlock { Text = d.Name.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 14, Foreground = B("Ink") });
-                sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = 11, Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
-                // The one drive this install can work on gets said so on the
-                // button itself, not only in the line underneath, because the
-                // buttons are what a person reads before pressing one.
-                if (InstallPlace.SameDrive(d.Name, skyrimDrive))
-                    sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = 11, Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
+        /// <summary>
+        /// One drive's button: its letter, its free space, and Skyrim is here
+        /// on Skyrim's. Pressing it installs there.
+        /// </summary>
+        DriveButton AddDrive(string driveName, long free)
+        {
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock { Text = driveName.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 14, Foreground = B("Ink") });
+            sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = 11, Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
+            // The one drive this install can work on gets said so on the
+            // button itself, not only in the line underneath, because the
+            // buttons are what a person reads before pressing one.
+            bool skyrimHere = InstallPlace.SameDrive(driveName, skyrimDrive);
+            if (skyrimHere)
+                sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = 11, Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
 
-                string name = d.Name;
-                var b = new Button
+            string name = driveName;
+            var b = new DriveButton
+            {
+                Content = sp, Padding = new Thickness(15, 9), Margin = new Thickness(0, 0, 8, 8), MinWidth = 104,
+                HorizontalContentAlignment = HorizontalAlignment.Left, Tag = name,
+                BorderBrush = B("Line"), Background = B("Deep"), Foreground = B("Ink"),
+            };
+            // What a screen reader says for it: the same words the button
+            // shows. Without this Avalonia names a button whose content is a
+            // panel by its first line alone, so each drive was read as only
+            // its letter, with no free space and no Skyrim is here (#4693).
+            AutomationProperties.SetName(b, InstallPlace.Letter(name) + ", " + InstallPlace.Gb(free) + " free" + (skyrimHere ? ", Skyrim is here" : ""));
+            b.Click += delegate { SetRoot(Path.Combine(name, "Thornswood")); };
+            driveRow.Children.Add(b);
+            driveButtons.Add(b);
+            return b;
+        }
+
+        /// <summary>
+        /// A drive's button. The drives are one choice of several, so to a
+        /// screen reader each is a radio button, chosen or not, and says so
+        /// when that changes (#4693). On screen it is the window's Button as
+        /// before, chosen shown by its edge, and Enter on it presses it.
+        /// </summary>
+        sealed class DriveButton : Button
+        {
+            bool chosen;
+
+            // Drawn with Button's own look: a subclass otherwise has none.
+            protected override Type StyleKeyOverride { get { return typeof(Button); } }
+
+            public bool Chosen
+            {
+                get { return chosen; }
+                set
                 {
-                    Content = sp, Padding = new Thickness(15, 9), Margin = new Thickness(0, 0, 8, 8), MinWidth = 104,
-                    HorizontalContentAlignment = HorizontalAlignment.Left, Tag = name,
-                    BorderBrush = B("Line"), Background = B("Deep"), Foreground = B("Ink"),
-                };
-                b.Click += delegate { SetRoot(Path.Combine(name, "Thornswood")); };
-                driveRow.Children.Add(b);
-                driveButtons.Add(b);
+                    if (chosen == value) return;
+                    chosen = value;
+                    // Only a peer Windows has asked for has anyone to tell.
+                    (ControlAutomationPeer.FromElement(this) as DrivePeer)?.SayChosen(!value, value);
+                }
+            }
+
+            protected override AutomationPeer OnCreateAutomationPeer() { return new DrivePeer(this); }
+        }
+
+        /// <summary>
+        /// A drive's button to UI Automation: a radio button with the
+        /// SelectionItem pattern, selected when it is the install's drive.
+        /// Avalonia's RadioButtonAutomationPeer needs a RadioButton, which
+        /// would draw a dot and tick itself on a click; this keeps the button.
+        /// </summary>
+        sealed class DrivePeer : ButtonAutomationPeer, ISelectionItemProvider
+        {
+            public DrivePeer(DriveButton owner) : base(owner) { }
+
+            protected override AutomationControlType GetAutomationControlTypeCore() { return AutomationControlType.RadioButton; }
+
+            public bool IsSelected { get { return ((DriveButton)Owner).Chosen; } }
+
+            public ISelectionProvider SelectionContainer { get { return null; } }
+
+            public void Select() { Invoke(); }
+
+            public void AddToSelection()
+            {
+                if (!IsSelected) throw new InvalidOperationException("A drive is chosen by pressing it.");
+            }
+
+            public void RemoveFromSelection()
+            {
+                if (IsSelected) throw new InvalidOperationException("A drive stays chosen until another is pressed.");
+            }
+
+            public void SayChosen(bool was, bool now)
+            {
+                RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, was, now);
             }
         }
 
@@ -393,11 +483,12 @@ namespace Thornswood
             installRoot = path.TrimEnd('\\');
             txtRoot.Text = installRoot;
             string root = InstallPlace.DriveOf(installRoot);
-            foreach (Button b in driveButtons)
+            foreach (DriveButton b in driveButtons)
             {
                 bool on = string.Equals((string)b.Tag, root, StringComparison.OrdinalIgnoreCase);
                 b.Background = B(on ? "CardHover" : "Deep");
                 b.BorderBrush = B(on ? "Accent" : "Line");
+                b.Chosen = on;
             }
 
             string colour;
