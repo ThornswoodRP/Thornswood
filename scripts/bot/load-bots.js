@@ -59,7 +59,11 @@
 //          whose AI a game runs and the server only passes on) is looked at
 //          on the same 130 ms beat as its own character and sent by the same
 //          rule, standing where the server put it, until HostStop. Without
-//          this the bots would leave every NPC's moves out of the load. An
+//          this the bots would leave every NPC's moves out of the load. It
+//          asks to host an actor, once, each time the server says nobody
+//          hosts it (a CreateActor without isHostedByOther, or
+//          isHostedByOther set to false), as the game's FormView does since
+//          #6247 (Host, reliable). An
 //          NPC a bot hosts never walks, so under --moves change it costs one
 //          move and one settled move, where a game's NPC that walks about
 //          costs more;
@@ -120,6 +124,7 @@ const TELEPORT2 = 31;
 const PASS_EVERY_MS = 60000;   // the front plugin sends the pass at once and every minute
 const UPDATE_ANIMATION = 3;
 const ON_HIT = 17;
+const HOST_ASK = 14;
 const HOST_START = 26;
 const HOST_STOP = 27;
 const UNARMED = 0x1f4;         // ActionListener.cpp IsUnarmedAttack
@@ -530,6 +535,11 @@ class LoadBot extends Bot {
       if (m.t === MSG.CreateActor && !m.isMe && this.play.length) {
         const tr = m.transform || {};
         if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0 }); }
+        if (!(m.props && m.props.isHostedByOther)) { this.askHost(Number(m.refrId) || 0); }
+      }
+      if (m.t === MSG.UpdateProperty && m.propName === 'isHostedByOther' && m.dataDump === 'false') {
+        const o = this.others.get(m.idx);
+        if (o) { this.askHost(o.refrId); }
       }
       if (m.t === MSG.UpdateMovement && this.play.length && m.data && Array.isArray(m.data.pos)) {
         const o = this.others.get(m.idx);
@@ -559,6 +569,13 @@ class LoadBot extends Bot {
         this.teleports++;
       }
     }
+  }
+
+  // Asks to host refrId, under --play host (see host above).
+  askHost(refrId) {
+    if (!refrId || this.play.indexOf('host') < 0) { return; }
+    this.send({ t: HOST_ASK, remoteId: refrId }, true);
+    this.did('hostAsks');
   }
 
   // Counts m as a copy when the same message came within REPEAT_MS, and

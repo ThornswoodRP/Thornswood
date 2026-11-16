@@ -19,9 +19,10 @@
 # A person is also a chat socket on the voice service, which carries their
 # join pass, so the voice service from this checkout runs beside the server.
 # A run by hand can have the bots do more than walk (play: fight, host, trade,
-# quest; load-bots.js says what each is). With host, the bots run the NPCs
-# the server hands them, as games do, and each step says how many copies of
-# one message a bot read (#6252).
+# quest; load-bots.js says what each is), and keep the masters' NPCs alive
+# (npcs: yes; off unless asked). With both, the bots ask for and run the NPCs
+# near them, as games do, and each step says how many copies of one message
+# a bot read (#6252).
 # The numbers are in the run's summary and in the load-test-<shape> artifact
 # (result.json, the two services' logs and samples, nothing else), and go on
 # #4623.
@@ -61,6 +62,10 @@ on:
         description: 'What the bots do besides walking, comma separated (fight, host, trade, quest), or none'
         required: false
         default: 'none'
+      npcs:
+        description: 'yes: the engine keeps the masters NPCs alive near the bots, for play host'
+        required: false
+        default: 'no'
   pull_request:
     paths:
       - 'scripts/bot/Load-Test.js'
@@ -143,8 +148,10 @@ jobs:
 
       - name: Lay out the load server
         shell: pwsh
+        env:
+          NPCS: ${{ github.event.inputs.npcs == 'yes' && 'yes' || 'no' }}
         run: |
-          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
+          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes --npcs $env:NPCS
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Put the bots on it
