@@ -809,7 +809,7 @@ if ($FromFeed) {
     $diffs += @(Get-LoadOrderCopyDiffs $loCopies)
     if ($diffs.Count -gt 0) {
         foreach ($line in $diffs) { Say "  $line" 'Red' }
-        Die ("Load order copies that must match diverge:`n  " + ($diffs -join "`n  ") + "`nBake OwnGame from the Thornswood Vortex profile (launcher Settings, Maintenance, bring the folder up to date), or fix the lists, then Ship again.")
+        Die ("Load order copies that must match do not, or could not all be compared:`n  " + ($diffs -join "`n  ") + "`nBake OwnGame from the Thornswood Vortex profile (launcher Settings, Maintenance, bring the folder up to date), or fix the lists, then Ship again.")
     }
     Say ("  Thornswood profile at $twProfile; load order copies agree") 'Green'
 }
