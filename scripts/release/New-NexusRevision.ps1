@@ -174,7 +174,8 @@
   the revision's md5 and size, and the plugin is found in it by that sha256.
   Each patch is read back and applied before it is packed, and the plugin it
   makes is compared with records\collection-plugins.json, the bytes One
-  deploys. Lay the new archive out with Install-NexusRevision.ps1
+  deploys, which has to be there and be the record of the revision this
+  starts from (#4279). Lay the new archive out with Install-NexusRevision.ps1
   -CollectionArchive ... -Record to check it end to end.
 
   WHAT EACH MOD'S PAGE ALLOWS (#3649). Before a revision is made, and before
@@ -300,6 +301,11 @@
   revision carries in place of the ones before it (#4537). A run that
   builds stops without it.
 
+.PARAMETER PluginRecord
+  The collection's plugin bytes, records\collection-plugins.json unless said
+  otherwise, which -SetLight and -ClearLight hold the plugin they make to. It
+  has to be the record of the revision this starts from (#4279).
+
 .PARAMETER WaitSeconds
   How long to wait for Nexus to process the upload. 600 unless said otherwise.
 
@@ -332,6 +338,7 @@ param(
   [string]$Permissions,
   [string]$CollectionRecord,
   [string]$PageRecord,
+  [string]$PluginRecord,
   [int]$WaitSeconds = 600,
   [switch]$WhatIf,
   [switch]$NoPause
@@ -342,6 +349,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'Nexus.ps1')
 . (Join-Path $Here 'Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named
+. (Join-Path $Here 'RecordShape.ps1')   # Read-ThornswoodRecord: collection-plugins.json held to its shape (#4279)
 . (Join-Path $Here 'NexusModPlan.ps1')   # an added mod's FOMOD run with its choices
 
 $script:Done = New-Object System.Collections.Generic.List[string]
@@ -359,6 +367,7 @@ function Step([scriptblock]$b) { try { return (& $b) } catch { Die $_.Exception.
 if (-not $Permissions) { $Permissions = Join-Path $Here '..\..\records\collection-permissions.json' }
 if (-not $CollectionRecord) { $CollectionRecord = Join-Path $Here '..\..\records\collection.json' }
 if (-not $PageRecord) { $PageRecord = Join-Path $Here '..\..\records\collection-page.json' }
+if (-not $PluginRecord) { $PluginRecord = Join-Path $Here '..\..\records\collection-plugins.json' }
 
 # A program run with its output kept apart from its errors, the same in
 # Windows PowerShell 5.1 (where a redirected error line would stop the
@@ -920,9 +929,14 @@ if ($lights.Count) {
     $c = $line.Split("`t")
     if ($c.Count -eq 4) { $placedBy[$c[3].ToLowerInvariant()] = [pscustomobject]@{ Sha256 = $c[0]; Size = [long]$c[1]; FileId = $c[2] } }
   }
-  $recordPath = Join-Path $Here '..\..\records\collection-plugins.json'
   $onOne = @{}
-  if (Test-Path -LiteralPath $recordPath) { foreach ($p in @((ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($recordPath)) $recordPath).plugins)) { $onOne[([string]$p.name).ToLowerInvariant()] = [string]$p.sha256 } }
+  # The record is held to its shape and to the revision this starts from
+  # (#4279): one that is missing, or of another revision, would only say
+  # "does not name it" or "NOT the bytes" about a plugin it was never about.
+  $plugRec = Step { Read-ThornswoodRecord -Path $PluginRecord -Kind collection-plugins }
+  $plugRev = Get-ThornswoodRecordProp $plugRec 'revision'
+  if (-not (Test-ThornswoodWhole $plugRev 1) -or [int64]$plugRev -ne $BaseRevision) { Die ($PluginRecord + ' is the plugins of collection revision ' + $plugRev + ', and this starts from revision ' + $BaseRevision + ', so the light flags made here cannot be held to the bytes One deploys. Record revision ' + $BaseRevision + ' with scripts\mods\New-CollectionPluginRecord.ps1 first.') }
+  foreach ($p in @($plugRec.plugins)) { $onOne[([string]$p.name).ToLowerInvariant()] = [string]$p.sha256 }
   $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
   if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
   New-Item -ItemType Directory -Force -Path $staged | Out-Null

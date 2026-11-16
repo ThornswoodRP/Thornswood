@@ -87,6 +87,7 @@ function Yes([string]$what, [bool]$cond) {
 function Skip([string]$what) { Write-Host "SKIP  $what" }
 $script:standin = $null
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-2914-' + [Guid]::NewGuid().ToString('N').Substring(0, 10))
+$script:plugRec = $null   # the light flags' plugin record, set where they are tested (#4279)
 function Done {
     if ($script:standin -and -not $script:standin.HasExited) { $script:standin.Kill() }
     if (Test-Path -LiteralPath $T) { Remove-Item -LiteralPath $T -Recurse -Force }
@@ -152,6 +153,8 @@ function Run([string]$name, [string[]]$arguments) {
     # New-NexusRevision holds every mod to a permission record (#3649): the
     # stand-in's mods are in one of the test's own, never the real one.
     if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm, '-PageRecord', $script:pageRec) }
+    # And its light flags to a plugin record of the test's own (#4279).
+    if ($name -eq 'New-NexusRevision.ps1' -and $script:plugRec) { $arguments = @($arguments) + @('-PluginRecord', $script:plugRec) }
     $psi.Arguments = ((@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Q (Join-Path $rel $name))) + @($arguments | ForEach-Object { Q $_ }) + @('-NoPause')) -join ' ')
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $p = [Diagnostics.Process]::Start($psi)
@@ -1053,6 +1056,17 @@ function Layout([string]$md5) {
 }
 Layout ((Get-FileHash -LiteralPath $lightBase -Algorithm MD5).Hash.ToLowerInvariant())
 Control @{ serve = @{ '191234' = @{ path = $fishArc; name = (Split-Path -Leaf $fishArc) } } }
+# The plugin record the light flags are held to: revision 3's, the one this
+# starts from (#4279).
+$script:plugRec = Join-Path $fl 'collection-plugins.json'
+function PlugRec([int]$rev) { Put $script:plugRec ('{"version":1,"collection":"7essxf","revision":' + $rev + ',"plugins":[{"name":"Fish-Light.esp","size":64,"sha256":"' + (Get-FileHash -LiteralPath (Join-Path $fishMod 'Fish-Light.esp') -Algorithm SHA256).Hash.ToLowerInvariant() + '"}]}') }
+PlugRec 2
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '-SetLight with the plugin record of another revision is refused, naming both' ($r.Code -eq 1 -and $r.Out -match 'is the plugins of collection revision 2, and this starts from revision 3') $r
+Remove-Item -LiteralPath $script:plugRec
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '  and with no plugin record at all' ($r.Code -eq 1 -and $r.Out -match 'there is no collection-plugins record at') $r
+PlugRec 3
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
 $got = @(Since $n0)

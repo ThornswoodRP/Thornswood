@@ -154,7 +154,10 @@ for (let i = 0; i < names.length; i++) {
 yes('C1 no two stations stand within 300 units of each other' + (close.length ? ' (' + close.join('; ') + ')' : ''), close.length === 0);
 
 // ---------------------------------------------------------------- B
-const order = JSON.parse(fs.readFileSync(LAST, 'utf8')).loadOrder;
+// The load order is the one records/load-order.json records (#5191), which
+// ends with the Last plugin, made after the stations are placed.
+const order = JSON.parse(fs.readFileSync(path.join(ROOT, 'records', 'load-order.json'), 'utf8')).loadOrder
+  .filter((n) => n !== 'Thornswood-Last.esp');
 const record = JSON.parse(fs.readFileSync(COLLECTION, 'utf8'));
 const rec = {};
 for (const r of record.plugins) { rec[r.name.toLowerCase()] = r; }

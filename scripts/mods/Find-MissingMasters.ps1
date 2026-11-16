@@ -19,10 +19,11 @@
   that needs it, as switched off.
 
   Exit 0 when every plugin plugins.txt enables has its masters in Data. Exit 1
-  when an enabled plugin has a missing master, or when Data or plugins.txt is
-  missing or cannot be read (#4760). A plugin with a missing master that
-  plugins.txt leaves disabled is listed but does not fail the run, because
-  nothing loads it.
+  when an enabled plugin has a missing master, or when Data is missing or
+  empty (#4760). A plugins.txt that is missing or cannot be read stops it
+  with exit 1 before any verdict, naming the path (#4809). A plugin with a
+  missing master that plugins.txt leaves disabled is listed but does not fail
+  the run, because nothing loads it.
 #>
 #Requires -Version 7
 param(
@@ -63,14 +64,30 @@ Get-ChildItem -LiteralPath $Data -File |
 
 $enabled = @{}
 $pl = $Plugins
-# Whether plugins.txt was read whole. Without it every plugin counts as
-# disabled, so the verdict below means nothing and the run cannot pass.
-$pluginsRead = $false
-if (Test-Path $pl) {
-    Get-Content $pl -ErrorVariable plError | Where-Object { $_ -match '^\*' } |
-        ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
-    $pluginsRead = -not $plError
+<#
+  NO LIST, NO VERDICT (#4809). Without plugins.txt nothing says which plugins
+  are switched on, so every one would count as switched off and the verdict
+  below would be made up: "nothing will crash" over a plugin that loads.
+  Until 16 Nov a plugins.txt that was not there was read as an empty list and
+  that verdict was printed. A list that is not there, or cannot be read, stops
+  this here, naming where it looked.
+#>
+if (-not (Test-Path -LiteralPath $pl -PathType Leaf)) {
+    Write-Host ''
+    Write-Host "STOP. There is no plugins.txt at $pl, so which plugins are switched on is not known, and nothing can be said about what crashes." -ForegroundColor Red
+    Write-Host '  Pass -Plugins with the plugins.txt of the profile you play.' -ForegroundColor Yellow
+    if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+    exit 1
 }
+try { $plLines = [IO.File]::ReadAllLines($pl) }
+catch {
+    Write-Host ''
+    Write-Host "STOP. The plugins.txt at $pl could not be read ($($_.Exception.Message)), so which plugins are switched on is not known, and nothing can be said about what crashes." -ForegroundColor Red
+    if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+    exit 1
+}
+$plLines | Where-Object { $_ -match '^\*' } |
+    ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
 
 # What the game loads: what plugins.txt switches on, the five base masters,
 # and what Skyrim.ccc in the game folder names.
@@ -152,5 +169,5 @@ if (-not $problems) {
 # What it found is the exit code (#4760). Until then a crash at load was
 # printed in red and the run still exited 0, so a script or harness that ran
 # this read a pass.
-if ($crashes -or -not $pluginsRead) { exit 1 }
+if ($crashes) { exit 1 }
 exit 0

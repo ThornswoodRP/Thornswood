@@ -71,6 +71,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
 | `launcher/tests/test-4459-setup-keys.ps1` | The install window works from the keyboard: focus starts on its first control, Esc closes it as Not now does, Enter on a tick box starts the install, and focus follows what the install says, run on the real window on Avalonia's headless platform | Pull request and nightly |
 | `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names a size typed in by hand | Pull request and nightly |
+| `launcher/tests/test-4681-install-room.ps1` | What the install window says about room on each drive is what the install refuses: the window's line, its Install button and InstallSteps all read InstallPlace.Rooms and InstallPlace.Short, held over a spread of free space on both drives | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
@@ -97,6 +98,7 @@ These name an install file or this read me without testing the install.
 - `test-5197-real-client.js`: reads InstallPlace.cs for the record that says where the launcher is installed, so the real game run finds it; it tests that run, not the install.
 - `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
 - `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
+- `test-3682-github-front.js`: names InstallWindow.cs to say where the install's log is written; it checks only that the crash form names that log.
 
 
 ## Why the install is in the launcher

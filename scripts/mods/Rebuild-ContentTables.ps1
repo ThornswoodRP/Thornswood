@@ -66,6 +66,17 @@
   or not.
 
   -List prints the steps it would run, with their arguments, and runs none.
+
+  WITHOUT THE LAST PLUGIN (-WithoutLast, #5191). Thornswood-Last.esp is made
+  by Build-LastPlugin.py from tables the steps before it build, and those
+  steps read a load order with Thornswood-Last.esp in it, so each build read
+  the Last plugin the build before it made. Patrick's B on
+  q-5191-last-plugin-loop (15 Nov 2026): the steps before it never read the
+  Last plugin, and each takes what the Last plugin changes from the data that
+  decides it. -WithoutLast measures which tables that moves: every step
+  before Build-LastPlugin.py is given the load order without
+  Thornswood-Last.esp, and the steps from it on the whole order. It is a
+  measurement (Build-Content -WithoutLast on the box), not a build to keep.
 #>
 [CmdletBinding()]
 param(
@@ -74,7 +85,10 @@ param(
     # A plugin list to check against the load order the commit records; the
     # builders are given that record's load order either way.
     [string]$PluginsTxt = '',
-    [switch]$List
+    [switch]$List,
+    # The steps before Build-LastPlugin.py read the order without
+    # Thornswood-Last.esp (WITHOUT THE LAST PLUGIN, above).
+    [switch]$WithoutLast
 )
 
 $ErrorActionPreference = 'Stop'
@@ -146,13 +160,26 @@ $orderFolder = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-loadorder-' + [
 $orderList = Join-Path $orderFolder 'plugins.txt'
 
 $steps = @($chain.steps)
+$lastPlugin = 'Thornswood-Last.esp'
+$lastAt = $steps.Count
+$withoutList = $null
+if ($WithoutLast) {
+    $lastAt = -1
+    for ($i = 0; $i -lt $steps.Count; $i++) { if ($steps[$i].tool -eq 'scripts/mods/Build-LastPlugin.py') { $lastAt = $i; break } }
+    if ($lastAt -lt 0) { throw ('content-tables.json has no scripts/mods/Build-LastPlugin.py step, so -WithoutLast has nothing to leave the Last plugin out before. Nothing was run.') }
+    if (-not @($recorded | Where-Object { $_ -ieq $lastPlugin }).Count) { throw ("the load order game\data\npc-population.json records has no $lastPlugin, so -WithoutLast would change nothing. Nothing was run.") }
+    $withoutList = Join-Path (Join-Path $orderFolder 'without-last') 'plugins.txt'
+}
 $runs = @()
+$at = 0
 foreach ($s in $steps) {
+    $stepList = $(if ($WithoutLast -and $at -lt $lastAt) { $withoutList } else { $orderList })
+    $at++
     $tool = Join-Path $repo $s.tool
     if (-not (Test-Path -LiteralPath $tool)) { throw ("content-tables.json names $($s.tool), which is not in this checkout. Nothing was run.") }
     $a = @()
     if ($Data -and $s.data) { $a += @($s.data, $Data) }
-    if ($s.plugins) { $a += @($s.plugins, $orderList) }
+    if ($s.plugins) { $a += @($s.plugins, $stepList) }
     switch ([IO.Path]::GetExtension($tool).ToLowerInvariant()) {
         '.js'  { $runs += , @($node, (@($tool) + $a)) }
         '.py'  { $runs += , @($python, (@($tool) + $a)) }
@@ -166,12 +193,19 @@ if ($List) {
         Say ('{0,2}. {1} {2}' -f ($i + 1), $steps[$i].tool, (@($runs[$i][1] | Select-Object -Skip ($(if ($steps[$i].tool -like '*.ps1') { 5 } else { 1 }))) -join ' '))
     }
     Say ('{0} steps, then the hashes of game\content in records\asset-provenance.json, each list {1}: {2}. Nothing was run.' -f $steps.Count, $orderList, (Get-LoadOrderName $recorded))
+    if ($WithoutLast) { Say ('steps 1 to {0} are given {1}, the same order without {2}' -f $lastAt, $withoutList, $lastPlugin) }
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $orderFolder | Out-Null
 [IO.File]::WriteAllLines($orderList, [string[]]@($recorded | Select-Object -Skip 5 | ForEach-Object { '*' + $_ }), (New-Object Text.UTF8Encoding($false)))
 Say ('the load order: ' + (Get-LoadOrderName $recorded) + ', from game\data\npc-population.json') 'Cyan'
+if ($WithoutLast) {
+    $without = @($recorded | Where-Object { $_ -ine $lastPlugin })
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $withoutList) | Out-Null
+    [IO.File]::WriteAllLines($withoutList, [string[]]@($without | Select-Object -Skip 5 | ForEach-Object { '*' + $_ }), (New-Object Text.UTF8Encoding($false)))
+    Say ('steps 1 to {0}, before {1}, read it without {2}: {3}' -f $lastAt, $steps[$lastAt].tool, $lastPlugin, (Get-LoadOrderName $without)) 'Cyan'
+}
 
 # A file a step reads back (readsBack in content-tables.json) is written by a
 # later step. When that step changes it, the reader built from the old one, so

@@ -249,7 +249,7 @@ try {
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
     }
-    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'))) {
+    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
         $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])"))
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
         Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build.*?Get-ContentBuild\.ps1 -Newest')

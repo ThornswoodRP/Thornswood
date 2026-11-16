@@ -633,6 +633,10 @@ issue where the card did.
   request from its own message, held to that commit, not GitHub's
   commit lookup.** (dec_hEDMbH9Ygp_hp6NKG6qGJw) 11 Nov 2026,
   [#4135](https://github.com/ThornswoodRP/Thornswood/issues/4135#issuecomment-6814947207).
+- **#6179 closes as replaced by #6185, which fixed the journal id on main,
+  and its branch wisp/6178-social-share goes with it.**
+  (dec_J9Bj_6xJZC_s3jM1XZcuMg) 15 Nov 2026,
+  [#6249](https://github.com/ThornswoodRP/Thornswood/issues/6249#issuecomment-6904011724).
 
 ### Languages and code
 

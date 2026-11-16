@@ -956,6 +956,14 @@ $checks = @(
   # Ready, unlike Health, is restarted for: the header says why.
   @{ Name = 'tunnel';    Task = 'Thornswood Tunnel';     Port = 20241; Say = 'The Cloudflare tunnel, which carries the website, both update feeds and the ssh bridge'; Ready = 'http://127.0.0.1:20241/ready' }
 )
+# MongoDB, where a game server keeps its world once Move-World has moved it
+# (#6237): a server whose database does not answer cannot load or save. Put
+# first, so a run starts it before it looks at the game servers. Only once
+# Install-Mongo.ps1 has installed it (bin\installed.json), so a box without
+# it is not told about a task that is not there.
+if (Test-Path -LiteralPath 'C:\Thornswood-Mongo\bin\installed.json') {
+  $checks = @(@{ Name = 'mongo'; Task = 'Thornswood Mongo'; Port = 27017; Say = 'MongoDB, which keeps the game servers'' worlds' }) + $checks
+}
 
 # Told about and never restarted. The runner's service name is the one
 # Install-Runner.ps1 registers, actions.runner.<owner>-<repo>.<runner name>,
