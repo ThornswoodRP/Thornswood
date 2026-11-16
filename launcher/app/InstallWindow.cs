@@ -281,7 +281,7 @@ namespace Thornswood
             chkAge.IsCheckedChanged += delegate { Gate(); };
             boxes.Children.Add(chkAge);
             agree = new CheckBox[InstallAgreements.Pages.Length];
-            string[] linkWords = InstallAgreements.LinkWords;
+            string[] linkWords = { "Read them", "Read it", "Read them" };
             for (int i = 0; i < agree.Length; i++)
             {
                 string page = InstallAgreements.Pages[i];
