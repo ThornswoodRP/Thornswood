@@ -563,7 +563,10 @@ Then the person picks a hold.
 1. **Turn on Community.** Server Settings, Enable Community. Without it there
    are no forum channels, no announcement channel and no rules screen. Run
    `Setup-Discord.ps1` again afterwards and the text channels standing in for
-   forums are replaced with real ones.
+   forums are replaced with real ones. That takes `-Prune`, and only an empty
+   one is replaced: the forum is made first and the text channel deleted
+   after, so a forum Discord refuses leaves the channel. One with a message
+   or an open thread in it stays, named with why (#4492).
 
 2. **Point the rules screen at the rules.** Community, then Safety Setup. That
    is what makes people accept the rules before they can type.

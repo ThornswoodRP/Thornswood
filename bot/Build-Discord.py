@@ -1961,6 +1961,30 @@ def gone_mentions(guild, text):
     return [int(i) for i in re.findall(r'<#(\d+)>', text or '') if int(i) not in have]
 
 
+async def rebuild_as_forum(guild, cat, spec, want, ow, old):
+    """The forum the plan wants in place of old, a text channel why_kept
+       found nothing in, or old itself when Discord refuses the forum (#4492).
+       The forum is made before old is deleted, so a refused forum leaves the
+       channel standing; a refused delete leaves both, and says so."""
+    try:
+        forum = await guild.create_forum(
+            want, category=cat, topic=topic_text(guild, spec),
+            overwrites=ow, reason='Thornswood setup, rebuilding a text channel as a forum')
+    except discord.HTTPException as e:
+        failed.append('#%s could not be rebuilt as a forum, and the text channel '
+                      'stays (%s)' % (want, refused(e)))
+        return old
+    made.append('#' + want + ' (rebuilt as a forum)')
+    try:
+        await old.delete(reason='Thornswood setup, rebuilt as a forum')
+    except discord.HTTPException as e:
+        failed.append('#%s: the forum is made, and the old text channel of that '
+                      'name could not be deleted (%s)' % (want, refused(e)))
+        return forum
+    say('rebuilt', want + ' is a forum now')
+    return forum
+
+
 async def ensure_channel(guild, cat, spec, roles, found):
     name = spec['name']
     kind = spec['kind']
@@ -2018,8 +2042,12 @@ async def ensure_channel(guild, cat, spec, roles, found):
     else:
         # Made before Community was on, so it came out as a text channel where
         # a forum was wanted. Discord cannot convert one into the other, so the
-        # only fix is to delete it and make it again, which is why this says so
-        # loudly rather than quietly leaving it wrong.
+        # only fix is a new forum and the old channel deleted, which is why this
+        # says so loudly rather than quietly leaving it wrong. The delete goes
+        # through why_kept, the check -Prune's own deletes go through, and
+        # here a message in the channel keeps it too: its name stays in the
+        # plan, so whatever is written in it is somebody's (#4492). The forum
+        # is made first, so a forum Discord refuses leaves the channel there.
         if kind == 'forum' and not isinstance(existing, getattr(discord, 'ForumChannel', ())):
             if PRUNE and want in KEEP:
                 say('note', '#' + want + ' is a text channel where a forum was '
@@ -2028,17 +2056,16 @@ async def ensure_channel(guild, cat, spec, roles, found):
             elif PRUNE and CHECK:
                 # -Check asks Discord for nothing; it said nothing of this
                 # and deleted the channel until #3317.
-                say('would rebuild', '#' + want + ' as a forum; this deletes it')
+                say('would rebuild', '#' + want + ' as a forum, and delete the text '
+                    'channel if no message and no open thread is in it')
             elif PRUNE:
-                try:
-                    await existing.delete(reason='wrong kind, rebuilding as a forum')
-                    existing = await guild.create_forum(
-                        want, category=cat, topic=topic_text(guild, spec),
-                        overwrites=ow, reason='Thornswood setup')
-                    made.append('#' + want + ' (rebuilt as a forum)')
-                    say('rebuilt', want + ' is a forum now')
-                except Exception:
-                    failed.append('#' + want + ' could not be rebuilt as a forum')
+                why = await why_kept(existing, await open_threads(guild), messages=True)
+                if why:
+                    say('left', '#%s is a text channel where a forum was wanted, '
+                        'and it stays: %s. Move or close what is in it, then '
+                        'run this again' % (want, why))
+                else:
+                    existing = await rebuild_as_forum(guild, cat, spec, want, ow, existing)
             else:
                 say('note', '#' + want + ' is a text channel where a forum was '
                     'wanted. The only fix for that deletes it, so ask first')
@@ -3614,6 +3641,35 @@ async def open_threads(guild):
     return out
 
 
+async def why_kept(ch, busy, messages=False):
+    """Why the build leaves a channel it would otherwise delete, in words, or
+       None when nothing goes with it. The one check both of the build's
+       channel deletes go through (#4492): -Prune's of a channel the plan no
+       longer has, and the rebuild of a text channel as the forum the plan
+       wants. busy is open_threads()'s answer, None when Discord would not
+       list the threads, which is never taken as none open.
+
+       messages=True leaves a channel that holds any message too. The rebuild
+       asks for it: the channel's name stays in the plan, so what is written
+       in it is somebody's (#bugs, #character-introductions and #tales, made
+       as text channels before Community). The prune list does not: a
+       channel the plan retired, such as the old ticket dropdown or closed
+       ticket log, holds messages by design and goes once no thread is open
+       in it."""
+    if busy is None:
+        return ('Discord would not say which threads are open, and an open '
+                'ticket would go with it')
+    if busy.get(ch.id):
+        return '%d thread(s) still open in it' % busy[ch.id]
+    if messages:
+        try:
+            async for _m in ch.history(limit=1):
+                return 'it holds messages, which would go with it'
+        except discord.HTTPException as e:
+            return 'its messages could not be read (%s)' % refused(e)
+    return None
+
+
 async def keep_order(guild):
     moves = order_wanted(guild)
     if not moves:
@@ -3811,14 +3867,12 @@ async def on_ready():
             if PRUNE:
                 busy = await open_threads(guild)
                 for ch in extra:
-                    if busy is None:
-                        failed.append('#%s was not removed: Discord would not say which '
-                                      'threads are open, and an open ticket would go '
-                                      'with it' % ch.name)
+                    why = await why_kept(ch, busy)
+                    if why and busy is None:
+                        failed.append('#%s was not removed: %s' % (ch.name, why))
                         continue
-                    if busy.get(ch.id):
-                        say('left', '#%s: %d thread(s) still open in it; it goes once '
-                            'they are closed' % (ch.name, busy[ch.id]))
+                    if why:
+                        say('left', '#%s: %s; it goes once they are closed' % (ch.name, why))
                         continue
                     if CHECK:
                         say('would remove', '#' + ch.name)
