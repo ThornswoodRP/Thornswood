@@ -11,20 +11,23 @@
   no copy on the box with the world in it.
 
   The fix marks such a copy when it is made, with <archive>.incomplete
-  beside it saying why, and retention never counts it as a daily or a
-  weekly. An incomplete copy is kept only while it is newer than the newest
-  whole copy, at most as many as the dailies, and its mark goes with it.
+  beside it saying why, and retention never lets it push a whole copy out.
+  It takes only a daily place no whole daily needs, and only while it is
+  newer than the newest whole copy, so the server still keeps no more than
+  seven daily and four weekly copies, as site/data/site/privacy.md says.
+  Its mark goes with it.
 
   This runs the script's own retention section (from its "retention" header
   to the line that says what was kept) over a stand-in backups folder:
     1. seven whole nights, then seven nights without the servers: every
-       whole daily and the whole weekly stay
-       and the incomplete ones are kept beside them, none counted as daily
-    2. then one whole night: it is a daily, the oldest whole daily goes,
-       and the incomplete ones older than it go with their marks
-    3. ten nights without the servers after a whole one: at most seven of
-       them are kept, the newest
-    4. the script writes the mark when the servers were not taken, before
+       whole daily and the whole weekly stay, and only the newest copy
+       without the servers takes the one daily place left
+    2. then one whole night: it is a daily, the seven whole dailies are
+       kept, and the incomplete ones older than it go with their marks
+    3. ten nights without the servers after one whole daily: the newest six
+       take the six daily places left
+    4. no run keeps more than seven daily and four weekly copies in all
+    5. the script writes the mark when the servers were not taken, before
        retention runs
   Writes only into a scratch folder under TEMP, which it removes.
 #>
@@ -79,8 +82,12 @@ try {
     $lost = @($whole | Where-Object { $left -notcontains $_ })
     Yes ('1. after seven nights without the servers every whole copy stays' + $(if ($lost.Count) { ' (dropped: ' + ($lost -join ', ') + ')' } else { '' })) ($lost.Count -eq 0)
     $partial = @(foreach ($n in 8..14) { 'thornswood-' + (Day $n).ToString('yyyyMMdd') + '-021500.zip.enc' })
-    Yes '   and the seven without them are kept beside them, each with its mark' (
-        @($partial | Where-Object { $left -contains $_ -and $left -contains ($_ + '.incomplete') }).Count -eq 7)
+    $keptPartial = @($partial | Where-Object { $left -contains $_ })
+    Yes ('   and only the newest without the servers takes the one daily place left, with its mark (' + ($keptPartial -join ', ') + ')') (
+        $keptPartial.Count -eq 1 -and $keptPartial[0] -eq $partial[6] -and $left -contains ($partial[6] + '.incomplete'))
+    Yes '   and the marks of the ones dropped went with them' (@($left | Where-Object { $_ -like '*.incomplete' }).Count -eq 1)
+    Yes ('4. no more than seven daily and four weekly copies are kept (' + @($left | Where-Object { $_ -notlike '*.incomplete' }).Count + ')') (
+        @($left | Where-Object { $_ -notlike '*.incomplete' }).Count -le 11)
 
     # ---- 2. then a whole night -------------------------------------------------
     Night $out (Day 16)
@@ -90,8 +97,8 @@ try {
     Yes '   the incomplete copies older than it go, marks and all' (
         @($left | Where-Object { $_ -like '*.incomplete' -or $partial -contains $_ }).Count -eq 0)
     $dailies = @($left | Where-Object { $_ -match '^thornswood-(\d{8})-\d{6}\.zip\.enc$' -and ([datetime]::ParseExact($Matches[1], 'yyyyMMdd', $null)).DayOfWeek -ne 'Sunday' })
-    Yes ('   seven whole dailies are kept, the oldest gone (' + $dailies.Count + ')') (
-        $dailies.Count -eq 7 -and $left -notcontains $whole[1] -and $left -contains $whole[2])
+    Yes ('   the seven whole dailies are kept, 2 to 7 Nov and the new one (' + $dailies.Count + ')') (
+        $dailies.Count -eq 7 -and $left -contains $whole[1] -and $left -contains $whole[6])
     Yes '   and the whole weekly stays' ($left -contains $whole[0])
 
     # ---- 3. ten nights without the servers -------------------------------------
@@ -102,18 +109,20 @@ try {
     Run-Retention $out
     $left = Left $out
     $kept = @($left | Where-Object { Test-Path -LiteralPath (Join-Path $out ($_ + '.incomplete')) })
-    $newest = @(foreach ($n in 6..12) { 'thornswood-' + (Day $n).ToString('yyyyMMdd') + '-021500.zip.enc' })
-    Yes ('3. of ten nights without the servers the newest seven are kept (' + $kept.Count + ')') (
-        $kept.Count -eq 7 -and @($newest | Where-Object { $kept -notcontains $_ }).Count -eq 0)
+    $newest = @(foreach ($n in 7..12) { 'thornswood-' + (Day $n).ToString('yyyyMMdd') + '-021500.zip.enc' })
+    Yes ('3. of ten nights without the servers the newest six take the six daily places left (' + $kept.Count + ')') (
+        $kept.Count -eq 6 -and @($newest | Where-Object { $kept -notcontains $_ }).Count -eq 0)
     Yes '   and the whole one before them stays' ($left -contains ('thornswood-' + (Day 2).ToString('yyyyMMdd') + '-021500.zip.enc'))
+    Yes ('4. no more than seven daily and four weekly copies are kept here either (' + @($left | Where-Object { $_ -notlike '*.incomplete' }).Count + ')') (
+        @($left | Where-Object { $_ -notlike '*.incomplete' }).Count -le 11)
 }
 finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- 4. the mark is written when the copy is made --------------------------
+# ---- 5. the mark is written when the copy is made --------------------------
 $mark = [regex]::Match($text, "if \(\`$serversNotTaken\) \{[^\n]*'\.incomplete'")
-Yes '4. the script writes the mark when the servers were not taken' ($mark.Success)
+Yes '5. the script writes the mark when the servers were not taken' ($mark.Success)
 Yes '   before retention runs' ($mark.Success -and $mark.Index -lt $head)
 
 Write-Host ''
