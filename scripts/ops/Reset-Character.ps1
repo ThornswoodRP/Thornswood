@@ -95,6 +95,7 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $forms ('_discarded-' + $stamp)
 $moved = @()
+$stuck = @()
 # The characters, by the one rule (#5168, Release-List.ps1): a runtime form's
 # hex name and a profileId above 0, so 1f.json goes as 12.json does and the
 # world's own runtime forms stay.
@@ -105,9 +106,15 @@ foreach ($p in $chars.files) {
     $name = Split-Path -Leaf $p
     $to = Join-Path $bin $name
     try { Move-Item -LiteralPath $p -Destination $to -Force -ErrorAction Stop; $moved += $to }
-    catch { Write-Host ("could not move {0}: {1}" -f $name, $_.Exception.Message) }
+    catch { $stuck += $name; Write-Host ("could not move {0}: {1}" -f $name, $_.Exception.Message) }
 }
-if ($moved.Count -eq 0) { Write-Host 'there was no character on the server to throw away'; exit 0 }
+# A character that could not be moved is still there on the next Play, so
+# the reset did not work (#4199): it ends 1, after the release list names
+# the ones that did go.
+if ($moved.Count -eq 0) {
+    if ($stuck.Count) { Write-Host ("STOP. {0} character change form(s) could not be moved ({1}), so the reset did not happen." -f $stuck.Count, ($stuck -join ', ')); exit 1 }
+    Write-Host 'there was no character on the server to throw away'; exit 0
+}
 Write-Host ("thrown away: {0} change form(s), kept at {1}" -f $moved.Count, $bin)
 # Only the characters, never the profile (#2668): Release-List.ps1 says why.
 $bad = $false
@@ -121,6 +128,7 @@ foreach ($l in @($found.notes) + @(Write-ThornswoodReleaseList -Root $Root -Acto
     }
 }
 if ($bad) { exit 1 }
+if ($stuck.Count) { Write-Host ("STOP. {0} character change form(s) could not be moved ({1}) and are still there." -f $stuck.Count, ($stuck -join ', ')); exit 1 }
 '@
 
 # What the box runs around the body (#2871): the server on this root's own
@@ -217,7 +225,10 @@ if ($UseLocal) {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-reset.ps1'
     Set-Content -LiteralPath $tmp -Value $body -Encoding UTF8
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $tmp -Root $Local
+    $resetCode = $LASTEXITCODE
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    # Done only when the reset says it worked (#4199), as the VPS path reads it.
+    if ($resetCode -ne 0) { Die "the reset exited with $resetCode, so the character is not thrown away. The lines above say why." }
 
     Write-Host ''
     Say 'Done. Press Play and creation runs from the top.' 'Green'

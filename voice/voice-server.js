@@ -1357,7 +1357,23 @@ class Sock {
 
       let msg = null;
       try { msg = JSON.parse(body.toString('utf8')); } catch (e) { continue; }
-      if (msg && this.onmessage) this.onmessage(msg);
+      if (!msg || !this.onmessage) continue;
+      /*
+        A fault in handling one message costs that one socket (#4206). It
+        used to leave the process, and every socket in the room went with
+        it, for one page's one message. The fields a page sends are read
+        with pageText and pageNumber so that a shape cannot do that; this is
+        where whatever else could still throw stops, and it says in the log
+        what it was so it can be found and fixed where it is.
+      */
+      try {
+        this.onmessage(msg);
+      } catch (e) {
+        console.log('[voice] closed a connection whose ' + JSON.stringify(String(typeof msg.t === 'string' ? msg.t : '?').slice(0, 20)) +
+                    ' message could not be handled: ' + (e && e.stack || e));
+        this.close();
+        return;
+      }
     }
   }
 }
@@ -1373,9 +1389,26 @@ class Sock {
   is for. Anything unrecognised becomes local rather than being rejected, so an
   older client that has never heard of modes still sounds normal to everyone.
 */
+/*
+  A FIELD AS A PAGE SENT IT (#4206).
+
+  Every message is the page's own JSON, so a field the service reads as text
+  or as a number can arrive as an object, and String() or Number() on an
+  object with no callable toString or valueOf throws. One chat line whose
+  text was { "toString": 0 } stopped the whole service. So what a page sent
+  is read here, and nowhere else: text is a string or nothing, and a number
+  is a number, or a string of one, or nothing.
+*/
+function pageText(v) {
+  return typeof v === 'string' ? v : '';
+}
+function pageNumber(v) {
+  return typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+}
+
 const MODES = ['whisper', 'local', 'yell'];
 function cleanMode(v) {
-  const m = String(v == null ? '' : v).toLowerCase();
+  const m = pageText(v).toLowerCase();
   return MODES.indexOf(m) === -1 ? 'local' : m;
 }
 
@@ -1397,7 +1430,7 @@ function cleanMode(v) {
 */
 const SDP_TYPES = ['offer', 'answer', 'pranswer'];
 function signal(msg) {
-  const to = Number(msg.to);
+  const to = pageNumber(msg.to);
   if (msg.t === 'sdp') {
     const d = msg.sdp;
     if (!d || typeof d !== 'object' || SDP_TYPES.indexOf(d.type) === -1 || typeof d.sdp !== 'string') return null;
@@ -1565,7 +1598,7 @@ function sendRoster() {
   proven and relay marks), so no name can change the command it rides with.
 */
 function cleanName(v) {
-  return String(v == null ? '' : v)
+  return pageText(v)
     .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '')
     .trim()
     .slice(0, 40);
@@ -1578,7 +1611,7 @@ function cleanName(v) {
   compared, so a page that says one thing and proved another is written down.
 */
 function onJoin(ws, msg, profileId) {
-  const claimed = Number(msg.profileId) || 0;
+  const claimed = pageNumber(msg.profileId) || 0;
   if (claimed && claimed !== profileId) {
     console.log('[voice] join claimed profile ' + claimed + ' on a connection whose token is for ' +
                 profileId + '. The token wins.');
@@ -2900,7 +2933,7 @@ server.on('upgrade', (req, socket, head) => {
     // server never inspects what an offer or a candidate says, it only
     // decides who is allowed to hear it; see signal for the shape.
     if (msg.t === 'sdp' || msg.t === 'ice') {
-      const to = peers.get(Number(msg.to));
+      const to = peers.get(pageNumber(msg.to));
       // Only between two voice places (#3570): a socket at the menu is on
       // nobody's roster, and nobody's page builds a connection to it.
       // And only between two who each have the other in their view (#5516):
@@ -2978,7 +3011,7 @@ server.on('upgrade', (req, socket, head) => {
     // Words made of what somebody said on voice, on their own machine
     // (#2475). Never written down; see captions, above.
     if (msg.t === 'caption') {
-      const why = relayCaption(peers.get(myId), msg.text, Date.now());
+      const why = relayCaption(peers.get(myId), pageText(msg.text), Date.now());
       if (why) captionCounts.dropped++; else captionCounts.sent++;
       return;
     }
@@ -3031,7 +3064,7 @@ server.on('upgrade', (req, socket, head) => {
       const me = peers.get(myId);
       // A slash line that is not speech (/me, /do, /w, /s and /ooc are) is a
       // command, and keeps up to COMMAND_CHARS. Everything said keeps 400.
-      const long = String(msg.text == null ? '' : msg.text).slice(0, COMMAND_CHARS);
+      const long = pageText(msg.text).slice(0, COMMAND_CHARS);
       const text = (long.charAt(0) === '/' && !headlines.floatLine(long)) ? long : long.slice(0, SAID_CHARS);
       if (!text) return;
 

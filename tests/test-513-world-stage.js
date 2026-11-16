@@ -235,12 +235,12 @@ attempt('the stage', function () {
   yes('S1 the start is the list\'s, not the code\'s: put another stage first and the world starts there',
       call(other, 'worldStage').id === 'test-landing' && warText() === null);
 
-  let r = call(s, 'setWorldStage', 'dragons', 'Gavin');
+  let r = call(s, 'setWorldStage', 'dragons', 'Patrick');
   yes('S2 an id the list does not have is refused: "' + (r && r.why) + '"',
       r && r.ok === false && /no stage called "dragons"/.test(r.why) && warText() === null);
-  r = call(s, 'setWorldStage', 42, 'Gavin');
+  r = call(s, 'setWorldStage', 42, 'Patrick');
   yes('S2 and so is something that is not an id', r && r.ok === false && warText() === null);
-  r = call(s, 'setWorldStage', 'peace', 'Gavin');
+  r = call(s, 'setWorldStage', 'peace', 'Patrick');
   yes('S3 the stage it is already at is refused: "' + (r && r.why) + '"',
       r && r.ok === false && /already at Peace/.test(r.why) && warText() === null);
   r = call(s, 'setWorldStage', 'test-landing', '   ');
@@ -248,8 +248,8 @@ attempt('the stage', function () {
   r = call(s, 'setWorldStage', 'test-landing', 'x'.repeat(81));
   yes('S4 and so is a who past 80 characters', r && r.ok === false && warText() === null);
   ['Test-Landing', 'test_landing', 'test landing', 'a'.repeat(33), ''].forEach(function (bad) {
-    const m = call(s, 'setWorldStage', bad, 'Gavin');
-    const p = call(s, 'proposeWorldStage', bad, 'Gavin');
+    const m = call(s, 'setWorldStage', bad, 'Patrick');
+    const p = call(s, 'proposeWorldStage', bad, 'Patrick');
     yes('S4b an id that breaks the patrol file\'s key rule is refused by a move and a proposal: ' + JSON.stringify(bad),
         m && m.ok === false && p && p.ok === false &&
         /A stage id is lower case letters, digits and dashes, 1 to 32 of them/.test(m.why) && m.why === p.why &&
@@ -257,14 +257,14 @@ attempt('the stage', function () {
   });
 
   const t1 = clock.t;
-  r = call(s, 'setWorldStage', 'test-landing', 'Gavin  (a test)');
+  r = call(s, 'setWorldStage', 'test-landing', 'Patrick  (a test)');
   let d = onDisk();
   yes('S5 a stage the list has is taken, and written with when, as the first move on record',
       r && r.ok === true && r.stage.id === 'test-landing' && !!d && d.id === 'test-landing' &&
       d.since === t1 && Array.isArray(d.history) && d.history.length === 1 &&
       JSON.stringify(d.history[0]) === JSON.stringify({ id: 'test-landing', at: t1 }));
   yes('S5 and the file names nobody: who moved it is the staff log\'s (#2860)',
-      !('by' in d) && warText().indexOf('Gavin') < 0);
+      !('by' in d) && warText().indexOf('Patrick') < 0);
   st = call(s, 'worldStage');
   yes('S5 and worldStage() reads it at once, with the force as written', st.id === 'test-landing' && st.force === 'remnant');
   yes('S5 and no half written file is left beside it', !fs.existsSync(warFile + '.tmp'));
@@ -277,7 +277,7 @@ attempt('the stage', function () {
       r.ok && st.force === 'Maormer raiders, paid by nobody who will say so');
   clock.t += 60 * 60 * 1000;
   const t3 = clock.t;
-  call(s, 'setWorldStage', 'peace', 'Gavin');
+  call(s, 'setWorldStage', 'peace', 'Patrick');
   s = boot(worldTest);
   st = call(s, 'worldStage');
   const h = call(s, 'worldHistory');
@@ -285,7 +285,7 @@ attempt('the stage', function () {
       stageLogs(s.logs).length === 0);
   yes('S7 and the history keeps every move, oldest first, a later stage taking none off, naming nobody',
       JSON.stringify(h) === JSON.stringify([{ id: 'test-landing', at: t1 }, { id: 'test-free', at: t2 }, { id: 'peace', at: t3 }]) &&
-      ['Gavin', 'Smeagle'].every(function (n) { return warText().indexOf(n) < 0; }));
+      ['Patrick', 'Smeagle'].every(function (n) { return warText().indexOf(n) < 0; }));
   h.length = 0;
   yes('S7 and what worldHistory() hands out is a copy', call(s, 'worldHistory').length === 3);
   const before = warText();
@@ -317,33 +317,33 @@ attempt('the stage', function () {
       call(s, 'pendingWorldStage').id === 'test-free');
   clock.t += 1000;
   const tc = clock.t;
-  r = call(s, 'confirmWorldStage', 'Gavin');
+  r = call(s, 'confirmWorldStage', 'Patrick');
   const last = call(s, 'worldHistory').slice(-1)[0];
   yes('S12 a yes makes the move and clears it, handing back who proposed it for the staff log, and the file names neither',
       r.ok === true && r.proposedBy === 'the server' && call(s, 'worldStage').id === 'test-free' &&
       JSON.stringify(last) === JSON.stringify({ id: 'test-free', at: tc }) &&
       call(s, 'pendingWorldStage') === null && onDisk().pending === null &&
-      warText().indexOf('Gavin') < 0 && warText().indexOf('the server') < 0);
-  r = call(s, 'confirmWorldStage', 'Gavin');
+      warText().indexOf('Patrick') < 0 && warText().indexOf('the server') < 0);
+  r = call(s, 'confirmWorldStage', 'Patrick');
   yes('S13 a second yes has nothing to confirm', r.ok === false && /Nothing is proposed/.test(r.why));
   call(s, 'proposeWorldStage', 'peace', 'the server');
   const hist0 = JSON.stringify(call(s, 'worldHistory'));
-  r = call(s, 'dropWorldStageProposal', 'Gavin');
+  r = call(s, 'dropWorldStageProposal', 'Patrick');
   yes('S14 a proposal dropped moves nothing and leaves the history alone',
       r.ok === true && r.proposedBy === 'the server' && call(s, 'pendingWorldStage') === null && call(s, 'worldStage').id === 'test-free' &&
       JSON.stringify(call(s, 'worldHistory')) === hist0 && onDisk().pending === null);
-  yes('S14 and dropping nothing is refused', call(s, 'dropWorldStageProposal', 'Gavin').ok === false);
+  yes('S14 and dropping nothing is refused', call(s, 'dropWorldStageProposal', 'Patrick').ok === false);
   call(s, 'proposeWorldStage', 'test-landing', 'the server');
-  r = call(s, 'setWorldStage', 'peace', 'Gavin');
+  r = call(s, 'setWorldStage', 'peace', 'Patrick');
   yes('S15 a direct move clears a proposal it overtook', r.ok && call(s, 'pendingWorldStage') === null && onDisk().pending === null);
   call(s, 'proposeWorldStage', 'test-landing', 'the server');
   s = boot(worldTest);
   clock.t += 1000;
-  r = call(s, 'confirmWorldStage', 'Gavin');
+  r = call(s, 'confirmWorldStage', 'Patrick');
   yes('S15b a proposal made before a restart is confirmed with nobody named for it',
       r.ok === true && r.proposedBy === '' && call(s, 'worldStage').id === 'test-landing' &&
       JSON.stringify(call(s, 'worldHistory').slice(-1)[0]) === JSON.stringify({ id: 'test-landing', at: clock.t }));
-  call(s, 'setWorldStage', 'peace', 'Gavin');
+  call(s, 'setWorldStage', 'peace', 'Patrick');
 
   // Files the list cannot account for.
   const kept = warText();
@@ -355,7 +355,7 @@ attempt('the stage', function () {
   st = call(s, 'worldStage');
   yes('S16 the real list reads a stage it does not have as the start, and says so once',
       st.id === 'peace' && stageLogs(s.logs).length === 1 && warText() === lostText);
-  r = call(s, 'setWorldStage', 'peace', 'Gavin');
+  r = call(s, 'setWorldStage', 'peace', 'Patrick');
   yes('S16 the start may then be set, and every move on record is kept with it',
       r.ok === true && onDisk().history.length === JSON.parse(lostText).history.length + 1 &&
       onDisk().history.slice(-2)[0].id === 'test-landing');
@@ -373,7 +373,7 @@ attempt('the stage', function () {
       st.id === 'peace' && stageLogs(s.logs).length === 1);
   yes('S18 and the file is left as it was', warText() === '{not json');
   clock.t += 1000;
-  r = call(s, 'setWorldStage', 'test-landing', 'Gavin');
+  r = call(s, 'setWorldStage', 'test-landing', 'Patrick');
   const aside = path.join(priv, 'war.json.unreadable-' + clock.t);
   yes('S19 a move after that keeps the unreadable file beside the new one',
       r.ok === true && fs.existsSync(aside) && fs.readFileSync(aside, 'utf8') === '{not json' &&
@@ -487,11 +487,11 @@ attempt('the id rule', function () {
       left.length === 4 && /"Upper"/.test(left[0]) && /"has space"/.test(left[2]) && /"7"/.test(left[3]));
   const ids = call(s, 'stages').map(function (r) { return r.id; });
   yes('I2 the list is what is left, in order', ids.join() === ['peace', LONGEST.id].join());
-  let r = call(s, 'setWorldStage', 'Upper', 'Gavin');
+  let r = call(s, 'setWorldStage', 'Upper', 'Patrick');
   yes('I3 a move to one of them is refused with the rule', r.ok === false && /1 to 32 of them/.test(r.why));
-  r = call(s, 'proposeWorldStage', 'b'.repeat(33), 'Gavin');
+  r = call(s, 'proposeWorldStage', 'b'.repeat(33), 'Patrick');
   yes('I3 and so is a proposal', r.ok === false && /1 to 32 of them/.test(r.why));
-  r = call(s, 'setWorldStage', LONGEST.id, 'Gavin');
+  r = call(s, 'setWorldStage', LONGEST.id, 'Patrick');
   yes('I4 an id of exactly 32 is a stage the world can reach', r.ok === true && call(s, 'worldStage').id === LONGEST.id);
   const plain = boot(worldTest);
   yes('I5 a list that keeps the rule leaves nothing out and logs nothing about it',

@@ -356,12 +356,14 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   yes('  the pull request number and head through env, never pasted into the script', /\n          PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}\n          PR_HEAD: \$\{\{ github\.event\.pull_request\.head\.sha \}\}\n/.test(note) &&
       !/\$\{\{/.test(note.split('        run: |')[1] || ''));
   yes('the pull request build has the same note step', pr.indexOf(note) >= 0);
-  // The gate's reports are the one artifact a build keeps (#5295, public
-  // since 30 Oct 2026): the Windows shares', the Linux shares' (#5293) and
-  // the merged one. The note is never one (#3399).
+  // The gate's reports are what a build keeps (#5295, public since 30 Oct
+  // 2026): the Windows shares', the Linux shares' (#5293) and the merged
+  // one; and the content build the pick laid, handed to the shares for a
+  // day so they lay the same one and hold no token (#5191, stage 4). The
+  // note is never one (#3399).
   const uploads = (y) => (y.replace(/^\s*#.*$/gm, '').match(/uses: actions\/upload-artifact@[\s\S]*?\n\s+name: (.+)/g) || []).map(m => m.replace(/[\s\S]*name: /, ''));
-  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n));
-  yes('no step of either build uploads an artifact but the gate\'s reports, and the note is never one (#3399, #5295)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 3 && !/tested-tree/i.test(uploads(build).join(' ')));
+  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n) || n === 'content-laid');
+  yes('no step of either build uploads an artifact but the gate\'s reports and the content build the pick laid, and the note is never one (#3399, #5295, #5191)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 4 && !/tested-tree/i.test(uploads(build).join(' ')));
   for (const n of T.JOBS) { yes('the script\'s job name "' + n + '" is a job in build-pr.yml', pr.indexOf('\n    name: ' + n + '\n') >= 0); }
   yes('the script\'s workflow is the pull request build', fs.existsSync(path.join(REPO, T.WORKFLOW)) && /\non:\n  pull_request:\n/.test(pr));
   yes('  and runs in the merge queue, whose run the script reads first (#5182)', /\non:\n  pull_request:\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));
@@ -398,7 +400,8 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     'scripts/dev/Launcher-Reach.ps1': 'the pick\'s path rule (#5292): the event chooses only whether the launcher job builds, and a pull request build that built nothing keeps no note, so main builds',
     'tests/test-5292-path-rule.ps1': 'sets those names for Launcher-Reach.ps1 in scratch processes, to hold what it says on each event',
     'tests/test-5179-merge-release.ps1': 'sets GITHUB_SHA for merge-release.yml\'s notes step, run in a scratch process over a stand-in; merge-release.yml runs on main after a merge and is no check of a build (#5179)',
-    'scripts/ops/Box-Step.js': 'box-step.yml\'s issue event: which issue was opened, edited or closed (#5611); it runs on issues and a schedule, never in a check of a build'
+    'scripts/ops/Box-Step.js': 'box-step.yml\'s issue event: which issue was opened, edited or closed (#5611); it runs on issues and a schedule, never in a check of a build',
+    'tests/pr-read-cases.py': 'sets GITHUB_EVENT_NAME and GITHUB_RUN_ATTEMPT for bot/pr_tasks.py in its own process, over a stand-in GitHub, to hold where test-tasks.yml reads the body from on each event (#5900); test-tasks.yml is no check of a build'
   };
   const ENVREAD = /\b(GITHUB_(EVENT_NAME|EVENT_PATH|REF|REF_NAME|REF_TYPE|SHA|HEAD_REF|BASE_REF|RUN_ID|RUN_NUMBER|ACTOR))\b/;
   const found = [];

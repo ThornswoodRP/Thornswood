@@ -6,6 +6,14 @@ change the plan and run that, and `bot/tests/test-3317-layout.py` fails when
 the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live
 server differs from this page. Issue #3317 is where it was set out.
 
+## Contents
+
+- [The staff council](#the-staff-council)
+- [Roles, top of the list first](#roles-top-of-the-list-first)
+- [Who a mode lets in](#who-a-mode-lets-in)
+- [Categories and channels, in order](#categories-and-channels-in-order)
+- [Retired](#retired)
+
 ## The staff council
 
 Each staff category has a lead, and the leads are the council: they
@@ -621,7 +629,7 @@ Category mode: staff.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #staff-announcements | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; topic: Announcements for every staff member. The council posts here. |
+| #staff-news | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; was #staff-announcements in Staff; topic: Every dev release, and announcements for every staff member. The council posts here. |
 | #council-decisions | text | staffread | everybody on staff | the council | posts: the council; topic: Every council decision, with its date. The council posts here. |
 | #staff-updates | text | staff | everybody on staff | everybody on staff | never made by the build; topic: Only what every staff member must act on: a restart, an outage, or a change to how staff work. The bot and the watchdog post here. |
 | #staff-general | text | staff | everybody on staff | everybody on staff | topic: Nobody else can see this. |
@@ -713,6 +721,6 @@ Categories retired by the plan, removed by `-Prune` once empty: Help, The Holds,
 
 Channel names the build no longer wants, removed by `-Prune`: tech-help, looking-for-group, off-topic, downloads, links-and-credits, Small Table, The Longhouse, Away, screenshots, clips, bot-commands, The Bannered Mare, The Road, test-these, test-tasks-archive, tickets-and-applications, tickets, seats.
 
-Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
+Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-news, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
 
 Roles never deleted: every Jarl, Citizen and office role, and every faction's Leader, member and Officer role.

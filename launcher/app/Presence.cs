@@ -184,7 +184,7 @@ namespace Thornswood
                         pipe = null;
                         nextTry = DateTime.UtcNow.AddSeconds(10);
                         lock (gate) { dirty = true; }
-                        if (said) Say("Discord presence dropped: " + ex.Message + ". Trying again.");
+                        if (said) Say("Discord presence dropped: " + Failure.Why("Presence", ex, "Discord") + ". Trying again.");
                         said = false;
                         Thread.Sleep(3000);
                     }

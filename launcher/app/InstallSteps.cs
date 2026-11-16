@@ -224,8 +224,7 @@ namespace Thornswood
             // parked one stayed on the disk. This run writes the files into
             // the folder that is already there.
             string ownGame = Path.Combine(Root, "Game");
-            string madeRecord = Path.Combine(ProfileDir, "OwnGame", "files.txt");
-            madeOwn = Directory.Exists(ownGame) && File.Exists(madeRecord);
+            madeOwn = InstallPlace.MadeOwn(Root);
             ownFirst = choice.MakeOwnGame && !madeOwn;
 
             if (madeOwn)
@@ -279,7 +278,7 @@ namespace Thornswood
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
                     Say("");
-                    Say("  It would not move: " + e.Message);
+                    Say("  It would not move: " + Failure.Say("InstallSteps, moving it aside", e));
                     Say("  Close Skyrim, Vortex and the launcher, then run this again.");
                     throw Die("The old Game folder is in the way and the launcher will read it instead.");
                 }
@@ -306,27 +305,19 @@ namespace Thornswood
             // ------------------------------------------------- space
             // The launcher, Thornswood's own content and the script extender,
             // and nothing else: the fifteen gigabytes of Bethesda archives are
-            // already on the disk and stay where they are. The window says the
-            // same number (InstallPlace.Needed) before Install is pressed.
-            long needGB = InstallPlace.Needed / 1073741824L;
-            string dl = DriveName(Root);
-            double freeGB = FreeGB(Root);
+            // already on the disk and stay where they are. The drives and the
+            // room each needs are InstallPlace.Rooms, the rule the window's
+            // line says and its Install button refuses by, so this never stops
+            // what the window let through (#4681). An unreadable drive stops
+            // here with its reason, since this is about to write to it.
+            List<InstallPlace.Room> rooms = InstallPlace.Rooms(InstallPlace.DriveOf(Root), InstallPlace.DriveOf(steamGame), !ownFirst && !madeOwn);
+            Func<string, long> freeOn = d => new DriveInfo(d).AvailableFreeSpace;
             Say("  Installing to " + Root);
-            Say("  " + Gb1(freeGB) + " GB free on " + dl);
-            if (freeGB < needGB) throw Die("You need about " + needGB + " GB free on " + dl + ". Close this, open Thornswood again and pick a different drive.");
-            if (!ownFirst && !madeOwn)
-            {
-                // The files land on whichever drive Steam keeps Skyrim on,
-                // which is not necessarily the one just checked. With the own
-                // folder chosen they land under Root, which is.
-                string sd = DriveName(steamGame);
-                if (sd.Length > 0 && !string.Equals(sd, dl, StringComparison.OrdinalIgnoreCase))
-                {
-                    double sf = FreeGB(steamGame);
-                    Say("  " + Gb1(sf) + " GB free on " + sd + ", where Steam keeps Skyrim");
-                    if (sf < 3) throw Die("Only " + Gb1(sf) + " GB free on " + sd + ", and Thornswood's own content needs about 3 GB there.");
-                }
-            }
+            foreach (InstallPlace.Room r in rooms)
+                Say("  " + InstallPlace.Gb(freeOn(r.Drive)) + " free on " + InstallPlace.Letter(r.Drive) + (r.Steam ? ", where Steam keeps Skyrim" : ""));
+            InstallPlace.Room shortOn;
+            string refused = InstallPlace.Short(rooms, freeOn, out shortOn);
+            if (refused != null) throw Die(refused + " Close this and open Thornswood again to choose again.");
 
             // ------------------------------------------------- the base game
             // Copying Bethesda's files into the Steam folder they are already
@@ -449,7 +440,7 @@ namespace Thornswood
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + e.Message + "). " +
+                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
                               "Check the disk has room and nothing has those files open, then run this again.");
                 }
                 done += new FileInfo(from).Length;
@@ -703,7 +694,7 @@ namespace Thornswood
             catch (Exception e) when (e is UnauthorizedAccessException || e is IOException || e is InvalidOperationException ||
                                       e is System.Security.Principal.IdentityNotMappedException || e is PlatformNotSupportedException)
             {
-                Say("  config.json could not be kept to this account only: " + e.Message);
+                Say("  config.json could not be kept to this account only: " + Failure.Say("InstallSteps, config.json's rights", e, "config.json"));
             }
         }
 
@@ -816,21 +807,6 @@ namespace Thornswood
         }
 
         // ---------------------------------------------------------------- helpers
-
-        /// <summary>"D:" for a path on D:, as the script's Split-Path -Qualifier said it.</summary>
-        static string DriveName(string path)
-        {
-            string r = Path.GetPathRoot(Path.GetFullPath(path)) ?? "";
-            return r.Length > 1 ? r.TrimEnd('\\') : r;
-        }
-
-        static double FreeGB(string path)
-        {
-            string r = Path.GetPathRoot(Path.GetFullPath(path));
-            return Math.Round(new DriveInfo(r).AvailableFreeSpace / 1073741824.0, 1);
-        }
-
-        static string Gb1(double gb) { return gb.ToString("0.0", CultureInfo.InvariantCulture); }
 
         // How many names a file has, asked with a handle that may read the
         // file's attributes and nothing else, as OwnGame.Links asks it

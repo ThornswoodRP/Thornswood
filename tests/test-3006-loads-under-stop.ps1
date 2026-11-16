@@ -12,7 +12,7 @@
   an error PowerShell prints and walks past, and so is every call to a
   function that file would have defined: Assert-FreshCheckout was "not
   recognized" and the Ship went on with no freshness check at all.
-  tests\test-ship-dry-run.ps1 did exactly that on every run, because its
+  scripts\tests\test-ship-dry-run.ps1 did exactly that on every run, because its
   scratch tree had no Fresh-Checkout.ps1, and passed. About fifty other
   scripts (the deploys, Publish-Server, Publish-Update, Package-Thornswood,
   Publish-Installer, the box scripts loading Vps.ps1) had the same order,

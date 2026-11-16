@@ -86,7 +86,17 @@ The link is on the [Downloads](/downloads) page, on the card above Play and on
 the launcher's Diagnostics page. Each opens the revision of the collection the
 server was built against and names its number. Install that revision, not a
 newer one Nexus may show first: a newer one keeps Play shut until the server
-catches up. Vortex takes it from there: it makes a profile for Thornswood,
+catches up.
+
+A new Nexus account has two stops before Vortex can start. First, some of the
+collection's mods are marked adult, and Nexus hides the collection until you
+turn on adult content in your Nexus Mods settings. In some countries Nexus
+asks you to verify your age first. Second, on a free account Vortex opens
+each file's page on Nexus and you press **Slow download** there, once for
+each file: 120 files, from 111 mods. A Premium account downloads them without
+pressing anything.
+
+After that, Vortex takes it from there: it makes a profile for Thornswood,
 downloads every mod from its own author, and deploys them. Give it time.
 
 When the server later moves to a newer revision, update the collection inside

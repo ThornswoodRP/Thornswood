@@ -62,12 +62,15 @@ require('./lib/http');
 const { discordGet, roleNames } = require('./lib/discord');
 require('./lib/roster');
 require('./lib/signins');
+require('./lib/ledger');
 require('./lib/sessions');
 const { retentionSweep } = require('./lib/retention');
 const { rereadTrouble } = require('./lib/trouble');
 require('./lib/serverlogs');
 require('./lib/members');
 require('./lib/passes');
+require('./lib/characters');
+require('./lib/your-settings');
 const { failed, handle } = require('./lib/serve');
 const { applyDeletionRequests } = require('./lib/deletion');
 
@@ -86,11 +89,19 @@ http.createServer((req, res) => {
   if (done && typeof done.catch === 'function') {
     done.catch((e) => failed(req, res, e));
   }
-}).listen(PORT, BIND, () => {
-  console.log('[thornswood-docs] listening on ' + BIND + ':' + PORT);
+}).listen(PORT, BIND, function () {
+  /* THE PORT IT GOT (#6136). Given THORNSWOOD_DOCS_PORT=0 the system hands
+     the site a free port as it listens, and the line below says which. A
+     copy handed a port somebody else chose and let go can find it taken
+     by then: on the Linux gate a harness's copy exited with EADDRINUSE on
+     the port its freePort() had just closed. So a harness starts its copy
+     on 0 and reads the port from that line (tests/site-files.js,
+     listening). */
+  const port = this.address().port;
+  console.log('[thornswood-docs] listening on ' + BIND + ':' + port);
   if (EXPOSED) {
     console.log('[thornswood-docs] WARNING: plain HTTP on every address (THORNSWOOD_DOCS_EXPOSE=1). ' +
-                'Sign-ins, cookies and uploads reach ' + PORT + ' unencrypted from anywhere the firewall lets in. ' +
+                'Sign-ins, cookies and uploads reach ' + port + ' unencrypted from anywhere the firewall lets in. ' +
                 'Put Caddy in front and unset it (#2185).');
   }
   console.log('[thornswood-docs] writing this to ' + siteLog.file +

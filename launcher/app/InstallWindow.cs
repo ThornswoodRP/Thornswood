@@ -212,7 +212,7 @@ namespace Thornswood
             });
             chkOwn = Box("Give Thornswood a Skyrim folder of its own", new Thickness(0, 12, 0, 0));
             chkOwn.IsChecked = true;
-            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); };
+            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); SayRoom(); };
             ownStack.Children.Add(chkOwn);
             txtOwn = Small(new Thickness(0, 8, 0, 0));
             txtOwn.LineHeight = 18;
@@ -403,9 +403,25 @@ namespace Thornswood
             string colour;
             txtSkyrim.Text = InstallPlace.SaySkyrim(skyrimDrive, root, out colour);
             txtSkyrim.Foreground = B(colour);
-            txtRoom.Text = InstallPlace.SayRoom(FreeOn(root), out colour);
-            txtRoom.Foreground = B(colour);
+            SayRoom();
             SayOwnGame();
+        }
+
+        /// <summary>
+        /// The drives this install writes to and the room each needs, by what
+        /// the window says now: the same rule InstallSteps stops by (#4681).
+        /// </summary>
+        List<InstallPlace.Room> Rooms()
+        {
+            bool intoSteam = chkOwn.IsChecked != true && !InstallPlace.MadeOwn(installRoot);
+            return InstallPlace.Rooms(InstallPlace.DriveOf(installRoot), InstallPlace.DriveOf(skyrimPath), intoSteam);
+        }
+
+        void SayRoom()
+        {
+            string colour;
+            txtRoom.Text = InstallPlace.SayRoom(Rooms(), FreeOn, out colour);
+            txtRoom.Foreground = B(colour);
         }
 
         static long FreeOn(string driveRoot)
@@ -556,11 +572,11 @@ namespace Thornswood
             {
                 if (!Ask.YesNo(InstallPlace.OtherDriveQuestion(skyrimDrive, root), Title_, Ask.Icon.Warning)) return;
             }
-            long free = FreeOn(root);
-            if (free >= 0 && free < InstallPlace.Needed)
+            InstallPlace.Room shortOn;
+            string refused = InstallPlace.Short(Rooms(), FreeOn, out shortOn);
+            if (refused != null)
             {
-                Ask.Tell("There is only " + InstallPlace.Gb(free) + " free on " + root + " and this needs about " +
-                         InstallPlace.Gb(InstallPlace.Needed) + ".\n\nPick another drive.", Title_, Ask.Icon.Warning);
+                Ask.Tell(refused, Title_, Ask.Icon.Warning);
                 return;
             }
 
@@ -633,8 +649,9 @@ namespace Thornswood
             catch (InstallStop stop)
             {
                 Line("");
-                Line("STOP. " + stop.Message);
-                why = stop.Message;
+                string stopped = Failure.Say("InstallWindow, the install stopped", stop);
+                Line("STOP. " + stopped);
+                why = stopped;
             }
             catch (Exception e)
             {
@@ -642,9 +659,10 @@ namespace Thornswood
                 // an exception left to escape it ends the launcher with no
                 // word. So it is said like a stop, in full in the log.
                 Line("");
-                Line("STOP. " + e.Message);
+                string failed = Failure.Say("InstallWindow, the install", e);
+                Line("STOP. " + failed);
                 Log(e.ToString());
-                why = e.Message;
+                why = failed;
             }
             finally
             {

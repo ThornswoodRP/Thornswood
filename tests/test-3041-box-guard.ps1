@@ -117,7 +117,8 @@ foreach ($rel in $carriers.Keys) {
 }
 # Any other script with a copy holds it exactly too, and nothing outside a
 # copy asks Windows for ProductType, the question the rule asks.
-$scripts = @(Get-ChildItem -LiteralPath (Path-Of 'scripts') -Recurse -File -Filter '*.ps1')
+# Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+$scripts = @(Get-ChildItem -LiteralPath (Path-Of 'scripts') -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
 $differ = @(); $asks = @()
 foreach ($f in $scripts) {
     if ($f.FullName -eq $guard) { continue }

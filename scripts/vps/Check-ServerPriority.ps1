@@ -10,7 +10,7 @@
   servers run on high priority"). Install-ThornswoodServer.ps1 and
   Install-Voice.ps1 register each task at priority 1 and start node through
   cmd's start "" /b /wait /high, because the task's priority alone makes only
-  its cmd.exe High (tests\test-server-task-priority.ps1). For each of the
+  its cmd.exe High (scripts\tests\test-server-task-priority.ps1). For each of the
   four this prints the task's priority, whether its action starts node
   through start /high, and every node running from that folder with its
   priority class, I/O priority and memory priority (High, 2 and 5 is right).

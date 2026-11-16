@@ -14,7 +14,7 @@
 
       1  gamemode   Channel=dev runs Deploy-DevGamemode.ps1 -Note (sends
                     game\gamemode.js to the VPS dev server, restarts only
-                    that one and posts the note to the dev updates channel).
+                    that one and posts the note to #staff-news).
                     Channel=main runs Deploy-Gamemode.ps1 (writes
                     gamemode.js and the load order into the built server)
                     then Deploy-Server.ps1 (sends that build to the live VPS
@@ -44,7 +44,7 @@
   with Deploy-Server.ps1, and remirrors the main tip to /feed.
 
 .PARAMETER Note
-  What the dev gamemode step posts to the dev updates channel, passed to
+  What the dev gamemode step posts to #staff-news, passed to
   Deploy-DevGamemode.ps1 as its -Note: a title, then "- " lines. Required when
   that step runs (Channel=dev without -SkipGameMode), because
   Deploy-DevGamemode refuses a deploy without one (#594). Until #1955 this
@@ -141,7 +141,7 @@ if ([string]::IsNullOrWhiteSpace($DistRoot)) {
 # sent instead of at Deploy-DevGamemode's own refusal.
 $devGamemode = ($Channel -eq 'dev' -and -not $SkipGameMode)
 if ($devGamemode -and -not $Note.Trim()) {
-    Die ('the dev gamemode step posts a note to the dev updates channel, and none was given. Give it as -Note, a title then "- " lines:' + "`n" +
+    Die ('the dev gamemode step posts a note to #staff-news, and none was given. Give it as -Note, a title then "- " lines:' + "`n" +
         '  .\scripts\release\Ship-Stack.ps1 -Note "The door answers on the first knock' + "`n" +
         '  - The door no longer needs a second try before it opens."' + "`n" +
         'or leave the gamemode out with -SkipGameMode.')

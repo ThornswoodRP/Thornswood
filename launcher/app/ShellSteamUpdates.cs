@@ -117,7 +117,7 @@ namespace Thornswood
                         : "Could not tell whether Steam had closed, so nothing was changed. " + SteamUpdates.How;
                 }
             }
-            catch (Exception ex) { said = "Could not change Steam's Updates setting for Skyrim: " + ex.Message + " " + SteamUpdates.How; }
+            catch (Exception ex) { said = "Could not change Steam's Updates setting for Skyrim: " + Failure.Why("ShellSteamUpdates", ex) + ". " + SteamUpdates.How; }
             // Steam was asked to exit, so it is started again whatever came after, as Yes said.
             if (asked)
             {

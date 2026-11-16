@@ -53,6 +53,7 @@ const { LINKED, post } = require('./discord');
 const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
+const { LEDGER_KEEP_DAYS, searchLedger, takeLedger } = require('./ledger');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
@@ -61,6 +62,9 @@ const { copyKeptChat, dropKeptChat, freshGalleryReports, isObjectLike,
 const { applyTrouble, noteTrouble, readTrouble, TROUBLE_RULES } = require('./trouble');
 const { chatSlice, DEPLOYS_DIR, readDeploys, serverLogSlice, sessionRow } = require('./serverlogs');
 const { changeOffice, departed, officesForDoor, standing } = require('./members');
+const chars = require('./characters');
+const yourSettings = require('./your-settings');
+const { SETTINGS } = yourSettings;
 const { errorPage, feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
   notFoundPage, PASS_MS, passLoginKey, plainPage, readTicket, versionCompare,
   versionParts, wantsHtml } = require('./passes');
@@ -1012,7 +1016,7 @@ async function handle(req, res) {
     let o;
     try { o = JSON.parse(await body(req, 40000)); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) {
+    if (!sameSecret(o.key, String(cfg.botKey))) {
       return sendJson(res, 401, { error: 'no' });
     }
     const title = String(o.title || '').trim().slice(0, 200);
@@ -1913,9 +1917,25 @@ async function handle(req, res) {
     }
 
     const reports = jsonFile(GREPORTS, []);
-    const id = crypto.randomBytes(8).toString('hex');
+    /* ONE ACCOUNT CANNOT PUSH THE OTHERS OUT (#4380). The file keeps its newest
+       500 and nothing limited a sender, so one account could send enough to
+       push every other report off the end, and a report is what holds a
+       taken-down picture's file (#2352). Held to the limit every other
+       report on the site has, by the same table (reportRefusal, five an hour
+       and twenty a day): by the account, the one the person report on
+       /api/report counts, or by the connection for the member password,
+       which names no account. Asked here, after the body is in, with nothing
+       awaited between this and reportTaken, as /api/report does. And one row
+       per account and picture: saying it again updates the first, so one
+       account holds at most one row for each picture on the gallery. */
+    const key = discordId ? 'acct:' + discordId : reportFrom(req);
+    const no = reportRefusal(key, Date.now(), discordId ? 'your account' : 'your connection');
+    if (no) return send(res, 429, JSON.stringify({ error: no.error }), null, { 'Retry-After': String(no.wait) });
+    const again = discordId ? reports.find((r) => String(r.name) === name && String(r.discordId || '') === discordId) : null;
+    const id = again ? String(again.id) : crypto.randomBytes(8).toString('hex');
     const entry = { id: id, name: name, why: why, at: Date.now(), from: from };
     if (discordId) entry.discordId = discordId;
+    if (again) reports.splice(reports.indexOf(again), 1);
     reports.push(entry);
     // Keep the newest 500 so a flood cannot grow the file forever, and none
     // past GREPORTS_DAYS (#2353). A report that will not save is said, not
@@ -1924,6 +1944,7 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, error: REPORT_UNSAVED });
     }
+    reportTaken(key, Date.now());
     return sendJson(res, 200, { ok: true, id: id });
   }
 
@@ -2070,9 +2091,10 @@ async function handle(req, res) {
 
       Such an install's spare, the id the menu's New character uses, was
       checked in under the first account too, and this route cannot tell it
-      from an id somebody took. So the launcher mints the relinked account a
-      fresh spare before it checks anything in (Chars.EnsureSpare), and the
-      new character is filed under the account that made it.
+      from an id somebody took. So each account's spare is minted here, by
+      /api/play/characters (lib/characters.js, #5938), and the launcher
+      checks in the spare that route hands it, so the new character is filed
+      under the account that made it.
 
       WHAT THIS COSTS SOMEBODY WHO CHANGED ACCOUNTS, which is new with this
       rule and not something main did. Measured by a reviewer on 24 September
@@ -2149,7 +2171,9 @@ async function handle(req, res) {
       id: String(t.d), name: st.name || t.n,
       first: was.first || Date.now(), seen: Date.now(),
       played: Date.now(), roles: st.roles,
-      profiles: profiles.slice(-8)
+      // Its characters and spare stay on whatever else comes and goes
+      // (#5938); the rest is cut to the eight checked in most recently.
+      profiles: chars.keepProfiles(profiles, was)
     });
     /* Not recorded is not let in: the door lists only what linked.json holds.
        It used to answer yes whatever the write did, and a linked.json that
@@ -2261,6 +2285,18 @@ async function handle(req, res) {
       if (!isFinite(m) || m < 0) m = 0;
       m = Math.round(m * 10) / 10;
       const why = String(o.why || '') === 'update' ? 'update' : 'quit';
+      /* Every character played in the run, in the order first picked
+         (#4643). Change character brings the menu back without closing the
+         game, so profile alone, the last one, filed the whole run under it
+         and staff could not see the others were on. */
+      const played = Array.isArray(o.profiles)
+        ? o.profiles.map(Number).filter((n) => n > 0 && Number.isInteger(n)).slice(0, 20) : [];
+      const keepPlayed = (r) => {
+        if (!played.length) return;
+        const all = Array.isArray(r.profiles) ? r.profiles.map(Number) : [];
+        for (const n of played) if (all.indexOf(n) < 0) all.push(n);
+        r.profiles = all.slice(0, 20);
+      };
       if (at >= 0) {
         const was = rows[at];
         was.end = now;
@@ -2269,12 +2305,14 @@ async function handle(req, res) {
         // The character is picked at the game's menu, so the start went out
         // not knowing it and the end is the first that does.
         if (Number(o.profileId) > 0) was.profile = Number(o.profileId);
+        keepPlayed(was);
         if (o.version) was.version = String(o.version).slice(0, 32);
       } else {
         const row = sessionRow(t, o, key);
         row.end = now;
         row.minutes = m;
         row.why = why;
+        keepPlayed(row);
         rows.push(row);   // start stays 0: it was never seen
       }
     }
@@ -2408,7 +2446,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const who = (o.who && typeof o.who === 'object') ? o.who : {};
     const store = jsonFile(ROSTER, { who: {} });
     if (!store.who || typeof store.who !== 'object') store.who = {};
@@ -2487,7 +2525,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
     const now = Date.now();
     const kept = cleanEconomy(Object.assign({}, o, { at: now }), now);
@@ -2499,6 +2537,23 @@ async function handle(req, res) {
     }
     if (!putJson(ECONOMY, { servers })) return sendJson(res, 500, { error: 'could not save' });
     return sendJson(res, 200, { ok: true, server: srv, days: Object.keys(kept.days).length });
+  }
+
+  /*
+    A game server's gold and trade rows (#6270), with the door key, the
+    economy's way: the dev server's arrive on /dev/api/ledger and are kept
+    apart. A write that fails answers 500, so the game server keeps the rows
+    for its next push rather than losing them.
+  */
+  if ((route === '/api/ledger' || route === '/dev/api/ledger') && req.method === 'POST') {
+    if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
+    let o = {};
+    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
+    const n = takeLedger(srv, o.rows, Date.now());
+    if (n < 0) return sendJson(res, 500, { error: 'could not save' });
+    return sendJson(res, 200, { ok: true, server: srv, kept: n });
   }
 
   if (p === '/api/play/roster' && req.method === 'POST') {
@@ -2956,6 +3011,96 @@ async function handle(req, res) {
     });
   }
 
+  /*
+    The account's characters (#5938, site/lib/characters.js says what is
+    kept). The launcher asks with its Discord ticket at every Play, and again
+    after each pick, forget and finished session, and draws the game's menu
+    from the answer, so nothing about which characters are somebody's is
+    written on their PC.
+
+      op ''       the list, made right first (dead, revived, slots, spare)
+      op 'chose'  profileId was picked at the menu
+      op 'played' profileId was played for seconds
+      op 'forget' profileId was put in the bin at the menu
+
+    Discord is asked first, as at /api/play/join, and nothing is awaited
+    between reading linked.json and writing it. Discord not answering is 503,
+    not a no, and the launcher stops Play on it rather than draw a menu
+    without anybody's characters.
+  */
+  if (p === '/api/play/characters' && req.method === 'POST') {
+    const by = Date.now() + PLAY_ANSWER_MS;
+    let o = {};
+    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await within(standingCached(d), by - Date.now(), () => standingLate(d));
+    if (st.lookupFailed && !st.admin) return sendJson(res, 503, discordUnasked());
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    if (!st.play) return sendJson(res, 403, { ok: false, why: 'role', message: notAcceptedYet() });
+
+    const now = Date.now();
+    const op = String(o.op || '');
+    const linked = jsonFile(LINKED, {});
+    let refused = null;
+    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
+    else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+
+    const pkRows = jsonFile(PK, {}) || {};
+    const slots = slotsFor(st);
+    const said = chars.settle(linked, d, {
+      slots,
+      pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
+      revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
+    });
+    if (!putJson(LINKED, linked)) {
+      console.error('[thornswood-docs] a list of characters was not recorded: linked.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message:
+        'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
+    }
+    const out = chars.answer(linked, d, slots);
+    out.said = said;
+    if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
+    return sendJson(res, 200, out);
+  }
+
+  /*
+    The account's settings (#5939, site/lib/your-settings.js says which). The
+    launcher gets them before the game starts (op 'get') and sends them back
+    when it closes, and sends launcher.json whenever one of its own choices
+    changes (op 'put', files { name: text, or null to remove }). Written
+    against the Discord id in the ticket and nothing else, so a ticket only
+    ever reads and writes its own account's.
+  */
+  if (p === '/api/play/settings' && req.method === 'POST') {
+    let o = {};
+    try { o = JSON.parse(await body(req, 1536 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await standingCached(d);
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    const all = jsonFile(SETTINGS, {}) || {};
+    const have = all[d] || {};
+    if (String(o.op || '') === 'get') {
+      return sendJson(res, 200, { ok: true, at: Number(have.at) || 0, files: have.files || {} });
+    }
+    if (String(o.op || '') !== 'put') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+    const next = yourSettings.merge(have, o.files);
+    if (next.why) return sendJson(res, 400, { ok: false, why: 'refused', message: 'Your settings were not kept: ' + next.why + '.' });
+    all[d] = { at: Date.now(), files: next.files };
+    if (!putJson(SETTINGS, all)) {
+      console.error('[thornswood-docs] settings were not kept: settings.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message: 'The site could not keep your settings just now.' });
+    }
+    return sendJson(res, 200, { ok: true, at: all[d].at, files: Object.keys(next.files).length });
+  }
+
   // ------------------------------------------------------------------- api
   if (p.startsWith('/api/')) {
     // Staff as well as hub members, so the Gallery page can boot (#742). What
@@ -3001,6 +3146,16 @@ async function handle(req, res) {
     if (p === '/api/economy' && req.method === 'GET') {
       if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
       return sendJson(res, 200, { keepDays: ECONOMY_KEEP_DAYS, servers: economyNow(Date.now()) });
+    }
+
+    /* The hub's Gold and trades page (#6270): staff, the same as the page.
+       ?q= an account, a profile or a name; ?server= main or dev; ?flagged=1. */
+    if (p === '/api/ledger' && req.method === 'GET') {
+      if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
+      const u = new URL(req.url, 'http://x');
+      const found = searchLedger(String(u.searchParams.get('q') || '').slice(0, 64),
+        String(u.searchParams.get('server') || ''), u.searchParams.get('flagged') === '1', Date.now());
+      return sendJson(res, 200, found);
     }
 
     if (p === '/api/results' && req.method === 'PUT') {

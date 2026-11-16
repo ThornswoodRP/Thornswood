@@ -10,9 +10,15 @@
 //  - load-bots.js's bot, against a stand-in for createBotClient: it logs in
 //    once connected and answers the login challenge with a join pass signed
 //    by the load copy's own key, sends one face when the race menu is open,
-//    then a move every 130 ms, unreliable, walking; a Teleport2 moves it and its
+//    then a look every 130 ms, walking; a Teleport2 moves it and its
 //    teleportSeq is echoed; a refusal or a closed connection fails it with
 //    the reason; it keeps no message;
+//  - its moves by the game's rule (#6247): a move only when what anybody
+//    could see changed, unreliable, each with a moveSeq one more than the
+//    last; standing, that move once more as settled, reliably, then
+//    nothing; walking again, moves again. Under --moves beat, a move on
+//    every look, unreliable and unnumbered, standing or not. The standing
+//    share of --stand, and the counts it reports;
 //  - Load-Test.js's arithmetic: cores over the samples' own times, bytes on
 //    the wire with 28 bytes of header a datagram, per person against step 0,
 //    and the summary table;
@@ -28,9 +34,16 @@
 //    unarmed hit on a person near it, both reliable; an NPC the server hands
 //    it (HostStart) is sent a move on its beat until HostStop; a trade ask is
 //    "/merchant <id>" for the nearest NPC, and the answers are counted;
+//    quest play opens the panel of the nearest NPC within the trade block's
+//    reach and stands there, picks the trade of a novice work it saw when it
+//    can take none, presses Take work with the commission's quote and Leave
+//    work with its token, as the panel's buttons send them, then steps back
+//    and walks on; its answers are counted against the merchant block's own
+//    lines, and the gate and Load-Box.ps1 let quest through;
 //  - the box's copy (New-LoadServer.js --from, against a stand-in for an
 //    installed server): its plugins by full path, its NPC switch and
-//    gameplay switches kept, nothing else of the server's settings, its own
+//    gameplay switches kept, its merchant ledger and hold price lists
+//    copied, nothing else of the server's settings, its own
 //    ports and pass key, and its refusals of the server's own port and a
 //    plugin that is not there; and Load-Test.js stops for anybody on a
 //    watched server, or one that does not answer.
@@ -47,8 +60,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS } = require(path.join(BOT, 'load-bots.js'));
-const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts } = require(path.join(BOT, 'Load-Test.js'));
+const { LoadBot, MOVE_MS, STAND_CYCLE_MS, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
 const server = require(path.join(BOT, 'New-LoadServer.js'));
@@ -185,6 +198,74 @@ function botChecks() {
   yes('no answer in time fails it, naming the step', s.step === 'failed' && /no answer at step connecting/.test(s.why));
 }
 
+// A walking bot with its character, ready to look; moves is 'change' or 'beat'.
+function walker(moves) {
+  const addon = fakeAddon();
+  const b = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'm' });
+  b.profileId = 1900000700; b.moves = moves;
+  b.client = addon.createBotClient('127.0.0.1', 5000);
+  b.state = 'connected'; b.step = 'moving'; b.character = { idx: 7 }; b.center = [0, 0, 0]; b.cell = 0x3c; b.radius = 300; b.angle = 0;
+  return { b, c: addon.made[0] };
+}
+
+function moveRuleChecks() {
+  let now = 1000000;
+  const { b, c } = walker('change');
+  const look = () => { b.lastMove = now; now += MOVE_MS + 1; b.advance(now); };
+  const mine = () => c.sent.filter((x) => x.m.t === 2 && x.m.idx === 7);
+  look(); look(); look();
+  const walking = mine();
+  yes('walking, every look is a move, unreliable, numbered one more each time',
+    walking.length === 3 && walking.every((x) => x.reliable === false && !x.m.data.settled) &&
+    walking.map((x) => x.m.data.moveSeq).join() === '1,2,3' && walking[0].m.data.runMode === 'Walking');
+  b.stand = 1;
+  look();
+  const stopped = mine()[3];
+  yes('stopping is a move that changed (standing, speed 0), unreliable', stopped && stopped.reliable === false && stopped.m.data.runMode === 'Standing' && stopped.m.data.speed === 0 && !stopped.m.data.settled);
+  look();
+  const settled = mine()[4];
+  yes('the first look with nothing changed sends that move once more as settled, reliably',
+    settled && settled.reliable === true && settled.m.data.settled === true && settled.m.data.moveSeq === 5 &&
+    JSON.stringify(settled.m.data.pos) === JSON.stringify(stopped.m.data.pos));
+  look(); look(); look();
+  yes('then nothing while it stands', mine().length === 5);
+  b.seq = 9; look();
+  yes('a teleport carried out is a change: its teleportSeq goes out at once', mine().length === 6 && mine()[5].m.data.teleportSeq === 9 && mine()[5].reliable === false);
+  b.stand = 0; look();
+  yes('walking again, moves again', mine().length === 7 && mine()[6].m.data.runMode === 'Walking' && mine()[6].m.data.moveSeq === 7);
+  yes('it counts what it sent and how many were settled', b.movesSent === 7 && b.settledSent === 1);
+
+  const h = walker('change');
+  h.b.play = ['host']; h.b.stand = 1;
+  h.b.hosted.set(21, { pos: [350, 0, 0], rot: [0, 0, 90], cell: 0x3c });
+  for (let i = 0; i < 4; i++) { h.b.lastMove = now; now += MOVE_MS + 1; h.b.advance(now); }
+  const npc = h.c.sent.filter((x) => x.m.t === 2 && x.m.idx === 21);
+  yes('an NPC it hosts goes by the same rule: one move, one settled move, then nothing',
+    npc.length === 2 && npc[0].reliable === false && npc[1].reliable === true && npc[1].m.data.settled === true && h.b.played.hostMoves === 2);
+  yes('  and its moves share the bot\'s numbering, as the game\'s do', npc[0].m.data.moveSeq < npc[1].m.data.moveSeq &&
+    h.c.sent.filter((x) => x.m.t === 2).map((x) => x.m.data.moveSeq).every((q, i, a) => i === 0 || q > a[i - 1]));
+  h.c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1981e, transform: { pos: [350, 0, 0], worldOrCell: 0x3c } } });
+  h.c.queue.push({ type: 'message', message: { t: 27, target: 0x100000000 + 0x1981e } });
+  h.b.pump();
+  h.b.hosted.set(21, { pos: [350, 0, 0], rot: [0, 0, 90], cell: 0x3c });
+  h.b.lastMove = now; now += MOVE_MS + 1; h.b.advance(now);
+  yes('  and one handed to it again after HostStop starts again with a move', h.c.sent.filter((x) => x.m.t === 2 && x.m.idx === 21).length === 3);
+
+  const o = walker('beat');
+  o.b.stand = 1;
+  for (let i = 0; i < 4; i++) { o.b.lastMove = now; now += MOVE_MS + 1; o.b.advance(now); }
+  const old = o.c.sent.filter((x) => x.m.t === 2);
+  yes('under --moves beat, a move on every look, unreliable and unnumbered, standing or not',
+    old.length === 4 && old.every((x) => x.reliable === false && x.m.data.moveSeq === undefined && !x.m.data.settled && x.m.data.runMode === 'Standing'));
+
+  const s = walker('change');
+  s.b.stand = 0.25; s.b.standPhase = 0;
+  yes('--stand is the standing share of every ' + STAND_CYCLE_MS / 1000 + ' s, at the bot\'s own phase',
+    s.b.standing(0) && s.b.standing(STAND_CYCLE_MS * 0.25 - 1) && !s.b.standing(STAND_CYCLE_MS * 0.25) && !s.b.standing(STAND_CYCLE_MS - 1) && s.b.standing(STAND_CYCLE_MS));
+  s.b.stand = 0;
+  yes('  and with none it never stands, unless at a trader panel', !s.b.standing(0) && (s.b.atPanel = [1, 2, 3], s.b.standing(0)));
+}
+
 function playChecks() {
   const addon = fakeAddon();
   const b = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'p' });
@@ -212,7 +293,7 @@ function playChecks() {
   c.sent.length = 0;
   b.lastMove = now; b.advance(now + MOVE_MS + 2);
   const hosted = c.sent.find((x) => x.m.t === 2 && x.m.idx === 21);
-  yes('the NPC it hosts is sent a move on the same beat, unreliable, standing where the server put it',
+  yes('the NPC it hosts is sent a move on its first look, unreliable, standing where the server put it',
     c.sent.some((x) => x.m.t === 2 && x.m.idx === 7) && hosted && hosted.reliable === false && hosted.m.data.pos[0] === 350 && hosted.m.data.runMode === 'Standing' && hosted.m.data.rot[2] === 90);
   c.queue.push({ type: 'message', message: { t: 27, target: 0x100000000 + 0x1981e } });
   b.pump();
@@ -229,6 +310,90 @@ function playChecks() {
   addon.made[1].queue.push({ type: 'message', message: { t: 33, idx: 20, refrId: 0xff000123, transform: { pos: [1, 2, 3], worldOrCell: 0x3c } } });
   w.pump();
   yes('a bot that only walks keeps nobody\'s position', w.others.size === 0);
+}
+
+// Quest play (#4623, 15 Nov 2026): the trader panel's presses, against a
+// stand-in server that pushes the panel's view as the merchant block does.
+function questChecks() {
+  const bundle = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'merchant-trading-bundle.ts'), 'utf8');
+  const panel = fs.readFileSync(path.join(ROOT, 'game', 'ui', 'thornswood-merchant.js'), 'utf8');
+  // Each line as the bundle writes it, a single-quoted string literal.
+  const literal = (t) => "'" + t.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  const missing = Object.keys(QUEST_SAID).filter((t) => bundle.indexOf(literal(t)) < 0);
+  yes('every quest answer the bots count is a line the merchant block says', missing.length === 0 || console.log('      not said: ' + JSON.stringify(missing)));
+  const notWhy = Object.keys(QUEST_ROW_WHY).filter((t) => bundle.indexOf(literal(t)) < 0);
+  yes('every reason a panel row is counted by is one the commissions\' view writes', notWhy.length === 0 || console.log('      not written: ' + JSON.stringify(notWhy)));
+  yes('the panel view they read is the property the merchant block pushes', bundle.indexOf("var property = '" + MERCHANT_VIEW + "';") >= 0);
+  yes('they open the panel within the merchant block\'s own reach', new RegExp('var REACH = ' + QUEST_REACH + ';').test(bundle));
+  yes('the panel\'s buttons send the quest presses and Step back the way the bots do',
+    panel.indexOf("net('/merchant quest ' + el.getAttribute('data-action') + ' ' + questId +") >= 0 && panel.indexOf("net('/merchant close')") >= 0 &&
+    panel.indexOf("' @'+token") >= 0);
+  yes('quest is one of the plays Load-Test.js takes', PLAYS.indexOf('quest') >= 0);
+  const box = fs.readFileSync(path.join(BOT, 'Load-Box.ps1'), 'utf8');
+  const boxPattern = new RegExp(/ValidatePattern\('([^']+)'\)\]\s*\[string\]\$Play/.exec(box)[1]);
+  const gatePattern = new RegExp(JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'vps', 'gate', 'verbs.json'), 'utf8')).verbs['Load-Test'].params.Play);
+  yes('the gate and Load-Box.ps1 take -Play fight,host,trade,quest and refuse a play there is not',
+    boxPattern.test('fight,host,trade,quest') && gatePattern.test('fight,host,trade,quest') && gatePattern.test('quest') &&
+    !gatePattern.test('quest,dance') && !boxPattern.test('dance'));
+  yes('Load-Box.ps1 plays quest unless told otherwise', /\[string\]\$Play = 'fight,host,trade,quest'/.test(box));
+
+  const addon = fakeAddon();
+  const b = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'q' });
+  b.profileId = 1900000600; b.play = ['trade', 'quest'];
+  b.client = addon.createBotClient('127.0.0.1', 5000);
+  const c = addon.made[0];
+  const said = [];
+  b.state = 'connected'; b.step = 'moving'; b.character = { idx: 7 }; b.center = [0, 0, 0]; b.cell = 0x3c; b.radius = 300; b.angle = 0;
+  let now = Date.now();
+  b.lastMove = now; b.nextHit = now + 1e9; b.nextTrade = now + 1e9; b.nextQuest = now + 1e9;
+  b.ws = { send: (t) => said.push(JSON.parse(t).text) }; b.welcomed = true; b.passSentAt = now;
+  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1c18d, transform: { pos: [300, 300, 0], rot: [0, 0, 0], worldOrCell: 0x3c } } });
+  c.queue.push({ type: 'message', message: { t: 33, idx: 22, refrId: 0x100000000 + 0x1c18e, transform: { pos: [5000, 0, 0], rot: [0, 0, 0], worldOrCell: 0x3c } } });
+  b.pump();
+  const view = (quests) => c.queue.push({ type: 'message', message: { t: 7, idx: 7, propName: MERCHANT_VIEW, dataDump: JSON.stringify({ open: true, trader: 'Dagur', quests }) } });
+  const step = () => { now += 5000; b.nextQuest = now; b.advance(now); b.pump(); };
+  step();
+  yes('quest play opens the panel of the NPC within reach, over the chat socket', said[said.length - 1] === '/merchant 1c18d' && b.played.questPanelAsks === 1);
+  const stood = b.here().slice();
+  c.sent.length = 0;
+  b.lastMove = now; b.advance(now + MOVE_MS + 1); b.advance(now + 2 * MOVE_MS + 2);
+  const moves = c.sent.filter((x) => x.m.t === 2 && x.m.idx === 7);
+  yes('at an open panel it stands where it opened it: one move, then that move settled',
+    moves.length === 2 && moves.every((x) => x.m.data.speed === 0 && x.m.data.runMode === 'Standing' && JSON.stringify(x.m.data.pos) === JSON.stringify(stood)));
+  const locked = { id: 'q-winterhold-cook-novice-parcel', kind: 'commission', who: 'cook, hearthcook, novice', state: 'locked', canTake: false };
+  view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
+  b.pump();
+  yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
+  yes('  each row by its kind and state', b.played['questRow:commission:locked'] === 2);
+  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. No submitted buy price is available for this work.' })]);
+  b.pump();
+  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noPrice'] === 1);
+  view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
+  b.pump();
+  step();
+  yes('with nothing it can take, it picks the trade of the novice work it saw, as the K panel sends it', said[said.length - 1] === '/pick profession cook hearthcook' && b.played.questPicks === 1);
+  step();
+  yes('  and opens the panel again', said[said.length - 1] === '/merchant 1c18d' && b.played.questPanelAsks === 2);
+  const quote = 'ab'.repeat(32);
+  view([Object.assign({}, locked, { state: 'available', canTake: true, quoteToken: quote })]);
+  b.pump(); step();
+  yes('it presses Take work on the work it can take, with the commission\'s quote', said[said.length - 1] === '/merchant quest take q-winterhold-cook-novice-parcel @' + quote && b.played.questTakeAsks === 1);
+  view([Object.assign({}, locked, { state: 'open', canTake: false, canAbandon: true, token: 7 })]);
+  b.pump(); step();
+  yes('then Leave work on what it holds, with its token', said[said.length - 1] === '/merchant quest abandon q-winterhold-cook-novice-parcel @7' && b.played.questLeaveAsks === 1);
+  step();
+  yes('then steps back and walks on', said[said.length - 1] === '/merchant close' && b.atPanel === null && b.questPhase === 'idle' && b.nextQuest === now + 30000);
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You take the work.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You leave the work without payment.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'This trader does not handle that work.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Trading with Dagur in Winterhold. Purse 100.' }));
+  yes('quest answers are counted as quest answers, and a trade answer as a trade answer',
+    b.played.questTaken === 1 && b.played.questLeft === 1 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
+    !b.played.tradeOtherAnswer && b.played.tradeOpened === 1);
+  b.nextQuest = now; b.questPhase = 'idle'; b.atPanel = null; b.others.clear(); b.advance(now + 1);
+  yes('with no NPC within reach it says so and asks nothing', b.played.questNoTraderNear === 1 && b.played.questPanelAsks === 2);
+  b.questPhase = 'asked'; b.questView = null; b.nextQuest = now; b.advance(now + 2);
+  yes('a panel that never came is counted, and it steps back', b.played.questNoPanel === 1 && said[said.length - 1] === '/merchant close');
 }
 
 async function boxChecks() {
@@ -252,6 +417,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.json'), '{"version":1}');
     fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.initialized'), '1');
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
+    const BOOKS = JSON.stringify({ books: [{ id: 'b1' }, { id: 'b2' }], ledgers: { winterhold: { b1: {}, b2: {} }, whiterun: { b1: {} }, riften: {} } });
+    fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -267,7 +434,15 @@ async function boxChecks() {
       fs.readFileSync(path.join(out, 'data', 'scripts', 'MarkerScript.pex'), 'utf8') === 'pex' && !fs.lstatSync(path.join(out, 'data', 'scripts')).isSymbolicLink());
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
-      !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() && fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'door.json,merchant-ledger.initialized,merchant-ledger.json');
+      !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() &&
+      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('  and a copy of the hold price lists the traders quote every commission from, counted by hold and naming nobody (#6180)',
+      fs.readFileSync(path.join(out, 'private', 'books.json'), 'utf8') === BOOKS && r.prices.lists === 3 && r.prices.holds.join(',') === 'whiterun 1,winterhold 2' &&
+      !fs.lstatSync(path.join(out, 'private', 'books.json')).isSymbolicLink());
+    fs.unlinkSync(path.join(inst, 'private', 'books.json'));
+    const bare = server.fromInstalled({ from: inst, out: path.join(tmp, 'c8'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
+    yes('  a server nobody has submitted a price list to gives a copy with none, and says so', bare.prices.lists === 0 && !fs.existsSync(path.join(tmp, 'c8', 'private', 'books.json')));
+    fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
@@ -356,20 +531,23 @@ function mathChecks() {
   const reading = (at, cpuUs, rss, up, upD, down, downD, busy, total) => ({ at, server: { at, user: cpuUs, system: 0, rss, heap: 0 }, proxy: { up, upDatagrams: upD, down, downDatagrams: downD }, cpu: { busy, total } });
   const a = reading(0, 0, 100 * 1048576, 0, 0, 0, 0, 0, 0);
   const b = reading(10000, 5e6, 150 * 1048576, 10000, 100, 50000, 500, 4000, 10000);
-  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80] }, { cpuMs: 1000, movesReadPerBot: [90] }];
+  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80], movesSentPerBot: [20, 40], settledSent: 5 }, { cpuMs: 1000, movesReadPerBot: [90], movesSentPerBot: [0], settledSent: 0 }];
   const w = windowOf(a, b, bots, 10);
   yes('cores are the server\'s CPU time over the samples\' own times (5 s in 10 s is 0.5)', Math.abs(w.serverCores - 0.5) < 1e-9);
   yes('memory is the working set at the end, in MB', w.serverRssMB === 150);
   yes('bytes on the wire add 28 a datagram (10,000 + 100 x 28 in 10 s up)', w.upWirePerS === 1280 && w.downWirePerS === 6400);
   yes('the runner\'s busy share and the bots\' cores are read', w.machineBusy === 0.4 && w.botCores === 0.3);
   yes('moves read are a second, per walking bot, with the fewest', w.movesReadPerBotPerS === 8 && w.fewestMovesReadPerS === 7);
+  yes('moves sent are a second, per walking bot, and settled ones a second in all', w.movesSentPerBotPerS === 2 && w.settledSentPerS === 0.5);
   const base = { serverCores: 0.1, serverRssMB: 100 };
   const p = perPerson(w, base);
   yes('per person is against step 0: (0.5 - 0.1) / 10 cores, (150 - 100) / 10 MB', Math.abs(p.cores - 0.04) < 1e-9 && p.memoryMB === 5);
   yes('per person bandwidth is the wire bytes over the people, in KB/s', p.downKBps === 0.625 && p.upKBps === 0.125);
   yes('step 0 has no per person numbers', perPerson(Object.assign({}, w, { people: 0 }), base) === null);
-  const md = markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, steps: [{ people: 10, window: w, perPerson: p }, { people: 20, stopped: 'the runner was 95% busy' }], problem: '' });
+  const md = markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'change', stand: 0.5, steps: [{ people: 10, window: w, perPerson: p }, { people: 20, stopped: 'the runner was 95% busy' }], problem: '' });
   yes('the summary has a row a step and says where it stopped', /\| 10 \| 0\.500 \| 150 \|/.test(md) && /Stopped at 20: the runner was 95% busy/.test(md));
+  yes('  and says how the bots sent their moves and how much they stood', /stands still 50% of the time/.test(md) && /only when it changed, then once settled/.test(md) && /\| 2\.0 \| 8\.0 \| 40% \|/.test(md));
+  yes('  or that they sent on every look', /on every look, as the game did before/.test(markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'beat', stand: 0, steps: [], problem: '' })));
 }
 
 function freePort() {
@@ -473,7 +651,9 @@ async function serverChecks() {
 (async () => {
   await proxyChecks();
   botChecks();
+  moveRuleChecks();
   playChecks();
+  questChecks();
   mathChecks();
   await voiceChecks();
   await serverChecks();

@@ -4,7 +4,8 @@
 // rev 64). scripts/dev/gamemode-source.js says how; docs/GAMEMODE-SOURCE.md
 // is the design.
 //
-//   node scripts/dev/Build-Gamemode.js              write game/gamemode.js from the parts
+//   node scripts/dev/Build-Gamemode.js              write the code bundles into the parts, then
+//                                                   game/gamemode.js from the parts
 //   node scripts/dev/Build-Gamemode.js --check      fail when game/gamemode.js is not what the
 //                                                   parts build, or a bundle is not what its
 //                                                   own sources make
@@ -40,13 +41,22 @@ function firstDifference(a, b) {
   return 0;
 }
 
-if (args.includes('--check')) {
-  if (dir === source.SOURCE) {
-    const r = spawnSync(process.execPath, [path.join(__dirname, 'Build-MerchantGamemode.js'), '--check'], { cwd: source.ROOT, encoding: 'utf8' });
+// The bundles of game code the parts carry, built with the gamemode (#6195):
+// neither is a step of the content chain, so a content build never writes
+// gamemode code, and a build laid over a newer checkout never puts older
+// code back. Each splices its game/*.js sources into its part.
+const BUNDLES = ['Build-MerchantGamemode.js', 'Build-MarketStallsGamemode.js'];
+function bundles(words) {
+  for (const bundle of BUNDLES) {
+    const r = spawnSync(process.execPath, [path.join(__dirname, bundle)].concat(words), { cwd: source.ROOT, encoding: 'utf8' });
     if (r.stdout) process.stdout.write(r.stdout);
     if (r.stderr) process.stderr.write(r.stderr);
     if (r.status !== 0) process.exit(r.status || 1);
   }
+}
+
+if (args.includes('--check')) {
+  if (dir === source.SOURCE) bundles(['--check']);
   let built;
   try { built = source.build(dir); } catch (e) { stop(e); }
   const out = source.builtPath(dir);
@@ -90,6 +100,7 @@ if (args.length && !(args.length === 2 && arg('--source'))) {
   console.error('FAIL  unknown arguments: ' + args.join(' '));
   process.exit(2);
 }
+if (dir === source.SOURCE) bundles([]);
 let changed;
 try { changed = source.writeBuilt(dir); } catch (e) { stop(e); }
 console.log((changed ? 'wrote ' : 'unchanged ') + rel(source.builtPath(dir)) + ' from ' + source.order(dir).length + ' parts');
