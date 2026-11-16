@@ -61,7 +61,7 @@ const m = require('../../tests/gamemode-tables.js').lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
 yes('gamemode.js has a DATA line', !!DATA);
-if (!DATA) { done(); }
+if (!DATA) { done(); } else {
 
 // ---- 1. the table -----------------------------------------------------------
 const SOLSTHEIM = '800:Dragonborn.esm';
@@ -112,7 +112,7 @@ function sliceFn(src, start, end) {
 }
 const arrivalSrc = sliceFn(gm, '\nfunction dist2(', '\nfunction ensureProperties(');
 yes('resolveArrival and the helpers it calls are sliced out of gamemode.js', !!arrivalSrc);
-if (!arrivalSrc) { done(); }
+if (!arrivalSrc) { done(); } else {
 // The functions of the slice, with mp and log stood in for where a test needs them.
 function sliceParts(mp) {
   return new Function('DATA', 'WORLDSPACES', 'PREFER_SLOT', 'FALLBACK_DESTINATION', 'mp', 'log',
@@ -286,8 +286,9 @@ if (DATA_DIR && LIST && fs.existsSync(DATA_DIR) && fs.existsSync(LIST) && !proce
 }
 
 done();
+}}
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }

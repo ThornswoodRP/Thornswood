@@ -37,10 +37,10 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 yes('the purse service is in gamemode.js', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 const ctx = { Map, Set, Number, JSON, Object, Array, require };
 vm.createContext(ctx);
 vm.runInContext(source.slice(a, b), ctx);
@@ -133,3 +133,4 @@ for (const [what, harm] of damaged) {
   }
 }
 done();
+}

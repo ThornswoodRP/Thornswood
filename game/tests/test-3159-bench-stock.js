@@ -374,4 +374,4 @@ yes('the property rules say a bench draws from the chests', /bench[^.]*draws?[^.
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -29,7 +29,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -40,7 +40,7 @@ function slice(start, end) {
 
 const needsBlock = slice('// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 yes('the needs block is in the gamemode', !!needsBlock);
-if (!needsBlock) { done(); }
+if (!needsBlock) { done(); } else {
 
 // The page's table: | 1st | 30 | -8 | -6 | and so on.
 const table = {};
@@ -49,7 +49,7 @@ page.replace(/^\| (\d)(?:st|nd|rd|th) \| (-?\d+) \| (-?\d+) \| (-?\d+) \|$/gm, f
   return m;
 });
 yes('the page has a row for each of the first four ales', [1, 2, 3, 4].every(function (i) { return !!table[i]; }));
-if (![1, 2, 3, 4].every(function (i) { return !!table[i]; })) { done(); }
+if (![1, 2, 3, 4].every(function (i) { return !!table[i]; })) { done(); } else {
 
 const ME = 0xff000001;
 const ALE = 0x34c5e;
@@ -101,3 +101,4 @@ yes('after 46 minutes with none, the next is the first again', fresh.said.indexO
     near(fresh.drink, table[1].drink) && near(fresh.rest, table[1].rest) && fresh.ale === 1);
 
 done();
+}}

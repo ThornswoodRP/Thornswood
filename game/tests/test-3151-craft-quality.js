@@ -60,8 +60,8 @@ yes('1 mp.onCraft reads the margin before the work is credited, and names the qu
 if (!pieces.every(Boolean)) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // The progression rules, as the gamemode has them.
 const progression = slice(gm, '// ==== thornswood progression ====', '// ==== end thornswood progression ====');
@@ -267,4 +267,5 @@ yes('8 the professions page says the three tiers, the 10% and what is rolled',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

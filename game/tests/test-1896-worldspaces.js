@@ -333,4 +333,4 @@ if (DATA_DIR && LIST && fs.existsSync(DATA_DIR) && fs.existsSync(LIST)) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

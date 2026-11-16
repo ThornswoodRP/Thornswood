@@ -85,4 +85,4 @@ yes('G4 cutKey still hands the key over named, in the same step it takes the ing
     /takeItem\(actorId, KEY_INGOT, 1\)[\s\S]{0,200}giveNamed\(actorId, KEY, keyLabel\(building\)\)/.test(gm));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

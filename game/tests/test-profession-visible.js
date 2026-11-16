@@ -30,7 +30,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 /** A top level function, from its first line to the brace that closes it. */
@@ -46,6 +46,7 @@ function cut(head) {
 const ensure = cut('function ensureProperties() {');
 yes('gamemode.js still has ensureProperties', ensure !== null);
 if (!ensure) done();
+else {
 
 const made = {};
 const propBox = {
@@ -63,6 +64,7 @@ vm.runInNewContext(ensure + '\nensureProperties();', propBox,
 const chargen = made.thornswoodChargen;
 yes('the chargen property is made', !!chargen);
 if (!chargen) done();
+else {
 
 // What the character property (the one the K panel reads, and the one the
 // skill property became) is made with, read from its own makeProperty call.
@@ -72,6 +74,7 @@ const ownerMatch = /isVisibleByOwner:\s*(true|false)/.exec(charOpts);
 const neighMatch = /isVisibleByNeighbors:\s*(true|false)/.exec(charOpts);
 yes('the character property is still made with both flags', !!ownerMatch && !!neighMatch);
 if (!ownerMatch || !neighMatch) done();
+else {
 
 yes('the chargen property is seen by its owner',
     chargen.isVisibleByOwner === true);
@@ -86,6 +89,7 @@ yes('and, like it, by no neighbour (neighbours ' + neighMatch[1] + ')',
 const tick = cut('function chargenTick() {');
 yes('gamemode.js still has chargenTick', tick !== null);
 if (!tick) done();
+else {
 
 // Who is on, and what each one is.
 let room = {};
@@ -125,6 +129,7 @@ vm.runInNewContext(tick, box, { filename: 'gamemode.js chargenTick' });
 const run = box.chargenTick;
 yes('chargenTick is a function', typeof run === 'function');
 if (typeof run !== 'function') done();
+else {
 
 room = {
   1: { prof: 'smith', half: 'platewright' },
@@ -168,3 +173,4 @@ yes('a broken state read is logged, not thrown',
     logged.some(function (l) { return l.indexOf('could not say the profession') >= 0; }));
 
 done();
+}}}}}

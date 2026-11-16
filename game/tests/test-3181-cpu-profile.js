@@ -34,7 +34,7 @@ const end = source.indexOf('// CPU PROFILE ON REQUEST END');
 let passed = 0, failed = 0;
 function yes(what, ok) { if (ok) { passed++; console.log('PASS  ' + what); } else { failed++; console.log('FAIL  ' + what); } }
 yes('gamemode.js has the CPU PROFILE ON REQUEST block', begin >= 0 && end > begin);
-if (failed) { console.log(JSON.stringify({ passed, failed })); process.exit(1); }
+if (failed) { console.log(JSON.stringify({ passed, failed })); process.exitCode = 1; } else {
 const block = source.slice(begin, end);
 yes('it never opens an inspector port', !/inspector\.open|_debugProcess|--inspect/.test(block));
 
@@ -114,3 +114,4 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
   console.log(JSON.stringify({ passed, failed }));
   process.exitCode = failed ? 1 : 0;
 })();
+}

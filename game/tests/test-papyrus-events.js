@@ -39,7 +39,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function findPython() {
@@ -54,6 +54,7 @@ function findPython() {
 const PY = findPython();
 yes('there is a Python 3 to run the audit with', !!PY);
 if (!PY) done();
+else {
 function py(args, opts) {
   return spawnSync(PY[0], PY[1].concat(args), Object.assign({ encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }, opts || {}));
 }
@@ -467,7 +468,7 @@ if (run.status !== 0) console.log(String(run.stdout) + String(run.stderr));
 let R = null;
 try { R = JSON.parse(fs.readFileSync(OUT, 'utf8')); } catch (e) { R = null; }
 yes('it writes the JSON --json names', !!R);
-if (!R) { fs.rmSync(ROOT, { recursive: true, force: true }); done(); }
+if (!R) { fs.rmSync(ROOT, { recursive: true, force: true }); done(); } else {
 
 const P = {};
 R.plugins.forEach(function (p) { P[p.plugin] = p; });
@@ -794,7 +795,7 @@ const LIST = 'C:\\Thornswood\\Profile\\Default\\plugins.txt';
 if (!fs.existsSync(GAME) || !fs.existsSync(LIST)) {
   console.log('SKIP  no game folder here, so the real load order is not audited');
   done();
-}
+} else {
 const REAL = path.join(os.tmpdir(), 'ts-papyrus-real-' + process.pid + '.json');
 const real = py([AUDIT, '--json', REAL], { timeout: 600000 });
 let G = null;
@@ -817,3 +818,4 @@ if (G) {
   yes('SkyUI works under its own exemption', !sky || sky.status === 'works');
 }
 done();
+}}}

@@ -163,4 +163,4 @@ yes('the front plugin holds no copy of any of them' + (copies.length ? ' (' + co
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

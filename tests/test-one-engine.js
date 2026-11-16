@@ -284,4 +284,4 @@ yes('engine/README.md names no commit or hash in full; the pin and the records a
     readme !== null && inFull.length === 0);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
