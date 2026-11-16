@@ -409,8 +409,10 @@ save or server state names their form ids.
 
 
 Usage (--out defaults to game\\content\\Thornswood-Content.esp in this repo,
---masters to C:\\Thornswood\\Game\\Data):
+--masters to C:\\Thornswood\\Game\\Data, --plugins, the load order the fine
+dishes are named through, to C:\\Thornswood\\Profile\\Default\\plugins.txt):
     python scripts/mods/Add-ContentRecords.py --masters <the game's Data folder>
+    python scripts/mods/Add-ContentRecords.py --masters <Data> --plugins <plugins.txt>
     python scripts/mods/Add-ContentRecords.py --masters <Data> --out <file>
     python scripts/mods/Add-ContentRecords.py --masters <Data> --check
 
@@ -1060,13 +1062,21 @@ FEASTS = (
 # dish's own magic is taken away by the server anyway (FOOD_GROUPS.strip).
 # A fine dish wears its plain dish's look, read from the plugin that made the
 # dish (its bounds, mesh, mesh textures, sounds, worth and weight), is named
-# "Fine " and the plain dish's name from game\data\recipes.json, and carries
-# VendorItemFood. The burnt meal wears Skyrim.esm's Cooked Beef. Every one is
-# made from the masters and the dishes' plugins on every build (--masters).
+# "Fine " and the plain dish's name, and carries VendorItemFood. The burnt meal
+# wears Skyrim.esm's Cooked Beef. Every one is made from the masters and the
+# dishes' plugins on every build (--masters).
+#
+# The plain dish's name is the one the game shows: the FULL of the dish's
+# winning record in the load order (--plugins), out of its plugin's string
+# table when that plugin is localised, the way scripts\dev\Build-RecipeTable.ps1
+# names a recipe's output. Until #6351 it was read from game\data\recipes.json,
+# which that builder writes from the load order this plugin is part of. Since
+# #5191 no built table is committed, so the box's clean checkout of every main
+# commit after 67c120a had none, and the build stopped on this plugin, the
+# first thing it makes, with exit 1 and no STOP line.
 FOOD_GROUPS_TABLE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                                   'game', 'data', 'food-groups.json'))
-RECIPE_TABLE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
-                                             'game', 'data', 'recipes.json'))
+PLUGINS_TXT = 'C:\\Thornswood\\Profile\\Default\\plugins.txt'
 BURNT_EFFECT = 0x5019001
 BURNT_EFFECT_WORDS = 'Burnt. Stamina recovers 10% slower for 10 minutes.'
 FINE_EFFECT = 0x5019002
@@ -1504,17 +1514,29 @@ def spoiled_records():
             (b'EFID', struct.pack('<I', SPOILED_EFFECT)), (b'EFIT', struct.pack('<fII', 0.0, 0, 0))])]
 
 
-def quality_wanted(plugin_masters, plugin_name):
+def quality_table():
+    """food-groups.json's quality block: the burnt meal and {plain dish: fine
+    record}."""
+    with open(FOOD_GROUPS_TABLE, encoding='utf-8') as fh:
+        return json.load(fh).get('quality') or {}
+
+
+def quality_fids(plugin_masters, plugin_name):
+    """The form ids of the burnt meal and every fine dish, in this plugin's
+    numbering."""
+    quality = quality_table()
+    return ([local_fid(quality['burnt'], plugin_masters, plugin_name)] +
+            [local_fid(fine, plugin_masters, plugin_name) for fine in quality.get('fine', {}).values()])
+
+
+def quality_wanted(plugin_masters, plugin_name, names):
     """[(form id, editor id, name, the dish whose look it wears, effect)] for
-    the burnt meal and every fine dish in food-groups.json's quality block."""
-    table = json.load(open(FOOD_GROUPS_TABLE, encoding='utf-8'))
-    quality = table.get('quality') or {}
-    recipes = json.load(open(RECIPE_TABLE, encoding='utf-8'))['recipes']
-    names = {}
-    for row in recipes.values():
-        names.setdefault(row.get('out'), row.get('name'))
-    # The festival feasts are this plugin's own (#3152), named here before the
-    # recipe table is built from the plugin that holds them.
+    the burnt meal and every fine dish in food-groups.json's quality block.
+    names is {plain dish: its name}, from dish_names()."""
+    quality = quality_table()
+    names = dict(names)
+    # The festival feasts are this plugin's own (#3152), named here before any
+    # load order holds the plugin they are in.
     for item, recipe, edid, name, bench_kw, inputs, model, box, weight in FEASTS:
         names.setdefault('%x:%s' % (item & 0xFFFFFF, plugin_name), name)
     out = [(local_fid(quality['burnt'], plugin_masters, plugin_name), BURNT_MEAL_EDID, BURNT_MEAL_NAME,
@@ -1522,13 +1544,112 @@ def quality_wanted(plugin_masters, plugin_name):
     for plain, fine in sorted(quality.get('fine', {}).items(), key=lambda kv: kv[1]):
         name = names.get(plain)
         if not name:
-            raise SystemExit('STOP. %s has a fine record and no recipe makes it (game\\data\\recipes.json). '
-                             'Nothing was written.' % plain)
+            raise SystemExit('STOP. %s has a fine record and no name was found for it. Nothing was written.' % plain)
         # An apostrophe is dropped, not a break: Harvest's End is HarvestsEnd.
         edid = 'ThornswoodFoodFine' + ''.join(w[:1].upper() + w[1:] for w in
                                                ''.join(c if c.isalnum() else ' '
                                                        for c in name.replace("'", '')).split())
         out.append((local_fid(fine, plugin_masters, plugin_name), edid, 'Fine ' + name, plain, FINE_EFFECT))
+    return out
+
+
+_LAST = None
+
+
+def last_plugin_module():
+    """scripts/mods/Build-LastPlugin.py, whose reader and copier
+    Thornswood-Last.esp is made with, loaded once."""
+    global _LAST
+    if _LAST is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'build_last_plugin', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Build-LastPlugin.py'))
+        _LAST = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_LAST)
+    return _LAST
+
+
+def top_group_records(src, tag):
+    """Every record of one top level group of a plugin (the group a record of
+    that tag sits in), as Build-LastPlugin.py's entries, without walking the
+    plugin's other groups."""
+    last = last_plugin_module()
+    b, out = src.buf, []
+    p, n = src.header_end, len(src.buf)
+    while p + 24 <= n:
+        size = struct.unpack_from('<I', b, p + 4)[0]
+        if b[p:p + 4] != b'GRUP' or size < 24:
+            raise SystemExit('STOP. %s has something other than a group at byte %d. Nothing was written.'
+                             % (src.name, p))
+        if b[p + 8:p + 12] == tag and struct.unpack_from('<i', b, p + 12)[0] == 0:
+            q, end = p + 24, p + size
+            while q + 24 <= end:
+                t = b[q:q + 4]
+                rsize = struct.unpack_from('<I', b, q + 4)[0]
+                if t == b'GRUP':
+                    q += rsize
+                    continue
+                flags, fid = struct.unpack_from('<II', b, q + 8)
+                if t == tag:
+                    out.append(last.Entry(t, flags, fid, q, rsize, None, src.index))
+                q += 24 + rsize
+        p += size
+    return out
+
+
+def dish_names(data_dir, plugins_txt, wanted):
+    """{plain dish: its name} for every dish in wanted, each the FULL of its
+    winning ALCH record in the load order plugins_txt names (the five masters,
+    then each plugin switched on), read from data_dir. Thornswood's own
+    plugins are left out: this plugin is the one being made, and
+    Thornswood-Last.esp is made after it. A localised plugin's FULL is a
+    string id, looked up in its .STRINGS. Both are read the way
+    scripts/dev/Build-RecipeTable.ps1 reads them (Windows-1252), so a fine
+    dish is named as the game names its plain one."""
+    last = last_plugin_module()
+    if not os.path.isfile(plugins_txt):
+        raise SystemExit('STOP. there is no plugin list at %s, so the plain dishes cannot be named. '
+                         'Give --plugins the load order\'s plugins.txt. Nothing was written.' % plugins_txt)
+    order = [n for n in last.own_plugins.load_order(plugins_txt)
+             if n.lower() != PLUGIN.lower() and not last.own_plugins.is_own(n)]
+    missing = [n for n in order if not os.path.isfile(os.path.join(data_dir, n))]
+    if missing:
+        raise SystemExit('STOP. %s of the load order in %s %s not in %s. Nothing was written.'
+                         % (', '.join(missing), plugins_txt, 'is' if len(missing) == 1 else 'are', data_dir))
+    want = {}
+    for desc in wanted:
+        local, _, owner = desc.partition(':')
+        want[(owner.lower(), int(local, 16))] = desc
+    win = {}
+    for i, name in enumerate(order):
+        src = last.Plugin(os.path.join(data_dir, name), name, i)
+        for e in top_group_records(src, b'ALCH'):
+            desc = want.get(src.gid(e.fid))
+            if desc is not None:
+                # The record's own bytes, not the plugin: a plugin read whole
+                # is let go before the next is read.
+                win[desc] = (src.name, src.localised, src.data(e))
+    out, tables = {}, {}
+    for desc in wanted:
+        if desc not in win:
+            raise SystemExit('STOP. no plugin of the load order in %s has the dish %s. Nothing was written.'
+                             % (plugins_txt, desc))
+        name, localised, data = win[desc]
+        full = None
+        for t, body in last.subrecords(data):
+            if t != b'FULL':
+                continue
+            if localised:
+                if len(body) == 4:
+                    if name not in tables:
+                        tables[name] = last.string_table(data_dir, name, 'strings')
+                    full = tables[name].get(struct.unpack_from('<I', body, 0)[0], b'').decode('cp1252')
+            elif len(body) > 1:
+                full = body[:-1].decode('cp1252')
+        if not full:
+            raise SystemExit('STOP. %s, the winning record of the dish %s, has no name. Nothing was written.'
+                             % (name, desc))
+        out[desc] = full
     return out
 
 
@@ -1591,12 +1712,16 @@ def quality_record(fid, edid, name, look, effect):
     return own_record(b'ALCH', fid, pairs)
 
 
-def quality_records(masters_dir, plugin_masters, problems):
+def quality_records(masters_dir, plugins_txt, plugin_masters, problems):
     """The burnt meal and every fine dish (#2906), in the table's order, each
-    wearing its dish's look out of masters_dir. A dish that cannot be made is
-    added to problems and left out."""
+    wearing its dish's look out of masters_dir and named from the load order
+    plugins_txt names. A dish that cannot be made is added to problems and
+    left out."""
+    feasts = set('%x:%s' % (row[0] & 0xFFFFFF, PLUGIN) for row in FEASTS)
+    plain = sorted(d for d in quality_table().get('fine', {}) if d not in feasts)
+    names = dish_names(masters_dir, plugins_txt, plain)
     out = []
-    for fid, edid, name, dish, effect in quality_wanted(plugin_masters, PLUGIN):
+    for fid, edid, name, dish, effect in quality_wanted(plugin_masters, PLUGIN, names):
         # A festival feast's fine record wears the feast's own look (#3152),
         # which is this plugin's and needs no master.
         feast = next((row for row in FEASTS if '%x:%s' % (row[0] & 0xFFFFFF, PLUGIN) == dish), None)
@@ -1889,14 +2014,10 @@ def bethesdas_world_records(masters_dir, plugin_masters, wanted):
     every localised name written in plain. Read with Build-LastPlugin.py's
     reader and copier, the ones Thornswood-Last.esp is made with. None when
     the masters are not in masters_dir."""
-    import importlib.util
     paths = [os.path.join(masters_dir, m) for m in plugin_masters]
     if not all(os.path.isfile(p) for p in paths):
         return None
-    spec = importlib.util.spec_from_file_location(
-        'build_last_plugin', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Build-LastPlugin.py'))
-    last = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(last)
+    last = last_plugin_module()
     names = [m.lower() for m in plugin_masters]
     want = {(t, (names[f >> 24], f & 0xFFFFFF)) for t, f in wanted}
     win = {}
@@ -2531,6 +2652,8 @@ def main():
     ap.add_argument('--out', default=OUT, help='where the plugin is written (default: game\\content in this repo)')
     ap.add_argument('--masters', default=MASTERS_DIR,
                     help="the game's Data folder: the five masters, and their string tables loose or in its archives")
+    ap.add_argument('--plugins', default=PLUGINS_TXT,
+                    help="the load order's plugins.txt, which the plain dishes' names are read through")
     ap.add_argument('--check', action='store_true',
                     help='build it and say whether the file at --out is what it builds; write nothing')
     args = ap.parse_args()
@@ -2614,7 +2737,7 @@ def main():
     # be made listed before anything stops.
     problems = []
     try:
-        quality_made = quality_records(args.masters, plugin_masters, problems)
+        quality_made = quality_records(args.masters, args.plugins, plugin_masters, problems)
     except (KeyError, ValueError) as e:
         print('')
         print('STOP. game\\data\\food-groups.json has no quality block this can read (%s). '

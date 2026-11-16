@@ -93,7 +93,7 @@ param([Parameter(Position = 0)][string]$Script, [Parameter(Position = 1, ValueFr
 $co = $env:TS5191_CHECKOUT
 Add-Content -LiteralPath $env:TS5191_CALLS -Value ("$Server $Script " + ($Arguments -join ' '))
 Add-Content -LiteralPath ($env:TS5191_CALLS + '.store') -Value $Collection
-if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { exit 3 }
+if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { if ($env:TS5191_SAYS) { Write-Host 'a line before'; Write-Host ('STOP. ' + $env:TS5191_SAYS) -ForegroundColor Yellow; Write-Host 'the tool exited 3' }; exit 3 }
 if ($env:TS5191_THROW -and $Script -like "*$($env:TS5191_THROW)*") { throw "the stand-in threw before it reached the box for $Script" }
 $src = [IO.File]::ReadAllText((Join-Path $co 'game/data/source.json'))
 function W($rel, $text) { $p = Join-Path $co $rel; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null; [IO.File]::WriteAllText($p, $text) }
@@ -145,6 +145,7 @@ try {
     $env:TS5191_CALLS = $calls
     $env:TS5191_FAIL = ''
     $env:TS5191_THROW = ''
+    $env:TS5191_SAYS = ''
     $env:TS5191_MOVED = 'the catalogue'
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
@@ -167,7 +168,7 @@ try {
     if ($r1.Code -ne 0) { Write-Host $r1.Text }
     Yes '1 a first build ends 0 and says BUILT with its key, and the commit it is from' ($r1.Code -eq 0 -and $r1.Key -and ($r1.Lines -contains "FROM $base"))
     Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, the catalogue in that order, then the chain' (
-        $r1.Calls.Count -eq 3 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
+        $r1.Calls.Count -eq 3 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data} --plugins {plugins}' -and
         $r1.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
         $r1.Calls[2] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
     $kept = Join-Path (Join-Path $cache 'dev') $r1.Key
@@ -255,6 +256,23 @@ try {
     $env:TS5191_THROW = ''
     Yes '5 a runner that throws stops the run on a STOP line naming what it threw' (
         $r5c.Code -eq 1 -and @($r5c.Lines | Where-Object { $_ -match '^STOP\. the stand-in threw before it reached the box for scripts/mods/Add-ContentRecords\.py .*Nothing was kept\.$' }).Count -eq 1 -and -not $r5c.Key)
+    # A step that ends other than 0 after saying why (Run-OnBox.ps1 says the
+    # tool's last STOP line, or its last line, #6351) stops the build on a
+    # STOP line that carries that reason, so the agent's status has it.
+    Fresh $v2
+    Put 'game/data/source.json' '{"v":5}'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'source v5') | Out-Null
+    $env:TS5191_FAIL = 'Add-ContentRecords'
+    $env:TS5191_SAYS = "FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'."
+    $r5d = Run
+    $env:TS5191_FAIL = ''
+    $env:TS5191_SAYS = ''
+    $last5d = @($r5d.Lines | Where-Object { $_ -match '^STOP\. ' }) | Select-Object -Last 1
+    Yes '5 a step that says why it stopped stops the build on a last STOP line carrying that reason' (
+        $r5d.Code -eq 1 -and -not $r5d.Key -and
+        $last5d -ceq "STOP. Add-ContentRecords.py ended with exit 3: FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'. The chain did not run and nothing was kept.")
+    Yes '5   and what the step said is still shown, in its order' (
+        @($r5d.Lines | Where-Object { $_ -ceq 'a line before' }).Count -eq 1 -and @($r5d.Lines | Where-Object { $_ -ceq 'the tool exited 3' }).Count -eq 1)
 
     # ---- 8. a revision that adds plugins ------------------------------------
     Fresh $v2

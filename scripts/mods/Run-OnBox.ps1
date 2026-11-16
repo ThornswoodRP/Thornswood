@@ -6,8 +6,8 @@
   wrote into the repository's game\, records\ and docs\systems\ folders.
   Issue #2899.
 
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}'
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}' --plugins '{plugins}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}' --plugins '{plugins}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Build-LastPlugin.py --data '{data}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Rebuild-ContentTables.ps1 -Data '{data}' -PluginsTxt '{plugins}'
 
@@ -246,4 +246,10 @@ try {
     Remove-Item -LiteralPath $local -Recurse -Force -ErrorAction SilentlyContinue
 }
 Say ('the tool exited ' + $code) $(if ($code -eq 0) { 'Green' } else { 'Yellow' })
+# Why, on a STOP line of its own, last, so whoever ran this can carry it on:
+# Build-ContentOnBox.ps1 puts it in the content build's status (#6351).
+if ($code -ne 0) {
+    $why = Get-ThornswoodToolReason $lines
+    if ($why) { Say ('STOP. ' + $why) 'Yellow' }
+}
 exit $code
