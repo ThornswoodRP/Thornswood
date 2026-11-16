@@ -50,10 +50,12 @@
 
   AFTER THE BUILDERS. records\asset-provenance.json holds each of Thornswood's
   own plugins by sha256, and tests\test-asset-provenance.js refuses a file
-  that changed since it was registered. These three are built here, so their
-  entries take the new hash; each entry's status, licence and ask stay as
-  written, and the line printed for each says the entry's "what" describes
-  what the plugin holds, which only the change's author can say.
+  that changed since it was registered. Those built here take the new hash;
+  each entry's status, licence and ask stay as written, and the line printed
+  for each says the entry's "what" describes what the plugin holds, which
+  only the change's author can say. An entry whose status is
+  built-on-the-box (Thornswood-Content.esp since #5191) holds no hash: the
+  box's build holds it in its content-build.json, so nothing is written.
 
   WHAT IT SAYS. Every file under game, docs\systems and records, and every
   other file a step writes (tests\fixtures\merchant-retrieval-records.json,
@@ -238,6 +240,7 @@ if (-not $stopped) {
             $unregistered += $rel
             continue
         }
+        if ($entry.status -eq 'built-on-the-box') { Say ("  {0} is built on the box; its build's content-build.json holds its sha256 ({1})" -f $rel, $sha.Substring(0, 16)); continue }
         if ($entry.sha256 -eq $sha) { Say ("  {0} is the registered bytes" -f $rel); continue }
         $at = $text.IndexOf('"path": "' + $rel + '"')
         $m = ([regex]'"sha256": "[0-9a-f]{64}"').Match($text, $at)

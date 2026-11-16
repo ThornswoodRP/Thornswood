@@ -43,7 +43,7 @@ A change to a plugin in `game\content` (`Thornswood-Content.esp` and the two bes
 .\scripts\mods\Rebuild-ContentTables.ps1
 ```
 
-It runs every builder in `scripts\mods\content-tables.json`, in order, and writes each plugin's new sha256 into `records\asset-provenance.json`. It ends with `All <n> builders ran.` and a list of every file that changed: commit those with the plugin, and write in the plugin's entry in `records\asset-provenance.json` what your change put in it. When a builder fails it prints `STOP.`, names the builder, and runs nothing after it.
+It runs every builder in `scripts\mods\content-tables.json`, in order. It ends with `All <n> builders ran.` and a list of every file that changed: commit those with the plugin, and write in the plugin's entry in `records\asset-provenance.json` what your change put in it. The register holds no hash for `Thornswood-Content.esp`: the box builds it at each merge, and its build's `content-build.json` holds its sha256 (#5191). When a builder fails it prints `STOP.`, names the builder, and runs nothing after it.
 
 One builder needs no game: commit first, then run it on the VPS box against the dev server's plugins, its load order and Skyrim's archives there, from any machine with box access (a cloud thread runs `pwsh scripts/vps/Setup-CloudSsh.ps1` first). What it writes under `game`, `records` and `docs\systems` comes back into your checkout:
 
