@@ -145,6 +145,35 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// Moves this launcher's working directory out of the folder an update
+        /// moves aside (#6129). Velopack starts the launcher in its current
+        /// folder, and every program the launcher starts without a folder of
+        /// its own works from there too and holds it open for as long as it
+        /// runs. On 15 Nov 2026 that was the Explorer Icons.Repair restarts:
+        /// from 11:15 AM it held current\, Velopack could not move it ("being
+        /// used by another process") and every update after failed and started
+        /// the launcher again, every 15 seconds. Velopack's own root, which
+        /// holds current\ and Update.exe, is never moved by an update. Does
+        /// nothing for a launcher Velopack did not install. Returns a line for
+        /// the log when the folder could not be changed, else null.
+        /// </summary>
+        public static string LeaveCurrentFolder()
+        {
+            try
+            {
+                if (!Installed) return null;
+                string root = Locator.RootAppDir;
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
+                Environment.CurrentDirectory = root;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return "Could not move the launcher's working folder out of its program folder (" + Failure.Why("Velo.LeaveCurrentFolder", ex) + "), so an update may find the folder held.";
+            }
+        }
+
+        /// <summary>
         /// WHERE THE GAME FILES COME FROM (#4825, #5608).
         /// True when Thornswood's game files come from the Velopack package of
         /// each launcher update (Updater, SyncPackage.cs): every launcher
@@ -175,6 +204,40 @@ namespace Thornswood
 
         /// <summary>True while an update waits for the launcher to close.</summary>
         public static bool Staged { get { lock (stageGate) return staged != null; } }
+
+        /// <summary>The version of the update waiting for the launcher to close, or null.</summary>
+        public static string StagedVersion { get { lock (stageGate) return staged != null && staged.Version != null ? staged.Version.ToString() : null; } }
+
+        /// <summary>
+        /// The last line Velopack's own log says an error on, for the launcher
+        /// to say why an update did not go in (#6129). Velopack writes it in
+        /// %LocalAppData%\velopack\velopack_&lt;app&gt;.log, not beside the
+        /// launcher. Empty when there is none or it cannot be read.
+        /// </summary>
+        public static string LastError()
+        {
+            try
+            {
+                IVelopackLocator l = Locator;
+                if (l == null || string.IsNullOrEmpty(l.AppId)) return "";
+                string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                           "velopack", "velopack_" + l.AppId + ".log");
+                if (!File.Exists(file)) return "";
+                string last = "";
+                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var r = new StreamReader(fs))
+                {
+                    // Only the end matters, and the log grows for as long as
+                    // the install lives.
+                    if (fs.Length > 256 * 1024) fs.Seek(-256 * 1024, SeekOrigin.End);
+                    string line;
+                    while ((line = r.ReadLine()) != null)
+                        if (line.Contains("[ERROR]")) last = line.Trim();
+                }
+                return last;
+            }
+            catch (Exception ex) { Swallow.Note("Velo.LastError, reading Velopack's log", ex); return ""; }
+        }
 
         /// <summary>
         /// The last line of Main, after the window has closed and everything

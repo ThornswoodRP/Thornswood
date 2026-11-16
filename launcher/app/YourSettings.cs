@@ -288,7 +288,7 @@ namespace Thornswood
             if (!Discord.Linked) return null;
             JsonObject files;
             try { files = Get(timeoutMs); }
-            catch (Exception ex) { return "Your launcher settings were not fetched from your Discord account: " + ex.Message; }
+            catch (Exception ex) { return "Your launcher settings were not fetched from your Discord account: " + Failure.Say("YourSettings", ex, "thornswood.net"); }
             string text = files[LauncherName] == null ? null : (string)files[LauncherName];
             if (text == null)
             {

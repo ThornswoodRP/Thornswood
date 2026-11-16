@@ -584,6 +584,12 @@ if (beat) {
 function finish() {
   process.chdir(home);
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { }
+  // #5431 put this harness on the gate. The move to game\tests (#5976) was
+  // branched before that and merged after it, and git took the moved line as a
+  // new one, so the harness went back to the nightly only. This check holds it on.
+  const excluded = fs.readFileSync(path.join(__dirname, '..', '..', 'tests', 'gate-excluded.txt'), 'utf8');
+  yes('this harness is on the build gate (not in tests/gate-excluded.txt, #3009)',
+      !/^game\/tests\/test-server-tick-cost\.js\s/m.test(excluded));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

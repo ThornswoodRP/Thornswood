@@ -158,7 +158,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not check the server: " + ex.Message);
+                Log("Could not check the server: " + Failure.Say("ShellPlay, checking the server", ex, "the server"));
                 return true;
             }
         }
@@ -209,6 +209,22 @@ namespace Thornswood
                         Ask.Tell(archives, "Thornswood", Ask.Icon.Warning);
                         return;
                     }
+                }
+
+                // The main menu with no Bethesda logo, the notice board's
+                // meshes and the mods' menus with no gold values are made from
+                // this machine's own game, never shipped (#2827, #3113,
+                // MadeFromGame). Only what is missing or changed is
+                // written; a game that cannot make them still plays, and the
+                // line says why. Before the plugin list is judged (#6181):
+                // Thornswood-Last.esp is one of them and the server's list
+                // names it, so judging first refused a game that had not made
+                // it yet as "a mod the server needs is not installed", and
+                // Play never reached the step that makes it.
+                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
+                catch (Exception ex)
+                {
+                    Log("The files made from your game could not be written (" + Failure.Why("Shell.Play, the files made from the game", ex) + ").");
                 }
 
                 // Checked again here, not just at startup, because the player's
@@ -327,7 +343,7 @@ namespace Thornswood
                 await OffThread(delegate
                 {
                     try { putSettings = YourSettings.PutInPlace(); }
-                    catch (Exception ex) { settingsWhy = ex.Message; }
+                    catch (Exception ex) { settingsWhy = Failure.Why("ShellPlay, the game's settings", ex); }
                 });
                 if (settingsWhy != null)
                 {
@@ -356,11 +372,10 @@ namespace Thornswood
                 await OffThread(delegate
                 {
                     try { built = GeneratedHere.Ensure(SafeLog); }
-                    catch (GeneratedStop ex) { notBuilt = ex.Message; }
+                    catch (GeneratedStop ex) { notBuilt = Failure.Say("ShellPlay, the generated files", ex); }
                     catch (Exception ex)
                     {
-                        Swallow.Note("Shell.Play, the animation and body files", ex);
-                        notBuilt = "Thornswood's animation and body files could not be built (" + ex.Message.TrimEnd('.') + ").";
+                        notBuilt = "Thornswood's animation and body files could not be built (" + Failure.Why("Shell.Play, the animation and body files", ex) + ").";
                     }
                 });
                 if (built != null) Log(built);
@@ -370,19 +385,6 @@ namespace Thornswood
                     DrawStatus();
                     Ask.Tell(notBuilt + "\n\nThe launcher log on the Diagnostics page has each step it took.", "Thornswood", Ask.Icon.Warning);
                     return;
-                }
-
-                // The main menu with no Bethesda logo, the notice board's
-                // meshes and the mods' menus with no gold values are made from
-                // this machine's own game, never shipped (#2827, #3113,
-                // MadeFromGame). Only what is missing or changed is
-                // written; a game that cannot make them still plays, and the
-                // line says why.
-                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
-                catch (Exception ex)
-                {
-                    Swallow.Note("Shell.Play, the files made from the game", ex);
-                    Log("The files made from your game could not be written (" + ex.Message.TrimEnd('.') + ").");
                 }
 
                 if (!await EnsureServer()) return;
@@ -494,7 +496,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                string reason = ex.Message == null ? "" : ex.Message;
+                string reason = Failure.Why("ShellPlay, starting the game", ex);
 
                 // The whole thing still goes to the log file, because Log
                 // writes there before the bar trims anything, and the log is

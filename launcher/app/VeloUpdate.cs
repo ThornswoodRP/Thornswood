@@ -166,7 +166,7 @@ namespace Thornswood
             {
                 try { File.Delete(pkg); } catch (Exception dex) { Swallow.Note("Updater.FetchLauncher, delete the refused package", dex); }
                 throw new Exception(
-                    "The launcher " + u.Version + " was refused: " + ex.Message + " " +
+                    "The launcher " + u.Version + " was refused: " + Failure.Why("VeloUpdate, " + u.Version, ex) + ". " +
                     "Nothing has been replaced and the one you are running is untouched. " +
                     "Tell Patrick before running anything.");
             }
@@ -224,7 +224,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "No newer launcher could be put in: " + ex.Message;
+                return "No newer launcher could be put in: " + Failure.Say("VeloUpdate, putting in a newer launcher", ex);
             }
         }
 

@@ -34,6 +34,11 @@
      master on the end of the masters, a dropped plugin taken out only for
      its revision, Thornswood-Last.esp last.
   9. Records of two revisions stop the build before any tool runs.
+  10. -Stations (#6192) lays the newest whole build of the server kept here
+      over the checkout, measures the stations over its tables, then builds
+      the plugin from the new sites and runs the chain, keeps nothing, and
+      hands every file back, station-sites.json among them; with no build
+      kept it stops before any tool runs.
 #>
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
@@ -78,7 +83,10 @@ Add-Content -LiteralPath ($env:TS5191_CALLS + '.store') -Value $Collection
 if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { exit 3 }
 $src = [IO.File]::ReadAllText((Join-Path $co 'game/data/source.json'))
 function W($rel, $text) { $p = Join-Path $co $rel; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null; [IO.File]::WriteAllText($p, $text) }
-if ($Script -eq 'scripts/mods/Add-ContentRecords.py') { W 'game/content/Thornswood-Content.esp' ("plugin for $Server from $src") }
+$sitesAt = Join-Path $co 'game/data/station-sites.json'
+$sites = if (Test-Path -LiteralPath $sitesAt) { ' with ' + [IO.File]::ReadAllText($sitesAt) } else { '' }
+if ($Script -eq 'scripts/mods/Add-ContentRecords.py') { W 'game/content/Thornswood-Content.esp' ("plugin for $Server from $src$sites") }
+elseif ($Script -eq 'scripts/dev/Build-StationSites.py') { W 'game/data/station-sites.json' ('sites over ' + [IO.File]::ReadAllText((Join-Path $co 'game/data/x.json'))) }
 elseif ($Script -eq 'scripts/dev/Build-NpcPopulation.py') { W 'game/data/npc-population.json' $env:TS5191_MOVED }
 elseif ($Script -eq 'scripts/dev/Build-ResourceLocations.py') { W 'game/data/resource-locations.json' 'resources in the moved order' }
 elseif ($Script -eq 'scripts/mods/Rebuild-ContentTables.ps1') {
@@ -124,10 +132,11 @@ try {
     $env:TS5191_FAIL = ''
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
-    function Run([string]$Server = 'dev', [int]$Keep = 8) {
+    function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations) {
         foreach ($f in @($calls, ($calls + '.store'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
         if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-        $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner -Store $store 2>&1 | ForEach-Object { "$_" })
+        $more = @(); if ($Stations) { $more = @('-Stations') }
+        $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner -Store $store @more 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
         $asked = $(if (Test-Path -LiteralPath $calls) { @(Get-Content -LiteralPath $calls) } else { @() })
         $script:stores = $(if (Test-Path -LiteralPath ($calls + '.store')) { @(Get-Content -LiteralPath ($calls + '.store')) } else { @() })
@@ -248,6 +257,27 @@ try {
     Put 'records/collection-dropped.json' '{"collection":"abc","revision":4,"dropped":[{"name":"B.esp"}]}'
     $d8 = Get-ThornswoodContentOrder -Repo $co
     Yes '8 collection-dropped.json for this revision takes its plugin out' ($d8.Names -notcontains 'B.esp' -and ($d8.Dropped -join ',') -eq 'B.esp')
+    Fresh $rev4
+
+    # ---- 10. the stations, when the order moves ----------------------------
+    $before = @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name } | Sort-Object) -join ','
+    $r10 = Run -Stations
+    if ($r10.Code -ne 0) { Write-Host $r10.Text }
+    Yes '10 -Stations measures the stations first, then builds the plugin and runs the chain' (
+        $r10.Code -eq 0 -and $r10.Calls.Count -ge 3 -and $r10.Calls[0] -eq 'dev scripts/dev/Build-StationSites.py --data {data}' -and
+        $r10.Calls[1] -like 'dev scripts/mods/Add-ContentRecords.py *' -and $r10.Calls[-1] -like 'dev scripts/mods/Rebuild-ContentTables.ps1 *')
+    Yes '10   over the tables of the newest build kept, and says which' (
+        [IO.File]::ReadAllText((Join-Path $out 'game/data/station-sites.json')) -eq ('sites over table of plugin for dev from {"v":2}') -and
+        ($r10.Lines -contains "MEASURED $($r8.Key)"))
+    Yes '10   the plugin it hands back is built from the new sites' (
+        [IO.File]::ReadAllText((Join-Path $out 'game/content/Thornswood-Content.esp')) -eq 'plugin for dev from {"v":2} with sites over table of plugin for dev from {"v":2}')
+    Yes '10   and nothing is kept: the builds of the server are the ones before it' (
+        (@(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name } | Sort-Object) -join ',') -eq $before -and
+        -not ($r10.Lines | Where-Object { $_ -match '^(BUILT|REUSED) ' }))
+    Fresh $rev4
+    Remove-Item -LiteralPath (Join-Path $cache 'main') -Recurse -Force
+    $r10b = Run -Server main -Stations
+    Yes '10 with no build of the server kept, -Stations stops before any tool runs' ($r10b.Code -ne 0 -and $r10b.Text -match 'no whole build of the main server is kept here' -and $r10b.Calls.Count -eq 0)
     Fresh $rev4
 
     # ---- 9. records of two revisions ---------------------------------------

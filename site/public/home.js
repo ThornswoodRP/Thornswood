@@ -1230,7 +1230,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c
    from the start, and the word comes out of the address so a reload or a
    shared link does not say it again. Only these three words are shown, and
    as text, never as markup. hub.js says the same three lines on its gate,
-   and tests\test-4406-signin-failure-line.js holds the two equal. It is
+   and site\tests\test-4406-signin-failure-line.js holds the two equal. It is
    here with the code that runs as the page loads, not among the helpers
    above show(), which site\tests\test-site-front-resilience.js lifts and
    runs on their own. */

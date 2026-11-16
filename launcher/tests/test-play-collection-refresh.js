@@ -128,7 +128,8 @@ yes('a busy folder stops Play with a line saying so, before the wait and after i
     (due.match(/if \(ownGameBusy\)\s*\{\s*Log\([^;]*\);\s*return true;\s*\}/g) || []).length === 2);
 const catchBody = due.slice(due.indexOf('catch (Exception ex)'), due.indexOf('return false;', due.indexOf('catch (Exception ex)')));
 yes('a NeedsRefresh that throws is noted and said in the log, and Play goes on from the folder as it is',
-    catchBody.indexOf('Swallow.Note(') >= 0 && catchBody.indexOf('Log(') >= 0);
+    // Failure.Why writes the exception to launcher.log and gives the reason (#4633).
+    (catchBody.indexOf('Swallow.Note(') >= 0 || /Failure\.(Why|Say)\(/.test(catchBody)) && catchBody.indexOf('Log(') >= 0);
 
 const requiredAt = startPlay.indexOf('if (!OwnGameRequired()) return;');
 const dueAt = startPlay.indexOf('if (await OwnGameRefreshIfDue()) return;');

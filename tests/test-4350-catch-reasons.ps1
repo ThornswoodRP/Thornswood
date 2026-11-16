@@ -158,19 +158,23 @@ try {
     Yes 'and when it does not parse' ($man -match 'Swallow\.Note\("Verify\.Manifest, reading')
 
     $onl = [IO.File]::ReadAllText((Join-Path $AppDir 'Online.cs'))
-    Yes 'Online.AskPort takes the reason and says it' ($onl -match 'GetOrNull\(url, 2500, Http\.DefaultReadMs, out why\)' -and $onl -match 'SayWhenItChanges\(resourcePort, url, why\)' -and $onl -match 'Swallow\.Say\("Online\.AskPort"')
-    # AskPort runs every ten seconds. Its catch hands the reason to
-    # SayWhenItChanges, which writes once per change; a Swallow.Note there
-    # would write a line on every ask while the same exception repeats.
+    Yes 'Online.AskPort takes the reason and says it' ($onl -match 'GetOrNull\(url, 2500, Http\.DefaultReadMs, out why\)' -and $onl -match 'SayWhenItChanges\(resourcePort, url, why, error\)' -and $onl -match 'Swallow\.Say\("Online\.AskPort"')
+    # AskPort runs every ten seconds. Its catch hands the reason and the
+    # exception to SayWhenItChanges, which writes once per change; a
+    # Swallow.Note or a Failure.Why there (which notes) would write a line on
+    # every ask while the same exception repeats (#4633).
     $at = $onl.IndexOf('static Count AskPort(')
     $end = if ($at -ge 0) { $onl.IndexOf('SayWhenItChanges(resourcePort', $at) } else { -1 }
     $ask = if ($at -ge 0 -and $end -gt $at) { $onl.Substring($at, $end - $at) } else { '' }
     $catch = [regex]::Match($ask, 'catch\s*\(Exception ex\)\s*\{[^}]*\}')
     Yes 'AskPort''s catch keeps the reason for SayWhenItChanges and writes no line of its own' (
-        $catch.Success -and $catch.Value -match 'why = ex\.GetType\(\)\.Name' -and $catch.Value -notmatch 'Swallow\.')
+        $catch.Success -and $catch.Value -match 'why = Failure\.Plain\(ex' -and $catch.Value -match 'error = ex' -and $catch.Value -notmatch 'Swallow\.|Failure\.(Why|Say)\(')
+    $says = $onl.Substring([Math]::Max(0, $onl.IndexOf('static void SayWhenItChanges(')))
+    Yes 'SayWhenItChanges writes the exception once, after it knows the reason changed' (
+        $says -match '(?s)lastWhy\[port\] = why;.*?if \(error != null\) Swallow\.Note\("Online\.AskPort", error\);')
 
     $sw = [IO.File]::ReadAllText((Join-Path $AppDir 'Swallow.cs'))
-    Yes 'Swallow.Say writes to the log and never throws' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'File\.AppendAllText')
+    Yes 'Swallow.Say uses the one diagnostic writer' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'LauncherLog\.Line')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

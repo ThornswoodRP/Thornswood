@@ -156,7 +156,7 @@
 
   Install-AdminService.ps1 puts it on the box as the task "Thornswood
   Admin", LOCAL SERVICE with a SID of its own, its folder closed to every
-  other account, the runners' included. tests\test-3107-admin.js drives it.
+  other account, the runners' included. scripts\tests\test-3107-admin.js drives it.
 */
 const http = require('http');
 const https = require('https');

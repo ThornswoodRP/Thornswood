@@ -124,7 +124,7 @@ namespace Thornswood
                     st = new Standing();
                     st.Ok = false;
                     st.Why = "offline";
-                    st.Message = "Could not reach thornswood.net: " + ex.Message;
+                    st.Message = "Could not reach thornswood.net: " + Failure.Say("Door, checking in", ex, "thornswood.net");
                 }
 
                 Dispatcher.UIThread.Post(delegate

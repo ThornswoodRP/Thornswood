@@ -81,15 +81,7 @@ namespace Thornswood
 
         static void Stamp(string m)
         {
-            for (int i = 0; i < 3; i++)
-            {
-                try
-                {
-                    File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine);
-                    return;
-                }
-                catch { Thread.Sleep(50); }
-            }
+            LauncherLog.Line(m);
         }
     }
 }

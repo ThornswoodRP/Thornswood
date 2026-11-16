@@ -42,7 +42,7 @@ namespace Thornswood
         public static void Tidy(DateTime now)
         {
             int lines = 0, zips = 0;
-            try { lines = PruneLog(Paths.LogFile, now); }
+            try { lines = PruneLog(Paths.LogFile, now) + PruneLog(LauncherLog.Older(Paths.LogFile), now); }
             catch (Exception ex) { Swallow.Note("LocalKeep.Tidy, launcher.log", ex); }
             try { zips = PruneReports(Diag.ReportDir, now); }
             catch (Exception ex) { Swallow.Note("LocalKeep.Tidy, reports", ex); }
@@ -51,13 +51,9 @@ namespace Thornswood
             var said = new List<string>();
             if (lines > 0) said.Add(lines + (lines == 1 ? " line" : " lines") + " of launcher.log");
             if (zips > 0) said.Add(zips + (zips == 1 ? " support report" : " support reports"));
-            try
-            {
-                File.AppendAllText(Paths.LogFile, now.ToString(StampFormat, CultureInfo.InvariantCulture) +
-                    "  Kept to the last " + Days + " days on this PC: removed " + string.Join(" and ", said.ToArray()) +
-                    " older than that." + Environment.NewLine);
-            }
-            catch (Exception ex) { Swallow.Note("LocalKeep.Tidy, saying what went", ex); }
+            LauncherLog.Text(now.ToString(StampFormat, CultureInfo.InvariantCulture) +
+                "  Kept to the last " + Days + " days on this PC: removed " + string.Join(" and ", said.ToArray()) +
+                " older than that." + Environment.NewLine);
         }
 
         /// <summary>
@@ -70,6 +66,11 @@ namespace Thornswood
         /// leaves the log as it was.
         /// </summary>
         public static int PruneLog(string path, DateTime now)
+        {
+            return LauncherLog.Holding(delegate { return PruneLogHeld(path, now); });
+        }
+
+        static int PruneLogHeld(string path, DateTime now)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return 0;
             DateTime cutoff = now.AddDays(-Days);

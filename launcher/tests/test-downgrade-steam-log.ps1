@@ -179,7 +179,8 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-log-' + [Gui
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
     $asm = $null
-    try { $asm = Add-LauncherType -Source $probe }
+    $failure = [IO.File]::ReadAllText((Join-Path $AppPath 'Failure.cs')).Replace('namespace Thornswood', 'namespace Probe')   # Run's catches say through Failure (#4633)
+    try { $asm = Add-LauncherType -Source $probe, $failure }
     catch { $out = $_.Exception.Message }
     Yes 'the lifted text compiles with the .NET SDK the launcher builds with' ($null -ne $asm)
     if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }

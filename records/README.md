@@ -237,6 +237,11 @@ folder here is named below, under the heading it belongs to.
   the same rule, and the record's own shape check fails a reading it does
   not give; `allowed` and `not stated` both pass a revision, so the rule
   says what a reading means and lets nothing new through.
+  An entry that is not a Nexus mod (a bundle packed into the collection's own
+  archive, or a direct, browse or manual one) goes in `others`, by its source
+  type and its name, with `ours` or a reading held to the same rule (#4278);
+  check refuses one the list does not have, has not read, or reads as not
+  allowed.
   `node scripts\release\collection-permissions.js update <collection.json>
   --revision <n>` takes the list of mods from a new revision and keeps every
   reading, so a new mod comes in unread. `New-NexusRevision.ps1` makes and

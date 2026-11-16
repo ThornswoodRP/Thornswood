@@ -346,7 +346,7 @@ else:
     try:
         proj = tmp / 'runner'
         proj.mkdir()
-        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs'])
+        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs', 'Failure.cs'])
         write(proj / 'runner.csproj', f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>

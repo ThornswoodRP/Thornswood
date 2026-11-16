@@ -137,6 +137,48 @@ yes('update keeps a mod\'s reading and takes its new file', JSON.stringify(u.mod
 yes('update brings a new mod in unread, with the plugins its hashes name', u.mods[1].reading === null && u.mods[1].plugins.join() === 'New.esp' && cp.refusals(u, [70]).length === 1);
 yes('what update writes has the shape the check takes', cp.shapeProblems(u).length === 0, cp.shapeProblems(u).join('; '));
 
+// 5b. Entries that are not Nexus mods (#4278). check and update took only
+// entries whose source is nexus, so a bundled, direct or manual entry was
+// never held to the record and New-NexusRevision still said every mod was
+// allowed. A bundled entry is a file packed into the collection archive
+// itself, so it most needs a reading. The record's others list carries them,
+// by Vortex's source type and the entry's name.
+const os = require('os');
+const { spawnSync } = require('child_process');
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tcp-4278-'));
+function check(rec, col) {
+  const rf = path.join(TMP, 'record.json'), cf = path.join(TMP, 'collection.json');
+  fs.writeFileSync(rf, JSON.stringify(rec));
+  fs.writeFileSync(cf, JSON.stringify(col));
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'release', 'collection-permissions.js'), 'check', '--record', rf, cf], { encoding: 'utf8' });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+const withBundle = { mods: [
+  { name: 'Mod 10 file', version: '1', source: { type: 'nexus', modId: 10, fileId: 11 } },
+  { name: 'A Packed Patch', version: '1', source: { type: 'bundle', fileExpression: 'A Packed Patch' } },
+] };
+let c = check(planted, withBundle);
+yes('#4278 check refuses a bundled entry the record has nothing on, naming it', c.code === 1 && /A Packed Patch/.test(c.out) && /not a Nexus mod/.test(c.out), c.code + ' ' + c.out.trim());
+const covered = JSON.parse(JSON.stringify(planted));
+covered.others = [{ type: 'bundle', name: 'A Packed Patch', reading: allowedRead }];
+yes('#4278 a record whose others list reads that entry has the shape the check takes', cp.shapeProblems(covered).length === 0, cp.shapeProblems(covered).join('; '));
+c = check(covered, withBundle);
+yes('#4278 and check lets it through', c.code === 0, c.code + ' ' + c.out.trim());
+const unreadOther = JSON.parse(JSON.stringify(covered)); unreadOther.others[0].reading = null;
+c = check(unreadOther, withBundle);
+yes('#4278 an entry in others nobody has read is refused', c.code === 1 && /A Packed Patch/.test(c.out), c.code + ' ' + c.out.trim());
+const ourOther = JSON.parse(JSON.stringify(covered)); ourOther.others[0] = { type: 'bundle', name: 'A Packed Patch', ours: true, reading: null };
+c = check(ourOther, withBundle);
+yes('#4278 one of ours needs no reading', c.code === 0, c.code + ' ' + c.out.trim());
+yes('#4278 an others entry of a source type Vortex does not have is a shape problem', bad(c2 => { c2.others = [{ type: 'nexus', name: 'x', reading: null }]; }).length > 0);
+yes('#4278 an others reading is held to the same rule as a mod\'s', bad(c2 => { c2.others = [{ type: 'manual', name: 'x', reading: read('allowed') }]; }).length > 0);
+const u2 = cp.updated(covered, { mods: withBundle.mods.concat([{ name: 'Got By Hand', version: '1', source: { type: 'manual' } }]) }, 6);
+yes('#4278 update keeps an others reading and brings a new entry that is not a Nexus mod in unread',
+  !!u2.others && u2.others.length === 2 && u2.others.some(o => o.name === 'A Packed Patch' && o.reading && o.reading.collections === 'allowed') &&
+  u2.others.some(o => o.type === 'manual' && o.name === 'Got By Hand' && o.reading === null), JSON.stringify(u2.others));
+yes('#4278 update drops an others entry the collection no longer carries', !cp.updated(covered, { mods: [withBundle.mods[0]] }, 6).others);
+fs.rmSync(TMP, { recursive: true, force: true });
+
 // 6. New-NexusRevision runs it on both paths
 const nnr = fs.readFileSync(path.join(ROOT, 'scripts', 'release', 'New-NexusRevision.ps1'), 'utf8');
 yes('New-NexusRevision.ps1 checks the revision it builds and the draft it publishes', (nnr.match(/^\s*Test-ModPermissions \$/gm) || []).length === 2 && /collection-permissions\.js'\), 'check'/.test(nnr));

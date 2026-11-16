@@ -325,6 +325,9 @@
     var ch = g.__thornswoodCharacter;
     // And whether it offers "Dye their hair" (#2675): you carry a dye.
     var dyes = g.__thornswoodHairDye;
+    // And whether K reads a contract they wrote you (#4561). See waitingFrom
+    // in the contracts block.
+    var contracts = g.__thornswoodContracts;
     for (var a = 0; a < at.length; a++) {
       var me = at[a];
       var s = read(me.id) || fresh();
@@ -363,6 +366,8 @@
           try { dyeing = (dyes && dyes.carries && dyes.carries(me.id)) ? 1 : 0; } catch (eDy) { dyeing = 0; }
         }
         if (dyeing) { w[them.id.toString(16)].hd = 1; }
+        // ct: they wrote you a contract you have not signed, and the prompt's K reads it (#4561).
+        if (contracts && contracts.waitingFrom && contracts.waitingFrom(me.pid, them.pid)) { w[them.id.toString(16)].ct = 1; }
       }
       var sig = JSON.stringify(w) + (s.namesAll ? ':all' : '');
       if (nearWas[me.id] === sig) { continue; }
@@ -894,8 +899,15 @@
     // once, and a command offered again under its id runs once (commandsRun).
     // tests/test-2135-journal-press.js counts it. So there is no time window
     // here: the 2 s one #2037 added guessed at a repeat nothing makes.
+    // The id is unique among this person's journals. Two made in the same
+    // millisecond drew the same number about once in a thousand, and then
+    // every write, share and drop meant for the second went to the first:
+    // the gate's test-social failed on it in the merge queue on 15 Nov.
+    var base = 'j' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36);
+    var id = base;
+    for (var n = 2; findJournal(s, id); n++) { id = base + 'x' + n.toString(36); }
     var j = {
-      id: 'j' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36),
+      id: id,
       title: String(title || 'Journal').slice(0, 60),
       pages: [], shared: {}, at: Date.now()
     };

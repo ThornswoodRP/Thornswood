@@ -170,12 +170,18 @@ namespace Thornswood
         static Button[] navButtons;
         static Control[] pages;
 
+        // What Velo.LeaveCurrentFolder said, for launcher.log (#6129).
+        static string leftCurrentFolder;
+
         [STAThread]
         static void Main(string[] args)
         {
             // Velopack first (#4825): when it runs the exe about an install, an
             // update or an uninstall, this answers and the process ends here.
             Velo.Start(args, Uninstall.FromVelopack);
+            // Out of the folder an update moves aside, before anything is
+            // started from here (#6129). Said in launcher.log once it is open.
+            leftCurrentFolder = Velo.LeaveCurrentFolder();
 
             // PerMonitorV2 is in the application manifest (#463), and Avalonia
             // rescales on WM_DPICHANGED by itself; WindowFit keeps the window
@@ -236,11 +242,7 @@ namespace Thornswood
                         try { Paths.Init(Velo.InstallRoot); }
                         catch (Exception initEx) { Swallow.Note("Shell.Main, paths", initEx); }
                     }
-                    Action<string> log = delegate (string line)
-                    {
-                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
-                        catch (Exception logEx) { Swallow.Note("Shell.Main, log", logEx); }
-                    };
+                    Action<string> log = delegate (string line) { LauncherLog.Line(line); };
                     log("COULD NOT START: " + ex.ToString());
                     // The update check is otherwise asked from the window, so a
                     // launcher that cannot open its window asks here, unless the
@@ -264,6 +266,7 @@ namespace Thornswood
             // The very last thing: an update downloaded and checked while the
             // launcher ran goes in now that the window has closed, everything
             // it put back is back and the lock is let go (Velo.ExitApply).
+            HandOverUpdate(Velo.StagedVersion);
             Velo.ExitApply();
         }
 
@@ -326,6 +329,7 @@ namespace Thornswood
             LogOnly("Launcher start: the window was on screen " + window.ToString("F1", inv) + " s after the launcher started" +
                     (startScanSeconds >= 0 ? ", " + startScanSeconds.ToString("F1", inv) + " s of it the mod check" : "") +
                     ", on launcher " + Updater.Version + ".");
+            if (leftCurrentFolder != null) LogOnly(leftCurrentFolder);
         }
 
         static void Run(string[] args)
@@ -558,7 +562,7 @@ namespace Thornswood
             // starting, with the window built and nothing on it.
             var scanClock = Stopwatch.StartNew();
             try { RunScan(); }
-            catch (Exception ex) { Log("Could not check the mod list on the way in: " + ex.Message); }
+            catch (Exception ex) { Log("Could not check the mod list on the way in: " + Failure.Say("Shell.Run, the mod list on the way in", ex)); }
             startScanSeconds = scanClock.Elapsed.TotalSeconds;
             if (DrawStatus()) Log("Ready."); else Log("Something needs attention before you can play.");
             // Nobody should have to press anything to get a client file back.
@@ -592,6 +596,7 @@ namespace Thornswood
             win.ContentRendered += delegate
             {
                 try { LogStartTime(); } catch (Exception ex) { Swallow.Note("Shell.Run, saying how long the start took", ex); }
+                try { SayHandedUpdate(); } catch (Exception ex) { Swallow.Note("Shell.Run, the update the last launcher handed over", ex); }
                 if (Velo.Restarted)
                     ThreadPool.QueueUserWorkItem(delegate
                     {
@@ -640,7 +645,7 @@ namespace Thornswood
             Dispatcher.UIThread.UnhandledException += delegate (object faultSender, DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
-                try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); } catch (Exception ex) { Swallow.Note("Shell.Run, append", ex); }
+                LauncherLog.Text(fault.Exception.ToString() + Environment.NewLine);
                 // The launcher is native code with no symbols on the customer's
                 // machine, so each frame is also written as its method and its
                 // offset into the exe. The pdb the native build writes, kept on
@@ -665,7 +670,7 @@ namespace Thornswood
                         at.Append(ip != 0 && image != 0 ? " +0x" + (ip - image).ToString("x8") : " (no native offset)");
                         at.AppendLine();
                     }
-                    File.AppendAllText(Paths.LogFile, at.ToString());
+                    LauncherLog.Text(at.ToString());
                 }
                 catch (Exception atEx) { Swallow.Note("Shell.UnhandledException, native offsets", atEx); }
                 fault.Handled = true;
@@ -921,7 +926,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    string why = ex.Message;
+                    string why = Failure.Why("Shell.ConnectDiscord", ex, "Discord") + ".";
                     Dispatcher.UIThread.Post(new Action(delegate
                     {
                         linkingDiscord = false;
@@ -1085,8 +1090,7 @@ namespace Thornswood
         {
             lastLogged = m;
             txtStatus.Text = m;
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch (Exception ex) { Swallow.Note("Shell.Log, append", ex); }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1096,8 +1100,7 @@ namespace Thornswood
         /// </summary>
         static void LogOnly(string m)
         {
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch { /* the log is the only place this line could have gone */ }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1124,7 +1127,7 @@ namespace Thornswood
                     : (DateTime.Now - gameClosedAt).TotalSeconds.ToString("0.0") + " s after the last game closed";
                 return "Play pressed by " + by + ", window " + (win != null && win.IsActive ? "active" : "not active") + ", " + when + ".";
             }
-            catch (Exception ex) { return "Play pressed (what pressed it could not be read: " + ex.Message + ")."; }
+            catch (Exception ex) { return "Play pressed (what pressed it could not be read: " + Failure.Why("Shell, what pressed Play", ex) + ")."; }
         }
 
         // ------------------------------------------------------------- pages
@@ -1200,7 +1203,7 @@ namespace Thornswood
 
             HeaderFrames frames;
             try { frames = Art.HeaderVideo(); }
-            catch (Exception ex) { Stamp("Title band: the video did not play (" + ex.Message + "), the still picture stays"); return; }
+            catch (Exception ex) { Stamp("Title band: the video did not play (" + Failure.Why("Shell, the title band video", ex) + "), the still picture stays"); return; }
             if (frames == null) return;
 
             // The frame on screen. The decoding thread copies each finished
@@ -1245,7 +1248,7 @@ namespace Thornswood
                     }
                     catch (Exception ex)
                     {
-                        string why = ex.Message;
+                        string why = Failure.Why("Shell, a title band frame", ex);
                         Dispatcher.UIThread.Post(delegate { drop(why); });
                         frames.Dispose();
                         return;
@@ -1334,7 +1337,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Stamp("Menu music: could not copy the track out of the game folder (" + ex.Message + ")");
+                Stamp("Menu music: could not copy the track out of the game folder (" + Failure.Why("Shell, copying the menu track", ex) + ")");
                 return;
             }
             try
@@ -1346,7 +1349,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Stamp("Menu music: " + ex.Message);
+                Stamp("Menu music: " + Failure.Why("Shell, starting the menu music", ex));
             }
         }
 
@@ -2420,7 +2423,7 @@ namespace Thornswood
                         "Thornswood Dev", Ask.Icon.Question);
                     if (!r) return;
                     try { Log(DevBuild.RemoveSelf()); }
-                    catch (Exception ex) { Log("Could not remove the dev build: " + ex.Message); return; }
+                    catch (Exception ex) { Log("Could not remove the dev build: " + Failure.Say("Shell, removing the dev build", ex)); return; }
                     try { Voice.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                     Quit();
                 };
@@ -2540,7 +2543,24 @@ namespace Thornswood
                 // Not while Skyrim is being closed. Play or the update that
                 // asked for it carries on once it is gone, window or no window.
                 // The launcher ending itself (Quit) is not asked either.
-                if (!quitting && waitDepth > 0) { e.Cancel = true; Log("Wait for Skyrim to finish closing."); return; }
+                // What is running is said as it is: the line used to blame
+                // Skyrim for every wait, the scan after an update among them
+                // (#6129). An update that has to close the launcher closes it
+                // the moment the last wait ends (LetWindowGo); before, its
+                // close was dropped here and the launcher sat on Updating.
+                if (!quitting && waitDepth > 0)
+                {
+                    e.Cancel = true;
+                    string doing = stallDoing;
+                    if (Velo.Staged)
+                    {
+                        closeWhenWaitsEnd = true;
+                        Log("The update goes in as soon as the launcher has finished " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ".");
+                    }
+                    else
+                        Log("Wait for the launcher to finish " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ", then close it.");
+                    return;
+                }
                 if (!quitting && playing)
                 {
                     bool r = Ask.YesNo(
@@ -2617,11 +2637,11 @@ namespace Thornswood
                 ThreadPool.QueueUserWorkItem(delegate
                 {
                     try { Chars.AddPlaytime(playedAs, counted); }
-                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + playedAs + ": " + ex.Message); }
+                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + playedAs + ": " + Failure.Say("Shell, play time of " + playedAs, ex, "thornswood.net")); }
                     // The settings as the game left them, to the Discord
                     // account that keeps them (#5939).
                     try { YourSettings.SendBack(); }
-                    catch (Exception ex) { PresenceLog("Your settings were not sent to your Discord account: " + ex.Message); }
+                    catch (Exception ex) { PresenceLog("Your settings were not sent to your Discord account: " + Failure.Say("Shell, sending settings", ex, "thornswood.net")); }
                     try { Discord.SessionEnd(playedAs, ranFor, "quit"); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
                     // Then the logs, on the same thread so they go after the
                     // row they attach to exists. This is the only moment they
@@ -2757,7 +2777,7 @@ namespace Thornswood
         static void Open(string path)
         {
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-            catch (Exception ex) { Log("Could not open it: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open it: " + Failure.Say("Shell, opening a file", ex)); }
         }
 
         // ------------------------------------------------------------- checks
@@ -3270,7 +3290,7 @@ namespace Thornswood
                 psi.UseShellExecute = true;
                 Process.Start(psi);
             }
-            catch (Exception ex) { Log("Could not open the folder: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open the folder: " + Failure.Say("Shell, opening a folder", ex)); }
         }
 
         // ------------------------------------------------------------- settings
@@ -3887,7 +3907,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not delete the crash snapshot " + snapshot + ": " + ex.Message);
+                Log("Could not delete the crash snapshot " + snapshot + ": " + Failure.Say("Shell, deleting a crash snapshot", ex, snapshot));
             }
         }
 
@@ -4210,7 +4230,7 @@ namespace Thornswood
                     st = new Standing();
                     st.Ok = false;
                     st.Why = "offline";
-                    st.Message = "Could not reach thornswood.net: " + ex.Message;
+                    st.Message = "Could not reach thornswood.net: " + Failure.Say("Shell, checking in", ex, "thornswood.net");
                 }
 
                 Dispatcher.UIThread.Post(new Action(delegate
@@ -4282,7 +4302,7 @@ namespace Thornswood
         {
             if (playing) { Log("Quit the game first."); return; }
             try { Log(DevBuild.Switch(cfg, channel)); }
-            catch (Exception ex) { Log("Could not switch to " + channel + ": " + ex.Message); return; }
+            catch (Exception ex) { Log("Could not switch to " + channel + ": " + Failure.Say("Shell, switching to " + channel, ex)); return; }
             // What the old channel offered is not this one's.
             pendingLauncher = null;
             updateTried = null;
@@ -4453,8 +4473,9 @@ namespace Thornswood
             catch (Exception ex)
             {
                 btnUninstall.IsEnabled = true;
-                Log("Uninstall stopped: " + ex.Message);
-                Ask.Tell(ex.Message + "\n\nNothing was removed.",
+                string stopped = Failure.Say("Shell, uninstall", ex);
+                Log("Uninstall stopped: " + stopped);
+                Ask.Tell(stopped + "\n\nNothing was removed.",
                                 "Thornswood", Ask.Icon.Warning);
                 return;
             }
@@ -4565,7 +4586,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    string why = ex.Message;
+                    string why = Failure.Why("Shell, uninstall step", ex);
                     Dispatcher.UIThread.Post(new Action(delegate
                     {
                         Log("Could not put the client runtime back: " + why);
@@ -4795,7 +4816,7 @@ namespace Thornswood
                     LogOnly("Vortex does not answer Nexus links on this machine, so the collection opens on the site.");
                 Process.Start(new ProcessStartInfo(page) { UseShellExecute = true });
             }
-            catch (Exception ex) { Log("Could not open the collection: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open the collection: " + Failure.Say("Shell, opening the collection", ex, "Vortex")); }
         }
 
         /// <summary>

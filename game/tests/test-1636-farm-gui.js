@@ -368,6 +368,8 @@ const CLIENT = {
   gameMenuOpen: liftFrom(front, 'function gameMenuOpen() {', '  '),
   busyMenuOpenNow: liftFrom(front, 'function busyMenuOpenNow(except) {', '  '),
   stampedMolds: liftFrom(front, 'function stampedMolds(pc, base) {', '  '),
+  // The client tables (#5191) are read through clientTable; the rig loads none.
+  clientTable: 'const clientTableSaid = {};\n' + liftFrom(front, 'function clientTable(name) {', '  '),
   menus: (function () {
     const a = front.indexOf('  const KEYBOARD_MENUS = [');
     const b = a < 0 ? -1 : front.indexOf('\n  ];\n', a);
@@ -416,7 +418,7 @@ function client() {
   };
   const body = [
     CLIENT.iniNumber, CLIENT.keyName, CLIENT.anyClaim, CLIENT.gameMenuOpen, CLIENT.menus,
-    CLIENT.busyMenuOpenNow,
+    CLIENT.busyMenuOpenNow, CLIENT.clientTable,
     'const LOCK_KEY = 45; const LOCK_NAME = keyName(LOCK_KEY);',
     "const MOLD_FILE = 'Thornswood-Content.esp'; const MOLD_ITEM = 0x15495; const DOOR_TYPE = 29;",
     'let moldBase = 0;',

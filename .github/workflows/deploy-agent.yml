@@ -29,6 +29,8 @@ on:
       - 'tools/DeployAgent/**'
       - 'tools/DeployAgent.Tests/**'
       - 'launcher/app/Signature.cs'
+      - 'launcher/app/LastPlugin.cs'
+      - 'launcher/app/FromGameArchive.cs'
       - '.github/workflows/deploy-agent.yml'
       # The steps after a deploy and the verbs they may run (#5186): the
       # agent's rules hold them here, before they reach a Release.
@@ -40,6 +42,8 @@ on:
       - 'tools/DeployAgent/**'
       - 'tools/DeployAgent.Tests/**'
       - 'launcher/app/Signature.cs'
+      - 'launcher/app/LastPlugin.cs'
+      - 'launcher/app/FromGameArchive.cs'
       - 'scripts/release/Sign-OnRunner.ps1'
       - 'scripts/release/New-SignedManifest.ps1'
       - '.github/workflows/deploy-agent.yml'

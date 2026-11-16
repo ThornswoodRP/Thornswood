@@ -187,7 +187,6 @@ Roster.cs 3
 Shell.cs 6
 ShellChars.cs 2
 SkyMp.cs 3
-Stall.cs 1
 Steam.cs 1
 SteamUpdates.cs 5
 Swap.cs 1

@@ -1916,9 +1916,25 @@ async function handle(req, res) {
     }
 
     const reports = jsonFile(GREPORTS, []);
-    const id = crypto.randomBytes(8).toString('hex');
+    /* ONE ACCOUNT CANNOT PUSH THE OTHERS OUT (#4380). The file keeps its newest
+       500 and nothing limited a sender, so one account could send enough to
+       push every other report off the end, and a report is what holds a
+       taken-down picture's file (#2352). Held to the limit every other
+       report on the site has, by the same table (reportRefusal, five an hour
+       and twenty a day): by the account, the one the person report on
+       /api/report counts, or by the connection for the member password,
+       which names no account. Asked here, after the body is in, with nothing
+       awaited between this and reportTaken, as /api/report does. And one row
+       per account and picture: saying it again updates the first, so one
+       account holds at most one row for each picture on the gallery. */
+    const key = discordId ? 'acct:' + discordId : reportFrom(req);
+    const no = reportRefusal(key, Date.now(), discordId ? 'your account' : 'your connection');
+    if (no) return send(res, 429, JSON.stringify({ error: no.error }), null, { 'Retry-After': String(no.wait) });
+    const again = discordId ? reports.find((r) => String(r.name) === name && String(r.discordId || '') === discordId) : null;
+    const id = again ? String(again.id) : crypto.randomBytes(8).toString('hex');
     const entry = { id: id, name: name, why: why, at: Date.now(), from: from };
     if (discordId) entry.discordId = discordId;
+    if (again) reports.splice(reports.indexOf(again), 1);
     reports.push(entry);
     // Keep the newest 500 so a flood cannot grow the file forever, and none
     // past GREPORTS_DAYS (#2353). A report that will not save is said, not
@@ -1927,6 +1943,7 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, error: REPORT_UNSAVED });
     }
+    reportTaken(key, Date.now());
     return sendJson(res, 200, { ok: true, id: id });
   }
 
@@ -2267,6 +2284,18 @@ async function handle(req, res) {
       if (!isFinite(m) || m < 0) m = 0;
       m = Math.round(m * 10) / 10;
       const why = String(o.why || '') === 'update' ? 'update' : 'quit';
+      /* Every character played in the run, in the order first picked
+         (#4643). Change character brings the menu back without closing the
+         game, so profile alone, the last one, filed the whole run under it
+         and staff could not see the others were on. */
+      const played = Array.isArray(o.profiles)
+        ? o.profiles.map(Number).filter((n) => n > 0 && Number.isInteger(n)).slice(0, 20) : [];
+      const keepPlayed = (r) => {
+        if (!played.length) return;
+        const all = Array.isArray(r.profiles) ? r.profiles.map(Number) : [];
+        for (const n of played) if (all.indexOf(n) < 0) all.push(n);
+        r.profiles = all.slice(0, 20);
+      };
       if (at >= 0) {
         const was = rows[at];
         was.end = now;
@@ -2275,12 +2304,14 @@ async function handle(req, res) {
         // The character is picked at the game's menu, so the start went out
         // not knowing it and the end is the first that does.
         if (Number(o.profileId) > 0) was.profile = Number(o.profileId);
+        keepPlayed(was);
         if (o.version) was.version = String(o.version).slice(0, 32);
       } else {
         const row = sessionRow(t, o, key);
         row.end = now;
         row.minutes = m;
         row.why = why;
+        keepPlayed(row);
         rows.push(row);   // start stays 0: it was never seen
       }
     }

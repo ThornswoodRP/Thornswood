@@ -186,7 +186,9 @@
       is, or a machine Windows will not say is a server (BoxGuard.ps1)
     - a Discord id that is not 17 to 20 digits
     - -Delete without -By, the person running it
-    - a JSON file, or a line of the record, that is there and will not parse
+    - a JSON file, or a line of the record, that is there and will not parse,
+      in a store it reads whole or among the launcher logs, change forms and
+      other data files it reads one by one, each such file named (#4203)
     - no node on the PATH (the JSON is edited by node, as the site writes it)
 
   tests\test-2351-delete-person.ps1 runs it against stand-ins of every store.
@@ -601,6 +603,10 @@ const people = a.people.map((x) => ({ discordId: String(x.discordId), profiles: 
 const linked = json(path.join(a.site, 'data', 'linked.json'), 'site');
 want(linked, 'object');
 const results = [];
+// Every file in scope that would not parse (#4203). One that cannot be read
+// may hold this person's records, so the run stops before anything is
+// written, naming each, the same as json() does for a store it reads whole.
+const unread = [];
 // What each service is asked to take out of its own files at its next start:
 // writer -> { people: Map(Discord id -> Set(profile)), actors: Set, kept: [] }.
 const asks = new Map();
@@ -680,7 +686,7 @@ for (const person of people) {
       // can be a year of them, up to a megabyte each.
       let set = null;
       try { set = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); }
-      catch (e) { left(T + ': launcher logs that would not parse, so were not read', 1); continue; }
+      catch (e) { unread.push(p); continue; }
       if (!isObj(set)) continue;
       if (String(set.who) !== id && !gone.has(String(set.session))) continue;
       if (kept.has(String(set.session))) held(T + ': launcher logs of kept sessions', 1);
@@ -827,7 +833,7 @@ for (const person of people) {
             const p = path.join(dir, f);
             if (!P.size) continue;
             let o = null;
-            try { o = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { left(T + ': change forms that would not parse, so were not read', 1); continue; }
+            try { o = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { unread.push(p); continue; }
             if (isObj(o) && Number(o.profileId) > 0 && hasP(o.profileId) && !unlinks.has(p)) {
               unlink(p, live && !bak ? g.writer : null);
               removed(T + ': characters' + (bak ? ' in copies an appearance reset kept' : w === 'world' && dir === forms ? '' : ' in ' + path.relative(R, dir)), 1);
@@ -900,7 +906,7 @@ for (const person of people) {
             if (!st.isFile() || st.size > 64 * 1024 * 1024) continue;
             let v;
             try { v = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); }
-            catch (e) { left(T + ': ' + path.relative(R, p) + ' would not parse, so was not read', 1); continue; }
+            catch (e) { unread.push(p); continue; }
             const n = refs(v, P, id, A);
             if (dir === priv && RELEASED.test(f)) {
               releases(T + ': places in ' + path.relative(R, p) + ' naming their character', n);
@@ -1013,6 +1019,11 @@ for (const person of people) {
     if (named && r.waiting.indexOf(w) < 0) r.waiting.push(w);
   }
   results.push(r);
+}
+
+if (unread.length) {
+  const each = Array.from(new Set(unread));
+  stop(each.length + ' file(s) that may hold their records will not parse, so nothing was changed: ' + each.join('; '));
 }
 
 // Each request, merged into one still waiting there.
