@@ -450,6 +450,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
