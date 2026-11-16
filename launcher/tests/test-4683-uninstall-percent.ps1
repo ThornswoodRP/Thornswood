@@ -14,14 +14,18 @@
     1. every path Script writes into the .cmd file has each % doubled, which
        cmd reads back as one: the targets, _quarantine, the install folder,
        the root record, Velopack's Update.exe and the farewell note
-    2. on Windows, the script run by cmd removes exactly the folder it was
+    2. a value left empty (no farewell note, no Update.exe, no root record)
+       writes no line: cmd reads del /f /q "" as every file in its working
+       folder, and until #6382 the script for an empty note took every file
+       at the top of this repository while the gate ran this harness
+    3. on Windows, the script run by cmd removes exactly the folder it was
        given, and leaves the folder cmd's expansion would have reached:
          - an install folder with one percent sign, beside the same name
            without it
          - an install folder named %TW4683DECOY%, with that variable set to
            the name of a decoy folder beside it
 
-  Off Windows, part 2 says SKIP: a SKIP is not a pass. Read only apart from
+  Off Windows, part 3 says SKIP: a SKIP is not a pass. Read only apart from
   its own scratch folder, which it removes.
 #>
 [CmdletBinding()]
@@ -88,7 +92,9 @@ Yes 'Script compiles with the compiler the build runs' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 $PathsT = $asm.GetType('Thornswood.Paths')
 $U = $asm.GetType('Thornswood.Uninstall')
-function Build([string]$root, [string[]]$targets, [int]$pid_, [string]$note, [string]$update, [string]$record) {
+# The last three stay untyped: a [string] parameter turns $null into '', and
+# the launcher passes null for a value it has not got.
+function Build([string]$root, [string[]]$targets, [int]$pid_, $note, $update, $record) {
     $PathsT.GetField('Root').SetValue($null, $root)
     return [string]$U.GetMethod('Script').Invoke($null, [object[]]@([string[]]$targets, $pid_, $note, $update, $record))
 }
@@ -111,7 +117,15 @@ try {
         Yes "  and $want reads back as itself" ($back -contains $want)
     }
 
-    # ---- 2. cmd runs it -------------------------------------------------------
+    # ---- 2. an empty value writes nothing --------------------------------------
+    foreach ($none in @($null, '')) {
+        $said = if ($null -eq $none) { 'null' } else { 'empty' }
+        $text = Build $r @($game) 1 $none $none $none
+        $blank = @($text -split "`r?`n" | Where-Object { $_.Contains('""') })
+        Yes ("with every value $said, no line has an empty path" + $(if ($blank.Count) { ' (not: ' + ($blank -join ' | ') + ')' } else { '' })) ($blank.Count -eq 0)
+    }
+
+    # ---- 3. cmd runs it -------------------------------------------------------
     if (-not $OnWindows) {
         Write-Host 'SKIP  the script run by cmd: this is not Windows'
     }
