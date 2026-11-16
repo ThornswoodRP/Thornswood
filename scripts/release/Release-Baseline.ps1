@@ -55,6 +55,7 @@
 #>
 
 . (Join-Path $PSScriptRoot 'Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named
+. (Join-Path $PSScriptRoot 'Release-Name.ps1')    # Get-ReleaseIdUtc: the instant a release id names
 function Get-BaselineHex([byte[]]$bytes) {
     return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
 }
@@ -266,14 +267,14 @@ function New-FeedReleaseEntry($Pointer, [string]$LastPack, [string]$To) {
     return [pscustomobject]$o
 }
 
-# When a release id says it was made, as yyyyMMddHHmmss, for putting two lists
-# in one order: ids are yyyyMMdd-HHmmss since #1057 and yyyyMMdd-HHmm before,
-# -dev on dev. '' for an id of any other shape.
+# When a release id says it was made, as yyyyMMddHHmmss in UTC, for putting
+# two lists in one order: ids are yyyyMMdd-HHmmssZ since #4950, and
+# yyyyMMdd-HHmmss and yyyyMMdd-HHmm in Mountain time before it
+# (Get-ReleaseIdUtc), -dev on dev. '' for an id of any other shape.
 function Get-FeedReleaseTimeKey([string]$Id) {
-    $m = [regex]::Match([string]$Id, '^(\d{8})-(\d{4})(\d{2})?(?:$|-)')
-    if (-not $m.Success) { return '' }
-    $s = if ($m.Groups[3].Success) { $m.Groups[3].Value } else { '00' }
-    return ($m.Groups[1].Value + $m.Groups[2].Value + $s)
+    $at = Get-ReleaseIdUtc $Id
+    if ($null -eq $at) { return '' }
+    return $at.ToString('yyyyMMddHHmmss', [Globalization.CultureInfo]::InvariantCulture)
 }
 
 # The list as the store keeps it, in the channel's working folder $Dir

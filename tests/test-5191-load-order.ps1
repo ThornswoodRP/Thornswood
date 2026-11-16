@@ -19,6 +19,10 @@
      moved order (the new plugin on the end of its kind, Thornswood-Last.esp
      last), and -Check passes; a second run writes the same bytes.
   3. With no records\load-order.json, it stops and writes nothing.
+  4. The live move, Deploy-Server.ps1 -FromStore -FromRecord, writes that
+     order (Get-ThornswoodContentOrder), never last-plugin.json's, which the
+     box's build writes and git does not keep current; and the gate sends
+     the file it reads it with.
 
   Needs nothing but pwsh. No network.
 #>
@@ -87,6 +91,17 @@ try {
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# ---- 4. the live move reads the record --------------------------------------
+$ds = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Deploy-Server.ps1')).Replace("`r`n", "`n")
+$fromRecord = [regex]::Match($ds, '(?s)  if \(\$FromRecord\) \{\n(.*?)\n  \}\n').Groups[1].Value
+Yes '4 Deploy-Server -FromRecord moves the live server to the order Get-ThornswoodContentOrder makes' (
+    $fromRecord.Contains(". (Join-Path `$repoRoot 'scripts\mods\ContentPaths.ps1')") -and
+    $fromRecord.Contains('$contentOrder = Get-ThornswoodContentOrder -Repo $repoRoot') -and $fromRecord.Contains('@($contentOrder.Names)'))
+Yes '4   and reads no order from last-plugin.json' ($fromRecord -ne '' -and -not $fromRecord.Contains("'game\data\last-plugin.json'") -and -not $fromRecord.Contains('.loadOrder)'))
+Yes '4   and refuses an order of another revision than the store''s' ($fromRecord.Contains('[int]$contentOrder.Revision -ne [int]$store.Revision'))
+$verbs = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/vps/gate/verbs.json')) | ConvertFrom-Json
+Yes '4 the gate sends ContentPaths.ps1 with Deploy-Server' (@($verbs.verbs.'Deploy-Server'.reads) -contains 'scripts/mods/ContentPaths.ps1')
 
 Write-Host ''
 Write-Host "$($script:pass) passed, $($script:fail) failed"

@@ -80,6 +80,11 @@ _MOD_DID = {
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).
     'idle': 'was moved out for being idle',
+    # An admin taking gold or a thing back out of a character from the hub's
+    # Gold and trades page, done by the game server (#6271): the why says
+    # how much of how much was asked, on which server, and why.
+    'takeback': 'took back from %s',
+    'takebackfailed': 'could not take back from %s',
     # Not staff: 1000 gold or more handed to somebody, flagged by the gold
     # and trade log (#6270), said as its why reads.
     'gold': 'was flagged for gold',

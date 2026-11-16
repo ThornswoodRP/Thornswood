@@ -704,8 +704,21 @@ def vmad_objects(tree):
 # plugin in the catalogue's order overrides any of them (read 16 Oct). This
 # plugin carries each winning record without its lock and without its script,
 # so the gates load unlocked. A claimed gate is still locked by the property
-# block's own lock script (#615), which never read the record's lock.
-GATES = (('skyrim.esm', 0x01B1F1), ('skyrim.esm', 0x042284), ('skyrim.esm', 0x042286))
+# block's own lock script (#615), which never read the record's lock. The
+# list is the policy's gatesUnlocked, which scripts/dev/Build-DoorTable.py
+# reads too, so the door table says the gates are open from the list itself
+# and not from this plugin, which it is built before (#5191).
+def policy_gates(policy):
+    """The policy's gatesUnlocked as (plugin, form id) pairs, plugin lower case."""
+    out = []
+    for desc in (policy.get('gatesUnlocked') or {}).get('gates', []):
+        fid, _, plug = str(desc).partition(':')
+        out.append((plug.lower(), int(fid, 16)))
+    return tuple(out)
+
+
+with open(POLICY, encoding='utf-8') as _policy:
+    GATES = policy_gates(json.load(_policy))
 
 # What a gate's copy keeps, and which of those hold a form id in their first
 # four bytes. Anything else on the record stops the build.

@@ -86,6 +86,8 @@ function Parse([string]$f) {
 $L = Parse $ListPs; $R = Parse $ResetPs; $W = Parse $WipePs
 Yes 'S1 Release-List.ps1, Reset-Character.ps1 and Wipe-Saves.ps1 parse' ($L.errors -eq 0 -and $R.errors -eq 0 -and $W.errors -eq 0)
 . $ListPs
+# The world a tool works on (#6237), which the reset's body carries too.
+. (Join-Path $Repo 'scripts\deploy\World.ps1')
 $e = $null; [void][System.Management.Automation.Language.Parser]::ParseInput($ThornswoodReleaseList, [ref]$null, [ref]$e)
 Yes 'S2 the writer it sends parses on its own' ($ThornswoodReleaseList -and $e.Count -eq 0)
 $dot = ". (Join-Path `$Here 'Release-List.ps1')"
@@ -260,8 +262,11 @@ try {
 
     $r5 = Server 'reset-badsettings' '{"privDir": '
     $x = RunBox $resetBody @('-Root', $r5)
+    # Since #6237 it stops a step sooner, at finding the world, which the
+    # same file says: neither where the world is nor where the list goes is
+    # guessed.
     Yes ('R11 a server-settings.json that will not parse stops the reset: where the list goes is not guessed (' + ($x.out -join ' / ') + ')') (
-        $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *server-settings.json will not parse*Nothing was thrown away.' }).Count -eq 1 -and
+        $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *server-settings.json will not*Nothing was thrown away.' }).Count -eq 1 -and
         @(Get-ChildItem -LiteralPath (Join-Path $r5 'world\changeForms') -Filter '*.json' -File).Count -eq 4 -and
         -not (Test-Path -LiteralPath (Join-Path $r5 'private')))
 

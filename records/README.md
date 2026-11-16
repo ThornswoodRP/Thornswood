@@ -345,6 +345,14 @@ named. Names only: no secret or token is in any of them.
   `scripts\deploy\Install-Tunnel.ps1` reads it and makes Cloudflare and the
   box match it; nothing writes it. A new cloudflared is its version, URL and
   SHA-256 changed together, from the release page.
+- `mongodb.json`: the MongoDB the game servers keep their worlds in (#6237):
+  mongod, the database tools and mongosh, each by version, URL and SHA-256
+  from MongoDB's own download records, the address and port mongod listens
+  on (loopback only), its cache, and the user each game server, the backup
+  and the admin signs in as. `scripts\deploy\Install-Mongo.ps1` reads it and
+  makes the box match it; nothing writes it. A new version is its URL and
+  SHA-256 changed together, and the server stays on the 8.0 series the
+  engine's driver is held to.
 
 ## Provenance notes
 

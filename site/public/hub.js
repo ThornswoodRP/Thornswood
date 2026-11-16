@@ -375,6 +375,19 @@ function charLine(pid, rec, now) {
 /* The Notes line under one account (#412, #1010): the account's ban if there
    is one, each of its characters with a PK or a ban of its own, then every
    staff note, newest first, each with who wrote it and when. */
+/* The other accounts that played from one of this account's PCs in the
+   last 30 days (the site's pcs.js), by name where the list has one. A
+   shared family PC looks the same, so it is said, never acted on. */
+function pcLine(u) {
+  var others = (u && u.sharesPc) || [];
+  if (!others.length) return '';
+  var names = others.map(function (id) {
+    var o = (S.linked || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return esc((o && (o.name || o.handle)) || 'not linked now') + ' (<code>' + esc(id) + '</code>)';
+  });
+  return '<div class="said">Played from the same PC as ' + names.join(', ') + ' in the last 30 days.</div>';
+}
+
 function linkedNotes(u, rec, now) {
   rec = rec || { bans: {}, notes: {} };
   var id = String(u && u.id || '');
@@ -390,6 +403,7 @@ function linkedNotes(u, rec, now) {
       ' (by ' + esc(b.by || 'staff') + ')</div>';
   }
   chars.forEach(function (pid) { out += charLine(pid, rec, now); });
+  out += pcLine(u);
   if (!notes.length && !b) out += ' <span class="said">no notes yet</span>';
   notes.forEach(function (n) {
     out += '<div class="note">' + esc(n.text || '') + ' <span class="said">(' +
@@ -1926,6 +1940,15 @@ function wireEconomy() {
 */
 var LFIND = { srv: 'main', q: '', flagged: false };
 var LEDG = null;
+/*
+  TAKE BACK (#6271), admins only, under the log: gold or a thing taken back
+  out of a character, online or not, by the game server that holds it. A
+  row's Take back fills the form with whoever received it and what they
+  got. The asks and what each game server did with them are listed under
+  the form; a game server takes its asks every 30 seconds.
+*/
+var TB = { pid: '', record: 'gold', count: '', why: '', said: '' };
+var TBROWS = null;
 
 function ledgerWho(p) {
   if (!p) return '<span class="faint">nobody</span>';
@@ -1940,7 +1963,8 @@ function ledgerWhat(gold, things) {
   return bits.length ? esc(bits.join(', ')) : '<span class="faint">nothing</span>';
 }
 var LEDGER_KIND = { trade: 'Trade', halftrade: 'Trade, half through', sale: 'Sale to the company',
-                    take: 'Took gold', drop: 'Dropped gold', put: 'Put gold away' };
+                    take: 'Took gold', drop: 'Dropped gold', put: 'Put gold away',
+                    takeback: 'Taken back by staff' };
 
 function loadLedger() {
   LEDG = { loading: true };
@@ -1972,19 +1996,19 @@ function drawLedger() {
       '<label class="check"><input type="checkbox" id="lflag" aria-label="Flagged only"' + (LFIND.flagged ? ' checked' : '') + '> Flagged only</label>' +
     '</div>';
   if (!LEDG || LEDG.loading) {
-    el('page').innerHTML = out + '<div class="empty">Reading the log.</div>';
+    el('page').innerHTML = out + '<div class="empty">Reading the log.</div>' + takeBackPanel();
     return wireLedger();
   }
   if (LEDG.failed) {
     el('page').innerHTML = out + '<div class="empty">The log could not be read: ' + esc(LEDG.failed) +
-      '. Read again, or reload the page if you were signed out.</div>';
+      '. Read again, or reload the page if you were signed out.</div>' + takeBackPanel();
     return wireLedger();
   }
   if (!LEDG.rows.length) {
     el('page').innerHTML = out + '<div class="empty">' + (LFIND.q.trim() || LFIND.flagged
       ? 'Nothing matches that in the last ' + esc(String(LEDG.keepDays)) + ' days.'
       : 'Nothing logged on the ' + (LFIND.srv === 'dev' ? 'dev' : 'main') + ' server in the last ' +
-        esc(String(LEDG.keepDays)) + ' days.') + '</div>';
+        esc(String(LEDG.keepDays)) + ' days.') + '</div>' + takeBackPanel();
     return wireLedger();
   }
   out += '<div class="said said-show">Newest first, ' + LEDG.rows.length + (LEDG.more ? ' shown, and there are more: search narrower to see them.' : ' found.') +
@@ -2001,15 +2025,105 @@ function drawLedger() {
         '<td data-label="Gave"><div class="cell">' + ledgerWhat(r.gold, r.things) + '</div></td>' +
         '<td data-label="To"><div class="cell">' + (r.to ? ledgerWho(r.to) : esc(r.source || 'nobody')) + '</div></td>' +
         '<td data-label="Gave back"><div class="cell">' + (back ? ledgerWhat(r.backGold, r.backThings) : '') + '</div></td>' +
-        '<td data-label="Where"><div class="cell">' + esc(r.where || '') + '</div></td></tr>';
+        '<td data-label="Where"><div class="cell">' + esc(r.where || '') +
+          (S.me.admin && r.to && r.to.pid && (r.gold || (r.things || []).length)
+            ? ' <button class="btn" data-tb="' + esc(String(r.to.pid)) + '" data-tbrec="' +
+              esc(r.gold ? 'gold' : (r.things[0].desc || '')) + '" data-tbn="' +
+              esc(String(r.gold || r.things[0].c)) + '">Take back</button>' : '') +
+          '</div></td></tr>';
     }).join('') + '</tbody></table></div>';
-  el('page').innerHTML = out;
+  el('page').innerHTML = out + takeBackPanel();
   wireLedger();
 }
 
+function loadTakeBack() {
+  TBROWS = { loading: true };
+  api('/api/staff/takeback').then(function (r) {
+    if (!r.ok) throw new Error('the site answered ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    TBROWS = { rows: (d && d.rows) || [] };
+    if (S.at === 'ledger') drawLedger();
+  }).catch(function (e) {
+    TBROWS = { failed: String((e && e.message) || e) };
+    if (S.at === 'ledger') drawLedger();
+  });
+}
+
+function takeBackPanel() {
+  if (!S.me.admin) return '';
+  if (!TBROWS) loadTakeBack();
+  var out = '<div class="section-label">Take back</div>' +
+    '<p class="lede">Takes gold or a thing out of a character on the ' + (LFIND.srv === 'dev' ? 'dev' : 'main') +
+    ' server, online or not. The game server does it within 30 seconds, takes what they hold up to the count, ' +
+    'and the staff channel is told. Admins only.</p>' +
+    '<div class="bar bar-mb-16">' +
+      '<input id="tbpid" inputmode="numeric" aria-label="Profile number" placeholder="Profile number" value="' + esc(TB.pid) + '">' +
+      '<input id="tbrec" aria-label="Gold, or the thing\'s record" placeholder="gold, or a record like 12eb7:Skyrim.esm" value="' + esc(TB.record) + '">' +
+      '<input id="tbn" inputmode="numeric" aria-label="How many" placeholder="How many" value="' + esc(TB.count) + '">' +
+      '<input id="tbwhy" aria-label="Why" placeholder="Why: it goes in the staff log" value="' + esc(TB.why) + '">' +
+      '<button class="btn" id="tbgo">Take back</button>' +
+    '</div>' + (TB.said ? '<div class="said said-show">' + esc(TB.said) + '</div>' : '');
+  if (!TBROWS || TBROWS.loading) return out + '<div class="empty">Reading the asks.</div>';
+  if (TBROWS.failed) return out + '<div class="empty">The asks could not be read: ' + esc(TBROWS.failed) + '.</div>';
+  if (!TBROWS.rows.length) return out + '<div class="empty">Nothing has been taken back.</div>';
+  return out + '<div class="tablewrap"><table class="board ledger"><thead><tr><th>Asked</th><th>Server</th>' +
+    '<th>From</th><th>What</th><th>By</th><th>Why</th><th>Done</th></tr></thead><tbody>' +
+    TBROWS.rows.map(function (r) {
+      var done = r.state === 'waiting' ? 'Waiting for the game server'
+        : r.state === 'done' ? 'Took ' + r.took + ' of ' + r.count + (r.answer ? ' (' + r.answer + ')' : '')
+        : 'Not done: ' + (r.answer || 'no reason given');
+      return '<tr><td data-label="Asked"><div class="cell">' + esc(new Date(r.at).toLocaleString()) + '</div></td>' +
+        '<td data-label="Server"><div class="cell">' + esc(r.server) + '</div></td>' +
+        '<td data-label="From"><div class="cell">' + esc(r.whoName || 'somebody') + ' <span class="faint">profile ' + esc(String(r.pid)) + '</span></div></td>' +
+        '<td data-label="What"><div class="cell">' + esc(r.count + ' ' + r.name) + '</div></td>' +
+        '<td data-label="By"><div class="cell">' + esc(r.byName) + '</div></td>' +
+        '<td data-label="Why"><div class="cell">' + esc(r.why) + '</div></td>' +
+        '<td data-label="Done"><div class="cell">' + esc(done) + '</div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function wireTakeBack() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tb]'), function (b) {
+    b.onclick = function () {
+      TB.pid = b.getAttribute('data-tb'); TB.record = b.getAttribute('data-tbrec');
+      TB.count = b.getAttribute('data-tbn'); TB.said = '';
+      drawLedger();
+      var why = el('tbwhy');
+      if (why) why.focus();
+    };
+  });
+  var go = el('tbgo');
+  if (!go) return;
+  ['tbpid', 'tbrec', 'tbn', 'tbwhy'].forEach(function (id) {
+    var f = el(id);
+    if (f) f.oninput = function () { TB[{ tbpid: 'pid', tbrec: 'record', tbn: 'count', tbwhy: 'why' }[id]] = f.value; };
+  });
+  go.onclick = function () {
+    go.disabled = true;
+    api('/api/staff/takeback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: LFIND.srv, profileId: Number(TB.pid), record: TB.record,
+                             count: Number(TB.count), why: TB.why })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error(j.message || j.error || ('the site answered ' + r.status));
+        TB = { pid: '', record: 'gold', count: '', why: '', said: 'Asked. The game server takes it within 30 seconds.' };
+        TBROWS = null;
+        drawLedger();
+      });
+    }).catch(function (e) {
+      // Said in the page, never lost (#4187).
+      TB.said = 'Not asked: ' + String((e && e.message) || e);
+      drawLedger();
+    });
+  };
+}
+
 function wireLedger() {
+  wireTakeBack();
   var r = el('lreload');
-  if (r) r.onclick = function () { LEDG = null; drawLedger(); };
+  if (r) r.onclick = function () { LEDG = null; TBROWS = null; drawLedger(); };
   var s = el('lsrv');
   if (s) s.onchange = function () { LFIND.srv = s.value; LEDG = null; drawLedger(); };
   var c = el('lflag');
