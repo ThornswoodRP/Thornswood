@@ -1218,6 +1218,22 @@
         "NetworkOnly": "switch"
       }
     },
+    "Install-Mongo": {
+      "script": "scripts/deploy/Install-Mongo.ps1",
+      "reads": [
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/mongo-users.js"
+      ],
+      "timeoutMinutes": 30,
+      "fixed": ["-FromGate", "-NoPause"],
+      "params": {
+        "Status": "switch"
+      }
+    },
     "Install-Backup": {
       "script": "scripts/deploy/Install-Backup.ps1",
       "reads": [

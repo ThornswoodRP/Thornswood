@@ -1,0 +1,31 @@
+{
+  "about": "The MongoDB the game servers keep their worlds in (#6237). scripts/deploy/Install-Mongo.ps1 installs these three downloads on the box, each checked against its SHA-256 before it is used, runs mongod as the task Thornswood Mongo on loopback only with authorization on, and makes one user per server, a backup user and an admin. MongoDB's own download records give each SHA-256 (downloads.mongodb.org/full.json, downloads.mongodb.org/tools/db/release.json, downloads.mongodb.com/compass/mongosh.json), and each was checked against the file on 16 Nov 2026. The engine's driver (the fork's mongo-c-driver 2.2.3) is held to the 8.0 series. Community Server, Database Tools and mongosh are free; nothing here is paid. Nothing here is secret: the passwords are made on the box and kept there.",
+  "server": {
+    "version": "8.0.38",
+    "url": "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-8.0.38.zip",
+    "sha256": "85147ae32f9bb9a2e5a0a3875b0ffcc4423ab7a49bc4f75cb4bbc9811883d3de",
+    "take": ["bin/mongod.exe", "bin/vc_redist.x64.exe"]
+  },
+  "tools": {
+    "version": "100.20.1",
+    "url": "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.20.1.zip",
+    "sha256": "5a1a8aa2c87ca0685ffdcad403601b110d495d44afe579473b8f75ec46621c80",
+    "take": ["bin/mongodump.exe", "bin/mongorestore.exe"]
+  },
+  "shell": {
+    "version": "2.14.2",
+    "url": "https://downloads.mongodb.com/compass/mongosh-2.14.2-win32-x64.zip",
+    "sha256": "93072fa3466fdd309c3e40ec0b1e8b805a90ef7e455868320117b3d2c756a4bc",
+    "take": ["bin/mongosh.exe", "bin/mongosh_crypt_v1.dll"]
+  },
+  "bindIp": "127.0.0.1",
+  "port": 27017,
+  "cacheSizeGB": 0.5,
+  "cacheWhy": "The box has 8 GB and runs two game servers (about 1 GB each under 100 people, #4623), two voice services, the site and the bot. MongoDB's default cache is half of the memory less 1 GB, 3.5 GB here. A 20,000-form world is 55 MB of JSON, so half a gigabyte holds every world several times over; the load test (#6237) says whether it is enough.",
+  "servers": [
+    { "name": "live", "task": "Thornswood Server", "database": "thornswood-live", "user": "live" },
+    { "name": "dev", "task": "Thornswood Dev Server", "database": "thornswood-dev", "user": "dev" }
+  ],
+  "backup": { "task": "Thornswood Backup", "user": "backup" },
+  "admin": { "user": "twadmin" }
+}

@@ -671,6 +671,51 @@
                       "reason":  "start of a named task"
                   },
                   {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "Remote",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "return Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Script $script",
+                      "does":  "sends a script or file for its caller",
+                      "class":  "transport",
+                      "reason":  "carries what its caller hands it; each caller is mapped"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote ($common + @\"",
+                      "does":  "reads files, settings, logs or status",
+                      "class":  "read-status",
+                      "reason":  "reads files, settings, logs or status only"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "$made = Remote @\"",
+                      "does":  "makes MongoDB\u0027s folder on the box",
+                      "class":  "admin",
+                      "reason":  "install-time work"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh $usersJs \"${target}:$($Root.Replace(\u0027\\\u0027,\u0027/\u0027))/mongo-users.js\" }",
+                      "does":  "uploads the script that makes MongoDB\u0027s users",
+                      "class":  "admin",
+                      "reason":  "script run with the admin\u0027s connection file"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Mongo.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "$out = @(Remote $install | ForEach-Object { Say \"  $_\"; \"$_\".Trim() })",
+                      "does":  "installs MongoDB, registers its task and makes its users",
+                      "class":  "admin",
+                      "reason":  "sends Register-ScheduledTask and makes secrets"
+                  },
+                  {
                       "script":  "scripts/deploy/Install-Bot.ps1",
                       "scope":  "Remote",
                       "via":  "Invoke-ThornswoodRemote",
