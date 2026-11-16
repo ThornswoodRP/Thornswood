@@ -196,6 +196,29 @@ try {
     $g = Facts; $g.Remove('firewallProfiles'); $g.Remove('edgeVersion')
     $x = Run $g ''
     T ($x.Code -eq 1 -and $x.Out -match 'REVIEW  firewall local rules' -and $x.Out -match 'REVIEW  program Microsoft Edge') 'facts that carry neither are not taken for a clean box'
+    # The active store still lists a rule an installer put in the local store
+    # after the firewall was told to ignore local rules (8 Nov). Such a rule
+    # opens nothing, so it is not a door, and it does not hold a required one
+    # open either.
+    $craw2 = Get-Content -LiteralPath $collector -Raw
+    T ($craw2 -match 'store = \[string\]\$fw\.PolicyStoreSourceType' -and $craw2 -match 'profiles = \[string\]\$fw\.Profile') 'the collector says which store each rule came from and which profiles it covers'
+    $mdns = @{ name = '{AAAA0000-1111-2222-3333-444455556666}'; displayName = 'Microsoft Edge (mDNS-In)'; protocol = 'UDP'; ports = @('5353'); remote = @('Any'); store = 'Local'; profiles = 'Any' }
+    $g = Facts; $g.inboundRules += $mdns
+    $x = Run $g ''
+    T ($x.Code -eq 0 -and $x.Out -notmatch 'REVIEW  firewall Microsoft Edge') 'a local rule an installer added is not to review while every profile ignores local rules'
+    T ($x.Report -match '\| firewall \| Microsoft Edge \(mDNS-In\) \|[^\n]*\| ignored: a local rule, UDP 5353 from Any \| ok \|') 'the report names it as ignored'
+    $g = Facts; $g.inboundRules += $mdns; $g.firewallProfiles[2] = @{ name = 'Public'; allowLocalRules = 'NotConfigured' }
+    $x = Run $g ''
+    T ($x.Out -match 'REVIEW  firewall Microsoft Edge \(mDNS-In\): expected not listed in the record, found on, UDP 5353 from Any') 'it is still caught where a profile it covers takes local rules'
+    $g = Facts; $g.inboundRules += ($mdns.Clone()); $g.inboundRules[-1].profiles = 'Public'; $g.firewallProfiles[0] = @{ name = 'Domain'; allowLocalRules = 'NotConfigured' }
+    $x = Run $g ''
+    T ($x.Out -notmatch 'REVIEW  firewall Microsoft Edge') 'a local rule for the Public profile alone is ignored when Public ignores local rules'
+    $g = Facts; ($g.inboundRules | Where-Object { $_.displayName -eq 'Thornswood game (UDP)' }) | ForEach-Object { $_.store = 'Local'; $_.profiles = 'Any' }
+    $x = Run $g ''
+    T ($x.Code -eq 1 -and $x.Out -match 'REVIEW  firewall Thornswood game \(UDP\): expected on \(required\), found off, or not on the box') 'a required rule held only in the ignored local store is not taken as on'
+    $g = Facts; $g.inboundRules += @{ name = 'x'; displayName = 'Microsoft Edge (mDNS-In)'; protocol = 'UDP'; ports = @('5353'); remote = @('Any') }
+    $x = Run $g ''
+    T ($x.Out -match 'REVIEW  firewall Microsoft Edge \(mDNS-In\)') 'a rule from facts that do not say its store is judged as before'
 
     $rec2 = Get-Content (Join-Path $repo 'records\prod-parity.json') -Raw
     T ($rec2 -notmatch '(?i)password\s*[=:]|BEGIN ') 'records\prod-parity.json holds no secret'
