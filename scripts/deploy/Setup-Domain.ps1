@@ -173,7 +173,7 @@ foreach ($need in @('Strict-Transport-Security', 'X-Content-Type-Options', 'Refe
 }
 $cfg64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($caddyfile))
 
-Remote @"
+$caddySaid = @(Remote @"
 `$ErrorActionPreference = 'Stop'
 `$dir = '$caddyWin'
 $(Get-ThornswoodLockedFolderScript $caddyWin)
@@ -241,7 +241,12 @@ foreach (`$p in 80,443) {
   }
 }
 if (`$fwMade) { Sync-ThornswoodFirewall }
-"@ | ForEach-Object { "  $_" }
+"@)
+$caddySaid | ForEach-Object { "  $_" }
+# A Caddy folder the box could not lock stops the run there, and the box's
+# script stopped at the lock, so no caddy.exe or Caddyfile went into it (#4212).
+$lockFailed = Get-ThornswoodLockFailure $caddySaid
+if ($lockFailed) { throw ('The box could not lock ' + $caddyWin + ', so nothing was put in it and the run stops here. The next run locks it again: ' + $lockFailed) }
 
 # The docs site moves to loopback, so 3001 is no longer a plain HTTP way in.
 Write-Host ''

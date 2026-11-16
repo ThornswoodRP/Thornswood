@@ -337,6 +337,13 @@ try {
         (Refusal { Assert-ThornswoodSourceIntegrity -Artifact $v -RepoDir $src }) -eq '')
 
     # ---- 4. sending and recording, against a stand-in box ------------------
+    # The store's lock is a Windows ACL. Off Windows the lock the box's text
+    # carries is stood in, so the text runs whole; a lock that fails stops
+    # that text (#4212), which is scripts\tests\test-4212-lock-checked.ps1's.
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        function Lock-ThornswoodFolder { param([string]$Path, [switch]$Only, [string[]]$Writers) }
+        function Test-ThornswoodFolderLocked { param([string]$Path) return $true }
+    }
     $box = Join-Path $tmp 'box'
     $store = (Join-Path $box 'Thornswood-Deploys').Replace('\', '/')
     $partRoot = (Join-Path $box 'Thornswood-Server-Dev').Replace('\', '/')
