@@ -47,6 +47,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Install-Bridge.ps1](deploy/Install-Bridge.ps1) | Puts the box's end of ssh on the VPS (#2753, #2891), the way every machine reaches the box's ssh: scripts\vps\bridge\bridge.js, as the task "Thornswood Bridge", listening on 127.0.0.1:7790. |
 | [deploy/Install-DeployAgent.ps1](deploy/Install-DeployAgent.ps1) | Puts the box deploy agent on the VPS (#5180): the Windows service ThornswoodDeployAgent, C:\Thornswood-Agent\thornswood-agent.exe, from the newest signed agent-v<version> Release that .github\workflows\deploy-agent.yml published. |
 | [deploy/Install-Gate.ps1](deploy/Install-Gate.ps1) | Puts the deploy gate on the box (#2841): the account thornswood-deploy, which has no administrator rights, its forced command, and the broker that runs the verbs. |
+| [deploy/Install-Mongo.ps1](deploy/Install-Mongo.ps1) | Puts MongoDB on the box (#6237): the game servers keep their worlds there instead of one JSON file per form. mongod runs as the task Thornswood Mongo, listening on 127.0.0.1 only, with authorization on, and every program that signs in has a user of its own. |
 | [deploy/Install-Runner.ps1](deploy/Install-Runner.ps1) | Puts a GitHub Actions runner on the VPS, so the build check runs on every pull request without paying for minutes. |
 | [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the game folder's Data and puts it into the install's plugin lists, in front of the plugin -Before names. |
 | [deploy/Install-ThornswoodServer.ps1](deploy/Install-ThornswoodServer.ps1) | Run this ON THE VPS, after Bootstrap-VPS.ps1, as Administrator. |
@@ -55,6 +56,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/LastPluginOnBox.ps1](deploy/LastPluginOnBox.ps1) | Thornswood-Last.esp on a game server, made on the box from its recipe (#2791 step 2, Patrick's A of 26 Oct 2026 on #3721). |
 | [deploy/LastPluginRecipe.ps1](deploy/LastPluginRecipe.ps1) | What this checkout's recipe for Thornswood-Last.esp says of the plugin it makes (#2791): the size and sha256 game\data\last-plugin.json names, and the plugin's file header, which the recipe writes out. |
 | [deploy/MaxOnline.ps1](deploy/MaxOnline.ps1) | How many people a Thornswood server holds at once: read from the one place it is written, records\most-online.json, and put into server-settings.json. |
+| [deploy/Mongo.ps1](deploy/Mongo.ps1) | What every MongoDB script reads (#6237): the record, the folder on the box, the configuration mongod starts with, and who signs in to which database. |
 | [deploy/Move-RunnersToDrive.ps1](deploy/Move-RunnersToDrive.ps1) | #4048. Move One's runners to its existing Dev Drive, one verified runner at a time. |
 | [deploy/New-RunnerDrive.ps1](deploy/New-RunnerDrive.ps1) | Makes the Windows 11 Dev Drive that One's pull request runners live on, so Defender scans what their builds open without holding each file until the scan is done (#4048, #3861; Patrick's answer A on the report page, 27 Oct 2026, q-3861-defender). |
 | [deploy/Reload.ps1](deploy/Reload.ps1) | A dev gamemode deploy that changes only gamemode.js puts the new one in place while the dev server runs, and the server loads it there, with nobody dropped and every NPC still in the world (#3196, Patrick's C on 22 Oct 2026). |
@@ -81,6 +83,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/StopAndMove.ps1](deploy/StopAndMove.ps1) | Stopping what runs from a folder, and then moving its files, on the box: each process waited for until it has exited, and each move tried once. |
 | [deploy/Swap.ps1](deploy/Swap.ps1) | Stages a deploy beside what is running, checks it there, and only then swaps it in, keeping what it replaced for a one-command put-back. |
 | [deploy/VoiceSite.ps1](deploy/VoiceSite.ps1) | Says whether a voice service's site address is one it can let people in with, and whether a join gets through on a running service. |
+| [deploy/World.ps1](deploy/World.ps1) | Where a game server keeps its world, and how a tool works on it (#6237). |
 | [dev/Allow-Claude.ps1](dev/Allow-Claude.ps1) | Adds the folders and the script paths a Claude working in this repo needs, to the Claude Code settings file, and reports exactly what it changed. |
 | [dev/Build-HarvestTable.ps1](dev/Build-HarvestTable.ps1) | Builds game\data\harvests.json: the table the server needs to say who may pick which plant. |
 | [dev/Build-HuntTable.ps1](dev/Build-HuntTable.ps1) | Builds game\data\hunts.json: the table the server needs to answer a carcass. |
@@ -169,6 +172,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Discord-Hook.ps1](ops/Discord-Hook.ps1) | The Discord webhooks releases post through, kept in one place on the VPS instead of a file on each machine that ships. |
 | [ops/List-Untouched.ps1](ops/List-Untouched.ps1) | Lists the open issues nobody has touched for a month, oldest first, for the weekly board review to re-rank (#5185). |
 | [ops/Mark-Spot.ps1](ops/Mark-Spot.ps1) | Reads the spots you marked in game and prints them in the shape the content table wants. |
+| [ops/Move-World.ps1](ops/Move-World.ps1) | Moves one game server's world out of the file driver and into its own database in the box's MongoDB (#6237), with the engine's own move, and starts the server on it. |
 | [ops/New-Character.ps1](ops/New-Character.ps1) | Throws the test character away so the next connect builds a fresh one. |
 | [ops/NpcReset.ps1](ops/NpcReset.ps1) | The box half of Reset-Npcs.ps1 (#4595): which saved change forms are NPCs, and moving those aside so each NPC starts again from its plugin record. |
 | [ops/Publish-Discord.ps1](ops/Publish-Discord.ps1) | Posts the newest release into the Discord #news channel. |
