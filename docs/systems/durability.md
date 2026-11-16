@@ -24,11 +24,15 @@ picked. Each takes two cheap Skyrim goods that a class already
 supplies at novice, so the half that makes the kit can gather the
 makings from day one. All three are novice.
 
-| Kit | Made of | Bench | Who |
-| --- | --- | --- | --- |
-| Weapon Kit | 1 Iron Ingot, 1 Leather Strips | Forge | Smith, Edgewright |
-| Armor Kit | 1 Iron Ingot, 1 Leather | Forge | Smith, Platewright |
-| Sewing Kit | 1 Tundra Cotton, 1 Leather Strips | Tanning rack | Tailor, Haberdasher |
+| Kit | Made of | Bench | Burns | Who |
+| --- | --- | --- | --- | --- |
+| Weapon Kit | 1 Iron Ingot, 1 Leather Strips | Forge | 1 Poor Charcoal | Smith, Edgewright |
+| Armor Kit | 1 Iron Ingot, 1 Leather | Forge | 1 Poor Charcoal | Smith, Platewright |
+| Sewing Kit | 1 Tundra Cotton, 1 Leather Strips | Tanning rack | Nothing | Tailor, Haberdasher |
+
+Burns is what the bench takes besides the makings, the way every forge
+burns charcoal of the grade the metal asks for ([Smith](professions/smith.md)).
+Iron asks for Poor Charcoal. The tanning rack burns nothing.
 
 The Sewing Kit was first offered as linen wrap and leather strips.
 No class supplies linen wrap, so tundra cotton, a gatherer's, takes

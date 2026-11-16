@@ -78,7 +78,7 @@ yes('2 and the needs block\'s insulation reads it',
   /if \(w && burnt && \(burnt\.all \|\| burnt\[parts\[p\]\]\)\) \{ w = w \* burnt\.counts; \}/.test(needs));
 const clothing = flat(section(temp, 'Clothing'));
 yes('2 temperature.md\'s Clothing says a bad burn of ' + burnBad + ' health halves everything worn',
-  new RegExp('bad burn[^.]*' + burnBad + ' health').test(clothing) && /everything (?:you wear|worn)[^.]*at half/.test(clothing));
+  new RegExp('bad burn[\\s\\S]{0,80}?' + burnBad + ' health').test(clothing) && /everything (?:you wear|worn)[^.]*at half/.test(clothing));
 
 const help = /mealHelp: \{\s*minutes: (\d+), warm: (\d+),/.exec(needs);
 const feastRow = /feast: \{ strength: (\d+), time: ([\d.]+) \}/.exec(needs);
@@ -138,7 +138,7 @@ yes('3 Add-ContentRecords.py makes the three kits at a bench this test knows',
 const kitRows = {};
 for (const line of section(dur, 'What a kit is made of').split('\n')) {
   const cells = line.split('|').map((c) => c.trim());
-  if (cells.length === 7 && /Kit$/.test(cells[1])) {
+  if (cells.length === 7 && /\S Kit$/.test(cells[1])) {
     kitRows[cells[1]] = { made: cells[2], bench: cells[3], burns: cells[4], who: cells[5] };
   }
 }
