@@ -159,11 +159,11 @@ if ((-not $Undo) -and (Test-Path -LiteralPath $off)) {
 
 # ------------------------------------------------------------- load order ---
 Head 'Rebuilding the server load order'
-Note 'Deploy-Gamemode.ps1 builds it now (#4688): ..\deploy\Deploy-Gamemode.ps1'
+Note 'Deploy-Gamemode.ps1 builds it now (#4688): .\scripts\deploy\Deploy-Gamemode.ps1'
 
 Head 'Now'
 Note 'The server must get the new list before you launch, or the two disagree:'
 Note ''
-Note '    .\Publish-Server.ps1'
+Note '    .\scripts\release\Publish-Server.ps1'
 Note ''
-Note 'To undo all of this:  .\Enable-MCM.ps1 -Undo   then publish again.'
+Note 'To undo all of this:  .\scripts\mods\Enable-MCM.ps1 -Undo   then publish again.'

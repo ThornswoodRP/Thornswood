@@ -406,18 +406,10 @@ try {
         $c -eq 0 -and (Said 'waiting\s+the live game server has a request') -and -not (Said 'deleted-characters\.taken\.json'))
     Move-Item -LiteralPath $took -Destination $req
 
-    # ---- each service starts, the way it starts on the box
+    # ---- each service starts, the way it starts on the box. The site first
+    # (#4470): it can start before a game server does, and the game server
+    # still holds the character until it starts.
     $node = (Get-Command node).Source
-    $writer = Join-Path $Repo 'scripts\vps\Server-Log.js'
-    foreach ($R in $Live, $Dev, $Vl, $Vd) {
-        Put (Join-Path $R 'exit.js') 'process.exit(0);'
-        Push-Location -LiteralPath $R
-        try { & $node $writer --log (Join-Path $R 'server.log') exit.js | Out-Null } finally { Pop-Location }
-        Remove-Item -LiteralPath (Join-Path $R 'exit.js') -Force
-    }
-    $logs = (Get (Join-Path $Live 'server.log')) + (Get (Join-Path $Vl 'server.log'))
-    Yes 'server-log.js took the game server''s and voice''s requests as each started, and said so with counts' (
-        $logs -match 'deletions: saves: characters 1, cards 1' -and $logs -match 'deletions: chat: chat lines 2' -and $logs -notmatch "$P1|$ME")
     $driver = Join-Path $T 'site-start.js'
     Put $driver @'
 const fs = require('fs'), path = require('path');
@@ -428,14 +420,33 @@ const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== en
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
 new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS', 'TROUBLE_FILE', 'ROSTER', 'INBOX',
-  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
+  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', 'PCS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
   path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
   path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
   path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
-  path.join(D, 'settings.json'));
+  path.join(D, 'settings.json'), path.join(D, 'pcs.json'));
 '@
     $siteSaid = @(& $node $driver $Repo $Site 2>&1 | ForEach-Object { "$_" }) -join "`n"
     Yes 'the site took its request as it started, and said so with counts' ($siteSaid -match 'deletion requests: 1 person\(s\): .*done, and the request is gone' -and -not (Test-Path (Join-Path $Site 'data\deletion-requests.json')))
+    # The site has let go of their link, so its linked.json no longer names
+    # their character; the game servers have not started and still hold it.
+    # The dry run still shows both as waiting, by the characters the record
+    # wrote down (#4470).
+    $c = Run (@('-DiscordId', $ME) + $roots)
+    if (-not (Said 'waiting\s+the live game server has a request')) { Show }
+    Yes '  and with the site started first, a dry run still shows each game server waiting, by the characters in the record (#4470)' (
+        $c -eq 0 -and (Said 'Discord id 111111111111111111: 1 character') -and (Said 'waiting\s+the live game server has a request') -and
+        (Said 'waiting\s+the dev game server has a request') -and -not (Said 'waiting\s+the site has a request') -and -not (Said 'nothing of theirs on this box'))
+    $writer = Join-Path $Repo 'scripts\vps\Server-Log.js'
+    foreach ($R in $Live, $Dev, $Vl, $Vd) {
+        Put (Join-Path $R 'exit.js') 'process.exit(0);'
+        Push-Location -LiteralPath $R
+        try { & $node $writer --log (Join-Path $R 'server.log') exit.js | Out-Null } finally { Pop-Location }
+        Remove-Item -LiteralPath (Join-Path $R 'exit.js') -Force
+    }
+    $logs = (Get (Join-Path $Live 'server.log')) + (Get (Join-Path $Vl 'server.log'))
+    Yes 'server-log.js took the game server''s and voice''s requests as each started, and said so with counts' (
+        $logs -match 'deletions: saves: characters 1, cards 1' -and $logs -match 'deletions: chat: chat lines 2' -and $logs -notmatch "$P1|$ME")
     # The bot needs Python 3.11 or newer and discord.py to be imported at all.
     $pyExe = $null
     foreach ($cand in @(@('py', '-3.12'), @('py', '-3.11'), @('python'))) {

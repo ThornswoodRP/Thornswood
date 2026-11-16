@@ -453,7 +453,7 @@ async function pass(opts) {
   const name = 'Bot Pass ' + profileId;
   const server = new ServerRun(root, opts.spawn || spawnNode, path.join(root, 'bot-pass-server.log'));
   const voice = new VoiceRun({ from: opts.voiceFrom || __dirname, dir: opts.voiceDir || path.join(path.dirname(root), 'voice'),
-                               port: Number(settings.thornswoodVoicePort), log });
+                               port: settings.thornswoodVoicePort === 0 ? 0 : Number(settings.thornswoodVoicePort), log });
   const result = () => ({ ok: lines.length > 0 && lines.every((l) => l.ok), lines, blob, profileId,
                           tail: server.tail.slice(), voiceTail: voice.tail.slice() });
   const bots = [];
@@ -514,6 +514,17 @@ async function pass(opts) {
     log('the voice service starts beside the copy');
     why = await voice.start(stepMs);
     if (why) { say('loads', false, 'the voice service beside the copy did not start: ' + why + voiceSaid()); return result(); }
+    // Given port 0, the service bound a free one and said it (#6050); the
+    // gamemode reads the port from server-settings.json as it loads, so the
+    // port goes there before the server starts.
+    if (settings.thornswoodVoicePort === 0) {
+      const file = path.join(root, 'server-settings.json');
+      const doc = readJson(file);
+      doc.thornswoodVoicePort = voice.port;
+      fs.writeFileSync(file, JSON.stringify(doc, null, 2));
+      settings.thornswoodVoicePort = voice.port;
+      log('the voice service took port ' + voice.port + ', written to server-settings.json');
+    }
 
     server.start();
     log('the server started; it has ' + Math.round(loadMs / 1000) + ' s to say gamemode.js loaded');

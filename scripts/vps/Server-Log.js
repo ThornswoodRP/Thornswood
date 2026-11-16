@@ -440,6 +440,78 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
   return { list: list, file: TAKEN, left: left };
 }
 // -- the release list, taken (#4920), end --
+/*
+  A WORLD IN MONGODB (#6237). A server whose server-settings.json says
+  databaseDriver "mongodb" keeps its change forms in the changeForms
+  collection of databaseName, signed in to with databaseUriFile (the
+  server's own connection file, which its task may read). Two things here
+  reach it, through the box's mongosh (Install-Mongo.ps1 lets the server's
+  task run it):
+    forget   the part "saves" below: every form whose profileId is one of
+             the list's, taken out of the database before the engine starts,
+             with the engine's own write concern (journaled).
+    people   --people <ids>: the formDesc of every such form, one FORM| line
+             each and PEOPLE|<n>, for Delete-Person.ps1 to count and to name
+             the characters' form ids in the release list, without a copy of
+             the world anywhere. It runs this file beside the server, so the
+             two read the database the same way.
+  The script is carried here because server-log.js goes up alone beside a
+  server; scripts\vps\world.js is the tools' (read out, write back) and
+  signs in the same way: the connection file is read inside mongosh and
+  nothing prints it. A failure is the line WORLD FAILED: <why>.
+*/
+const WORLD_SHELL = process.env.THORNSWOOD_MONGOSH || 'C:\\Thornswood-Mongo\\bin\\mongosh.exe';
+const WORLD_PEOPLE_JS = [
+  "const fs = require('fs');",
+  "function fail(m) { print('WORLD FAILED: ' + m); quit(1); }",
+  "let plan;",
+  "try { plan = JSON.parse(fs.readFileSync(process.env.THORNSWOOD_WORLD_PLAN, 'utf8')); } catch (e) { fail('the plan does not read: ' + e.message); }",
+  "if (!/^thornswood-[a-z]+$/.test(String(plan.db))) fail('the plan names no world database: ' + plan.db);",
+  "try {",
+  "  const text = fs.readFileSync(plan.uri, 'utf8').trim();",
+  "  if (!/^mongodb:\\/\\//.test(text)) fail('the connection file is not a mongodb: URI: ' + plan.uri);",
+  "  const coll = new Mongo(text).getDB(plan.db).getCollection('changeForms');",
+  "  const theirs = { profileId: { $in: plan.profiles } };",
+  "  if (plan.op === 'people') {",
+  "    let n = 0;",
+  "    coll.find(theirs, { _id: 0, formDesc: 1 }).sort({ formDesc: 1 }).forEach((d) => { print('FORM|' + d.formDesc); n++; });",
+  "    print('PEOPLE|' + n);",
+  "  } else if (plan.op === 'forget') {",
+  "    const r = coll.deleteMany(theirs, { writeConcern: { w: 1, j: true } });",
+  "    const left = coll.countDocuments(theirs);",
+  "    if (left) fail(left + ' of their forms are still there');",
+  "    print('FORGOT|' + r.deletedCount);",
+  "  } else fail('the plan names no step this knows: ' + plan.op);",
+  "} catch (e) { fail(String(e && e.message ? e.message : e)); }"
+].join('\n');
+// Runs that script for a server's settings; { lines } or { error }.
+function worldPeople(settings, op, profiles) {
+  if (!/^thornswood-[a-z]+$/.test(String(settings.databaseName || ''))) return { error: 'server-settings.json names no world database (databaseName ' + settings.databaseName + ')' };
+  if (!settings.databaseUriFile) return { error: 'server-settings.json names no databaseUriFile' };
+  if (!fs.existsSync(WORLD_SHELL)) return { error: WORLD_SHELL + ' is not there; Install-Mongo puts it there' };
+  let tmp;
+  try {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-people-'));
+    const js = path.join(tmp, 'people.js'), planFile = path.join(tmp, 'plan.json');
+    fs.writeFileSync(js, WORLD_PEOPLE_JS, 'utf8');
+    fs.writeFileSync(planFile, JSON.stringify({ op, uri: String(settings.databaseUriFile), db: String(settings.databaseName), profiles }), 'utf8');
+    const r = cp.spawnSync(WORLD_SHELL, ['--nodb', '--quiet', '--file', js], {
+      encoding: 'utf8', windowsHide: true, timeout: 5 * 60 * 1000,
+      env: Object.assign({}, process.env, { THORNSWOOD_WORLD_PLAN: planFile })
+    });
+    const lines = String(r.stdout || '').split(/\r?\n/).filter((l) => l);
+    const failed = lines.filter((l) => l.indexOf('WORLD FAILED: ') === 0);
+    if (failed.length) return { error: failed[0].slice('WORLD FAILED: '.length) };
+    if (r.error) return { error: 'mongosh did not run: ' + (r.error.code || r.error.message) };
+    if (r.status !== 0) return { error: 'mongosh exited with ' + r.status };
+    return { lines };
+  } catch (e) {
+    return { error: e.code || e.message };
+  } finally {
+    if (tmp) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* the temp folder holds no password */ } }
+  }
+}
+
 const RELEASE_PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
 
 function startDeletions(dir, now) {
@@ -506,7 +578,13 @@ function startDeletions(dir, now) {
       const P = new Set(list.profiles);
       const mine = (v) => P.has(Number(v));
       let whole = true;
-      if (settings.databaseDriver && settings.databaseDriver !== 'file') {
+      if (settings.databaseDriver === 'mongodb') {
+        // The engine is not started yet, so nothing writes their forms back.
+        const r = worldPeople(settings, 'forget', list.profiles);
+        const got = r.lines ? r.lines.filter((l) => /^FORGOT\|\d+$/.test(l)) : [];
+        if (got.length) count('characters', Number(got[0].split('|')[1]));
+        else { say('their characters in ' + settings.databaseName + ' were not taken out: ' + (r.error || 'mongosh said nothing')); whole = false; }
+      } else if (settings.databaseDriver && settings.databaseDriver !== 'file') {
         say('the saves are in ' + settings.databaseDriver + ', not in files, so their characters were not removed and the part waits');
         whole = false;
       } else {
@@ -642,6 +720,10 @@ function startDeletions(dir, now) {
       <root>\<privDir>\<name>-before-<stamp>          a wipe's other marks
       <root>\<world>\changeForms\_discarded-<stamp>   a character reset's forms
       <root>\<world>\changeForms\<id>.json.bak-<stamp>  an appearance reset's copy
+      <root>\world-mongo-<stamp>                      a tool's read-out of a world in
+                                                      MongoDB (World.ps1): once saved
+                                                      it holds only what the tool set
+                                                      aside (changeForms\_discarded-*)
 
   Only a game server's folder (a server-settings.json in it), only those
   names, and only directly where each step puts them. A link is left as it is
@@ -666,6 +748,7 @@ function ageAside(dir, now, days) {
   const world = settings.databaseName ? String(settings.databaseName) : 'world';
   const places = [
     [dir, /^world-before-(?:restore-)?(\d{8}-\d{6})$/, true],
+    [dir, /^world-mongo-(\d{8}-\d{6})$/, true],
     [path.join(dir, settings.privDir ? String(settings.privDir) : 'private'), /^.+-before-(\d{8}-\d{6})(?:\.json)?$/, false],
     [path.join(dir, world, 'changeForms'), /^_discarded-(\d{8}-\d{6})$/, true],
     [path.join(dir, world, 'changeForms'), /^.+\.json\.bak-(\d{8}-\d{6})$/, false]
@@ -849,6 +932,21 @@ function run(o) {
 }
 
 if (require.main === module) {
+  // --people <ids, by commas>: run beside a server, in its folder, by
+  // Delete-Person.ps1 (above, A WORLD IN MONGODB). Exit 0 with the lines,
+  // 1 with WORLD FAILED, 2 when the folder's world is not in MongoDB.
+  if (process.argv[2] === '--people') {
+    const profiles = String(process.argv[3] || '').split(',').map(Number);
+    if (!profiles.length || !profiles.every((n) => Number.isSafeInteger(n) && n > 0)) { console.log('WORLD FAILED: --people takes profile ids, by commas'); process.exit(1); }
+    let settings;
+    try { settings = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'server-settings.json'), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { console.log('WORLD FAILED: server-settings.json will not read: ' + (e.code || e.message)); process.exit(1); }
+    if (!settings || settings.databaseDriver !== 'mongodb') { console.log('NOT MONGODB'); process.exit(2); }
+    const r = worldPeople(settings, 'people', profiles);
+    if (r.error) { console.log('WORLD FAILED: ' + r.error); process.exit(1); }
+    for (const l of r.lines) console.log(l);
+    process.exit(r.lines.some((l) => /^PEOPLE\|\d+$/.test(l)) ? 0 : 1);
+  }
   const o = parseArgs(process.argv.slice(2));
   if (o.roll) {
     for (const l of rollNow(o.log, Date.now(), o)) console.log(l);
@@ -856,5 +954,5 @@ if (require.main === module) {
   }
   run(o);
 } else {
-  module.exports = { KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
+  module.exports = { WORLD_PEOPLE_JS, worldPeople, KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
 }

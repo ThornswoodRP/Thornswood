@@ -101,7 +101,9 @@
   plugin order the record holds. WabbajackModlist.cs says the format. The
   mods go in MO2's priority by the collection's mod rules, so a file two mods
   share is the one the rules deploy last, as in files.txt; a dinput mod's
-  files go under Root in its folder. The same record writes the same bytes,
+  Data files are its own like any mod's, and what goes beside the game
+  (skse64_loader.exe) goes under Root in its folder, as Root Builder lays it
+  out. The same record writes the same bytes,
   and the modlist's sha256 is printed. This is how the launcher installs
   without Vortex: each Release carries the modlist and its hash.
 
@@ -420,7 +422,7 @@ foreach ($e in $col.Entries) {
   $got = Step { Receive-NexusPresigned $url $dir $what ([string]$e.FileId + '.archive') }
   if ($got.Size -ne $e.Size -or $got.Md5Hex -ne $e.Md5) {
     [IO.File]::Delete($got.Path)
-    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there.')
+    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there. Run it again to tell which: if the second download is the same ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', Nexus now serves other bytes as file ' + $e.FileId + ' and the revision is made again in Vortex on One; if it is the revision''s, the first broke on the way and the run carries on.')
   }
   # Measured on 20 Oct: the CDN sends no Content-Disposition for some files
   # (Crafting Categories for SkyUI, file 493920). Then the archive is named
@@ -581,7 +583,7 @@ Head 'Deploying, as Vortex would'
 $edges = [Thornswood.Layout.NexusLayout]::Edges($col)
 $cycle = $null
 $before = [Thornswood.Layout.NexusLayout]::Before($edges, [ref]$cycle)
-if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy.') }
+if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy. Take one of those rules out in Vortex on One, and lay out the revision that publishes.') }
 $claims = @{}
 foreach ($plan in $plans) {
   $e = $plan.Entry
@@ -613,7 +615,7 @@ foreach ($key in $claims.Keys) {
   }
   $placed.Add([pscustomobject]@{ Rel = $win.Rel; Full = $win.Staged.Full; Entry = $win.Entry; Over = @($c | Where-Object { $_ -ne $win } | ForEach-Object { $_.Entry }); Size = 0; Sha256 = '' })
 }
-if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ")) }
+if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ") + "`nGive each pair a mod rule in Vortex on One, one of the two loading after the other, and lay out the revision that publishes.") }
 Say ('  ' + $placed.Count + ' files; ' + $won + ' copies lost to a mod the rules deploy later')
 
 # Plugins: the collection's list first, in its order (gamebryo.tsx, the
@@ -631,7 +633,7 @@ foreach ($p in $col.Plugins) {
   if (-not $present.ContainsKey($k)) { $missingPlugins += $p.Name; continue }
   $order.Add([pscustomobject]@{ Name = $p.Name; Enabled = $p.Enabled })
 }
-if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '.') }
+if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '. Put in the mod that has them, or take them off the plugin list, in Vortex on One, and lay out the revision that publishes.') }
 $unlisted = @($present.Keys | Where-Object { -not $seen.ContainsKey($_) } | Sort-Object | ForEach-Object { $present[$_] })
 foreach ($n in $unlisted) { $order.Add([pscustomobject]@{ Name = $n; Enabled = $false }) }
 # The rules are held over the plugins the game loads, the enabled ones. A
@@ -844,10 +846,13 @@ if ($Record) {
       $e = $byIndex[$i].Entry
       $ax = $script:ArchXx[$i]
       $ml.AddNexusArchive([IO.Path]::GetFileName($archives[$i]), $e.Size, $ax, $GameDomain, $e.ModId, $e.FileId, $e.Name, $e.Version)
-      $base = 'mods\' + $folders[$i] + '\' + $(if ($e.Type -eq 'dinput') { 'Root\' } else { '' })
+      $base = 'mods\' + $folders[$i] + '\'
       foreach ($w in $script:WjFiles[$i]) {
-        if ($w.Delta) { $ml.PatchedFromArchive($ax, $w.Source, $w.FromXx, $w.Delta, $w.Xx, $w.Size, $base + $w.Rel); $patchCount++ }
-        else { $ml.FromArchive($ax, $w.Source, $w.Xx, $w.Size, $base + $w.Rel) }
+        # A dinput mod's Rel is from the game folder: its Data files are the
+        # mod's own, as for any mod, and the rest goes under Root.
+        $to = if ($e.Type -ne 'dinput') { $base + $w.Rel } elseif ($w.Rel -match '^(?i)Data\\(.+)$') { $base + $Matches[1] } else { $base + 'Root\' + $w.Rel }
+        if ($w.Delta) { $ml.PatchedFromArchive($ax, $w.Source, $w.FromXx, $w.Delta, $w.Xx, $w.Size, $to); $patchCount++ }
+        else { $ml.FromArchive($ax, $w.Source, $w.Xx, $w.Size, $to) }
         $fileCount++
       }
       $meta = "[General]`r`ngameName=SkyrimSE`r`nmodid=" + $e.ModId + "`r`nversion=" + $e.Version + "`r`ninstallationFile=" + [IO.Path]::GetFileName($archives[$i]) + "`r`nrepository=Nexus`r`n`r`n[installedFiles]`r`n1\modid=" + $e.ModId + "`r`n1\fileid=" + $e.FileId + "`r`nsize=1`r`n"

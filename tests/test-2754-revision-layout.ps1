@@ -41,8 +41,9 @@
        listed, not counted; and a record with no rules refused;
     9. -Modlist (#6244): the record's revision as a Wabbajack modlist. Each
        file named by its archive's xxHash64 and its path in it, in its mod's
-       Mod Organizer 2 folder (a dinput mod's under Root), the bsdiff-patched
-       file as an Octodiff delta that makes AAAB of AAAA, MO2's own files
+       Mod Organizer 2 folder (what a dinput mod puts beside the game under
+       Root), the bsdiff-patched file as an Octodiff delta that makes AAAB
+       of AAAA, MO2's own files
        from its pinned archive, the profile's mod priority from the mod
        rules and its plugin order from the record, every "$type" first, the
        same bytes on a second run; and a pin that is not MO2's GitHub
@@ -308,6 +309,7 @@ $n0 = Count
 $r = Run (@('-CollectionArchive', $colPlain, '-Revision', '5', '-Cache', $cache) + (To 'game'))
 Control @{ corrupt = @() }
 YesR 'a download whose md5 is not the revision''s stops the run, naming the file' ($r.Code -eq 1 -and $r.Out -match 'The download of Beta \(mod 102, file 900002\) is not the archive the revision lists' -and $r.Out -match 'deleted from the cache') $r
+YesR '  and it says how to tell a broken download from a changed file, and what to do for each (#4215)' ($r.Out -match 'Run it again to tell which' -and $r.Out -match 'made again in Vortex on One' -and $r.Out -match 'broke on the way') $r
 Yes 'and nothing of it stays in the cache, while the one before it does' (@(Get-ChildItem -LiteralPath (P $cache '900002') -File -ErrorAction SilentlyContinue).Count -eq 0 -and @(Get-ChildItem -LiteralPath (P $cache '900001') -File).Count -eq 1)
 Yes 'and -Game (or -Record) was not made' (-not (Test-Path -LiteralPath (P $T 'game')))
 $got = @(Since $n0)
@@ -435,6 +437,21 @@ $colNoRule = P $T 'col-norule'
 Write-Col $colNoRule (Collection @($alphaE, $gammaE) @())
 $r = Run (@('-CollectionArchive', $colNoRule, '-Revision', '5', '-Cache', $cache) + (To 'game3'))
 YesR 'two mods that share a file with no rule between them stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'No mod rule says which' -and $r.Out -match 'Alpha and Gamma \(1 files\)' -and -not (Test-Path -LiteralPath (P $T 'game3'))) $r
+YesR '  and it says what to do: a mod rule for each pair, in Vortex on One (#4215)' ($r.Out -match 'Give each pair a mod rule in Vortex on One') $r
+
+# #4215: mod rules that go round in a circle, and plugins no mod has, each
+# stop with the next step, not only what is wrong.
+$ruleBack = [ordered]@{ type = 'after'; reference = [ordered]@{ fileMD5 = (Md5 $arc.gamma); versionMatch = '1.0.0'; logicalFileName = 'Gamma' }; source = [ordered]@{ fileMD5 = (Md5 $arc.alpha); versionMatch = '1.0.0'; logicalFileName = 'Alpha' } }
+$colCircle = P $T 'col-circle'
+Write-Col $colCircle (Collection @($alphaE, $gammaE) @($rule, $ruleBack))
+$r = Run (@('-CollectionArchive', $colCircle, '-Revision', '5', '-Cache', $cache) + (To 'game-circle'))
+YesR 'mod rules that go round in a circle stop the run, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'mod rules go round in a circle' -and -not (Test-Path -LiteralPath (P $T 'game-circle'))) $r
+YesR '  and it says what to do: take one of them out in Vortex on One (#4215)' ($r.Out -match 'Take one of those rules out in Vortex on One') $r
+$colGhost = P $T 'col-ghost'
+Write-Col $colGhost (Collection @($alphaE, $gammaE) @($rule))
+$r = Run (@('-CollectionArchive', $colGhost, '-Revision', '5', '-Cache', $cache) + (To 'game-ghost'))
+YesR 'plugins on the list that no mod has stop the run, naming them, and -Game (or -Record) is untouched' ($r.Code -eq 1 -and $r.Out -match 'lists plugins no mod in it has' -and $r.Out -match 'Beta\.esp' -and -not (Test-Path -LiteralPath (P $T 'game-ghost'))) $r
+YesR '  and it says what to do: put the mod in or take them off the list, in Vortex on One (#4215)' ($r.Out -match 'Put in the mod that has them, or take them off the plugin list, in Vortex on One') $r
 
 # 27 Oct: revision 5 ruled cheddars_mashups.esl, which the game loads as a
 # master, to load after plugins that are not, and the list had it at the end,
@@ -596,7 +613,7 @@ function WjFrom([string]$to, [string]$archive, [string]$inArc, [string]$text) {
 Yes 'a mod''s file goes to its MO2 folder, named by its archive and its path in it' ((WjFrom 'mods\Alpha\Alpha.esp' $arc.alpha 'Data\Alpha.esp' 'alpha plugin') -and (WjFrom 'mods\Beta\Beta.esp' $arc.beta 'junk\Beta.esp' 'beta plugin'))
 Yes 'the FOMOD''s choice is the file the modlist takes, and its own name in the archive is used' ((WjFrom 'mods\Gamma\Gamma.esp' $arc.gamma 'opt2\Gamma.esp' 'gamma two') -and (WjFrom 'mods\Lambda\lambda.txt' $arc.lambda 'opt\Lambda.txt' 'lambda text'))
 Yes 'a file two mods share is in both folders; MO2''s priority picks it' ((WjFrom 'mods\Alpha\textures\shared.dds' $arc.alpha 'Data\textures\shared.dds' 'alpha texture') -and (WjFrom 'mods\Gamma\textures\shared.dds' $arc.gamma 'common\textures\shared.dds' 'gamma texture'))
-Yes 'a dinput mod''s files go under Root in its folder' ((WjFrom 'mods\Delta\Root\skse64_loader.exe' $arc.delta 'delta_1\skse64_loader.exe' 'loader') -and (WjFrom 'mods\Delta\Root\Data\Scripts\delta.pex' $arc.delta 'delta_1\Data\Scripts\delta.pex' 'script'))
+Yes 'a dinput mod''s game folder files go under Root in its folder, and its Data files are the mod''s own' ((WjFrom 'mods\Delta\Root\skse64_loader.exe' $arc.delta 'delta_1\skse64_loader.exe' 'loader') -and (WjFrom 'mods\Delta\Scripts\delta.pex' $arc.delta 'delta_1\Data\Scripts\delta.pex' 'script') -and -not $wjD.ContainsKey('mods\delta\root\data\scripts\delta.pex'))
 $alphaMeta = $wjD['mods\alpha\meta.ini']
 Yes 'each mod folder''s meta.ini is MO2''s own, never the archive''s' ($null -ne $alphaMeta -and $alphaMeta.'$type' -eq 'InlineFile' -and (New-Object Text.UTF8Encoding($false)).GetString($wjEntries[$alphaMeta.SourceDataID]) -match 'modid=101' -and @($wj.Directives | Where-Object { $_.'$type' -ne 'InlineFile' -and $_.To -match '(?i)meta\.ini$' }).Count -eq 0)
 # Octodiff's delta: the header, then copy (0x60) and data (0x80) commands.
