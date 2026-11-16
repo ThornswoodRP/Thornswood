@@ -167,6 +167,9 @@ New-Item -ItemType Directory -Force -Path `$data | Out-Null
 `$ownDir = Join-Path `$repo 'game\content'
 `$ownHere = @(if (Test-Path -LiteralPath `$ownDir -PathType Container) { Get-ChildItem -LiteralPath `$ownDir -File })
 `$ours = @(@($ownText) + @(`$ownHere | ForEach-Object { `$_.Name.ToLowerInvariant() }))
+# Ours the commit does not hold yet: the step that makes them is this one or
+# one after it, so they are in no order this run is given (#6351).
+`$unmade = @(@($ownText) | Where-Object { `$n = `$_; -not @(`$ownHere | Where-Object { `$_.Name.ToLowerInvariant() -eq `$n }).Count })
 foreach (`$f in @(Get-ChildItem -LiteralPath `$plugins -File)) {
   if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 }
@@ -211,7 +214,8 @@ if (`$linkedStrings) { 'strings   ' + `$linkedStrings + ' loose string table(s) 
 `$orderFrom = '$ServerRoot\server-settings.json'
 if (`$$fromRecord) {
   `$orderFrom = 'the load order this commit records'
-  `$names = @($orderText)
+  `$names = @(@($orderText) | Where-Object { `$unmade -notcontains `$_.ToLowerInvariant() })
+  if (`$unmade.Count) { 'unmade    ' + (`$unmade -join ', ') + ': not in this commit yet, so left out of ' + `$orderFrom }
   `$missing = @(`$names | Where-Object { -not (Test-Path -LiteralPath (Join-Path `$data `$_) -PathType Leaf) })
   if (`$missing.Count) { 'STOP. ' + `$missing.Count + ' plugin(s) of ' + `$orderFrom + ' are in neither ' + `$plugins + ' nor ' + `$collection + ': ' + (`$missing -join ', '); exit 2 }
 } elseif (`$$wantsPlugins -or `$$wantsSettings) {

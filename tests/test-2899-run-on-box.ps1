@@ -206,7 +206,7 @@ $errs = $null
 [void][Management.Automation.Language.Parser]::ParseInput($farRec, [ref]$null, [ref]$errs)
 Yes 'from the record, the run lays the collection''s store over the server''s plugins and lists the order it is given, and its text parses' (
     (-not $errs -or $errs.Count -eq 0) -and $farRec.Contains("`$collection = 'C:\Thornswood-Deploys\collection\abc-8'") -and
-    $farRec.Contains("`$names = @('Skyrim.esm', 'KS_Hairdo''s_Lite_NoNPCs.esp')") -and $farRec.Contains('if ($True) {') -and $far.Contains("`$collection = ''"))
+    $farRec.Contains("`$names = @(@('Skyrim.esm', 'KS_Hairdo''s_Lite_NoNPCs.esp') | Where-Object") -and $farRec.Contains('if ($True) {') -and $far.Contains("`$collection = ''"))
 $m = ''; $m2 = ''
 try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @('A.esp')) } catch { $m = $_.Exception.Message }
 try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @("A.esp'; Remove-Item C:\ -Recurse; '.esp", 'x\..\y.esp') -Collection 'C:\c') } catch { $m2 = $_.Exception.Message }
@@ -231,6 +231,8 @@ Yes 'and both refuse an event name that is not a keeper''s' ($m -match 'not a ke
 Yes 'the run holds its folder''s lock while it runs, and stops when it cannot' ($far.Contains("New-Object IO.FileStream((`$run + '.lock'), 'Open', 'ReadWrite', 'ReadWrite')") -and $far -match 'could not be held through its lock')
 Yes 'the run leaves the server''s copy of each plugin the build makes out of its data, and reads game\content only when the commit has it (#6351)' (
     $far.Contains("`$ours = @(@('thornswood-content.esp')") -and $far.Contains("if (Test-Path -LiteralPath `$ownDir -PathType Container)"))
+Yes 'a plugin the build makes that the commit does not hold yet is left out of the recorded order, not missed (#6351)' (
+    $farRec.Contains("`$unmade -notcontains `$_.ToLowerInvariant()") -and $farRec.IndexOf('$unmade = ') -lt $farRec.IndexOf("`$missing = "))
 Yes 'an error the run does not catch ends it on a STOP line (#6351)' ($far.Contains("trap { 'STOP. ' + `$_.Exception.Message"))
 $runSrc = Get-Content -LiteralPath $runOnBox -Raw
 Yes 'and Run-OnBox.ps1 hands that STOP line on when the run ends with no EXIT' ($runSrc.Contains("the run on the box stopped before the tool ended, so nothing was brought back: ") -and $runSrc.Contains("-Own `$own"))
@@ -435,11 +437,17 @@ sys.exit(3)
         [IO.File]::WriteAllText((Join-Path $src3 'scripts\mods\t.py'), "import os, sys`nprint('OWN ' + str(os.path.exists(os.path.join(sys.argv[2], 'Thornswood-Content.esp'))))`n")
         [IO.Compression.ZipFile]::CreateFromDirectory($src3, (Join-Path $run3 'tools.zip'))
         $file3 = Join-Path $work 'far3.ps1'
-        [IO.File]::WriteAllText($file3, (Get-ThornswoodOnBoxScript -Run $run3 -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}') -ArchiveStore $store), (New-Object Text.UTF8Encoding($true)))
+        # From the record, as a content build runs it: the recorded order
+        # names the plugin the commit does not hold yet.
+        $coll3 = Join-Path $work 'collection3'
+        New-Item -ItemType Directory -Force -Path $coll3 | Out-Null
+        [IO.File]::WriteAllText((Join-Path $coll3 'store.json'), '{}')
+        [IO.File]::WriteAllText($file3, (Get-ThornswoodOnBoxScript -Run $run3 -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}') -ArchiveStore $store -Order @('Skyrim.esm', 'Thornswood-Content.esp') -Collection $coll3), (New-Object Text.UTF8Encoding($true)))
         $lines3 = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file3 2>&1 | ForEach-Object { "$_" })
         foreach ($l in $lines3) { Write-Host ('    ' + $l) }
         Yes 'a commit with no game\content runs the tool to its EXIT, with the server''s copy of our plugin left out (#6351)' (
-            ($lines3 -contains 'OWN False') -and ($lines3 -contains 'EXIT 0') -and ($lines3 -match '^data\s+1 plugin\(s\)').Count -eq 1)
+            ($lines3 -contains 'OWN False') -and ($lines3 -contains 'EXIT 0') -and ($lines3 -match '^data\s+1 plugin\(s\)').Count -eq 1 -and
+            ($lines3 -match '^unmade\s+thornswood-content\.esp: not in this commit yet').Count -eq 1)
         $null = Stop-Keeper $runKeeper
 
         # A run that fails before its tool says why on a STOP line (#6351).
