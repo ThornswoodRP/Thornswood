@@ -18,7 +18,12 @@
     the bot folder              whole: its config, bot.log and joins.json
     the voice server folder     whole: its config, voice.log and the chat\
                                 day files, every line typed in the game
-    the game server             server-settings.json, gamemode.js and the
+    the game servers            live (C:\Thornswood-Server, as game) and dev
+                                (C:\Thornswood-Server-Dev, as game-dev), the
+                                names Restore-Server.ps1 reads. Nothing else
+                                with a server-settings.json: not the kept
+                                .prev copies, not a restore rehearsal (#4209).
+                                For each, server-settings.json, gamemode.js and the
                                 gamemode-tables it reads (#5191), and the
                                 data, world and private folders next to it.
                                 world is the characters: every person who plays
@@ -186,21 +191,18 @@ foreach (`$f in @('server.js','package.json','package-lock.json','config.json'))
 Grab 'C:\Thornswood-Bot' 'bot'
 Grab 'C:\Thornswood-Voice' 'voice'
 
-# The game server moves around between builds, so it gets found rather than
-# assumed. Anything with a server-settings.json beside it counts.
-`$found = @()
-foreach (`$d in (Get-ChildItem 'C:\' -Directory -EA SilentlyContinue)) {
-  foreach (`$hit in (Get-ChildItem `$d.FullName -Recurse -Filter 'server-settings.json' -Depth 4 -File -EA SilentlyContinue)) {
-    `$found += `$hit.DirectoryName
-  }
-}
-`$found = `$found | Select-Object -Unique
-if (`$found.Count -eq 0) { 'missing   the game server (no server-settings.json anywhere under C:\)' }
-`$i = 0
-foreach (`$root in `$found) {
-  `$i = `$i + 1
-  `$tag = if (`$i -eq 1) { 'game' } else { 'game-' + `$i }
-  'game at   ' + `$root
+# The two game servers, by the folders every other script names them by
+# (Restore-Server.ps1, the nightly), and under the names Restore-Server.ps1
+# reads them from: game for live, game-dev for dev. Until #4209 every
+# folder on C: with a server-settings.json in it, four levels down, was
+# taken and named game, game-2, ... in the order it was found, so the kept
+# copies an install leaves (Thornswood-Server.prev-<stamp>) and a restore
+# rehearsal's folder went in too, and any of them could be the one named game.
+foreach (`$g in @(@{ Root = 'C:\Thornswood-Server'; Tag = 'game' }, @{ Root = 'C:\Thornswood-Server-Dev'; Tag = 'game-dev' })) {
+  `$root = `$g.Root
+  `$tag = `$g.Tag
+  if (-not (Test-Path (Join-Path `$root 'server-settings.json'))) { 'missing   ' + `$tag + ' (no server-settings.json in ' + `$root + ')'; continue }
+  'game at   ' + `$root + '   as ' + `$tag
   Grab (Join-Path `$root 'server-settings.json') (`$tag + '\server-settings.json')
   if (Test-Path (Join-Path `$root 'gamemode.js')) { Grab (Join-Path `$root 'gamemode.js') (`$tag + '\gamemode.js') }
   if (Test-Path (Join-Path `$root 'gamemode-tables')) { Grab (Join-Path `$root 'gamemode-tables') (`$tag + '\gamemode-tables') }

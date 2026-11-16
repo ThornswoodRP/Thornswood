@@ -512,7 +512,8 @@ namespace Thornswood
             if (fail == null)
             {
                 bool already = said != null
-                    && said.IndexOf("already matches what Vortex has deployed", StringComparison.Ordinal) >= 0;
+                    && (said.IndexOf("already matches what Vortex has deployed", StringComparison.Ordinal) >= 0
+                        || said.IndexOf("already matches the mods in Mod Organizer 2", StringComparison.Ordinal) >= 0);
                 int ordered = 0;
                 try
                 {

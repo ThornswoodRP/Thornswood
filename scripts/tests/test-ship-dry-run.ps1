@@ -274,6 +274,17 @@ try {
     Copy-Item -LiteralPath (Join-Path $realRel '..\..\records\ui-gone.json') -Destination (Join-Path $repo 'records\ui-gone.json') -Force
     New-Item -ItemType Directory -Force -Path (Join-Path $repo 'scripts\mods') | Out-Null
     Copy-Item -LiteralPath (Join-Path $realRel '..\mods\LoadOrder.ps1') -Destination (Join-Path $repo 'scripts\mods\LoadOrder.ps1') -Force
+    # The content build Ship lays over its checkout (#5191, stage 4e): a
+    # stand-in that writes down the server it was asked for and lays nothing,
+    # since the build is the box's and this folder is no checkout.
+    # tests\test-5191-leave-git.ps1 holds the real one.
+    [IO.File]::WriteAllText((Join-Path $repo 'scripts\mods\ContentPaths.ps1'), @'
+function Use-ThornswoodContentBuild {
+    param([string]$Repo, [string]$Server, [string]$Kept)
+    [IO.File]::AppendAllText($env:TS_DRY_CALLS, "Use-ThornswoodContentBuild -Server $Server`r`n")
+    return [pscustomobject]@{ Server = $Server; Key = ('c' * 64); Commit = ('d' * 40); From = 'a stand-in'; Files = @{} }
+}
+'@)
     # The freshness guard a real Ship loads (#2118), the real one: R runs it,
     # and it lets R by only as the harness stand-in, THORNSWOOD_HARNESS with
     # the box harness.invalid. Until #3006 it was not here, Ship walked past
@@ -556,6 +567,9 @@ if ($target -match '^repos/[^/]+/[^/]+/actions/workflows/release\.yml/runs\?') {
     Yes ('R and nothing it loads or calls is missing (#3006)' + $(if ($unknown.Count) { ': ' + $unknown[0].Trim() } else { '' })) ($unknown.Count -eq 0)
     # When it stops, what it said and what it called, so the FAIL says why.
     if ($r.Code -ne 0) { $r.Out -split "`r?`n" | Select-Object -Last 25 | ForEach-Object { Write-Host ("      " + $_) }; $r.Calls | ForEach-Object { Write-Host ("      call: " + $_) } }
+    $lay = Called $r 'Use-ThornswoodContentBuild'
+    Yes 'R the dev server''s content build is laid over the checkout once, before the publisher (#5191)' (
+        $lay.Count -eq 1 -and $lay[0] -eq 'Use-ThornswoodContentBuild -Server dev' -and [array]::IndexOf($r.Calls, $lay[0]) -lt [array]::IndexOf($r.Calls, (Called $r 'Publish-Update')[0]))
     $pub = Called $r 'Publish-Update'
     Yes 'R the publisher ran, and was not told to hold anything back' ($pub.Count -eq 1 -and $pub[0] -notmatch ' -NoUpload\b' -and $pub[0] -notmatch ' -NoPush\b')
     foreach ($n in 'Publish-Discord', 'Request-Restart') {

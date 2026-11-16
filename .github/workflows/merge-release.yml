@@ -770,7 +770,11 @@ jobs:
           $tables = Join-Path $out 'gamemode-tables.zip'
           ./scripts/release/App-Part.ps1 -Part tables -Out $tables
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host ('gamemode tables are git tree ' + (git rev-parse "$($env:GITHUB_SHA):game/gamemode-tables"))
+          # The tables are the box's build taken above, never committed
+          # (#5191, stage 4e), so their tree is worked out from the folder,
+          # as the gamemode logs it when it loads (GamemodeId.ps1).
+          . .\scripts\deploy\GamemodeId.ps1
+          Write-Host ('gamemode tables are git tree ' + (Get-ThornswoodTablesTree (Resolve-Path 'game\gamemode-tables').Path))
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $launcher = @(Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { 'launcher=' + $_.FullName })
           $adds = $launcher + @("game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",

@@ -2210,7 +2210,7 @@ function Get-ShipSkyUIFeedChange([string]$GameDir, [hashtable]$Record, [string[]
 }
 
 function Get-ShipLastPluginProblem([string]$RepoDir, [string[]]$Enabled, [string[]]$Ccc = @()) {
-    $rebuild = 'Build it again for this load order: python scripts\mods\Build-LastPlugin.py --data <a Data folder holding the collection''s bytes>, then commit game\data\last-plugin.recipe and game\data\last-plugin.json.'
+    $rebuild = 'Lay the box''s content build of this commit, which makes both at each merge and commits neither (#5191): pwsh scripts\release\Get-ContentBuild.ps1 -Take. On a PC with the game, python scripts\mods\Build-LastPlugin.py --data <a Data folder holding the collection''s bytes> builds them for this load order.'
     $recipe = Join-Path $RepoDir $ShipLastRecipe
     $mpath = Join-Path $RepoDir $ShipLastManifest
     if (-not (Test-Path -LiteralPath $mpath)) { return "the checkout has the recipe for $ShipLastPlugin and no $ShipLastManifest saying what it was built against." }

@@ -95,7 +95,10 @@ function Invoke-ThornswoodLastPluginMake {
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). The plugin is made only on the box whose key is pinned. Nothing was sent.') }
     $strict = @('-o', 'StrictHostKeyChecking=yes') + @($SshArgs)
-    $artifact = New-ThornswoodArtifact -Component lastplugin -RepoDir $RepoDir -Paths $ThornswoodLastTools
+    # The recipe is the box's content build, never committed (#5191, stage
+    # 4e): every caller lays the dev server's build of its commit first, the
+    # one every Release carries, and the artifact holds the recipe to it.
+    $artifact = New-ThornswoodArtifact -Component lastplugin -RepoDir $RepoDir -Paths $ThornswoodLastTools -Content dev
     $local = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-lastplugin-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
     New-Item -ItemType Directory -Force -Path $local | Out-Null
     $box = $null

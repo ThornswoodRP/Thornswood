@@ -147,6 +147,10 @@ namespace Thornswood
         {
             try
             {
+                // Once the modlist installs into Mod Organizer 2 the revision
+                // is the one its last whole install put in (#6244), and
+                // Vortex's state is not read again.
+                if (OwnGame.FromMods) return OwnGame.ModsRevision();
                 string slug = CollectionSlug(cfg);
                 if (slug.Length == 0) return 0;
                 int fromState = CollectionRevisionFromState(slug);
