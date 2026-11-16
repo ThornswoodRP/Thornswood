@@ -53,7 +53,7 @@ const { LINKED, post } = require('./discord');
 const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
-const { LEDGER_KEEP_DAYS, searchLedger, takeLedger } = require('./ledger');
+const { searchLedger, takeLedger } = require('./ledger');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
