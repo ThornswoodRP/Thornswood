@@ -107,12 +107,6 @@ param(
     [string]$VpsHost = '',
     [string]$VpsUser = '',
 
-    # A folder that gets a copy of every file the tool wrote, at its
-    # repository path, as well as this checkout. The deploy gate's
-    # Rebuild-ContentTables verb sets it to the run's out folder, so what the
-    # box wrote goes back to the session that asked (Rebuild-OnBox.ps1).
-    [string]$Out = '',
-
     # The box's store of the collection's plugins at the revision
     # records\collection-plugins.json names (CollectionStore.ps1): the run is
     # then built from the commit's record, the header says how.
@@ -159,6 +153,14 @@ if ($Collection) {
         $(if ($recordOrder.Added.Count) { ', with ' + ($recordOrder.Added -join ', ') + ' added' } else { '' }) +
         $(if ($recordOrder.Dropped.Count) { ', without ' + ($recordOrder.Dropped -join ', ') } else { '' })) 'DarkGray'
 }
+# What a content build writes is not committed (#5191, stage 4e), so a
+# written file the commit does not have yet is one an earlier step of this
+# build has still to make, and goes up only once that step's run committed it
+# (Build-ContentOnBox.ps1, Save-Step).
+$builtNow = Get-ThornswoodBuiltPaths -Repo $repo
+$have = @{}
+foreach ($line in @(& git -C $repo ls-tree -r --name-only --full-tree HEAD -- @paths 2>$null)) { $have[[string]$line] = $true }
+$paths = @($paths | Where-Object { $p = $_; -not (Test-ThornswoodBuiltPath $builtNow $p) -or @($have.Keys | Where-Object { $_ -ceq $p -or $_.StartsWith($p + '/') }).Count })
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
@@ -215,11 +217,9 @@ try {
             Say ''
             Say ('the tool wrote ' + $changed.Count + ' file(s), now in this checkout:') 'Green'
             foreach ($e in $zip.Entries) {
-                foreach ($into in @($repo, $Out | Where-Object { $_ })) {
-                    $dest = Join-Path $into $e.FullName
-                    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
-                    [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
-                }
+                $dest = Join-Path $repo $e.FullName
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
                 Say ('  ' + $e.FullName)
             }
         } finally { $zip.Dispose() }

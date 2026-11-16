@@ -576,6 +576,21 @@ if (-not $DryRun -and (Test-Path (Join-Path $RepoDir '.git'))) {
     }
 }
 
+# ------------------------------------------------------------ the content build
+# Our plugin, the Last plugin's recipe and record, the client tables in
+# game\plugins and every other table are never committed (#5191, stage 4e):
+# they are the box's content build of this commit, laid over this checkout
+# before the ship root or a pack reads one (on the box from the builds it
+# keeps, elsewhere from the build's draft Release). On either channel it is
+# the dev server's build, the one every Release carries: merge-release.yml
+# takes it, and a main release is one of those promoted (#6175).
+# They are ignored by git, so the gate above never counts them.
+Head 'The content build'
+. (Join-Path $RepoDir 'scripts\mods\ContentPaths.ps1')
+try { $laidBuild = Use-ThornswoodContentBuild -Repo $RepoDir -Server dev }
+catch { Die ($_.Exception.Message + ' Nothing was built or published.') }
+Say ("  the dev server's build {0}, built from {1}, laid over this checkout" -f $laidBuild.Key.Substring(0, 12), $laidBuild.Commit.Substring(0, 12)) 'DarkGray'
+
 # ------------------------------------------------------------ the ship root
 # Issue #2019. The folder this release is built from is a launcher install
 # whose launcher is never started (Patrick, 15 Oct: his own installs stay

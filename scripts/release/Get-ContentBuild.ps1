@@ -304,8 +304,11 @@ try {
         if ($AssetDir) { Copy-Item -LiteralPath (Join-Path $AssetDir $a.name) -Destination $to }
         else {
             # GitHub answers with a redirect to its file store, and
-            # Invoke-WebRequest drops the token when it leaves the host.
-            Invoke-WebRequest -Uri ([string]$a.url) -OutFile $to -Headers @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null
+            # Invoke-WebRequest drops the token when it leaves the host. A
+            # machine with no GH_TOKEN (a deploy from a developer's PC) has
+            # gh's own sign-in, which listed the draft above.
+            $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { (gh auth token) -join '' }
+            Invoke-WebRequest -Uri ([string]$a.url) -OutFile $to -Headers @{ Authorization = "Bearer $tok"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null
         }
         if ((Get-Item -LiteralPath $to).Length -ne [long]$a.size) { Stop-Take "$($a.name) on $tag is not the $($a.size) bytes the Release says" }
     }

@@ -190,9 +190,13 @@ if ($built) {
     }
     # What each tool wrote came back into this checkout. Run-OnBox.ps1 sends
     # a commit, never the tree, so it is committed here, in a commit the
-    # gate's next run throws away.
+    # gate's next run throws away. What a build writes is ignored by git
+    # (#5191, stage 4e), so it is added by name, past the ignore.
+    $builtHere = Get-ThornswoodBuiltPaths -Repo $repo
     function Save-Step([string]$Tool) {
         $c = Invoke-BuildGit @('add', '--all')
+        $made = @($builtHere | Where-Object { Test-Path -LiteralPath (Join-Path $repo $_) })
+        if ($c.Code -eq 0 -and $made.Count) { $c = Invoke-BuildGit (@('add', '--force', '--') + $made) }
         if ($c.Code -eq 0) { $c = Invoke-BuildGit @('-c', 'user.name=Thornswood Gate', '-c', 'user.email=gate@thornswood.invalid', 'commit', '--quiet', '--allow-empty', '-m', "what $Tool wrote") }
         if ($c.Code -ne 0) { Stop-Build ("what $Tool wrote could not be committed in the checkout: " + ($c.Out -join ' ') + ' Nothing was kept.') }
     }

@@ -26,6 +26,7 @@ on:
     - cron: '20 * * * *'
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   issues: write
 concurrency:
@@ -51,6 +52,17 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # What the box's content build writes is never committed (#5191,
+      # stage 4e): the newest a merge release kept, laid as the gate's shares
+      # lay it (build.yml, "Lay the newest content build"). Reading the list
+      # of kept builds is what actions: read is for.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
       - name: Read the four revisions and keep the rebuild issue
         shell: pwsh
         env:

@@ -154,7 +154,23 @@ function Get-NexusRunTracked([string]$RepoRoot, [string]$Rel) {
     return $files
 }
 
-# The zip Send-NexusFile uploads, from files of main alone. Entries in
+# What the box's content build writes at or under $Rel, as paths from the
+# repository's root: the content plugin and the tables are never committed
+# (#5191, stage 4e), so they are packed from the build laid over the checkout
+# (nexus-run.yml lays it), held to this commit's inputs and to the sha256
+# each was laid at (Get-ThornswoodLaidBuild). It is the dev server's build,
+# the one every Release carries. Nothing for a path the build does not write.
+function Get-NexusRunLaid([string]$RepoRoot, [string]$Rel) {
+    . (Join-Path $Here '..\mods\ContentPaths.ps1')
+    $built = @(Get-ThornswoodBuiltPaths -Repo $RepoRoot -NotCommitted | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') -or $Rel.StartsWith($_ + '/') })
+    if (-not $built.Count) { return @() }
+    try { $laid = Get-ThornswoodLaidBuild -Repo $RepoRoot -Server dev }
+    catch { throw ($Rel + ' is the box''s content build, which is never committed (#5191): ' + $_.Exception.Message + ' Nothing was run.') }
+    return @(@($laid.Files.Keys) | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') } | Sort-Object -CaseSensitive)
+}
+
+# The zip Send-NexusFile uploads, from files of main alone and the content
+# build laid over it. Entries in
 # ordinal order, each with the commit's time, so the same commit packs the
 # same bytes. Returns @{ Path; Entries }.
 function New-NexusRunPack([string]$RepoRoot, [string]$Root, [string[]]$Items, [string]$Name, [string]$Into, [DateTimeOffset]$When) {
@@ -163,7 +179,7 @@ function New-NexusRunPack([string]$RepoRoot, [string]$Root, [string[]]$Items, [s
     foreach ($it in $Items) {
         $it = $it.Trim()
         if (-not (Test-NexusRunPath $it)) { throw ('-Pack ' + $it + ' is not a path under -PackRoot. Nothing was run.') }
-        $got = @(Get-NexusRunTracked $RepoRoot ($Root + '/' + $it))
+        $got = @(Get-NexusRunTracked $RepoRoot ($Root + '/' + $it)) + @(Get-NexusRunLaid $RepoRoot ($Root + '/' + $it))
         if (-not $got.Count) { throw ($Root + '/' + $it + ' is no file of main. Nothing was run.') }
         foreach ($f in $got) { $entries[$f.Substring($Root.Length + 1)] = $f }
     }

@@ -10,13 +10,15 @@
     1. Get-ContentBuild.ps1 -Take -Kept lays that build of the commit's key
        over the checkout, held to its build.json, and writes
        temp\content-laid.json: the server, key, commit and every file laid
-       with its sha256;
+       with its sha256, which reads back held under Set-StrictMode too, as
+       Ship.ps1 runs (a step of content-tables.json names only the lists
+       it has);
     2. it says MISSING and lays nothing when no build of the key is kept, and
        stops, writing nothing, on a kept file that is not its sha256;
     3. New-ThornswoodArtifact -Content dev puts the laid files in the zip,
        not the commit's copies, the rest from the commit, and its record
        names the build; without -Content the same deploy is refused, the
-       laid files being changes to the commit;
+       commit holding no tables;
     4. -Content refuses a laid file changed after it was laid, a build of
        the other server, a build of other inputs than the commit's, and a
        built file the deploy sends that the build lacks;
@@ -104,10 +106,14 @@ try {
     $one = Join-Path $dir 'files/game/data/last-plugin.json'
     $was = [IO.File]::ReadAllBytes($one)
     [IO.File]::WriteAllText($one, 'tampered')
-    $before = [IO.File]::ReadAllBytes((Join-Path $repo 'game/gamemode-tables/DATA.json'))
+    # A table is built, never committed (#5191): the checkout has none until
+    # a build is laid, and a stop leaves it so.
+    $dataAt = Join-Path $repo 'game/gamemode-tables/DATA.json'
+    function DataNow { if (Test-Path -LiteralPath $dataAt) { Sha ([IO.File]::ReadAllBytes($dataAt)) } else { 'none' } }
+    $before = DataNow
     $r = Run @('-Repo', $repo, '-Take', '-Kept', $cache)
     Check '2 a kept file that is not its sha256 stops it' ($r.Code -ne 0 -and $r.Text -match 'game/data/last-plugin.json in the box''s build .* is not the sha256 build.json names')
-    Check '2 writing nothing' ((Sha ([IO.File]::ReadAllBytes((Join-Path $repo 'game/gamemode-tables/DATA.json')))) -ceq (Sha $before) -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
+    Check '2 writing nothing' ((DataNow) -ceq $before -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
     [IO.File]::WriteAllBytes($one, $was)
 
     # ----------------------------------------------------- 1. laid
@@ -122,6 +128,13 @@ try {
         $rec.files['game/gamemode-tables/DATA.json'] -ceq (Sha ([Text.Encoding]::UTF8.GetBytes($laidText))))
     $l = Try-It { Get-ThornswoodLaidBuild -Repo $repo -Server dev }
     Check '1 and reads back held' ($l.Ok -and $l.Value.Key -ceq $key -and $l.Value.Files.Count -eq $built.Count)
+    $strict = @(& pwsh -NoProfile -Command {
+            param($cp, $r)
+            Set-StrictMode -Version Latest
+            $ErrorActionPreference = 'Stop'
+            try { . $cp; 'KEY ' + (Get-ThornswoodLaidBuild -Repo $r -Server dev).Key } catch { 'STOPPED: ' + $_.Exception.Message }
+        } -args (Join-Path $root 'scripts\mods\ContentPaths.ps1'), $repo 2>&1 | ForEach-Object { "$_" })
+    Check ('1 and under Set-StrictMode, as Ship.ps1 runs (' + ($strict -join ' ') + ')') ($strict -contains "KEY $key")
 
     # ------------------------------------------------ 3. the artifact
     $out = Join-Path $tmp 'deploys'
@@ -141,7 +154,7 @@ try {
         Check '3 the record names the build' ($art.Record.content -ceq "dev $key $head")
     }
     $a = Try-It { New-ThornswoodArtifact -Component gamemode -RepoDir $repo -Paths 'game/gamemode.js', 'game/gamemode-tables' -OutDir $out }
-    Check '3 without -Content the laid files are changes to the commit, and it is refused' (-not $a.Ok -and $a.Why -match 'not committed' -and $a.Why -match 'game/gamemode-tables/')
+    Check '3 without -Content it is refused: the commit holds no tables, which only a build has (#5191)' (-not $a.Ok -and $a.Why -match 'has nothing at game/gamemode-tables')
 
     # ------------------------------------------------ 4. refusals
     $a = Try-It { New-ThornswoodArtifact -Component gamemode -RepoDir $repo -Paths 'game/gamemode-tables' -OutDir $out -Content main }
