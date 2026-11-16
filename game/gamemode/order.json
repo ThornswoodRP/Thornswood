@@ -68,6 +68,7 @@
     "asking-staff.ts",
     "stuck.ts",
     "staff.ts",
+    "take-back.ts",
     "staff-crafting.ts",
     "shared-resource-stock.ts",
     "npc-merchant-purses.ts",

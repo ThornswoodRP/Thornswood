@@ -275,6 +275,19 @@ try:
     yes('M15 nothing in it pings anybody',
         '@everyone' not in gold_ping and '<@&111111111111111111>' not in gold_ping)
 
+    # M16: an admin taking gold back from the hub (#6271), done by the game
+    # server and written by the site.
+    tb = bot.moderation_text('site', {
+        'did': 'takeback', 'byName': 'Patrick', 'who': 102, 'whoName': 'Bjorn',
+        'why': '4200 of the 5000 gold asked, on the main server (they held 4200): duped'})
+    yes('M16 a take back says the admin, whose character, what was taken of what was asked, and why',
+        tb == '**Staff on the site:** Patrick took back from Bjorn (profile 102): '
+              '4200 of the 5000 gold asked, on the main server (they held 4200): duped')
+    tbf = bot.moderation_text('site', {'did': 'takebackfailed', 'byName': 'Patrick', 'who': 7, 'whoName': 'profile 7',
+                                       'why': '1 Iron Sword on the dev server: no such character. Asked because: x'})
+    yes('M16 one the game server could not do says so',
+        tbf is not None and tbf.startswith('**Staff on the site:** Patrick could not take back from profile 7'))
+
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the
     # building and its hold in the why, and each reads as who did what where.

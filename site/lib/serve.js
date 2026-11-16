@@ -54,6 +54,7 @@ const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
 const { searchLedger, takeLedger } = require('./ledger');
+const { askTakeBack, cleanTakeBackAsk, takeBackRows, takeBackTurn } = require('./takeback');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
@@ -834,6 +835,36 @@ async function handle(req, res) {
     server was told by the client, a claim rather than a proof, and the row
     says so in words staff read.
   */
+  /*
+    A game server's turn at the take-back asks (#6271), keyed with the door's
+    key in a header like /api/report/game: it hands back what it did and gets
+    what still waits for it. Each finished ask is one line in moderation.log
+    for the bot's staff channel.
+  */
+  if ((route === '/api/takeback' || route === '/dev/api/takeback') && req.method === 'POST') {
+    if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
+    if (!sameSecret(String(req.headers['x-thornswood-key'] || ''), String(cfg.botKey))) {
+      return sendJson(res, 401, { error: 'no' });
+    }
+    let o;
+    try { o = JSON.parse(await body(req, 256 * 1024)) || {}; }
+    catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+    const srv = route.indexOf('/dev/') === 0 ? 'dev' : 'main';
+    const turn = takeBackTurn(srv, o.done, Date.now());
+    if (!turn.saved) return sendJson(res, 500, { error: 'could not save' });
+    for (const r of turn.finished) {
+      const what = r.name === 'gold' ? 'gold' : r.name;
+      const said = r.state === 'done'
+        ? r.took + ' of the ' + r.count + ' ' + what + ' asked, on the ' + srv + ' server' +
+          (r.answer ? ' (' + r.answer + ')' : '') + ': ' + r.why
+        : r.count + ' ' + what + ' on the ' + srv + ' server: ' + (r.answer || 'no reason given') +
+          '. Asked because: ' + r.why;
+      modLog({ did: r.state === 'done' ? 'takeback' : 'takebackfailed', byName: r.byName,
+               whoName: r.whoName || ('profile ' + r.pid), who: r.pid, why: said });
+    }
+    return sendJson(res, 200, { ok: true, server: srv, waiting: turn.waiting });
+  }
+
   if ((route === '/api/report/game' || route === '/dev/api/report/game') && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     if (!sameSecret(String(req.headers['x-thornswood-key'] || ''), String(cfg.botKey))) {
@@ -3193,6 +3224,27 @@ async function handle(req, res) {
       goes to moderation.log for the bot to say in the staff channel; the
       game's /ban and /note are said from the game server's own log.
     */
+    /*
+      Take-back asks (#6271): the admin role's, the same as the play sessions,
+      because it changes what somebody owns. GET lists them, POST asks one.
+    */
+    if (p === '/api/staff/takeback' && req.method === 'GET') {
+      if (!w.admin) return sendJson(res, 403, { error: 'admins only' });
+      return sendJson(res, 200, { rows: takeBackRows(Date.now()) });
+    }
+    if (p === '/api/staff/takeback' && req.method === 'POST') {
+      if (!w.admin) return sendJson(res, 403, { error: 'admins only', message: 'Only an admin can take things back.' });
+      let o;
+      try { o = JSON.parse(await body(req, 8000)) || {}; }
+      catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+      const ask = cleanTakeBackAsk(o);
+      if (ask.error) return sendJson(res, 400, { error: ask.error });
+      const whoName = String(((jsonFile(ROSTER, { who: {} }).who || {})[String(ask.pid)] || {}).name || '').slice(0, 60);
+      const row = askTakeBack(ask, w, whoName, Date.now());
+      if (!row) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, row });
+    }
+
     if (p === '/api/staff/records' && req.method === 'GET') {
       if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
       return sendJson(res, 200, staffRecords(Date.now()));

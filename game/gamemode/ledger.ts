@@ -208,6 +208,19 @@
     return row;
   }
 
+  /*
+    Gold or a thing an admin took back out of a character (#6271, the take
+    back block), so a search of the person shows it beside what it undid.
+  */
+  function takeBack(actorId, record, count, byName) {
+    var n = Math.floor(Number(count) || 0);
+    if (!(n > 0)) { return null; }
+    var isGold = String(record || '').toLowerCase() === 'f:skyrim.esm';
+    return add({ kind: 'takeback', from: person(actorId), to: null, gold: isGold ? n : 0,
+                 things: isGold ? [] : [{ n: String(record || ''), desc: String(record || ''), c: n }],
+                 source: 'staff' + (byName ? ': ' + byName : ''), where: cellOf(actorId), flagged: false });
+  }
+
   /* To the site: door.json names it and the key, the dev server's with /dev. */
   /*
     A server with no site to send to: the load test's copy of dev (#4623,
@@ -269,7 +282,7 @@
   state.sending = false;
   g.__thornswoodLedgerPush = setInterval(push, EVERY_MS);
 
-  g.__thornswoodLedger = { trade: trade, gold: gold, push: push, FLAG_GOLD: FLAG_GOLD, EVERY_MS: EVERY_MS,
+  g.__thornswoodLedger = { trade: trade, gold: gold, takeBack: takeBack, push: push, FLAG_GOLD: FLAG_GOLD, EVERY_MS: EVERY_MS,
                            pending: function () { return state.rows.length; } };
   llog('ready: trades and gold moves go to the site every', EVERY_MS / 1000, 's, and', FLAG_GOLD, 'gold or more is flagged');
 })();
