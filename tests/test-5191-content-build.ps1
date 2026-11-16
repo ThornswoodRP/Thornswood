@@ -41,6 +41,11 @@
       the plugin from the new sites and runs the chain, keeps nothing, and
       hands every file back, station-sites.json among them; with no build
       kept it stops before any tool runs.
+  12. -WithoutLast (#5191, Patrick's B on q-5191-last-plugin-loop) builds
+      the commit with the chain told -WithoutLast, holds every file to the
+      build kept for the same key, names each that differs (DIFFERS, and
+      without-last.json in -Out), and keeps nothing; with no build of the
+      key kept, or with -Stations too, it stops before any tool runs.
 #>
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
@@ -93,7 +98,8 @@ elseif ($Script -eq 'scripts/dev/Build-NpcPopulation.py') { W 'game/data/npc-pop
 elseif ($Script -eq 'scripts/dev/Build-ResourceLocations.py') { W 'game/data/resource-locations.json' 'resources in the moved order' }
 elseif ($Script -eq 'scripts/mods/Rebuild-ContentTables.ps1') {
     $plugin = [IO.File]::ReadAllText((Join-Path $co 'game/content/Thornswood-Content.esp'))
-    W 'game/data/x.json' ("table of $plugin")
+    $without = $(if ($Arguments -contains '-WithoutLast') { ' without the Last plugin' } else { '' })
+    W 'game/data/x.json' ("table of $plugin$without")
     W 'game/gamemode-tables/X.json' ("gamemode table of $plugin")
     W 'docs/systems/lists/a.md' 'list a'
     W 'docs/systems/lists/deep/b.md' 'list b'
@@ -134,10 +140,10 @@ try {
     $env:TS5191_MOVED = 'the catalogue'
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
-    function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations) {
+    function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations, [switch]$WithoutLast) {
         foreach ($f in @($calls, ($calls + '.store'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
         if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-        $more = @(); if ($Stations) { $more = @('-Stations') }
+        $more = @(); if ($Stations) { $more += '-Stations' }; if ($WithoutLast) { $more += '-WithoutLast' }
         $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner -Store $store @more 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
         $asked = $(if (Test-Path -LiteralPath $calls) { @(Get-Content -LiteralPath $calls) } else { @() })
@@ -213,6 +219,31 @@ try {
         $r4m.Code -eq 0 -and $r4m.Key -ne $r4.Key -and $r4m.Calls.Count -eq 4 -and $r4m.Calls[0] -like 'main *' -and
         (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'main') $r4m.Key)) -and (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'dev') $r4.Key)))
 
+    # ---- 12. without the Last plugin ---------------------------------------
+    Fresh $v2
+    $before12 = @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name } | Sort-Object) -join ','
+    $keptX = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $cache 'dev') $r4.Key) 'files/game/data/x.json'))
+    $r12 = Run -WithoutLast
+    if ($r12.Code -ne 0) { Write-Host $r12.Text }
+    Yes '12 -WithoutLast builds the commit as a build does, with the chain told -WithoutLast' (
+        $r12.Code -eq 0 -and $r12.Calls.Count -eq 4 -and $r12.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
+        $r12.Calls[3] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins} -WithoutLast')
+    Yes '12   and names the one file that differs from the build kept for the key, and no other' (
+        @($r12.Lines | Where-Object { $_ -like 'DIFFERS *' }) -join ',' -eq 'DIFFERS game/data/x.json' -and
+        ($r12.Lines -contains "WITHOUT-LAST $($r4.Key)") -and ($r12.Lines -contains "FROM $v2"))
+    $note12 = [IO.File]::ReadAllText((Join-Path $out 'without-last.json')) | ConvertFrom-Json
+    Yes '12   -Out gets every file of that build and without-last.json, which names it too' (
+        [IO.File]::ReadAllText((Join-Path $out 'game/data/x.json')) -eq 'table of plugin for dev from {"v":2} without the Last plugin' -and
+        (Test-Path -LiteralPath (Join-Path $out 'docs/systems/lists/deep/b.md')) -and
+        (@($note12.differs) -join ',') -eq 'game/data/x.json' -and $note12.key -eq $r4.Key -and $note12.against -eq $v2)
+    Yes '12   and nothing is kept or changed: the build kept for the key is as it was' (
+        (@(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name } | Sort-Object) -join ',') -eq $before12 -and
+        [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $cache 'dev') $r4.Key) 'files/game/data/x.json')) -eq $keptX -and
+        -not ($r12.Lines | Where-Object { $_ -match '^(BUILT|REUSED) ' }))
+    Fresh $v2
+    $r12s = Run -Stations -WithoutLast
+    Yes '12 -Stations with -WithoutLast stops before any tool runs' ($r12s.Code -ne 0 -and $r12s.Text -match 'two measurements' -and $r12s.Calls.Count -eq 0)
+
     # ---- 5. a failing tool, and an uncommitted change -----------------------
     Fresh $v2
     Put 'game/data/source.json' '{"v":3}'
@@ -282,6 +313,9 @@ try {
     Remove-Item -LiteralPath (Join-Path $cache 'main') -Recurse -Force
     $r10b = Run -Server main -Stations
     Yes '10 with no build of the server kept, -Stations stops before any tool runs' ($r10b.Code -ne 0 -and $r10b.Text -match 'no whole build of the main server is kept here' -and $r10b.Calls.Count -eq 0)
+    Fresh $rev4
+    $r12b = Run -Server main -WithoutLast
+    Yes '12 with no build of the key kept, -WithoutLast stops before any tool runs' ($r12b.Code -ne 0 -and $r12b.Text -match 'Run Build-Content first' -and $r12b.Calls.Count -eq 0)
     Fresh $rev4
 
     # ---- 11. the order is load-order.json's, not a catalogue's --------------
