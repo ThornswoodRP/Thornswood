@@ -265,8 +265,10 @@ function moveRuleChecks() {
 
   const k = walker('change');
   k.b.play = ['host'];
-  k.c.queue.push({ type: 'message', message: { t: 33, idx: 31, refrId: 0x100000000 + 0x1981f, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {} } });
-  k.c.queue.push({ type: 'message', message: { t: 33, idx: 32, refrId: 0xff000010, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: { isHostedByOther: true } } });
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 31, refrId: 0x100000000 + 0x1981f, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {}, equipment: { inv: { entries: [] } } } });
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 32, refrId: 0xff000010, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: { isHostedByOther: true }, equipment: { inv: { entries: [] } } } });
+  // A chest, which the engine sends with no equipment (#6349).
+  k.c.queue.push({ type: 'message', message: { t: 33, idx: 33, refrId: 0x6134a, transform: { pos: [0, 0, 0], worldOrCell: 0x3c }, props: {}, baseId: 0xc5209 } });
   k.b.pump();
   const asks = () => k.c.sent.filter((x) => x.m.t === 14);
   yes('under --play host, an actor nobody hosts is asked for once, reliably; one somebody hosts is not',
@@ -274,6 +276,9 @@ function moveRuleChecks() {
   k.c.queue.push({ type: 'message', message: { t: 7, idx: 32, propName: 'isHostedByOther', dataDump: 'false' } });
   k.b.pump();
   yes('  and one the server frees is asked for when it says so', asks().length === 2 && asks()[1].m.remoteId === 0xff000010);
+  k.c.queue.push({ type: 'message', message: { t: 7, idx: 33, propName: 'isHostedByOther', dataDump: 'false' } });
+  k.b.pump();
+  yes('  and a form that is no actor is never asked for, as the game never asks (#6349)', asks().length === 2 && asks().every((x) => x.m.remoteId !== 0x6134a));
 
   const o = walker('beat');
   o.b.stand = 1;
@@ -301,7 +306,7 @@ function playChecks() {
   b.lastMove = now; b.nextHit = now + 100000; b.nextTrade = now + 100000;
   b.ws = { send: (t) => { b.wsSent = (b.wsSent || []).concat([t]); } }; b.welcomed = true; b.passSentAt = now;
   c.queue.push({ type: 'message', message: { t: 33, idx: 20, refrId: 0xff000123, transform: { pos: [300, 100, 0], worldOrCell: 0x3c } } });
-  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1981e, transform: { pos: [350, 0, 0], rot: [0, 0, 90], worldOrCell: 0x3c } } });
+  c.queue.push({ type: 'message', message: { t: 33, idx: 21, refrId: 0x100000000 + 0x1981e, transform: { pos: [350, 0, 0], rot: [0, 0, 90], worldOrCell: 0x3c }, equipment: { inv: { entries: [] } } } });
   c.queue.push({ type: 'message', message: { t: 33, idx: 22, refrId: 0xff000999, transform: { pos: [90000, 0, 0], worldOrCell: 0x3c } } });
   b.pump();
   yes('it keeps where the actors it is sent are, by idx', b.others.size === 3 && b.others.get(21).refrId === 0x100000000 + 0x1981e);
