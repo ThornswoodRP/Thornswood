@@ -362,7 +362,7 @@ try {
     $fake = Join-Path $T 'repo'
     # Fresh-Checkout.ps1 too: Publish-Update loads its freshness guard under
     # Stop since #3006, where before a tree without it walked past the guard.
-    foreach ($f in 'scripts\release\Publish-Update.ps1', 'scripts\deploy\Fresh-Checkout.ps1', 'scripts\release\Read-JsonFile.ps1', 'scripts\release\RecordShape.ps1', 'scripts\release\RepoPlugins.ps1', 'scripts\release\CollectionRevision.ps1', 'scripts\release\Ship-Rules.ps1', 'scripts\mods\LoadOrder.ps1',
+    foreach ($f in 'scripts\release\Publish-Update.ps1', 'scripts\deploy\Fresh-Checkout.ps1', 'scripts\release\Read-JsonFile.ps1', 'scripts\release\RecordShape.ps1', 'scripts\release\RepoPlugins.ps1', 'scripts\release\CollectionRevision.ps1', 'scripts\release\Ship-Rules.ps1', 'scripts\mods\LoadOrder.ps1', 'scripts\release\SevenZip.ps1',
                    'scripts\release\Feed-Store.ps1', 'scripts\release\Feed-Json.ps1', 'scripts\release\Release-Baseline.ps1', 'scripts\release\Release-Name.ps1', 'scripts\release\Source-Notice.ps1',
                    'scripts\release\Dev-News.ps1', 'scripts\deploy\ServerContent.ps1', 'scripts\deploy\LastPluginRecipe.ps1',
                    'scripts\release\Feed-News.ps1', 'scripts\release\Feed-Rules.ps1', 'scripts\release\Release-Manifest.ps1', 'scripts\release\Sign-OnGitHub.ps1', 'scripts\release\Assert-PublishSigned.ps1', 'scripts\release\ShippedBytes.ps1',

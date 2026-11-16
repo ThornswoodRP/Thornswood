@@ -27,6 +27,7 @@
 #>
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'Windows.ps1')   # $OnWindows and Get-BoxPowerShell (#2957)
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond, [string]$why = '') {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
@@ -60,13 +61,18 @@ Yes 'O5 no "no 7-Zip" message carries a list of its own; each asks the finder wh
 # ------------------------------------------------------------------ M
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-4424-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $T | Out-Null
-$OnWindows = [bool]$IsWindows
+$pwsh = Get-BoxPowerShell
 try {
+    # The child sets the stand-in places itself before it loads the script:
+    # Windows sets ProgramFiles and ProgramFiles(x86) afresh for every new
+    # process, so a value the parent set never reaches the child there.
     $runner = Join-Path $T 'find.ps1'
     [IO.File]::WriteAllText($runner, @'
-param([string]$Lib)
+param([string]$Lib, [string]$PF, [string]$PF86, [string]$Local, [string]$Data, [string]$Bin)
 $ErrorActionPreference = 'Stop'
 try {
+    $env:ProgramFiles = $PF; ${env:ProgramFiles(x86)} = $PF86; $env:LOCALAPPDATA = $Local
+    $env:XDG_DATA_HOME = $Data; $env:PATH = $Bin
     . $Lib
     $got = if (Get-Command Find-SevenZip -ErrorAction SilentlyContinue) { Find-SevenZip } elseif (Get-Command Get-SevenZipPath -ErrorAction SilentlyContinue) { Get-SevenZipPath } else { 'NO FINDER' }
     Write-Output ('GOT=' + [string]$got)
@@ -91,23 +97,11 @@ try {
         }
         foreach ($d in $env.Values) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
         $want = & $make $env
-        $saved = @{}
-        foreach ($k in 'ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA', 'XDG_DATA_HOME', 'PATH') { $saved[$k] = [Environment]::GetEnvironmentVariable($k) }
-        $pwsh = (Get-Process -Id $PID).Path
-        try {
-            [Environment]::SetEnvironmentVariable('ProgramFiles', $env.PF)
-            [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $env.PF86)
-            [Environment]::SetEnvironmentVariable('LOCALAPPDATA', $env.Local)
-            [Environment]::SetEnvironmentVariable('XDG_DATA_HOME', $env.Data)
-            [Environment]::SetEnvironmentVariable('PATH', $env.Bin)
-            $got = @{}
-            foreach ($lib in 'scripts/release/Nexus.ps1', 'scripts/mods/LoadOrder.ps1') {
-                $o = @(& $pwsh -NoProfile -File $runner -Lib (Join-Path $Repo $lib) 2>&1 | ForEach-Object { "$_" })
-                $line = @($o | Where-Object { $_ -match '^(GOT|THREW)=' }) | Select-Object -Last 1
-                $got[$lib] = if ($line) { $line } else { 'SAID ' + ($o -join ' ') }
-            }
-        } finally {
-            foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
+        $got = @{}
+        foreach ($lib in 'scripts/release/Nexus.ps1', 'scripts/mods/LoadOrder.ps1') {
+            $o = @(& $pwsh -NoProfile -File $runner -Lib (Join-Path $Repo $lib) -PF $env.PF -PF86 $env.PF86 -Local $env.Local -Data $env.Data -Bin $env.Bin 2>&1 | ForEach-Object { "$_" })
+            $line = @($o | Where-Object { $_ -match '^(GOT|THREW)=' }) | Select-Object -Last 1
+            $got[$lib] = if ($line) { $line } else { 'SAID ' + ($o -join ' ') }
         }
         $n = $got['scripts/release/Nexus.ps1']; $l = $got['scripts/mods/LoadOrder.ps1']
         Yes "M $name`: Nexus.ps1 finds $(if ($want) { 'the one the rule names' } else { 'none' })" ($n -eq ('GOT=' + $want)) "Nexus.ps1: $n; wanted $want"
@@ -131,7 +125,7 @@ try {
         $was = $env:XDG_DATA_HOME
         try {
             $env:XDG_DATA_HOME = $data
-            $o = @(& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $Repo 'scripts/release/Get-SevenZip.ps1') -Check 2>&1 | ForEach-Object { "$_" })
+            $o = @(& $pwsh -NoProfile -File (Join-Path $Repo 'scripts/release/Get-SevenZip.ps1') -Check 2>&1 | ForEach-Object { "$_" })
             $code = $LASTEXITCODE
         } finally { $env:XDG_DATA_HOME = $was }
         Yes 'G Get-SevenZip.ps1 -Check prints the place the finder looks, on this machine too' ($code -eq 0 -and ($o | Select-Object -Last 1) -eq $own) ("exit $code`: " + ($o -join ' '))
