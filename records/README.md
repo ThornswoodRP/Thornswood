@@ -195,6 +195,10 @@ folder here is named below, under the heading it belongs to.
 
 ## The collection
 
+- `mo2.json`: the Mod Organizer 2 the Thornswood modlist installs (#6244):
+  its version, its release asset on GitHub and that asset's size and sha256.
+  `scripts\release\Install-NexusRevision.ps1 -Modlist` downloads it, refuses
+  any other bytes, and names each of its files in the modlist.
 - `collection.json`: the collection as it should be (issue #5189): each
   Nexus file it installs with the plugins that file puts in Data, every
   plugin in the collection's order with its load-after rule and what its
