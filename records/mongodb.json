@@ -27,5 +27,6 @@
     { "name": "dev", "task": "Thornswood Dev Server", "database": "thornswood-dev", "user": "dev" }
   ],
   "backup": { "task": "Thornswood Backup", "user": "backup" },
+  "rehearsal": { "database": "thornswood-rehearsal", "user": "rehearsal", "why": "The monthly restore rehearsal (Rehearse-OnBox.ps1) puts a backup's world here, never into a server's own database, starts a server on it and empties it again. Only SYSTEM and Administrators read its file: the rehearsal runs from the deploy gate." },
   "admin": { "user": "twadmin" }
 }

@@ -5,7 +5,8 @@
 // (#1046, #5020) asks exactly this of a person in the game today: "load your
 // character on a server restored from backup". Here it is a comparison.
 //
-// expected(root, profileId) reads the character from root's world, the same
+// expected(root, profileId) reads the character from root's world (its
+// world folder, or MongoDB read out the same way, #6237), the same
 // rule Restore-Server.ps1 uses: a runtime change form in world\changeForms,
 // named with its form id in lowercase hex and no plugin (FormDesc::ToString,
 // %x, #5168), whose profileId is the one asked for and which is not
@@ -20,7 +21,9 @@
 // line saying so, never a silent pass.
 'use strict';
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const childProcess = require('child_process');
 
 function readJson(file) {
   return JSON.parse(String(fs.readFileSync(file, 'utf8')).replace(/^﻿/, ''));
@@ -75,11 +78,41 @@ function descToId(desc, table) {
   return (0xfe000000 | (s.index << 12) | (id & 0xfff)) >>> 0;
 }
 
+// A world in MongoDB (#6237), read out by scripts/vps/world.js into a
+// folder laid out as the file driver lays out a world, with the connection
+// file the server's settings name (read inside mongosh, never here).
+// Returns the folder; the caller removes its parent when done.
+function readOutMongo(settings) {
+  const shell = process.env.THORNSWOOD_MONGOSH || 'C:\\Thornswood-Mongo\\bin\\mongosh.exe';
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-world-'));
+  const plan = path.join(tmp, 'plan.json');
+  const to = path.join(tmp, 'changeForms');
+  fs.writeFileSync(plan, JSON.stringify({
+    op: 'export', uri: String(settings.databaseUriFile || ''), db: String(settings.databaseName || ''),
+    to, manifest: path.join(tmp, 'export.json'), live: true
+  }));
+  const r = childProcess.spawnSync(shell, ['--nodb', '--quiet', '--file', path.join(__dirname, '..', 'vps', 'world.js')],
+    { env: Object.assign({}, process.env, { THORNSWOOD_WORLD_PLAN: plan }), encoding: 'utf8' });
+  const said = String(r.stdout || '') + String(r.stderr || '');
+  if (r.status !== 0 || !/^EXPORTED\|/m.test(said)) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    throw new Error('the world in ' + settings.databaseName + ' could not be read out: ' + (said.trim() || (r.error && r.error.message) || 'mongosh said nothing'));
+  }
+  return to;
+}
+
 // The living characters in root's world: [{ file, profileId, form }].
 function characters(root, settings) {
+  if (settings.databaseDriver === 'mongodb') {
+    const dir = readOutMongo(settings);
+    try { return charactersIn(dir); } finally { fs.rmSync(path.dirname(dir), { recursive: true, force: true }); }
+  }
   // The engine's own setting names the folder: databaseName, "world" when
   // unset (DatabaseFactory.cpp in the fork).
-  const dir = path.join(root, String(settings.databaseName || 'world'), 'changeForms');
+  return charactersIn(path.join(root, String(settings.databaseName || 'world'), 'changeForms'));
+}
+
+function charactersIn(dir) {
   const out = [];
   for (const f of fs.readdirSync(dir)) {
     if (!/^[0-9a-f]{1,16}\.json$/.test(f)) { continue; }
@@ -109,7 +142,7 @@ function expected(root, profileId) {
     angle: form.angle,
     worldOrCellDesc: form.worldOrCellDesc,
     worldOrCell: form.worldOrCellDesc ? descToId(form.worldOrCellDesc, table) : undefined,
-    inventory: form.inv && Array.isArray(form.inv.entries) ? form.inv.entries : undefined,
+    inventory: form.inv && Array.isArray(form.inv.entries) ? form.inv.entries.map((e) => numbered(e, table)) : undefined,
     healthPercentage: form.healthPercentage,
     magickaPercentage: form.magickaPercentage,
     staminaPercentage: form.staminaPercentage,
@@ -119,6 +152,44 @@ function expected(root, profileId) {
     port: Number(settings.port) || 7777,
     password: settings.password === undefined ? '' : String(settings.password)
   };
+}
+
+// Ids by plugin (#6237, the engine's StableIds): a saved id is "801:Sword.esp"
+// rather than the number the server sends, and a made bottle's or
+// enchantment's id is "made", its hash worked out again from its effects.
+// An inventory entry with each id as the number the server sends.
+function numbered(entry, table) {
+  const n = JSON.parse(JSON.stringify(entry));
+  const id = (v) => (typeof v === 'string' && v !== 'made' ? descToId(v, table) : v);
+  const effects = (o) => { if (o && Array.isArray(o.effects)) { for (const e of o.effects) { e.effectId = id(e.effectId); } } };
+  effects(n.made);
+  effects(n.madeEnchantment);
+  n.baseId = n.baseId === 'made' ? madeId(canonicalMade(n.made)) : id(n.baseId);
+  if (n.enchantmentId !== undefined) {
+    n.enchantmentId = n.enchantmentId === 'made' ? madeId(canonicalEnchantment(n.madeEnchantment)) : id(n.enchantmentId);
+  }
+  if (n.poisonId !== undefined) { n.poisonId = id(n.poisonId); }
+  return n;
+}
+
+// Inventory.cpp: Canonical(Made), Canonical(MadeEnchantment) and MadeId,
+// FNV-1a over the canonical text, in the made range from 0xff800000.
+function canonicalEffects(effects) {
+  return (effects || []).map((e) => '|' + (Number(e.effectId) >>> 0).toString(16) + ':' + Math.fround(Number(e.magnitude)).toFixed(2) +
+    ':' + Number(e.area) + ':' + Number(e.duration)).join('');
+}
+function canonicalMade(made) {
+  if (!made) { throw new Error('an entry says its id is made but carries no made bottle'); }
+  return (made.poison ? 'poison|' : 'potion|') + String(made.name || '') + canonicalEffects(made.effects);
+}
+function canonicalEnchantment(e) {
+  if (!e) { throw new Error('an entry says its enchantment is made but carries none'); }
+  return (e.weapon ? 'weapon-enchantment' : 'armour-enchantment') + canonicalEffects(e.effects);
+}
+function madeId(text) {
+  let h = 2166136261;
+  for (const b of Buffer.from(text, 'utf8')) { h = Math.imul(h ^ b, 16777619) >>> 0; }
+  return (0xff800000 | (h & 0x007fffff)) >>> 0;
 }
 
 function nameOf(appearanceDump) {
@@ -191,4 +262,4 @@ function compare(want, got) {
   return lines;
 }
 
-module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, canon };
+module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, canon, numbered, madeId, canonicalMade, canonicalEnchantment };

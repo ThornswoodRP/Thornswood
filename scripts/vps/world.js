@@ -49,6 +49,10 @@
 //          APPLIED|<written>|<added>|<removed>|<count after>.
 // count    {op, uri, db}: COUNT|<forms>|<characters>, a character being a
 //          form with profileId above 0 that is not deleted (#5168).
+// empty    {op, uri, db}: drops the world's collection, for the restore
+//          rehearsal's database only (thornswood-rehearsal), which holds a
+//          copy of everybody's characters only while a rehearsal runs.
+//          Prints EMPTIED|<forms it held>.
 //
 // The indexes the engine makes (formDesc_unique and profileId) are made here
 // too, with the same names and options, before anything is written: a
@@ -264,6 +268,17 @@ function countWorld(plan) {
   print('COUNT|' + forms + '|' + people);
 }
 
+function emptyWorld(plan) {
+  if (plan.db !== 'thornswood-rehearsal') fail('only the rehearsal\'s world is ever emptied, not ' + plan.db);
+  const db = connect(plan.uri, plan.db);
+  const coll = db.getCollection(kCollection);
+  const had = coll.countDocuments({});
+  coll.drop({ writeConcern: { w: 1, j: true } });
+  const left = coll.countDocuments({});
+  if (left !== 0) fail(plan.db + ' still holds ' + left + ' forms');
+  print('EMPTIED|' + had);
+}
+
 const planPath = process.env.THORNSWOOD_WORLD_PLAN;
 if (!planPath) fail('THORNSWOOD_WORLD_PLAN names no plan');
 let plan;
@@ -277,6 +292,7 @@ try {
   if (plan.op === 'export') exportWorld(plan);
   else if (plan.op === 'apply') applyWorld(plan);
   else if (plan.op === 'count') countWorld(plan);
+  else if (plan.op === 'empty') emptyWorld(plan);
   else fail('the plan names no step this knows: ' + plan.op);
 } catch (e) {
   fail(String(e && e.message ? e.message : e));

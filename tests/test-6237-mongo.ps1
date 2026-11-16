@@ -62,6 +62,8 @@ try {
     Refused 'gives two servers one user' { param($r) $r.servers[1].user = $r.servers[0].user } 'two servers'
     Refused 'gives the backup a server''s user' { param($r) $r.backup.user = $r.servers[0].user } 'backup'
     Refused 'keeps a world outside thornswood-<name>' { param($r) $r.servers[0].database = 'admin' } 'thornswood-'
+    Refused 'rehearses in a server''s database' { param($r) $r.servers[1].database = 'thornswood-rehearsal' } 'rehearsal'
+    Refused 'gives the rehearsal a server''s user' { param($r) $r.rehearsal.user = $r.servers[0].user } 'rehearsal'
 } finally { Remove-Item -LiteralPath $scratch -Recurse -Force -EA SilentlyContinue }
 
 # ---- 2. mongod.cfg --------------------------------------------------------
@@ -75,7 +77,7 @@ if ($rec) {
 
 # ---- 3. the users -----------------------------------------------------------
     $users = @(Get-ThornswoodMongoUsers $rec 'C:\Thornswood-Mongo')
-    Yes 'one user per game server, and the backup' ($users.Count -eq (@($rec.servers).Count + 1))
+    Yes 'one user per game server, the backup and the rehearsal' ($users.Count -eq (@($rec.servers).Count + 2))
     foreach ($s in @($rec.servers)) {
         $u = @($users | Where-Object { $_.User -eq $s.user })
         $ok = ($u.Count -eq 1 -and $u[0].Db -eq $s.database -and $u[0].Task -eq $s.task -and @($u[0].Roles).Count -eq 1 -and
@@ -84,6 +86,8 @@ if ($rec) {
     }
     $b = @($users | Where-Object { $_.User -eq $rec.backup.user })
     Yes 'the backup user has the backup role and nothing else' ($b.Count -eq 1 -and @($b[0].Roles).Count -eq 1 -and $b[0].Roles[0].role -eq 'backup' -and $b[0].Task -eq $rec.backup.task)
+    $h = @($users | Where-Object { $_.User -eq $rec.rehearsal.user })
+    Yes 'the rehearsal user reads and writes thornswood-rehearsal and nothing else, and no task reads its file' ($h.Count -eq 1 -and @($h[0].Roles).Count -eq 1 -and $h[0].Roles[0].role -eq 'readWrite' -and $h[0].Roles[0].db -eq 'thornswood-rehearsal' -and -not $h[0].Task)
     Yes 'every connection file is in the access folder' (@($users | Where-Object { $_.File -notlike 'C:\Thornswood-Mongo\access\*.uri' }).Count -eq 0)
     Yes 'the admin''s file is in the access folder' ((Get-ThornswoodMongoAdminFile $rec 'C:\Thornswood-Mongo') -eq ('C:\Thornswood-Mongo\access\' + $rec.admin.user + '.uri'))
     $uri = New-ThornswoodMongoUri 'live' 'thornswood-live' $rec

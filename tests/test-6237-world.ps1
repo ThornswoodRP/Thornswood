@@ -220,8 +220,40 @@ db.changeForms.insertMany([
         Yes 'a world it could not read out is said and counted, for the run to end non-zero' ($worldsNotTaken -contains 'game-dev/world' -and @($notes | Where-Object { $_ -like '*WORLD NOT TAKEN game-dev/world*' }).Count -eq 1)
         $inst = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Install-Backup.ps1'))
         Yes 'Install-Backup sends the world functions beside the backup as world.ps1' ($inst.Contains('$ThornswoodWorld, (New-Object Text.UTF8Encoding $true)') -and $inst.Contains('/world.ps1"'))
+
+        # Restore-Server.ps1, whole, into a folder whose settings say
+        # MongoDB, with a stand-in Restore-Backup.ps1 that lays out a backup
+        # the way the real one unpacks it.
+        $tree = Join-Path $scratch 'tree'
+        foreach ($d in 'scripts/vps', 'scripts/deploy', 'records') { New-Item -ItemType Directory -Path (Join-Path $tree $d) -Force | Out-Null }
+        foreach ($f in 'scripts/vps/Restore-Server.ps1', 'scripts/vps/world.js', 'scripts/deploy/World.ps1', 'scripts/deploy/Mongo.ps1', 'records/mongodb.json') { Copy-Item -LiteralPath (Join-Path $Repo $f) -Destination (Join-Path $tree $f) }
+        $bk = Join-Path $scratch 'unpacked'
+        foreach ($f in @{ 'a01.json' = '{"formDesc":"a01","profileId":5001,"recType":1,"isDeleted":false,"inv":{"entries":[{"baseId":"f:Skyrim.esm","count":5}]}}'; '13164_Skyrim.esm.json' = '{"formDesc":"13164:Skyrim.esm","profileId":-1,"recType":0}' }.GetEnumerator()) {
+            $to = Join-Path $bk ('game/world/changeForms/' + $f.Key); New-Item -ItemType Directory -Path (Split-Path -Parent $to) -Force | Out-Null; [IO.File]::WriteAllText($to, $f.Value)
+        }
+        New-Item -ItemType Directory -Path (Join-Path $bk 'game/private') -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $bk 'game/private/characters.json'), '{"who":{}}')
+        [IO.File]::WriteAllText((Join-Path $tree 'scripts/vps/Restore-Backup.ps1'), "param([string]`$Backup, [string]`$To, [string]`$KeyFile, [string]`$Work, [switch]`$NoPause)`nCopy-Item -LiteralPath '$bk' -Destination `$To -Recurse`nexit 0`n")
+        $rroot = Join-Path $scratch 'restore-root'
+        New-Item -ItemType Directory -Path (Join-Path $rroot 'plugins') -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $rroot 'plugins/Skyrim.esm'), 'TES4')
+        $db = 'thornswood-wtestg'
+        [IO.File]::WriteAllText((Join-Path $rroot 'server-settings.json'), (@{ port = 7777; loadOrder = @(($rroot -replace '\\', '/') + '/plugins/Skyrim.esm'); databaseDriver = 'mongodb'; databaseName = $db; databaseUriFile = $uriFile } | ConvertTo-Json))
+        $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "b07", profileId: 9, recType: 1 }])'
+        $out = @(& $box -NoProfile -NonInteractive -File (Join-Path $tree 'scripts/vps/Restore-Server.ps1') -Backup 'x.zip.enc' -Root $rroot -Expect 5001 -Work (Join-Path $scratch 'work') -NoPause 2>&1 | ForEach-Object { "$_" })
+        $code = $LASTEXITCODE
+        $held = (Shell $db 'print(db.changeForms.find().sort({ formDesc: 1 }).toArray().map(d => d.formDesc + "=" + (d.inv ? d.inv.entries[0].baseId : "")).join(","))') -join ''
+        Yes ('Restore-Server puts a backup''s world into the server''s MongoDB database and finds the character there: ' + (($out | Where-Object { $_ -match 'RESTORE OK|STOP|world  ' }) -join ' / ')) ($code -eq 0 -and $held.Trim() -eq '13164:Skyrim.esm=,a01=f:Skyrim.esm')
+        $asideB07 = @(Get-ChildItem -LiteralPath $rroot -Recurse -File -Filter 'b07.json' | Where-Object { $_.FullName -match 'world-before-restore-[0-9-]+[\\/]world[\\/]changeForms' })
+        Yes 'and keeps what the database held aside in world-before-restore-<stamp>\world' ($asideB07.Count -eq 1 -and -not @(Get-ChildItem -LiteralPath $rroot -Directory -Filter 'world-mongo-*').Count)
+        $before = (Shell $db 'print(db.changeForms.countDocuments({}))') -join ''
+        $out = @(& $box -NoProfile -NonInteractive -File (Join-Path $tree 'scripts/vps/Restore-Server.ps1') -Backup 'x.zip.enc' -Root $rroot -Rehearse -Work (Join-Path $scratch 'work') -NoPause 2>&1 | ForEach-Object { "$_" })
+        $rs = [IO.File]::ReadAllText((Join-Path $rroot 'server-settings.json')) | ConvertFrom-Json
+        $after = (Shell $db 'print(db.changeForms.countDocuments({}))') -join ''
+        Yes ('a rehearsal points the folder at the rehearsal''s own database before any world goes in: ' + $rs.databaseName + ' ' + $rs.databaseUriFile) ($rs.databaseName -eq 'thornswood-rehearsal' -and $rs.databaseUriFile -eq 'C:\Thornswood-Mongo\access\rehearsal.uri' -and $before -eq $after)
     } finally {
         Remove-Item Env:THORNSWOOD_MONGOSH -ErrorAction SilentlyContinue
+        $null = Shell 'thornswood-wtestg' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestf' 'db.dropDatabase()'
         $null = Shell 'thornswood-wteste' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestd' 'db.dropDatabase()'
