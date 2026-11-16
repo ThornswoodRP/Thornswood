@@ -35,7 +35,8 @@ const { DATA } = require('./base');
   own log the lines came from: the hourly sweep deletes a whole day file once
   its day is past, and the privacy page says the same number.
 
-  A ROW is a time, the server, a kind (trade, sale, take, drop or put), who
+  A ROW is a time, the server, a kind (trade, sale, take, drop, put, or
+  takeback for what an admin took back, #6271), who
   it came from and who it went to (profile, character name and Discord
   account, either of which can be nobody: gold dropped goes to the ground),
   the gold and the things, what came back the other way in a trade, where
@@ -44,7 +45,7 @@ const { DATA } = require('./base');
 */
 const LEDGER = path.join(DATA, 'ledger');
 const LEDGER_KEEP_DAYS = 90;
-const LEDGER_KINDS = ['trade', 'halftrade', 'sale', 'take', 'drop', 'put'];
+const LEDGER_KINDS = ['trade', 'halftrade', 'sale', 'take', 'drop', 'put', 'takeback'];
 // The most rows one push may carry, and the most one search hands back.
 const LEDGER_PUSH_MOST = 5000;
 const LEDGER_FIND_MOST = 500;

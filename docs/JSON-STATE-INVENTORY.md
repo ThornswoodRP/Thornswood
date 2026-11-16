@@ -54,6 +54,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `economy.json` | site, from each game server's hold economy count (POST /api/economy) | site (the hub's Hold economy page) | Low | none |
 | `session-logs/<session>.json` | site, from the launcher at the end of a play session | site (the hub), Read-LauncherStarts.ps1 | Medium: kept 365 days by the file's time, then deleted (#4432) | none |
 | `gallery.json`, `gallery-pending.json`, `gallery-reports.json`, `uploads/uploads.json` | site | site | Medium | none |
+| `takeback.json` | site, from an admin on the hub's Gold and trades page and from each game server's turn (POST /api/takeback, #6271) | site, each game server's take back block | Medium: what an admin asked to take back out of a character, and what the game server did | its own: each ask held to its shape (`cleanTakeBackAsk`, `site/lib/takeback.js`), never written over while it will not read (`putJson`); a game server marks each ask done on the character, so a lost answer is never taken twice |
 | `files/files.json` (the downloads list) | by hand on the box; nothing in the repository writes it since the installer moved to its GitHub Release (#4824) | site (`/file/` and the Downloads page) | Medium: what `/file/` serves (#3798) | none |
 | `news.json` | the site (from the build Releases main has reached, #5801), Set-DevNews | site | Low | named on a bad read (#2119) |
 | `public/page-versions.json` | by hand, committed | site | Low | `site\tests\test-page-changed.js` |
