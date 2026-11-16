@@ -60,7 +60,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS, STAND_CYCLE_MS, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { LoadBot, MOVE_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
 const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
@@ -304,6 +304,44 @@ function playChecks() {
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'That is not a guild trader.' }));
   yes('the answers are counted by what they say', b.played.tradeOpened === 1 && b.played.notATrader === 1 && b.played.tradeAsks === 1);
   yes('the play counts of every worker add up', JSON.stringify(playCounts([{ play: { hits: 2 } }, { play: { hits: 3, tradeAsks: 1 } }, {}])) === '{"hits":5,"tradeAsks":1}');
+  // Two bots trade gold with each other, so the gold and trade log (#6270)
+  // has rows in a crowd run.
+  const q = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'q' });
+  q.profileId = 1900000501; q.play = ['trade']; q.state = 'connected'; q.step = 'moving'; q.welcomed = true;
+  q.character = { idx: 8, refrId: 0xff000a01 }; q.center = [1000, 0, 0]; q.cell = 0x3c; q.radius = 300; q.angle = 0;
+  q.ws = { send: (t) => { q.wsSent = (q.wsSent || []).concat([t]); } };
+  b.character.refrId = 0xff000a00; b.wsSent = []; q.wsSent = [];
+  let lone = pairUp(null, b);
+  lone = pairUp(lone, q);
+  yes('the bots of a process trade in pairs, the first leading', lone === null && b.payWith === q && q.payWith === b && b.payGives && !q.payGives);
+  const lines = (x) => (x.wsSent || []).map((t) => JSON.parse(t).text);
+  let at = now + 10000;
+  b.nextTrade = at + 999999; b.nextPay = at; b.advance(at);
+  yes('it meets the other: both stand still, side by side', b.payAt && q.payAt && Math.abs(q.payAt[0] - b.payAt[0]) === 80 && b.played.payMeets === 1);
+  c.sent.length = 0; b.lastMove = at; b.advance(at + MOVE_MS + 1);
+  const standing = c.sent.find((x) => x.m.t === 2 && x.m.idx === 7);
+  yes('  and its moves say it stands where it met', standing && standing.m.data.runMode === 'Standing' && standing.m.data.pos[0] === b.payAt[0]);
+  at += PAY_STEP_MS; b.advance(at);
+  yes('it asks the other to trade by its actor id, as the panel\'s Trade does', lines(b).indexOf('/trade ff000a01') >= 0 && b.played.payAsks === 1);
+  at += PAY_STEP_MS; b.advance(at);
+  yes('the other says yes', lines(q).indexOf('/yes') >= 0);
+  at += PAY_STEP_MS; b.advance(at);
+  const gold = (x) => lines(x).find((t) => /^\/trade gold [1-5]$/.test(t));
+  yes('each puts up 1 to 5 gold', !!gold(b) && !!gold(q));
+  at += PAY_STEP_MS; b.advance(at);
+  yes('both agree, then both walk on', lines(b).indexOf('/trade ok') >= 0 && lines(q).indexOf('/trade ok') >= 0 &&
+    !b.payAt && !q.payAt && b.played.payAgrees === 1 && b.nextPay > at + 30000);
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Traded. You gave 3 gold and got 2 gold.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Asked Load 1900000501. They have 30 seconds.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You only have 2.' }));
+  yes('what the server says back is counted by what it says', b.played.payTraded === 1 && b.played.payAsked === 1 && b.played.payNoGold === 1 && b.played.tradeOtherAnswer === undefined);
+  const TRADE_TS = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'trade.ts'), 'utf8');
+  const TP_TS = fs.readFileSync(path.join(ROOT, 'game', 'gamemode', 'teleport.ts'), 'utf8');
+  yes('  every answer it counts is a line the trading and social blocks say',
+    /'Traded\. You gave '/.test(TRADE_TS) && /'You only have ' \+ have/.test(TRADE_TS) && /'The trade timed out\.'/.test(TRADE_TS) &&
+    /'Asked ' \+ theirName \+ '\. They have '/.test(TP_TS) && /'Nobody has asked you anything\.'/.test(TP_TS) && PAY_SAID.length === 11);
+  q.step = 'failed'; b.nextPay = at; b.advance(at + 1);
+  yes('with its partner gone it says so and tries again later', b.played.payNoPartner === 1 && !b.payAt);
   const w = new LoadBot(addon, { host: '127.0.0.1', port: 5000, name: 'w' });
   w.play = [];
   w.client = addon.createBotClient('127.0.0.1', 5000);

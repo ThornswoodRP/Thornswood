@@ -187,6 +187,19 @@ ctx.__thornswoodLedger.push();
 yes('the dev server\'s rows go to /dev/api/ledger as dev\'s',
     pushes[2].opts.path === '/dev/api/ledger' && JSON.parse(pushes[2].body).server === 'dev');
 
+// The load test's copy of dev has no site (#4623): it builds the push, says
+// its size in its log, and keeps nothing.
+ctx = makeContext('dev');
+fs.writeFileSync(path.join(priv, 'door.json'), JSON.stringify({ passKey: 'p' }));
+vm.runInNewContext(BLOCK, ctx);
+for (let i = 0; i < 7; i++) ctx.__thornswoodLedger.trade('trade', 1, 2, { gold: 3 }, { gold: 4 });
+ctx.__thornswoodLedger.push();
+const sizeLine = ctx.said.find((s) => /no site in door\.json to send to: a push would be 7 rows, \d+ bytes, built in \d+ ms; they are not kept/.test(s));
+yes('a server with no site says the push it would send, rows and bytes, and keeps nothing',
+    !!sizeLine && pushes.length === 3 && ctx.__thornswoodLedger.pending() === 0);
+ctx.__thornswoodLedger.trade('trade', 1, 2, { gold: 'x\nfake line' }, { gold: 4 });
+yes('a log line never breaks into two', ctx.said.every((s) => s.indexOf('\n') < 0));
+
 // What a move costs the game server's loop.
 ctx = makeContext('main');
 vm.runInNewContext(BLOCK, ctx);
@@ -314,7 +327,7 @@ const dayOf = (t) => { const d = new Date(t); const two = (n) => (n < 10 ? '0' :
   srv.stderr.on('data', (d) => { out += d; });
   try {
     let up = false;
-    for (let i = 0; i < 200 && !up; i++) {
+    for (let i = 0; i < 200; i++) {
       if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);

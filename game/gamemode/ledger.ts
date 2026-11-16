@@ -53,7 +53,9 @@
 
   function llog() {
     var a = ['[thornswood ledger]'];
-    for (var i = 0; i < arguments.length; i++) { a.push(arguments[i]); }
+    // Each part on one line: a name or a site's answer cannot start a
+    // line of its own in the server log.
+    for (var i = 0; i < arguments.length; i++) { a.push(String(arguments[i]).replace(/[\u0000-\u001f\u007f]/g, ' ')); }
     try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
   }
 
@@ -207,13 +209,31 @@
   }
 
   /* To the site: door.json names it and the key, the dev server's with /dev. */
+  /*
+    A server with no site to send to: the load test's copy of dev (#4623,
+    New-LoadServer.js), which has no door to the site on purpose. It builds
+    the push it would send, so the copy pays what dev pays for it, and says
+    the size in its log, which the load run keeps: that line is how a crowd
+    run measures the log (#6270). The rows then go, as a push that was taken
+    would take them: a server with no site has nowhere they could ever be
+    sent, and holding them would make the copy's memory unlike dev's.
+  */
+  function noSite() {
+    var batch = state.rows.slice(0, PUSH_MOST);
+    var t0 = Date.now();
+    var bytes = Buffer.byteLength(JSON.stringify({ server: serverName(), rows: batch }));
+    llog('no site in door.json to send to: a push would be', batch.length, 'rows,', bytes, 'bytes, built in',
+         Date.now() - t0, 'ms; they are not kept');
+    state.rows.splice(0, batch.length);
+  }
+
   function push() {
     if (state.sending || !state.rows.length || !fs || !path || !https) { return; }
     var conf = null;
     var privDir = String(settings().privDir || 'private');
     try { conf = JSON.parse(fs.readFileSync(path.join(privDir, 'door.json'), 'utf8').replace(/^\uFEFF/, '')); }
-    catch (e) { return; }
-    if (!conf || !conf.site || !conf.key) { return; }
+    catch (e) { conf = null; /* no door.json: said below, as a server with no site */ }
+    if (!conf || !conf.site || !conf.key) { noSite(); return; }
     var u = null;
     try { u = new URL(String(conf.site).replace(/\/+$/, '') + '/api/ledger'); } catch (e) { return; }
     var batch = state.rows.slice(0, PUSH_MOST);
