@@ -34,6 +34,9 @@ namespace Thornswood
         /// </summary>
         static Control CollectionStatusCard()
         {
+            // The launcher's own install, once it has started (#6244):
+            // ShellModlist.cs.
+            if (OwnGame.FromMods) return ModlistStatusCard();
             int have = 0;
             try { have = Checks.CollectionRevision(cfg); }
             catch (Exception ex) { Swallow.Note("Shell.CollectionStatusCard", ex); }

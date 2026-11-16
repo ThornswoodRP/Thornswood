@@ -44,7 +44,13 @@
     D  the record of what goes into the game folder (ModlistSetup.Deployment):
        a mod's files under Data and its Root folder's beside the game, the mod
        higher in the profile's modlist.txt winning a shared path, a switched
-       off mod and meta.ini left out, and no modlist.txt refused.
+       off mod and meta.ini left out, and no modlist.txt refused; its first
+       line names the revision, which OwnGame.ModsRevision and
+       Checks.CollectionRevision read for an install in Mod Organizer 2;
+    U  the window installs the modlist of the Release the channel is on, off
+       its thread with a Stop, from the collection card and button once the
+       mods come from Mod Organizer 2, and offered beside Vortex's until then
+       (read from the source, which cannot be drawn here).
 
   Builds the launcher from its project with the writer beside it
   (tests\Launcher-Csc.ps1).
@@ -252,7 +258,7 @@ try {
     # ModlistSetup is the launcher's own (internal), so it is called by reflection.
     $deployment = [Thornswood.ModlistInstall].Assembly.GetType('Thornswood.ModlistSetup', $true).GetMethod('Deployment')
     $lines = @($deployment.Invoke($null, [object[]]@($dm, 'abc')))
-    $want = @('modlist=abc',
+    $want = @('modlist=abc revision=8',
         ('Data\Scripts\x.pex|SKSE|Scripts\x.pex|' + (HashOf $pex).ToString('x16') + '|3'),
         ('Data\textures\x.dds|High|textures\x.dds|' + (HashOf $dds1).ToString('x16') + '|4'),
         ('Data\textures\y.dds|Low|textures\y.dds|' + (HashOf $dds2).ToString('x16') + '|3'),
@@ -274,6 +280,41 @@ try {
     $beside = @($recLines | Select-Object -Skip 1 | Where-Object { -not $_.StartsWith('Data\') })
     $paths = @($recLines | Select-Object -Skip 1 | ForEach-Object { $_.Split('|')[0].ToLowerInvariant() })
     Yes ("D5 records/collection-modlist.wabbajack makes a record of $($recLines.Count - 1) files, $($beside.Count) beside the game, the loader among them, each path once") ($recLines.Count -gt 1000 -and ($beside | Where-Object { $_.StartsWith('skse64_loader.exe|') }).Count -eq 1 -and @($paths | Select-Object -Unique).Count -eq $paths.Count -and ($recLines -match '^Data\\[^\\|]+\.esm\|').Count -gt 0)
+    Yes 'D6 and its first line names the modlist and its revision, 8' ($recLines[0] -ceq 'modlist=abc revision=8') $recLines[0]
+
+    # The revision the launcher reads off an install in Mod Organizer 2, in
+    # place of Vortex's, once the mods come from there.
+    $root6 = Join-Path $T 'root6'
+    $mods6 = Join-Path $root6 'Mods'
+    New-Item -ItemType Directory -Force -Path (Join-Path $mods6 'mods') | Out-Null
+    $asm = [Thornswood.ModlistInstall].Assembly
+    $rootField = $asm.GetType('Thornswood.Paths', $true).GetField('Root')
+    $oldRoot = $rootField.GetValue($null)
+    $rootField.SetValue($null, [string]$root6)
+    try {
+        $ownGame = $asm.GetType('Thornswood.OwnGame', $true)
+        $modsRev = { $ownGame.GetMethod('ModsRevision').Invoke($null, @()) }
+        $checksRev = { $asm.GetType('Thornswood.Checks', $true).GetMethod('CollectionRevision').Invoke($null, [object[]]@([Activator]::CreateInstance($asm.GetType('Thornswood.Config', $true)))) }
+        $part = & $modsRev
+        [IO.File]::WriteAllLines((Join-Path $mods6 'thornswood-deployment.txt'), [string[]]$recLines)
+        $whole = & $modsRev; $viaChecks = & $checksRev
+        [IO.File]::WriteAllLines((Join-Path $mods6 'thornswood-deployment.txt'), [string[]]@('modlist=abc'))
+        $none = & $modsRev
+        Yes "D7 an install in Mod Organizer 2 is on the revision its record names ($whole), and Checks reads that in place of Vortex's ($viaChecks)" ($whole -eq 8 -and $viaChecks -eq 8)
+        Yes "D8 one part way, with no record, or a record naming no revision, is on none ($part, $none)" ($part -eq 0 -and $none -eq 0)
+    } finally { $rootField.SetValue($null, $oldRoot) }
+
+    # The window runs the install (ShellModlist.cs). It cannot be drawn
+    # here, so what wires it is read.
+    $app = Join-Path $Repo 'launcher/app'
+    $sm = [IO.File]::ReadAllText((Join-Path $app 'ShellModlist.cs'))
+    $sh = [IO.File]::ReadAllText((Join-Path $app 'Shell.cs'))
+    $sc = [IO.File]::ReadAllText((Join-Path $app 'ShellCollection.cs'))
+    $ms = [IO.File]::ReadAllText((Join-Path $app 'ModlistSetup.cs'))
+    $vu = [IO.File]::ReadAllText((Join-Path $app 'VeloUpdate.cs'))
+    Yes 'U1 the install takes the modlist of the Release the channel is on, held to its signed record' ($vu.Contains('ChannelOn = on;') -and $ms.Contains('VeloRecord.Modlist(m, file);') -and $sm.Contains('ModlistSetup.FromRelease(on, steps)') -and $sm.Contains('Updater.ChannelOn'))
+    Yes 'U2 it runs off the window''s thread, says each step, and Stop stops it after the file it is on' ($sm.Contains('await Task.Run(') -and $sm.Contains('steps.Stop = () => modlistStop;') -and $sm.Contains('Dispatcher.UIThread.Post'))
+    Yes 'U3 once the mods come from Mod Organizer 2 the collection card and button are its install''s, and Vortex''s card offers it until then' ($sc.Contains('if (OwnGame.FromMods) return ModlistStatusCard();') -and $sh.Contains('if (OwnGame.FromMods) { InstallModlist(); return; }') -and $sh.Contains('if (OwnGame.FromMods) return ModlistButtonText(mine);') -and $sm.Contains('if (!OwnGame.FromMods) diagCollection.Children.Add(ModlistOfferCard());'))
 
     $dl2 = Join-Path $T 'downloads-short'
     New-Item -ItemType Directory -Path $dl2 -Force | Out-Null

@@ -702,7 +702,14 @@ half an install; its V lines in `files.txt` are the modlist's mods. Pandora's
 build reads the same record (`ModsDeployed` in Generated.cs). The last whole
 install's record also says which of a mod's settings files (.ini, .toml) the
 person changed in Mod Organizer 2 since: those are kept as they left them,
-and the rest take the new modlist's copy (`ModlistInstall.Changed`).
+and the rest take the new modlist's copy (`ModlistInstall.Changed`). The
+install itself starts from Diagnostics (ShellModlist.cs): a card beside
+Vortex's offers it, and once the mods come from Mod Organizer 2 the
+collection card and the bar's button are that install's, with the
+revision its record names (`OwnGame.ModsRevision`, which
+`Checks.CollectionRevision` reads in place of Vortex's). It installs the
+modlist of the Release the channel is on (`Updater.ChannelOn`,
+`ModlistSetup.FromRelease`), off the window's thread, with a Stop.
 
 **ClientRuntime** (ClientRuntime.cs). The six files that are the SkyMP client,
 checked by SHA-256 against `records\client-build.json`, which is compiled into

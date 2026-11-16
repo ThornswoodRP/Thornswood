@@ -149,9 +149,8 @@ namespace Thornswood
         {
             var wrote = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
             if (!File.Exists(file)) return wrote;
-            foreach (string line in File.ReadLines(file).Skip(1))
+            foreach (string[] p in File.ReadLines(file).Skip(1).Select(line => line.Split('|')))
             {
-                string[] p = line.Split('|');
                 ulong h;
                 if (p.Length == 5 && ulong.TryParse(p[3], System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out h))
                     wrote["mods\\" + p[1] + "\\" + p[2]] = h;
@@ -166,7 +165,8 @@ namespace Thornswood
         /// What goes into Thornswood's game folder from the modlist's mods,
         /// one line a file: the path in the game folder, the mod, the path in
         /// the mod's folder, its xxHash64 and its size, joined with |, after a
-        /// line naming the modlist by its sha256. Written into the instance as
+        /// line naming the modlist by its sha256 and the collection revision
+        /// it is, which OwnGame.ModsRevision reads. Written into the instance as
         /// OwnGame.ModsRecordName once an install is whole, and read by
         /// OwnGame in place of Vortex's deployment record (#6244).
         ///
@@ -198,9 +198,49 @@ namespace Thornswood
                 if (won.TryGetValue(rel, out had) && had.Key <= r) continue;
                 won[rel] = new KeyValuePair<int, string>(r, rel + "|" + p[1] + "|" + under + "|" + f.Hash.ToString("x16") + "|" + f.Size);
             }
-            var lines = new List<string> { "modlist=" + sha256 };
+            var lines = new List<string> { "modlist=" + sha256 + " revision=" + RevisionOf(m.Version) };
             lines.AddRange(won.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).Select(k => won[k].Value));
             return lines;
+        }
+
+        /// <summary>
+        /// The collection revision a modlist is: its version's first number,
+        /// which the writer makes the revision (8.0.0.0 is revision 8). 0 when
+        /// it has none.
+        /// </summary>
+        static int RevisionOf(string version)
+        {
+            string v = version ?? "";
+            int dot = v.IndexOf('.');
+            int n;
+            return int.TryParse(dot < 0 ? v : v.Substring(0, dot), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out n) ? n : 0;
+        }
+
+        /// <summary>Where the modlist a Release names is kept in the instance, for Run.</summary>
+        public const string ModlistName = "collection-modlist.wabbajack";
+
+        /// <summary>
+        /// Installs the mods from the modlist of the Release
+        /// <paramref name="on"/>, the one this launcher's channel is on
+        /// (Updater.ChannelOn), into OwnGame.ModsFolder: the modlist
+        /// held to that Release's signed record (VeloRecord.Modlist), then
+        /// Run, with Mod Organizer 2 pointed at the Steam copy. Throws
+        /// ModlistStop with the reason, and whatever VeloRecord throws when
+        /// the record cannot be read.
+        /// </summary>
+        public static int FromRelease(Velopack.SemanticVersion on, Steps s)
+        {
+            if (on == null)
+                throw new ModlistStop("The launcher has not read which Release its channel is on yet, so it does not know which modlist to install. Press it again once the update check has run.");
+            if (string.IsNullOrEmpty(Paths.SteamCopy))
+                throw new ModlistStop("Steam lists no Skyrim Special Edition on this PC, and the mods are installed for that copy. Install Skyrim Special Edition in Steam first.");
+            string said;
+            VeloRecord.Manifest m = VeloRecord.Get(on, out said);
+            string mods = OwnGame.ModsFolder;
+            string file = Path.Combine(mods, ModlistName);
+            VeloRecord.Modlist(m, file);
+            if (s.Say != null) s.Say("The modlist of " + m.Tag + ", collection revision " + m.CollectionRevision + ", held to its signed record");
+            return Run(file, mods, Path.Combine(mods, "tools"), Paths.SteamCopy, s);
         }
 
         static string Sha256Of(string file)
