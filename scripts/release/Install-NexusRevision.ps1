@@ -30,7 +30,11 @@
        kept between runs. A cached archive is used only when its size and md5
        are the revision's; any other file there is replaced. Every archive is
        checked against the revision before it is used. A failed download
-       stops the run and says which file; nothing is tried again;
+       stops the run and says which file; nothing is tried again. Once the
+       cache holds every archive the revision lists, the folder of any file
+       id the revision does not list is taken out (#4324), so the cache holds
+       one revision's archives and no more; anything in it that is not a file
+       id's folder is left;
     4. unpacks each archive (7-Zip, as Vortex does) and works out its files
        with the installer Vortex would pick, the FOMOD choices the revision
        gives, and its patches (NexusLayout.cs says how each is read from
@@ -125,7 +129,8 @@
 
 .PARAMETER Cache
   Where downloaded archives are kept. %LOCALAPPDATA%\Thornswood\nexus-cache
-  unless said otherwise.
+  unless said otherwise. A run that has every archive of its revision takes
+  the folders of other file ids out of it, so give a folder of its own.
 
 .PARAMETER WhatIf
   Downloads and works everything out, and changes nothing in -Game.
@@ -411,6 +416,23 @@ foreach ($e in $col.Entries) {
   Say ('  ' + $got.Name + ', ' + ([double]$got.Size / 1MB).ToString('N1') + ' MB in ' + [Math]::Round($sw.Elapsed.TotalSeconds) + ' s') 'DarkGray'
 }
 Say ('  ' + $reused + ' from the cache, ' + $fetched + ' downloaded, every one the revision''s size and md5') 'Green'
+# The cache keeps one folder per file id, and until #4324 only the folders of
+# the file ids a run's revision lists were ever read, so an archive no
+# revision lists any more stayed for good. Now that this run holds every
+# archive its revision lists, the folder of any other file id is an older
+# revision's, and it goes. What in the cache is not a file id's folder is not
+# this script's, and stays.
+$listed = New-Object 'System.Collections.Generic.HashSet[string]'
+foreach ($e in $col.Entries) { [void]$listed.Add([string]$e.FileId) }
+$gone = New-Object System.Collections.Generic.List[string]
+if (Test-Path -LiteralPath $Cache -PathType Container) {
+  foreach ($d in @(Get-ChildItem -LiteralPath $Cache -Directory -Force)) {
+    if ($d.Name -notmatch '^\d+$' -or $listed.Contains($d.Name) -or ($d.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+    Step { Remove-Tree $d.FullName }
+    $gone.Add($d.Name)
+  }
+}
+if ($gone.Count) { Say ('  taken out of the cache, as no file of this revision: file id ' + ($gone -join ', file id ')) 'DarkGray' }
 # A RAR archive needs a 7-Zip that unpacks RAR. Ubuntu's does not: measured
 # 21 Oct (#2969), its 7zip package has no RAR codec ("Unsupported Method" on
 # Skyrim Sewers) and its 7zip-rar codec crashes on every RAR (exit 139). So
