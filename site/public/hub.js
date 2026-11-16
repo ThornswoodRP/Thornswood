@@ -1969,7 +1969,7 @@ function drawLedger() {
         }).join('') +
       '</select>' +
       '<input type="search" id="lfind" value="' + esc(LFIND.q) + '" aria-label="Find an account, a profile or a character" placeholder="A Discord account, a profile number or a character\'s name">' +
-      '<label class="check"><input type="checkbox" id="lflag"' + (LFIND.flagged ? ' checked' : '') + '> Flagged only</label>' +
+      '<label class="check"><input type="checkbox" id="lflag" aria-label="Flagged only"' + (LFIND.flagged ? ' checked' : '') + '> Flagged only</label>' +
     '</div>';
   if (!LEDG || LEDG.loading) {
     el('page').innerHTML = out + '<div class="empty">Reading the log.</div>';
@@ -2087,7 +2087,7 @@ function drawHome() {
   // a Gamemaster lands on a home page with Gallery on it and nothing else.
   if (inHub()) {
     out += '<div class="cards">' +
-      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') +
+      card('uploads') + card('sessions') + card('linked') + card('inbox') + card('economy') + card('ledger') +
       '</div>';
   } else {
     out += '<p class="lede">Signing in with Discord opens the hub.</p>' +

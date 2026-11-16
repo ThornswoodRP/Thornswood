@@ -314,7 +314,7 @@ yes('the Hold economy page has its own address and is a staff page',
     /'\/economy':\s*'economy'/.test(SERVER) && /economy: 'staff'/.test(SERVER) &&
     /'\/economy':'economy'/.test(HUB));
 yes('it is in the hub\'s tabs, on its home cards and drawn by its own function',
-    /keys:\['uploads','sessions','linked','inbox','economy'\]/.test(HUB) && /card\('economy'\)/.test(HUB) &&
+    /keys:\['uploads','sessions','linked','inbox','economy','ledger'\]/.test(HUB) && /card\('economy'\)/.test(HUB) &&
     /if \(S\.at === 'economy'\) return drawEconomy\(\);/.test(HUB));
 yes('it reads the counts when it opens, and a read that fails is said rather than shown as nothing counted',
     /api\('\/api\/economy'\)/.test(HUB) && /The counts could not be read: /.test(HUB));

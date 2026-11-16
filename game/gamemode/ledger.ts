@@ -211,7 +211,7 @@
     if (state.sending || !state.rows.length || !fs || !path || !https) { return; }
     var conf = null;
     var privDir = String(settings().privDir || 'private');
-    try { conf = JSON.parse(fs.readFileSync(path.join(privDir, 'door.json'), 'utf8').replace(/^﻿/, '')); }
+    try { conf = JSON.parse(fs.readFileSync(path.join(privDir, 'door.json'), 'utf8').replace(/^\uFEFF/, '')); }
     catch (e) { return; }
     if (!conf || !conf.site || !conf.key) { return; }
     var u = null;

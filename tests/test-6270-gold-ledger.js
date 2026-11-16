@@ -204,8 +204,8 @@ const CUFFS = read(path.join(ROOT, 'game', 'gamemode', 'cuffs.ts'));
 yes('the trading block logs a trade, a half trade, a sale and a half sale',
     /ledger\('trade', t\.a, t\.b/.test(TRADE) && (TRADE.match(/ledger\('halftrade'/g) || []).length === 2 &&
     /ledger\('sale', seller, worker/.test(TRADE));
-yes('onTakeItem, onPutItem and onDropItem log gold', /ledgerGold\('take'/.test(CUFFS) &&
-    /ledgerGold\('put'/.test(CUFFS) && /ledgerGold\('drop'/.test(CUFFS));
+yes('onTakeItem, onPutItem and onDropItem log gold', /ledgerTake\.gold\('take'/.test(CUFFS) &&
+    /ledgerPut\.gold\('put'/.test(CUFFS) && /ledgerDrop\.gold\('drop'/.test(CUFFS));
 yes('the privacy page says what the log keeps, who sees it and its 90 days',
     /\*\*Gold and trades\.\*\*/.test(PRIVACY) && /\*\*Gold and trades\*\*, each one above, are kept for 90 days/.test(PRIVACY) &&
     /the gold and trade log and the\s+gallery queue/.test(PRIVACY));
