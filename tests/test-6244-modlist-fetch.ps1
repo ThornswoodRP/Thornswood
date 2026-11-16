@@ -282,7 +282,7 @@ try {
         $m = [Thornswood.CollectionModlist]::Read($wf)
         $with = $SZ.GetMethod('With', $flags).Invoke($null, @([string]$zz))
         $mo2 = Join-Path $T 'Mods-7z'
-        $n = [Thornswood.ModlistInstall]::Install($m, $dlU, $mo2, (Join-Path $T 'Game'), $with, $null)
+        $n = [Thornswood.ModlistInstall]::Install($m, $dlU, $mo2, (Join-Path $T 'Game'), $with, $null, $null)
         $got = Join-Path $mo2 (Join-Path 'mods' (Join-Path 'Seven' 'Seven.esp'))
         Yes 'U1 the install takes a 7z archive''s files through 7-Zip' ($n -eq 1 -and (Test-Path -LiteralPath $got) -and [IO.File]::ReadAllText($got) -eq 'a plugin inside a 7z')
         Remove-Item -LiteralPath $mo2 -Recurse -Force
@@ -294,7 +294,7 @@ try {
         $wb.FromArchive($hb, 'Data\Seven.esp', [Thornswood.XxHash64]::OfBytes($esp), $esp.Length, 'mods\Seven\Seven.esp')
         $wb.Save($wf)
         $mb = [Thornswood.CollectionModlist]::Read($wf)
-        $why = Stop-Of { [Thornswood.ModlistInstall]::Install($mb, $dlU, $mo2, (Join-Path $T 'Game'), $with, $null) }
+        $why = Stop-Of { [Thornswood.ModlistInstall]::Install($mb, $dlU, $mo2, (Join-Path $T 'Game'), $with, $null, $null) }
         Yes 'U2 a broken archive stops the install, naming it and what 7-Zip said' ($why.Contains('7-Zip could not unpack Seven-300-3-0.7z (exit ')) $why
     } else {
         Skip 'U1 the install takes a 7z archive''s files through 7-Zip (7-Zip''s Linux build is not here: pwsh scripts/release/Get-SevenZip.ps1)'

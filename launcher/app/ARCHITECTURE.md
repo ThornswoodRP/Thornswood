@@ -696,10 +696,13 @@ the Steam copy or the Downgrade, and the install's record
 in the game folder, its mod, its path in the mod's folder and its xxHash64,
 the mod higher in the profile's modlist.txt winning a shared path) stands
 where Vortex's deployment record stood (`OwnGame.ModsStaged`). The record is
-taken off before a changed modlist is installed and written once every file
-is in, so a folder is never made from half an install; its V lines in
-`files.txt` are the modlist's mods. Pandora's build reads the same record
-(`ModsDeployed` in Generated.cs).
+set aside (`thornswood-deployment-last.txt`) before a changed modlist is
+installed and written once every file is in, so a folder is never made from
+half an install; its V lines in `files.txt` are the modlist's mods. Pandora's
+build reads the same record (`ModsDeployed` in Generated.cs). The last whole
+install's record also says which of a mod's settings files (.ini, .toml) the
+person changed in Mod Organizer 2 since: those are kept as they left them,
+and the rest take the new modlist's copy (`ModlistInstall.Changed`).
 
 **ClientRuntime** (ClientRuntime.cs). The six files that are the SkyMP client,
 checked by SHA-256 against `records\client-build.json`, which is compiled into

@@ -2143,7 +2143,7 @@ namespace Thornswood
             try
             {
                 // Mod Organizer 2's profile, once the mods come from there (#6244).
-                string tw = FromMods ? Path.Combine(ModsFolder, "profiles\\Thornswood") : Checks.VortexProfileDir("Thornswood");
+                string tw = FromMods ? Path.Combine(ModsFolder, "profiles", "Thornswood") : Checks.VortexProfileDir("Thornswood");
                 string livePlugins = Path.Combine(Paths.WinLocalAD, "plugins.txt");
                 if (tw == null)
                 {
