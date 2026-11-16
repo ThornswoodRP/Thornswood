@@ -567,7 +567,7 @@ yes('the shipped Thornswood.ini carries CloseGameKey = 68', !!iniM && Number(ini
 }
 
 // The social key guard (pull request 291) stays: the five keys over the
-// RaceSex Menu are tests\test-social-keys.js, and it is not touched here.
+// RaceSex Menu are game\tests\test-social-keys.js, and it is not touched here.
 yes('the social keys still wait out the RaceSex Menu',
     /if \(e\.code === FRIEND_KEY \|\| e\.code === TRADE_KEY \|\| e\.code === MUTE_KEY \|\|/.test(front) &&
     /const KEYBOARD_MENUS = \[[\s\S]*?'RaceSex Menu'/.test(front));

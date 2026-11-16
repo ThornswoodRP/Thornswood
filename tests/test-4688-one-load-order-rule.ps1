@@ -157,6 +157,7 @@ try {
         'scripts/vps/Restore-Server.ps1'           = 'a restored order, its paths pointed at its own folder'
         'scripts/vps/vps-dev-instance.ps1'         = 'the live order, its paths pointed at the dev folder'
         'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
+        'tools/DeployAgent/ServerOrder.cs'         = 'the order a Release was built for, from its catalogue, pointed at the server''s plugins (#6209)'
     }
     $writeRx = [regex]'(?i)(NotePropertyName\s+loadOrder\b|\.loadOrder\s*=(?!=)|\[\s*[''"]loadOrder[''"]\s*\]\s*=(?!=))'
     $found = [ordered]@{}

@@ -305,7 +305,7 @@ namespace Thornswood
                 PinFile info = skyrimInfo[rel];
                 FileInfo fi;
                 try { fi = new FileInfo(Path.Combine(dir, rel)); }
-                catch (Exception ex) { throw new Exception(SkyrimFromRefused(dir, rel, "could not be read (" + ex.Message.TrimEnd('.') + ")")); }
+                catch (Exception ex) { throw new Exception(SkyrimFromRefused(dir, rel, "could not be read (" + Failure.Why("OwnGameKinds, " + rel, ex, rel) + ")")); }
                 if (!fi.Exists) throw new Exception(SkyrimFromRefused(dir, rel, "is not there"));
                 if (fi.Length != info.Bytes)
                     throw new Exception(SkyrimFromRefused(dir, rel, "is " + fi.Length.ToString("n0") + " bytes and the build's is " + info.Bytes.ToString("n0")));
@@ -335,7 +335,7 @@ namespace Thornswood
                         if (say != null && pct >= shown + 10) { shown = pct - pct % 10; say("Checking Skyrim's own files in " + dir + ": " + shown + "%"); }
                     });
                 }
-                catch (Exception ex) { throw new Exception(SkyrimFromRefused(dir, f.Rel, "could not be read (" + ex.Message.TrimEnd('.') + ")")); }
+                catch (Exception ex) { throw new Exception(SkyrimFromRefused(dir, f.Rel, "could not be read (" + Failure.Why("OwnGameKinds, " + f.Rel, ex, f.Rel) + ")")); }
                 if (!string.Equals(sha, skyrimInfo[f.Rel].Sha1, StringComparison.OrdinalIgnoreCase))
                     throw new Exception(SkyrimFromRefused(dir, f.Rel, "has the build's size but not its bytes (SHA-1 " + sha + ", the list's " + skyrimInfo[f.Rel].Sha1 + ")"));
                 at[f.Rel] = before;

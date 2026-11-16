@@ -493,7 +493,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Could not put " + f.Rel + " into " + game + ": " + ex.Message);
+                    throw new Exception("Could not put " + f.Rel + " into " + game + ": " + Failure.Say("OwnGameShare.TakePinned, " + f.Rel, ex, f.Rel));
                 }
                 took.Add(f.Rel);
                 done += f.Size;

@@ -63,7 +63,7 @@
     4. Setup-ShipMachine.ps1's Save-EngineBuild writes the record and refuses
        a folder with no build in it; Ship.ps1 runs Update-ShipRoot.ps1 for
        the channel's root before the version moves and before anything is
-       built, and stops when it refuses (tests\test-ship-dry-run.ps1 runs that
+       built, and stops when it refuses (scripts\tests\test-ship-dry-run.ps1 runs that
        Ship, N). Setup-ShipMachine.ps1 takes -SkyrimFrom and hands it to
        Update-ShipRoot.ps1, not with -Check.
 
@@ -427,7 +427,7 @@ Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -Liter
 if (Test-Path -LiteralPath $LauncherDotnet) {
     # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
     # Config and OwnGame read their JSON through LooseString.cs, and Downgrade asks with Ask.cs (#4823).
-    $real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'DevBuild.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
+    $real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'DevBuild.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
         ForEach-Object { Join-Path $App $_ }
     $real += @((Join-Path $Tool 'ShipRoot.cs'), (Join-Path $Tool 'OwnGameShipRoot.cs'))
     foreach ($f in $real) { Yes ("$([IO.Path]::GetFileName($f)) is there") (Test-Path -LiteralPath $f) }

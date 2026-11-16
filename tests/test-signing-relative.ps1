@@ -68,7 +68,7 @@ $setupText = Get-Content -LiteralPath $setup -Raw
 Yes '3. Setup-ShipMachine.ps1 resolves them against the repository (Get-SigningPathsMissing)' ($setupText -match 'IsPathRooted\(\$v\)\)\s*\{\s*\$v = Join-Path \$Repo \$v')
 
 # 4. Nothing tracked reads C:\tools (code, not docs or tests' own fixtures).
-$files = & git -C $repo ls-files -- '*.ps1' '*.psm1' '*.js' '*.cs' '*.py' '*.json' '*.bat' '*.cmd' | Where-Object { $_ -notmatch '^(tests|docs|engine)/' }
+$files = & git -C $repo ls-files -- '*.ps1' '*.psm1' '*.js' '*.cs' '*.py' '*.json' '*.bat' '*.cmd' | Where-Object { $_ -notmatch '^(tests|docs|engine)/|^[^/]+/tests/' }
 $hits = @()
 foreach ($f in $files) {
   $p = Join-Path $repo $f

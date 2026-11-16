@@ -84,7 +84,9 @@ function mod(id, reading, ours) {
   return m;
 }
 function read(collections) { return { read: '2026-10-27', by: 'the test', collections: collections, terms: { "Author's instructions": 'x' } }; }
-const planted = { version: 1, collection: '7essxf', revision: 5, mods: [mod(10, read('allowed')), mod(20, read('not stated')), mod(30, read('not allowed')), mod(40, null), mod(50, null, true)] };
+// An allowed reading carries what allows it (#4190): here an open licence.
+const allowedRead = Object.assign(read('allowed'), { licence: { name: 'MIT' } });
+const planted = { version: 1, collection: '7essxf', revision: 5, mods: [mod(10, allowedRead), mod(20, read('not stated')), mod(30, read('not allowed')), mod(40, null), mod(50, null, true)] };
 yes('a planted record has the shape the check takes', cp.shapeProblems(planted).length === 0, cp.shapeProblems(planted).join('; '));
 const r = cp.refusals(planted, [10, 20, 30, 40, 50, 60]);
 yes('the check refuses the mod whose page does not allow it in a collection', r.some(x => x.modId === 30 && /does not allow it in a collection/.test(x.why)));
@@ -98,6 +100,32 @@ yes('a reading with no date is a shape problem', bad(c => { delete c.mods[0].rea
 yes('a page that is not the mod\'s own is a shape problem', bad(c => { c.mods[0].page = 'https://www.nexusmods.com/skyrimspecialedition/mods/99?tab=description'; }).length > 0);
 yes('a mod of ours with a reading is a shape problem', bad(c => { c.mods[4].reading = read('allowed'); }).length > 0);
 
+// 4b. What makes a reading (#4190). SKSE Menu Framework's page points to
+// its licence file, GPL-3.0, without naming it, and was read "not stated",
+// while Crash Logger's page, saying the same of its own, was read
+// "allowed": nothing wrote down what makes a reading allowed. The rule is in
+// records\README.md and collection-permissions.js ruled(), and the record's
+// own shape holds every reading to it.
+yes('collection-permissions.js says what each reading comes to by one rule (ruled)', typeof cp.ruled === 'function');
+if (typeof cp.ruled === 'function') {
+  const off = record.mods.filter(m => m.reading && cp.ruled(m.reading) !== m.reading.collections);
+  yes('every reading in the record is what the rule gives', off.length === 0,
+    off.slice(0, 6).map(m => m.modId + ' ' + m.name + ' reads "' + m.reading.collections + '", the rule gives "' + cp.ruled(m.reading) + '"').join('; '));
+}
+const smf = record.mods.find(m => m.modId === 120352);
+yes('SKSE Menu Framework reads allowed, through the GPL-3.0 licence file its page points to, with who read that file',
+  !!smf && smf.reading && smf.reading.collections === 'allowed' && smf.reading.licence && /GPL-3\.0/.test(smf.reading.licence.name) &&
+  !!smf.reading.licence.at && !!smf.reading.licence.read && !!smf.reading.licence.by);
+yes('a reading marked allowed with nothing that allows it is a shape problem', bad(c => { delete c.mods[0].reading.licence; }).length > 0);
+yes('a reading marked not stated whose page allows uploads elsewhere is a shape problem',
+  bad(c => { c.mods[1].reading.terms['Upload permission'] = 'You can upload this file to other sites but you must credit me as the creator of the file'; }).length > 0);
+yes('  and marked allowed on that line it is not', bad(c => { c.mods[1].reading.collections = 'allowed'; c.mods[1].reading.terms['Upload permission'] = 'You can upload this file to other sites but you must credit me as the creator of the file'; }).length === 0);
+yes('a licence the page only links, with nobody named as reading the file, is a shape problem', bad(c => { c.mods[0].reading.licence.at = 'the LICENSE file the page links'; }).length > 0);
+yes('a grant that is not in the page\'s words is a shape problem', bad(c => { delete c.mods[0].reading.licence; c.mods[0].reading.grant = 'do anything'; }).length > 0);
+yes('a line against collections stays the reader\'s not allowed, whatever else the page says', bad(c => { c.mods[2].reading.licence = { name: 'MIT' }; }).length === 0);
+const readme = fs.readFileSync(path.join(ROOT, 'records', 'README.md'), 'utf8');
+yes('records/README.md says what makes a reading allowed', /What makes a reading `allowed`/.test(readme));
+
 // 5. update
 const collection = { mods: [
   { name: 'Mod 10 file', version: '2', source: { type: 'nexus', modId: 10, fileId: 11 }, author: 'Someone' },
@@ -108,6 +136,48 @@ yes('update writes the new revision with only the mods the collection carries', 
 yes('update keeps a mod\'s reading and takes its new file', JSON.stringify(u.mods[0].reading) === JSON.stringify(planted.mods[0].reading) && u.mods[0].files[0].fileId === 11);
 yes('update brings a new mod in unread, with the plugins its hashes name', u.mods[1].reading === null && u.mods[1].plugins.join() === 'New.esp' && cp.refusals(u, [70]).length === 1);
 yes('what update writes has the shape the check takes', cp.shapeProblems(u).length === 0, cp.shapeProblems(u).join('; '));
+
+// 5b. Entries that are not Nexus mods (#4278). check and update took only
+// entries whose source is nexus, so a bundled, direct or manual entry was
+// never held to the record and New-NexusRevision still said every mod was
+// allowed. A bundled entry is a file packed into the collection archive
+// itself, so it most needs a reading. The record's others list carries them,
+// by Vortex's source type and the entry's name.
+const os = require('os');
+const { spawnSync } = require('child_process');
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tcp-4278-'));
+function check(rec, col) {
+  const rf = path.join(TMP, 'record.json'), cf = path.join(TMP, 'collection.json');
+  fs.writeFileSync(rf, JSON.stringify(rec));
+  fs.writeFileSync(cf, JSON.stringify(col));
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'release', 'collection-permissions.js'), 'check', '--record', rf, cf], { encoding: 'utf8' });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+const withBundle = { mods: [
+  { name: 'Mod 10 file', version: '1', source: { type: 'nexus', modId: 10, fileId: 11 } },
+  { name: 'A Packed Patch', version: '1', source: { type: 'bundle', fileExpression: 'A Packed Patch' } },
+] };
+let c = check(planted, withBundle);
+yes('#4278 check refuses a bundled entry the record has nothing on, naming it', c.code === 1 && /A Packed Patch/.test(c.out) && /not a Nexus mod/.test(c.out), c.code + ' ' + c.out.trim());
+const covered = JSON.parse(JSON.stringify(planted));
+covered.others = [{ type: 'bundle', name: 'A Packed Patch', reading: allowedRead }];
+yes('#4278 a record whose others list reads that entry has the shape the check takes', cp.shapeProblems(covered).length === 0, cp.shapeProblems(covered).join('; '));
+c = check(covered, withBundle);
+yes('#4278 and check lets it through', c.code === 0, c.code + ' ' + c.out.trim());
+const unreadOther = JSON.parse(JSON.stringify(covered)); unreadOther.others[0].reading = null;
+c = check(unreadOther, withBundle);
+yes('#4278 an entry in others nobody has read is refused', c.code === 1 && /A Packed Patch/.test(c.out), c.code + ' ' + c.out.trim());
+const ourOther = JSON.parse(JSON.stringify(covered)); ourOther.others[0] = { type: 'bundle', name: 'A Packed Patch', ours: true, reading: null };
+c = check(ourOther, withBundle);
+yes('#4278 one of ours needs no reading', c.code === 0, c.code + ' ' + c.out.trim());
+yes('#4278 an others entry of a source type Vortex does not have is a shape problem', bad(c2 => { c2.others = [{ type: 'nexus', name: 'x', reading: null }]; }).length > 0);
+yes('#4278 an others reading is held to the same rule as a mod\'s', bad(c2 => { c2.others = [{ type: 'manual', name: 'x', reading: read('allowed') }]; }).length > 0);
+const u2 = cp.updated(covered, { mods: withBundle.mods.concat([{ name: 'Got By Hand', version: '1', source: { type: 'manual' } }]) }, 6);
+yes('#4278 update keeps an others reading and brings a new entry that is not a Nexus mod in unread',
+  !!u2.others && u2.others.length === 2 && u2.others.some(o => o.name === 'A Packed Patch' && o.reading && o.reading.collections === 'allowed') &&
+  u2.others.some(o => o.type === 'manual' && o.name === 'Got By Hand' && o.reading === null), JSON.stringify(u2.others));
+yes('#4278 update drops an others entry the collection no longer carries', !cp.updated(covered, { mods: [withBundle.mods[0]] }, 6).others);
+fs.rmSync(TMP, { recursive: true, force: true });
 
 // 6. New-NexusRevision runs it on both paths
 const nnr = fs.readFileSync(path.join(ROOT, 'scripts', 'release', 'New-NexusRevision.ps1'), 'utf8');

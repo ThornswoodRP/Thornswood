@@ -55,8 +55,8 @@ criteria before claiming that related human role work is finished.
 
 Source: `game/gamemode.js`, catalogues in `game/data`, native fork under
 `engine/skymp`. Checks live under `tests` and the fork's `unit`.
-Run `node tests/test-npc-shared-runtime.js` and
-`node tests/test-npc-shared-native.js <addon path> <installed settings path>`.
+Run `node game/tests/test-npc-shared-runtime.js` and
+`node game/tests/test-npc-shared-native.js <addon path> <installed settings path>`.
 The latter reads installed plugin paths and creates an isolated offline
 world. Never print the private settings or credentials. It holds each
 callback to its CPU time read to the cycle (`tests/thread-clock.js`, which

@@ -50,7 +50,7 @@
   handful at most. Exit 0 either way; 1 only when it could not measure, with
   VERDICT UNKNOWN and why.
 
-  tests\test-syn-flood.ps1 holds it to this.
+  scripts\tests\test-syn-flood.ps1 holds it to this.
 #>
 [CmdletBinding()]
 param(

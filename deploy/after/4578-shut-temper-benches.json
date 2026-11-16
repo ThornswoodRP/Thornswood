@@ -1,0 +1,7 @@
+{
+  "issue": 4578,
+  "environment": "dev",
+  "steps": [
+    { "inGame": "On dev, a smith presses the sharpening wheel and then the armour table beside a forge.", "doneWhen": "Neither opens a crafting menu, and each says Tempering is not done here and that a piece is mended with a repair kit." }
+  ]
+}

@@ -18,7 +18,7 @@ try {
     $recordPath = Join-Path $work 'client-build.json'
     [IO.File]::WriteAllText($recordPath, $record)
     $app = [IO.Path]::Combine($Repo, 'launcher', 'app')
-    $dll = Build-LauncherCode -Exe -Resource @{ 'client-build.json' = $recordPath } -File (Join-Path $app 'Keep.cs'), (Join-Path $app 'ClientRuntime.cs'), ([IO.Path]::Combine($Repo, 'tests', 'fixtures', 'RuntimeKeepTest.cs'))
+    $dll = Build-LauncherCode -Exe -Resource @{ 'client-build.json' = $recordPath } -File (Join-Path $app 'Keep.cs'), (Join-Path $app 'ClientRuntime.cs'), (Join-Path $app 'Failure.cs'), ([IO.Path]::Combine($Repo, 'tests', 'fixtures', 'RuntimeKeepTest.cs'))
     Write-Host 'PASS Keep.cs, ClientRuntime.cs and the fixture build with the .NET SDK the launcher builds with'
     if (-not $OnWindows) {
         Write-Host 'SKIP the repair and Play sequence, run: Keep walks the game''s folders by Windows paths (Data\Platform), which only Windows has'

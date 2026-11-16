@@ -58,7 +58,7 @@ namespace Thornswood
                     if (string.IsNullOrEmpty(text)) listError = "this launcher was built without its build list, generated.json";
                     else list = GeneratedList.Parse(text, "records\\generated.json");
                 }
-                catch (GeneratedStop ex) { listError = ex.Message.TrimEnd('.'); }
+                catch (GeneratedStop ex) { listError = Failure.Why("GeneratedHere, the list", ex); }
                 return list;
             }
         }
@@ -75,7 +75,7 @@ namespace Thornswood
             problem = null;
             if (List == null) { problem = ListError; return null; }
             try { return Generated.State(Paths.Root, List); }
-            catch (GeneratedStop ex) { problem = ex.Message.TrimEnd('.'); return null; }
+            catch (GeneratedStop ex) { problem = Failure.Why("GeneratedHere, a generated file", ex); return null; }
         }
 
         /// <summary>

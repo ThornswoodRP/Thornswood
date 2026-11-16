@@ -221,6 +221,15 @@
                       "reason":  "reload block; replaces gamemode.js and the stamp in the server folder, stops nothing"
                   },
                   {
+                      "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote \"Remove-Item -LiteralPath \u0027$stageWin\u0027 -Recurse -Force -EA SilentlyContinue\" | Out-Null",
+                      "does":  "takes away an -OrderOnly stage when the dev server already runs that order (#6166)",
+                      "class":  "stage",
+                      "reason":  "writes or checks a stage folder or file"
+                  },
+                  {
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",
@@ -1209,6 +1218,15 @@
                       "does":  "registers the voice task again and restarts voice under it (-TaskOnly)",
                       "class":  "admin",
                       "reason":  "task registration is install-time work outside the gate verbs"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Voice.ps1",
+                      "scope":  "Assert-VoiceJoin",
+                      "via":  "Remote",
+                      "anchor":  "$join = Read-VoiceJoin @(Remote (Get-VoiceJoinCheck $Port)",
+                      "does":  "asks the voice service's /token on loopback with a ticket nobody holds, to see a join reaches its site (#4467)",
+                      "class":  "read-status",
+                      "reason":  "one request to the service; nothing is minted, written or changed"
                   },
                   {
                       "script":  "scripts/deploy/Install-Voice.ps1",
@@ -2438,10 +2456,10 @@
                       "script":  "scripts/vps/Setup-SshKey.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "ssh",
-                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target \"powershell -NoProfile -EncodedCommand $b64\" }",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target $line }",
                       "does":  "install-time or outside-the-gate work",
                       "class":  "admin",
-                      "reason":  "sends authorized_keys"
+                      "reason":  "puts the pinned pwsh on a new box and sends authorized_keys"
                   },
                   {
                       "script":  "scripts/vps/Show-BotLog.ps1",

@@ -223,6 +223,25 @@ folder here is named below, under the heading it belongs to.
   Only a line against being in a collection is `not allowed`; one against
   uploading or redistributing the files is `not stated` (Patrick, 27 Oct,
   q-3649-no-upload-lines).
+  What makes a reading `allowed` (#4190): the page grants the mod's own
+  files more than a collection asks, in one of three ways the reading
+  records. `licence`: an open licence covering all of the mod's own files,
+  named on the page or in a licence file the page points to as its terms;
+  one the page only points to also says where it is (`at`) and who opened
+  it and when (`by`, `read`). `upload`: the page's Upload permission line
+  lets the files go to other sites, with or without credit. `grant`: the
+  page's own words letting anyone do anything with the files, copied as
+  they stand in a term. A licence for part of the mod (a program but not
+  its assets) is none of these, nor is "open source" with no licence named.
+  Any other reading is `not stated`. `collection-permissions.js ruled()` is
+  the same rule, and the record's own shape check fails a reading it does
+  not give; `allowed` and `not stated` both pass a revision, so the rule
+  says what a reading means and lets nothing new through.
+  An entry that is not a Nexus mod (a bundle packed into the collection's own
+  archive, or a direct, browse or manual one) goes in `others`, by its source
+  type and its name, with `ours` or a reading held to the same rule (#4278);
+  check refuses one the list does not have, has not read, or reads as not
+  allowed.
   `node scripts\release\collection-permissions.js update <collection.json>
   --revision <n>` takes the list of mods from a new revision and keeps every
   reading, so a new mod comes in unread. `New-NexusRevision.ps1` makes and

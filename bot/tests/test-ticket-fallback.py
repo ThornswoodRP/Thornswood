@@ -311,9 +311,9 @@ def plan_shape():
     panel_at = where.get('report-someone', (None, None))
     yes("the PLAN makes #ticket-log, TICKET_LOG's first name, in Staff, for the council",
         bot.TICKET_LOG[0] == 'ticket-log' and tickets == ('Staff', 'council'))
-    yes("and a report's desk, #report-someone, in the public Tickets",
+    yes("and a report's desk, #report-someone, in Tickets, which every Member reads (#5841)",
         bot.desk_of('report') == 'report-someone'
-        and panel_at == ('Tickets', 'read'))
+        and panel_at == ('Tickets', 'membersread'))
 
     g = Guild()
     roles = {}

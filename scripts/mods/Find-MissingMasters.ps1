@@ -7,6 +7,22 @@
 
   Only the first 8 KB of each file is read. MAST fields always live in the TES4
   record, which is the first record in the file.
+
+  A MASTER IN DATA IS NOT A LOADED MASTER (#4257). Switching a plugin off in
+  Vortex takes its line out of plugins.txt and leaves its file in Data, so
+  until 15 Nov an enabled plugin whose master had just been switched off
+  passed here with "every dependency present" and failed at load. A master
+  counts as loaded only when plugins.txt switches it on or the game loads it
+  with no line: the five base masters (LoadOrder.ps1's, which test-load-order
+  holds to the launcher's) and the plugins Skyrim.ccc beside Data names. A
+  master in Data that is neither is reported against each enabled plugin
+  that needs it, as switched off.
+
+  Exit 0 when every plugin plugins.txt enables has its masters in Data. Exit 1
+  when an enabled plugin has a missing master, or when Data or plugins.txt is
+  missing or cannot be read (#4760). A plugin with a missing master that
+  plugins.txt leaves disabled is listed but does not fail the run, because
+  nothing loads it.
 #>
 #Requires -Version 7
 param(
@@ -14,6 +30,8 @@ param(
     [string]$Plugins = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Profile\Default\plugins.txt'),
     [switch]$NoPause
 )
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'LoadOrder.ps1')   # $script:LoadOrderMasters, the five the game loads with no line
 
 <#
   A CHECK THAT FINDS NOTHING MUST NOT SAY EVERYTHING IS FINE.
@@ -45,9 +63,24 @@ Get-ChildItem -LiteralPath $Data -File |
 
 $enabled = @{}
 $pl = $Plugins
+# Whether plugins.txt was read whole. Without it every plugin counts as
+# disabled, so the verdict below means nothing and the run cannot pass.
+$pluginsRead = $false
 if (Test-Path $pl) {
-    Get-Content $pl | Where-Object { $_ -match '^\*' } |
+    Get-Content $pl -ErrorVariable plError | Where-Object { $_ -match '^\*' } |
         ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
+    $pluginsRead = -not $plError
+}
+
+# What the game loads: what plugins.txt switches on, the five base masters,
+# and what Skyrim.ccc in the game folder names.
+$loaded = @{}
+foreach ($n in $enabled.Keys) { $loaded[$n] = $true }
+foreach ($m in $script:LoadOrderMasters) { $loaded[$m.ToLower()] = $true }
+$ccc = Join-Path (Split-Path -Parent $Data) 'Skyrim.ccc'
+if (Test-Path -LiteralPath $ccc) {
+    Get-Content -LiteralPath $ccc | ForEach-Object { "$_".Trim() } | Where-Object { $_ } |
+        ForEach-Object { $loaded[$_.ToLower()] = $true }
 }
 
 $problems = @()
@@ -71,12 +104,17 @@ foreach ($f in (Get-ChildItem -LiteralPath $Data -File |
         }
     }
 
+    $on = $enabled.ContainsKey($f.Name.ToLower())
     foreach ($m in ($masters | Select-Object -Unique)) {
-        if (-not $present.ContainsKey($m.ToLower())) {
+        $why = $null
+        if (-not $present.ContainsKey($m.ToLower())) { $why = 'not in Data' }
+        elseif ($on -and -not $loaded.ContainsKey($m.ToLower())) { $why = 'switched off' }
+        if ($why) {
             $problems += [pscustomobject]@{
                 Plugin  = $f.Name
                 Missing = $m
-                State   = if ($enabled.ContainsKey($f.Name.ToLower())) { 'ENABLED' } else { 'disabled' }
+                State   = if ($on) { 'ENABLED' } else { 'disabled' }
+                Why     = $why
             }
         }
     }
@@ -90,6 +128,7 @@ if ($present.Count -eq 0) {
     if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
     exit 1
 }
+$crashes = 0
 if (-not $problems) {
     # THE COUNT IS THE POINT. The old line said everything was fine whether it
     # had read ninety nine plugins or none, which is how it spent weeks
@@ -98,10 +137,20 @@ if (-not $problems) {
                 "$($enabled.Count) of them enabled, every dependency present.") -ForegroundColor Green
 } else {
     $live = @($problems | Where-Object State -eq 'ENABLED')
+    $crashes = $live.Count
     $problems | Sort-Object State, Plugin | Format-Table -AutoSize
     if ($live) {
         Write-Host ("{0} ENABLED plugin(s) have a missing master. That crashes at load." -f $live.Count) -ForegroundColor Red
+        if (@($live | Where-Object Why -eq 'switched off').Count) {
+            Write-Host '  A master marked switched off is in Data, but plugins.txt does not switch it on: switch it on in Vortex, or switch off the plugin that needs it.' -ForegroundColor Yellow
+        }
     } else {
         Write-Host "all affected plugins are already disabled. nothing will crash." -ForegroundColor Yellow
     }
 }
+
+# What it found is the exit code (#4760). Until then a crash at load was
+# printed in red and the run still exited 0, so a script or harness that ran
+# this read a pass.
+if ($crashes -or -not $pluginsRead) { exit 1 }
+exit 0

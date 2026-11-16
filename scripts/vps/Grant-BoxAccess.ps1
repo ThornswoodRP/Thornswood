@@ -21,9 +21,6 @@
       .\scripts\vps\Grant-BoxAccess.ps1 -Name codex -MakeKey -NoticesOnly
                        an agent that only posts staff notices: a key that can
                        do nothing on the box but put one in #staff-updates
-      .\scripts\vps\Grant-BoxAccess.ps1 -Name claude -MakeKey -NoticesOnly -ToEnvironment notices
-                       the same, for the ops repository's staff-notice.yml:
-                       the key goes into that GitHub environment, not a file
       .\scripts\vps\Grant-BoxAccess.ps1 -Name desk -Deploy -MakeKey -ToEnvironment desk
                        the release desk's deploy key (#2841): a key that logs
                        in as thornswood-deploy and runs only the deploy gate's
@@ -67,18 +64,14 @@
   box-run.yml reads it (#4013);
   without, into <OutDir>\deploy-access.txt as THORNSWOOD_DESK_KEY_B64=...
 
-  -ToEnvironment <name> (with -MakeKey -NoticesOnly; #3045) puts the key
-  instead into the secret NOTICE_KEY_B64 of that environment on GitHub, on
-  -GitHubRepo, the private ops repository ThornswoodRP/Thornswood-Ops where
-  the VPS runners are registered (#4013), whose staff-notice.yml reads it:
-  the way a cloud thread posts. Before anything on the box changes, it makes the environment usable
-  by main alone (a branch policy for main and nothing else), and stops,
-  changing nothing, when the environment already lets another branch in or
-  gh cannot reach it. After the proof the key goes to gh secret set on its
-  standard input, so no file holds it and nothing prints it. The workflow runs
-  on the box and reaches sshd on 127.0.0.1 itself, so it needs no bridge
-  token: the token this makes is proved like every notices key's and then
-  held by nobody.
+  -ToEnvironment <name> (with -MakeKey -Deploy) makes that GitHub
+  environment usable by main alone (a branch policy for main and nothing
+  else) before anything on the box changes, and stops, changing nothing,
+  when the environment already lets another branch in or gh cannot reach it.
+  After the proof the key goes to gh secret set on its standard input, so no
+  file holds it and nothing prints it. Until 15 Nov 2026 a notices key went
+  the same way, for the ops repository's staff-notice.yml; #5314 took both
+  away, since a cloud thread files a staff notice as an issue (#5187).
 
   THE TWO HALVES, and why neither is any use alone:
     the key     the public half goes on the box as
@@ -126,9 +119,9 @@ param(
     [switch]$NoticesOnly,
     # With -MakeKey: a key that runs only the deploy gate's verbs (see above).
     [switch]$Deploy,
-    # With -MakeKey -NoticesOnly or -MakeKey -Deploy: the GitHub environment the key goes into.
+    # With -MakeKey -Deploy: the GitHub environment the key goes into.
     [string]$ToEnvironment = '',
-    # Where staff-notice.yml and the VPS runners are (#4013).
+    # Where box-run.yml and the VPS runners are (#4013).
     [string]$GitHubRepo = 'ThornswoodRP/Thornswood-Ops',
     [switch]$Remove,
     [switch]$List,
@@ -372,7 +365,7 @@ function Invoke-GitHub([string]$Method, [string]$Path, [string]$Body = '') {
     return [pscustomobject]@{ Ok = ($c -eq 0); Text = ($o -join "`n") }
 }
 
-# The GitHub environment a workflow's notices key goes into, usable by main
+# The GitHub environment the desk's key goes into, usable by main
 # and no other branch, so a workflow on a pull request branch cannot read the
 # key. Stops, changing nothing, when it already lets another branch in.
 function Set-MainOnlyEnvironment([string]$EnvName) {
@@ -413,10 +406,10 @@ if ($ways -ne 1) { Die 'Pass one of: -PublicKey (or -FromClipboard), -ThisMachin
 if ($NoticesOnly -and -not $MakeKey) { Die '-NoticesOnly goes with -MakeKey. Nothing was changed.' }
 if ($Deploy -and -not $MakeKey) { Die '-Deploy goes with -MakeKey. Nothing was changed.' }
 if ($Deploy -and $NoticesOnly) { Die 'A key is a notices key or a deploy key, not both. Nothing was changed.' }
-if ($ToEnvironment -and -not ($NoticesOnly -or $Deploy)) { Die '-ToEnvironment goes with -MakeKey -NoticesOnly or -MakeKey -Deploy. Nothing was changed.' }
-if ($ToEnvironment -and $ToEnvironment -notmatch '^[a-z0-9][a-z0-9-]{0,31}$') { Die '-ToEnvironment is one lower case word, the way the workflow names it: notices, or desk. Nothing was changed.' }
-# The secret each kind of key goes into, the name its workflow reads.
-$SecretName = if ($Deploy) { 'DESK_KEY_B64' } else { 'NOTICE_KEY_B64' }
+if ($ToEnvironment -and -not $Deploy) { Die '-ToEnvironment goes with -MakeKey -Deploy. Nothing was changed.' }
+if ($ToEnvironment -and $ToEnvironment -notmatch '^[a-z0-9][a-z0-9-]{0,31}$') { Die '-ToEnvironment is one lower case word, the way the workflow names it: desk. Nothing was changed.' }
+# The secret the key goes into, the name box-run.yml reads.
+$SecretName = 'DESK_KEY_B64'
 if ($ToEnvironment -and -not (Get-Command gh -ErrorAction SilentlyContinue)) { Die '-ToEnvironment puts the key on GitHub with gh, and gh is not on PATH. Nothing was changed.' }
 
 Write-Host ''
@@ -609,8 +602,7 @@ try {
             $ErrorActionPreference = $old
             if ($setCode -ne 0) { Die ("GitHub refused the secret: " + ($set -join ' ') + " The key is on the box and holds nowhere else; run this again, which replaces it, or -Name $Name -Remove.") }
             Say "  $SecretName in $ToEnvironment, which only main may use. Nothing here holds it." 'Green'
-            if ($Deploy) { Say "  Any session now runs a gate verb with scripts/vps/Box-Run.ps1 <verb> [switches], through box-run.yml on $GitHubRepo." 'White' }
-            else { Say "  A session with no ssh now posts with scripts/ops/Say-Staff.ps1 -Text `"...`", as $Name, through staff-notice.yml on $GitHubRepo." 'White' }
+            Say "  Any session now runs a gate verb with scripts/vps/Box-Run.ps1 <verb> [switches], through box-run.yml on $GitHubRepo." 'White'
         } elseif ($Deploy) {
             Say "  ssh through the bridge with the new key got in, and $ran" 'Green'
             $out = Join-Path $OutDir 'deploy-access.txt'

@@ -219,7 +219,7 @@ const FACE_CAP_MS = 1800000;
   gamemode deploy logged in again everybody on: the login hook ran for each
   of them (their profession said again, the known spells and the K panel
   sent again), and somebody in the hall read as a reconnect, which starts
-  the creation wait over. Measured by tests\test-3154-login-restore.js, which
+  the creation wait over. Measured by game\tests\test-3154-login-restore.js, which
   runs the whole file and reloads it under a character in the world. The
   needs block already keeps who has arrived on globalThis for the same
   reason. A restart is a new process, so everybody is new again, which is
@@ -1290,8 +1290,10 @@ function chargenTick() {
         const prof = s && s.prof && P && P.has(P.TABLE.professions, s.prof)
           ? P.TABLE.professions[s.prof] : null;
         if (prof) {
-          notify(actorId, 'Your profession: ' + prof.name +
-                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.');
+          const line = 'Your profession: ' + prof.name +
+                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.';
+          notify(actorId, line);
+          say(actorId, line);
         }
       } catch (e) {
         log('login', actorId.toString(16), 'could not say the profession:', e);
