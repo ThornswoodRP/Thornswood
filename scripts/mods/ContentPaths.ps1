@@ -9,6 +9,7 @@
   for Build-ContentOnBox.ps1 and the merge release that takes the build
   (scripts\release\Get-ContentBuild.ps1).
 #>
+#Requires -Version 7
 
 <#
   The repository paths a content run reads, -Paths, and the paths it may
@@ -226,4 +227,87 @@ function Get-ThornswoodContentKey {
     $text = "server $Server`n" + ($lines -join "`n") + "`n"
     $key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()
     return [pscustomobject]@{ Key = $key; Files = $out.Count }
+}
+
+<#
+  What a content build lays over a checkout (#5191, stage 4e): the content
+  plugin, the catalogue Build-ContentOnBox.ps1 makes in the record's order
+  ahead of the chain, and every path the chain writes. Nothing generated is
+  committed (Patrick's B on #5191), so a reader outside the chain reads these
+  from a laid build, never from the commit.
+#>
+function Get-ThornswoodBuiltPaths {
+    param([Parameter(Mandatory = $true)][string]$Repo)
+    $chain = Get-ThornswoodContentPaths -Repo $Repo
+    $out = New-Object 'Collections.Generic.List[string]'
+    foreach ($p in @(@('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($chain.Writes))) {
+        if (-not $out.Contains([string]$p)) { $out.Add([string]$p) }
+    }
+    return [string[]]$out.ToArray()
+}
+
+# Whether repository path -Path is one of -Built, or lies under one (a
+# step that writes a folder: docs/systems/lists).
+function Test-ThornswoodBuiltPath([string[]]$Built, [string]$Path) {
+    $p = $Path.Replace('\', '/').Trim('/')
+    return [bool]@($Built | Where-Object { $p -ceq $_ -or $p.StartsWith($_ + '/') }).Count
+}
+
+<#
+  THE LAID BUILD. Get-ContentBuild.ps1 writes what it laid over a checkout to
+  temp\content-laid.json there (temp\ is ignored): the build's server, key
+  and commit, and every file it wrote with its sha256. Get-ThornswoodLaidBuild
+  reads it back held: for -Server, the key of -Commit's inputs, and each file
+  still its sha256 in the working tree. So a deploy that sends a built file
+  (New-ThornswoodArtifact -Content) sends the box's build of the commit it
+  names, as it sends the commit's own files, and refuses anything else.
+#>
+function Get-ThornswoodLaidBuildFile([string]$Repo) { return (Join-Path $Repo 'temp/content-laid.json') }
+
+function Save-ThornswoodLaidBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$Server,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Commit,
+        [Parameter(Mandatory = $true)][string]$From,
+        [Parameter(Mandatory = $true)][Collections.IDictionary]$Files
+    )
+    $names = [string[]]@($Files.Keys)
+    [Array]::Sort($names, [StringComparer]::Ordinal)
+    $sorted = [ordered]@{}
+    foreach ($n in $names) { $sorted[$n] = [string]$Files[$n] }
+    $rec = [ordered]@{ issue = 5191; server = $Server; key = $Key; commit = $Commit; from = $From; files = $sorted }
+    $to = Get-ThornswoodLaidBuildFile $Repo
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+    [IO.File]::WriteAllText($to, ($rec | ConvertTo-Json -Depth 4) + "`n", (New-Object Text.UTF8Encoding($false)))
+}
+
+function Get-ThornswoodLaidBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][ValidateSet('dev', 'main')][string]$Server,
+        [string]$Commit = 'HEAD'
+    )
+    $how = "pwsh scripts/release/Get-ContentBuild.ps1 -Take -Server $Server lays the box's build of this commit's inputs (on the box, -Kept)"
+    $at = Get-ThornswoodLaidBuildFile $Repo
+    if (-not (Test-Path -LiteralPath $at -PathType Leaf)) { throw "no content build is laid over $Repo (there is no temp\content-laid.json). $how." }
+    try { $rec = [IO.File]::ReadAllText($at) | ConvertFrom-Json -AsHashtable } catch { throw "temp\content-laid.json in $Repo does not read: $($_.Exception.Message). $how." }
+    if ([string]$rec.server -cne $Server) { throw "the content build laid over $Repo is the $($rec.server) server's, not $Server's. $how." }
+    $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
+    if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { throw "there is no commit $Commit in $Repo" }
+    $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+    $mine = (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key
+    if ([string]$rec.key -cne $mine) { throw "the content build laid over $Repo is of other inputs ($($rec.key), built from $($rec.commit)) than $($sha.Substring(0, 12))'s ($mine). $how." }
+    $files = $rec.files
+    if (-not ($files -is [Collections.IDictionary]) -or -not $files.Count) { throw "temp\content-laid.json in $Repo names no files. $how." }
+    $off = @()
+    foreach ($n in @($files.Keys)) {
+        $p = Join-Path $Repo $n
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $off += "$n (gone)"; continue }
+        $h = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($p))).ToLowerInvariant()
+        if ($h -cne [string]$files[$n]) { $off += "$n (changed)" }
+    }
+    if ($off.Count) { throw ("the content build laid over $Repo is not what it laid any more: " + (@($off | Select-Object -First 5) -join ', ') + $(if ($off.Count -gt 5) { ", and $($off.Count - 5) more" } else { '' }) + ". $how.") }
+    return [pscustomobject]@{ Server = $Server; Key = [string]$rec.key; Commit = [string]$rec.commit; From = [string]$rec.from; Files = $files }
 }
