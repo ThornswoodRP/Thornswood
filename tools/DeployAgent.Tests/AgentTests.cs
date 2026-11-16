@@ -1682,7 +1682,7 @@ public sealed partial class AgentTests : IDisposable
 
     [Theory]
     [InlineData("records/collection-plugins.json")]
-    [InlineData("game/data/npc-population.json")]
+    [InlineData("records/load-order.json")]
     [InlineData("records/collection.json")]
     [InlineData(null)]
     public async Task ARecordChangeMovesTheOrderAndAMoveThatFailsFailsTheDeploymentAndIsTriedByTheNext(string? changed)

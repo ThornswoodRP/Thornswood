@@ -282,7 +282,7 @@ $h = @{}; $want = ''
     Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
     $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
     $cp = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\ContentPaths.ps1'))
-    foreach ($f in 'records/collection.json', 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/npc-population.json') {
+    foreach ($f in 'records/collection.json', 'records/collection-plugins.json', 'records/collection-dropped.json', 'records/load-order.json') {
         $win = $f.Replace('/', '\')
         # -FromRecord reads the order Get-ThornswoodContentOrder makes (#6209), from these.
         Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and $dg.Contains("'" + $f + "'") -and ($cp.Contains("'" + $f + "'") -or $dg.Contains($win)))

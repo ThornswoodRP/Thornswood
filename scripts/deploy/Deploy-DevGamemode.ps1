@@ -220,8 +220,8 @@
 
   The order is the one the box's content build of this commit reads, so
   the one every table and the Last plugin of a Release of it were built
-  against (#6209): game\data\npc-population.json's order moved to the
-  revision records\collection-plugins.json names (ContentPaths.ps1,
+  against (#6209): records\load-order.json, held to the revision
+  records\collection-plugins.json names (ContentPaths.ps1,
   Get-ThornswoodContentOrder), with Thornswood-Last.esp on the end. The collection's plugins come from the
   box's store of the revision records\collection-plugins.json names
   (CollectionStore.ps1), which this fills from Nexus through Nexus-Run when
@@ -387,7 +387,7 @@ $ThornswoodOrderInputs = @(
   'records/collection.json',
   'records/collection-plugins.json',
   'records/collection-dropped.json',
-  'game/data/npc-population.json'
+  'records/load-order.json'
 )
 if ($At) {
   $atRepo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -616,7 +616,7 @@ if ($LoadOrder) {
   if ($FromRecord) {
     if ($Dist) { throw '-FromRecord takes the order from the repository''s record and the plugins from the box''s store, so it does not go with -Dist. Nothing was sent.' }
     # FROM THE RECORD (#4069): the order the box's content build of this
-    # commit reads (#6209), the catalogue's order moved to the revision the
+    # commit reads (#6209), records\load-order.json held to the revision the
     # record names (ContentPaths.ps1, Get-ThornswoodContentOrder), and the
     # collection's plugins from the box's store of that revision. Until 15
     # Nov 2026 it was game\data\last-plugin.json's order, which the box's

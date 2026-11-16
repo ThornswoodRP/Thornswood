@@ -53,7 +53,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         "records/collection.json",
         "records/collection-plugins.json",
         "records/collection-dropped.json",
-        "game/data/npc-population.json",
+        "records/load-order.json",
     ];
     /// <summary>Only dev's order and plugins, nothing of the gamemode: the
     /// Release's gamemode and tables are already in, and the gate runs main as
