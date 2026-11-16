@@ -421,6 +421,7 @@ file carries outside code and the file does not carry that project's notice.
 | `FromGameDeflate.cs` | zlib 1.3, `deflate.c` and `trees.c` | yes: zlib | A translation of zlib's code, above. |
 | `FromGameMath.cs` | numpy, OpenBLAS, LAPACK's `dgesv` | no | It does the arithmetic Build-NoticeBoard.py does with numpy in the same order and rounding, so the meshes come out the same bytes, and says what that order is. The order was measured from the results (19 Oct), not copied from their code: the inverse is a 3 by 3 LU solve written out by hand, and nothing in it is OpenBLAS's or LAPACK's source. |
 | `FromGameArchive.cs` | LZ4 | no | It decodes the LZ4 frame and block format the game's archives use, written from that published format and the BSA layout. Build-NoticeBoard.py calls the lz4 package for this; the launcher has its own short decoder instead, and no code of the lz4 library is in it. |
+| `ModlistFetch.cs` | 7-Zip | no | It downloads 7-Zip 25.01's own `7zr.exe` and installer from 7-Zip's GitHub release, each held to a sha256 it pins, takes `7z.exe` and `7z.dll` out of the installer with `7zr.exe`, and runs `7z.exe` to unpack the modlist's archives (#6244). It runs 7-Zip as a program; no code of 7-Zip is in it. |
 
 ## The SkyMP client runtime, built from the fork
 
@@ -1391,6 +1392,13 @@ the copy the project's own Google Fonts folder keeps with its copyright line:
   whose page says no (#3649).
 - SKSE, which is in the collection, and Skyrim Special Edition, which each
   person owns.
+- 7-Zip and Mod Organizer 2, for the install from the collection's modlist
+  (#6244, not used by Play yet). The launcher downloads each from its own
+  release on GitHub on the person's machine and holds it to a hash it pins:
+  7-Zip 25.01 (Igor Pavlov, GNU LGPL with the unRAR restriction,
+  https://github.com/ip7z/7zip) in `launcher\app\ModlistFetch.cs`, and Mod
+  Organizer 2 2.5.2 (GPL-3.0, https://github.com/ModOrganizer2/modorganizer)
+  as `records\mo2.json` and the modlist pin it. Thornswood carries neither.
 - texconv, the tool the main menu picture is built with (next section).
 - Bethesda's five master files, which the fork's build downloads to run its
   unit tests (the section after texconv's).
