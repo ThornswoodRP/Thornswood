@@ -41,8 +41,9 @@
        listed, not counted; and a record with no rules refused;
     9. -Modlist (#6244): the record's revision as a Wabbajack modlist. Each
        file named by its archive's xxHash64 and its path in it, in its mod's
-       Mod Organizer 2 folder (a dinput mod's under Root), the bsdiff-patched
-       file as an Octodiff delta that makes AAAB of AAAA, MO2's own files
+       Mod Organizer 2 folder (what a dinput mod puts beside the game under
+       Root), the bsdiff-patched file as an Octodiff delta that makes AAAB
+       of AAAA, MO2's own files
        from its pinned archive, the profile's mod priority from the mod
        rules and its plugin order from the record, every "$type" first, the
        same bytes on a second run; and a pin that is not MO2's GitHub
@@ -596,7 +597,7 @@ function WjFrom([string]$to, [string]$archive, [string]$inArc, [string]$text) {
 Yes 'a mod''s file goes to its MO2 folder, named by its archive and its path in it' ((WjFrom 'mods\Alpha\Alpha.esp' $arc.alpha 'Data\Alpha.esp' 'alpha plugin') -and (WjFrom 'mods\Beta\Beta.esp' $arc.beta 'junk\Beta.esp' 'beta plugin'))
 Yes 'the FOMOD''s choice is the file the modlist takes, and its own name in the archive is used' ((WjFrom 'mods\Gamma\Gamma.esp' $arc.gamma 'opt2\Gamma.esp' 'gamma two') -and (WjFrom 'mods\Lambda\lambda.txt' $arc.lambda 'opt\Lambda.txt' 'lambda text'))
 Yes 'a file two mods share is in both folders; MO2''s priority picks it' ((WjFrom 'mods\Alpha\textures\shared.dds' $arc.alpha 'Data\textures\shared.dds' 'alpha texture') -and (WjFrom 'mods\Gamma\textures\shared.dds' $arc.gamma 'common\textures\shared.dds' 'gamma texture'))
-Yes 'a dinput mod''s files go under Root in its folder' ((WjFrom 'mods\Delta\Root\skse64_loader.exe' $arc.delta 'delta_1\skse64_loader.exe' 'loader') -and (WjFrom 'mods\Delta\Root\Data\Scripts\delta.pex' $arc.delta 'delta_1\Data\Scripts\delta.pex' 'script'))
+Yes 'a dinput mod''s game folder files go under Root in its folder, and its Data files are the mod''s own' ((WjFrom 'mods\Delta\Root\skse64_loader.exe' $arc.delta 'delta_1\skse64_loader.exe' 'loader') -and (WjFrom 'mods\Delta\Scripts\delta.pex' $arc.delta 'delta_1\Data\Scripts\delta.pex' 'script') -and -not $wjD.ContainsKey('mods\delta\root\data\scripts\delta.pex'))
 $alphaMeta = $wjD['mods\alpha\meta.ini']
 Yes 'each mod folder''s meta.ini is MO2''s own, never the archive''s' ($null -ne $alphaMeta -and $alphaMeta.'$type' -eq 'InlineFile' -and (New-Object Text.UTF8Encoding($false)).GetString($wjEntries[$alphaMeta.SourceDataID]) -match 'modid=101' -and @($wj.Directives | Where-Object { $_.'$type' -ne 'InlineFile' -and $_.To -match '(?i)meta\.ini$' }).Count -eq 0)
 # Octodiff's delta: the header, then copy (0x60) and data (0x80) commands.
