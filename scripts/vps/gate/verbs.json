@@ -812,6 +812,46 @@
         "Survey": "switch"
       }
     },
+    "Move-World-Dev": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Move-World-Main": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
+      "build": true,
+      "fixed": ["-Server", "main", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
     "Rebuild-ContentTables": {
       "script": "scripts/mods/Rebuild-OnBox.ps1",
       "reads": [

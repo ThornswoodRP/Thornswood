@@ -106,6 +106,8 @@ $calls = @([regex]::Matches($inst, '& `\$mongosh [^\r\n]*') | ForEach-Object { $
 Yes 'Install-Mongo runs mongosh only with --nodb and --file, never a connection string' ($calls.Count -ge 1 -and @($calls | Where-Object { $_ -notmatch '--nodb --quiet --file' }).Count -eq 0)
 Yes 'Install-Mongo checks each download''s SHA-256 against the record before it is used' ($inst.Contains('Get-FileHash -LiteralPath `$zip -Algorithm SHA256') -and $inst.Contains('-ne `$p.sha256'))
 Yes 'Install-Mongo puts mongod on LOCAL SERVICE through ServiceAccount.ps1, with the fail-safe first' ($inst.Contains('New-ThornswoodServicePrincipal -AsSystem:`$system') -and $inst.Contains('Test-ThornswoodServiceCannotReach'))
+$watch = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/vps/Watch-Services.ps1'))
+Yes 'the watchdog watches MongoDB on 27017 by its task, first, once Install-Mongo has installed it' ($watch.Contains("if (Test-Path -LiteralPath 'C:\Thornswood-Mongo\bin\installed.json') {") -and $watch.Contains("`$checks = @(@{ Name = 'mongo'; Task = 'Thornswood Mongo'; Port = 27017;") -and $watch.Contains('}) + $checks'))
 Yes 'Install-Mongo lets every task that signs in (the backup, each game server) run mongosh from bin and nothing else in the folder' ($inst.Contains('foreach (`$u in @(`$users | Where-Object { `$_.Task }))') -and $inst.Contains('Get-ThornswoodTaskSidFromName `$u.Task') -and $inst.Contains('Get-Acl -LiteralPath `$bin') -and $inst.Contains("'ReadAndExecute'"))
 $verbs = (Text 'scripts/vps/gate/verbs.json') | ConvertFrom-Json
 $v = $verbs.verbs.'Install-Mongo'
