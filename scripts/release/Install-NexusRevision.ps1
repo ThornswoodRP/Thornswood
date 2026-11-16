@@ -224,7 +224,7 @@ function Invoke-Tool([string]$exe, [string[]]$arguments) {
 $script:SevenZip = ''
 function Use-SevenZip {
   if (-not $script:SevenZip) { $script:SevenZip = Find-SevenZip }
-  if (-not $script:SevenZip) { throw '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and Vortex unpacks every archive with it.' }
+  if (-not $script:SevenZip) { throw ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and Vortex unpacks every archive with it.') }
 }
 # A scratch folder and everything under it. 7-Zip keeps an archive's
 # read-only attribute on the files it unpacks, and on Windows

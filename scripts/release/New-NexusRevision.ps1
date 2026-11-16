@@ -535,7 +535,7 @@ if ($Publish) {
   $pnode = Get-Command node -ErrorAction SilentlyContinue
   if (-not $pnode) { Die 'node is not on this machine, and collection-permissions.js checks the draft''s mods.' }
   $psz = Find-SevenZip
-  if (-not $psz) { Die '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and the draft is a 7z archive.' }
+  if (-not $psz) { Die ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and the draft is a 7z archive.') }
   $plink = [string](Get-NexusField $rev 'downloadLink')
   if ($plink -notmatch '^/v2/collections/\d+/revisions/\d+/download_link$') { Die ('Nexus gave revision ' + $Publish + ' the download link "' + $plink + '", not an API path, so its mods could not be checked.') }
   $plinks = @(Get-NexusField (Step { Invoke-NexusApi 'GET' $plink '' ('Asking for revision ' + $Publish + '''s download') }) 'download_links')
@@ -724,7 +724,7 @@ if ($draft) {
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { Die 'node is not on this machine, and nexus-collection.js writes collection.json the way Vortex does.' }
 $sz = Find-SevenZip
-if (-not $sz) { Die '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and the collection is a 7z archive.' }
+if (-not $sz) { Die ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and the collection is a 7z archive.') }
 
 $scratch = & (Join-Path $Here 'Get-ScratchDir.ps1') ('nexus-revision-' + $Slug)
 if (-not $From) {

@@ -71,6 +71,8 @@ function New-Tree([string]$name, [string]$lo) {
     New-Item -ItemType Directory -Force -Path (Join-Path $t 'scripts\mods') | Out-Null
     if ($lo -eq 'real') {
         Copy-Item -LiteralPath (Join-Path $repo 'scripts\mods\LoadOrder.ps1') -Destination (Join-Path $t 'scripts\mods\LoadOrder.ps1')
+        New-Item -ItemType Directory -Force -Path (Join-Path $t 'scripts\release') | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repo 'scripts\release\SevenZip.ps1') -Destination (Join-Path $t 'scripts\release\SevenZip.ps1')
     } elseif ($lo) {
         Put (Join-Path $t 'scripts\mods\LoadOrder.ps1') $lo
     }
