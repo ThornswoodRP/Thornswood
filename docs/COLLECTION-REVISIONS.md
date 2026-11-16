@@ -16,7 +16,9 @@ says how. From Nexus to a release it goes like this:
 2. The records follow in a pull request of their own:
    `collection-plugins.json` (written by
    `scripts/mods/New-CollectionPluginRecord.ps1` from the revision's plugins),
-   `collection-dropped.json`, `collection-permissions.json`, the record's
+   `collection-dropped.json`, `collection-permissions.json`,
+   `collection-modlist.wabbajack` (the revision as the Wabbajack modlist the
+   launcher installs from, #6244), the record's
    `revision`, and `load-order.json`, the order the servers run and every
    build reads, which `pwsh scripts/mods/Set-LoadOrder.ps1` moves to the new
    revision once the others are its (`tests/test-5191-load-order.ps1` stays

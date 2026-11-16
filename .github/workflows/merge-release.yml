@@ -728,6 +728,10 @@ jobs:
           # The steps after a deploy and the verbs they are held to (#5186).
           $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
           $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          # The collection's modlist the launcher installs from, its sha256 in
+          # this signed record (#6244); test-6244-collection-modlist.ps1 holds
+          # it to the revision collection-plugins.json names.
+          $adds += @('modlist=' + (Resolve-Path 'records\collection-modlist.wabbajack').Path)
           Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'

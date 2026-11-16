@@ -199,6 +199,15 @@ folder here is named below, under the heading it belongs to.
   its version, its release asset on GitHub and that asset's size and sha256.
   `scripts\release\Install-NexusRevision.ps1 -Modlist` downloads it, refuses
   any other bytes, and names each of its files in the modlist.
+- `collection-modlist.wabbajack`: the published revision as a Wabbajack
+  modlist (#6244), which every merge release carries in its signed record
+  as the part `modlist` and the launcher installs from. Written by
+  `Install-NexusRevision.ps1 -Record -Modlist` (Publish-CollectionRecord.ps1
+  puts it in the records that follow a publish), and it moves with
+  `collection-plugins.json`: `tests\test-6244-collection-modlist.ps1` holds
+  it to that revision and to `mo2.json`. It holds names, hashes and sizes,
+  our own MO2 files, and the collection's own patches as deltas; no other
+  author's file.
 - `collection.json`: the collection as it should be (issue #5189): each
   Nexus file it installs with the plugins that file puts in Data, every
   plugin in the collection's order with its load-after rule and what its
