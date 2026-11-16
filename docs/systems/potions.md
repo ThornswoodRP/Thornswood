@@ -60,6 +60,6 @@ before it lands: the second at half, the third at a quarter, the fourth
 and after at nothing but the sip. A brewed potion counts. A restart
 starts a new minute. The engine reads it through the change in skymp #62,
 which is in the engine pin (`records/client-build.json`, fork commit
-ee67f972) and in the engines both servers run: on 15 Nov 2026 the site's
-credits page said the main server runs ec8e20f9 and the test server
-50736fe6, and both carry it.
+`ee67f972`) and in the engines both servers run: on 15 Nov 2026 the site's
+credits page said the main server runs `ec8e20f9` and the test server
+`50736fe6`, and both carry it.
