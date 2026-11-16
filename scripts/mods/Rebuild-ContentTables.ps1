@@ -155,7 +155,7 @@ if ($PluginsTxt) {
     if ($at -ge 0) {
         $g = $(if ($at -lt $given.Count) { $given[$at] } else { 'nothing' })
         $r = $(if ($at -lt $recorded.Count) { $recorded[$at] } else { 'nothing' })
-        throw ("$PluginsTxt is not the load order game\data\npc-population.json records: $($given.Count) plugins against $($recorded.Count), and at place $($at + 1) it has $g where the record has $r. When the servers' load order moved, rebuild the record first (Build-NpcPopulation.py, then Build-ResourceLocations.py, content-tables.json's notInChain says why). Nothing was run.")
+        throw ("$PluginsTxt is not the load order game\data\npc-population.json records: $($given.Count) plugins against $($recorded.Count), and at place $($at + 1) it has $g where the record has $r. When the servers' load order moved, rebuild the record first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.")
     }
 }
 $orderFolder = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-loadorder-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))

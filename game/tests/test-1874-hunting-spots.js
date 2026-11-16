@@ -201,8 +201,8 @@ yes("a body the hunt table leaves out (#1808) is not a Hunter row: the Spectral 
   const tmp = stage("full"); temps.push(tmp);
   fs.writeFileSync(path.join(tmp, CSV), "untouched\n");
   const r = huntingOnly(tmp, []);
-  yes("without --hunting-only it refuses when --settings and --strings-dir are missing (exit " + r.status + ")",
-      r.status === 2 && /--settings and --strings-dir are required/.test(r.stderr || ""));
+  yes("without --hunting-only it refuses when neither --data nor --settings and --strings-dir is given (exit " + r.status + ")",
+      r.status === 2 && /--data, or --settings and --strings-dir, unless --hunting-only/.test(r.stderr || ""));
   yes("and writes nothing", fs.readFileSync(path.join(tmp, CSV), "utf8") === "untouched\n");
 }
 
