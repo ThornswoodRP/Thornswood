@@ -59,7 +59,7 @@ function Yes([string]$what, [bool]$cond) {
 # whatever the system gives a .NET fail fast: 134 on Linux (SIGABRT),
 # -2146232797 (0x80131623) on Windows (#6257). Case 12 holds it to both, and
 # to failing without the dying line, on every machine.
-$DIED_SAYS = '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit \d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752'
+$DIED_SAYS = '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit -?\d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752'
 
 # ---- A. the function, as the runner has it -------------------------------------------
 $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
