@@ -39,12 +39,14 @@
   moves the records to a new revision moves too (Set-LoadOrder.ps1). Until
   16 Nov 2026 it was game\data\npc-population.json's, a table this build
   writes, so a build read its order back from the build before it. So the
-  catalogue is built from the order first in every build, as
-  content-tables.json's notInChain says it is when the collection's order
-  moves: scripts\dev\Build-NpcPopulation.py, then
-  scripts\dev\Build-ResourceLocations.py (game\data\resource-locations.json;
-  the docs' CSV lists it also writes are not brought back). The chain then
-  reads that order.
+  catalogue, scripts\dev\Build-NpcPopulation.py, is built from the order
+  first in every build, and the chain then reads that order. It reads none of
+  Thornswood-Last.esp's records (#5191), which its folder has from the
+  server; the chain's own catalogue step, after Build-LastPlugin.py, holds
+  the bytes of the plugin that step made. Until 16 Nov 2026
+  scripts\dev\Build-ResourceLocations.py was built here too, out of the
+  server's Last plugin and the tables of the build before; it is a step of
+  the chain now, after the catalogue.
 
   WHAT A BUILD IS KEPT BY. Its inputs: the server it was built against and
   every file Run-OnBox.ps1 sends for the chain (ContentPaths.ps1), by the
@@ -249,8 +251,7 @@ if ($built) {
     # since the order is records\load-order.json's and not the last build's
     # catalogue (ORDER, above).
     Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The chain did not run and nothing was kept.'
-    Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
-    $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
+    $moves = @('game/data/npc-population.json')
     $chainWords = @('-Data', '{data}', '-PluginsTxt', '{plugins}')
     if ($WithoutLast) { $chainWords += '-WithoutLast' }
     Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' $chainWords 'Nothing was kept.'

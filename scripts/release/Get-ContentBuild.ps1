@@ -150,9 +150,9 @@ if ($Newest) {
     $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
     try { $mine = (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key } catch { Stop-Take $_.Exception.Message }
     # What a build of this checkout writes (Build-ContentOnBox.ps1): the
-    # plugin, the catalogue and the places when the order moves, and every
+    # plugin, the catalogue built in the order before the chain, and every
     # path the chain writes.
-    $writes = [string[]]@(@('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/resource-locations.json') + @($chain.Writes))
+    $writes = [string[]]@(@('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($chain.Writes))
     $work = Join-Path ([IO.Path]::GetTempPath()) ('content-newest-' + [Guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $work | Out-Null
     try {

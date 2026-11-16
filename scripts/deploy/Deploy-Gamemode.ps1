@@ -798,8 +798,8 @@ $paths = @($keep | ForEach-Object {
 #
 #   Deploy-Gamemode.ps1 -NewOrder -OrderOnly temp\order\server-settings.json
 #   python scripts\dev\Build-NpcPopulation.py --settings temp\order\server-settings.json --write-runtime
-#   python scripts\dev\Build-ResourceLocations.py --settings temp\order\server-settings.json
 #   python scripts\mods\Build-LastPlugin.py --data <the same Data>
+#   python scripts\dev\Build-ResourceLocations.py --data <the same Data>
 #
 # and a deploy after that holds the order the plugin's record now names.
 # Each of Thornswood's own plugins in game\content is named at its file
