@@ -73,6 +73,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names a size typed in by hand | Pull request and nightly |
 | `launcher/tests/test-4680-collection-load-order.ps1` | A missing plugin list is no failed check while the launcher's own folder is not made, since Vortex writes it with the collection, and is still one once the folder is made: the real InstallSteps, run with no plugin list in AppData | Pull request and nightly |
 | `launcher/tests/test-4681-install-room.ps1` | What the install window says about room on each drive is what the install refuses: the window's line, its Install button and InstallSteps all read InstallPlace.Rooms and InstallPlace.Short, held over a spread of free space on both drives | Pull request and nightly |
+| `launcher/tests/test-4693-setup-reader.ps1` | A screen reader can use the install window: each drive is a radio button named by its letter and free space and reads as chosen or not, the links name their pages, the progress bar and log have names, and the bar's value and each status line are told to Windows as they change, read through the real window's automation peers on Avalonia's headless platform | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
@@ -98,7 +99,7 @@ These name an install file or this read me without testing the install.
 - `test-4115-collection-revision-link.ps1`: names this read me in a comment.
 - `test-4415-clean-install-run.js`: names InstallWindow.cs and InstallAgreements.cs to say what the clean install list follows; it reads only that list.
 - `test-5197-real-client.js`: reads InstallPlace.cs for the record that says where the launcher is installed, so the real game run finds it; it tests that run, not the install.
-- `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
+- `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to say the setup window's names are read by `test-4693-setup-reader.ps1`.
 - `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
 - `test-3682-github-front.js`: names InstallWindow.cs to say where the install's log is written; it checks only that the crash form names that log.
 

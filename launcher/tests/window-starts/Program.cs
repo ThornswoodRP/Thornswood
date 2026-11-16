@@ -53,6 +53,9 @@ namespace Thornswood.Tests
             // worked from the keyboard, and nothing else.
             string[] argv = Environment.GetCommandLineArgs();
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
+            // launcher\tests\test-4693-setup-reader.ps1: the install window as
+            // a screen reader finds it, and nothing else.
+            if (argv.Length > 1 && argv[1] == "setup-reader") return SetupReader.Run();
 
             MainWindow win = null;
             Check("the window is made from its markup", () => win = new MainWindow());
