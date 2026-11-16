@@ -380,6 +380,16 @@ function standIn(root, break_) {
             // The engine's tick throws while it takes the login (ts/index.ts,
             // the tick's catch), and a flood of script warnings follows, as
             // the world loads (#6346): no character comes.
+            // A throw the engine's custom packet handler caught and wrote out
+            // whole (index.ts, console.error(e)), as the login's is: no "in
+            // server.tick" line, a stack ending in the tick's own frame (#6346).
+            if (break_ === 'login caught') {
+              child0.stdout.emit('data', '[2026-11-16 00:28:42.100] [console] [error] Error: the spawn went wrong here\n' +
+                '    at Spawn.listenerFn (C:\\skymp5-server\\dist_back\\skymp5-server.js:9:9)\n    at EventEmitter.emit (node:events:518:28)\n' +
+                '    at C:\\skymp5-server\\ts\\index.ts:192:16\n    at runNextTicks (node:internal/process/task_queues:64:5)\n' +
+                Array.from({ length: 90 }, () => '[console] [warning] Script \'CWThreatTriggerScript\' not found in the script storage\n').join(''));
+              return;
+            }
             if (break_ === 'tick throws') {
               child0.stdout.emit('data', '[2026-11-16 00:28:42.100] [console] [error] in server.tick:\n' +
                 'Error: the login went wrong here\n    at PartOne::Login (C:\\skymp5-server\\x.cpp:1:1)\n' +
@@ -620,9 +630,14 @@ function failedAt(r, step) {
   yes('a server that does not say it holds no pass is refused too', failedAt(unset.r, 'loads') && unset.s.state.runs === 0);
   const threw = await run('threw', 'tick throws');
   yes('the server\'s tick throws as it takes the login: FAIL on login, carrying what it threw though the last lines are warnings (#6346)',
-    failedAt(threw.r, 'login') && /The server's tick threw: Error: the login went wrong here at PartOne::Login .* at C:.*index\.ts:192:16/.test(threw.r.lines.find((l) => !l.ok).detail) &&
+    failedAt(threw.r, 'login') && /The server threw: Error: the login went wrong here at PartOne::Login .* at C:.*index\.ts:192:16/.test(threw.r.lines.find((l) => !l.ok).detail) &&
     !threw.r.tail.some((l) => /in server\.tick/.test(l)));
-  yes('  and a FAIL with no throw in its step says nothing of one', nopass.r.lines.every((l) => !/tick threw/.test(l.detail)));
+  const caught = await run('caught', 'login caught');
+  const caughtLine = (caught.r.lines.find((l) => !l.ok) || {}).detail || '';
+  yes('a throw caught inside the tick as it takes the login: FAIL on login, carrying its message and first frames, once (#6346)',
+    failedAt(caught.r, 'login') && /The server threw: Error: the spawn went wrong here at Spawn\.listenerFn .* at EventEmitter\.emit/.test(caughtLine) &&
+    (caughtLine.match(/the spawn went wrong/g) || []).length === 1);
+  yes('  and a FAIL with no throw in its step says nothing of one', nopass.r.lines.every((l) => !/server threw/.test(l.detail)));
   yes('not new: FAIL on new', failedAt((await run('notnew', 'not new')).r, 'new'));
   const stays = await run('stays', 'stays');
   yes('creation does not move on after the face: FAIL on face, saying what it waited for',
