@@ -14,7 +14,10 @@
     1. every path Script writes into the .cmd file has each % doubled, which
        cmd reads back as one: the targets, _quarantine, the install folder,
        the root record, Velopack's Update.exe and the farewell note
-    2. on Windows, the script run by cmd removes exactly the folder it was
+    2. a value Script is given empty (the farewell note, Update.exe, the
+       root record) writes no line, as a null one writes none: an empty
+       note gave del /f /q "", the folder cmd runs in (#6382)
+    3. on Windows, the script run by cmd removes exactly the folder it was
        given, and leaves the folder cmd's expansion would have reached:
          - an install folder with one percent sign, beside the same name
            without it
@@ -24,7 +27,7 @@
        folder it runs in, and del /q emptied the repository root of its
        files while other harnesses read them (#6382)
 
-  Off Windows, part 2 says SKIP: a SKIP is not a pass. Read only apart from
+  Off Windows, part 3 says SKIP: a SKIP is not a pass. Read only apart from
   its own scratch folder, which it removes.
 #>
 [CmdletBinding()]
@@ -120,7 +123,15 @@ try {
         Yes "  and $want reads back as itself" ($back -contains $want)
     }
 
-    # ---- 2. cmd runs it -------------------------------------------------------
+    # ---- 2. an empty value writes nothing --------------------------------------
+    foreach ($none in @($null, '')) {
+        $said = if ($null -eq $none) { 'null' } else { 'empty' }
+        $text = Build $r @($game) 1 $none $none $none
+        $blank = @($text -split "`r?`n" | Where-Object { $_.Contains('""') })
+        Yes ("with every value $said, no line has an empty path" + $(if ($blank.Count) { ' (not: ' + ($blank -join ' | ') + ')' } else { '' })) ($blank.Count -eq 0)
+    }
+
+    # ---- 3. cmd runs it -------------------------------------------------------
     if (-not $OnWindows) {
         Write-Host 'SKIP  the script run by cmd: this is not Windows'
     }

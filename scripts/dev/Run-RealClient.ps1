@@ -28,9 +28,14 @@
   crash, said so), or after -Minutes.
 
   It refuses to start while the launcher or the game is already running, so
-  it never takes over somebody's session, and on an install that is not on
-  the dev channel, so it never plays on the live server. It stops both when
-  it ends.
+  it never takes over somebody's session. Its steps are for a dev release, so
+  an install on the main channel is put on dev for the run, the way the
+  launcher's Server card switch does it (launcher\app\DevBuild.cs Set): the
+  launcher takes dev's package by itself when it starts, and Play is pressed
+  only once the launcher running is dev's. When the run ends the install's
+  channel is put back as it was, and the launcher takes that channel's
+  package again at its next start. It stops the launcher and the game when it
+  ends.
 
   Windows only: it drives the launcher through UI Automation and the game
   window through user32.
@@ -96,16 +101,51 @@ foreach ($p in @($game, $platform, $launcherExe, $Steps)) {
     if (-not (Test-Path -LiteralPath $p)) { throw "Not there: $p" }
 }
 # The run joins whichever server the install is on, and its steps are for a
-# dev release (-Publish puts it on the newest Dev Deployment), so an install
-# on main would play on the live server. The channel is the launcher's
-# UpdateBranch in config.json (launcher\app\DevBuild.cs).
-$branch = 'main'
-try {
-    $cfg = [IO.File]::ReadAllText((Join-Path $Root 'config.json')) | ConvertFrom-Json
-    if ($cfg.PSObject.Properties['UpdateBranch'] -and $cfg.UpdateBranch) { $branch = [string]$cfg.UpdateBranch }
-} catch { throw "No readable config.json in $Root, so which server this install joins is not known: $($_.Exception.Message)" }
-if ($branch -ne 'dev') {
-    throw "This install is on the $branch channel, so the run would play on the $branch server. Switch it to dev on the launcher's Settings page, let it update, close it, and run this again."
+# dev release (-Publish puts it on the newest Dev Deployment). The channel is
+# five fields of config.json, which the launcher's Server card switch sets
+# together (launcher\app\DevBuild.cs Set): Channel, UpdateBranch, and the
+# server's game and voice ports and voice address. An install on main is put
+# on dev here the same way, and put back when the run ends (Set-RunChannel).
+$cfgFile = Join-Path $Root 'config.json'
+$channelFields = @('Channel', 'UpdateBranch', 'ServerPort', 'VoicePort', 'VoiceUrl')
+function Read-ChannelFields {
+    try { $c = [IO.File]::ReadAllText($cfgFile) | ConvertFrom-Json }
+    catch { throw "No readable config.json in $Root, so which server this install joins is not known: $($_.Exception.Message)" }
+    $f = [ordered]@{}
+    foreach ($n in $channelFields) {
+        if (-not $c.PSObject.Properties[$n]) { throw "config.json in $Root has no $n, so its channel cannot be set the way the launcher sets it." }
+        $f[$n] = [string]$c.$n
+    }
+    $f
+}
+# Writes the five fields into config.json as they are given and leaves every
+# other byte of it as the launcher wrote it.
+function Set-RunChannel($fields) {
+    $text = [IO.File]::ReadAllText($cfgFile)
+    foreach ($n in $channelFields) {
+        $rx = [regex]('("' + $n + '"\s*:\s*)("(?:[^"\\]|\\.)*"|null)')
+        if (-not $rx.IsMatch($text)) { throw "config.json in $Root has no string $n to set." }
+        $value = ConvertTo-Json -InputObject ([string]$fields[$n]) -Compress
+        $text = $rx.Replace($text, { param($m) $m.Groups[1].Value + $value }, 1)
+    }
+    [IO.File]::WriteAllText($cfgFile, $text, (New-Object System.Text.UTF8Encoding $false))
+}
+# The dev voice address from the main one (DevBuild.DevVoiceUrl).
+function Get-DevVoiceUrl([string]$u) {
+    $u = $u.Trim().TrimEnd('/')
+    if (-not $u -or $u.EndsWith('-dev', [StringComparison]::OrdinalIgnoreCase)) { return $u }
+    $u + '-dev'
+}
+$leftOn = Read-ChannelFields
+$wasDev = $leftOn.Channel -eq 'dev' -or $leftOn.UpdateBranch -eq 'dev'
+# The channel of the launcher Velopack has in place: the <channel> its
+# current\sq.version names (Velo.ChannelFor reads the same when there is no
+# config.json). Empty for a launcher Velopack did not install.
+function Get-InstalledChannel {
+    $sq = Join-Path (Split-Path $launcherExe) 'sq.version'
+    if (-not (Test-Path -LiteralPath $sq)) { return '' }
+    $m = [regex]::Match([IO.File]::ReadAllText($sq), '<channel>\s*([^<\s]+)\s*</channel>')
+    if ($m.Success) { $m.Groups[1].Value } else { '' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Root 'Profile\dev-allowed.txt'))) {
     throw "No Profile\dev-allowed.txt under $Root, so the test plugin would not run: the site has not named this install's Discord account a dev."
@@ -224,24 +264,53 @@ Say "Run $runId, $($stepsJson.steps.Count) steps from $Steps, into $Out"
 $launcherLog = Join-Path $Root 'Profile\launcher.log'
 $launcherLogStart = if (Test-Path -LiteralPath $launcherLog) { (Get-Item -LiteralPath $launcherLog).Length } else { 0 }
 
-$launcher = Start-Process -FilePath $launcherExe -WorkingDirectory (Split-Path $launcherExe) -PassThru
-Say "Started the launcher, process $($launcher.Id)"
-
+$launcher = $null
+$switched = $false
 $result = 'unfinished'
 $note = ''
 try {
-    # Play, through UI Automation, once the launcher lets it be pressed: an
-    # update or the mod check may be holding it.
+    if (-not $wasDev) {
+        Set-RunChannel ([ordered]@{ Channel = 'dev'; UpdateBranch = 'dev'; ServerPort = '7787'; VoicePort = '7789'; VoiceUrl = (Get-DevVoiceUrl $leftOn.VoiceUrl) })
+        $switched = $true
+        Say "The install was on the $($leftOn.UpdateBranch) channel; put it on dev for the run, as the launcher's Server card does. It goes back when the run ends."
+    }
+    $launcher = Start-Process -FilePath $launcherExe -WorkingDirectory (Split-Path $launcherExe) -PassThru
+    Say "Started the launcher, process $($launcher.Id)"
+
+    # Play, through UI Automation, once the launcher lets it be pressed and
+    # the launcher running is dev's: an update or the mod check may be holding
+    # it, and an install just put on dev takes dev's package first. Taking an
+    # update closes the launcher and Velopack starts the new one, so a launcher
+    # that closes is followed to the one started after it.
     $ae = [System.Windows.Automation.AutomationElement]
     $cond = New-Object System.Windows.Automation.PropertyCondition ($ae::AutomationIdProperty, 'BtnPlay')
     $deadline = (Get-Date).AddMinutes($PlayMinutes)
     $pressed = $false
     $toldWaiting = $false
+    $toldChannel = ''
     while (-not $pressed) {
-        if ((Get-Date) -gt $deadline) { throw "Play was not there to press in $PlayMinutes minutes" }
-        if ($launcher.HasExited) { throw "The launcher closed by itself, exit code $($launcher.ExitCode)" }
+        if ((Get-Date) -gt $deadline) {
+            $ch = Get-InstalledChannel
+            if ($ch -and $ch -ne 'dev') { throw "The launcher was still $ch's after $PlayMinutes minutes, so it never took dev's package: is Settings, Updates, automatic updates off?" }
+            throw "Play was not there to press in $PlayMinutes minutes"
+        }
+        if ($launcher.HasExited) {
+            $next = Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object {
+                $_.Id -ne $launcher.Id -and $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase)
+            } | Select-Object -First 1
+            if ($next) { Say "The launcher closed (exit code $($launcher.ExitCode)) and Velopack started it again, process $($next.Id): following that one."; $launcher = $next; $toldWaiting = $false; continue }
+            if ($launcher.ExitTime -lt (Get-Date).AddMinutes(-2)) { throw "The launcher closed by itself, exit code $($launcher.ExitCode), and no launcher started after it in two minutes" }
+            Start-Sleep -Milliseconds 500
+            continue
+        }
         $launcher.Refresh()
         $h = $launcher.MainWindowHandle
+        $ch = Get-InstalledChannel
+        if ($ch -and $ch -ne 'dev') {
+            if ($toldChannel -ne $ch) { Say "The launcher in place is $ch's; waiting for it to take dev's package."; $toldChannel = $ch }
+            Start-Sleep -Milliseconds 500
+            continue
+        }
         if ($h -ne [IntPtr]::Zero) {
             $win = $ae::FromHandle($h)
             $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
@@ -309,8 +378,13 @@ try {
 } finally {
     $proc = Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue
     if ($proc) { $proc | Stop-Process -Force; Say 'Closed the game.' }
-    if (-not $launcher.HasExited) { $launcher | Stop-Process -Force; Say 'Closed the launcher.' }
+    $ours = @(Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase) })
+    if ($ours.Count) { $ours | Stop-Process -Force; Say 'Closed the launcher.' }
     if (Test-Path -LiteralPath $runFile) { Remove-Item -LiteralPath $runFile -Force; Say 'The plugin never took the run file; removed it so the next Play does not run it.' }
+    if ($switched) {
+        Set-RunChannel $leftOn
+        Say "Put the install back on the $($leftOn.UpdateBranch) channel it was left on; the launcher takes that channel's package at its next start."
+    }
 }
 
 # ------------------------------------------------------------ what it saw --
