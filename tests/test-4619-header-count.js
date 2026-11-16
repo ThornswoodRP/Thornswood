@@ -94,4 +94,4 @@ yes('D and test-2468 still holds Thornswood-Last\'s count to its records plus it
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
