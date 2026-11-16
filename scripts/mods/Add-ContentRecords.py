@@ -1517,7 +1517,8 @@ def spoiled_records():
 def quality_table():
     """food-groups.json's quality block: the burnt meal and {plain dish: fine
     record}."""
-    return json.load(open(FOOD_GROUPS_TABLE, encoding='utf-8')).get('quality') or {}
+    with open(FOOD_GROUPS_TABLE, encoding='utf-8') as fh:
+        return json.load(fh).get('quality') or {}
 
 
 def quality_fids(plugin_masters, plugin_name):
