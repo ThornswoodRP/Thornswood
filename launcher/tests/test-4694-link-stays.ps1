@@ -22,10 +22,10 @@
        tests\Launcher-Csc.ps1). On Windows they are run over a scratch
        staging folder and a Data folder whose plugin is a hard link to it:
          a. a link that comes off: our bytes are written, and only into Data;
-         b. a refused delete (another program holds the file without letting
-            it be deleted, which still lets it be written): nothing is
-            written, the staged copy keeps its bytes, and Fix says the plugin
-            could not be written;
+         b. a refused delete (Windows will not let this account delete the
+            file, or delete files from its folder, but still lets it write
+            the file): nothing is written, the staged copy keeps its bytes,
+            and Fix says the plugin could not be written;
          c. a link count that cannot be read: the same.
 
   Writes only a scratch folder under the temp directory, removed at the end.
@@ -162,9 +162,6 @@ namespace $ns {
         [return: MarshalAs(UnmanagedType.Bool)]
         private static partial bool MakeLink(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
         public static bool Link(string name, string existing) { return MakeLink(name, existing, IntPtr.Zero); }
-        // Another program's handle: it reads the file's attributes, and lets
-        // others read and write it but not delete it.
-        public static SafeFileHandle Hold(string path) { return CreateFile(path, FileReadAttributes, 0x3, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero); }
         public $links
         $detach
     }
@@ -234,13 +231,29 @@ try {
     Yes 'a. our bytes are in Data' ([IO.File]::ReadAllText($a[1]) -eq 'THORNSWOOD-RELEASE-COPY')
     Yes "a. and Vortex's staged copy keeps its own" ([IO.File]::ReadAllText($a[0]) -eq 'VORTEX-STAGED-COPY')
 
-    # b. The delete is refused, while a write is still let through.
+    # b. The delete is refused, while a write is still let through. A handle
+    # of another program cannot do this: one that may read or write the file
+    # also stops the write, and one that only reads its attributes stops
+    # nothing, since Windows leaves such a handle out of sharing. So this
+    # account is refused the delete itself: Windows lets a name be deleted
+    # when the file allows Delete or its folder allows deleting what is in
+    # it, and here neither does.
     $b = Stage 'b' $G
-    $held = $G::Hold($b[0])
-    Yes 'b. another program holds the staged file without letting it be deleted' (-not $held.IsInvalid)
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $fileInfo = [IO.FileInfo]$b[1]
+    $dirInfo = [IO.DirectoryInfo](Split-Path -Parent $b[1])
+    $noDelete = [Security.AccessControl.FileSystemAccessRule]::new($me, [Security.AccessControl.FileSystemRights]::Delete, [Security.AccessControl.AccessControlType]::Deny)
+    $noDeleteIn = [Security.AccessControl.FileSystemAccessRule]::new($me, [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles, [Security.AccessControl.AccessControlType]::Deny)
+    $fileAcl = [IO.FileSystemAclExtensions]::GetAccessControl($fileInfo); $fileAcl.AddAccessRule($noDelete); [IO.FileSystemAclExtensions]::SetAccessControl($fileInfo, $fileAcl)
+    $dirAcl = [IO.FileSystemAclExtensions]::GetAccessControl($dirInfo); $dirAcl.AddAccessRule($noDeleteIn); [IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirAcl)
     $said = ''
     try { $ok = Run $F $b[1] ([ref]$said) }
-    finally { $held.Dispose() }
+    finally {
+        # Delete allowed again, so the scratch folder can go.
+        $fileAcl = [IO.FileSystemAclExtensions]::GetAccessControl($fileInfo); [void]$fileAcl.RemoveAccessRule($noDelete); [IO.FileSystemAclExtensions]::SetAccessControl($fileInfo, $fileAcl)
+        $dirAcl = [IO.FileSystemAclExtensions]::GetAccessControl($dirInfo); [void]$dirAcl.RemoveAccessRule($noDeleteIn); [IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirAcl)
+    }
+    Yes 'b. the name still has its link, so the delete really was refused' ($G::Links($b[0]) -eq 2)
     Yes 'b. a refused delete: the plugin is not written' (-not $ok)
     Yes "b. Vortex's staged copy keeps its bytes" ([IO.File]::ReadAllText($b[0]) -eq 'VORTEX-STAGED-COPY')
     Yes 'b. and Fix says the plugin could not be written' ($said -match 'Thornswood-Content\.esp could not be written \(why ')
