@@ -380,7 +380,9 @@ namespace Thornswood
         /// Stops before writing anything when an archive is missing. A file
         /// already there with the modlist's size and hash is left as it is, so a
         /// run again finishes one that was cut short. Every file written is
-        /// held to the modlist's hash first, through a .part beside it.
+        /// held to the modlist's hash first, through a .part beside it. Last,
+        /// a file in one of the modlist's mod folders that it does not name
+        /// is taken out (Tidy).
         /// </summary>
         public static int Install(CollectionModlist m, string downloads, string target, string game, Unpack unpack, Action<string> say)
         {
@@ -454,7 +456,45 @@ namespace Thornswood
                 Put(dest, delegate (string part) { File.WriteAllBytes(part, b); });
                 written++;
             }
+            Tidy(m, target, say);
             return written;
+        }
+
+        /// <summary>
+        /// Takes out of each mod folder the modlist names (mods\&lt;mod&gt;) every
+        /// file the modlist does not name there: what an earlier revision put
+        /// in that this one no longer has, and a .part an install cut short
+        /// left. Mod Organizer 2 then holds and shows exactly the modlist's
+        /// mods. A folder the modlist does not name, and everything outside
+        /// mods (downloads, profiles, overwrite), is left as it is.
+        /// </summary>
+        static void Tidy(CollectionModlist m, string target, Action<string> say)
+        {
+            var named = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ModlistFile f in m.Files)
+            {
+                string[] p = f.To.Split('\\');
+                if (p.Length < 3 || !string.Equals(p[0], "mods", StringComparison.OrdinalIgnoreCase)) continue;
+                named.Add(f.To);
+                folders.Add(p[1]);
+            }
+            int gone = 0;
+            foreach (string mod in folders)
+            {
+                string dir = Under(target, "mods\\" + mod);
+                if (!Directory.Exists(dir)) continue;
+                foreach (string full in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).ToList())
+                {
+                    string rel = "mods\\" + mod + "\\" + Path.GetRelativePath(dir, full).Replace(Path.DirectorySeparatorChar, '\\');
+                    if (named.Contains(rel)) continue;
+                    File.Delete(full);
+                    gone++;
+                }
+                foreach (string sub in Directory.EnumerateDirectories(dir, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList())
+                    if (!Directory.EnumerateFileSystemEntries(sub).Any()) Directory.Delete(sub);
+            }
+            if (gone > 0 && say != null) say(gone + " files the modlist no longer has were taken out of the mods");
         }
     }
 }

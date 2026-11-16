@@ -123,7 +123,8 @@ namespace Thornswood
 
         /// <summary>
         /// One line per file brought in: kind (L linked, C copied), origin (V
-        /// deployed by Vortex, O Skyrim's own, T Thornswood's own; before
+        /// the collection's, deployed by Vortex or from Mod Organizer 2's
+        /// mods (#6244), O Skyrim's own, T Thornswood's own; before
         /// Rules 13 O was anything not Vortex's), size and write time of the
         /// source when it was brought in, then the path under the game folder.
         /// Publish-Update reads the V lines to keep the collection out of packs.
@@ -453,6 +454,14 @@ namespace Thornswood
             // arrives in quotes, and Path.Combine threw on it out of here and
             // out of the Settings card on the window's thread. Found by the
             // verification of hotfix 1.1.93.
+            // Once the modlist installs into Mod Organizer 2 (#6244) the mods
+            // come from there and nothing of Vortex's is read, so the two
+            // never mix in one folder.
+            if (FromMods)
+            {
+                Said("Thornswood takes its mods from Mod Organizer 2 in " + ModsFolder + ", where the modlist installs them, and nothing from Vortex.");
+                return ModsFolder;
+            }
             string s = cfg == null || cfg.VortexGame == null ? "" : cfg.VortexGame.Trim().Trim('"').Trim().TrimEnd('\\');
             bool usable = false;
             try { usable = s.Length > 0 && File.Exists(Path.Combine(s, "SkyrimSE.exe")) && HasRecord(s); }
@@ -549,7 +558,12 @@ namespace Thornswood
         /// <summary>Which folder Vortex deploys into and why, into the log once each time the answer changes.</summary>
         static void Chosen(string folder, string why)
         {
-            string line = "Vortex deploys into " + folder + ": " + why + ".";
+            Said("Vortex deploys into " + folder + ": " + why + ".");
+        }
+
+        /// <summary>A line about where the mods come from, into the log once each time it changes.</summary>
+        static void Said(string line)
+        {
             lock (chosenLock)
             {
                 if (line == lastChosen) return;
@@ -560,6 +574,7 @@ namespace Thornswood
 
         static bool HasRecord(string dir)
         {
+            if (IsMods(dir)) return File.Exists(Path.Combine(dir, ModsRecordName));
             try { return File.Exists(Path.Combine(dir, "Data\\vortex.deployment.json")); }
             catch { return false; }
         }
@@ -651,7 +666,7 @@ namespace Thornswood
             string into = DeploysInto(cfg);
             // Before the folder exists the Skyrim it reads is the Steam copy,
             // also when Paths.Game is Profile\Payload (#1226).
-            if (into.Length == 0 || !HasRecord(into) || SameFolder(into, Paths.Collection ? Paths.SteamCopy : Paths.Game)) return "";
+            if (into.Length == 0 || IsMods(into) || !HasRecord(into) || SameFolder(into, Paths.Collection ? Paths.SteamCopy : Paths.Game)) return "";
             return into;
         }
 
@@ -727,7 +742,7 @@ namespace Thornswood
             // mod put in by hand, so neither Make nor a refresh runs (#1232).
             string noList = NoSkyrimList();
             if (noList != null) return noList;
-            if (string.IsNullOrEmpty(src) || !File.Exists(Path.Combine(src, "SkyrimSE.exe")))
+            if (string.IsNullOrEmpty(src) || (!IsMods(src) && !File.Exists(Path.Combine(src, "SkyrimSE.exe"))))
                 return made
                     ? "Thornswood cannot find the Skyrim folder Vortex deploys into. In Vortex, Mods, Open, Open Game Folder shows which, and Choose Vortex's folder in Settings points Thornswood at it."
                     : "There is no Skyrim to make it from. Steam does not list one.";
@@ -754,6 +769,9 @@ namespace Thornswood
             // This install's own folder or any other Thornswood folder (#2210).
             string thornswood = ThornswoodSource(cfg, src);
             if (thornswood != null) return thornswood;
+            if (!HasRecord(src) && IsMods(src))
+                return "The mods in " + src + " are not all installed yet: the install of the modlist was stopped part way, or is still going. " +
+                       "Let it finish, then try again.";
             if (!HasRecord(src))
                 return "Vortex has nothing deployed in " + src + " right now. In Vortex, enable the Thornswood profile and let it deploy, then try again. " +
                        "If it is deployed, Vortex is deploying into another folder: in Vortex, Mods, Open, Open Game Folder shows which, " +
@@ -815,6 +833,9 @@ namespace Thornswood
                 }
                 catch { missing++; }
             }
+            if (missing == 0 && unstaged > 0 && IsMods(src))
+                return unstaged + " of Thornswood's " + want.Count + " plugins are in Mod Organizer 2's record for " + src +
+                       " but not in its mods folder, so the install of the mods is not whole. Install the mods again, then try again.";
             if (missing == 0 && unstaged > 0)
                 return unstaged + " of Thornswood's " + want.Count + " plugins are in Vortex's record for " + src +
                        " but no longer in Vortex's own mods folder, so that deployment is out of date. In Vortex, press Deploy Mods, then try again.";
@@ -830,6 +851,9 @@ namespace Thornswood
             // for the same reason, so neither could be used. Half the
             // reference list gone is another profile. See NotThisCollection.
             int gap = missing + unstaged;
+            if (gap > 0 && NotThisCollection(gap, want.Count) && IsMods(src))
+                return gap + " of Thornswood's " + want.Count + " plugins are not among the mods installed in " + src +
+                       ", so those mods are another release's. Install the mods of this release, then try again.";
             if (gap > 0 && NotThisCollection(gap, want.Count))
                 return gap + " of Thornswood's " + want.Count + " plugins are not in " + src +
                        ", so Vortex has another profile deployed, or deploys Thornswood into another folder. In Vortex, enable the Thornswood profile and let it deploy. " +
@@ -1499,6 +1523,7 @@ namespace Thornswood
                 // is copied on this path too. It is two small files, and
                 // copying them writes nothing but Profile\OwnGame.
                 BakeVortexList();
+                if (IsMods(src)) return "Thornswood's own Skyrim folder already matches the mods in Mod Organizer 2.";
                 return "Thornswood's own Skyrim folder already matches what Vortex has deployed.";
             }
 
@@ -1859,8 +1884,9 @@ namespace Thornswood
             // refresh cost (#2210).
             string cost = " It took " + Seconds(clock.Elapsed) + Looked(scope) + ".";
             if (added + changed + removed + byHand.Count == 0)
-                return "Thornswood's own Skyrim folder already matches what Vortex has deployed." + own + cost;
-            return "Thornswood's own Skyrim folder is up to date with Vortex: " + added.ToString("n0") + " new, " +
+                return (IsMods(src) ? "Thornswood's own Skyrim folder already matches the mods in Mod Organizer 2."
+                                    : "Thornswood's own Skyrim folder already matches what Vortex has deployed.") + own + cost;
+            return "Thornswood's own Skyrim folder is up to date with " + (IsMods(src) ? "Mod Organizer 2" : "Vortex") + ": " + added.ToString("n0") + " new, " +
                    changed.ToString("n0") + " changed, " + removed.ToString("n0") + " taken out" +
                    (copyBytes > 0 ? ", " + Mb(copyBytes) + " copied" : "") + "." + own + cost;
         }
@@ -2116,7 +2142,8 @@ namespace Thornswood
         {
             try
             {
-                string tw = Checks.VortexProfileDir("Thornswood");
+                // Mod Organizer 2's profile, once the mods come from there (#6244).
+                string tw = FromMods ? Path.Combine(ModsFolder, "profiles\\Thornswood") : Checks.VortexProfileDir("Thornswood");
                 string livePlugins = Path.Combine(Paths.WinLocalAD, "plugins.txt");
                 if (tw == null)
                 {
@@ -3036,6 +3063,7 @@ namespace Thornswood
 
         static HashSet<string> Deployed(string src)
         {
+            if (IsMods(src)) return new HashSet<string>(Staged(src).From.Keys, StringComparer.OrdinalIgnoreCase);
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             ReadDeployment(set, Path.Combine(src, "Data"), "Data\\");
             ReadDeployment(set, src, "");
@@ -3160,7 +3188,7 @@ namespace Thornswood
                     var fi = new FileInfo(kv.Value);
                     if (!fi.Exists)
                     {
-                        left.Add(kv.Key + "  (Vortex's record lists it and its mods folder does not have it)");
+                        left.Add(kv.Key + "  (" + Whose(src) + " record lists it and its mods folder does not have it)");
                         continue;
                     }
                     f.Size = fi.Length;
@@ -3168,7 +3196,7 @@ namespace Thornswood
                 }
                 catch
                 {
-                    left.Add(kv.Key + "  (Vortex's copy of it could not be read)");
+                    left.Add(kv.Key + "  (" + Whose(src) + " copy of it could not be read)");
                     continue;
                 }
                 byRel[f.Rel] = f;
@@ -3314,7 +3342,7 @@ namespace Thornswood
                 string from = FromVortex(src, rel, apart, rec, deployed);
                 if (from == null)
                 {
-                    left.Add(rel + "  (Vortex's record lists it and its mods folder does not have it)");
+                    left.Add(rel + "  (" + Whose(src) + " record lists it and its mods folder does not have it)");
                     failed.Add(rel);
                     continue;
                 }
@@ -3331,7 +3359,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     Swallow.Note("OwnGame.Vortex, reading " + from, ex);
-                    left.Add(rel + "  (Vortex's copy of it could not be read)");
+                    left.Add(rel + "  (" + Whose(src) + " copy of it could not be read)");
                     failed.Add(rel);
                 }
             }
@@ -3394,6 +3422,12 @@ namespace Thornswood
         {
             string key = src + "|" + DeploymentStamp(src);
             lock (recordLock) { if (recordCache != null && recordKey == key) return recordCache; }
+            if (IsMods(src))
+            {
+                Record m = ModsStaged(src);
+                lock (recordLock) { recordKey = key; recordCache = m; }
+                return m;
+            }
 
             var r = new Record();
             foreach (string[] where in new string[][] { new string[] { Path.Combine(src, "Data"), "Data\\" }, new string[] { src, "" } })
@@ -3453,6 +3487,99 @@ namespace Thornswood
                 }
             }
             lock (recordLock) { recordKey = key; recordCache = r; }
+            return r;
+        }
+
+        // ------------------------------------------------------- Mod Organizer 2
+
+        /// <summary>
+        /// The portable Mod Organizer 2 the collection's modlist installs into
+        /// (#6244, ModlistSetup.cs). Once it is there the folder's mods come
+        /// from its mods folder, by the record the install writes, in place of
+        /// Vortex's deployment: DeploysInto names this folder, the game itself
+        /// still comes from the Steam copy or the Downgrade (GameFor), and a
+        /// refresh links the mods' files as it linked Vortex's.
+        /// </summary>
+        public static string ModsFolder { get { return Path.Combine(Paths.Root, "Mods"); } }
+
+        /// <summary>
+        /// The install's record of what goes into the game folder, in
+        /// ModsFolder (ModlistSetup.Deployment): a first line naming the
+        /// modlist, then one line a file, the path in the game folder, the
+        /// mod, the path in the mod's folder, its xxHash64 and its size,
+        /// joined with |. Taken off before a changed modlist is installed and
+        /// written once every file is in, so it never speaks for half an install.
+        /// </summary>
+        public const string ModsRecordName = "thornswood-deployment.txt";
+
+        /// <summary>
+        /// The modlist has begun installing into ModsFolder (its mods folder or
+        /// its record is there), so the mods come from it and never from
+        /// Vortex again. A folder part way through its first install has no
+        /// record yet, and WhyNot says it is not finished.
+        /// </summary>
+        public static bool FromMods
+        {
+            get
+            {
+                try { return Directory.Exists(Path.Combine(ModsFolder, "mods")) || File.Exists(Path.Combine(ModsFolder, ModsRecordName)); }
+                catch (Exception ex) { Swallow.Note("OwnGame.FromMods", ex); return false; }
+            }
+        }
+
+        static bool IsMods(string src)
+        {
+            return !string.IsNullOrEmpty(src) && SameFolder(src, ModsFolder);
+        }
+
+        /// <summary>Whose record and mods folder a file comes from, for a line of left-out.txt.</summary>
+        static string Whose(string src)
+        {
+            return IsMods(src) ? "Mod Organizer 2's" : "Vortex's";
+        }
+
+        /// <summary>
+        /// Mod Organizer 2's record in <paramref name="src"/>, as Staged gives
+        /// Vortex's: each path in the game folder to the mod's file in its
+        /// mods folder, and its mod and xxHash64 as the entry a refresh
+        /// compares (VortexMoved). A line that cannot be read, or that names a
+        /// path outside the game folder or the mods folder, is refused and said.
+        /// </summary>
+        static Record ModsStaged(string src)
+        {
+            var r = new Record();
+            string mods = Path.Combine(src, "mods");
+            string file = Path.Combine(src, ModsRecordName);
+            r.Staging.Add(mods);
+            string[] lines;
+            try { lines = File.ReadAllLines(file); }
+            catch (Exception ex)
+            {
+                r.Refused.Add(ModsRecordName + "  (Mod Organizer 2's record could not be read: " + Failure.Why("OwnGame.ModsStaged", ex, file) + "; so nothing it lists was brought in)");
+                return r;
+            }
+            var folders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (lines[i].Length == 0) continue;
+                string[] p = lines[i].Split('|');
+                if (p.Length != 5)
+                {
+                    r.Refused.Add(ModsRecordName + ", line " + (i + 1) + "  (Mod Organizer 2's record has a line it could not read, so that file was not brought in)");
+                    continue;
+                }
+                string rel = p[0], mod = p[1], under = p[2];
+                string folder;
+                if (!folders.TryGetValue(mod, out folder)) { folder = ModFolder(mods, mod); folders[mod] = folder; }
+                if (folder == null || !Tidy(rel) || !Tidy(under))
+                {
+                    r.Refused.Add(rel + "  (Mod Organizer 2's record points outside Thornswood's folder or its mods folder)");
+                    continue;
+                }
+                if (r.From.ContainsKey(rel)) continue;
+                r.From[rel] = folder + under;
+                r.Entry[rel] = mod + "|" + p[3];
+            }
             return r;
         }
 
@@ -3518,6 +3645,15 @@ namespace Thornswood
         /// <summary>When Vortex last deployed, as the newest write time of its records.</summary>
         static long DeploymentStamp(string src)
         {
+            if (IsMods(src))
+            {
+                try
+                {
+                    string f = Path.Combine(src, ModsRecordName);
+                    return File.Exists(f) ? File.GetLastWriteTimeUtc(f).Ticks : 0;
+                }
+                catch (Exception ex) { Swallow.Note("OwnGame.DeploymentStamp, Mod Organizer 2's record", ex); return 0; }
+            }
             long newest = 0;
             foreach (string dir in new string[] { src, Path.Combine(src, "Data") })
             {
