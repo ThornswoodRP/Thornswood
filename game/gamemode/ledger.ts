@@ -43,7 +43,7 @@
   'use strict';
   var g = (typeof globalThis !== 'undefined') ? globalThis : this;
   var fs = null, path = null, https = null;
-  try { fs = require('fs'); path = require('path'); https = require('https'); } catch (e) { }
+  try { fs = require('fs'); path = require('path'); https = require('https'); } catch (e) { /* no fs or https here: push() and sayFlag() check for them and do nothing */ }
 
   var FLAG_GOLD = 1000;
   var EVERY_MS = 15000;
@@ -54,7 +54,7 @@
   function llog() {
     var a = ['[thornswood ledger]'];
     for (var i = 0; i < arguments.length; i++) { a.push(arguments[i]); }
-    try { console.log(a.join(' ')); } catch (e) { }
+    try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
   }
 
   // On globalThis, so a hot reload keeps the rows not yet sent and who
@@ -76,7 +76,7 @@
       var ap = mp.get(actorId, 'appearance');
       var n = String((ap && ap.name) || '');
       if (n) { return n; }
-    } catch (e) { }
+    } catch (e) { /* no appearance yet: the name stays empty and the profile still says who */ }
     return '';
   }
   function cellOf(actorId) {
@@ -245,7 +245,7 @@
     } catch (e) { done(false, String((e && e.message) || e)); }
   }
 
-  if (g.__thornswoodLedgerPush) { try { clearInterval(g.__thornswoodLedgerPush); } catch (e) { } }
+  if (g.__thornswoodLedgerPush) { try { clearInterval(g.__thornswoodLedgerPush); } catch (e) { /* nothing to stop: an earlier load's timer is already gone */ } }
   state.sending = false;
   g.__thornswoodLedgerPush = setInterval(push, EVERY_MS);
 
