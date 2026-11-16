@@ -155,6 +155,10 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 . (Join-Path $Here 'Swap.ps1')
+# The restart lines what the box says is held to, beside the restarts that
+# print them (#4211). It also goes up to the box, in front of the scripts
+# that write the token or the ping address.
+. (Join-Path $Here '..\vps\Write-BotToken.ps1')
 # The bot's code as one list: bot.py and the modules it imports (#5357).
 . (Join-Path $Here 'Bot-Code.ps1')
 # The bot sources live at the repo root, in bot\. This script sits two levels
@@ -283,12 +287,21 @@ if (`$r -contains 'bot reconnected') {
   foreach ($l in @($out)) {
     $s = "$l"
     $c = 'Gray'
-    if ($s -match 'NOT WRITTEN|NOT RESTARTED|HAS NOT SAID|FAILED') { $c = 'Red' }
+    if ((Test-ThornswoodRestartLine $s) -or $s -match 'NOT WRITTEN|HAS NOT SAID|FAILED') { $c = 'Red' }
     elseif ($s -match 'read back|reconnected|reached the outside monitor|hears from this bot again') { $c = 'Green' }
     Say "  $s" $c
   }
   Write-Host ''
   if ("$out" -match 'NOT WRITTEN') { Die 'The ping address was not changed.' }
+  # The bot reads bot.env.json only when it starts, so the change is in use
+  # only once its restart said it worked (#4211).
+  if ("$out" -notmatch 'PING UNCHANGED') {
+    $failed = @(Get-ThornswoodRestartFailed $out @('bot'))
+    if ($failed.Count) {
+      foreach ($f in $failed) { Say "  $f" 'Red' }
+      Die 'bot.env.json has the change, but the bot did not restart onto it, so it still runs on what it had.'
+    }
+  }
   if ("$out" -match 'PING UNCHANGED') { Say '  Nothing to do: the bot already has that.' 'DarkGray' }
   elseif ("$out" -match 'reached the outside monitor') { Say '  The monitor hears from the bot. Its page shows the first ping.' 'Green' }
   elseif ("$out" -match 'taken out') { Say '  The bot no longer pings anything. Pause or delete the check on the monitor''s page, or it alerts.' 'Yellow' }
@@ -1160,8 +1173,16 @@ if (-not (Confirm-BotFiles @($send.Keys))) {
   Die 'the install finished but the box does not hold every file it sent. The lines above name each one, with the full path on the box.'
 }
 
+# The site reads its key and token only when it starts, so the settings step
+# restarted it when either changed, and they are in use only once that
+# restart said it worked (#4211).
+$siteFailed = @()
+if (-not @($settings | Where-Object { "$_" -like 'key and token unchanged*' }).Count) {
+  $siteFailed = @(Get-ThornswoodRestartFailed $settings @('site'))
+}
 Write-Host ''
-if ("$settings" -match 'SITE DID NOT COME BACK|SITE CONFIG DOES NOT PARSE') {
+if ($siteFailed.Count -or "$settings" -match 'SITE CONFIG DOES NOT PARSE') {
+  foreach ($f in $siteFailed) { Say "  $f" 'Red' }
   Say 'The site is not running with the new key or token, so tickets and role' 'Yellow'
   Say 'lookups fail until it is. Start it again with:' 'Yellow'
   Say '    .\scripts\deploy\Deploy-Docs.ps1' 'Green'
@@ -1177,5 +1198,6 @@ if ("$settings" -match 'NEW key') {
 }
 Write-Host ''
 Say 'Then check the panel channel above, and try joining with another account.' 'DarkGray'
+if ($siteFailed.Count) { Die 'The bot is installed, but the site did not restart onto its key and token: the FAILED line above says why.' }
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
