@@ -18,7 +18,8 @@
   21 Oct 2026 though the box held what they read. The last line above runs
   the whole chain of scripts\mods\content-tables.json. Since #3105 its
   tables are the ones a game PC writes: every builder reads the load order
-  game\data\npc-population.json records, on the box and on a PC alike, and
+  the commit records (records\load-order.json since #5191), on the box and
+  on a PC alike, and
   the crime table reads the script pack a PC made (records\papyrus-scripts.json).
 
   WHY. Patrick, 20 Oct 2026: "let's make the content plugin available in the

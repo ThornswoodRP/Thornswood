@@ -239,7 +239,12 @@ if (-not `$python -or -not (Test-Path -LiteralPath `$python)) { 'STOP. py -3 nam
 # above put there is the server's, made from whichever recipe it last
 # deployed. When this commit's recipe does not make it here (a plugin it
 # reads is another copy, the content plugin of a pull request), the server's
-# stays and the line says so; Build-LastPlugin.py makes this commit's.
+# stays and the line says so; Build-LastPlugin.py makes this commit's. It is
+# for a tool that reads the plugin a build made, as Build-StationSites.py
+# measures over the build it lays: the content chain's steps before
+# Build-LastPlugin.py are not given it in their order (Rebuild-ContentTables.ps1,
+# #5191), and that step writes the plugin it makes over this one, for the
+# steps after it.
 `$lastRecipe = Join-Path `$repo 'game\data\last-plugin.recipe'
 if (Test-Path -LiteralPath `$lastRecipe) {
   `$lastSaid = @(& `$python (Join-Path `$repo 'scripts\mods\Make-LastPlugin.py') --data `$data --recipe `$lastRecipe 2>&1 | ForEach-Object { "`$_".Trim() } | Where-Object { `$_ })
