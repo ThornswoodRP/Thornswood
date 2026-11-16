@@ -520,8 +520,9 @@ function thornswoodBooks(env) {
     private folder beside the books, by the good's record; a good staff
     never changed pays its starting price.
   */
-  var REWARD_START = env.rewardPrices ||
-    (typeof table === 'function' ? table('COMMISSION_REWARD_PRICES') : { version: 1, items: [] });
+  // The gamemode hands the table in when it starts the books; a harness that
+  // runs the books block alone gives none, and no good has a reward price.
+  var REWARD_START = env.rewardPrices || { version: 1, items: [] };
   var rewardStart = {};
   var rewardOrder = [];
   (function () {
@@ -591,8 +592,8 @@ function thornswoodBooks(env) {
     var setting = words.length >= 2 && (/^(0|[1-9][0-9]{0,9})$/.test(last) || last === 'start');
     var good = rewardGood(setting ? words.slice(0, -1) : words);
     if (!good) {
-      return 'Name a good guild work asks for: /book reward <good> to read its price, ' +
-             '/book reward <good> <gold> to set it, /book reward <good> start for its starting price.';
+      return 'Name a good guild work asks for to read its price; add a price in gold to set it, ' +
+             'or start to put it back on its starting price.';
     }
     if (good === 'two') { return 'Two goods have that name. Name it by its record instead.'; }
     var key = good.item.toLowerCase();
@@ -1565,7 +1566,7 @@ function thornswoodBooks(env) {
       var cfg = JSON.parse(fs.readFileSync('server-settings.json', 'utf8'));
       if (cfg && cfg.privDir) { privDir = String(cfg.privDir); }
     } catch (e) { }
-    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir });
+    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir, rewardPrices: table('COMMISSION_REWARD_PRICES') });
     g.__thornswoodBooks = api;
     if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('books', api.release); }
     g.__thornswoodBooksTimer = setInterval(function () {
