@@ -46,6 +46,10 @@
       Last plugin of the build before. Rebuild-ContentTables.ps1 leaves the
       plugin out of their order on every build since 16 Nov 2026, so the
       switch is gone: asked for, it stops before any tool runs.
+  13. Every file of the build is the bytes git holds at the build's commit,
+      not the checkout's copy: a file committed LF that the checkout holds
+      CRLF (core.autocrlf, an eol rule added later) is kept and handed back
+      LF.
 #>
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
@@ -106,9 +110,11 @@ exit 0
 '@)
 
 try {
-    # The stand-in checkout: the two scripts under test, a chain of one step,
+    # The stand-in checkout: the scripts under test (and Artifact.ps1, which
+    # reads the build's files out of git), a chain of one step,
     # its source and the outputs as committed.
-    foreach ($f in @('scripts/mods/Build-ContentOnBox.ps1', 'scripts/mods/ContentPaths.ps1')) {
+    foreach ($f in @('scripts/mods/Build-ContentOnBox.ps1', 'scripts/mods/ContentPaths.ps1', 'scripts/deploy/Artifact.ps1',
+            'scripts/vps/Vps.ps1', 'scripts/vps/Send-Script.ps1', 'scripts/vps/Lock-Folder.ps1')) {
         Put $f ([IO.File]::ReadAllText((Join-Path $Repo $f)))
     }
     Put 'scripts/mods/content-tables.json' '{"steps":[{"tool":"scripts/dev/Build-X.js","reads":[],"writes":["game/data/x.json","game/gamemode-tables/X.json","docs/systems/lists"]}],"notInChain":[]}'
@@ -297,6 +303,34 @@ try {
     $o11 = Get-ThornswoodContentOrder -Repo $co
     Yes '11 a catalogue in the checkout with another order moves nothing: the order is records\load-order.json''s, moved to the record' (
         ($o11.Names -join ',') -eq ($o8.Names -join ',') -and ($o11.Recorded -join ',') -eq 'Skyrim.esm,Update.esm,Dawnguard.esm,HearthFires.esm,Dragonborn.esm,A.esm,B.esp,Thornswood-Content.esp,Thornswood-Last.esp')
+    Fresh $rev4
+
+    # ---- 13. the files as git holds them, not as the checkout wrote them ----
+    # The box's checkout has core.autocrlf true: a file whose eol=lf rule
+    # came after its blob last changed stays CRLF there, and git calls it
+    # clean (29e6a4c's CSVs, 16 Nov 2026). The build takes git's bytes.
+    Fresh $rev4
+    Put 'scripts/mods/content-tables.json' '{"steps":[{"tool":"scripts/dev/Build-X.js","reads":[],"writes":["game/data/x.json","game/gamemode-tables/X.json","docs/systems/lists","docs/SPOTS.csv"]}],"notInChain":[]}'
+    Put 'docs/SPOTS.csv' "a,b`nc,d`n"
+    TGit @('add', '--all') | Out-Null
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-m', 'spots') | Out-Null
+    # The box's checkout writes it, then the rule comes in a commit that
+    # leaves its blob alone.
+    TGit @('config', 'core.autocrlf', 'true') | Out-Null
+    Remove-Item -LiteralPath (Join-Path $co 'docs/SPOTS.csv')
+    TGit @('checkout', '--', 'docs/SPOTS.csv') | Out-Null
+    Put '.gitattributes' "*.csv text eol=lf`n"
+    TGit @('add', '.gitattributes') | Out-Null
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-m', 'the rule') | Out-Null
+    $clean = ([IO.File]::ReadAllText((Join-Path $co 'docs/SPOTS.csv')) -eq "a,b`r`nc,d`r`n") -and -not @(TGit @('status', '--porcelain')).Count
+    $r13 = Run
+    TGit @('config', 'core.autocrlf', 'false') | Out-Null
+    if ($r13.Code -ne 0) { Write-Host $r13.Text }
+    $k13 = Join-Path (Join-Path (Join-Path $cache 'dev') $r13.Key) 'files/docs/SPOTS.csv'
+    Yes '13 a file git holds LF whose checkout copy is CRLF, which git calls clean, is built' ($clean -and $r13.Code -eq 0 -and $r13.Key)
+    Yes '13   and the build keeps it LF, as git holds it, and hands it back LF' (
+        (Test-Path -LiteralPath $k13) -and [IO.File]::ReadAllText($k13) -eq "a,b`nc,d`n" -and
+        [IO.File]::ReadAllText((Join-Path $out 'docs/SPOTS.csv')) -eq "a,b`nc,d`n")
     Fresh $rev4
 
     # ---- 9. records of two revisions ---------------------------------------

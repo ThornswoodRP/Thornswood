@@ -196,6 +196,27 @@ if ($built) {
         if ($c.Code -eq 0) { $c = Invoke-BuildGit @('-c', 'user.name=Thornswood Gate', '-c', 'user.email=gate@thornswood.invalid', 'commit', '--quiet', '--allow-empty', '-m', "what $Tool wrote") }
         if ($c.Code -ne 0) { Stop-Build ("what $Tool wrote could not be committed in the checkout: " + ($c.Out -join ' ') + ' Nothing was kept.') }
     }
+    # The files -Names as the checkout's HEAD holds them, written under -Into
+    # at their repository paths: the bytes of each blob, as Run-OnBox.ps1
+    # sends a commit's (Artifact.ps1). Returns each name with its sha256.
+    function Save-CommittedFiles([string[]]$Names, [string]$Into) {
+        . (Join-Path $Here '..\deploy\Artifact.ps1')
+        Initialize-ThornswoodArtifactType
+        $ids = @{}
+        $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $lines = @(& git -C $repo ls-tree -r --full-tree HEAD -- @Names 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
+        foreach ($l in $lines) { if ($l -match '^\d{6} blob ([0-9a-f]{40})\t(.+)$') { $ids[$Matches[2]] = $Matches[1] } }
+        $lost = @($Names | Where-Object { -not $ids.ContainsKey($_) })
+        if ($lost.Count) { throw ("the build's commit does not hold " + (@($lost | Select-Object -First 5) -join ', ') + ', which the chain wrote.') }
+        $git = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+        $datas = [ThornswoodArtifactZip]::ReadBlobs($git, $repo, [string[]]@($Names | ForEach-Object { $ids[$_] }))
+        for ($i = 0; $i -lt $Names.Count; $i++) {
+            $to = Join-Path $Into $Names[$i]
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+            [IO.File]::WriteAllBytes($to, $datas[$i])
+            [pscustomobject]@{ Name = $Names[$i]; Sha = Get-Sha256 $to }
+        }
+    }
     # The record's plugins (the header says why) and the order it moves to.
     try {
         $order = Get-ThornswoodContentOrder -Repo $repo
@@ -243,7 +264,15 @@ if ($built) {
     # writes taken whole.
     $part = $done + '.part'
     if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Recurse -Force }
-    $files = [ordered]@{}
+    # Each file is taken from the commit the last step made, as git holds it,
+    # never from this checkout's working tree. A file no step changed is
+    # one the gate's checkout wrote, with whatever line endings that checkout
+    # gave it when its blob last changed: a .gitattributes rule added later
+    # does not rewrite it, so on the box (core.autocrlf true) the build of
+    # 29e6a4c carried docs/FISHING-SPOTS.csv and HANGING-GAME-SPOTS.csv CRLF,
+    # which git and their builder hold LF, and every merge release after it
+    # stopped on test-3029-builder-eol.js (16 Nov 2026).
+    $names = New-Object 'Collections.Generic.List[string]'
     foreach ($w in @($Plugin) + @($moves) + @($content.Writes)) {
         $full = Join-Path $repo $w
         $each = @()
@@ -252,22 +281,16 @@ if ($built) {
             $each = @(Get-ChildItem -LiteralPath $full -Recurse -File | ForEach-Object {
                     $w + '/' + [IO.Path]::GetRelativePath($full, $_.FullName).Replace('\', '/') })
         } else { Stop-Build "the chain says it writes $w, and there is no such file after it ran. Nothing was kept." }
-        foreach ($f in $each) {
-            if ($files.Contains($f)) { continue }
-            $to = Join-Path (Join-Path $part 'files') $f
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
-            Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to
-            $files[$f] = Get-Sha256 $to
-        }
+        foreach ($f in $each) { if (-not $names.Contains($f)) { $names.Add($f) } }
     }
+    $files = [ordered]@{}
+    try { Save-CommittedFiles $names.ToArray() (Join-Path $part 'files') | ForEach-Object { $files[$_.Name] = $_.Sha } }
+    catch { Stop-Build ($_.Exception.Message + ' Nothing was kept.') }
     if ($Stations) {
         # Kept nowhere: the measurement goes back for a pull request.
         if ($Out) {
-            foreach ($f in @($files.Keys) + @('game/data/station-sites.json')) {
-                $to = Join-Path $Out $f
-                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
-                Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to -Force
-            }
+            try { $null = Save-CommittedFiles ([string[]]@(@($files.Keys) + @('game/data/station-sites.json'))) $Out }
+            catch { Stop-Build ($_.Exception.Message + ' Nothing was handed back.') }
         }
         Remove-Item -LiteralPath $part -Recurse -Force
         Write-Host ("MEASURED $($from[0].Build.key)")
