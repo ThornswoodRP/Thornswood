@@ -121,11 +121,25 @@ function New-Sandbox([string]$chainText = $chain, [string[]]$order = @('A.esp', 
     [void][IO.Directory]::CreateDirectory((Join-Path $root 'game/content'))
     return $root
 }
-# Out is the run's whole output as one string, which Windows wraps at the
-# console's width, so a check reads it with its white space taken out.
+# Out is the run's whole output as one string. Windows may still break a
+# long line at the console's width, so a check reads it with its white space
+# taken out.
 function Invoke-Chain([string]$root, [string[]]$more = @()) {
     $shell = (Get-Process -Id $PID).Path
-    $out = & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts/mods/Rebuild-ContentTables.ps1') @more 2>&1 | Out-String
+    # A stop is caught in the child and its message written as one line:
+    # left to the console, Windows' error view breaks it at the console's
+    # width with "|" on each line after the first, which no match reads.
+    # The switches go by name: a string '-List' splatted from an array is a
+    # value, not a switch.
+    $named = @{}
+    for ($i = 0; $i -lt $more.Count; $i++) {
+        $n = $more[$i].TrimStart('-')
+        if ($i + 1 -lt $more.Count -and -not $more[$i + 1].StartsWith('-')) { $named[$n] = $more[$i + 1]; $i++ } else { $named[$n] = $true }
+    }
+    $out = & $shell -NoProfile -ExecutionPolicy Bypass -Command {
+        param($s, $m)
+        try { & $s @m } catch { 'STOPPED: ' + $_.Exception.Message; exit 1 }
+    } -args (Join-Path $root 'scripts/mods/Rebuild-ContentTables.ps1'), $named 2>&1 | Out-String
     $code = $LASTEXITCODE
     $logFile = Join-Path $root 'run.log'
     $ran = $(if (Test-Path -LiteralPath $logFile) { @([IO.File]::ReadAllLines($logFile) | Where-Object { $_ }) } else { @() })
