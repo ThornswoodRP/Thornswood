@@ -41069,8 +41069,9 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   the character is not in it, because the server does not see those. The
   moment it ends is kept on the character, so a relog or a restart does not
   end it early. Waiting the 30 minutes clears it. The page's other clear, a
-  cooked meal and a bed, waits for the cooked meal (#1382), which the server
-  does not know yet.
+  cooked meal and a bed, is not built here: the needs block has known a
+  cooked meal since #1382 (NEEDS.foodGroup.cooked), and nothing in this
+  block ends withered on one and a rest in a bed yet (#6239).
 */
 (function () {
   'use strict';
