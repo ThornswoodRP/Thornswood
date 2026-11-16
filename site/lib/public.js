@@ -239,7 +239,8 @@ const PAGES = {
   '/linked':      'linked',
   '/sessions':    'sessions',
   '/inbox':       'inbox',
-  '/economy':     'economy'
+  '/economy':     'economy',
+  '/ledger':      'ledger'
 };
 
 Object.assign(module.exports, { PAGES, PUBLIC_ORIGIN });

@@ -149,14 +149,16 @@ function fromCharburner(name) {
   return m && { inputs: [[ITEMS.firewood, +m[1]]], out: ITEMS[name.toLowerCase()], bench: KILN, makes: +m[2] };
 }
 function fromEdgewright(name) {
-  // | Pickaxe | 1 | novice | War axes | SmithingForge | 1 Iron Ingot, 1 Tool Handle |  | yes | `1548d:...` |
-  const m = pages.edgewright.match(new RegExp('^\\| ' + name + ' \\| (\\d+) \\| \\w+ \\| [^|]+ \\| SmithingForge \\| ([^|]+) \\|', 'm'));
+  // | Pickaxe | Novice | 1 iron ingot, 1 tool handle | 1 |, in the page's own
+  // words: the recipe list under docs/systems/lists is read out of this
+  // plugin, so it could not say the plugin is right.
+  const m = pages.edgewright.match(new RegExp('^\\| ' + name + ' \\| \\w+ \\| ([^|]+) \\| (\\d+) \\|$', 'm'));
   if (!m) { return null; }
-  const inputs = m[2].trim().split(', ').map(part => {
+  const inputs = m[1].trim().split(', ').map(part => {
     const k = part.match(/^(\d+) (.+)$/);
     return k && ITEMS[k[2].toLowerCase()] ? [ITEMS[k[2].toLowerCase()], +k[1]] : null;
   });
-  return inputs.every(Boolean) && { inputs, out: ITEMS[name.toLowerCase()], bench: FORGE, makes: +m[1] };
+  return inputs.every(Boolean) && { inputs, out: ITEMS[name.toLowerCase()], bench: FORGE, makes: +m[2] };
 }
 const DESIGN = {
   0x05015480: () => fromCharburner('Poor Charcoal'), 0x05015486: () => fromCharburner('Charcoal'),

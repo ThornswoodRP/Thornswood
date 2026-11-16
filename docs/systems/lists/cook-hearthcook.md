@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 6
 
 By rank: novice 30, advanced 24, expert 7, master 3.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (30 names). Baked Potatoes. Beef Stew. Cabbage Soup. Carrot Soup. Clam Chowder. Cooked Beef. Cooked Dog. Cooked Skeever. First Planting Mead. Goat Roast. Goat Stew. Gourd Soup. Grilled Chicken Breast. Grilled Leeks. Juniper Tea. Lavender Tea. Midyear Jazbay Wine. Pheasant Roast. Pheasant Stew. Potato Soup. Rabbit Haunch. Rabbit Stew. Roasted Carrots. Roasted Mushrooms. Sack of Flour. Salmon Steak. Slaughterfish Steak. Steamed Mudcrab Legs. Venison Chop. Venison Stew.
+
+**Advanced** (24 names). Ash Hopper Stew. Ash Yam Soup. Braided Bread. Bread Loaf. Cooked Boar Meat. Eidar Cheese Fondue. First Planting Loaf. Garlic Bread. Goat Cheese Fondue. Harvest's End Ale. Harvest's End Roast. Horker Loaf. Horker Stew. Horse Haunch. Mammoth Cheese Fondue. Midyear Jazbay Tart. Potato Bread. Roasted Glowing Mushroom. Roasted Wild Mushrooms. Roasted Yams. Saturalia Mulled Mead. Saturalia Spice Cake. Snowberry Tea. Tomato Soup.
+
+**Expert** (7 names). Boar Stew. Cabbage Potato Soup. Cabbage and Tomato Soup. Glowing Mushroom Stew. Mushroom Stew. Vegetable Soup. Wild Mushroom Stew.
+
+**Master** (3 names). Dwemer Fire Paste. Mammoth Steak. Mammoth Stew.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Clam Chowder | 1 | novice | Chowders | Cookpot | 1 Salt Pile, 2 Clam Meat, 1 Jug of Milk, 1 Butter |  | yes | `3543:HearthFires.esm` |

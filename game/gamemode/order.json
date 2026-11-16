@@ -16,6 +16,7 @@
     "character-roster.ts",
     "hold-economy.ts",
     "door.ts",
+    "ledger.ts",
     "keeping-times.ts",
     "server-manifest.ts",
     "load-order-refusal.ts",

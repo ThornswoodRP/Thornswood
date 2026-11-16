@@ -118,19 +118,24 @@ function Get-ThornswoodServerOrder($Record, [string[]]$Order, [string[]]$Drop = 
 
 <#
   The load order a content build at -Repo is built against (#5191): the
-  order game\data\npc-population.json records (the one every table and the
-  Last plugin read), moved to the revision records\collection-plugins.json
-  names by Get-ThornswoodServerOrder. Until 13 Nov 2026 only a server's own
-  settings moved that record (Build-NpcPopulation.py --settings), and a
-  server moves only to the order the commit records (Deploy-DevGamemode
-  -LoadOrder -FromRecord), so a plugin a new revision added was in no order
-  anywhere but One's Vortex game: revision 8's Improved Eyes Skyrim.esp
-  stopped the box's first content build at Build-BuildingHolds.py.
-  records\collection-dropped.json takes out what it names only when it is
-  for that revision. Hands back Names (the order, the five masters first and
-  Thornswood-Last.esp last), Recorded (the catalogue's), Moved (the two
-  differ), Added, Dropped, Slug and Revision. Throws when the records are
-  not of one revision, since there is then no telling which order is meant.
+  order records\load-order.json records, moved to the revision
+  records\collection-plugins.json names by Get-ThornswoodServerOrder. Until
+  13 Nov 2026 only a server's own settings moved the recorded order
+  (Build-NpcPopulation.py --settings), and a server moves only to the order
+  the commit records (Deploy-DevGamemode -LoadOrder -FromRecord), so a
+  plugin a new revision added was in no order anywhere but One's Vortex
+  game: revision 8's Improved Eyes Skyrim.esp stopped the box's first
+  content build at Build-BuildingHolds.py. Until 16 Nov 2026 the recorded
+  order was game\data\npc-population.json's loadOrder, a table the build
+  writes, so a build read its order back from the last one and the table
+  could not leave git; it is records\load-order.json now, which
+  scripts\mods\Set-LoadOrder.ps1 moves to a new revision in the pull
+  request that moves the records. records\collection-dropped.json takes out
+  what it names only when it is for that revision. Hands back Names (the
+  order, the five masters first and Thornswood-Last.esp last), Recorded
+  (load-order.json's), Moved (the two differ), Added, Dropped, Slug and
+  Revision. Throws when the records are not of one revision, since there is
+  then no telling which order is meant.
 #>
 function Get-ThornswoodContentOrder {
     param([Parameter(Mandatory = $true)][string]$Repo)
@@ -140,7 +145,8 @@ function Get-ThornswoodContentOrder {
     if ([string]$record.collection -ne [string]$plugins.collection -or [string]$record.revision -ne [string]$plugins.revision) {
         throw ('records\collection.json is collection ' + $record.collection + ' revision ' + $record.revision + ', and records\collection-plugins.json ' + $plugins.collection + ' revision ' + $plugins.revision + ': they move together, so there is no telling which load order is meant.')
     }
-    $recorded = [string[]]@((& $read 'game/data/npc-population.json').loadOrder | ForEach-Object { [string]$_.name })
+    $recorded = [string[]]@((& $read 'records/load-order.json').loadOrder | ForEach-Object { [string]$_ } | Where-Object { $_ })
+    if (-not $recorded.Count) { throw 'records\load-order.json records no load order, so there is no order to move to the record''s revision.' }
     $drop = @()
     $dropPath = Join-Path $Repo 'records/collection-dropped.json'
     if (Test-Path -LiteralPath $dropPath -PathType Leaf) {
@@ -163,6 +169,36 @@ function Get-ThornswoodContentOrder {
         Slug     = [string]$plugins.collection
         Revision = [int]$plugins.revision
     }
+}
+
+<#
+  The text of records\load-order.json for -Order, the order the servers run
+  on collection -Slug revision -Revision (Get-ThornswoodContentOrder's
+  Names): written by hand, one name a line, LF and no byte order mark, so the
+  same order gives the same bytes on every machine (Set-LoadOrder.ps1).
+#>
+function Format-ThornswoodLoadOrderRecord {
+    param(
+        [Parameter(Mandatory = $true)][string]$Slug,
+        [Parameter(Mandatory = $true)][int]$Revision,
+        [Parameter(Mandatory = $true)][string[]]$Order
+    )
+    $esc = { param($v) ([string]$v).Replace('\', '\\').Replace('"', '\"') }
+    $lines = New-Object 'Collections.Generic.List[string]'
+    $lines.Add('{')
+    $lines.Add('  "version": 1,')
+    $lines.Add('  "issue": 5191,')
+    $lines.Add('  "what": "The load order the servers run and every content build reads, at the collection revision records/collection-plugins.json names: the five masters first and Thornswood-Last.esp last. A plugin a revision adds goes on the end of its kind and none moves to another index (docs/LIGHT-ORDER-DRIFT.md). scripts/mods/Set-LoadOrder.ps1 writes it in the pull request that moves the records to a new revision, and tests/test-5191-load-order.ps1 fails while it is another revision''s.",')
+    $lines.Add('  "builtBy": "scripts/mods/Set-LoadOrder.ps1",')
+    $lines.Add('  "collection": "' + (& $esc $Slug) + '",')
+    $lines.Add('  "revision": ' + $Revision + ',')
+    $lines.Add('  "loadOrder": [')
+    for ($i = 0; $i -lt $Order.Count; $i++) {
+        $lines.Add('    "' + (& $esc $Order[$i]) + '"' + $(if ($i -lt $Order.Count - 1) { ',' } else { '' }))
+    }
+    $lines.Add('  ]')
+    $lines.Add('}')
+    return (($lines -join "`n") + "`n")
 }
 
 <#
