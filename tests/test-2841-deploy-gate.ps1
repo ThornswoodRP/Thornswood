@@ -36,6 +36,13 @@
        is refused; it comes back through the run's log as TWSEAL-LOG lines,
        held to their count and sha256 (a stand-in gh serves the log); the
        box half uses the signed ssh.exe by full path.
+   11. The two lanes (#6231): a ping and a verb verbs.json marks onlyReads
+       go to the broker's read lane, which runs beside the lane that runs
+       one verb at a time; nothing that changes the box is marked so; and
+       Gate.ps1, against stand-in pipes where they are files (not Windows,
+       where a real broker may hold the names), takes a line to the second
+       pipe only when the read lane hands it on, never prints @CHANGE, and
+       names what the busy lane runs when it does not take the line.
   Nothing connects anywhere and nothing outside the temp folder is touched.
 #>
 [CmdletBinding()]
@@ -347,6 +354,14 @@ foreach (`$l in 'Deploy-DevGamemode -Restart -Why "a gamemode update"', 'Install
     if (($said -join ';') -ne 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ') { $said | Write-Host }
 } finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
 
+# The lanes (#6231): ping and a verb marked onlyReads read; every other verb
+# changes, and only the boolean true marks one.
+$laneOf = { param($l) (Test-ThornswoodGateRequest -Line $l -Verbs $verbs).Lane }
+Yes 'ping and the log and parity reads go to the read lane' ((& $laneOf 'ping') -eq 'read' -and (& $laneOf 'Get-Logs -Dev') -eq 'read' -and (& $laneOf 'Check-ProdParity') -eq 'read')
+Yes '  and a deploy, a content build and Update-Gate to the lane that runs one at a time' ((& $laneOf 'Deploy-DevGamemode -Restart') -eq 'change' -and (& $laneOf 'Build-Content') -eq 'change' -and (& $laneOf 'Update-Gate') -eq 'change')
+$laneVerbs = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/vps/gate/verbs.json')) | ConvertFrom-Json
+$laneVerbs.verbs.'Read-Online' | Add-Member -NotePropertyName onlyReads -NotePropertyValue 'true' -Force
+Yes '  and onlyReads as a string marks nothing' ((Test-ThornswoodGateRequest -Line 'Read-Online' -Verbs $laneVerbs).Lane -eq 'change')
 # ---- 3. verbs.json against the scripts ---------------------------------------
 $never = @('Vps', 'VpsHost', 'User', 'VpsUser', 'Root', 'Task', 'TaskName', 'Data', 'Dist', 'Out', 'PasswordFile', 'Path', 'Script', 'Command', 'Site', 'Gamemode', 'ServerBuild', 'Note', 'DropPlugins', 'AsSystem', 'RunAs', 'Remove', 'RotateKey', 'Password')
 # Deploy-Docs -Site is a switch (which part of the site to send), not an address.
@@ -378,6 +393,13 @@ foreach ($p in $verbs.verbs.PSObject.Properties) {
     }
     if ($v.out) { Yes "$($p.Name) out $($v.out): the script takes it" ($takes -contains ([string]$v.out).TrimStart('-')) }
     Yes "$($p.Name): a timeout of an hour at most, which box-run.yml's job allows" ([int]$v.timeoutMinutes -gt 0 -and [int]$v.timeoutMinutes -le 45)
+    # A verb that runs beside a deploy changes nothing: never a live verb,
+    # the gate's own, or a script that deploys, installs, releases or builds.
+    if ($v.PSObject.Properties['onlyReads']) {
+        Yes "$($p.Name): onlyReads is true itself, and the verb is no live verb, no Update-Gate, and no deploy, install, release or build script" (
+            $v.onlyReads -is [bool] -and $v.onlyReads -and -not $v.PSObject.Properties['build'] -and $p.Name -cne 'Update-Gate' -and
+            [string]$v.script -notmatch '^scripts/(deploy|release|mods)/' -and [string]$v.script -notmatch '/(Install|Deploy|Publish|Set|Start|Stop|Wipe|Reset|Rotate|Delete|Grant|Renew|Send)-')
+    }
 }
 
 # ---- 4. Gate.ps1 holds no rule and runs nothing ------------------------------
@@ -385,7 +407,8 @@ $gate = Text 'scripts/vps/gate/Gate.ps1'
 $gateCode = ($gate -replace '(?s)<#.*?#>', '')
 Yes 'Gate.ps1 reads SSH_ORIGINAL_COMMAND and nothing else from the caller' ($gateCode.Contains('$env:SSH_ORIGINAL_COMMAND') -and $gateCode -notmatch '\$args|param\(')
 Yes '  runs nothing: no Invoke-Expression, no call operator, no Start-Process, no Process' ($gateCode -notmatch 'Invoke-Expression|\biex\b|Start-Process|Diagnostics\.Process|(^|\s)&\s' )
-Yes '  and talks to the broker''s pipe by its name' ($gateCode.Contains("'thornswood-gate'"))
+Yes '  and talks to the broker''s pipes by their names, the read lane''s first' ($gateCode.Contains("Ask 'thornswood-gate-read'") -and $gateCode.Contains("Ask 'thornswood-gate'") -and
+    $gateCode.IndexOf("Ask 'thornswood-gate-read'") -lt $gateCode.IndexOf("Ask 'thornswood-gate' "))
 Yes '  sends the line in base64, so no character in it ends the request' ($gateCode.Contains("'LINE ' + [Convert]::ToBase64String"))
 Yes '  loads no module and writes through [Console] (#3059)' ($gateCode -notmatch 'ConvertTo-Json|Import-Module|Write-Host|Write-Output' -and $gateCode.Contains('[Console]::Out'))
 
@@ -536,6 +559,21 @@ Yes 'the program starts with no shell, and nothing on its input' ($brokerCode.Co
 Yes 'a run past its time is ended with everything it started' ($brokerCode.Contains('taskkill.exe" @(''/T'', ''/F'', ''/PID'''))
 Yes 'git reads with the deploy key and pinned host keys only' ($brokerCode.Contains('-F none -i') -and $brokerCode.Contains('StrictHostKeyChecking=yes') -and $brokerCode.Contains('github_known_hosts'))
 Yes 'every request is logged, refusals too' ($brokerCode.Contains("Log ('REFUSED [") -and $brokerCode.Contains("Log ('START ") -and $brokerCode.Contains("Log ('END "))
+# The two lanes (#6231).
+Yes 'the read lane has a pipe and a checkout of its own' ($brokerCode.Contains("'repo-read'") -and $brokerCode.Contains("'thornswood-gate-read'") -and $brokerCode.Contains('$pipe = New-GatePipe $PipeName'))
+Yes '  and is started by the change lane in a runspace of its process, on this same file, with the pipe''s type made first' (
+    $brokerCode.Contains(".AddCommand(`$PSCommandPath).AddParameter('Root', `$Root).AddParameter('Lane', 'read')") -and
+    $brokerCode -match 'Add-Type -TypeDefinition \$GatePipeCode \}\r?\n\$readState')
+$handOn = $brokerCode.IndexOf("if (`$Lane -eq 'read' -and `$req.Lane -ne 'read')")
+Yes '  and runs only what main''s verbs.json marks onlyReads: anything else is handed on after the rules, before any script runs' (
+    $handOn -gt $brokerCode.IndexOf('Test-ThornswoodGateRequest -Line $line') -and $handOn -lt $brokerCode.IndexOf('Invoke-Child ([string]$Cfg.pwsh)') -and
+    $brokerCode.Contains("Send ('@CHANGE ' + [string]`$Shared.Holds)"))
+Yes 'a ping says what the lane that runs one verb at a time runs, which that lane sets at its start and clears at its end' (
+    $brokerCode.Contains("Send ('| GATE RUNS '") -and $brokerCode.Contains("if (`$Lane -eq 'change') { `$Shared.Holds = `$shown") -and $brokerCode.Contains("`$Shared.Holds = ''"))
+Yes 'both lanes write gate.log under one lock' ($brokerCode.Contains('[Threading.Monitor]::Enter($Shared.LogLock)') -and $brokerCode.Contains('[Threading.Monitor]::Exit($Shared.LogLock)'))
+Yes 'at a hand over the read lane opens its pipe no more and ends its read before the broker ends' (
+    $brokerCode.IndexOf('$Shared.Stop = $true') -gt $brokerCode.IndexOf("Log ('BROKER handing over") -and
+    $brokerCode.Contains('while (-not $Shared.Stop)') -and $brokerCode.Contains('$readRun.AsyncWaitHandle.WaitOne('))
 
 # ---- 6. the installer ----------------------------------------------------------
 $inst = Text 'scripts/deploy/Install-Gate.ps1'
@@ -779,7 +817,7 @@ Remove-Item -LiteralPath (Join-Path $fdir 'crlf/Gate.ps1')
 Yes '  and a missing one is none' ((Get-ThornswoodGateFileLine (Join-Path $fdir 'crlf')) -match '^Gate\.ps1=none ')
 Remove-Item -LiteralPath $fdir -Recurse -Force
 $gb = Text 'scripts/vps/gate/GateBroker.ps1'
-Yes 'the broker''s ping prints the line for the copies it runs from' ($gb.Contains("Send ('| GATE FILES ' + (Get-ThornswoodGateFileLine `$Root))") -and $gb.IndexOf('GATE FILES') -lt $gb.IndexOf("Log 'PING'"))
+Yes 'the broker''s ping prints the line for the copies it runs from' ($gb.Contains("Send ('| GATE FILES ' + (Get-ThornswoodGateFileLine `$Root))") -and $gb.IndexOf('GATE FILES') -lt $gb.IndexOf("Log ('PING'"))
 $pi = $br.IndexOf("Invoke-GateLine 'ping'"); $ui = $br.IndexOf("Invoke-GateLine 'Update-Gate'"); $li = $br.IndexOf('Invoke-GateLine $Line')
 Yes 'Box-Run pings, then sends Update-Gate when the copies are not main''s, then the verb' ($pi -gt 0 -and $ui -gt $pi -and $li -gt $ui -and
     $br.Contains("Get-ThornswoodGateFileLine (Join-Path `$Here 'gate')") -and $br.Contains('if ($have -ne $want)'))
@@ -876,6 +914,69 @@ Yes '  and every use of Select-Named or Select-Holding keeps its lines in @( )' 
 foreach ($case in @(@('desk', "is a way in this never touches"), @('nobody-here', 'main carries no scripts/vps/box-keys/nobody-here.json'), @('Bad Name', 'one lower case word'))) {
     $o = & pwsh -NoProfile -File (Join-Path $Repo 'scripts/vps/Grant-BoxKey.ps1') -Name $case[0] -NoPause 2>&1 | Out-String
     Yes "  Grant-BoxKey -Name $($case[0]) stops and changes nothing" ($LASTEXITCODE -eq 1 -and $o.Contains($case[1]) -and $o -match 'Nothing was changed')
+}
+
+# ---- 11. Gate.ps1 between the two lanes (#6231) ------------------------------
+# Stand-in pipes answer as the broker's lanes would. Not on Windows, where a
+# box's own broker may hold these names: there a named pipe is a pipe, and
+# elsewhere .NET makes it a file of the temp folder, which nothing else holds.
+if ($OnWindows) {
+    Write-Host 'SKIP  Gate.ps1 against stand-in pipes: on Windows the names may be a real broker''s'
+} else {
+    $serve = {
+        param([string]$Name, [string[]]$Answer)
+        $s = New-Object IO.Pipes.NamedPipeServerStream($Name, [IO.Pipes.PipeDirection]::InOut, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+        try {
+            if (-not $s.WaitForConnectionAsync().Wait(60000)) { return 'NOBODY' }
+            $enc = New-Object Text.UTF8Encoding($false)
+            $r = New-Object IO.StreamReader($s, $enc, $false, 4096, $true)
+            $got = $r.ReadLine()
+            $w = New-Object IO.StreamWriter($s, $enc, 4096, $true)
+            $w.NewLine = "`n"
+            foreach ($l in $Answer) { $w.WriteLine($l) }
+            $w.Flush()
+            # Until the caller has read it and gone.
+            while ($null -ne $r.ReadLine()) { }
+            return $got
+        } finally { $s.Dispose() }
+    }
+    $gatePs1 = Join-Path $Repo 'scripts/vps/gate/Gate.ps1'
+    function Ask-Gate([string]$Line) {
+        $env:SSH_ORIGINAL_COMMAND = $Line
+        try { $o = @(& pwsh -NoProfile -NonInteractive -File $gatePs1 2>&1 | ForEach-Object { "$_" }); return [pscustomobject]@{ Out = $o; Code = $LASTEXITCODE } }
+        finally { Remove-Item Env:SSH_ORIGINAL_COMMAND -ErrorAction SilentlyContinue }
+    }
+    $b64 = { param($t) 'LINE ' + [Convert]::ToBase64String((New-Object Text.UTF8Encoding($false)).GetBytes($t)) }
+    # A ping: the read lane answers it, and the other pipe is never asked.
+    $readJob = Start-ThreadJob -ScriptBlock $serve -ArgumentList 'thornswood-gate-read', @('| GATE READY, installed from x', '| GATE RUNS Build-Content -Server dev (run r1, since 23:50:48 UTC)', '@END 0')
+    Start-Sleep -Milliseconds 500
+    $a = Ask-Gate 'ping'
+    $got = Receive-Job $readJob -Wait -AutoRemoveJob
+    Yes 'a ping goes to the read lane alone, which says what the other lane runs' ($a.Code -eq 0 -and $got -eq (& $b64 'ping') -and ($a.Out -join ';') -eq '| GATE READY, installed from x;| GATE RUNS Build-Content -Server dev (run r1, since 23:50:48 UTC);@END 0')
+    # A verb that changes the box: handed on, and @CHANGE is never printed.
+    $readJob = Start-ThreadJob -ScriptBlock $serve -ArgumentList 'thornswood-gate-read', @('| gate run r2: Deploy-Docs', '@CHANGE ')
+    $changeJob = Start-ThreadJob -ScriptBlock $serve -ArgumentList 'thornswood-gate', @('| deployed', '@END 3')
+    Start-Sleep -Milliseconds 500
+    $a = Ask-Gate 'Deploy-Docs'
+    $gotRead = Receive-Job $readJob -Wait -AutoRemoveJob
+    $gotChange = Receive-Job $changeJob -Wait -AutoRemoveJob
+    Yes 'a verb the read lane hands on goes to the other pipe, the same line, and ends with that verb''s code' (
+        $a.Code -eq 3 -and $gotRead -eq (& $b64 'Deploy-Docs') -and $gotChange -eq (& $b64 'Deploy-Docs') -and
+        ($a.Out -join ';') -eq '| gate run r2: Deploy-Docs;| deployed;@END 3')
+    # The other lane busy past 20 seconds: refused, naming what it runs.
+    $readJob = Start-ThreadJob -ScriptBlock $serve -ArgumentList 'thornswood-gate-read', @('@CHANGE Build-Content -Server dev (run r1, since 23:50:48 UTC)')
+    Start-Sleep -Milliseconds 500
+    $a = Ask-Gate 'Deploy-Docs'
+    [void](Receive-Job $readJob -Wait -AutoRemoveJob)
+    $said = $a.Out -join ';'
+    Yes '  and when that lane does not take it in 20 seconds, the refusal names what it runs' ($a.Code -eq 65 -and $said.StartsWith('@REFUSED the gate did not take this verb within 20 seconds') -and
+        $said.Contains('it is running Build-Content -Server dev (run r1, since 23:50:48 UTC)') -and $said.EndsWith('@END 65') -and $said -notmatch '@CHANGE')
+    # No read lane at all: refused as before, in the words Renew-BoxKey.ps1
+    # takes as proof that the key logged in.
+    $a = Ask-Gate 'ping'
+    $proved = [regex]::Match((Text 'scripts/vps/Renew-BoxKey.ps1'), "Proved = '([^']+)'").Groups[1].Value
+    Yes 'with no broker, a line is refused in 20 seconds, in the words Renew-BoxKey takes as proof the key logged in' ($a.Code -eq 65 -and $proved -and [string]$a.Out[0] -match $proved -and
+        [string]$a.Out[0] -match '^@REFUSED the gate broker did not answer in 20 seconds')
 }
 
 Write-Host ''

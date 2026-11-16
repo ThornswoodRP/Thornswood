@@ -98,6 +98,7 @@
         "scripts/mods/PluginRuleLoops.ps1",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/HashStamps.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/NexusLayout.cs",
