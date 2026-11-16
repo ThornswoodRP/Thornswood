@@ -616,17 +616,28 @@ if ($Password) {
   # ssh's standard input from the prompt. What writes it is the same.
   $setTail = Get-ThornswoodSiteConfigSet -ConfigPath "$rootWin\config.json" -Key 'password' -What 'password'
   if ($pwFromBox) {
-    Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ((Get-ThornswoodDocsPasswordSetHead $PasswordFile) + $setTail) |
-      Where-Object { $_ -is [string] } | ForEach-Object { "  $_" }
+    $said = Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ((Get-ThornswoodDocsPasswordSetHead $PasswordFile) + $setTail) |
+      Where-Object { $_ -is [string] }
   } else {
     $setHead = @"
 `$ErrorActionPreference = 'Stop'
 `$pw = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 if (-not `$pw) { 'NOTHING ARRIVED on standard input. Nothing written, the password is unchanged.'; return }
 "@
-    Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script ($setHead + "`n" + $setTail) | ForEach-Object { "  $_" }
+    $said = Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script ($setHead + "`n" + $setTail)
   }
   $newPassword = $null
+  # Held to the line the write says when it worked (#4210): a refused
+  # password file, an unreadable config.json, a throw or no answer at all is
+  # FAILED and ends 1 here, before anything of the deploy is sent. Until then
+  # whatever came back was printed and the deploy carried on.
+  $said = @($said | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  $said | ForEach-Object { "  $_" }
+  if (-not @($said | Where-Object { $_ -match '^set password, \d+ other setting' }).Count) {
+    Write-Host ''
+    Write-Host ('  FAILED    writing the new password into the site''s config.json did not happen. ' + $(if ($said.Count) { 'The box said: ' + $said[-1] } else { 'The box said nothing back.' })) -ForegroundColor Red
+    throw 'The site password was not written, so nothing else of the deploy was sent.'
+  }
 }
 
 if (-not $PutBack) {
@@ -1108,26 +1119,37 @@ function Why {
 # ==== end thornswood site hooks ====
 
 Write-Host ''
+# A deploy with nothing in the app to swap still restarts the site when what
+# it reads only at start has changed: its account (OWNER NEW, #4077), or the
+# member password -Password just wrote into config.json (#4210). The site
+# reads config.json once, when it starts (site\lib\config.js), so until
+# #4210 a -Password with no app change said the password was set and left
+# the site running on the old one.
+$restartWhy = ''
+if ($appUnchanged -and -not $PutBack) {
+  if ($ownerNew) { $restartWhy = 'the site starts through the launcher now' }
+  elseif ($Password) { $restartWhy = 'the site reads its password only when it starts' }
+}
 if ($PutBack) { Write-Host "Putting back the newest .prev folder in $rootWin..." }
-elseif ($appUnchanged -and $ownerNew) { Write-Host 'Nothing in the app to swap, but the site starts through the launcher now: restarting it.' }
+elseif ($restartWhy) { Write-Host "Nothing in the app to swap, but $($restartWhy): restarting it." }
 elseif ($appUnchanged) { Write-Host 'Nothing in the app to swap; site left running.' }
 else { Write-Host 'Stopping, swapping in and starting...' }
 # The site's own SID for StartIt (#4077), and the account helpers it uses.
 $ownerVars = $siteAccountHelpers + "`$Owner = '" + $owner + "'`r`n"
-# Nothing to swap and the site still writes as LOCAL SERVICE (OWNER NEW):
-# stopped, given what LOCAL SERVICE made in its folder, and started through
-# the launcher, the way the swap does it, so nothing it writes from here on
-# is every service's.
-if ($appUnchanged -and $ownerNew -and -not $PutBack) {
+# Nothing to swap, and the site still writes as LOCAL SERVICE (OWNER NEW) or
+# has a new password to read: stopped, given what LOCAL SERVICE made in its
+# folder, and started through the launcher, the way the swap does it.
+if ($restartWhy) {
   $restartVars = "`$Root = '" + $Root.Replace('/', '\').Replace("'", "''") + "'`r`n`$Wait = " + $Wait + "`r`n" +
                  "`$Task = '" + $Task.Replace("'", "''") + "'`r`n`$Port = " + $Port + "`r`n" +
-                 "`$HoldBy = '" + (Get-ThornswoodHoldBy 'Deploy-Docs.ps1').Replace("'", "''") + "'`r`n"
+                 "`$HoldBy = '" + (Get-ThornswoodHoldBy 'Deploy-Docs.ps1').Replace("'", "''") + "'`r`n" +
+                 "`$RestartWhy = '" + $restartWhy.Replace("'", "''") + "'`r`n"
   $eap = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
     $restartOut = @(Remote ($ownerVars + $restartVars + $ThornswoodHoldText + $ThornswoodStopAndMoveText + $siteHooks + @'
 # Held while it is stopped (#5155, ServerHold.ps1), so the watchdog leaves it.
-Set-ThornswoodHold -Target $Task -Why 'restarting the site to start it through its launcher' -By $HoldBy
+Set-ThornswoodHold -Target $Task -Why ('restarting the site: ' + $RestartWhy) -By $HoldBy
 StopIt
 StartIt
 $ok = Healthy
