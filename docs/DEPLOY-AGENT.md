@@ -507,7 +507,9 @@ shares on Windows and Linux. A red one stops the release, and the build is
 kept as the artifact `content-dev` only after they pass. Every other run of
 the harnesses (a pull request's gate, the nightly, the named harnesses, the
 gate map's trace, the load test, a developer's clone) lays that artifact
-over its checkout first (`Get-ContentBuild.ps1 -Newest`). A pull request
+over its checkout first (`Get-ContentBuild.ps1 -Newest`). A workflow lays it
+with `.github/actions/lay-content`, where GitHub's own download step takes
+it, never with the script's own download (#6359). A pull request
 whose content inputs are not that build's leaves out the content checks that
 read an input it changed, since they would hold its new sources to the old
 tables; the merge release runs them.

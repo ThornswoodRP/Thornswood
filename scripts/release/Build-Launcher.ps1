@@ -112,15 +112,25 @@ if (-not (Test-Path -LiteralPath $proj)) { Die "Thornswood.csproj is not at $pro
 
 # ------------------------------------------- the records compiled into it
 # RecordShape.ps1 (#2180): the records compiled into the launcher must be
-# a version this checkout knows with every field OwnGame reads, or the build
-# stops here; a launcher with a half-read list in it is worse than none. The
-# project file embeds them; it cannot read their shape, so this does.
+# a version this checkout knows with every field their readers need, or the
+# build stops here; a launcher with a half-read record in it is worse than
+# none. The project file embeds them and cannot read their shape, so this
+# does, for every record it embeds: read off the project (#4684). Until then
+# this kept a list of its own, which named three of the four and left out
+# client-build.json, so a bad one went into the exe and showed only in a
+# tester's launcher as a record it could not read (ClientRuntime.cs).
 . (Join-Path $Here 'RecordShape.ps1')
-foreach ($embedded in @(@{ Path = (Join-Path $Here '..\..\records\skyrim-files.json'); Kind = 'skyrim-files' },
-                        @{ Path = (Join-Path $Here '..\..\records\ui-gone.json'); Kind = 'ui-gone' },
-                        @{ Path = (Join-Path $Here '..\..\records\generated.json'); Kind = 'generated' })) {
-    if (Test-Path -LiteralPath $embedded.Path) {
-        try { $null = Read-ThornswoodRecord -Path $embedded.Path -Kind $embedded.Kind } catch { Die ($_.Exception.Message + ' Nothing was built.') }
+$recordsDir = [IO.Path]::GetFullPath((Join-Path (Join-Path (Join-Path $Here '..') '..') 'records'))
+$projDir = Split-Path -Parent ((Resolve-Path -LiteralPath $proj).Path)
+foreach ($item in @(([xml](Get-Content -LiteralPath $proj -Raw)).SelectNodes("//*[local-name()='EmbeddedResource']"))) {
+    $inc = $item.GetAttribute('Include').Replace('\', [IO.Path]::DirectorySeparatorChar)
+    $path = [IO.Path]::GetFullPath((Join-Path $projDir $inc))
+    if (-not $path.StartsWith($recordsDir + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
+    $name = 'records\' + [IO.Path]::GetFileName($path)
+    $kinds = @($script:ThornswoodRecordKinds.Keys | Where-Object { $script:ThornswoodRecordKinds[$_].File -ieq $name })
+    if ($kinds.Count -ne 1) { Die "Thornswood.csproj compiles in $name, and RecordShape.ps1 has no record kind for it, so its shape cannot be checked. Nothing was built." }
+    if (Test-Path -LiteralPath $path) {
+        try { $null = Read-ThornswoodRecord -Path $path -Kind $kinds[0] } catch { Die ($_.Exception.Message + ' Nothing was built.') }
     }
 }
 

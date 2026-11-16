@@ -867,12 +867,19 @@ $(Get-ThornswoodLockedFolderScript $store.Replace('/', '\'))
 New-Item -ItemType Directory -Force -Path '$($dir.Replace('/', '\'))', '$($store.Replace('/', '\'))\current' | Out-Null
 if (Test-Path -LiteralPath '$zipWin') { 'HAS ' + (Get-FileHash -LiteralPath '$zipWin' -Algorithm SHA256).Hash.ToLowerInvariant() } else { 'HAS none' }
 "@
-  $have = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
+  $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask)
+  # A store the box could not lock is never written into (#4212).
+  $lockFailed = Get-ThornswoodLockFailure $said
+  if ($lockFailed) { throw ('The box could not lock the deploy store, so nothing was sent to it: ' + $lockFailed) }
+  $have = @($said | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
   if ($have -eq ('HAS ' + $Artifact.Sha256)) {
     Write-Host ('  ' + $Artifact.Name + ' is already in the store on the box') -ForegroundColor DarkGray
   } else {
     Send-ThornswoodArtifactFile $Artifact.Zip $Target $SshArgs ($dir + '/' + $Artifact.Name)
-    $have = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
+    $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask)
+    $lockFailed = Get-ThornswoodLockFailure $said
+    if ($lockFailed) { throw ('The box could not lock the deploy store, so nothing was swapped: ' + $lockFailed) }
+    $have = @($said | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
     if ($have -ne ('HAS ' + $Artifact.Sha256)) { throw ('The box does not hold ' + $Artifact.Name + ' as it was built (' + $have + '). Nothing was swapped.') }
     Write-Host ('  ' + $Artifact.Name + ' sent to the store on the box, ' + $Artifact.Sha256.Substring(0, 16) + ' checked there') -ForegroundColor DarkGray
   }
@@ -1073,6 +1080,8 @@ function Restore-ThornswoodServerRecord {
   )
   $at = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
   $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs (Get-ThornswoodServerRestoreScript -Root $Root -At $at -Store $Store))
+  $lockFailed = Get-ThornswoodLockFailure $said
+  if ($lockFailed) { throw ('The box could not lock the deploy store, so the put-back was not recorded: ' + $lockFailed) }
   $r = @($said | Where-Object { "$_" -like 'SERVER RECORDED *' })
   if ($r.Count) { Write-Host ('  the box records ' + (Get-ThornswoodArtifactPart $Root) + ' as ' + ([string]$r[0]).Substring(16)) -ForegroundColor DarkGray }
   return $said

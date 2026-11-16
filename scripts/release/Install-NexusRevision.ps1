@@ -28,7 +28,9 @@
        download-link (GET /v3/games/<game>/mod-file-versions/<file id>/download-link)
        into the cache, %LOCALAPPDATA%\Thornswood\nexus-cache\<file id>\<name>,
        kept between runs. A cached archive is used only when its size and md5
-       are the revision's; any other file there is replaced. Every archive is
+       are the revision's; any other file there is replaced. One that passed
+       its md5 is not read again while its size and write time stay what they
+       were (the cache's md5-passed.tsv, #4388). Every archive is
        checked against the revision before it is used. A failed download
        stops the run and says which file; nothing is tried again. Once the
        cache holds every archive the revision lists, the folder of any file
@@ -51,7 +53,9 @@
          plugins.txt   the plugin order, in the shape LoadOrder.ps1 reads
          loadorder.txt the same names without stars
        A folder that already holds a layout has its old files checked (each
-       is still what files.txt says) and taken out first. A file in -Game that
+       is still what files.txt says) and taken out first; one whose size and
+       write time are still what placed.tsv recorded when it was placed is
+       not read again (#4388). A file in -Game that
        no layout put there is never written over: the run stops and names it.
 
   THE PLUGIN ORDER is the collection's plugins list, which Vortex writes from
@@ -220,7 +224,7 @@ function Invoke-Tool([string]$exe, [string[]]$arguments) {
 $script:SevenZip = ''
 function Use-SevenZip {
   if (-not $script:SevenZip) { $script:SevenZip = Find-SevenZip }
-  if (-not $script:SevenZip) { throw '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and Vortex unpacks every archive with it.' }
+  if (-not $script:SevenZip) { throw ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and Vortex unpacks every archive with it.') }
 }
 # A scratch folder and everything under it. 7-Zip keeps an archive's
 # read-only attribute on the files it unpacks, and on Windows
@@ -318,6 +322,7 @@ if (Test-Under $Cache $Record) { Die ('The cache ' + $Cache + ' is inside -Recor
 $skyrimRecord = Join-Path (Join-Path $Repo 'records') 'skyrim-files.json'
 if (-not (Test-Path -LiteralPath $skyrimRecord)) { Die ('records\skyrim-files.json is not in this checkout (' + $skyrimRecord + '), and it is what a FOMOD''s questions about the game are answered from.') }
 Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs'), (Join-Path $Repo 'launcher\app\XxHash64.cs')) } | Out-Null
+. (Join-Path $Here 'HashStamps.ps1')
 if ($Modlist) {
   if (-not $Mo2Record) { $Mo2Record = Join-Path (Join-Path $Repo 'records') 'mo2.json' }
   $mo2 = Step { Get-Content -Raw -LiteralPath $Mo2Record | ConvertFrom-Json }
@@ -407,13 +412,18 @@ $total = ($col.Entries | Measure-Object -Property Size -Sum).Sum
 Say ('  ' + $col.Entries.Count + ' archives, ' + ([double]$total / 1GB).ToString('N2') + ' GB')
 $archives = @{}
 $fetched = 0; $reused = 0
+# An archive that passed its md5 is stamped with its size and write time
+# (HashStamps.ps1), so the next run reads it again only when either changed
+# (#4388). A changed one is read and held to the md5 as before.
+$cacheStamps = Read-HashStamps (Join-Path $Cache 'md5-passed.tsv')
+$md5Of = { param([string]$p) (Get-FileHash -LiteralPath $p -Algorithm MD5).Hash.ToLowerInvariant() }
 foreach ($e in $col.Entries) {
   $dir = Join-Path $Cache ([string]$e.FileId)
   $hit = $null
   if (Test-Path -LiteralPath $dir) {
     foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -Force)) {
       if ($f.Name.EndsWith('.part')) { [IO.File]::Delete($f.FullName); continue }
-      if (-not $hit -and $f.Length -eq $e.Size -and (Get-FileHash -LiteralPath $f.FullName -Algorithm MD5).Hash.ToLowerInvariant() -eq $e.Md5) { $hit = $f.FullName; continue }
+      if (-not $hit -and (Test-HashAsRecorded $cacheStamps ([string]$e.FileId + '\' + $f.Name) $f.FullName $e.Size $e.Md5 $md5Of)) { $hit = $f.FullName; continue }
       Say ('  ' + $f.FullName + ' is not the archive the revision lists for file ' + $e.FileId + ', so it is replaced') 'Yellow'
       [IO.File]::Delete($f.FullName)
     }
@@ -444,8 +454,19 @@ foreach ($e in $col.Entries) {
     $got = [pscustomobject]@{ Path = $named; Name = $base + $ext; Size = $got.Size; Md5Hex = $got.Md5Hex }
   }
   $archives[$e.Index] = $got.Path; $fetched++
+  # Held to the revision's size and md5 above, so stamped with no read.
+  Set-HashStamp $cacheStamps ([string]$e.FileId + '\' + $got.Name) $got.Path $e.Md5
   Say ('  ' + $got.Name + ', ' + ([double]$got.Size / 1MB).ToString('N1') + ' MB in ' + [Math]::Round($sw.Elapsed.TotalSeconds) + ' s') 'DarkGray'
 }
+# Only the archives this revision uses keep a stamp; the cache holds no
+# other (the folders of other file ids go just below).
+$keep = @{}
+foreach ($e in $col.Entries) {
+  $k = ([string]$e.FileId + '\' + [IO.Path]::GetFileName($archives[$e.Index])).ToLowerInvariant()
+  if ($cacheStamps.ContainsKey($k)) { $keep[$k] = $cacheStamps[$k] }
+}
+New-Item -ItemType Directory -Force -Path $Cache | Out-Null
+Save-HashStamps (Join-Path $Cache 'md5-passed.tsv') $keep
 Say ('  ' + $reused + ' from the cache, ' + $fetched + ' downloaded, every one the revision''s size and md5') 'Green'
 # The cache keeps one folder per file id, and until #4324 only the folders of
 # the file ids a run's revision lists were ever read, so an archive no
@@ -934,10 +955,15 @@ if (Test-Path -LiteralPath $oldFiles) {
     $old[$c[3].ToLowerInvariant()] = [pscustomobject]@{ Sha256 = $c[0]; Size = [long]$c[1]; Rel = $c[3] }
   }
   $changedOld = @()
+  # placed.tsv stamps each file as the last run placed it (HashStamps.ps1),
+  # so one still as placed is not read again; the new files.txt has read
+  # this run's copy already (#4388). Any other is read and held to files.txt.
+  $placedStamps = Read-HashStamps (Join-Path $recDir 'placed.tsv')
+  $sha256Of = { param([string]$p) [Thornswood.Layout.NexusLayout]::Sha256Of($p) }
   foreach ($o in $old.Values) {
     $f = Join-Path $Game $o.Rel
     if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
-    if ((Get-Item -LiteralPath $f).Length -ne $o.Size -or [Thornswood.Layout.NexusLayout]::Sha256Of($f) -ne $o.Sha256) { $changedOld += $o.Rel }
+    if (-not (Test-HashAsRecorded $placedStamps $o.Rel $f $o.Size $o.Sha256 $sha256Of)) { $changedOld += $o.Rel }
   }
   if ($changedOld.Count) { Die ('These files of the layout already in ' + $Game + ' are not what its files.txt says, so something else wrote them and they are not taken out: ' + (($changedOld | Select-Object -First 20) -join ', ') + $(if ($changedOld.Count -gt 20) { ' and ' + ($changedOld.Count - 20) + ' more' } else { '' })) }
   Say ('  the layout there now has ' + $old.Count + ' files, all as its files.txt says')
@@ -950,7 +976,7 @@ foreach ($o in $old.Values) { $f = Join-Path $Game $o.Rel; if (Test-Path -Litera
 # A run cut part way through a copy leaves that file's .part (CopyWhole in
 # NexusLayout.cs, #4303); it is this script's own, for a name files.txt lists.
 foreach ($o in $old.Values) { $f = Join-Path $Game ($o.Rel + '.part'); if (Test-Path -LiteralPath $f -PathType Leaf) { [IO.File]::SetAttributes($f, [IO.FileAttributes]::Normal); [IO.File]::Delete($f) } }
-foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
+foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'placed.tsv') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
 # Folders the old layout left empty go too, deepest first; Data and the
 # game folder stay.
 foreach ($d in @($old.Values | ForEach-Object { Split-Path -Parent $_.Rel } | Where-Object { $_ } | Sort-Object -Unique | Sort-Object { $_.Length } -Descending)) {
@@ -984,6 +1010,13 @@ try {
 catch { Die ('Placing ' + $x.Rel + ' failed after ' + ($linked + $copied) + ' files: ' + $_.Exception.Message) }
 $lines[0] = $whole
 Write-LayoutRecord $recDir $true
+# Each placed file stamped with the sha256 files.txt has for it, which this
+# run worked out from the copy it placed: no file is read for it. Written
+# only once the layout is whole, so a stop part way leaves none, and the
+# next run reads every file it takes out.
+$placedNow = @{}
+foreach ($x in $placed) { Set-HashStamp $placedNow $x.Rel (Join-Path $Game $x.Rel) $x.Sha256 }
+Save-HashStamps (Join-Path $recDir 'placed.tsv') $placedNow
 $script:Changed = ''
 Remove-Tree $script:Work; $script:Work = ''
 

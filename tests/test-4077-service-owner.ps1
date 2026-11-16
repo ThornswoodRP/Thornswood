@@ -108,7 +108,7 @@ Yes 'LOCAL SERVICE''s old rules come off every server, chat and deploy-record co
     $docs.Contains("/remove:g '*S-1-5-19'") -and $docs.Contains("Name -like 'Thornswood-Server*'") -and $docs.Contains("Name -like 'Thornswood-Voice*'"))
 Yes 'its task starts through the launcher' ($docs.Contains("``" + '$a = New-ThornswoodOwnedAction -Launcher `$launcher -Sid `$own'))
 Yes 'its start gives it what LOCAL SERVICE made, with it stopped' ($docs.Contains('try { Repair-ThornswoodServiceOwner -Root $Root -Sid $Owner }'))
-Yes 'a deploy with nothing to swap still restarts it onto the launcher' ($docs.Contains('if ($appUnchanged -and $ownerNew -and -not $PutBack) {') -and $docs.Contains("'RESTART OK'"))
+Yes 'a deploy with nothing to swap still restarts it onto the launcher' ($docs.Contains("if (`$ownerNew) { `$restartWhy = 'the site starts through the launcher now' }") -and $docs.Contains('if ($restartWhy) {') -and $docs.Contains("'RESTART OK'"))
 $server = Text (Join-Path $Deploy 'Install-ThornswoodServer.ps1')
 Yes 'the server installer looks for the site''s rule by its task''s SID' ($server.Contains("if (`$siteSid -eq 'S-1-5-19') { `$siteSid = Get-ThornswoodTaskSidFromName 'Thornswood Docs' }"))
 

@@ -219,6 +219,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Get-ScratchDir.ps1](release/Get-ScratchDir.ps1) | Says where a short-lived build scratch folder goes, so Ship and Install-Thornswood take their launcher build (and the CI setup stub) from one place instead of each calling [IO.Path]::GetTempPath(). |
 | [release/Get-SevenZip.ps1](release/Get-SevenZip.ps1) | Puts 7-Zip's own Linux build (7zz, 25.01) on a Linux machine, checked against its pinned sha256, and prints where it is, so a cloud session can unpack every archive of the collection (#2969). |
 | [release/Go.ps1](release/Go.ps1) | Installs the front, the overlays and the plugins, then reports what the server is doing. |
+| [release/HashStamps.ps1](release/HashStamps.ps1) | Keeps the size, write time and hash of each file that has passed its hash, so a file unchanged since is not read again (#4388). |
 | [release/Install-Launcher.ps1](release/Install-Launcher.ps1) | Puts a launcher that Build-Launcher.ps1 has already built into an install, and does the things around it that only an install should do. |
 | [release/Install-NexusRevision.ps1](release/Install-NexusRevision.ps1) | Lays out one revision of the Thornswood collection on Nexus Mods (slug 7essxf) into a game folder, the way Vortex installs and deploys it, without Vortex (#2754). |
 | [release/Invoke-Said.ps1](release/Invoke-Said.ps1) | Runs a command and, when it fails, writes its own reason into one ::error annotation (#5765). |
@@ -265,6 +266,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Set-NexusDescription.ps1](release/Set-NexusDescription.ps1) | Adds a line to the description of one or more of our mods on Nexus Mods, or puts back a description from a file, and reads the page back to prove what Nexus kept (#2914). |
 | [release/Set-NexusKey.ps1](release/Set-NexusKey.ps1) | Puts Patrick's Nexus Mods API key on One, asked at a prompt and never shown, or says whether the key this machine has works (#2914). |
 | [release/Setup-ShipMachine.ps1](release/Setup-ShipMachine.ps1) | Checks and prepares a Windows machine to Ship dev, and says what is left for a person to do. |
+| [release/SevenZip.ps1](release/SevenZip.ps1) | Where this machine's 7-Zip is, by one rule for every script (#4424). |
 | [release/Ship-OnBox.ps1](release/Ship-OnBox.ps1) | The deploy gate's Ship verbs (#2841): a Ship from the feed run on the box itself, from main as the gate reads it, so a cloud session ships with no key to the box (Patrick, 30 Oct 2026: "we arent doing this on One"). |
 | [release/Ship-Rules.ps1](release/Ship-Rules.ps1) | The one list of what never leaves a machine inside a Thornswood pack. |
 | [release/Ship-Stack.ps1](release/Ship-Stack.ps1) | One Dev or Main command that runs the gamemode deploy and the host feed remirror. |

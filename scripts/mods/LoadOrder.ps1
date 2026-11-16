@@ -336,29 +336,12 @@ function Get-CollectionExportArchive([string]$Folder) {
 }
 
 <#
-  The 7-Zip on this machine, or $null. Only used to read one collection.json
+  The 7-Zip on this machine is SevenZip.ps1's Find-SevenZip, the one rule the
+  Nexus scripts use too (#4424). Only used here to read one collection.json
   out of a Vortex export archive, so nothing here installs it: a machine
   without 7-Zip is told to pass the extracted file with -Collection instead.
-  Vortex's own copy counts, since a machine with Vortex on it usually has one.
 #>
-function Get-SevenZipPath {
-    $spots = New-Object Collections.Generic.List[string]
-    if ($env:ProgramFiles) {
-        [void]$spots.Add((Join-Path $env:ProgramFiles '7-Zip\7z.exe'))
-        [void]$spots.Add((Join-Path $env:ProgramFiles 'Black Tree Gaming Ltd\Vortex\resources\7z.exe'))
-    }
-    if (${env:ProgramFiles(x86)}) { [void]$spots.Add((Join-Path ${env:ProgramFiles(x86)} '7-Zip\7z.exe')) }
-    if ($env:LOCALAPPDATA) {
-        [void]$spots.Add((Join-Path $env:LOCALAPPDATA 'Programs\7-Zip\7z.exe'))
-        [void]$spots.Add((Join-Path $env:LOCALAPPDATA 'Programs\Vortex\resources\7z.exe'))
-    }
-    foreach ($p in $spots) { if (Test-Path -LiteralPath $p -PathType Leaf) { return $p } }
-    foreach ($n in '7z', '7za', '7zz') {
-        $c = @(Get-Command $n -CommandType Application -EA SilentlyContinue) | Select-Object -First 1
-        if ($c) { return $c.Source }
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot '..\release\SevenZip.ps1')
 
 <#
   One collection.json read out of an export archive, cached under the temp
@@ -396,7 +379,7 @@ function Expand-CollectionJson($Archive) {
         if (Test-Path -LiteralPath $out -PathType Leaf) { return $out }
     }
 
-    $exe = Get-SevenZipPath
+    $exe = Find-SevenZip
     if ($exe) {
         # 7-Zip writes to stderr on a warning, which is a terminating error in
         # the callers that run with ErrorActionPreference Stop, so it is

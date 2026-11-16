@@ -75,12 +75,7 @@ jobs:
       # (build.yml, "Lay the newest content build"). Reading the list of
       # kept builds is what actions: read is for.
       - name: Lay the newest content build
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Newest
-          exit $LASTEXITCODE
+        uses: ./.github/actions/lay-content
 
       - name: Draft, hold to the record, publish
         id: publish
