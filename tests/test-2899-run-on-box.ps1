@@ -229,6 +229,11 @@ $m2 = ''
 try { Get-ThornswoodOnBoxKeepScript -Run 'C:\Windows\Temp\thornswood-onbox-0123456789ab' -End 'Global\Something-Else' | Out-Null } catch { $m2 = $_.Exception.Message }
 Yes 'and both refuse an event name that is not a keeper''s' ($m -match 'not a keeper''s end event' -and $m2 -match 'not a keeper''s end event')
 Yes 'the run holds its folder''s lock while it runs, and stops when it cannot' ($far.Contains("New-Object IO.FileStream((`$run + '.lock'), 'Open', 'ReadWrite', 'ReadWrite')") -and $far -match 'could not be held through its lock')
+Yes 'the run leaves the server''s copy of each plugin the build makes out of its data, and reads game\content only when the commit has it (#6351)' (
+    $far.Contains("`$ours = @(@('thornswood-content.esp')") -and $far.Contains("if (Test-Path -LiteralPath `$ownDir -PathType Container)"))
+Yes 'an error the run does not catch ends it on a STOP line (#6351)' ($far.Contains("trap { 'STOP. ' + `$_.Exception.Message"))
+$runSrc = Get-Content -LiteralPath $runOnBox -Raw
+Yes 'and Run-OnBox.ps1 hands that STOP line on when the run ends with no EXIT' ($runSrc.Contains("the run on the box stopped before the tool ended, so nothing was brought back: ") -and $runSrc.Contains("-Own `$own"))
 $runText = Get-Content -LiteralPath $runOnBox -Raw
 # The keeper is started and told the run is over in OnBox.ps1, for every
 # script that lands files on the box (#3035), and Run-OnBox.ps1 goes through it.
@@ -419,6 +424,35 @@ sys.exit(3)
         $gone = Stop-Keeper $runKeeper
         Yes 'the keeper removes the run''s folder and its lock when its end event is set, and the archive stays in the store' (
             ($gone -contains ('GONE ' + $run)) -and -not (Test-Path -LiteralPath $run) -and -not (Test-Path -LiteralPath ($run + '.lock')) -and [IO.File]::ReadAllText($archive) -eq 'archive bytes')
+
+        # A commit with no game\content (#6351): the first step of a content
+        # build makes the plugin, and nothing generated is committed. The run
+        # leaves the server's copy out and the tool still runs to its EXIT.
+        $run3 = Join-Path $work 'thornswood-onbox-0a1b2c3d4e5f'
+        $runKeeper = Start-Keeper $run3
+        $src3 = Join-Path $work 'src3'
+        New-Item -ItemType Directory -Force -Path (Join-Path $src3 'scripts\mods') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $src3 'scripts\mods\t.py'), "import os, sys`nprint('OWN ' + str(os.path.exists(os.path.join(sys.argv[2], 'Thornswood-Content.esp'))))`n")
+        [IO.Compression.ZipFile]::CreateFromDirectory($src3, (Join-Path $run3 'tools.zip'))
+        $file3 = Join-Path $work 'far3.ps1'
+        [IO.File]::WriteAllText($file3, (Get-ThornswoodOnBoxScript -Run $run3 -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}') -ArchiveStore $store), (New-Object Text.UTF8Encoding($true)))
+        $lines3 = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file3 2>&1 | ForEach-Object { "$_" })
+        foreach ($l in $lines3) { Write-Host ('    ' + $l) }
+        Yes 'a commit with no game\content runs the tool to its EXIT, with the server''s copy of our plugin left out (#6351)' (
+            ($lines3 -contains 'OWN False') -and ($lines3 -contains 'EXIT 0') -and ($lines3 -match '^data\s+1 plugin\(s\)').Count -eq 1)
+        $null = Stop-Keeper $runKeeper
+
+        # A run that fails before its tool says why on a STOP line (#6351).
+        $run4 = Join-Path $work 'thornswood-onbox-5f4e3d2c1b0a'
+        $runKeeper = Start-Keeper $run4
+        [IO.File]::WriteAllText((Join-Path $run4 'tools.zip'), 'not a zip')
+        $file4 = Join-Path $work 'far4.ps1'
+        [IO.File]::WriteAllText($file4, (Get-ThornswoodOnBoxScript -Run $run4 -ServerRoot $server -Tool 'scripts/mods/t.py' -ArchiveStore $store), (New-Object Text.UTF8Encoding($true)))
+        $lines4 = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file4 2>&1 | ForEach-Object { "$_" })
+        foreach ($l in $lines4) { Write-Host ('    ' + $l) }
+        Yes 'a run that fails before its tool says what on a STOP line, with no EXIT' (
+            @($lines4 | Where-Object { $_ -cmatch '^STOP\. .+\(run\.ps1 line \d+\)$' }).Count -eq 1 -and -not @($lines4 | Where-Object { $_ -like 'EXIT *' }).Count)
+        $null = Stop-Keeper $runKeeper
 
         # A PowerShell tool given the plugin list (#3100): the server's
         # loadOrder after the five masters, nothing else of its settings.
