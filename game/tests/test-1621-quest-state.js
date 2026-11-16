@@ -47,7 +47,7 @@ function slice(src, start, end) {
 
 const block = slice(gm, '// ==== thornswood custom quests ====', '// ==== end thornswood custom quests ====');
 yes('the custom quests block is in the gamemode', !!block);
-if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; } else {
 
 const PROP = (/var QUEST_PROPERTY = '([^']+)';/.exec(block) || [])[1];
 yes('the block names the property it keeps each person\'s quests in', PROP === 'thornswoodQuests');
@@ -883,4 +883,5 @@ for(const [index,school] of schools.entries()) {
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

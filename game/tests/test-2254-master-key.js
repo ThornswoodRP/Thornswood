@@ -36,7 +36,7 @@ function done() {
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ============================================== R. the record in the plugin
@@ -95,7 +95,7 @@ function slice(start, end) {
 }
 const propBlock = slice('// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('A0 the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const clock = { t: Date.UTC(2026, 9, 12, 20, 0, 0) };
@@ -254,7 +254,7 @@ function inDir(f) {
 let box = inDir(boot);
 let W = box.__thornswoodProperty;
 yes('A0 the property block publishes the master key', !!W && typeof W.holdsMasterKey === 'function');
-if (!W || !W.holdsMasterKey) { done(); }
+if (!W || !W.holdsMasterKey) { done(); } else {
 
 function linesTo(p, since) {
   return told.slice(since || 0).filter(function (t) { return t.a === p.pid || t.a === p.a; }).map(function (t) { return t.line; });
@@ -427,3 +427,4 @@ function claimed() { return W.claims()[HOUSE]; }
 }
 
 done();
+}}

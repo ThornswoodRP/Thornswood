@@ -55,4 +55,4 @@ yes('panel passes actor race into the recipe book',
   src.indexOf("bookHalf(own, 'own', P.rankOf(s, own) || 'novice', actorId)") >= 0);
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

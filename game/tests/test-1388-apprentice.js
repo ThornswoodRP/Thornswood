@@ -52,7 +52,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -80,7 +80,7 @@ const GATE_PARTS = [
 ];
 const ok = RULES && CHARACTER && SOCIAL && SOCIAL_CMDS && GATE_PARTS.every(function (p) { return p !== null; });
 yes('the rules, the character store, the social block, the /yes branch and the craft gate are in the gamemode', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
@@ -484,3 +484,4 @@ yes('C8: an offer that no longer holds when it is answered writes nothing, and t
 }
 
 done();
+}

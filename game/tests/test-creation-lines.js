@@ -46,7 +46,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ------------------------------------------------------- lifted by text
@@ -92,7 +92,7 @@ const missing = Object.keys(FNS).filter(function (k) { return !FNS[k]; })
   .concat(CHARGEN ? [] : ['CHARGEN']);
 yes('the chargen tick, every step it calls, tellOnce and the constants are all in gamemode.js' +
     (missing.length ? ' (missing: ' + missing.join(', ') + ')' : ''), missing.length === 0);
-if (missing.length) { done(); }
+if (missing.length) { done(); } else {
 
 const HALL = new Function('return ' + HALL_SRC)();
 const PASSAGES = CHARGEN.towns;
@@ -446,3 +446,4 @@ function clean(line) {
 }
 
 done();
+}

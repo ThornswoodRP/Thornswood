@@ -354,4 +354,4 @@ yes('W6 build.yml runs this harness (it is not in tests/gate-excluded.txt, #3009
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed, ' + skip + ' skipped');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

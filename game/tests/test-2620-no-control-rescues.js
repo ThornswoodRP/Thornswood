@@ -168,4 +168,4 @@ if (pc) {
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail === 0 ? 0 : 1);
+process.exitCode = fail === 0 ? 0 : 1;

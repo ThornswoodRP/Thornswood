@@ -8,11 +8,10 @@ if(!process.argv[2]||!process.argv[3]){
   const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../game/gamemode.js'),'utf8');
   for(const m of ["NPC SERVER RUNTIME"]){
     const b=src.indexOf('// '+m+' BEGIN'),e=src.indexOf('// '+m+' END');
-    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exit(1);}
+    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exitCode=1;}
   }
-  console.log('SKIP: runtime native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-runtime-native.js <addon> <installed.json>); gamemode sections present: NPC SERVER RUNTIME');
-  process.exit(0);
-}
+  if(!process.exitCode)console.log('SKIP: runtime native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-runtime-native.js <addon> <installed.json>); gamemode sections present: NPC SERVER RUNTIME');
+} else {
 const addon = require(path.resolve(process.argv[2]));
 const installed = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 // Read the installed load order only. No saved world, credentials or VPS state.
@@ -81,4 +80,4 @@ reloaded.stop();
 assert.equal(pending.size, 0);
 console.log(JSON.stringify({passed:true,candidates,indexingMs,batches,batchWorstMs:batchWorst,
   before:before.pos,after:after.pos,mesh:saved.mesh,route:saved.route,lines}));
-process.exit(0);
+}
