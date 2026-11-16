@@ -16,7 +16,8 @@
 //      opens in turn and the file is taken from Downloads as it lands
 //      (ModlistFetch.ByHand);
 //   6. the install itself into the Mod Organizer 2 instance
-//      (ModlistInstall.Install).
+//      (ModlistInstall.Install), and then the record of what goes into the
+//      game folder (Deployment), which OwnGame reads in place of Vortex's.
 // A run stopped part way keeps what it got: the archives in downloads and
 // the files already written, each still the modlist's, so the next run goes
 // on from there.
@@ -34,6 +35,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Thornswood
 {
@@ -101,8 +104,77 @@ namespace Thornswood
             if (nexus.Count > 0)
                 throw new ModlistStop(nexus.Count + " of the modlist's Nexus files are not downloaded yet (" + string.Join(", ", nexus.Select(a => a.Say())) + "). What is here is kept; press Install again to go on.");
 
+            // The record of what goes into the game folder comes off before a
+            // file of a changed modlist is written, so a folder made while the
+            // install is part way never takes a mix of two revisions, and goes
+            // back once every file is in.
+            List<string> record = Deployment(m, Sha256Of(modlist));
+            string recordFile = Path.Combine(mods, OwnGame.ModsRecordName);
+            bool same = File.Exists(recordFile) && File.ReadAllLines(recordFile).SequenceEqual(record);
+            if (!same && File.Exists(recordFile)) File.Delete(recordFile);
+
             say("Putting in Mod Organizer 2 and the mods");
-            return ModlistInstall.Install(m, downloads, mods, game, SevenZip.With(sevenZip), say);
+            int written = ModlistInstall.Install(m, downloads, mods, game, SevenZip.With(sevenZip), say);
+            if (!same)
+            {
+                string part = recordFile + ".part";
+                File.WriteAllLines(part, record, new UTF8Encoding(false));
+                File.Move(part, recordFile, true);
+            }
+            return written;
+        }
+
+        /// <summary>The profile the modlist's instance has on, whose modlist.txt gives the mods' order.</summary>
+        public const string Profile = "Thornswood";
+
+        /// <summary>
+        /// What goes into Thornswood's game folder from the modlist's mods,
+        /// one line a file: the path in the game folder, the mod, the path in
+        /// the mod's folder, its xxHash64 and its size, joined with |, after a
+        /// line naming the modlist by its sha256. Written into the instance as
+        /// OwnGame.ModsRecordName once an install is whole, and read by
+        /// OwnGame in place of Vortex's deployment record (#6244).
+        ///
+        /// A mod's files go under Data, except its Root folder, which goes
+        /// beside the game (the script extender's loader). Only the mods the
+        /// profile's modlist.txt switches on (+) count, its meta.ini never,
+        /// and where two mods have a file at one path the one higher in
+        /// modlist.txt has it, which is how Mod Organizer 2 orders them.
+        /// </summary>
+        public static List<string> Deployment(CollectionModlist m, string sha256)
+        {
+            string orderAt = "profiles\\" + Profile + "\\modlist.txt";
+            ModlistFile order = m.Files.FirstOrDefault(f => f.Kind == "InlineFile" && string.Equals(f.To, orderAt, StringComparison.OrdinalIgnoreCase));
+            if (order == null) throw new ModlistStop("The modlist has no " + orderAt + ", so the order of its mods is not known and nothing was installed.");
+            var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (string line in new UTF8Encoding(false).GetString(m.Data(order.DataId)).Split('\n'))
+            {
+                string l = line.Trim('\r', ' ', '\uFEFF');
+                if (l.Length > 1 && l[0] == '+' && !rank.ContainsKey(l.Substring(1))) rank[l.Substring(1)] = rank.Count;
+            }
+            var won = new Dictionary<string, KeyValuePair<int, string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (ModlistFile f in m.Files)
+            {
+                string[] p = f.To.Split('\\');
+                if (p.Length < 3 || !string.Equals(p[0], "mods", StringComparison.OrdinalIgnoreCase)) continue;
+                int r;
+                if (!rank.TryGetValue(p[1], out r)) continue;
+                string under = string.Join("\\", p, 2, p.Length - 2);
+                if (p.Length == 3 && string.Equals(under, "meta.ini", StringComparison.OrdinalIgnoreCase)) continue;
+                string rel = p.Length > 3 && string.Equals(p[2], "Root", StringComparison.OrdinalIgnoreCase) ? string.Join("\\", p, 3, p.Length - 3) : "Data\\" + under;
+                KeyValuePair<int, string> had;
+                if (won.TryGetValue(rel, out had) && had.Key <= r) continue;
+                won[rel] = new KeyValuePair<int, string>(r, rel + "|" + p[1] + "|" + under + "|" + f.Hash.ToString("x16") + "|" + f.Size);
+            }
+            var lines = new List<string> { "modlist=" + sha256 };
+            lines.AddRange(won.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).Select(k => won[k].Value));
+            return lines;
+        }
+
+        static string Sha256Of(string file)
+        {
+            using (var fs = File.OpenRead(file))
+                return Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
         }
     }
 }

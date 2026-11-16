@@ -36,7 +36,10 @@
        for a Premium account, which is asked only for those; a run again asks
        nothing; a free account's run stopped before its files land keeps what
        it got and says how to go on, and pressed again opens each file's page
-       in turn and puts every file in place;
+       in turn and puts every file in place; a whole install leaves the
+       record of what goes into the game folder (ModlistSetup.Deployment),
+       naming the modlist, which a run again leaves as it was, a record for
+       another modlist is written again, and a run that stops writes none;
     M  VeloRecord.Modlist writes the modlist a Release's signed record names,
        from that Release through GitHub's API, only when it is the sha256 and
        size the record gives; a record with no modlist says so.
@@ -409,7 +412,10 @@ try {
     $wr.FromArchive((& $hx $zipB), 'B.esp', (& $hx $espB), $espB.Length, 'mods\B\B.esp')
     $wr.FromArchive((& $hx $zipC), 'C.esp', (& $hx $espC), $espC.Length, 'mods\C\C.esp')
     $wr.Inline((Bytes '[General]'), 'ModOrganizer.ini', $false)
+    $wr.Inline((Bytes "+C`r`n+B`r`n+A`r`n"), 'profiles\Thornswood\modlist.txt', $false)
     $modlist = Join-Path $T 'collection-modlist.wabbajack'; $wr.Save($modlist)
+    $modlistSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $modlist).Hash.ToLowerInvariant()
+    function Record-Of([string]$mods) { $f = Join-Path $mods 'thornswood-deployment.txt'; if (Test-Path -LiteralPath $f) { return @([IO.File]::ReadAllLines($f)) } return @() }
     $srv.Files['5002'] = $zipB; $srv.Files['5003'] = $zipC
 
     $vortexR = Join-Path $T 'vortex-r'; $handR = Join-Path $T 'hand-r'
@@ -440,9 +446,19 @@ try {
     Yes 'R1 a Premium account''s install: 7-Zip and Mod Organizer 2 from GitHub, one file from Vortex''s folder, the rest from Nexus, then every file in place' ($why -eq '' -and $have.Count -eq 5 -and $script:pages.Count -eq 0 -and (Test-Path -LiteralPath (Join-Path $vortexR 'A renamed.zip'))) ($why + ' | ' + ($all | Where-Object { $have -notcontains $_ }) -join ', ')
     $links = @($srv.Asked() | Where-Object { $_.Contains('/download_link.json') })
     Yes 'R2 Nexus is asked only for the files not already on this PC' ($links.Count -eq 2 -and -not ($links -join ' ').Contains('/mods/501/'))
+    $rec = Record-Of $modsR
+    Yes 'R6 the whole install leaves the record of what goes into the game folder, naming the modlist by its sha256' ($rec.Count -eq 4 -and $rec[0] -eq ('modlist=' + $modlistSha) -and $rec[1].StartsWith('Data\A.esp|A|A.esp|') -and $rec[3].StartsWith('Data\C.esp|C|C.esp|')) ($rec -join ' / ')
+    $recFile = Join-Path $modsR 'thornswood-deployment.txt'
+    [IO.File]::SetLastWriteTimeUtc($recFile, [DateTime]::UtcNow.AddHours(-1))
+    $stamp = [IO.File]::GetLastWriteTimeUtc($recFile)
     $srv.Clear()
     $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
     Yes 'R3 a run again asks Nexus nothing and takes nothing' ($why -eq '' -and @($srv.Asked() | Where-Object { $_.Contains('/download_link.json') }).Count -eq 0) $why
+    Yes 'R7 and leaves the record as it was, so the game folder is not brought up to date for nothing' ([IO.File]::GetLastWriteTimeUtc($recFile) -eq $stamp)
+    [IO.File]::WriteAllLines($recFile, [string[]]@('modlist=an older one', 'Data\Old.esp|Old|Old.esp|0000000000000001|1'))
+    $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
+    $rec = Record-Of $modsR
+    Yes 'R8 a record for another modlist is written again for this one' ($why -eq '' -and $rec.Count -eq 4 -and $rec[0] -eq ('modlist=' + $modlistSha) -and -not (Test-Path -LiteralPath ($recFile + '.part'))) ($rec -join ' / ')
 
     $srv.Premium = $false; [void](Sign-In)
     $modsF = Join-Path $T 'Mods-free'
@@ -451,6 +467,7 @@ try {
     $soon = [Func[bool]] { $script:looks++; return $script:looks -gt 5 }
     $why = Stop-Of { Run-Setup $modsF (New-Steps $noPages $soon) }
     Yes 'R4 a free account''s run that stops before the files land keeps what it got and says how to go on' ($why.Contains('2 of the modlist''s Nexus files are not downloaded yet') -and $why.Contains('press Install again') -and $script:pages.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $modsF 'downloads/A-501-1-0.zip')) -and (Test-Path -LiteralPath (Join-Path $modsF 'downloads/Mod.Organizer-2.5.2.7z'))) $why
+    Yes 'R9 and writes no record, so no game folder is made from a part install' ((Record-Of $modsF).Count -eq 0)
     $hand = [Action[string]] {
         param($page) $script:pages += $page
         $id = ([Uri]$page).Query -replace '.*file_id=', ''
