@@ -65,6 +65,74 @@ function slots(paths) {
   return out;
 }
 
+// The masters a plugin names in its TES4 header (MAST subrecords), as file
+// names. Skyrim's TES4 record header is 24 bytes; an XXXX subrecord carries
+// the size of the one after it.
+function masters(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const head = Buffer.alloc(24);
+    if (fs.readSync(fd, head, 0, 24, 0) < 24 || head.toString('latin1', 0, 4) !== 'TES4') {
+      throw new Error(file + ' does not start with a TES4 header');
+    }
+    const size = head.readUInt32LE(4);
+    const data = Buffer.alloc(size);
+    if (fs.readSync(fd, data, 0, size, 24) < size) { throw new Error(file + '\'s TES4 header is cut short'); }
+    const out = [];
+    let at = 0, big = -1;
+    while (at + 6 <= data.length) {
+      const type = data.toString('latin1', at, at + 4);
+      const n = big >= 0 ? big : data.readUInt16LE(at + 4);
+      big = -1;
+      if (type === 'XXXX') { big = data.readUInt32LE(at + 6); at += 6 + 4; continue; }
+      if (type === 'MAST') { out.push(data.toString('latin1', at + 6, at + 6 + n).replace(/\0+$/, '')); }
+      at += 6 + n;
+    }
+    return out;
+  } finally { fs.closeSync(fd); }
+}
+
+// The load order change a rehearsal makes to check ids by plugin (#6237): the
+// earliest full plugin no other loaded plugin names as a master, moved to the
+// end, so every full plugin after it loads one slot earlier. A plugin that is
+// somebody's master stays, since the game loads a master before what needs
+// it. list is loadOrder's entries as written; paths are where they are.
+// Returns { order, moved, from, to }, or throws when no plugin may move.
+function reorder(list, paths) {
+  const names = paths.map((p) => path.basename(p.replace(/\\/g, '/')).toLowerCase());
+  const needed = new Set();
+  for (const p of paths) { for (const m of masters(p)) { needed.add(m.toLowerCase()); } }
+  let full = -1;
+  for (let i = 0; i < paths.length; i++) {
+    if (isLight(paths[i])) { continue; }
+    full++;
+    if (i === paths.length - 1 || needed.has(names[i])) { continue; }
+    const order = list.slice(0, i).concat(list.slice(i + 1), [list[i]]);
+    const after = paths.filter((p, j) => j !== i && !isLight(p)).length;
+    return { order, moved: path.basename(String(list[i]).replace(/\\/g, '/')), from: full, to: after };
+  }
+  throw new Error('every full plugin but the last is a master of another, so none can move');
+}
+
+// Each plugin the character's ids name, with its slot in table, as
+// { "Skyrim Unbound.esp": "0x2f" }: what a load order change moves.
+function pluginsOf(form, table) {
+  const out = {};
+  const note = (v) => {
+    const m = typeof v === 'string' ? /^[0-9a-fA-F]+:(.+)$/.exec(v) : null;
+    if (!m) { return; }
+    const s = table[m[1].toLowerCase()];
+    out[m[1]] = s ? (s.full ? '0x' + s.index.toString(16).padStart(2, '0') : '0xfe' + s.index.toString(16).padStart(3, '0')) : 'not loaded';
+  };
+  note(form.worldOrCellDesc);
+  const entries = form.inv && Array.isArray(form.inv.entries) ? form.inv.entries : [];
+  for (const e of entries) {
+    note(e.baseId); note(e.enchantmentId); note(e.poisonId);
+    for (const o of [e.made, e.madeEnchantment]) { if (o && Array.isArray(o.effects)) { for (const f of o.effects) { note(f.effectId); } } }
+  }
+  return out;
+}
+
 // FormDesc::ToFormId: "1a26f:Skyrim.esm" to the number the server sends.
 function descToId(desc, table) {
   const m = /^([0-9a-fA-F]+)(?::(.+))?$/.exec(String(desc || ''));
@@ -149,6 +217,7 @@ function expected(root, profileId) {
     isDead: form.isDead,
     isRaceMenuOpen: form.isRaceMenuOpen,
     name: nameOf(form.appearanceDump),
+    plugins: pluginsOf(form, table),
     port: Number(settings.port) || 7777,
     password: settings.password === undefined ? '' : String(settings.password)
   };
@@ -262,4 +331,4 @@ function compare(want, got) {
   return lines;
 }
 
-module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, canon, numbered, madeId, canonicalMade, canonicalEnchantment };
+module.exports = { expected, compare, characters, descToId, slots, pluginPaths, isLight, masters, reorder, pluginsOf, canon, numbered, madeId, canonicalMade, canonicalEnchantment };
