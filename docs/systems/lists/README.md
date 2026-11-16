@@ -30,4 +30,5 @@ Every row the recipe, harvest, ore and hunt tables currently hold. The pages tha
 - [The Alteration book](mage-alteration.md) (13 spells)
 - [The Conjuration book](mage-conjuration.md) (20 spells)
 - [The Illusion book](mage-illusion.md) (15 spells)
+- [Who makes what the world hands out](../who-makes-it.md)
 

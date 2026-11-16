@@ -50,6 +50,14 @@ take one tool handle as well as the charcoal. The handle is novice
 charburner work, 1 firewood, 5 gold, and it was not in the ingredients
 when the rank was chosen.
 
+The two tools a class pick starts with are novice forge work of their
+own, an iron ingot on a handle:
+
+| Item | Rank | Asks for | Makes |
+| --- | --- | --- | --- |
+| Pickaxe | Novice | 1 iron ingot, 1 tool handle | 1 |
+| Woodcutter's Axe | Novice | 1 iron ingot, 1 tool handle | 1 |
+
 ## What you are handed
 
 The half places 1 in Precision (+2 critical chance). The game may
