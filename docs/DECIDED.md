@@ -674,6 +674,9 @@ issue where the card did.
 - **#6345 stays on main though it merged without a card, at c3cc962 (main
   67c120a).** (dec_s7QWg9duDZ4g7ryfsQ5C5Q) 16 Nov 2026,
   [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191#issuecomment-6920676950).
+- **#6356 stays on main though it merged without a card, at 35483a1 (main
+  a1592b4).** (dec_Oll71lN1LK5hB9BhxiGxZQ) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920704425).
 
 ### Languages and code
 
