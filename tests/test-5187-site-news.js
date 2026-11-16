@@ -42,7 +42,7 @@ function yes(what, cond) {
 const from = server.indexOf('/* ---- news from the Release (#5187) ----');
 const to = server.indexOf('/* ---- end news from the Release ---- */');
 yes('the news block is in the site, between its markers', from >= 0 && to > from);
-if (from < 0 || to <= from) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (from < 0 || to <= from) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
 const block = server.slice(from, to);
 
 function load(opts) {
@@ -172,5 +172,5 @@ async function main() {
 
 main().then(() => {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-}, (e) => { console.log('FAIL  ' + (e && e.stack)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+}, (e) => { console.log('FAIL  ' + (e && e.stack)); process.exitCode = 1; });

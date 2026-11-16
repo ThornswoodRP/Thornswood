@@ -91,4 +91,4 @@ yes('the menus that forget their settings are called a bug, not a lack of a save
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

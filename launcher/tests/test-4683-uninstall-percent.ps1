@@ -14,16 +14,18 @@
     1. every path Script writes into the .cmd file has each % doubled, which
        cmd reads back as one: the targets, _quarantine, the install folder,
        the root record, Velopack's Update.exe and the farewell note
-    2. a value left empty (no farewell note, no Update.exe, no root record)
-       writes no line: cmd reads del /f /q "" as every file in its working
-       folder, and until #6382 the script for an empty note took every file
-       at the top of this repository while the gate ran this harness
+    2. a value Script is given empty (the farewell note, Update.exe, the
+       root record) writes no line, as a null one writes none: an empty
+       note gave del /f /q "", the folder cmd runs in (#6382)
     3. on Windows, the script run by cmd removes exactly the folder it was
        given, and leaves the folder cmd's expansion would have reached:
          - an install folder with one percent sign, beside the same name
            without it
          - an install folder named %TW4683DECOY%, with that variable set to
            the name of a decoy folder beside it
+       and the scripts it runs name no empty path: cmd reads one as the
+       folder it runs in, and del /q emptied the repository root of its
+       files while other harnesses read them (#6382)
 
   Off Windows, part 3 says SKIP: a SKIP is not a pass. Read only apart from
   its own scratch folder, which it removes.
@@ -92,8 +94,12 @@ Yes 'Script compiles with the compiler the build runs' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 $PathsT = $asm.GetType('Thornswood.Paths')
 $U = $asm.GetType('Thornswood.Uninstall')
-# The last three stay untyped: a [string] parameter turns $null into '', and
-# the launcher passes null for a value it has not got.
+# note, update and record are untyped on purpose (#6382). PowerShell hands a
+# [string] parameter given $null an empty string, so Run's scripts got
+# del /f /q "" for the farewell note; cmd reads an empty name as the folder it
+# runs in, which for a harness is the repository root, and /q emptied it of
+# its files while other harnesses read them. Untyped, $null reaches Script as
+# null, as it does from the launcher.
 function Build([string]$root, [string[]]$targets, [int]$pid_, $note, $update, $record) {
     $PathsT.GetField('Root').SetValue($null, $root)
     return [string]$U.GetMethod('Script').Invoke($null, [object[]]@([string[]]$targets, $pid_, $note, $update, $record))
@@ -137,6 +143,7 @@ try {
         function Run([string]$root, [string]$target) {
             $text = Build $root @($target) $gone.Id $null $null $null
             $cmdFile = Join-Path $scratch ('run-' + [Guid]::NewGuid().ToString('N') + '.cmd')
+            if ($text.Contains('""')) { $script:emptyPath = $true }
             [IO.File]::WriteAllText($cmdFile, $text, (New-Object System.Text.UTF8Encoding($false)))
             $p = Start-Process -FilePath $cmdExe -ArgumentList '/c', ('"' + $cmdFile + '"') -PassThru -WindowStyle Hidden
             $p.WaitForExit()
@@ -144,6 +151,7 @@ try {
         function Put([string]$dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null; [IO.File]::WriteAllText((Join-Path $dir 'file.txt'), 'x') }
 
         # One percent sign: cmd drops it, and Thorns%wood becomes Thornswood.
+        $script:emptyPath = $false
         $one = Join-Path $scratch 'one'
         $r1 = Join-Path $one 'Thorns%wood'
         Put (Join-Path $r1 'Game'); Put (Join-Path (Join-Path $one 'Thornswood') 'Game')
@@ -160,6 +168,7 @@ try {
         Yes 'two %: the install''s Game folder is removed' (-not (Test-Path -LiteralPath (Join-Path $r2 'Game')))
         Yes '  and the folder the variable names is left' (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path $two 'decoy') 'Game') 'file.txt'))
         Remove-Item Env:\TW4683DECOY
+        Yes 'the scripts cmd ran name no empty path, which del would read as the folder cmd runs in (#6382)' (-not $script:emptyPath)
     }
 }
 finally {

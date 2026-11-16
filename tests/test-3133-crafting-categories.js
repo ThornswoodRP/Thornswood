@@ -150,7 +150,8 @@ yes(LABELS + ' is UTF-16 with a byte order mark, one key and name per line', lab
 if (!cfg || !labels) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 // ---- 2 to 4. the groups ------------------------------------------------------
@@ -200,4 +201,4 @@ yes('a label with no English line, and a line nothing uses, are caught', r.some(
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

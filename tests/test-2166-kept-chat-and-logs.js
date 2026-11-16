@@ -140,7 +140,7 @@ async function keptChatOnASite() {
     fail++;
     console.log('FAIL  the kept-chat harness threw: ' + (err && err.stack ? err.stack : err));
   }
-  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
+  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
 }
 
 // ------------------------------------------------------- G1, the rules lifted --
@@ -309,5 +309,5 @@ function wiring() {
   siteLogAge();
   wiring();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

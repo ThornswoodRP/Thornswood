@@ -204,7 +204,7 @@ const from = src.indexOf('const feedNewest = {};');
 const head = src.indexOf('function feedFile(', from);
 let end = src.indexOf('{', head), d = 0;
 for (; end < src.length; end++) { if (src[end] === '{') d++; else if (src[end] === '}') { d--; if (d === 0) { end++; break; } } }
-if (from < 0 || head < 0) { console.log('no feedFile in server.js'); process.exit(1); }
+if (from < 0 || head < 0) { console.log('no feedFile in server.js'); process.exitCode = 1; return; }
 eval(src.slice(from, end));
 let passes = 0, missing = 0, other = 0; const said = {}; const seen = new Set();
 function read() {

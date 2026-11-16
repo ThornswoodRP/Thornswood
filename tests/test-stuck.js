@@ -77,7 +77,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function slice(from, to) {
@@ -105,7 +105,7 @@ yes('the chat command block is in gamemode.js', !!COMMANDS);
 yes('the stuck block is in gamemode.js between its markers', !!STUCK);
 yes('the staff block is in gamemode.js', !!STAFF);
 yes('DATA and BUILDING_NAME read out of the same file', !!(DATA && DATA.destinations && BUILDING_NAME));
-if (!(COMMANDS && STUCK && STAFF && PLACE_ACTORS && DATA && BUILDING_NAME)) { done(); }
+if (!(COMMANDS && STUCK && STAFF && PLACE_ACTORS && DATA && BUILDING_NAME)) { done(); return; }
 
 // ------------------------------------------------------------ the world --
 const TAMRIEL = '3c:Skyrim.esm';

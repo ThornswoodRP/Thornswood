@@ -28,7 +28,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function slice(src, start, end) {
@@ -66,7 +66,7 @@ const takeItemSrc = liftFrom(gm, 'function takeItem(actorId, itemDesc, count) {'
 const unfitSrc = liftFrom(gm, 'function unfitToMake(actorId, workbenchId) {', '');
 yes('the property, character and farming blocks and the pack helpers are in the gamemode',
     !!propBlock && !!charBlock && !!farmBlock && !!addItemSrc && !!takeItemSrc && !!unfitSrc);
-if (!propBlock || !charBlock || !farmBlock || !addItemSrc || !takeItemSrc || !unfitSrc) { done(); }
+if (!propBlock || !charBlock || !farmBlock || !addItemSrc || !takeItemSrc || !unfitSrc) { done(); } else {
 
 // ================================================================ the server
 const clock = { t: Date.UTC(2026, 9, 4, 20, 0, 0) };
@@ -178,7 +178,7 @@ inDir(function () {
 });
 const W = box.__thornswoodProperty;
 yes('the property block runs and publishes itself', !!W && typeof W.command === 'function');
-if (!W) { done(); }
+if (!W) { done(); } else {
 
 const every = [];
 function word(p, w, args) {
@@ -236,3 +236,4 @@ yes('U2 and the people at the door hear the same, and Dave and Erin do not',
 by = heard(function (tp) { W.command('/unlock', ['/unlock', hex(DOOR_OUT)], ALICE.a, ALICE.pid, tp); });
 yes('U3 a word that changes nothing is said to nobody else', Object.keys(by).length === 1 && /already unlocked/.test(by[ALICE.pid][0]));
 done();
+}}

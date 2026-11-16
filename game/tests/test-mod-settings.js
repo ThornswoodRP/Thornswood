@@ -39,7 +39,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const START = '// ==== thornswood mod settings ====';
@@ -49,6 +49,7 @@ const b = a < 0 ? -1 : src.indexOf(END, a);
 const block = (a >= 0 && b >= 0) ? src.slice(a, b + END.length) : null;
 yes('gamemode.js has its mod settings block', block !== null);
 if (!block) done();
+else {
 
 const box = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-mod-settings-'));
 const dataDir = path.join(box, 'data');
@@ -107,6 +108,7 @@ function onDisk() {
 const one = boot({});
 yes('the block publishes its interface', !!(one.api && one.api.command && one.api.tick));
 if (!one.api) done();
+else {
 const M = one.api;
 const TABLE = M.MOD_GLOBALS;
 
@@ -403,3 +405,4 @@ if (fa >= 0 && fb > fa) {
 
 try { fs.rmSync(box, { recursive: true, force: true }); } catch (e) { }
 done();
+}}

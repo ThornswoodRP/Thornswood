@@ -39,7 +39,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(src, a, b) {
   const i = src.indexOf(a);
@@ -96,7 +96,7 @@ const missing = Object.keys(FNS).filter(function (k) { return !FNS[k]; })
   .concat(CHARGEN ? [] : ['CHARGEN']);
 yes('the chargen tick, its steps, its handle, the rules and the character block are where this reads them' +
     (missing.length ? ' (missing: ' + missing.join(', ') + ')' : ''), missing.length === 0);
-if (missing.length) { done(); }
+if (missing.length) { done(); } else {
 
 const HALL = new Function('return ' + HALL_SRC)();
 const PASSAGES = CHARGEN.towns;
@@ -394,3 +394,4 @@ let s = srv.C.stateOf(W);
 }
 
 done();
+}

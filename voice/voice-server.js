@@ -1002,7 +1002,7 @@ const PING_EVERY = Number(process.env.THORNSWOOD_VOICE_PING_MS) || 25000;
 const SILENT_AFTER = Number(process.env.THORNSWOOD_VOICE_SILENT_MS) || PING_EVERY * 3;
 let closedSilent = 0;         // sockets closed for answering nothing, for /health
 
-setInterval(() => {
+const pingTimer = setInterval(() => {
   const now = Date.now();
   for (const s of live) {
     if (now - s.heard > SILENT_AFTER) {
@@ -1825,7 +1825,7 @@ function viewsOf(snap) {
   (thornswood-voice.js applyMoved, thornswood-chat.js keep, VoiceSession.cs
   ApplyRows), and voice/tests/test-moved.js counts the bytes.
 */
-setInterval(() => {
+const movedTimer = setInterval(() => {
   sweepSilenced(Date.now());
   if (peers.size === 0) return;
   const snap = snapshot();
@@ -2083,7 +2083,7 @@ function placeVoices() {
 }
 
 // Places whose minute is over are forgotten.
-setInterval(() => {
+const doorTimer = setInterval(() => {
   const cut = Date.now() - 60000;
   for (const door of [tokenDoor, socketDoor]) {
     for (const [key, list] of door.seen) {
@@ -3277,3 +3277,21 @@ server.listen(PORT, BIND, () => {
               (BIND === '127.0.0.1' ? ' (loopback only, so something must be proxying to it)' : ''));
   console.log('[voice] positions accepted from loopback at POST /positions');
 });
+
+/* Stops the service: no more connections, every socket closed, its timers
+   cleared, so the process it runs in can end by itself. Run as a program it
+   is never called; a harness that runs the service in its own process
+   (voice/tests/test-roster-once.js) calls it when it is done, instead of
+   node's exit function, which can hang on Node 24 (#6036). */
+function stop() {
+  return new Promise((ok) => {
+    clearInterval(pingTimer);
+    clearInterval(movedTimer);
+    clearInterval(doorTimer);
+    clearTimeout(chatPruneTimer);
+    server.close(() => ok());
+    server.closeAllConnections();
+    for (const s of live) s.close();
+  });
+}
+module.exports = { stop };

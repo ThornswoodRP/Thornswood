@@ -60,7 +60,7 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-2758-'));
 
 // One start under server-log.js, of a program that only exits.
 function start(root, env) {
-  put(path.join(root, 'exit.js'), 'process.exit(0);');
+  put(path.join(root, 'exit.js'), 'process.exitCode = 0;');
   const r = cp.spawnSync(process.execPath, [WRITER, '--log', path.join(root, 'server.log'), 'exit.js'],
     { cwd: root, env: Object.assign({}, process.env, env || {}), encoding: 'utf8' });
   return { code: r.status, log: rd(path.join(root, 'server.log')) || '' };
@@ -308,5 +308,5 @@ try {
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
 })();

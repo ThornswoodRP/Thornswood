@@ -159,11 +159,13 @@ function runClient(env, input, waitMs) {
     c.stderr.on('data', (d) => { err += d; });
     let expect = input.length;
     c.stdout.on('data', () => { if (Buffer.concat(out).length >= expect) c.stdin.end(); });
-    c.on('close', (code) => resolve({ code, out: Buffer.concat(out), err }));
+    // The kill is for a client that never ends; one that does clears it, so
+    // nothing holds node once the checks are done (#6036).
+    const stop = setTimeout(() => c.kill(), waitMs || 10000);
+    c.on('close', (code) => { clearTimeout(stop); resolve({ code, out: Buffer.concat(out), err }); });
     c.stdin.on('error', () => {});
     c.stdin.write(input);
     if (!input.length) c.stdin.end();
-    setTimeout(() => c.kill(), waitMs || 10000);
   });
 }
 
@@ -423,7 +425,8 @@ function runClient(env, input, waitMs) {
           while (next < marks.length && n >= marks[next]) hit(next++);
           if (n >= input.length) c.stdin.end();
         });
-        c.on('close', (code) => resolve({ code, out: Buffer.concat(out), err }));
+        const stop = setTimeout(() => c.kill(), 30000);
+        c.on('close', (code) => { clearTimeout(stop); resolve({ code, out: Buffer.concat(out), err }); });
         c.stdin.on('error', () => {});
         let at = 0;
         // Input waits a piece past the next mark until the output has
@@ -435,7 +438,6 @@ function runClient(env, input, waitMs) {
           at += 65536;
           setTimeout(feed, 5);
         })();
-        setTimeout(() => c.kill(), 30000);
       });
     }
     const carriedBefore = (log.match(/carried over to a new WebSocket/g) || []).length;
@@ -522,5 +524,5 @@ function runClient(env, input, waitMs) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('  FAIL ' + e.stack); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('  FAIL ' + e.stack); process.exitCode = 1; });

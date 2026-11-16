@@ -443,5 +443,5 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   yes('  every action pinned by a full commit', (code(dup).match(/uses: [^\n]+/g) || []).every(u => /@[0-9a-f]{40} # v/.test(u)));
 
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch(e => { console.log('  FAIL ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch(e => { console.log('  FAIL ' + (e && e.stack || e)); process.exitCode = 1; });

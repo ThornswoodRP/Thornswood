@@ -43,4 +43,4 @@ yes('and points at the carriage page for the fare', /fare[^.]*\]\(carriages\.md\
   sentences.some(function (s) { return /fare/i.test(s) && /\(carriages\.md\)/.test(s); }));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

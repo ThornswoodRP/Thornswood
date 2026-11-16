@@ -169,5 +169,5 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   }
   yes('the temp folder is gone', !fs.existsSync(dir));
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

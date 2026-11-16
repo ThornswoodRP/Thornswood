@@ -30,4 +30,4 @@ const pop = read('docs/NPC-POPULATION.md');
 const gen = read('scripts/dev/Build-NpcPopulation.py');
 const line = pop.split(/\r?\n/)[3];
 check(Boolean(line) && gen.includes(line), 'NPC-POPULATION.md line 4 matches the generator');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

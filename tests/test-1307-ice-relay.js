@@ -140,46 +140,49 @@ const relayOf = (r) => (r.list || []).find((s) => [].concat(s.urls)[0] === 'turn
   let srvLog = '';
   srv.stdout.on('data', (d) => { srvLog += d; });
   srv.stderr.on('data', (d) => { srvLog += d; });
-  await listening(srv, PORT);
-  const good = tokenFor(41);
+  try {
+    await listening(srv, PORT);
+    const good = tokenFor(41);
 
-  console.log('a stranger, through Caddy:');
-  let r = await ice('GET', null, true);
-  yes('a plain GET is handed the STUN list and nothing else', stunOnly(r));
-  r = await ice('POST', JSON.stringify({}), true);
-  yes('a POST with no token is handed the STUN list', stunOnly(r));
-  r = await ice('POST', JSON.stringify({ token: 'v1.41.' + (Date.now() + 3600000) + '.madeup' }), true);
-  yes('a made up token is handed the STUN list', stunOnly(r));
-  r = await ice('POST', JSON.stringify({ token: tokenFor(41, Date.now() - 121000) }), true);
-  yes('an expired token is handed the STUN list', stunOnly(r));
-  r = await ice('GET', null, true);
-  yes('and every one of those may be read from a null origin', r.cors === '*');
+    console.log('a stranger, through Caddy:');
+    let r = await ice('GET', null, true);
+    yes('a plain GET is handed the STUN list and nothing else', stunOnly(r));
+    r = await ice('POST', JSON.stringify({}), true);
+    yes('a POST with no token is handed the STUN list', stunOnly(r));
+    r = await ice('POST', JSON.stringify({ token: 'v1.41.' + (Date.now() + 3600000) + '.madeup' }), true);
+    yes('a made up token is handed the STUN list', stunOnly(r));
+    r = await ice('POST', JSON.stringify({ token: tokenFor(41, Date.now() - 121000) }), true);
+    yes('an expired token is handed the STUN list', stunOnly(r));
+    r = await ice('GET', null, true);
+    yes('and every one of those may be read from a null origin', r.cors === '*');
 
-  console.log('\na page that holds a join token that checks out (#1821: the relay comes on the roster):');
-  r = await ice('POST', JSON.stringify({ token: good }), true);
-  yes('is handed the STUN list and nothing else', stunOnly(r));
-  yes('readable from a null origin', r.cors === '*');
+    console.log('\na page that holds a join token that checks out (#1821: the relay comes on the roster):');
+    r = await ice('POST', JSON.stringify({ token: good }), true);
+    yes('is handed the STUN list and nothing else', stunOnly(r));
+    yes('readable from a null origin', r.cors === '*');
 
-  console.log('\nthis machine itself:');
-  r = await ice('GET', null, false);
-  const relay = relayOf(r);
-  yes('a plain GET is handed the relay, which is what Install-Voice.ps1 reads', !!relay);
-  const until = relay ? Number(relay.username) : 0;
-  const now = Math.floor(Date.now() / 1000);
-  yes('with a username that is an expiry about ten minutes out', until > now + 500 && until < now + 700);
-  yes('and a password coturn takes, HMAC-SHA1 of it',
-      !!relay && relay.credential === crypto.createHmac('sha1', SECRET).update(relay.username).digest('base64'));
+    console.log('\nthis machine itself:');
+    r = await ice('GET', null, false);
+    const relay = relayOf(r);
+    yes('a plain GET is handed the relay, which is what Install-Voice.ps1 reads', !!relay);
+    const until = relay ? Number(relay.username) : 0;
+    const now = Math.floor(Date.now() / 1000);
+    yes('with a username that is an expiry about ten minutes out', until > now + 500 && until < now + 700);
+    yes('and a password coturn takes, HMAC-SHA1 of it',
+        !!relay && relay.credential === crypto.createHmac('sha1', SECRET).update(relay.username).digest('base64'));
 
-  console.log('\nthe log and the pages:');
-  yes('the token never reaches the service\'s log', srvLog.indexOf(good) < 0);
-  const overlay = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-voice.js'), 'utf8').split(CR).join('');
-  const chat = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-chat.js'), 'utf8').split(CR).join('');
-  const host = ['VoiceSession.cs', 'Voice.cs'].map((f) => fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', f), 'utf8').split(CR).join('')).join('\n');
-  yes('the chat socket hands its token to nothing else on the page (#1821)', !/token: function/.test(chat));
-  yes('the game\'s voice overlay sends no token to /ice, nor asks it anything', !/\/ice'/.test(overlay) && !/\.token\(\)/.test(overlay));
-  yes('nor does the launcher\'s voice', !/\/ice["']/.test(host));
-
-  await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
+    console.log('\nthe log and the pages:');
+    yes('the token never reaches the service\'s log', srvLog.indexOf(good) < 0);
+    const overlay = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-voice.js'), 'utf8').split(CR).join('');
+    const chat = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-chat.js'), 'utf8').split(CR).join('');
+    const host = ['VoiceSession.cs', 'Voice.cs'].map((f) => fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', f), 'utf8').split(CR).join('')).join('\n');
+    yes('the chat socket hands its token to nothing else on the page (#1821)', !/token: function/.test(chat));
+    yes('the game\'s voice overlay sends no token to /ice, nor asks it anything', !/\/ice'/.test(overlay) && !/\.token\(\)/.test(overlay));
+    yes('nor does the launcher\'s voice', !/\/ice["']/.test(host));
+  } finally {
+    // Gone before the harness ends, whether its checks finished or threw.
+    if (srv.exitCode === null && srv.signalCode === null) await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
+  }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });

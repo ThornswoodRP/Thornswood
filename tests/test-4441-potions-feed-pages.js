@@ -85,4 +85,4 @@ yes('FEED.md\'s today section was re-checked, with a year, on or after the launc
   !isNaN(retired) && !isNaN(checked) && checked >= retired);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

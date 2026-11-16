@@ -158,7 +158,8 @@ yes('hasLeft and departed are in server.js', HELPERS.length > 10 &&
 if (!block || !ownsBlock || !rosterBlock || !allowedBlock || HELPERS.length <= 10) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
@@ -768,10 +769,10 @@ const PID = 1893288986;
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch(function (e) {
   console.log('FAIL  the route threw: ' + (e && e.stack || e));
   console.log('');
   console.log(pass + ' passed, ' + (fail + 1) + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
 });
