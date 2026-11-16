@@ -116,14 +116,15 @@ try {
         Write-Host 'SKIP  the script run by cmd: this is not Windows'
     }
     else {
+        $cmdExe = Get-WindowsPath 'System32\cmd.exe'
         # A process that has exited, so the script's wait ends at once.
-        $gone = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\cmd.exe') -ArgumentList '/c', 'exit' -PassThru -WindowStyle Hidden
+        $gone = Start-Process -FilePath $cmdExe -ArgumentList '/c', 'exit' -PassThru -WindowStyle Hidden
         $gone.WaitForExit()
         function Run([string]$root, [string]$target) {
             $text = Build $root @($target) $gone.Id $null $null $null
             $cmdFile = Join-Path $scratch ('run-' + [Guid]::NewGuid().ToString('N') + '.cmd')
             [IO.File]::WriteAllText($cmdFile, $text, (New-Object System.Text.UTF8Encoding($false)))
-            $p = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\cmd.exe') -ArgumentList '/c', ('"' + $cmdFile + '"') -PassThru -WindowStyle Hidden
+            $p = Start-Process -FilePath $cmdExe -ArgumentList '/c', ('"' + $cmdFile + '"') -PassThru -WindowStyle Hidden
             $p.WaitForExit()
         }
         function Put([string]$dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null; [IO.File]::WriteAllText((Join-Path $dir 'file.txt'), 'x') }
