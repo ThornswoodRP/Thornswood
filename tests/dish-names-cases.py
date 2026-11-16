@@ -1,6 +1,6 @@
 """The fine dishes' names come from the load order, not from a built table (#6351).
 
-    python tests/test-6351-dish-names.py
+    node tests/test-6351-dish-names.js     (runs this, python tests/dish-names-cases.py)
 
 scripts/mods/Add-ContentRecords.py names each fine dish "Fine " and its plain
 dish's name. Until #6351 it read that name from game/data/recipes.json, a
@@ -172,4 +172,22 @@ class ReadsNoBuiltTable(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    # One PASS or FAIL line per case, as every harness prints them.
+    passed = failed = 0
+    for cls in (DishNames, ReadsNoBuiltTable):
+        for name in unittest.defaultTestLoader.getTestCaseNames(cls):
+            result = unittest.TestResult()
+            cls(name).run(result)
+            bad = result.failures + result.errors
+            what = name[len('test_'):].replace('_', ' ')
+            if bad:
+                failed += 1
+                print('FAIL  ' + what)
+                for _, trace in bad:
+                    print(trace)
+            else:
+                passed += 1
+                print('PASS  ' + what)
+    print('')
+    print('%d passed, %d failed' % (passed, failed))
+    raise SystemExit(1 if failed else 0)
