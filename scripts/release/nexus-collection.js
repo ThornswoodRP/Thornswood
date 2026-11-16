@@ -310,7 +310,7 @@ function setMasters(collection, swaps) {
 }
 // An entry that only says something about the revision ("unlisted",
 // "masters") and changes nothing by itself.
-function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters'); }
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'page'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -684,6 +684,25 @@ function applyRemove(collection, rm, lines) {
   }
 }
 
+// ------------------------------------------------------ the page (#4537) ---
+// An entry { "page": <records/collection-page.json> } gives the page's text,
+// which New-NexusRevision always sends. It replaces the summary, the
+// description and the install steps the revision before carried, each
+// mark made plain, and each mark held to the mods this revision installs
+// (collection-page.js). Until #4537 the old text went out again unread.
+function applyPage(collection, swaps) {
+  const entries = swaps.filter(sw => sw && sw.page !== undefined);
+  if (!entries.length) return;
+  if (entries.length > 1) stop('The swaps give the page ' + entries.length + ' times; one says what the page is.');
+  const ids = new Set(collection.mods.map(m => Number(m.source && m.source.modId)));
+  let text;
+  try { text = require('./collection-page.js').sendable(entries[0].page, ids); }
+  catch (e) { stop(e.message); }
+  collection.info.summary = text.summary;
+  collection.info.description = text.description;
+  collection.info.installInstructions = text.installInstructions;
+}
+
 function main(argv) {
   if (argv.length !== 4) stop('usage: node nexus-collection.js <collection.json> <swaps.json> <out collection.json> <out payload.json>');
   const [inPath, swapsPath, outPath, payloadPath] = argv;
@@ -695,10 +714,11 @@ function main(argv) {
   if (!Array.isArray(swaps)) swaps = [swaps];
   if (!swaps.some(sw => !onlyContext(sw))) stop('There are no swaps, so the revision would be the same as the one published.');
   const lines = applySwaps(collection, swaps);
+  applyPage(collection, swaps);
   fs.writeFileSync(outPath, JSON.stringify(collection, undefined, 2));
   fs.writeFileSync(payloadPath, JSON.stringify(payloadOf(collection)));
   process.stdout.write(lines.join('\n') + (lines.length ? '\n' : ''));
 }
 
 if (require.main === module) main(process.argv.slice(2));
-module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, filterInfo, toV3CollectionPayload };
+module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, applyPage, filterInfo, toV3CollectionPayload };

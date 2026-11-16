@@ -52,6 +52,7 @@ jobs:
     runs-on: windows-latest
     environment: desk
     permissions:
+      actions: read
       contents: read
       issues: write
     # Install-NexusRevision downloads every mod of the collection (its
@@ -61,11 +62,25 @@ jobs:
       # The history without the files' old contents, so Nexus.ps1 can work out
       # the launcher's number it sends as Application-Version
       # (LauncherVersion.ps1, #5179).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
+
+      # The Last plugin's record and recipe, which the draft is held to, are
+      # the box's content build and never committed (#5191, stage 4e): the
+      # newest a merge release kept, laid as the gate's shares lay it
+      # (build.yml, "Lay the newest content build"). Reading the list of
+      # kept builds is what actions: read is for.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
 
       - name: Draft, hold to the record, publish
         id: publish

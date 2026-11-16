@@ -419,6 +419,33 @@ if ($At) {
   }
 }
 # ==== end thornswood dev order at ====
+# ==== thornswood dev engine light ====
+# WHETHER THE ENGINE LOADS LIGHT PLUGINS, for the start point the settings
+# block moves (#2011), read for every run of this script (#6346). It used to
+# be read only beside the gamemode's server build check, which -OrderOnly
+# skips, so the order step after build-1.3.80's Deployment (16 Nov 2026,
+# 9:03 PM) sent the block "$loadsLight = $", which does not parse. The block
+# went on with no light rule, counted every plugin as full, and moved dev's
+# start point from 0x2F19BAD4 to 0x6119BAD4 (Skyrim Unbound.esp is at place
+# 97 in the list and 47 among the full plugins). From then on every new character on
+# dev, the bot pass's among them, died at createActor with
+#   Error: FromFormId failed due to invalid file index 97 (6119bad4)
+# and every dev Deployment failed its bot pass at login.
+# The record is the build dev runs: with -At the Release's commit, whose
+# server build the deploy agent put on dev, else this checkout's, which the
+# server build check below holds the box's to.
+. (Join-Path $Here 'ServerOrder.ps1')
+$devLightRecord = Join-Path $Here '..\..\records\server-build.json'
+if ($At -and $headAt -ne $At) {
+  $atRecord = @(& git -C $atRepo show "${At}:records/server-build.json" 2>$null) -join "`n"
+  if ($LASTEXITCODE -ne 0 -or -not $atRecord.Trim()) { throw "records/server-build.json could not be read at $At, so whether the engine dev runs loads light plugins is not known and the start point cannot be placed. Nothing was sent." }
+  $global:LASTEXITCODE = 0
+  $devLightRecord = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-server-build-' + $At + '.json')
+  [IO.File]::WriteAllText($devLightRecord, $atRecord, (New-Object Text.UTF8Encoding $false))
+}
+$devRecordLight = [bool](Test-ThornswoodEngineLoadsLight $devLightRecord)
+Write-Host ('  the engine dev runs {0} light plugins, by {1}' -f $(if ($devRecordLight) { 'loads' } else { 'does not load' }), $(if ($devLightRecord -like '*thornswood-server-build-*') { 'the server build record at ' + $At.Substring(0, 12) } else { 'this checkout''s server build record' }))
+# ==== end thornswood dev engine light ====
 if (-not $PutBack -and -not $ShipFollows) {
   if (-not $Note.Trim()) {
     Write-Host ''
@@ -490,8 +517,15 @@ $alsoSends = @('records/most-online.json', 'records/server-build.json')
 # LastPluginOnBox.ps1), which goes up with the make's own tools.
 if ($LoadOrder) { $alsoSends += 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json' }
 # The gamemode's tables (#5191) are in the artifact with it: the gamemode
-# reads them from the folder beside it as it loads.
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends
+# reads them from the folder beside it as it loads. They, our plugin and the
+# Last plugin's recipe are never committed (#5191, stage 4e): they are the
+# box's content build of this commit for the dev server, laid over this
+# checkout first (on the box from the builds it keeps, elsewhere from the
+# build's draft Release), and the artifact holds them to that build.
+. (Join-Path $Here '..\mods\ContentPaths.ps1')
+$laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev
+Write-Host ('  content build ' + $laidBuild.Key.Substring(0, 12) + ', built from ' + $laidBuild.Commit.Substring(0, 12))
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends -Content dev
 Write-Host ('  artifact ' + (Format-ThornswoodArtifact $artifact))
 $Gamemode = Join-Path $artifact.Folder 'game\gamemode.js'
 $GamemodeTables = Join-Path $artifact.Folder 'game\gamemode-tables'
@@ -526,9 +560,8 @@ $devRecordSum = Get-ThornswoodRecordSum ([IO.File]::ReadAllBytes($devRecordPath)
 . (Join-Path $Here '..\release\RecordShape.ps1')
 $devRecord = Read-ThornswoodRecord -Path $devRecordPath -Kind server-build
 $devRecordCommit = [string]$devRecord.source.commit
-# Whether the engine loads light plugins, for the start point below: this
-# record's, which the check below holds the dev server's own record to.
-$devRecordLight = ($devRecord.PSObject.Properties.Name -contains 'lightPlugins' -and $devRecord.lightPlugins -eq $true)
+# Whether the engine loads light plugins is read above, for every run
+# ("dev engine light"), from this same record when there is no -At.
 $devBoxSaid = @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ($ThornswoodRecordSumText + "`r`n" + @"
 `$rp = Join-Path '$($Root.Replace('/', '\').Replace("'", "''"))' 'server-build.json'
 if (Test-Path -LiteralPath `$rp) {

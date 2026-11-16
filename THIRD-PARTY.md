@@ -421,16 +421,18 @@ file carries outside code and the file does not carry that project's notice.
 | `FromGameDeflate.cs` | zlib 1.3, `deflate.c` and `trees.c` | yes: zlib | A translation of zlib's code, above. |
 | `FromGameMath.cs` | numpy, OpenBLAS, LAPACK's `dgesv` | no | It does the arithmetic Build-NoticeBoard.py does with numpy in the same order and rounding, so the meshes come out the same bytes, and says what that order is. The order was measured from the results (19 Oct), not copied from their code: the inverse is a 3 by 3 LU solve written out by hand, and nothing in it is OpenBLAS's or LAPACK's source. |
 | `FromGameArchive.cs` | LZ4 | no | It decodes the LZ4 frame and block format the game's archives use, written from that published format and the BSA layout. Build-NoticeBoard.py calls the lz4 package for this; the launcher has its own short decoder instead, and no code of the lz4 library is in it. |
+| `ModlistFetch.cs` | 7-Zip | no | It downloads 7-Zip 25.01's own `7zr.exe` and installer from 7-Zip's GitHub release, each held to a sha256 it pins, takes `7z.exe` and `7z.dll` out of the installer with `7zr.exe`, and runs `7z.exe` to unpack the modlist's archives (#6244). It runs 7-Zip as a program; no code of 7-Zip is in it. |
+| `ModlistSetup.cs` | 7-Zip | no | It runs the modlist install in order: 7-Zip and Mod Organizer 2 through `ModlistFetch.cs`, the Nexus files, then the install itself (#6244). It names 7-Zip as one of those steps; no code of 7-Zip is in it. |
 
 ## The SkyMP client runtime, built from the fork
 
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `29312388` (in full, `29312388dd3f355f1ba433dba8522dd52d23e415`). That
+commit `0620b6d6` (in full, `0620b6d65cb755325f04b6d6e8eeb443ef5e8306`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...29312388.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...0620b6d6.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -699,7 +701,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`29312388`, the commit the client record names.
+`0620b6d6`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -796,11 +798,13 @@ full text.
 
 Thornswood publishes this itself, as its own mod: Nexus Mods mod 192762,
 https://www.nexusmods.com/skyrimspecialedition/mods/192762, by EvilPatrick06.
-Revision 4 of the collection (`7essxf`, published 21 October 2026, revision id
-813945) carries version 1.0.1, file 823485, uploaded on 20 October, and it is
-not optional. Nexus gives that file as 152,002,702 bytes, and the archive it
+Revision 8, the newest published revision of the collection (`7essxf`) and
+the one `records\collection.json` follows, carries version 1.0.1, file
+823485, uploaded on 20 October, and it is not optional. Revision 3 was the
+first to carry that file, and none since has moved it
+(`docs\COLLECTION-REVISIONS.md`). Nexus gives that file as 152,002,702 bytes, and the archive it
 serves has md5 `74ef6a9f5cf0a5ba7dbab9c00cb67491`, the md5 the collection
-pins. Revision 3 carries the same file; revisions 1 and 2 carry version
+pins. Revisions 1 and 2 carry version
 1.0.0, under "Version 1.0.0, which revisions 1 and 2 still install" below.
 
 It is the largest thing somebody else wrote that Thornswood hands out: 67
@@ -893,7 +897,7 @@ from that file:
 - Require distributors and external end users to agree to terms that
   protect it at least as much as the licence does. Patrick decided on
   20 October 2026 (#421, option A) that the Client Runtime's README says so,
-  and the README of 1.0.1, the version revisions 3 and 4 install, does: by
+  and the README of 1.0.1, the version every revision since 3 installs, does: by
   installing the file you accept Microsoft's terms for it, use it only with
   the Thornswood client, keep its copyright and other notices as they are,
   do not hand it on apart from the mod, and Microsoft gives no warranty for
@@ -1391,6 +1395,13 @@ the copy the project's own Google Fonts folder keeps with its copyright line:
   whose page says no (#3649).
 - SKSE, which is in the collection, and Skyrim Special Edition, which each
   person owns.
+- 7-Zip and Mod Organizer 2, for the install from the collection's modlist
+  (#6244, not used by Play yet). The launcher downloads each from its own
+  release on GitHub on the person's machine and holds it to a hash it pins:
+  7-Zip 25.01 (Igor Pavlov, GNU LGPL with the unRAR restriction,
+  https://github.com/ip7z/7zip) in `launcher\app\ModlistFetch.cs`, and Mod
+  Organizer 2 2.5.2 (GPL-3.0, https://github.com/ModOrganizer2/modorganizer)
+  as `records\mo2.json` and the modlist pin it. Thornswood carries neither.
 - texconv, the tool the main menu picture is built with (next section).
 - Bethesda's five master files, which the fork's build downloads to run its
   unit tests (the section after texconv's).
@@ -1482,15 +1493,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `29312388dd3f355f1ba433dba8522dd52d23e415` on the public fork. The
+  name `0620b6d65cb755325f04b6d6e8eeb443ef5e8306` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...29312388. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...0620b6d6. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `ea1d4c03a1a8d737546a17d7bbe9a2da18ab96269e59538c08e86684d436dfc7`, built
-  2026-11-16T03:17:51Z. This is the recorded next release, not a deployment
+  is `18e7b657b5e536cc05fca52f866b122b926a416457f7ca8053d18a588cb5ada8`, built
+  2026-11-16T05:29:45Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1527,7 +1538,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/29312388dd3f355f1ba433dba8522dd52d23e415
+https://github.com/ThornswoodRP/skymp/tree/0620b6d65cb755325f04b6d6e8eeb443ef5e8306
 
 For the engine Main runs until then:
 

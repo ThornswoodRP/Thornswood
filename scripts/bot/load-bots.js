@@ -41,6 +41,10 @@
 //      queue, and ends a session with none three minutes in. The proof at
 //      the login is a different check (#1320).
 // Every message the server sends is read and counted, by type; none is kept.
+// A message other than a move that arrives again, the same in every field,
+// within REPEAT_MS of the first is counted as a copy (repeatsRead, #6252):
+// the server sent everything said near a form once more to a person for
+// each NPC near it that person hosted.
 // What the chat socket carries is counted in bytes each way.
 //
 // WHAT ELSE A PERSON DOES (--play, any of fight, host, trade and quest). Each bot
@@ -55,7 +59,11 @@
 //          whose AI a game runs and the server only passes on) is looked at
 //          on the same 130 ms beat as its own character and sent by the same
 //          rule, standing where the server put it, until HostStop. Without
-//          this the bots would leave every NPC's moves out of the load. An
+//          this the bots would leave every NPC's moves out of the load. It
+//          asks to host an actor, once, each time the server says nobody
+//          hosts it (a CreateActor without isHostedByOther, or
+//          isHostedByOther set to false), as the game's FormView does since
+//          #6247 (Host, reliable). An
 //          NPC a bot hosts never walks, so under --moves change it costs one
 //          move and one settled move, where a game's NPC that walks about
 //          costs more;
@@ -107,6 +115,7 @@ const { face } = require('./Bot-Pass.js');
 
 const MOVE_MS = 130;           // SendInputsService.sendMovement's sendMovementRateMs
 const MOVES = ['change', 'beat']; // see step 4 above; change is the game's own since #6247
+const REPEAT_MS = 100;        // a message that comes again this soon is a copy (#6252)
 const STAND_CYCLE_MS = 20000;  // --stand is a share of this, at a phase of each bot's own
 const STEP_MS = 60000;         // how long each login step may take
 const WALK = 100;              // units a second, a walk
@@ -115,6 +124,7 @@ const TELEPORT2 = 31;
 const PASS_EVERY_MS = 60000;   // the front plugin sends the pass at once and every minute
 const UPDATE_ANIMATION = 3;
 const ON_HIT = 17;
+const HOST_ASK = 14;
 const HOST_START = 26;
 const HOST_STOP = 27;
 const UNARMED = 0x1f4;         // ActionListener.cpp IsUnarmedAttack
@@ -164,8 +174,7 @@ const QUEST_SAID = {
   'The work could not be committed just now.': 'questRefused:unwritten',
   'Quest work is unavailable.': 'questRefused:unavailable',
   'This trader does not handle that work.': 'questRefused:role',
-  'The submitted price changed or is missing. Choose the work again.': 'questRefused:price',
-  'This trader cannot reserve the quoted payment.': 'questRefused:purse',
+  'The reward price changed or is missing. Choose the work again.': 'questRefused:price',
   'This trader cannot accept more work yet.': 'questRefused:capacity',
   'The transfer is waiting for its saved inventory.': 'questRefused:waiting',
   'Finish or leave one of your three open jobs of this kind first.': 'questRefused:open-limit',
@@ -181,10 +190,9 @@ const QUEST_ROW_WHY = {
   'Trading is waiting for a saved inventory.': 'inventory',
   'You do not meet this work\'s requirements.': 'requirements',
   'This work is still resting.': 'resting',
-  'No submitted buy price is available for this work.': 'noPrice',
+  'Staff have set no reward for this work.': 'noReward',
   'You already hold three commissions.': 'threeHeld',
   'This trader cannot accept more work yet.': 'traderFull',
-  'The trader cannot reserve this payment.': 'purse'
 };
 
 function distance(a, b) {
@@ -216,6 +224,8 @@ class LoadBot extends Bot {
     this.lastSent = new Map(); // idx -> { key, settled }, the move it sent last for each
     this.movesSent = 0;        // moves it sent, since the last report
     this.settledSent = 0;      // of those, settled moves, since the last report
+    this.recent = new Map();   // a message other than a move, as text -> when it came
+    this.repeats = 0;          // copies read (see REPEAT_MS), since the last report
     this.teleports = 0;
     this.voicePort = 0;
     this.ws = null;            // the chat socket on the voice service
@@ -507,6 +517,7 @@ class LoadBot extends Bot {
       const t = m && typeof m.t === 'number' ? m.t : 'raw';
       this.counts[t] = (this.counts[t] || 0) + 1;
       if (!m) { continue; }
+      if (m.t !== MSG.UpdateMovement) { this.noteRepeat(m, Date.now()); }
       if (m.t === MSG.CreateActor && m.isMe && !this.character) { this.character = m; }
       if (m.t === MSG.UpdateProperty && m.propName === MERCHANT_VIEW && this.character && m.idx === this.character.idx && this.play.indexOf('quest') >= 0) {
         let v = null;
@@ -523,7 +534,17 @@ class LoadBot extends Bot {
       }
       if (m.t === MSG.CreateActor && !m.isMe && this.play.length) {
         const tr = m.transform || {};
-        if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0 }); }
+        // An actor, as the engine sends one (PartOne.cpp, the stream-in): it
+        // always carries its equipment, which no other form does. The game asks
+        // to host actors only (formView.ts tryHostIfNeed); an ask for anything
+        // else throws out of the server's tick (#6349).
+        const actor = m.equipment !== undefined;
+        if (Array.isArray(tr.pos)) { this.others.set(m.idx, { refrId: Number(m.refrId) || 0, pos: tr.pos.map(Number), rot: Array.isArray(tr.rot) ? tr.rot.map(Number) : [0, 0, 0], cell: Number(tr.worldOrCell) || 0, actor }); }
+        if (actor && !(m.props && m.props.isHostedByOther)) { this.askHost(Number(m.refrId) || 0); }
+      }
+      if (m.t === MSG.UpdateProperty && m.propName === 'isHostedByOther' && m.dataDump === 'false') {
+        const o = this.others.get(m.idx);
+        if (o && o.actor) { this.askHost(o.refrId); }
       }
       if (m.t === MSG.UpdateMovement && this.play.length && m.data && Array.isArray(m.data.pos)) {
         const o = this.others.get(m.idx);
@@ -552,6 +573,26 @@ class LoadBot extends Bot {
         if (typeof m.teleportSeq === 'number') { this.seq = m.teleportSeq; }
         this.teleports++;
       }
+    }
+  }
+
+  // Asks to host refrId, under --play host (see host above).
+  askHost(refrId) {
+    if (!refrId || this.play.indexOf('host') < 0) { return; }
+    this.send({ t: HOST_ASK, remoteId: refrId }, true);
+    this.did('hostAsks');
+  }
+
+  // Counts m as a copy when the same message came within REPEAT_MS, and
+  // forgets what is older than that.
+  noteRepeat(m, now) {
+    let key;
+    try { key = JSON.stringify(m); } catch (err) { return; }
+    const at = this.recent.get(key);
+    if (at !== undefined && now - at <= REPEAT_MS) { this.repeats++; }
+    this.recent.set(key, now);
+    if (this.recent.size > 256) {
+      for (const [k, t] of this.recent) { if (now - t > REPEAT_MS) { this.recent.delete(k); } }
     }
   }
 
@@ -693,6 +734,7 @@ function main() {
       const perBot = [];
       const sentPerBot = [];
       let settled = 0;
+      let repeats = 0;
       const play = {};
       let hostedNow = 0;
       // The NPCs the bots hold as sent to them at the report, and how many of
@@ -706,6 +748,7 @@ function main() {
         for (const k of Object.keys(b.counts)) { counts[k] = (counts[k] || 0) + b.counts[k]; }
         if (b.step === 'moving') { perBot.push(b.counts[MSG.UpdateMovement] || 0); sentPerBot.push(b.movesSent); settled += b.settledSent; }
         b.movesSent = 0; b.settledSent = 0;
+        repeats += b.repeats; b.repeats = 0;
         b.counts = {};
         teleports += b.teleports; all += b.all;
         wsDown += b.wsDown; wsUp += b.wsUp; b.wsDown = 0; b.wsUp = 0;
@@ -717,7 +760,7 @@ function main() {
           if (o.refrId >= 0x100000000) { npcsKnown++; if (o.cell === b.cell) { npcsInCell++; } }
         }
       }
-      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, movesSentPerBot: sentPerBot, settledSent: settled, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
+      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, movesSentPerBot: sentPerBot, settledSent: settled, repeatsRead: repeats, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
       cpu0 = process.cpuUsage(); at0 = now;
     }
     if (msg && msg.stop) {
@@ -739,4 +782,4 @@ function main() {
 
 if (require.main === module) { main(); }
 
-module.exports = { LoadBot, MOVE_MS, MOVES, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };
+module.exports = { LoadBot, MOVE_MS, MOVES, REPEAT_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };

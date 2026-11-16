@@ -77,9 +77,12 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'scripts') -Destination $fresh -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $repo 'records') -Destination $fresh -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $repo 'layout.json') -Destination (Join-Path $fresh 'layout.json') -Force
+    Copy-Item -LiteralPath (Join-Path $repo '.gitignore') -Destination (Join-Path $fresh '.gitignore') -Force
     New-Item -ItemType Directory -Force -Path (Join-Path $fresh 'game') | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode.js') -Destination (Join-Path $fresh 'game\gamemode.js') -Force
-    # And its tables (#5191), which the gamemode artifact carries with it.
+    # And its tables (#5191), which the gamemode artifact carries with it:
+    # built, never committed, so laid over the checkout as the box's build
+    # of its commit (below).
     Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode-tables') -Destination (Join-Path $fresh 'game\gamemode-tables') -Recurse -Force
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
@@ -90,6 +93,21 @@ try {
     } finally { $ErrorActionPreference = $eap }
     Yes 'the scratch checkout is a committed git repository' $committed
     if (-not $committed) { Done }
+    # The tables laid as the dev server's build of this commit, the way
+    # Get-ContentBuild.ps1 lays one (temp\content-laid.json), so the publish
+    # finds its build laid and fetches none.
+    . (Join-Path $fresh 'scripts\mods\ContentPaths.ps1')
+    $head = (& git -C $fresh rev-parse HEAD) -join ''
+    $laidKey = (Get-ThornswoodContentKey -Repo $fresh -Commit $head -Server dev -Paths (Get-ThornswoodContentPaths -Repo $fresh -Tool 'scripts/mods/Add-ContentRecords.py').Paths).Key
+    $laidFiles = [ordered]@{}
+    $tablesAt = Join-Path $fresh 'game\gamemode-tables'
+    foreach ($f in @(Get-ChildItem -LiteralPath $tablesAt -Recurse -File)) {
+        $laidFiles['game/gamemode-tables/' + [IO.Path]::GetRelativePath($tablesAt, $f.FullName).Replace('\', '/')] = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    Save-ThornswoodLaidBuild -Repo $fresh -Server dev -Key $laidKey -Commit $head -From 'the harness' -Files $laidFiles
+    Yes ('the tables are laid as the dev build of the commit, not committed ({0} files)' -f $laidFiles.Count) (
+        $laidFiles.Count -gt 0 -and -not @(& git -C $fresh ls-files -- game/gamemode-tables).Count -and
+        (Get-ThornswoodLaidBuild -Repo $fresh -Server dev).Key -ceq $laidKey)
     $publish = Join-Path $fresh 'scripts\release\Publish-Server.ps1'
     $own = [string](& (Join-Path $fresh 'scripts\release\Where.ps1') ServerDist)
     Yes ("it has no engine build: Where.ps1 ServerDist names {0}, which is not there" -f $own) (

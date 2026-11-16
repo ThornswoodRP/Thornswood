@@ -173,6 +173,7 @@ function windowOf(a, b, bots, people) {
   const moves = [].concat(...bots.map((r) => r.movesReadPerBot || []));
   const sent = [].concat(...bots.map((r) => r.movesSentPerBot || []));
   const settled = bots.reduce((x, r) => x + (r.settledSent || 0), 0);
+  const repeats = bots.reduce((x, r) => x + (r.repeatsRead || 0), 0);
   // The server passes each move a bot sends to every bot near it: in a
   // crowd that is everybody else.
   return {
@@ -198,7 +199,10 @@ function windowOf(a, b, bots, people) {
     movesReadPerBotPerS: moves.length ? moves.reduce((x, y) => x + y, 0) / moves.length / sec : 0,
     fewestMovesReadPerS: moves.length ? Math.min(...moves) / sec : 0,
     movesSentPerBotPerS: sent.length ? sent.reduce((x, y) => x + y, 0) / sent.length / sec : 0,
-    settledSentPerS: settled / sec
+    settledSentPerS: settled / sec,
+    // Copies: a message other than a move read again within load-bots.js's
+    // REPEAT_MS of the first, for each bot (#6252).
+    repeatsReadPerBotPerS: people ? repeats / people / sec : 0
   };
 }
 
@@ -231,13 +235,13 @@ function markdown(doc) {
   out.push('');
   out.push('Memory is the server process\'s private bytes; its working set, which Windows trims, is in result.json.');
   out.push('');
-  out.push('| People | Server cores | Server memory MB | Down KB/s | Up KB/s | Per person: cores | MB | down KB/s | up KB/s | Moves sent per bot /s | Moves read per bot /s | Runner busy |');
-  out.push('|---|---|---|---|---|---|---|---|---|---|---|---|');
+  out.push('| People | Server cores | Server memory MB | Down KB/s | Up KB/s | Per person: cores | MB | down KB/s | up KB/s | Moves sent per bot /s | Moves read per bot /s | Copies read per bot /s | Runner busy |');
+  out.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const st of doc.steps) {
     const w = st.window; const p = st.perPerson || {};
-    if (!w) { out.push('| ' + st.people + ' | not measured: ' + st.stopped + ' ||||||||||| '); continue; }
+    if (!w) { out.push('| ' + st.people + ' | not measured: ' + st.stopped + ' |||||||||||| '); continue; }
     out.push('| ' + [w.people, fixed(w.serverCores, 3), fixed(w.serverPrivateMB === null || w.serverPrivateMB === undefined ? w.serverRssMB : w.serverPrivateMB, 0), fixed(w.downWirePerS / 1024, 1), fixed(w.upWirePerS / 1024, 1),
-      fixed(p.cores, 4), fixed(p.memoryMB, 2), fixed(p.downKBps, 2), fixed(p.upKBps, 2), fixed(w.movesSentPerBotPerS, 1), fixed(w.movesReadPerBotPerS, 1),
+      fixed(p.cores, 4), fixed(p.memoryMB, 2), fixed(p.downKBps, 2), fixed(p.upKBps, 2), fixed(w.movesSentPerBotPerS, 1), fixed(w.movesReadPerBotPerS, 1), fixed(w.repeatsReadPerBotPerS, 2),
       fixed(w.machineBusy * 100, 0) + '%'].join(' | ') + ' |');
   }
   out.push('');

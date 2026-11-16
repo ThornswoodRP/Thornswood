@@ -4706,7 +4706,12 @@ namespace Thornswood
                 int mine = revision;
                 int wants = Updater.ServerCollectionRevision;
                 txtUpdateTitle.Text = "Your mods need updating";
-                txtUpdateNote.Text =
+                if (OwnGame.FromMods)
+                    txtUpdateNote.Text =
+                        "The server was built against collection revision " + wants + " and the mods in Mod Organizer 2 are on " + mine +
+                        ", so part of what the server expects is not installed. Update installs revision " + wants + " in place of " + mine +
+                        " and keeps each mod settings file you changed.";
+                else txtUpdateNote.Text =
                     "The server was built against collection revision " + wants + " and this copy is on " + mine +
                     ", so part of what the server expects is not installed. The button brings Vortex " +
                     "forward: open Collections there and press Update on the Thornswood collection, which " +
@@ -4731,7 +4736,11 @@ namespace Thornswood
             else
             {
                 txtUpdateTitle.Text = "Your mods are not installed yet";
-                txtUpdateNote.Text =
+                if (OwnGame.FromMods)
+                    txtUpdateNote.Text =
+                        "The install of Thornswood's mods into Mod Organizer 2 in " + OwnGame.ModsFolder + " has not finished. " +
+                        "The button goes on from where it stopped; every file it has is kept.";
+                else txtUpdateNote.Text =
                     "Thornswood's mods are a collection on Nexus, and Vortex installs them into a " +
                     "profile of its own, so the Skyrim you already play is left alone. Nothing else " +
                     "here comes right until that is done, updates included.";
@@ -4791,6 +4800,9 @@ namespace Thornswood
         /// </summary>
         static void OpenCollection()
         {
+            // The mods come from the launcher's own Mod Organizer 2 (#6244):
+            // the button installs, updates or stops that install.
+            if (OwnGame.FromMods) { InstallModlist(); return; }
             int mine = Checks.CollectionRevision(cfg);
             string command = Checks.NxmCommand();
             try
@@ -4844,6 +4856,7 @@ namespace Thornswood
         {
             int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
             int wants = Updater.ServerCollectionRevision;
+            if (OwnGame.FromMods) return ModlistButtonText(mine);
             if (mine > 0) return wants > mine ? "Update in Vortex" : "Open Vortex";
             return wants > 0 ? "Open revision " + wants : "Open the collection";
         }

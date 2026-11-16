@@ -286,9 +286,9 @@ function Select-Affected {
 function Get-ContentList([switch]$Stale) {
     . (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
     $c = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
-    # What a build holds: the plugin, the catalogue and the places when the
-    # order moves (Build-ContentOnBox.ps1), and every file the chain writes.
-    $writes = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/resource-locations.json') + @($c.Writes)
+    # What a build holds: the plugin, the catalogue built in the order before
+    # the chain (Build-ContentOnBox.ps1), and every file the chain writes.
+    $writes = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($c.Writes)
     $tmp = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
     $gateFile = Join-Path $tmp 'content-gate.txt'
     $writesFile = Join-Path $tmp 'content-writes.txt'

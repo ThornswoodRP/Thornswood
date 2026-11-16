@@ -638,8 +638,16 @@ if (-not $noBuild -and -not (Test-Path -LiteralPath $Dist)) {
 # The gamemode's tables (#5191) are in the artifact with it, and go up with
 # it on every deploy, full or -GamemodeOnly: the gamemode reads them from the
 # gamemode-tables folder beside it as it loads, and a load without them stops.
+# They, our plugin and the Last plugin's recipe are never committed (#5191,
+# stage 4e): they are the box's content build of this commit, laid over this
+# checkout first, and the artifact holds them to it. It is the dev server's
+# build, the one every Release carries: merge-release.yml takes it, and a
+# main release is one of those promoted (#6175), so the live server runs it.
+. (Join-Path $Here '..\mods\ContentPaths.ps1')
+$laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev
+'{0,-22} {1}, built from {2}' -f 'content build', $laidBuild.Key.Substring(0, 12), $laidBuild.Commit.Substring(0, 12) | Write-Host
 $artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' `
-  -AlsoSends 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json', 'records/server-build.json'
+  -AlsoSends 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json', 'records/server-build.json' -Content dev
 '{0,-22} {1}' -f 'artifact', (Format-ThornswoodArtifact $artifact) | Write-Host
 $src = Join-Path $artifact.Folder 'game\gamemode.js'
 $tablesFrom = Join-Path $artifact.Folder 'game\gamemode-tables'

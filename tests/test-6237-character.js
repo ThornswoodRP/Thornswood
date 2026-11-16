@@ -13,6 +13,14 @@
 //      canonical text); the three expected numbers were printed by that C++
 //      compiled on its own with fmt on 16 Nov 2026.
 //   3. An entry whose plugin is not loaded is refused by name.
+//   4. A load order change (Rehearse-OnBox.ps1 -Reorder): the masters a
+//      plugin names are read from its TES4 header; the earliest full plugin
+//      that is nobody's master and loads as no master itself is picked
+//      (#6313: a master would be loaded first by the game, never last); the
+//      slots a character's ids name are listed; Check-Character.js --pick
+//      names that plugin and writes nothing, since the order is the rule's
+//      (ServerOrder.ps1, written by Rehearse-OnBox.ps1); and the same saved
+//      item is the number of its plugin's new slot.
 // With THORNSWOOD_TEST_MONGOSH and THORNSWOOD_TEST_MONGO_URI (a mongod that
 // takes writes to thornswood-wtestc): characters() reads a server whose
 // settings say MongoDB out of the database and leaves no copy behind;
@@ -96,6 +104,69 @@ if (!shell || !uri || !fs.existsSync(shell)) {
     run('db.dropDatabase()');
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+// ---- 4. a load order change ------------------------------------------------
+// A plugin as the game writes its header: TES4, its size, flags, then HEDR
+// and a MAST and DATA pair for each master.
+function plugin(file, masters, flags) {
+  const subs = [];
+  const sub = (type, data) => { const h = Buffer.alloc(6); h.write(type, 0, 'latin1'); h.writeUInt16LE(data.length, 4); subs.push(h, data); };
+  const hedr = Buffer.alloc(12); hedr.writeFloatLE(1.71, 0); hedr.writeUInt32LE(0x800, 8);
+  sub('HEDR', hedr);
+  for (const m of masters) { sub('MAST', Buffer.from(m + '\0', 'latin1')); sub('DATA', Buffer.alloc(8)); }
+  const data = Buffer.concat(subs);
+  const head = Buffer.alloc(24);
+  head.write('TES4', 0, 'latin1'); head.writeUInt32LE(data.length, 4); head.writeUInt32LE(flags || 0, 8); head.writeUInt16LE(44, 20);
+  fs.writeFileSync(file, Buffer.concat([head, data]));
+}
+const lo = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-6237o-'));
+try {
+  const dataDir = path.join(lo, 'data');
+  fs.mkdirSync(dataDir);
+  // Skyrim and Update are masters of others. Fish.esm is nobody's master
+  // but is one itself, so the game loads it before every plugin that is
+  // not, and it cannot go on the end (#6313). Moves.esp is nobody's and no
+  // master, so it is the one that moves; Sword.esp and Last.esp come after it.
+  plugin(path.join(dataDir, 'Skyrim.esm'), [], 1);
+  plugin(path.join(dataDir, 'Update.esm'), ['Skyrim.esm'], 1);
+  plugin(path.join(dataDir, 'Fish.esm'), ['Skyrim.esm'], 1);
+  plugin(path.join(dataDir, 'Beards.esl'), ['Skyrim.esm'], 0x200);
+  plugin(path.join(dataDir, 'Moves.esp'), ['Skyrim.esm', 'Update.esm']);
+  plugin(path.join(dataDir, 'Sword.esp'), ['Update.esm']);
+  plugin(path.join(dataDir, 'Last.esp'), ['Sword.esp']);
+  const order = ['Skyrim.esm', 'Update.esm', 'Fish.esm', 'Beards.esl', 'Moves.esp', 'Sword.esp', 'Last.esp'];
+  const paths = order.map((n) => path.join(dataDir, n));
+  yes('the masters a plugin names are read from its header', c.masters(paths[4]).join(',') === 'Skyrim.esm,Update.esm' && c.masters(paths[0]).length === 0);
+  yes('a plugin the game loads as a master is told: the 0x1 flag, an .esm or an .esl', c.loadsAsMaster(paths[2]) && c.loadsAsMaster(paths[3]) && !c.loadsAsMaster(paths[4]));
+  yes('pick gives the plugin a rehearsal moves and no order: the order is the rule\'s (ServerOrder.ps1, #6313)', typeof c.reorder === 'undefined' && typeof c.pick === 'function');
+  const r = c.pick(paths);
+  yes('the earliest full plugin that is nobody\'s master and no master itself is picked, from its slot to the last', r.moved === 'Moves.esp' && r.from === 3 && r.to === 5);
+  let none = '';
+  try { c.pick(paths.slice(0, 3)); } catch (e) { none = e.message; }
+  yes('an order with no such plugin but the last is refused', /none can move/.test(none));
+  // The order the rule makes of it: Moves.esp out of the running order and back
+  // as a new full plugin, on the end of the full ones (test-4688 holds that).
+  const moved = ['Skyrim.esm', 'Update.esm', 'Fish.esm', 'Beards.esl', 'Sword.esp', 'Last.esp', 'Moves.esp'];
+  const before = c.slots(paths);
+  const after = c.slots(moved.map((n) => path.join(dataDir, n)));
+  const form = { worldOrCellDesc: '3c:Skyrim.esm', inv: { entries: [{ baseId: '801:Sword.esp', count: 1, enchantmentId: '802:Beards.esl' }] } };
+  yes('the slots a character\'s ids name are listed', JSON.stringify(c.pluginsOf(form, before)) === JSON.stringify({ 'Skyrim.esm': '0x00', 'Sword.esp': '0x04', 'Beards.esl': '0xfe000' }));
+  yes('  and after the change the plugin after the one that moved is a slot earlier', c.pluginsOf(form, after)['Sword.esp'] === '0x03');
+  yes('the same saved item is its plugin\'s number in each order', c.numbered(form.inv.entries[0], before).baseId === 0x04000801 && c.numbered(form.inv.entries[0], after).baseId === 0x03000801);
+  // Check-Character.js --pick on a folder: it says which plugin moves and
+  // writes nothing; Rehearse-OnBox.ps1 builds and writes the order by the rule.
+  const settingsFile = path.join(lo, 'server-settings.json');
+  const settingsText = JSON.stringify({ port: 7800, dataDir: 'data', loadOrder: order, other: { kept: true } }, null, 2);
+  fs.writeFileSync(settingsFile, settingsText);
+  const cli = (args) => childProcess.spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'bot', 'Check-Character.js')].concat(args), { encoding: 'utf8' });
+  let cr = cli(['--root', lo, '--pick']);
+  yes('Check-Character.js --pick says which plugin moves, from which slot to which', cr.status === 0 && /^PICK Moves\.esp from slot 0x03 to 0x05$/m.test(cr.stdout));
+  yes('  and writes no load order', fs.readFileSync(settingsFile, 'utf8') === settingsText && !fs.existsSync(settingsFile + '.before-reorder'));
+  cr = cli(['--root', lo, '--reorder']);
+  yes('--reorder, which wrote an order of its own, is refused, and nothing is written', cr.status === 1 && fs.readFileSync(settingsFile, 'utf8') === settingsText);
+} finally {
+  fs.rmSync(lo, { recursive: true, force: true });
 }
 
 console.log('');

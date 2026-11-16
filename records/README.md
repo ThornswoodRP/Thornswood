@@ -71,10 +71,10 @@ folder here is named below, under the heading it belongs to.
   `"owner"` is RECIPE_OWNER and `"rank"` is RECIPE_RANK in
   `scripts\dev\Build-RecipeTable.ps1`, which reads them from here. No script
   writes this one: it is changed by hand, in the pull request that adds the
-  recipe it names. It is data so that a recipe change is this file and
-  `game\content\Thornswood-Content.esp` and nothing else, the two files the
-  box's Rebuild-ContentTables takes from a pull request to rebuild its tables
-  with main's own builders (Patrick, 30 Oct 2026, B on the report page, #3470).
+  recipe it names. It is data so that a recipe's owner and rank are a change
+  to a file and not to a builder (Patrick, 30 Oct 2026, B on the report
+  page, #3470). The box builds the content plugin and the tables from the
+  sources at the merge, and neither is committed (#5191).
 - `game-strings.json`: the loose string tables of the localized masters the
   content tools read whose names are in no Skyrim archive, by size and
   sha256 (#2899): RaceCompatibility.esm's three, measured 20 Oct 2026.
@@ -199,6 +199,15 @@ folder here is named below, under the heading it belongs to.
   its version, its release asset on GitHub and that asset's size and sha256.
   `scripts\release\Install-NexusRevision.ps1 -Modlist` downloads it, refuses
   any other bytes, and names each of its files in the modlist.
+- `collection-modlist.wabbajack`: the published revision as a Wabbajack
+  modlist (#6244), which every merge release carries in its signed record
+  as the part `modlist` and the launcher installs from. Written by
+  `Install-NexusRevision.ps1 -Record -Modlist` (Publish-CollectionRecord.ps1
+  puts it in the records that follow a publish), and it moves with
+  `collection-plugins.json`: `tests\test-6244-collection-modlist.ps1` holds
+  it to that revision and to `mo2.json`. It holds names, hashes and sizes,
+  our own MO2 files, and the collection's own patches as deltas; no other
+  author's file.
 - `collection.json`: the collection as it should be (issue #5189): each
   Nexus file it installs with the plugins that file puts in Data, every
   plugin in the collection's order with its load-after rule and what its
@@ -218,6 +227,16 @@ folder here is named below, under the heading it belongs to.
   revision's plugins, in the pull request that moves the records to a new
   revision. The content table builders and `game\data\last-plugin.json` are
   held to it, and `docs\COLLECTION-REVISIONS.md` names its revision.
+- `collection-page.json`: the text of the collection's page on Nexus Mods,
+  its summary, description and install steps (issue #4537). Each mod it
+  names is written `[[the words|its Nexus mod id]]`, and `notSaid` is what
+  the build has made untrue, each with why. `New-NexusRevision.ps1` sends it
+  with every revision in place of the text the revision before carried;
+  `scripts\release\collection-page.js` holds it to `collection.json` (every
+  mod it names installed, nothing `notSaid` lists, real headings, the same
+  `revision`), and `tests\test-4537-collection-page.js` runs that in the
+  gate. Changed by hand, and read again in the pull request that moves
+  `collection.json` to a new revision.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with

@@ -30,7 +30,11 @@
        kept between runs. A cached archive is used only when its size and md5
        are the revision's; any other file there is replaced. Every archive is
        checked against the revision before it is used. A failed download
-       stops the run and says which file; nothing is tried again;
+       stops the run and says which file; nothing is tried again. Once the
+       cache holds every archive the revision lists, the folder of any file
+       id the revision does not list is taken out (#4324), so the cache holds
+       one revision's archives and no more; anything in it that is not a file
+       id's folder is left;
     4. unpacks each archive (7-Zip, as Vortex does) and works out its files
        with the installer Vortex would pick, the FOMOD choices the revision
        gives, and its patches (NexusLayout.cs says how each is read from
@@ -147,7 +151,8 @@
 
 .PARAMETER Cache
   Where downloaded archives are kept. %LOCALAPPDATA%\Thornswood\nexus-cache
-  unless said otherwise.
+  unless said otherwise. A run that has every archive of its revision takes
+  the folders of other file ids out of it, so give a folder of its own.
 
 .PARAMETER WhatIf
   Downloads and works everything out, and changes nothing in -Game.
@@ -312,7 +317,7 @@ if (Test-Under $Cache $Game) { Die ('The cache ' + $Cache + ' is inside -Game.')
 if (Test-Under $Cache $Record) { Die ('The cache ' + $Cache + ' is inside -Record.') }
 $skyrimRecord = Join-Path (Join-Path $Repo 'records') 'skyrim-files.json'
 if (-not (Test-Path -LiteralPath $skyrimRecord)) { Die ('records\skyrim-files.json is not in this checkout (' + $skyrimRecord + '), and it is what a FOMOD''s questions about the game are answered from.') }
-Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs')) } | Out-Null
+Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs'), (Join-Path $Repo 'launcher\app\XxHash64.cs')) } | Out-Null
 if ($Modlist) {
   if (-not $Mo2Record) { $Mo2Record = Join-Path (Join-Path $Repo 'records') 'mo2.json' }
   $mo2 = Step { Get-Content -Raw -LiteralPath $Mo2Record | ConvertFrom-Json }
@@ -442,9 +447,26 @@ foreach ($e in $col.Entries) {
   Say ('  ' + $got.Name + ', ' + ([double]$got.Size / 1MB).ToString('N1') + ' MB in ' + [Math]::Round($sw.Elapsed.TotalSeconds) + ' s') 'DarkGray'
 }
 Say ('  ' + $reused + ' from the cache, ' + $fetched + ' downloaded, every one the revision''s size and md5') 'Green'
+# The cache keeps one folder per file id, and until #4324 only the folders of
+# the file ids a run's revision lists were ever read, so an archive no
+# revision lists any more stayed for good. Now that this run holds every
+# archive its revision lists, the folder of any other file id is an older
+# revision's, and it goes. What in the cache is not a file id's folder is not
+# this script's, and stays.
+$listed = New-Object 'System.Collections.Generic.HashSet[string]'
+foreach ($e in $col.Entries) { [void]$listed.Add([string]$e.FileId) }
+$gone = New-Object System.Collections.Generic.List[string]
+if (Test-Path -LiteralPath $Cache -PathType Container) {
+  foreach ($d in @(Get-ChildItem -LiteralPath $Cache -Directory -Force)) {
+    if ($d.Name -notmatch '^\d+$' -or $listed.Contains($d.Name) -or ($d.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+    Step { Remove-Tree $d.FullName }
+    $gone.Add($d.Name)
+  }
+}
+if ($gone.Count) { Say ('  taken out of the cache, as no file of this revision: file id ' + ($gone -join ', file id ')) 'DarkGray' }
 # -Modlist names every archive by its xxHash64, as Wabbajack does.
 $script:ArchXx = @{}
-if ($Modlist) { foreach ($e in $col.Entries) { $script:ArchXx[$e.Index] = [Thornswood.Layout.XxHash64]::OfFile($archives[$e.Index]) } }
+if ($Modlist) { foreach ($e in $col.Entries) { $script:ArchXx[$e.Index] = [Thornswood.XxHash64]::OfFile($archives[$e.Index]) } }
 # A RAR archive needs a 7-Zip that unpacks RAR. Ubuntu's does not: measured
 # 21 Oct (#2969), its 7zip package has no RAR codec ("Unsupported Method" on
 # Skyrim Sewers) and its 7zip-rar codec crashes on every RAR (exit 139). So
@@ -539,8 +561,8 @@ foreach ($e in $col.Entries) {
       $wj = New-Object System.Collections.Generic.List[object]
       foreach ($s in $plan.Files.Values) {
         if ([Thornswood.Layout.NexusLayout]::Blacklist.IsMatch($s.Rel)) { continue }
-        $one = [pscustomobject]@{ Rel = $s.Rel; Source = $s.Source; Size = $script:Facts[$s.Full].Size; Xx = [Thornswood.Layout.XxHash64]::OfFile($s.Full); FromXx = [uint64]0; Delta = $null }
-        if ($s.Patched) { $one.FromXx = [Thornswood.Layout.XxHash64]::OfFile($s.Origin); $one.Delta = [Thornswood.Layout.OctoDelta]::Make($s.Origin, $s.Full) }
+        $one = [pscustomobject]@{ Rel = $s.Rel; Source = $s.Source; Size = $script:Facts[$s.Full].Size; Xx = [Thornswood.XxHash64]::OfFile($s.Full); FromXx = [uint64]0; Delta = $null }
+        if ($s.Patched) { $one.FromXx = [Thornswood.XxHash64]::OfFile($s.Origin); $one.Delta = [Thornswood.Layout.OctoDelta]::Make($s.Origin, $s.Full) }
         $wj.Add($one)
       }
       $script:WjFiles[$e.Index] = $wj
@@ -801,14 +823,14 @@ if ($Record) {
       [IO.File]::Move($part, $mo2File, $true)
       if (-not (& $mo2Ok $mo2File)) { [IO.File]::Delete($mo2File); Die ('The download of ' + $mo2.url + ' is not the Mod Organizer 2 ' + $Mo2Record + ' pins (' + $mo2.size + ' bytes, sha256 ' + $mo2.sha256 + '). It was deleted.') }
     }
-    $mo2Xx = [Thornswood.Layout.XxHash64]::OfFile($mo2File)
+    $mo2Xx = [Thornswood.XxHash64]::OfFile($mo2File)
     $ml.AddHttpArchive([string]$mo2.name, [long]$mo2.size, $mo2Xx, [string]$mo2.url)
     $mo2Un = Join-Path $script:Work 'mo2'
     Step { Expand-Archive7 $mo2File $mo2Un 'Mod Organizer 2' }
     $mo2Count = 0
     foreach ($f in [IO.Directory]::EnumerateFiles($mo2Un, '*', [IO.SearchOption]::AllDirectories)) {
       $rel = [IO.Path]::GetRelativePath($mo2Un, $f).Replace([IO.Path]::DirectorySeparatorChar, '\')
-      $ml.FromArchive($mo2Xx, $rel, [Thornswood.Layout.XxHash64]::OfFile($f), (Get-Item -LiteralPath $f).Length, $rel)
+      $ml.FromArchive($mo2Xx, $rel, [Thornswood.XxHash64]::OfFile($f), (Get-Item -LiteralPath $f).Length, $rel)
       $mo2Count++
     }
     Remove-Tree $mo2Un

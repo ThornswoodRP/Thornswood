@@ -30,23 +30,30 @@
   listed. -Data is handed to every builder that takes it; left out, each
   builder uses its own default, which on One is the game at C:\Thornswood.
   A step that changes a file an earlier step reads back (readsBack) runs the
-  chain again from that earlier step, once (#4087): Write-CutItems.js sorts a
-  new plugin's recipes into the cut file, and the recipe build applies it.
+  chain again from that earlier step, once for each file (#4087):
+  Write-CutItems.js sorts a new plugin's recipes into the cut file, and
+  Build-Recost.py re-costs a recipe in recost.json (#5191), and the recipe
+  build applies each.
 
   THE LOAD ORDER IS THE ONE THE COMMIT RECORDS (#3105). Every builder that
-  takes a plugin list is given the load order game\data\npc-population.json
-  records, the one both game servers run (Build-NpcPopulation.py reads it
-  out of a server's settings when the collection's load order moves), as a
-  plugins.txt in a temp folder. Until #3105 each builder read the profile
-  list of the PC it ran on: One's Default list held 101 plugins and both
-  servers load 103 (Thornswood-Last.esp and _ResourcePack.esl), so main's
-  door table still called the gates Last.esp unlocks locked, and a box run,
-  given the dev server's list, wrote different tables from One's. Now a PC
-  and the box build the same tables from the same commit. -PluginsTxt (the
-  box's '{plugins}', the dev server's load order) is held to that record: a
-  list that is not the same plugins in the same order stops the run before
-  any builder, because the record and the server disagree and the record is
-  rebuilt first.
+  takes a plugin list is given the load order records\load-order.json
+  records, moved to the revision records\collection-plugins.json names
+  (ContentPaths.ps1, Get-ThornswoodContentOrder), as a plugins.txt in a temp
+  folder. Until #3105 each builder read the profile list of the PC it ran
+  on: One's Default list held 101 plugins and both servers load 103
+  (Thornswood-Last.esp and _ResourcePack.esl), so main's door table still
+  called the gates Last.esp unlocks locked, and a box run, given the dev
+  server's list, wrote different tables from One's. Now a PC and the box
+  build the same tables from the same commit. Until 16 Nov 2026 (#5191) the
+  order was game\data\npc-population.json's, a table step
+  Build-NpcPopulation.py writes, so a run read its order back from the
+  catalogue of the run before. The catalogue is held to the record instead:
+  Build-LastPlugin.py cuts the actors it lists, in its order, so a catalogue
+  of another order stops the run before any builder, and is built in the
+  record's first (Build-NpcPopulation.py --settings, as
+  Build-ContentOnBox.ps1 does). -PluginsTxt (the box's '{plugins}') is held
+  to the record too: a list that is not the same plugins in the same order
+  stops the run before any builder.
 
   AFTER THE BUILDERS. records\asset-provenance.json holds each of Thornswood's
   own plugins by sha256, and tests\test-asset-provenance.js refuses a file
@@ -67,16 +74,19 @@
 
   -List prints the steps it would run, with their arguments, and runs none.
 
-  WITHOUT THE LAST PLUGIN (-WithoutLast, #5191). Thornswood-Last.esp is made
-  by Build-LastPlugin.py from tables the steps before it build, and those
-  steps read a load order with Thornswood-Last.esp in it, so each build read
-  the Last plugin the build before it made. Patrick's B on
-  q-5191-last-plugin-loop (15 Nov 2026): the steps before it never read the
-  Last plugin, and each takes what the Last plugin changes from the data that
-  decides it. -WithoutLast measures which tables that moves: every step
-  before Build-LastPlugin.py is given the load order without
-  Thornswood-Last.esp, and the steps from it on the whole order. It is a
-  measurement (Build-Content -WithoutLast on the box), not a build to keep.
+  WITHOUT THE LAST PLUGIN BEFORE IT IS MADE (#5191). Thornswood-Last.esp is
+  made by Build-LastPlugin.py from tables the steps before it build. Until
+  16 Nov 2026 those steps read a load order with Thornswood-Last.esp in it,
+  so each build read the Last plugin the build before it made. Patrick's B
+  on q-5191-last-plugin-loop (15 Nov 2026): the steps before it never read
+  the Last plugin, and each takes what the Last plugin changes from the data
+  that decides it. So every step before Build-LastPlugin.py is given the
+  load order without Thornswood-Last.esp, and the steps from it on the whole
+  order: Build-LastPlugin.py writes the plugin into the Data folder, where
+  the steps after it read this run's. The -WithoutLast box run of 16 Nov
+  2026 measured which tables that moved, and each now takes the plugin's
+  effect from its own data (the door, cast, recipe and catalogue builders)
+  or runs after it (the crime table and the fishing spots).
 #>
 [CmdletBinding()]
 param(
@@ -85,10 +95,7 @@ param(
     # A plugin list to check against the load order the commit records; the
     # builders are given that record's load order either way.
     [string]$PluginsTxt = '',
-    [switch]$List,
-    # The steps before Build-LastPlugin.py read the order without
-    # Thornswood-Last.esp (WITHOUT THE LAST PLUGIN, above).
-    [switch]$WithoutLast
+    [switch]$List
 )
 
 $ErrorActionPreference = 'Stop'
@@ -137,43 +144,49 @@ if ($need.Count -and -not $List) { throw ('not found on this machine: ' + ($need
 # The load order the commit records, as the game's plugins.txt: the five
 # masters are never written to it (OwnPlugins.ps1).
 . (Join-Path $repo 'scripts\dev\OwnPlugins.ps1')
-$populationPath = Join-Path $repo 'game\data\npc-population.json'
-$recorded = @(([IO.File]::ReadAllText($populationPath) | ConvertFrom-Json).loadOrder | ForEach-Object { [string]$_.name })
+. (Join-Path $repo 'scripts\mods\ContentPaths.ps1')
+try { $recorded = @((Get-ThornswoodContentOrder -Repo $repo).Names) }
+catch { throw ('the load order the commit records could not be read: ' + $_.Exception.Message + ' Nothing was run.') }
 $masters = @('skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm')
 if ($recorded.Count -lt 6 -or (@($recorded[0..4] | ForEach-Object { $_.ToLowerInvariant() }) -join '|') -ne ($masters -join '|')) {
-    throw ('game\data\npc-population.json records no load order that starts with the five masters. Nothing was run.')
+    throw ('records\load-order.json records no load order that starts with the five masters. Nothing was run.')
+}
+# Where two orders part, or nothing when they are the same.
+function Get-Parting([string[]]$a, [string[]]$b) {
+    for ($i = 0; $i -lt [Math]::Max($a.Count, $b.Count); $i++) {
+        if ($i -ge $a.Count -or $i -ge $b.Count -or $a[$i] -ine $b[$i]) {
+            return ('{0} plugins against {1}, and at place {2} it has {3} where the record has {4}' -f $a.Count, $b.Count, ($i + 1),
+                $(if ($i -lt $a.Count) { $a[$i] } else { 'nothing' }), $(if ($i -lt $b.Count) { $b[$i] } else { 'nothing' }))
+        }
+    }
+    return ''
 }
 if ($PluginsTxt) {
     if (-not (Test-Path -LiteralPath $PluginsTxt)) { throw "not found: $PluginsTxt. Nothing was run." }
-    $given = @(Get-LoadOrder $PluginsTxt)
-    $at = -1
-    for ($i = 0; $i -lt [Math]::Max($given.Count, $recorded.Count); $i++) {
-        if ($i -ge $given.Count -or $i -ge $recorded.Count -or $given[$i] -ine $recorded[$i]) { $at = $i; break }
-    }
-    if ($at -ge 0) {
-        $g = $(if ($at -lt $given.Count) { $given[$at] } else { 'nothing' })
-        $r = $(if ($at -lt $recorded.Count) { $recorded[$at] } else { 'nothing' })
-        throw ("$PluginsTxt is not the load order game\data\npc-population.json records: $($given.Count) plugins against $($recorded.Count), and at place $($at + 1) it has $g where the record has $r. When the servers' load order moved, rebuild the record first (Build-NpcPopulation.py, then Build-ResourceLocations.py, content-tables.json's notInChain says why). Nothing was run.")
-    }
+    $parting = Get-Parting @(Get-LoadOrder $PluginsTxt) $recorded
+    if ($parting) { throw ("$PluginsTxt is not the load order the commit records (records\load-order.json at its collection revision): $parting. Nothing was run.") }
+}
+if (-not $List) {
+    $populationPath = Join-Path $repo 'game\data\npc-population.json'
+    $catalogued = $(if (Test-Path -LiteralPath $populationPath -PathType Leaf) { @(([IO.File]::ReadAllText($populationPath) | ConvertFrom-Json).loadOrder | ForEach-Object { [string]$_.name }) } else { @() })
+    $parting = Get-Parting $catalogued $recorded
+    if ($parting) { throw ("game\data\npc-population.json is not built in the load order the commit records: $parting. Build-LastPlugin.py cuts the actors it lists, so build it in that order first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.") }
 }
 $orderFolder = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-loadorder-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
 $orderList = Join-Path $orderFolder 'plugins.txt'
 
+# The steps before Build-LastPlugin.py read the order without the plugin it
+# makes (WITHOUT THE LAST PLUGIN BEFORE IT IS MADE, above); a chain with no
+# such step makes none, so none of its steps reads one.
 $steps = @($chain.steps)
 $lastPlugin = 'Thornswood-Last.esp'
 $lastAt = $steps.Count
-$withoutList = $null
-if ($WithoutLast) {
-    $lastAt = -1
-    for ($i = 0; $i -lt $steps.Count; $i++) { if ($steps[$i].tool -eq 'scripts/mods/Build-LastPlugin.py') { $lastAt = $i; break } }
-    if ($lastAt -lt 0) { throw ('content-tables.json has no scripts/mods/Build-LastPlugin.py step, so -WithoutLast has nothing to leave the Last plugin out before. Nothing was run.') }
-    if (-not @($recorded | Where-Object { $_ -ieq $lastPlugin }).Count) { throw ("the load order game\data\npc-population.json records has no $lastPlugin, so -WithoutLast would change nothing. Nothing was run.") }
-    $withoutList = Join-Path (Join-Path $orderFolder 'without-last') 'plugins.txt'
-}
+for ($i = 0; $i -lt $steps.Count; $i++) { if ($steps[$i].tool -eq 'scripts/mods/Build-LastPlugin.py') { $lastAt = $i; break } }
+$withoutList = Join-Path (Join-Path $orderFolder 'without-last') 'plugins.txt'
 $runs = @()
 $at = 0
 foreach ($s in $steps) {
-    $stepList = $(if ($WithoutLast -and $at -lt $lastAt) { $withoutList } else { $orderList })
+    $stepList = $(if ($at -lt $lastAt) { $withoutList } else { $orderList })
     $at++
     $tool = Join-Path $repo $s.tool
     if (-not (Test-Path -LiteralPath $tool)) { throw ("content-tables.json names $($s.tool), which is not in this checkout. Nothing was run.") }
@@ -193,26 +206,27 @@ if ($List) {
         Say ('{0,2}. {1} {2}' -f ($i + 1), $steps[$i].tool, (@($runs[$i][1] | Select-Object -Skip ($(if ($steps[$i].tool -like '*.ps1') { 5 } else { 1 }))) -join ' '))
     }
     Say ('{0} steps, then the hashes of game\content in records\asset-provenance.json, each list {1}: {2}. Nothing was run.' -f $steps.Count, $orderList, (Get-LoadOrderName $recorded))
-    if ($WithoutLast) { Say ('steps 1 to {0} are given {1}, the same order without {2}' -f $lastAt, $withoutList, $lastPlugin) }
+    Say ('steps 1 to {0} are given {1}, the same order without {2}' -f $lastAt, $withoutList, $lastPlugin)
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $orderFolder | Out-Null
 [IO.File]::WriteAllLines($orderList, [string[]]@($recorded | Select-Object -Skip 5 | ForEach-Object { '*' + $_ }), (New-Object Text.UTF8Encoding($false)))
-Say ('the load order: ' + (Get-LoadOrderName $recorded) + ', from game\data\npc-population.json') 'Cyan'
-if ($WithoutLast) {
-    $without = @($recorded | Where-Object { $_ -ine $lastPlugin })
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $withoutList) | Out-Null
-    [IO.File]::WriteAllLines($withoutList, [string[]]@($without | Select-Object -Skip 5 | ForEach-Object { '*' + $_ }), (New-Object Text.UTF8Encoding($false)))
-    Say ('steps 1 to {0}, before {1}, read it without {2}: {3}' -f $lastAt, $steps[$lastAt].tool, $lastPlugin, (Get-LoadOrderName $without)) 'Cyan'
-}
+Say ('the load order: ' + (Get-LoadOrderName $recorded) + ', as the commit records it') 'Cyan'
+$without = @($recorded | Where-Object { $_ -ine $lastPlugin })
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $withoutList) | Out-Null
+[IO.File]::WriteAllLines($withoutList, [string[]]@($without | Select-Object -Skip 5 | ForEach-Object { '*' + $_ }), (New-Object Text.UTF8Encoding($false)))
+Say ('steps 1 to {0}{1} read it without {2}: {3}' -f $lastAt, $(if ($lastAt -lt $steps.Count) { ', before ' + $steps[$lastAt].tool + ',' } else { '' }), $lastPlugin, (Get-LoadOrderName $without)) 'Cyan'
+
 
 # A file a step reads back (readsBack in content-tables.json) is written by a
 # later step. When that step changes it, the reader built from the old one, so
 # the chain runs again from the reader, once (#4087): Build-RecipeTable.ps1
 # reads docs\systems\cut-items.json, and Write-CutItems.js sorts a row a new
-# plugin added into it, which the recipe build has to apply. A second change
-# is a builder that never settles, and stops the chain.
+# plugin added into it, which the recipe build has to apply; it reads
+# game\data\recost.json too, which Build-Recost.py writes from it (#5191).
+# Each file read back may change once: a second change of the same file is a
+# builder that never settles, and stops the chain.
 function Get-FileSha([string]$rel) {
     $f = Join-Path $repo $rel
     if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { return '' }
@@ -243,8 +257,8 @@ try {
             if (-not $readBackBy.ContainsKey($w) -or $readBackBy[$w] -ge $i) { continue }
             if ((Get-FileSha $w) -eq $readBackAt[$w]) { continue }
             $j = $readBackBy[$w]
-            if ($againFrom.ContainsKey($j)) { $stopped = '{0} changed {1} again after {2} ran on it a second time' -f $steps[$i].tool, $w, $steps[$j].tool; break }
-            $againFrom[$j] = $true
+            if ($againFrom.ContainsKey($w)) { $stopped = '{0} changed {1} again after {2} ran on it a second time' -f $steps[$i].tool, $w, $steps[$j].tool; break }
+            $againFrom[$w] = $true
             Say ('{0} changed {1}, which {2} read, so the chain runs again from step {3}' -f $steps[$i].tool, $w, $steps[$j].tool, ($j + 1)) 'Yellow'
             if ($from -lt 0 -or $j -lt $from) { $from = $j }
         }
