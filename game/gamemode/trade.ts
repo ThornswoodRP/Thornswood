@@ -45,6 +45,14 @@
 
   var TRADE_PROPERTY = 'thornswoodTrade';
 
+  /* Into the gold and trade log (#6270), which keeps it by account for staff. */
+  function ledger(kind, a, b, aGave, bGave) {
+    var l = g.__thornswoodLedger;
+    if (!l || typeof l.trade !== 'function') { tlog('the gold and trade log is not loaded, so this', kind, 'is only in this log'); return; }
+    try { l.trade(kind, a, b, aGave, bGave); }
+    catch (e) { tlog('the gold and trade log would not take this', kind + ':', String((e && e.message) || e)); }
+  }
+
   var TRADE = {
     // How far apart two people can be and still be trading. A trade that
     // carries on across Skyrim is a post office.
@@ -557,6 +565,7 @@
                  nameOf(not) + '\'s was not. Tell staff, it is in the server log.';
       tellEach([t.a, t.b], line);
       tlog('HALF A TRADE:', nameOf(got), 'was written and', nameOf(not), 'was not, trading', whatA, 'for', whatB);
+      ledger('halftrade', t.a, t.b, { gold: t.goldA, items: t.offerA }, { gold: t.goldB, items: t.offerB });
       close(t, '');
       return line;
     }
@@ -565,6 +574,7 @@
       say(t.b, 'Traded. You gave ' + whatB + ' and got ' + whatA + '.');
     } catch (e) { }
     tlog(nameOf(t.a), 'and', nameOf(t.b), 'traded:', whatA, 'for', whatB);
+    ledger('trade', t.a, t.b, { gold: t.goldA, items: t.offerA }, { gold: t.goldB, items: t.offerB });
     close(t, '');
     return '';
   }
@@ -614,6 +624,7 @@
                  nameOf(other(t, sold)) + '\'s was not. Tell staff, it is in the server log.';
       tellEach([seller, worker], half);
       tlog('HALF A SALE:', nameOf(sold), 'was written and', nameOf(other(t, sold)), 'was not');
+      ledger('halftrade', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
       close(t, '');
       return half;
     }
@@ -630,6 +641,7 @@
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
             : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
+    ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
          cuts.worker, 'to the worker,', cuts.gone, 'destroyed, and the things left the world');
     close(t, '');

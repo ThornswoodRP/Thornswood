@@ -301,7 +301,6 @@ if (process.exitCode === 1) {
   installPlaced();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-WaterTable.js',
-    builtAt: new Date().toISOString(),
     source: 'the WATR, CELL and WRLD records of ' + parsed + ' plugins in load order',
     readFrom: 'XCWT on a cell, NAM2 on a worldspace, and the editor id of the WATR they point at',
     note: 'what a class is WORTH is balance and lives in NEEDS.water in gamemode.js. ' +

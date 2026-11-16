@@ -2,8 +2,13 @@
   LoadOrder.ps1
 
   The load order as the game counts it, and how to put a plugin list into the
-  server's order. Dot-sourced by Publish-Update.ps1, so the reference plugin
-  list that goes into a pack ships in the order the server actually runs.
+  server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1,
+  Check-Manifest.ps1 and Find-MissingMasters.ps1 in scripts\mods, and by Check-ShipReady.ps1,
+  Publish-Update.ps1, Scrub-Feed.ps1 and Ship.ps1 in scripts\release, and by
+  the harnesses test-4735-revision-readers.ps1, test-bad-json-records.ps1 and
+  test-collection-export.ps1 in scripts\tests; for
+  Publish-Update.ps1, so the reference plugin list that goes into a pack ships
+  in the order the server actually runs.
 
   The same rule as launcher\app\LoadOrder.cs in the launcher, function for
   function, and the two are held to identical output by a test. Change one,
@@ -534,9 +539,14 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
             } catch { }
         }
     }
+    # A folder holding plugins.txt is a deployed profile, and wins over one
+    # that does not, whichever the state names first (#4387).
     foreach ($id in $ids) {
         $dir = Join-Path $profilesRoot $id
         if (Test-Path -LiteralPath (Join-Path $dir 'plugins.txt')) { return $dir }
+    }
+    foreach ($id in $ids) {
+        $dir = Join-Path $profilesRoot $id
         if (Test-Path -LiteralPath $dir) { return $dir }
     }
     return $null
@@ -548,8 +558,15 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
 #>
 function Assert-VortexProfile([string]$Name = 'Thornswood') {
     $dir = Get-VortexProfileDir $Name
-    if ($dir) { return $dir }
-    throw ("Vortex profile '$Name' was not found. In Vortex, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+    if (-not $dir) {
+        throw ("Vortex profile '$Name' was not found. In Vortex, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+    }
+    # A profile folder with no plugins.txt is one Vortex never deployed the
+    # collection into: there is no load order in it to read or check (#4387).
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'plugins.txt') -PathType Leaf)) {
+        throw ("Vortex profile '$Name' at $dir holds no plugins.txt, so the collection was never deployed into it. In Vortex, switch to the $Name profile and deploy the collection, then try again.")
+    }
+    return $dir
 }
 
 <#
@@ -558,19 +575,43 @@ function Assert-VortexProfile([string]$Name = 'Thornswood') {
 #>
 function Get-LoadOrderCopyDiffs([hashtable]$Copies) {
     $diffs = New-Object Collections.Generic.List[string]
-    if (-not $Copies -or $Copies.Count -lt 2) { return [string[]]$diffs.ToArray() }
+    if (-not $Copies -or $Copies.Count -eq 0) { return [string[]]$diffs.ToArray() }
     $names = @($Copies.Keys | Sort-Object)
-    for ($i = 0; $i -lt $names.Count; $i++) {
-        for ($j = $i + 1; $j -lt $names.Count; $j++) {
-            $aName = $names[$i]; $bName = $names[$j]
-            $aPath = [string]$Copies[$aName]; $bPath = [string]$Copies[$bName]
-            if (-not $aPath -or -not $bPath) { continue }
-            if (-not (Test-Path -LiteralPath $aPath)) { continue }
-            if (-not (Test-Path -LiteralPath $bPath)) { continue }
-            $aLines = @(Get-Content -LiteralPath $aPath -ErrorAction SilentlyContinue)
-            $bLines = @(Get-Content -LiteralPath $bPath -ErrorAction SilentlyContinue)
-            $aEn = @($aLines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
-            $bEn = @($bLines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
+    # Every copy named is read first. One that is not there, or cannot be
+    # read, is said by name, never skipped or taken as an empty list (#4387).
+    $read = [ordered]@{}
+    foreach ($n in $names) {
+        $p = [string]$Copies[$n]
+        if (-not $p -or -not (Test-Path -LiteralPath $p)) {
+            [void]$diffs.Add("$n is not there" + $(if ($p) { " ($p)" } else { '' }))
+            continue
+        }
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+            [void]$diffs.Add("$n cannot be read: $p is not a file")
+            continue
+        }
+        try { $lines = @(Get-Content -LiteralPath $p -ErrorAction Stop) }
+        catch {
+            [void]$diffs.Add(("$n cannot be read ({0}): {1}" -f $p, $_.Exception.Message))
+            continue
+        }
+        $read[$n] = @($lines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
+    }
+    # Agreement needs two copies to compare. Fewer is said, never taken as
+    # agreeing (#4387).
+    if ($read.Count -lt 2) {
+        if ($names.Count -lt 2) {
+            [void]$diffs.Add(("only one load order copy was named, {0}, so there is nothing to compare it with" -f $names[0]))
+        } else {
+            [void]$diffs.Add(("only {0} of the {1} load order copies could be read ({2}), so whether they agree was not checked" -f $read.Count, $names.Count, $(if ($read.Count) { @($read.Keys) -join ', ' } else { 'none' })))
+        }
+        return [string[]]$diffs.ToArray()
+    }
+    $rn = @($read.Keys)
+    for ($i = 0; $i -lt $rn.Count; $i++) {
+        for ($j = $i + 1; $j -lt $rn.Count; $j++) {
+            $aName = $rn[$i]; $bName = $rn[$j]
+            $aEn = @($read[$aName]); $bEn = @($read[$bName])
             $mismatch = Get-LoadOrderFirstMismatch $aEn $bEn
             if ($mismatch -ge 0) {
                 $aAt = if ($mismatch -lt $aEn.Count) { $aEn[$mismatch] } else { '(end)' }

@@ -85,6 +85,7 @@ function Run-UseLocal([string]$root) {
     $text = @"
 `$ErrorActionPreference = 'Stop'
 . '$ListPs'
+. '$(Join-Path $Repo 'scripts\deploy\World.ps1')'
 `$body = $($bodyAssign[0].Right.Extent.Text)
 `$Local = '$root'
 `$NoPause = `$true

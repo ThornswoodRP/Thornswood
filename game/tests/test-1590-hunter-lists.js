@@ -1,13 +1,15 @@
 // test-1590-hunter-lists.js
 //
 // #1590. game/data/hunts.json was rebuilt in #1523 and the lists made from it
-// were not written again, so docs/systems/classes/hunter.md (the table under
-// Every record), docs/systems/lists/hunter.md and the Hunter line of
+// were not written again, so docs/systems/lists/hunter.md, the copy of it
+// under Every record on docs/systems/classes/hunter.md and the Hunter line of
 // docs/systems/lists/README.md described 36 rows and 119 records the server no
 // longer had. This runs scripts/dev/Write-SystemLists.js in a temporary copy
-// of what it reads and writes and holds those three to what it writes from
-// today's hunts.json, and holds the numbers the hunter page states above
-// Every record to the same table. The repository is never written.
+// of what it reads and writes and holds the list and the index line to what
+// it writes from today's hunts.json, and holds the numbers the hunter page
+// states to the list's table. Since #5191 the script writes only into
+// docs/systems/lists, so the hand-written page keeps no copy and is left as
+// it is. The repository is never written.
 const REPO_DIR = require("path").join(__dirname, "..", "..");
 const fs = require("fs");
 const os = require("os");
@@ -53,22 +55,23 @@ try {
   function made(rel) { return lf(fs.readFileSync(path.join(tmp, rel), "utf8")); }
 
   yes("lists/hunter.md is what the script writes from today's hunts.json", made(HUNTER_LIST) === repo(HUNTER_LIST));
-  yes("the hunter page is what the script writes from today's hunts.json", made(HUNTER_PAGE) === repo(HUNTER_PAGE));
+  yes("the script leaves the hand-written hunter page as it is", made(HUNTER_PAGE) === repo(HUNTER_PAGE));
   const lineOf = function (t) { return (/^- \[Hunter\]\(hunter\.md\).*$/m.exec(t) || [""])[0]; };
   yes("the Hunter line of the lists index is what the script writes", lineOf(made(INDEX)) !== "" && lineOf(made(INDEX)) === lineOf(repo(INDEX)));
 
-  // The numbers the page states above Every record, against that table.
+  // The numbers the page states, against the list's table.
   const hunts = JSON.parse(fs.readFileSync(path.join(REPO_DIR, "game", "data", "hunts.json"), "utf8")).hunts;
   const records = Object.keys(hunts).length;
   const names = {};
   Object.keys(hunts).forEach(function (k) { names[hunts[k].name] = true; });
   const page = repo(HUNTER_PAGE);
-  const a = page.indexOf("## Every record"), b = page.indexOf("<!-- detail:end -->");
-  const rows = page.slice(a, b).split("\n").filter(function (l) { return /^\| /.test(l) && !/^\| (Name|---)/.test(l); });
+  yes("the hunter page keeps no copy of the list", page.indexOf("detail:begin") < 0 && page.indexOf("## Every record") < 0 &&
+    page.indexOf("(../lists/hunter.md)") >= 0);
+  const rows = repo(HUNTER_LIST).split("\n").filter(function (l) { return /^\| /.test(l) && !/^\| (Name|---)/.test(l); });
   const sum = rows.reduce(function (n, l) { return n + Number(l.split("|")[3]); }, 0);
   const tableNames = {};
   rows.forEach(function (l) { tableNames[l.split("|")[1].trim()] = true; });
-  yes("Every record holds every placed body in hunts.json (" + sum + " of " + records + ")", sum === records);
+  yes("the list holds every placed body in hunts.json (" + sum + " of " + records + ")", sum === records);
   yes("and every name (" + Object.keys(tableNames).length + " of " + Object.keys(names).length + ")",
     Object.keys(tableNames).length === Object.keys(names).length);
   const stated = /^(\d+) names, (\d+) placed bodies\./m.exec(page);

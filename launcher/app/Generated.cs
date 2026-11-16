@@ -165,6 +165,17 @@ namespace Thornswood
                     if (m.Groups[1].Value == "source") source = m.Groups[2].Value.Trim(); else steam = m.Groups[2].Value.Trim();
                 }
             if (source.Length == 0) throw new GeneratedStop(made + " names no source, so the files of Pandora's mod cannot be read.");
+            // The mods from Mod Organizer 2 (#6244): its record names each
+            // file's mod, so Pandora's files are the ones of its mod.
+            string mo2 = Under(source, ModsDeployed.Name);
+            if (File.Exists(mo2))
+            {
+                List<ModsDeployed> all = ModsDeployed.Read(mo2);
+                var exe = all.FindAll(delegate(ModsDeployed f) { return f.Rel.Equals("Data\\Pandora Behaviour Engine+.exe", StringComparison.OrdinalIgnoreCase); });
+                if (exe.Count != 1) throw new GeneratedStop("Mod Organizer 2's record (" + mo2 + ") does not name one mod for Pandora Behaviour Engine+.exe.");
+                return all.FindAll(delegate(ModsDeployed f) { return f.Mod == exe[0].Mod && f.Rel.StartsWith("Data\\", StringComparison.OrdinalIgnoreCase); })
+                          .ConvertAll(delegate(ModsDeployed f) { return f.Rel.Substring(5); });
+            }
             // The source may itself be a Thornswood folder rather than the one
             // Vortex deploys into: the dev release folder and the main install
             // on One both record source=C:\Thornswood-DevBuild\Game. A
@@ -685,6 +696,32 @@ namespace Thornswood
         public string Name = "";
         public double Big, Small;
         public BodySlideSlider Slider;
+    }
+
+    /// <summary>
+    /// One file of Mod Organizer 2's record of what goes into the game folder
+    /// (#6244): the path in the game folder, the mod, and the path in the
+    /// mod's folder under the instance's mods folder. The launcher writes it
+    /// into the instance once the modlist is installed (ModlistSetup.Deployment)
+    /// and reads it in place of Vortex's (OwnGame.ModsRecordName, the same name).
+    /// </summary>
+    public sealed class ModsDeployed
+    {
+        public const string Name = "thornswood-deployment.txt";
+        public string Rel = "", Mod = "", Under = "";
+
+        /// <summary>Every line of the record after its first, which names the modlist. A line not in its shape is skipped.</summary>
+        public static List<ModsDeployed> Read(string file)
+        {
+            var l = new List<ModsDeployed>();
+            string[] lines = File.ReadAllLines(file);
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string[] p = lines[i].Split('|');
+                if (p.Length == 5) l.Add(new ModsDeployed { Rel = p[0], Mod = p[1], Under = p[2] });
+            }
+            return l;
+        }
     }
 
     /// <summary>One file of Vortex's deployment record (Data\vortex.deployment.json).</summary>

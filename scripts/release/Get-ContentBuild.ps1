@@ -36,7 +36,30 @@
 
       pwsh scripts/release/Get-ContentBuild.ps1 -Newest
 
+  It says whether that build is of this checkout's content inputs: SAME KEY,
+  or OTHER KEY when the checkout changed one (a source, a builder, a script
+  a builder loads), and writes same=yes|no, commit= (the commit the build
+  was made of) and key= to -Output. Run-Gate.ps1's pick reads them (its
+  -Content says why). -Keep keeps the two files it took, which the pick
+  hands to the gate's shares, so every share of one run lays the build its
+  pick measured, even when a merge release keeps a newer one meanwhile, and
+  no share holds a token. -BuildKey holds the build to that key, as the
+  merge release's content checks lay the one it took.
+
   -Keep <folder> keeps the two files TAKE took there, for the artifact.
+
+  KEPT. On the box, the build Build-ContentOnBox.ps1 keeps for the key, with
+  no GitHub: -Kept names where builds are kept (C:\Thornswood-ContentBuilds),
+  and -Take lays <Kept>\<server>\<key>\files over this checkout, held to its
+  build.json the same way. A box verb that sends a built file lays it so.
+
+      pwsh scripts/release/Get-ContentBuild.ps1 -Take -Kept C:\Thornswood-ContentBuilds
+
+  THE LAID RECORD. Every lay (TAKE, KEPT, NEWEST) writes temp\content-laid.json
+  in this checkout: the build's server, key and commit, and each file it wrote
+  with its sha256 (ContentPaths.ps1, THE LAID BUILD). A deploy sends a built
+  file only from a laid build of its own commit's key that still holds
+  (New-ThornswoodArtifact -Content).
 
   A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
   two files) for -Newest, -ReleasesFile (the list of Releases) and -AssetDir (the two
@@ -59,7 +82,9 @@ param(
     [string]$AssetDir = '',
     [string]$DeploymentFile = '',
     [string]$ArtifactsFile = '',
-    [string]$ArtifactDir = ''
+    [string]$ArtifactDir = '',
+    [string]$BuildKey = '',
+    [string]$Kept = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,8 +103,10 @@ function Get-Sha256Bytes([byte[]]$B) { return [Convert]::ToHexString([Security.C
 # and every file in content.zip to the sha256 it names, none more and none
 # fewer, each at a repository path; then writes each over this checkout.
 # Writes nothing unless everything held. -Keep keeps the two files it took.
-function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
-    try { $rec = [IO.File]::ReadAllText((Join-Path $Work 'content-build.json')) | ConvertFrom-Json -AsHashtable } catch { Stop-Take "content-build.json in $From does not read: $($_.Exception.Message)" }
+function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]$Only = $null, [string]$FilesDir = '') {
+    if ($Keep -and $FilesDir) { Stop-Take '-Keep keeps a draft''s two files; a build kept on the box is kept there already' }
+    $recName = if ($FilesDir) { 'build.json' } else { 'content-build.json' }
+    try { $rec = [IO.File]::ReadAllText((Join-Path $Work $recName)) | ConvertFrom-Json -AsHashtable } catch { Stop-Take "$recName in $From does not read: $($_.Exception.Message)" }
     if ([string]$rec.server -cne $Server) { Stop-Take "content-build.json in $From is for the $($rec.server) server, not $Server" }
     if ($Key -and [string]$rec.key -cne $Key) { Stop-Take "content-build.json in $From is for $($rec.server) $($rec.key), not $Server $Key" }
     if ([string]$rec.key -cnotmatch '^[0-9a-f]{64}$') { Stop-Take "content-build.json in $From names no key" }
@@ -87,42 +114,80 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From) {
     $want = $rec.files
     if (-not ($want -is [Collections.IDictionary]) -or -not $want.Count) { Stop-Take "content-build.json in $From names no files" }
 
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $z = [IO.Compression.ZipFile]::OpenRead((Join-Path $Work 'content.zip'))
     $got = [ordered]@{}
-    try {
-        foreach ($e in $z.Entries) {
-            $n = $e.FullName
-            if ($n.EndsWith('/')) { continue }
-            if ($n.StartsWith('/') -or $n.Contains('\') -or $n.Contains(':') -or @($n.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count) { Stop-Take "content.zip in $From holds $n, which is not a repository path" }
-            if (-not $want.Contains($n)) { Stop-Take "content.zip in $From holds $n, which content-build.json does not name" }
-            $s = $e.Open(); $m = New-Object IO.MemoryStream
-            try { $s.CopyTo($m) } finally { $s.Dispose() }
-            $b = $m.ToArray()
-            if ((Get-Sha256Bytes $b) -cne [string]$want[$n]) { Stop-Take "$n in content.zip in $From is not the sha256 content-build.json names" }
+    if ($FilesDir) {
+        # A build kept on the box: files\ at repository paths, build.json beside.
+        $root = (Resolve-Path -LiteralPath $FilesDir).ProviderPath.TrimEnd('\', '/')
+        foreach ($f in @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
+            $n = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
+            if (-not $want.Contains($n)) { Stop-Take "the build in $From holds $n, which build.json does not name" }
+            $b = [IO.File]::ReadAllBytes($f.FullName)
+            if ((Get-Sha256Bytes $b) -cne [string]$want[$n]) { Stop-Take "$n in $From is not the sha256 build.json names" }
             $got[$n] = $b
         }
-    } finally { $z.Dispose() }
-    $lack = @($want.Keys | Where-Object { -not $got.Contains($_) })
-    if ($lack.Count) { Stop-Take ("content.zip in $From lacks " + ($lack -join ', ')) }
+        $lack = @($want.Keys | Where-Object { -not $got.Contains($_) })
+        if ($lack.Count) { Stop-Take ("the build in $From lacks " + ($lack -join ', ')) }
+    } else {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $z = [IO.Compression.ZipFile]::OpenRead((Join-Path $Work 'content.zip'))
+        try {
+            foreach ($e in $z.Entries) {
+                $n = $e.FullName
+                if ($n.EndsWith('/')) { continue }
+                if ($n.StartsWith('/') -or $n.Contains('\') -or $n.Contains(':') -or @($n.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count) { Stop-Take "content.zip in $From holds $n, which is not a repository path" }
+                if (-not $want.Contains($n)) { Stop-Take "content.zip in $From holds $n, which content-build.json does not name" }
+                $s = $e.Open(); $m = New-Object IO.MemoryStream
+                try { $s.CopyTo($m) } finally { $s.Dispose() }
+                $b = $m.ToArray()
+                if ((Get-Sha256Bytes $b) -cne [string]$want[$n]) { Stop-Take "$n in content.zip in $From is not the sha256 content-build.json names" }
+                $got[$n] = $b
+            }
+        } finally { $z.Dispose() }
+        $lack = @($want.Keys | Where-Object { -not $got.Contains($_) })
+        if ($lack.Count) { Stop-Take ("content.zip in $From lacks " + ($lack -join ', ')) }
+    }
 
     # Held whole, then written: nothing is written unless everything held.
+    # With -Only (-Newest), only what this checkout's chain says a build
+    # writes: an older build can carry a file a later change took out of the
+    # chain (#6195: builds before 6d2cf9d carry gamemode code), and laying it
+    # would put that file back as it was.
+    if ($null -ne $Only) {
+        $left = @($got.Keys | Where-Object { $n = $_; -not @($Only | Where-Object { $n -ceq $_ -or $n.StartsWith($_ + '/') }).Count })
+        foreach ($n in $left) { $got.Remove($n) }
+        if ($left.Count) { Write-Host ("left $($left.Count) file(s) of the build that this checkout's chain does not write: " + (@($left | Select-Object -First 5) -join ', ') + $(if ($left.Count -gt 5) { ', ...' } else { '' })) }
+    }
     foreach ($n in $got.Keys) {
         $to = Join-Path $Repo $n
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
         [IO.File]::WriteAllBytes($to, $got[$n])
     }
+    # What was laid, for a reader outside the chain (ContentPaths.ps1, THE
+    # LAID BUILD): a deploy sends these only while each is still its sha256.
+    $laid = [ordered]@{}
+    foreach ($n in $got.Keys) { $laid[$n] = [string]$want[$n] }
+    Save-ThornswoodLaidBuild -Repo $Repo -Server $Server -Key ([string]$rec.key) -Commit ([string]$rec.commit) -From $From -Files $laid
     if ($Keep) {
         New-Item -ItemType Directory -Force -Path $Keep | Out-Null
         foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $Work $n) -Destination (Join-Path $Keep $n) -Force }
     }
     Write-Host "TOOK $($rec.key) FROM $($rec.commit): $($got.Count) files over this checkout"
     if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The content plugin and tables are the box's build $(([string]$rec.key).Substring(0, 12)) of $($rec.commit) ($($got.Count) files), from $From." }
+    return $rec
 }
 
 # ---- the newest build main took, for a harness or a developer's checkout ----
 if ($Newest) {
-    if ($Take -or $Ask) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take and -Ask' }
+    if ($Take -or $Ask -or $Kept) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take, -Ask and -Kept' }
+    # This checkout's key, from git, before anything is written over it.
+    $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
+    if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "there is no commit $Commit in $Repo" }
+    $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+    try { $mine = (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key } catch { Stop-Take $_.Exception.Message }
+    # What a build of this checkout writes (Build-ContentOnBox.ps1): the
+    # plugin, the catalogue built in the order before the chain, and every
+    # path the chain writes.
+    $writes = Get-ThornswoodBuiltPaths -Repo $Repo
     $work = Join-Path ([IO.Path]::GetTempPath()) ('content-newest-' + [Guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $work | Out-Null
     try {
@@ -151,7 +216,14 @@ if ($Newest) {
             }
             $from = "artifact $($a.id) of run $($a.workflow_run.id)"
         }
-        Use-ContentFiles $work '' $from
+        $rec = Use-ContentFiles $work $BuildKey $from $writes
+        Say-Output "key=$($rec.key)"
+        Say-Output "commit=$($rec.commit)"
+        if ($rec.key -ceq $mine) { Write-Host "SAME KEY: the build is of this checkout's content inputs"; Say-Output 'same=yes' }
+        else {
+            Write-Host "OTHER KEY: this checkout's content inputs are $mine, and the build's $($rec.key) of $($rec.commit); a harness that holds a table to a source this checkout changed is held to the old table until the box builds these inputs"
+            Say-Output 'same=no'
+        }
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
     exit 0
 }
@@ -165,6 +237,22 @@ $tag = "content-$Server-$key"
 Write-Host "KEY $key"
 Write-Host "inputs: $($k.Files) files at $sha, against the $Server server's plugins"
 Say-Output "key=$key"
+
+# ---- a build kept on the box -------------------------------------------------
+if ($Kept) {
+    if ($Ask -or $Newest) { Stop-Take '-Kept takes the box''s own build of this commit''s inputs, so it goes with -Take only' }
+    $dir = Join-Path (Join-Path $Kept $Server) $key
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'build.json') -PathType Leaf)) {
+        Write-Host 'MISSING'
+        Say-Output 'found=no'
+        Stop-Take "the box keeps no build of these inputs for the $Server server in $Kept (Build-ContentOnBox.ps1 keeps each by its key); the Build-Content verb makes it"
+    }
+    Write-Host "FOUND $dir"
+    Say-Output 'found=yes'
+    if (-not $Take) { exit 0 }
+    $null = Use-ContentFiles $dir $key "the box's build $key" $null (Join-Path $dir 'files')
+    exit 0
+}
 
 try { $rels = @(Get-MergeReleaseList -Repo $GitHubRepo -ReleasesFile $ReleasesFile) } catch { Stop-Take $_.Exception.Message }
 $draft = @($rels | Where-Object { $_.draft -and [string]$_.tag_name -ceq $tag } | Select-Object -First 1)
@@ -216,11 +304,14 @@ try {
         if ($AssetDir) { Copy-Item -LiteralPath (Join-Path $AssetDir $a.name) -Destination $to }
         else {
             # GitHub answers with a redirect to its file store, and
-            # Invoke-WebRequest drops the token when it leaves the host.
-            Invoke-WebRequest -Uri ([string]$a.url) -OutFile $to -Headers @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null
+            # Invoke-WebRequest drops the token when it leaves the host. A
+            # machine with no GH_TOKEN (a deploy from a developer's PC) has
+            # gh's own sign-in, which listed the draft above.
+            $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { (gh auth token) -join '' }
+            Invoke-WebRequest -Uri ([string]$a.url) -OutFile $to -Headers @{ Authorization = "Bearer $tok"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null
         }
         if ((Get-Item -LiteralPath $to).Length -ne [long]$a.size) { Stop-Take "$($a.name) on $tag is not the $($a.size) bytes the Release says" }
     }
-    Use-ContentFiles $work $key "the draft $tag"
+    $null = Use-ContentFiles $work $key "the draft $tag"
 } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 exit 0

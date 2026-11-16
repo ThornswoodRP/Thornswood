@@ -54,15 +54,39 @@ function Done {
 # the first line of the step (- uses:) or a later one, so both shapes are read.
 # An action in this repository (./.github/actions/...) has no tag to pin and is
 # whatever the commit under test holds, so it is not one of these.
+#
+# Step is whether the uses belongs to a step (a job that calls a reusable
+# workflow has a uses of its own, and is named by its job), and Named whether
+# that step has a name: of its own (#4166).
 function Read-Uses([string]$text, [string]$file) {
     $out = New-Object System.Collections.ArrayList
     $lines = $text -split "`r?`n"
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        $m = [regex]::Match($lines[$i], '^\s*(?:-\s+)?uses:\s*(?<ref>[^\s#]+)\s*(?<note>#.*)?$')
+        $m = [regex]::Match($lines[$i], '^(?<lead>\s*(?:-\s+)?)uses:\s*(?<ref>[^\s#]+)\s*(?<note>#.*)?$')
         if (-not $m.Success) { continue }
         $ref = $m.Groups['ref'].Value.Trim("'", '"')
         if ($ref.StartsWith('./')) { continue }
         $at = $ref.LastIndexOf('@')
+        # The step's keys sit at the column uses: starts at. Its first line is
+        # the nearest line at or above this one whose dash sits two columns
+        # before that, and it runs to the next line indented no further than
+        # the dash.
+        $key = $m.Groups['lead'].Value.Length
+        $start = -1
+        for ($j = $i; $j -ge 0; $j--) {
+            $d = [regex]::Match($lines[$j], '^(\s*)-\s')
+            if ($d.Success -and $d.Groups[1].Value.Length + 2 -eq $key) { $start = $j; break }
+            if ($j -lt $i -and $lines[$j].Trim() -and ($lines[$j].Length - $lines[$j].TrimStart().Length) -lt $key) { break }
+        }
+        $named = $false
+        if ($start -ge 0) {
+            for ($j = $start; $j -lt $lines.Count; $j++) {
+                $l = $lines[$j]
+                if ($j -gt $start -and $l.Trim() -and ($l.Length - $l.TrimStart().Length) -lt $key) { break }
+                if ($j -eq $start) { $l = ' ' * $key + $l.Substring($key) }
+                if ($l -match ('^\s{' + $key + '}name:\s*\S')) { $named = $true; break }
+            }
+        }
         [void]$out.Add([pscustomobject]@{
             File   = $file
             Line   = $i + 1
@@ -70,9 +94,21 @@ function Read-Uses([string]$text, [string]$file) {
             Action = $(if ($at -gt 0) { $ref.Substring(0, $at) } else { $ref })
             Pin    = $(if ($at -gt 0) { $ref.Substring($at + 1) } else { '' })
             Note   = $m.Groups['note'].Value.Trim()
+            Step   = $start -ge 0
+            Named  = $named
         })
     }
     return @($out.ToArray())
+}
+
+# Every step that runs an action and has no name of its own (#4166). GitHub
+# names such a step from its uses: line, so the checks page and the job log
+# list it as "Run actions/checkout@" and the 40 character SHA, which a
+# screen reader reads one character at a time.
+function Get-NameFaults($uses) {
+    @(foreach ($u in @($uses)) {
+        if ($u.Step -and -not $u.Named) { "{0}:{1}  {2} has no name, so it shows as its pin" -f $u.File, $u.Line, $u.Action }
+    })
 }
 
 # What is wrong with a set of uses, as one line each, or nothing when they are
@@ -161,6 +197,10 @@ $faults = @(Get-PinFaults $all)
 Yes 'every action in every workflow is pinned to a full length SHA with its tag in the comment' ($faults.Count -eq 0)
 foreach ($b in $faults) { Write-Host "      $b" }
 
+$unnamed = @(Get-NameFaults $all)
+Yes ('every step that runs an action has a name of its own, so none shows as its pin (' + $unnamed.Count + ' without)') ($unnamed.Count -eq 0)
+foreach ($b in $unnamed) { Write-Host "      $b" }
+
 # Said out loud, so the run shows what is pinned to what rather than only that
 # it passed.
 foreach ($g in @($all | Group-Object Action | Sort-Object Name)) {
@@ -185,6 +225,31 @@ try {
         "        uses: actions/upload-artifact@$other # v7.0.1"))
     Yes 'the reader finds both shapes of uses, on the step line and under a name' ($ok.Count -eq 2)
     Yes 'and a pinned pair is clean' (@(Get-PinFaults $ok).Count -eq 0)
+
+    # A step with no name shows as its pin (#4166); one named before or after
+    # its uses does not, and a job calling a reusable workflow is no step.
+    $f = @(Get-NameFaults $ok)
+    Yes ('a step whose uses is its first line and has no name is caught (' + ($f -join '; ') + ')') ($f.Count -eq 1 -and $f[0] -match 'good\.yml:4  actions/checkout has no name')
+    $named = @(Fake 'named.yml' @(
+        'jobs:', '  one:', '    steps:',
+        "      - uses: actions/checkout@$sha # v7.0.1",
+        '        name: Check out the code',
+        '        with:',
+        '          fetch-depth: 0',
+        '      - name: Keep the report',
+        '        if: always()',
+        "        uses: actions/upload-artifact@$other # v7.0.1",
+        '  two:',
+        "    uses: ThornswoodRP/Thornswood/.github/workflows/x.yml@$sha # v7.0.1"))
+    Yes 'a name after the uses or before it counts, and a reusable workflow job is no step' ($named.Count -eq 3 -and @(Get-NameFaults $named).Count -eq 0)
+    $nested = @(Fake 'nested.yml' @(
+        'jobs:', '  one:', '    steps:',
+        '      - name: First',
+        '        run: echo hi',
+        "      - uses: actions/checkout@$sha # v7.0.1",
+        '        with:',
+        '          name: not the step''s name'))
+    Yes 'a name: under with: is not the step''s name' (@(Get-NameFaults $nested).Count -eq 1)
 
     $tag = @(Fake 'tag.yml' @('jobs:', '  one:', '    steps:', '      - uses: actions/checkout@v7'))
     $f = @(Get-PinFaults $tag)

@@ -3,7 +3,9 @@
 Scripts that did one job once, kept rather than deleted. Nothing in the
 repository calls any of them, and none of them is part of a release, a deploy
 or a test. They were parked here on 25 September from `tools\`, after the
-audit of that day found nothing still using them.
+audit of that day found nothing still using them. The nine retired installers
+from `scripts\mods` joined them for #4740; tests\test-hand-install-retired.ps1
+and tests\test-bodies-retired.ps1 hold each one to its refusal.
 
 They were written to sit in `tools\`, which is gone since 29 September, and
 some of them reach the scripts beside them from there, so a script taken out to
@@ -21,6 +23,15 @@ set up today. Read the header before running anything.
 | `Add-JContainers.ps1` | Installed JContainers for SunHelm's meters. | SunHelm is out. |
 | `Remove-FomodLeftovers.ps1` | Cleaned up after the 13 September body mod install. | Done. |
 | `Fix-PluginProblems.ps1` | Removed CFTO-JK-Patch.esp and RaceMenuPlugin.esp. | **Do not run it.** The JK's patch went into the collection on 15 September, so this would now take out a plugin that belongs. **It refuses to run** (#1179). |
+| `Add-Accuracy.ps1` | Hand-installed Core Impact Framework and Accuracy, then Shipped. | The collection installs them now. **It refuses to run** (#1179). |
+| `Add-Bodies.ps1` | Poured the CBBE, 3BA, HIMBO and The New Gentleman bodies, the skeleton and CBPC into Game\Data. | It put the nude female body back over the build on every run, and wrote through Vortex's hard links into its staging copy. The bodies come from the collection. **It refuses to run** (#405). |
+| `Add-CartTravel.ps1` | Hand-installed CFTO and its JK patch, rewrote the plugin lists, then Shipped. | The collection installs them now. **It refuses to run** (#1179). |
+| `Add-McmShortcut.ps1` | Hand-installed MCM Shortcut NG, then Shipped. | The collection installs it now. **It refuses to run** (#1179). |
+| `Enable-MCM.ps1` | Cleared SkyUI_SE.esp's light flag so MCMHelper.esp could load. | The collection's load order settles that now. **It refuses to run** (#1179). |
+| `Fix-MaleBody.ps1` | Moved the slotted HIMBO male body aside in Game\Data. | The collection's meshes settle that now. **It refuses to run** (#1179). |
+| `Fix-QuickLoot.ps1` | Switched MCMHelper.esp on in server-settings.json and plugins.txt. | It is on in the collection's load order on both sides now. **It refuses to run** (#1179). |
+| `Remove-Plugin.ps1` | Took one plugin out of the build by hand. | A plugin leaves through a collection revision now. **It refuses to run** (#1179). |
+| `Set-UnboundMenu.ps1` | Swapped Skyrim Unbound's MCM script between the locked and the full menu. | The locked script ships with the build now. **It refuses to run** (#1179). |
 | `Install-Emotes.ps1` | Copied the emote wheel from `tools\emotes` into a game folder. | The wheel is `game\plugins` and `game\ui` now, and `Go.ps1` installs it; the copies it read were 13 September's and are deleted. |
 | `Revert.ps1` | Put one day's game folder back after MCMHelper.esp shifted the load order. | Done, and it read the same deleted copies. |
 | `Undo-DiscordBuild.ps1` | Reverses, from Discord's audit log, what the bot changed when Setup-Discord.ps1 was run on 25 September only to make a webhook that already existed. | Made on 25 September to be run once; it lists first and changes nothing without `-Apply`. |

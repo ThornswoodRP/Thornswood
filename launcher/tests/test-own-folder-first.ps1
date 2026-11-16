@@ -921,13 +921,15 @@ function Install([string]$name, [bool]$own, [bool]$newer) {
     foreach ($k in $before.Keys) { $pre[$k] = $before[$k] }
     [IO.File]::WriteAllLines((Join-Path $dir 'steam-before.txt'), [string[]]@($before.Keys | Sort-Object | ForEach-Object { $_ + '|' + ($before[$_] -split '\|')[0] + '|' + ($before[$_] -split '\|')[1] }))
     # The load order check reads this PC's own AppData. Off Windows that is
-    # $XDG_DATA_HOME, pointed at the pretend one; Windows answers its own
-    # folder whatever the environment says, so there it may be this PC's.
+    # $XDG_DATA_HOME, pointed at the pretend one. Every install here is one
+    # with no own folder made yet, where a missing list is the collection's
+    # to bring (#4680), so on Windows, which answers its own folder whatever
+    # the environment says, no MISS is left over either.
     $oldXdg = $env:XDG_DATA_HOME
     $env:XDG_DATA_HOME = $local
     try { $out = @(Invoke-LauncherExe $exe install $root $package (Join-Path $dir 'steam') $game $(if ($own) { '1' } else { '0' }) 2>&1 | ForEach-Object { "$_" }) }
     finally { $env:XDG_DATA_HOME = $oldXdg }
-    $misses = @($out | Where-Object { $_ -match '\[MISS\]' } | Where-Object { -not ($OnWindows -and $_ -match 'Load order') })
+    $misses = @($out | Where-Object { $_ -match '\[MISS\]' })
     $ran = (@($out | Where-Object { $_ -match '^install: done' }).Count -eq 1) -and $misses.Count -eq 0
     Yes "$name, installer: it ran through to its checks, and nothing it installs is missing" $ran
     if (-not $ran) { $out | Select-Object -Last 25 | ForEach-Object { Write-Host "      $_" } }

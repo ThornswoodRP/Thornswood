@@ -11,7 +11,8 @@
   exited 0.
 
   The real script runs as a child from a scratch copy of the repository (the
-  script, Where.ps1 and layout.json), with the install, the user's folders
+  script, Leftovers.ps1 that names what it removes, Where.ps1 and
+  layout.json), with the install, the user's folders
   and LocalAppData pointed at scratch folders, so no root it can reach is a
   real one: not this checkout's engine, not this machine's Downloads.
 
@@ -48,8 +49,9 @@ $lockedDir = $null
 try {
     # The scratch repository: the script where main keeps it, and what it asks.
     $R = P $T @('repo')
-    $script = P $R @('scripts', 'mods', 'Clean-Leftovers.ps1')
-    Put $script ([IO.File]::ReadAllText((P $Repo @('scripts', 'mods', 'Clean-Leftovers.ps1'))))
+    $script = P $R @('scripts', 'dev', 'Clean-Leftovers.ps1')
+    Put $script ([IO.File]::ReadAllText((P $Repo @('scripts', 'dev', 'Clean-Leftovers.ps1'))))
+    Put (P $R @('scripts', 'dev', 'Leftovers.ps1')) ([IO.File]::ReadAllText((P $Repo @('scripts', 'dev', 'Leftovers.ps1'))))
     Put (P $R @('scripts', 'release', 'Where.ps1')) ([IO.File]::ReadAllText((P $Repo @('scripts', 'release', 'Where.ps1'))))
     Put (P $R @('layout.json')) ([IO.File]::ReadAllText((P $Repo @('layout.json'))))
 

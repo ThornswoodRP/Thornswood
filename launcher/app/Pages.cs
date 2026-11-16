@@ -81,12 +81,12 @@ namespace Thornswood
 
             if (diagCollection != null)
             {
-                diagCollection.Children.Clear();
                 // After the last Ready to launch row, before Bring it up to
                 // date from Vortex. Used to sit in DiagReadings under What the
                 // launcher can see right now, which put it under the Vortex
-                // section.
-                diagCollection.Children.Add(CollectionStatusCard());
+                // section. The launcher's own install is offered beside it
+                // (ShellModlist.cs, #6244).
+                DrawCollectionCards();
             }
 
             DrawReadings();

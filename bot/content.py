@@ -613,6 +613,7 @@ CHANGES = {
         ('2026-11-11', 'Step 4: Connect Discord is at the bottom of the launcher\'s left sidebar, above Settings, not on the Play page as an earlier line here said.', 'c83d73acfb09'),
         ('2026-11-12', "What you need: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking; unticked, Thornswood's files go into your Steam copy until it does.", '461c6ab34d74'),
         ('2026-11-15', 'Step 3: a new Nexus account has two stops before Vortex can start: turn on adult content in your Nexus Mods settings, since some of the collection\'s mods are marked adult, and on a free account press Slow download on each file\'s page.', 'ff7eb4e2df85'),
+        ('2026-11-15', 'Step 5: the first time you press Play, and again after the collection changes, the launcher builds Thornswood\'s animation and body files before the game starts, which takes a few minutes. If that build stops, a box says why, the game does not start, and the launcher log on the Diagnostics page has each step it took.', '90ae36cc69dd'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),

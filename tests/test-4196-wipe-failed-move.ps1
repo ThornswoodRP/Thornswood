@@ -58,6 +58,7 @@ function Head(`$m) { [void]`$said.Add('## ' + `$m) }
 function Die(`$m) { [void]`$said.Add('STOP. ' + `$m); throw 'DIED' }
 function Get-ThornswoodHoldScript { param([string]`$Script) 'function Clear-ThornswoodHold {}' }
 `$ThornswoodReleaseList = ''
+`$ThornswoodWorld = ''
 `$rootsLit = "'C:\Thornswood-Server-Dev'"
 `$tasksLit = "'Thornswood Dev Server'"
 `$movesLit = "'world','private\characters.json'"

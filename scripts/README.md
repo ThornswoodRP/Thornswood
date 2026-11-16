@@ -47,6 +47,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Install-Bridge.ps1](deploy/Install-Bridge.ps1) | Puts the box's end of ssh on the VPS (#2753, #2891), the way every machine reaches the box's ssh: scripts\vps\bridge\bridge.js, as the task "Thornswood Bridge", listening on 127.0.0.1:7790. |
 | [deploy/Install-DeployAgent.ps1](deploy/Install-DeployAgent.ps1) | Puts the box deploy agent on the VPS (#5180): the Windows service ThornswoodDeployAgent, C:\Thornswood-Agent\thornswood-agent.exe, from the newest signed agent-v<version> Release that .github\workflows\deploy-agent.yml published. |
 | [deploy/Install-Gate.ps1](deploy/Install-Gate.ps1) | Puts the deploy gate on the box (#2841): the account thornswood-deploy, which has no administrator rights, its forced command, and the broker that runs the verbs. |
+| [deploy/Install-Mongo.ps1](deploy/Install-Mongo.ps1) | Puts MongoDB on the box (#6237): the game servers keep their worlds there instead of one JSON file per form. mongod runs as the task Thornswood Mongo, listening on 127.0.0.1 only, with authorization on, and every program that signs in has a user of its own. |
 | [deploy/Install-Runner.ps1](deploy/Install-Runner.ps1) | Puts a GitHub Actions runner on the VPS, so the build check runs on every pull request without paying for minutes. |
 | [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the game folder's Data and puts it into the install's plugin lists, in front of the plugin -Before names. |
 | [deploy/Install-ThornswoodServer.ps1](deploy/Install-ThornswoodServer.ps1) | Run this ON THE VPS, after Bootstrap-VPS.ps1, as Administrator. |
@@ -55,6 +56,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/LastPluginOnBox.ps1](deploy/LastPluginOnBox.ps1) | Thornswood-Last.esp on a game server, made on the box from its recipe (#2791 step 2, Patrick's A of 26 Oct 2026 on #3721). |
 | [deploy/LastPluginRecipe.ps1](deploy/LastPluginRecipe.ps1) | What this checkout's recipe for Thornswood-Last.esp says of the plugin it makes (#2791): the size and sha256 game\data\last-plugin.json names, and the plugin's file header, which the recipe writes out. |
 | [deploy/MaxOnline.ps1](deploy/MaxOnline.ps1) | How many people a Thornswood server holds at once: read from the one place it is written, records\most-online.json, and put into server-settings.json. |
+| [deploy/Mongo.ps1](deploy/Mongo.ps1) | What every MongoDB script reads (#6237): the record, the folder on the box, the configuration mongod starts with, and who signs in to which database. |
 | [deploy/Move-RunnersToDrive.ps1](deploy/Move-RunnersToDrive.ps1) | #4048. Move One's runners to its existing Dev Drive, one verified runner at a time. |
 | [deploy/New-RunnerDrive.ps1](deploy/New-RunnerDrive.ps1) | Makes the Windows 11 Dev Drive that One's pull request runners live on, so Defender scans what their builds open without holding each file until the scan is done (#4048, #3861; Patrick's answer A on the report page, 27 Oct 2026, q-3861-defender). |
 | [deploy/Reload.ps1](deploy/Reload.ps1) | A dev gamemode deploy that changes only gamemode.js puts the new one in place while the dev server runs, and the server loads it there, with nobody dropped and every NPC still in the world (#3196, Patrick's C on 22 Oct 2026). |
@@ -81,7 +83,9 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/StopAndMove.ps1](deploy/StopAndMove.ps1) | Stopping what runs from a folder, and then moving its files, on the box: each process waited for until it has exited, and each move tried once. |
 | [deploy/Swap.ps1](deploy/Swap.ps1) | Stages a deploy beside what is running, checks it there, and only then swaps it in, keeping what it replaced for a one-command put-back. |
 | [deploy/VoiceSite.ps1](deploy/VoiceSite.ps1) | Says whether a voice service's site address is one it can let people in with, and whether a join gets through on a running service. |
+| [deploy/World.ps1](deploy/World.ps1) | Where a game server keeps its world, and how a tool works on it (#6237). |
 | [dev/Allow-Claude.ps1](dev/Allow-Claude.ps1) | Adds the folders and the script paths a Claude working in this repo needs, to the Claude Code settings file, and reports exactly what it changed. |
+| [dev/Audit-Leftovers.ps1](dev/Audit-Leftovers.ps1) | Measures. Deletes nothing, moves nothing, renames nothing. |
 | [dev/Build-HarvestTable.ps1](dev/Build-HarvestTable.ps1) | Builds game\data\harvests.json: the table the server needs to say who may pick which plant. |
 | [dev/Build-HuntTable.ps1](dev/Build-HuntTable.ps1) | Builds game\data\hunts.json: the table the server needs to answer a carcass. |
 | [dev/Build-OreTable.ps1](dev/Build-OreTable.ps1) | Builds game\data\ores.json: the table the server needs to answer an ore vein. |
@@ -97,10 +101,13 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Check-Push.ps1](dev/Check-Push.ps1) | The pre-push hook's checks (#5291): every script parses and the writing rules hold, in the commit being pushed, before it leaves the machine. |
 | [dev/Check-Secrets.ps1](dev/Check-Secrets.ps1) | Read only. Looks for anything that must never leave a machine: in the files this repository tracks, in a pack or another zip, or in a built program. |
 | [dev/Check-Serena.ps1](dev/Check-Serena.ps1) | Read only. Says how Claude Code on this machine starts Serena, and times one start the way Claude Code makes it: from the repo folder, over stdin and stdout, until Serena answers initialize and lists its tools. |
-| [dev/Check-Swallow.ps1](dev/Check-Swallow.ps1) | Counts the silent catches in the launcher and in the PowerShell under scripts\ and installer\, file by file, and fails when any file has more than scripts\dev\swallow-baseline.txt allows, or fewer than it allows with its line not yet lowered. |
+| [dev/Check-Swallow.ps1](dev/Check-Swallow.ps1) | Counts the silent catches in the launcher, the PowerShell under scripts\ and installer\, the site, voice, the bot, the game and the tools' C#, file by file, and fails when any file has more than scripts\dev\swallow-baseline.txt allows, or fewer than it allows with its line not yet lowered. |
 | [dev/Check-Words.ps1](dev/Check-Words.ps1) | The writing rules in docs/guide/rules.md, checked on every file people read instead of hoped for; each hit names the file, the line and the rule. |
+| [dev/Clean-Everything.ps1](dev/Clean-Everything.ps1) | Finds the old installers, build leftovers, temp files, stale backups and old GitHub release assets across this machine, the server and the source repository, adds up what they are costing, and prints it. |
+| [dev/Clean-Leftovers.ps1](dev/Clean-Leftovers.ps1) | Removes the leftovers Thornswood's own tools leave on this machine, in the folders Thornswood owns, and lists, without touching, backup and temp files in the game's Data folder. |
 | [dev/Close-Launcher.ps1](dev/Close-Launcher.ps1) | Shared by every script that writes into the build. |
 | [dev/Copy-BoxGuard.ps1](dev/Copy-BoxGuard.ps1) | Writes scripts\vps\BoxGuard.ps1's Get-ThornswoodBoxRefusal into every box script that carries a copy of it. |
+| [dev/Fix-Icons.ps1](dev/Fix-Icons.ps1) | Windows keeps the picture it once drew for a shortcut in a cache, and goes on showing it long after the icon inside the exe changed. |
 | [dev/GamemodeTables.ps1](dev/GamemodeTables.ps1) | Where a builder puts a table the gamemode reads (#5191). |
 | [dev/Gate-Harnesses.ps1](dev/Gate-Harnesses.ps1) | Prints the harnesses the build check runs on every pull request: every test-*.js and test-*.ps1 in tests\ and in a product's own tests folder (launcher\tests\) that tests\gate-excluded.txt does not name, one a line, in name order. |
 | [dev/Gate-Map.ps1](dev/Gate-Map.ps1) | Fetches the newest map of which gate harnesses a change can reach: the gate-map artifact of main's nightly trace on GitHub's runner (#5183, #4009). |
@@ -108,6 +115,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Install-Serena.ps1](dev/Install-Serena.ps1) | Installs Serena once, at the version in scripts\dev\serena-version.txt, and points Claude Code on this machine at the installed program, so a session start runs Serena straight away instead of resolving it first. |
 | [dev/Install-Thornswood.ps1](dev/Install-Thornswood.ps1) | Everything the client needs, in one run, in the order it has to happen in. |
 | [dev/Launcher-Reach.ps1](dev/Launcher-Reach.ps1) | Says whether a pull request's change reaches the job "Launcher builds" (#5292): launcher=true or launcher=false, to the step's outputs. |
+| [dev/Leftovers.ps1](dev/Leftovers.ps1) | What Clean-Leftovers.ps1 -Go removes, in one place, for it and for Audit-Leftovers.ps1 (#4256). |
 | [dev/Lint.ps1](dev/Lint.ps1) | Reports ruff, eslint and PSScriptAnalyzer findings, warnings only, over the files it is given or the whole tree, with each pinned tool fetched once per machine. |
 | [dev/Measure-Reclaim.ps1](dev/Measure-Reclaim.ps1) | How much disk deleting a folder would ACTUALLY free. |
 | [dev/Merge-HarnessReports.ps1](dev/Merge-HarnessReports.ps1) | Merges the JUnit reports of a run's harness shares into one report, and writes the failing checks, by name, to the run's summary (#5295). |
@@ -124,11 +132,6 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Trace-Gate-Box.ps1](dev/Trace-Gate-Box.ps1) | The part of a gate trace that runs as an administrator: an ETW session that sees every file each gate harness opens, and the reading of it into one list of paths a harness (#3114). |
 | [dev/Trace-Gate-Here.ps1](dev/Trace-Gate-Here.ps1) | Runs one step of a gate trace on this machine, as its administrator: the same scripts\dev\Trace-Gate-Box.ps1 the box ran, with no ssh (#5183). |
 | [dev/Watch-Foreground.ps1](dev/Watch-Foreground.ps1) | Which window Windows is giving the keyboard to, sampled from outside the game. |
-| [mods/Add-Accuracy.ps1](mods/Add-Accuracy.ps1) | RETIRED. DO NOT RUN. Issue #1179: hand-installed Core Impact Framework and Accuracy, then Ships. |
-| [mods/Add-Bodies.ps1](mods/Add-Bodies.ps1) | RETIRED. DO NOT RUN. Issue #405: every run poured the nude CBBE and 3BA female body (femalebody_0.nif and _1.nif, shapes 3BA, 3BA_Vagina and 3BA_Anus, no Bra or Panty) back over Game\Data, whatever body had been put there since. |
-| [mods/Add-CartTravel.ps1](mods/Add-CartTravel.ps1) | RETIRED. DO NOT RUN. Issue #1179: hand-installed CFTO and its patch, rewrote plugin lists, then Ships. |
-| [mods/Add-McmShortcut.ps1](mods/Add-McmShortcut.ps1) | RETIRED. DO NOT RUN. Issue #1179: hand-installed MCM Shortcut NG, then Ships. |
-| [mods/Audit-Leftovers.ps1](mods/Audit-Leftovers.ps1) | Measures. Deletes nothing, moves nothing, renames nothing. |
 | [mods/Audit-Mods.ps1](mods/Audit-Mods.ps1) | Measures the build and says which parts carry a plugin and which are pure assets, because only the second kind can ever be optional. |
 | [mods/Build-ContentOnBox.ps1](mods/Build-ContentOnBox.ps1) | The deploy gate's Build-Content verb (#5191, stage 3): the content plugin and every table read out of the load order, built on the box from main as the gate reads it, and kept there by what they were built from, so a build whose inputs did not change is taken from the last one and not built again. |
 | [mods/Build-Generated.ps1](mods/Build-Generated.ps1) | Builds Thornswood's animation and body files (the behavior files, with Pandora Behaviour Engine+, and BodySlide's body meshes) in a Thornswood game folder, by hand, with the launcher's own code. Never writes into the Steam copy. |
@@ -139,26 +142,17 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Check-FromGame.ps1](mods/Check-FromGame.ps1) | Makes the main menu, the notice board's two meshes and the collection's menus with no gold values from a game's own archives the way the launcher does, and says whether each came out byte for byte (#2827, #3113). |
 | [mods/Check-Manifest.ps1](mods/Check-Manifest.ps1) | Says what load order the game server is actually handing out, and how it compares to the one you play with. |
 | [mods/Check-Plugins.ps1](mods/Check-Plugins.ps1) | What is enabled that should not be, and what is missing that should be there. |
-| [mods/Clean-Everything.ps1](mods/Clean-Everything.ps1) | Finds the old installers, build leftovers, temp files, stale backups and old GitHub release assets across this machine, the server and the source repository, adds up what they are costing, and prints it. |
-| [mods/Clean-Leftovers.ps1](mods/Clean-Leftovers.ps1) | Removes the leftovers Thornswood's own tools leave on this machine, in the folders Thornswood owns, and lists, without touching, backup and temp files in the game's Data folder. |
 | [mods/ContentPaths.ps1](mods/ContentPaths.ps1) | What a content build on the box reads and what it writes, worked out from scripts\mods\content-tables.json and the builders themselves (#5191). |
-| [mods/Enable-MCM.ps1](mods/Enable-MCM.ps1) | RETIRED. DO NOT RUN. Issue #1179: patched SkyUI_SE.esp's light flag by hand. |
 | [mods/Find-MissingMasters.ps1](mods/Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
-| [mods/Fix-Icons.ps1](mods/Fix-Icons.ps1) | Windows keeps the picture it once drew for a shortcut in a cache, and goes on showing it long after the icon inside the exe changed. |
-| [mods/Fix-MaleBody.ps1](mods/Fix-MaleBody.ps1) | RETIRED. DO NOT RUN. Issue #1179: moved the collection's HIMBO male body aside by hand. |
-| [mods/Fix-QuickLoot.ps1](mods/Fix-QuickLoot.ps1) | RETIRED. DO NOT RUN. Issue #1179: switched on MCMHelper.esp in server-settings.json and plugins.txt by hand. |
-| [mods/Generated.ps1](mods/Generated.ps1) | Thornswood's animation and body files, for a script: what they are, what they were built from, whether the ones in a game folder are current, and the build itself. Dot-sourced by Build-Generated.ps1, Check-CoveredBodies.ps1 and the harnesses. |
+| [mods/Generated.ps1](mods/Generated.ps1) | Thornswood's animation and body files, for a script: what they are, what they were built from, whether the ones in a game folder are current, and the build itself. Dot-sourced by Build-Generated.ps1 and Check-CoveredBodies.ps1 in scripts\mods, by the harness test-2180-release-records.ps1 in scripts\tests, and by the harnesses in tests. |
 | [mods/LoadOrder.ps1](mods/LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [mods/New-CollectionPluginRecord.ps1](mods/New-CollectionPluginRecord.ps1) | Writes records\collection-plugins.json, the collection's plugins with the size and sha256 of each, which the full deploys hold the plugins they send to (#2019, CollectionPlugins.ps1). |
-| [mods/OnBox.ps1](mods/OnBox.ps1) | The two scripts Run-OnBox.ps1 sends to the box (issue #2899): the keeper, which makes the run's folder and removes it, and the run. |
+| [mods/OnBox.ps1](mods/OnBox.ps1) | The four script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts). |
 | [mods/PluginRuleLoops.ps1](mods/PluginRuleLoops.ps1) | The plugin rules of a collection that LOOT can never keep, because they go against an order the game itself sets. |
 | [mods/Rebuild-ContentTables.ps1](mods/Rebuild-ContentTables.ps1) | Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed. |
-| [mods/Rebuild-OnBox.ps1](mods/Rebuild-OnBox.ps1) | The deploy gate's Rebuild-ContentTables verb (#2841): the whole content chain, scripts\mods\Rebuild-ContentTables.ps1, run by Run-OnBox.ps1 against a server's plugins on the box, from main as main is when the gate reads it. |
-| [mods/Rebuild-PullTables.ps1](mods/Rebuild-PullTables.ps1) | Rebuilds the content tables for a pull request on the box and commits them back to its branch, in one run, from any session gh is signed in on, a cloud thread included (#4322). |
-| [mods/Remove-Plugin.ps1](mods/Remove-Plugin.ps1) | RETIRED. DO NOT RUN. Issue #1179: took one plugin out of the build by hand. |
 | [mods/Run-OnBox.ps1](mods/Run-OnBox.ps1) | Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders. |
 | [mods/Send-GameArchives.ps1](mods/Send-GameArchives.ps1) | Puts Skyrim's own archives that the content tools read on the VPS box, in C:\Thornswood-GameData, each checked against records\skyrim-files.json on this machine before it goes and on the box after it lands, and the loose string tables records\game-strings.json names, held to that record the same way. |
-| [mods/Set-UnboundMenu.ps1](mods/Set-UnboundMenu.ps1) | RETIRED. DO NOT RUN. Issue #1179: swapped Skyrim Unbound's MCM script by hand. |
+| [mods/Set-LoadOrder.ps1](mods/Set-LoadOrder.ps1) | Writes records\load-order.json, the load order the servers run and every content build reads (#5191), moved to the collection revision records\collection-plugins.json names. |
 | [ops/Chargen-Log.ps1](ops/Chargen-Log.ps1) | What the server thinks is happening to your character. |
 | [ops/Check-Board.ps1](ops/Check-Board.ps1) | Holds the board's cards to the rules docs/guide/the-board.md gives them, from a board.json Read-Board.ps1 wrote, and names every card that breaks one. |
 | [ops/Check-Chargen.ps1](ops/Check-Chargen.ps1) | Preflight for character creation. Everything it looks at is something that silently produces a broken first join rather than an error message, so it is worth thirty seconds before starting the server. |
@@ -167,6 +161,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Discord-Hook.ps1](ops/Discord-Hook.ps1) | The Discord webhooks releases post through, kept in one place on the VPS instead of a file on each machine that ships. |
 | [ops/List-Untouched.ps1](ops/List-Untouched.ps1) | Lists the open issues nobody has touched for a month, oldest first, for the weekly board review to re-rank (#5185). |
 | [ops/Mark-Spot.ps1](ops/Mark-Spot.ps1) | Reads the spots you marked in game and prints them in the shape the content table wants. |
+| [ops/Move-World.ps1](ops/Move-World.ps1) | Moves one game server's world out of the file driver and into its own database in the box's MongoDB (#6237), with the engine's own move, and starts the server on it. |
 | [ops/New-Character.ps1](ops/New-Character.ps1) | Throws the test character away so the next connect builds a fresh one. |
 | [ops/NpcReset.ps1](ops/NpcReset.ps1) | The box half of Reset-Npcs.ps1 (#4595): which saved change forms are NPCs, and moving those aside so each NPC starts again from its plugin record. |
 | [ops/Publish-Discord.ps1](ops/Publish-Discord.ps1) | Posts the newest release into the Discord #news channel. |
@@ -256,6 +251,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Read-JsonFile.ps1](release/Read-JsonFile.ps1) | ConvertFrom-ThornswoodJson: JSON text read from a file, parsed, or a stop that names the file. |
 | [release/Read-NexusFile.ps1](release/Read-NexusFile.ps1) | Reads one file of a Nexus mod with Patrick's Nexus API key and says what a change to records\collection.json needs from it (#5189). |
 | [release/RecordShape.ps1](release/RecordShape.ps1) | The shape and version each high-risk JSON record must have, checked fail closed (#2180, first slice). docs\JSON-STATE-INVENTORY.md lists every critical JSON file, who writes it and who reads it. |
+| [release/Reference-List.ps1](release/Reference-List.ps1) | The reference load order a release carries (profile\plugins.txt and loadorder.txt), made from the commit's records. |
 | [release/Refresh-DevNews.ps1](release/Refresh-DevNews.ps1) | Marks the dev feed's notes DEV again against what main has published, and sets its mainVersion, with no release. |
 | [release/Release-Baseline.ps1](release/Release-Baseline.ps1) | What a release is diffed against, and the record each release publishes of what it left installed (#441). |
 | [release/Release-Manifest.ps1](release/Release-Manifest.ps1) | The signed release manifest, phase B of docs\SIGNED-RELEASES.md (#2163). |

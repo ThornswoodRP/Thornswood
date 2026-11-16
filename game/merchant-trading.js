@@ -176,8 +176,8 @@ function createMerchantTrading(deps) {
   var settlement = SETTLEMENT.createSettlement({purses:purses,transfer:transfer,world:deps.namespace || purses.namespace,log:deps.log,now:now});
   var retirementRequired=deps.retirementRequired===true;
   var active = deps.suspended !== true && !retirementRequired, closed = false;
-  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,prices:prices,
-    resolve:deps.resolve,eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
+  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,rewards:deps.rewards,
+    eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
 
   function placeOf(reference) {
     return places[reference] || null;
@@ -562,8 +562,8 @@ function createMerchantTrading(deps) {
         unbound:'This work has no appointed place yet.',unwritten:'The work could not be committed just now.',
         unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',
         allowance:'Your new scene work has reached its shared daily gold allowance.',
-        price:'The submitted price changed or is missing. Choose the work again.',
-        purse:'This trader cannot reserve the quoted payment.',capacity:'This trader cannot accept more work yet.',
+        price:'The reward price changed or is missing. Choose the work again.',
+        capacity:'This trader cannot accept more work yet.',
         counter:'This trader cannot accept more work yet.',waiting:'The transfer is waiting for its saved inventory.',
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
@@ -643,7 +643,7 @@ function createMerchantTrading(deps) {
       var last = lastSupply(state, completedSupplyKey, itemName);
       if (last && now() - last < SUPPLY_WAIT) return fail('That supply is not due.');
     }
-    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay from its unreserved purse.');
+    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay that much from its purse.');
     if (!npcBuys && gold > 0 && world.carry(actorId, GOLD_BASE) < gold) return fail('You cannot pay.');
     if (npcBuys && world.carry(actorId, resolved.baseId) < asked.count) return fail('You are not carrying that.');
     if (!settlement.available()) {
@@ -849,6 +849,15 @@ function installMerchantTrading(env) {
     places: doc.byRef || {},
     roleTables: env.roleTables,
     commissions: env.commissions,
+    // What a commission pays for each good: the staff's reward prices, kept
+    // with the books (#6180).
+    rewards: {
+      price: function (desc) {
+        var books = g.__thornswoodBooks;
+        if (!books || typeof books.rewardPrice !== 'function') return null;
+        return books.rewardPrice(desc);
+      }
+    },
     commissionEligible:function(actor,gate) {
       var progression=g.__thornswoodProgression,character=g.__thornswoodCharacter;
       if(!progression||!character||!character.PROPERTY)return false;

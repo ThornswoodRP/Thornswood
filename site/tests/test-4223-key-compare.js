@@ -95,7 +95,7 @@ const wrapped = SERVE.split('\n').filter((l) => /sameSecret\(String\(o\.key/.tes
 yes('no route turns a body\'s key into a string before comparing it (' + wrapped.length + ')', wrapped.length === 0,
     wrapped.map((l) => l.trim()).join('\n'));
 const raw = SERVE.split('\n').filter((l) => /sameSecret\(o\.key, String\(cfg\.botKey\)\)/.test(l));
-yes('the ticket, roster and economy routes compare o.key itself (' + raw.length + ')', raw.length === 3);
+yes('the ticket, roster, economy and ledger routes compare o.key itself (' + raw.length + ')', raw.length === 4);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
