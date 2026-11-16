@@ -317,7 +317,6 @@ if (process.exitCode === 1) {
 } else {
   const doc = {
     builtFrom: PLUGINS,
-    builtAt: new Date().toISOString(),
     reach: REACH,
     inside: INSIDE,
     rule: 'flame: the model is one of the fire effects or wood fires. ' +
