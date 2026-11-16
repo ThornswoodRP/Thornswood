@@ -9,6 +9,7 @@
   for Build-ContentOnBox.ps1 and the merge release that takes the build
   (scripts\release\Get-ContentBuild.ps1).
 #>
+#Requires -Version 7
 
 <#
   The repository paths a content run reads, -Paths, and the paths it may

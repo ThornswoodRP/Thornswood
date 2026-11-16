@@ -144,8 +144,11 @@
     "Read-NexusFile": {
       "script": "scripts/release/Read-NexusFile.ps1",
       "reads": [
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/PluginRuleLoops.ps1",
+        "scripts/mods/last_recipe.py",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/CollectionRecord.ps1",
         "scripts/release/Get-ScratchDir.ps1",

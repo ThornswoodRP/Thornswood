@@ -522,7 +522,9 @@ function New-ThornswoodArtifact {
   $laid = $null
   $builtPaths = @()
   if ($Content) {
-    . (Join-Path $PSScriptRoot '..\mods\ContentPaths.ps1')
+    # The caller has laid the build, so it has scripts\mods\ContentPaths.ps1
+    # loaded; a script that sends no build never loads it through here.
+    if (-not (Get-Command Get-ThornswoodLaidBuild -ErrorAction SilentlyContinue)) { throw "-Content $Content takes the content build laid over this checkout, which scripts\mods\ContentPaths.ps1 reads; dot-source it before New-ThornswoodArtifact. Nothing was built." }
     $laid = Get-ThornswoodLaidBuild -Repo $RepoDir -Server $Content
     $builtPaths = Get-ThornswoodBuiltPaths -Repo $RepoDir
   }
