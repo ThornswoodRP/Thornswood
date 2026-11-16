@@ -70,8 +70,9 @@ their name does not turn off either. The party map marker and the
 arrow on the strip stay when the name is hidden, so you can still
 find someone in your party. That is on [Party](party.md).
 
-P lists the three switches for each friend and for each person in
-your party. The look-at prompt offers the same three.
+The look-at prompt offers only the voice switch, on L. The party rows on P
+have no switches; a party member's three are beside them under Friends or
+Near you.
 
 ## Every name
 
@@ -89,8 +90,13 @@ Gamemaster, Dev, Loremaster, Moderator.
 `/silence` and the name, then the minutes if not 30 (a day at most)
 and why. Their voice, their local text, the words above their head,
 and the speaking mark stop for everybody. They are told how long. They
-cannot lift it. `/unsilence` and the name, from any other staff member,
+cannot lift it. `/unsilence` and the name, from any staff member but the one silenced,
 lifts it, and it lifts by itself when the minutes run out.
+
+`/silence` on somebody already silenced starts their time again from
+then, for the minutes given, so it can make a silence shorter as well
+as longer. It does not lift it; only `/unsilence` or the time running
+out does.
 
 `/silence` with nothing after it says how it is used.
 

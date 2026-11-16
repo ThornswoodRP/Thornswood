@@ -128,7 +128,7 @@ yes('C2 the catalogue gives the activation list\'s ' + COMMISSIONS + ' delivery 
     page.catalogue.indexOf(COMMISSIONS + ' delivery commissions') !== -1 &&
     new RegExp('\\b' + WORDS[SCENES] + ' kill scenes', 'i').test(page.catalogue));
 yes('C3 the legacy offers page gives the same ' + COMMISSIONS,
-    page.legacy.indexOf(COMMISSIONS + ' parcel commissions') !== -1);
+    new RegExp('\\b' + COMMISSIONS + '\\s+parcel\\s+commissions').test(page.legacy));
 
 // ----------------------------------------------------------- R: the roster
 yes('R1 merchants-guild.md does not call the 249-trader roster current',
@@ -196,8 +196,8 @@ yes('V4 the party rows on P carry no switches, a friend\'s row carries all three
 yes('V5 voice.md says one thing about the switches: the look-at prompt has the voice switch alone, the party rows none',
     !/The look-at prompt offers the same three/.test(page.voice) &&
     !/three switches for each friend and for each person in\s+your party/.test(page.voice) &&
-    (page.voice.match(/look-at prompt offers only the voice switch/g) || []).length >= 1 &&
-    /party rows on P have no switches/.test(page.voice));
+    (page.voice.match(/look-at\s+prompt\s+offers\s+only\s+the\s+voice\s+switch/g) || []).length >= 1 &&
+    /party\s+rows\s+on\s+P\s+have\s+no\s+switches/.test(page.voice));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
