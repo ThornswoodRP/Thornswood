@@ -73,7 +73,7 @@ Yes 'and names each variable it sets, so it no longer says it defines functions 
     $vars.Count -gt 0 -and @($vars | Where-Object { $onHelp -notmatch [regex]::Escape($_) }).Count -eq 0 -and $onHelp -notmatch 'Defines functions and nothing else') ($vars -join ', ')
 
 # ---- 3. Clean-Everything -------------------------------------------------------------
-$ce = 'scripts/mods/Clean-Everything.ps1'
+$ce = 'scripts/dev/Clean-Everything.ps1'
 $ceAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repo $ce), [ref]$null, [ref]$null)
 $ceParams = @($ceAst.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
 $tokens = $null
