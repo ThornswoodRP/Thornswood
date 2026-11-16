@@ -142,6 +142,15 @@ function Invoke-BuildGit([string[]]$Words) {
     return [pscustomobject]@{ Out = $o; Code = $LASTEXITCODE }
 }
 function Stop-Build([string]$Why) { Write-Host ('STOP. ' + $Why) -ForegroundColor Red; exit 1 }
+# Every way this ends 1 says why on a STOP line, which the deploy agent puts
+# in the Deployment's status (ContentBuild.cs). An error nothing here caught,
+# such as a throw from Run-OnBox.ps1 before it reaches the box, ended the
+# script with exit 1 and no line at all, so #6351's status said only "ended
+# with exit 1:" and the reason had to be read off the box.
+trap {
+    $at = [IO.Path]::GetFileName([string]$_.InvocationInfo.ScriptName)
+    Stop-Build ($_.Exception.Message + $(if ($at) { " ($at line $($_.InvocationInfo.ScriptLineNumber))" } else { '' }) + ' Nothing was kept.')
+}
 function Get-Sha256([string]$Path) {
     $s = [IO.File]::OpenRead($Path)
     try { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($s)).ToLowerInvariant() } finally { $s.Dispose() }

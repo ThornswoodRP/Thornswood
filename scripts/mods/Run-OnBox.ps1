@@ -154,13 +154,11 @@ if ($Collection) {
         $(if ($recordOrder.Dropped.Count) { ', without ' + ($recordOrder.Dropped -join ', ') } else { '' })) 'DarkGray'
 }
 # What a content build writes is not committed (#5191, stage 4e), so a
-# written file the commit does not have yet is one an earlier step of this
-# build has still to make, and goes up only once that step's run committed it
+# written file the commit does not have yet, or a folder that holds only
+# such files (game/content, #6351), is one an earlier step of this build has
+# still to make, and goes up only once that step's run committed it
 # (Build-ContentOnBox.ps1, Save-Step).
-$builtNow = Get-ThornswoodBuiltPaths -Repo $repo
-$have = @{}
-foreach ($line in @(& git -C $repo ls-tree -r --name-only --full-tree HEAD -- @paths 2>$null)) { $have[[string]$line] = $true }
-$paths = @($paths | Where-Object { $p = $_; -not (Test-ThornswoodBuiltPath $builtNow $p) -or @($have.Keys | Where-Object { $_ -ceq $p -or $_.StartsWith($p + '/') }).Count })
+$paths = Select-ThornswoodSentPaths -Repo $repo -Commit 'HEAD' -Paths $paths
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
