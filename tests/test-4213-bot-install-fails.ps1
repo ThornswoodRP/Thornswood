@@ -149,7 +149,7 @@ try {
     try { $v = Get-ThornswoodBotInstallVerdict $lines 'ThornswoodBot' } catch { }
     Yes 'the verdict shows each COULD NOT line and the closing line in red' ($v -and @($v.Red).Count -eq 3 -and
         @($v.Red) -contains 'COULD NOT LOCK C:\Thornswood-Bot: denied' -and @($v.Red) -contains 'COULD NOT REMOVE the old scheduled task Thornswood Bot')
-    Yes '  but not a line the bot itself wrote' ($v -and @($v.Red | Where-Object { $_ -match 'thornswood-bot' }).Count -eq 0)
+    Yes '  but not a line the bot itself wrote' ($v -and @($v.Red | Where-Object { $_ -match '^\[thornswood-bot\]' }).Count -eq 0)
     Yes '  and gives a reason to stop that says the record was not saved' ($v -and $v.Why -match 'did not finish' -and $v.Why -match 'not saved')
     $v = $null
     try { $v = Get-ThornswoodBotInstallVerdict @('CANNOT SWITCH: python was not found on this box', 'Nothing was stopped or changed.', 'BOT SERVICE NOT INSTALLED') 'ThornswoodBot' } catch { }

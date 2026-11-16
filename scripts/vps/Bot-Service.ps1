@@ -526,9 +526,39 @@ function Write-ThornswoodBotHostJson([string]$Path, [string]$Root, [string]$Pyth
   [IO.File]::WriteAllText($Path, ($o | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
 }
 
+# The lines of a bot install that say a step did not go on (#4213): a lock or
+# a grant refused, the old scheduled task still registered, a record left
+# beside the code, a copy of the bot that could not be opened to stop. Every
+# one of them starts COULD NOT. A line the bot itself wrote starts with its
+# own [thornswood-bot] mark, so it is never one of these.
+function Get-ThornswoodBotInstallFailed([object[]]$Lines) {
+  return @(@($Lines) | ForEach-Object { "$_".Trim() } | Where-Object { $_ -like 'COULD NOT *' })
+}
+
+# What Install-Bot makes of the lines a full run brought back (#4213): Red,
+# the lines it shows in red, and Why, the reason the run stops with exit 1,
+# or '' when it may record the deploy. Until #4213 every line was grey, and a
+# run that could not lock the bot's folders, or did not install the service at
+# all, saved its record and exited 0.
+function Get-ThornswoodBotInstallVerdict([object[]]$Lines, [string]$Service = 'ThornswoodBot') {
+  $all = @(@($Lines) | ForEach-Object { "$_".Trim() })
+  $failed = @(Get-ThornswoodBotInstallFailed $all)
+  $red = @($all | Where-Object { $failed -contains $_ -or $_ -eq 'BOT SERVICE NOT INSTALLED' -or $_ -like 'THE BOT''S INSTALL DID NOT FINISH:*' })
+  $why = ''
+  if ($all -contains 'BOT SERVICE NOT INSTALLED') { $why = 'the bot''s service ' + $Service + ' was not installed: the lines above say why. Its deploy record was not saved.' }
+  elseif ($failed.Count) {
+    $why = 'the bot''s install did not finish: ' + $failed.Count + $(if ($failed.Count -eq 1) { ' step' } else { ' steps' }) +
+           ' said COULD NOT (in red above), so its deploy record was not saved. Fix what they say, then run this again.'
+  }
+  return @{ Red = $red; Why = $why }
+}
+
 # The whole switch. Everything that can fail without touching the running
 # bot is done first: python checked, the program built beside the old one.
-# Only then is anything stopped. @{ Ok; Lines }.
+# Only then is anything stopped. @{ Ok; Started; Lines }: Started says the
+# service was put in and started, so a run that is not Ok but Started left the
+# bot running with a step that did not go on (#4213), and one that is not
+# Started did not put the service in.
 function Install-ThornswoodBotService {
   param(
     [string]$Name = 'ThornswoodBot',
@@ -615,15 +645,24 @@ function Install-ThornswoodBotService {
 
   $out += @(Move-ThornswoodBotRecords $Root)
   $out += @(Grant-ThornswoodBotAccess -Sid $sid -Root $Root -WatchRoot $WatchRoot -DocsData $DocsData -ServerRoots $ServerRoots)
+  # What did not go on: the old task left registered, a record left beside
+  # the code, a lock or a grant refused (#4213). The service is still started
+  # below, since the bot ran before this with the same folder rules and its
+  # old program is already replaced, but the install is not Ok.
+  $failed = @(Get-ThornswoodBotInstallFailed $out)
 
   $started = ''
   try { Start-Service -Name $Name -ErrorAction Stop; $out += 'started the service ' + $Name }
   catch { $started = $_.Exception.Message }
   $out += @(Clear-ThornswoodHold -Target $Name -Root $WatchRoot)
-  if ($started) { return @{ Ok = $false; Lines = $out + @('THE SERVICE DID NOT START: ' + $started) } }
+  if ($started) { return @{ Ok = $false; Started = $false; Lines = $out + @('THE SERVICE DID NOT START: ' + $started) } }
   $w = Get-CimInstance Win32_Service -Filter ("Name = '" + $Name + "'") -EA SilentlyContinue
   if ($w) { $out += 'service ' + $Name + ': ' + $w.State + ', as ' + $w.StartName }
-  return @{ Ok = $true; Lines = $out }
+  if ($failed.Count) {
+    return @{ Ok = $false; Started = $true; Lines = $out + @('THE BOT''S INSTALL DID NOT FINISH: ' + $failed.Count + $(if ($failed.Count -eq 1) { ' step' } else { ' steps' }) +
+      ' said COULD NOT, above. The service runs, but fix what they say and run Install-Bot.ps1 again.') }
+  }
+  return @{ Ok = $true; Started = $true; Lines = $out }
 }
 
 # Stop by name, the sweep, start by name. What -CodeOnly does after sending
