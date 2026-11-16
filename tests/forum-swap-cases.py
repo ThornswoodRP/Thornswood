@@ -201,7 +201,7 @@ async def _no_overwrites(ch, ow, what):
 space['bring_back'] = _no_bring_back
 space['keep_overwrites'] = _no_overwrites
 
-for name in ('refused', 'open_threads', 'why_kept', 'ensure_channel'):
+for name in ('refused', 'open_threads', 'why_kept', 'rebuild_as_forum', 'ensure_channel'):
     exec(lift(name), space)
 
 yes('Build-Discord.py has ensure_channel and open_threads, where the swap and '
