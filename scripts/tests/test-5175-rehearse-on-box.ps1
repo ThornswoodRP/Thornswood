@@ -17,7 +17,9 @@
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $path = Join-Path $Root 'scripts\vps\Rehearse-OnBox.ps1'
-$src = [IO.File]::ReadAllText($path)
+# Read with LF line ends: the checks below find lines by their ends (`n),
+# and a Windows checkout has CRLF.
+$src = [IO.File]::ReadAllText($path) -replace "`r`n", "`n"
 $fails = 0; $passes = 0
 function Yes([string]$what, [bool]$ok) {
   if ($ok) { $script:passes++; Write-Host "PASS  $what" } else { $script:fails++; Write-Host "FAIL  $what" }
