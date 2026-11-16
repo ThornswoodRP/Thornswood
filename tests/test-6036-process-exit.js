@@ -19,6 +19,9 @@
 //   2. game/tests and the three harnesses Tree checks runs on their own steps
 //      (tests/gate-excluded.txt) call it nowhere, and the baseline names none
 //      of them, so they cannot come back by raising a line.
+//   2b. A harness another harness runs as its fixture, cut at a marker,
+//      parses up to that marker, so ending it without the exit call never
+//      leaves a block open above the cut.
 //   3. The check against a scratch repository: a new call, a call in a new
 //      file nobody has committed, a raised count, a lowered count, a file
 //      that has none left, and a baseline line it cannot read are each a
@@ -60,6 +63,46 @@ yes('those three are the node harnesses build.yml runs on steps of their own', T
 yes('the check and this harness end by setting process.exitCode',
   check.count(fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Check-ProcessExit.js'), 'utf8')) === 0 &&
   check.count(fs.readFileSync(__filename, 'utf8')) === 0);
+
+// ---- 2b. a harness another harness runs as its fixture, cut at a marker
+// The merchant harnesses run test-1621-quest-state.js up to 'let w = boot();'
+// and others cut test-merchant-settlement.js and test-merchant-trading.js the
+// same way. Ending a harness without the exit call can wrap its tail in a
+// block; a block opened above such a marker leaves the fixture unclosed, and
+// every harness that takes it stops on a SyntaxError.
+const vm = require('vm');
+const DIRS = ['game/tests', 'tests'];
+const cuts = [], broken = [];
+for (const dir of DIRS) {
+  for (const name of fs.readdirSync(path.join(REPO, dir)).filter((n) => /\.js$/.test(n))) {
+    const text = fs.readFileSync(path.join(REPO, dir, name), 'utf8');
+    if (!/\bvm\.run/.test(text)) continue;
+    const marks = [];
+    const re = /(\w+)\.slice\(0,\s*\1\.indexOf\((['"])((?:(?!\2)[^\\\n])+)\2\)\)|readFileSync\([^;]*?\)\.split\((['"])((?:(?!\4)[^\\\n])+)\4\)\[0\]/g;
+    let m;
+    while ((m = re.exec(text))) {
+      if (m[1] && !new RegExp('\\b' + m[1] + '\\s*=\\s*(?:fs\\.)?readFileSync\\(').test(text)) continue;
+      marks.push(m[3] || m[5]);
+    }
+    for (const other of new Set(text.match(/test-[\w-]+\.js/g) || [])) {
+      if (other === name) continue;
+      const at = DIRS.map((d) => path.join(REPO, d, other)).find((p) => fs.existsSync(p));
+      if (!at || !/readFileSync\(/.test(text)) continue;
+      const src = fs.readFileSync(at, 'utf8');
+      for (const mark of marks) {
+        const cut = src.indexOf(mark);
+        if (cut <= 0) continue;
+        const where = dir + '/' + name + ' cuts ' + path.relative(REPO, at).split(path.sep).join('/') + " at '" + mark + "'";
+        cuts.push(where);
+        try { new vm.Script(src.slice(0, cut).replace(/^#!.*/, ''), { filename: other }); }
+        catch (e) { broken.push(where + ': ' + e.message); }
+      }
+    }
+  }
+}
+broken.forEach((b) => console.log('FAIL  ' + b));
+yes('every harness another runs as a fixture parses up to the marker it is cut at (' + cuts.length + ' cut(s))',
+  cuts.length > 0 && broken.length === 0);
 
 // ---- 3. the check itself, on a scratch repository
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-6036-'));
