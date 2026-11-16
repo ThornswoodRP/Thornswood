@@ -265,7 +265,9 @@ function finish() {
   yes('a staff member opening voice and chat while somebody waits is let in, not closed with 1013',
       staff.welcomed && staff2.welcomed && !staff.closed && !staff2.closed, 'closed with ' + staff.code + ' / ' + staff2.code);
   await inWorld(s, [101, 102, 201]);
-  await until(() => names(lastRoster(staff)) === '101,102,201');
+  // Each socket gets its own roster message: wait for both rosters the check
+  // reads, staff's and a's, not one (#6049, as #5613 did for the seated pair).
+  await until(() => names(lastRoster(staff)) === '101,102,201' && names(lastRoster(a)) === '101,102,201');
   yes('in the world, the staff member takes the third voice place and is on the roster with the seated',
       names(lastRoster(staff)) === '101,102,201' && names(lastRoster(a)) === '101,102,201',
       names(lastRoster(staff)) + ' / ' + names(lastRoster(a)));
@@ -304,7 +306,8 @@ function finish() {
   // --------------------------------- seated from the line, back to the menu
   // 102 is moved out for being idle and 103, first in line, is seated.
   await inWorld(s, [101, 201, 103]);
-  await until(() => names(lastRoster(w)) === '101,103,201');
+  // Both rosters the check reads, w's and a's (#6049).
+  await until(() => names(lastRoster(w)) === '101,103,201' && names(lastRoster(a)) === '101,103,201');
   yes('seated from the line, they take a voice place and are sent the roster',
       names(lastRoster(w)) === '101,103,201' && names(lastRoster(a)) === '101,103,201',
       names(lastRoster(w)) + ' / ' + names(lastRoster(a)));
