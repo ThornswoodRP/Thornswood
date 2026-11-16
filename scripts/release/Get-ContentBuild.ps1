@@ -46,6 +46,19 @@
   no share holds a token. -BuildKey holds the build to that key, as the
   merge release's content checks lay the one it took.
 
+  IN A WORKFLOW (#6359) the build comes down through GitHub's own download
+  step, never this script's: .github/actions/lay-content runs -Newest -Find,
+  which names the newest kept build and writes artifact= and run= to -Output,
+  then actions/download-artifact takes it, and -Newest -ArtifactDir lays it.
+  On 16 Nov 2026 the script's own single request to GitHub's artifact store
+  (an Azure storage account many of GitHub's customers share) was answered
+  503 "Egress is over the account limit" twice, while every job that took the
+  build through download-artifact had it. So under GITHUB_ACTIONS the script
+  refuses to download a build itself; its own download is for a developer's
+  or a cloud session's checkout.
+
+      pwsh scripts/release/Get-ContentBuild.ps1 -Newest -Find
+
   -Keep <folder> keeps the two files TAKE took there, for the artifact.
 
   KEPT. On the box, the build Build-ContentOnBox.ps1 keeps for the key, with
@@ -61,25 +74,10 @@
   file only from a laid build of its own commit's key that still holds
   (New-ThornswoodArtifact -Content).
 
-  A BUSY FILE STORE (#6359). GitHub answers an artifact's download with a
-  redirect to its own file store, Azure Blob Storage
-  (productionresultssa<n>.blob.core.windows.net), one storage account that
-  many of GitHub's customers share. While that account is over its egress
-  for a moment it answers 503 "Egress is over the account limit" (Azure's
-  ServerBusy) to everybody, whatever we ask: on 16 Nov 2026 it refused a
-  3.6 MB build twice, seconds after the same build came down whole. Azure
-  says to ask again after a wait for exactly these answers, and
-  actions/download-artifact does so for the gate's shares. So -Newest asks
-  again on 408, 429, 500, 502, 503, 504 and a connection that drops, after
-  each wait in -BusyWaits (seconds, or longer when the store's Retry-After
-  says so, at most 120), says each wait and why, and stops after the last,
-  saying the store stayed busy. Any other answer (a 404 for an expired
-  build, a 401) stops at once.
-
   A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
   two files) for -Newest, -ReleasesFile (the list of Releases) and -AssetDir (the two
   files) for GitHub, and -DeploymentFile, where -Ask writes what it would
-  send. -ApiUrl points -Newest's download at a stand-in for GitHub's API.
+  send.
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -88,6 +86,7 @@ param(
     [switch]$Take,
     [switch]$Ask,
     [switch]$Newest,
+    [switch]$Find,
     [string]$Keep = '',
     [string]$Repo = '',
     [string]$Commit = 'HEAD',
@@ -99,9 +98,7 @@ param(
     [string]$ArtifactsFile = '',
     [string]$ArtifactDir = '',
     [string]$BuildKey = '',
-    [string]$Kept = '',
-    [string]$ApiUrl = 'https://api.github.com',
-    [string]$BusyWaits = '5,15,45'
+    [string]$Kept = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,41 +112,6 @@ if (-not $GitHubRepo) { $GitHubRepo = 'ThornswoodRP/Thornswood' }
 function Stop-Take([string]$Why) { Write-Host ('::error::' + $Why); Write-Host ('STOP. ' + $Why); exit 1 }
 function Say-Output([string]$Line) { if ($Output) { Add-Content -LiteralPath $Output -Value $Line } }
 function Get-Sha256Bytes([byte[]]$B) { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($B)).ToLowerInvariant() }
-
-# Downloads an artifact's zip to $To. GitHub's file store answers a busy
-# moment of its own with 503 "Egress is over the account limit" (A BUSY FILE
-# STORE, above, says why that is outside our control and expected), so a
-# busy answer or a dropped connection is asked again after each wait in
-# -BusyWaits, each wait said; after the last it stops saying so. Any other
-# answer stops at once.
-function Save-ContentArtifact([string]$Uri, [string]$Token, [string]$To, [string]$Id) {
-    $waits = @()
-    foreach ($w in @($BusyWaits.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
-        if ($w -cnotmatch '^\d{1,3}$') { Stop-Take "-BusyWaits takes whole seconds separated by commas, not $BusyWaits" }
-        $waits += [int]$w
-    }
-    $busy = @(408, 429, 500, 502, 503, 504)
-    $headers = @{ Authorization = "Bearer $Token"; 'X-GitHub-Api-Version' = '2022-11-28' }
-    for ($try = 0; ; $try++) {
-        $status = 0; $why = ''; $after = 0
-        try {
-            $r = Invoke-WebRequest -Uri $Uri -OutFile $To -PassThru -SkipHttpErrorCheck -Headers $headers
-            $status = [int]$r.StatusCode
-            if ($status -ge 200 -and $status -lt 300) { return }
-            $why = "answered $status ($($r.BaseResponse.ReasonPhrase))"
-            $ra = if ($r.Headers -and $r.Headers['Retry-After']) { [string]@($r.Headers['Retry-After'])[0] } else { '' }
-            if ($ra -cmatch '^\d+$') { $after = [Math]::Min([int]$ra, 120) }
-        } catch [System.Net.Http.HttpRequestException], [System.IO.IOException], [System.Threading.Tasks.TaskCanceledException] {
-            # The connection dropped or timed out before the whole answer came.
-            $why = "dropped the connection ($($_.Exception.Message))"
-        }
-        if ($status -and $status -notin $busy) { Stop-Take "GitHub did not give artifact ${Id}: it $why" }
-        if ($try -ge $waits.Count) { Stop-Take "GitHub did not give artifact ${Id}: its file store $why on all $($try + 1) asks, the last after waiting $(($waits | Measure-Object -Sum).Sum) s in all; that store is one GitHub's customers share, so this is GitHub's, not a limit of ours (#6359)" }
-        $wait = [Math]::Max($waits[$try], $after)
-        Write-Host "GitHub's file store $why for artifact $Id; asking again in $wait s (ask $($try + 2) of $($waits.Count + 1); a busy store is GitHub's, #6359)"
-        Start-Sleep -Seconds $wait
-    }
-}
 
 # Holds content-build.json (to the server, and to the key when one is given)
 # and every file in content.zip to the sha256 it names, none more and none
@@ -229,6 +191,25 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]
 }
 
 # ---- the newest build main took, for a harness or a developer's checkout ----
+# The newest content-<server> build a run on main kept, from the list of
+# artifacts: the merge release keeps it 90 days; newest first, main only.
+function Get-NewestContentArtifact {
+    $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
+    if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
+    $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
+    if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
+    return $list[0]
+}
+
+if ($Find) {
+    if (-not $Newest -or $Take -or $Ask -or $Kept -or $ArtifactDir -or $Keep -or $BuildKey) { Stop-Take '-Find goes with -Newest alone: it names the newest kept build for actions/download-artifact and lays nothing' }
+    $a = Get-NewestContentArtifact
+    Write-Host "NEWEST artifact $($a.id) of run $($a.workflow_run.id)"
+    Say-Output "artifact=$($a.id)"
+    Say-Output "run=$($a.workflow_run.id)"
+    exit 0
+}
+
 if ($Newest) {
     if ($Take -or $Ask -or $Kept) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take, -Ask and -Kept' }
     # This checkout's key, from git, before anything is written over it.
@@ -245,19 +226,17 @@ if ($Newest) {
     try {
         if ($ArtifactDir) { foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $ArtifactDir $n) -Destination (Join-Path $work $n) }; $from = "the folder $ArtifactDir" }
         else {
-            # The merge release keeps what it took as the artifact
-            # content-<server>, kept 90 days; newest first, from main only.
-            $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
-            if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
-            $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
-            if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
-            $a = $list[0]
+            $a = Get-NewestContentArtifact
+            # A workflow takes it through actions/download-artifact (IN A
+            # WORKFLOW, above, #6359); this download is for a checkout.
+            if ($env:GITHUB_ACTIONS -eq 'true') { Stop-Take "in a workflow the content build comes down through actions/download-artifact, not this script: lay it with the action .github/actions/lay-content (#6359)" }
             $zip = Join-Path $work 'artifact.zip'
             # GitHub answers with a redirect to its file store, and
             # Invoke-WebRequest drops the token when it leaves the host. A
             # developer's checkout has no GH_TOKEN; gh's own sign-in serves.
             $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { (gh auth token) -join '' }
-            Save-ContentArtifact "$($ApiUrl.TrimEnd('/'))/repos/$GitHubRepo/actions/artifacts/$($a.id)/zip" $tok $zip ([string]$a.id)
+            try { Invoke-WebRequest -Uri "https://api.github.com/repos/$GitHubRepo/actions/artifacts/$($a.id)/zip" -OutFile $zip -Headers @{ Authorization = "Bearer $tok"; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null }
+            catch { Stop-Take "GitHub did not give artifact $($a.id): $($_.Exception.Message)" }
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             [IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $work 'a'))
             foreach ($n in 'content.zip', 'content-build.json') {
