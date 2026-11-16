@@ -81,8 +81,6 @@ require('./lib/your-settings');
 const { failed, handle } = require('./lib/serve');
 const { applyDeletionRequests } = require('./lib/deletion');
 
-applyDeletionRequests();
-
 /* A PORT IT CANNOT HAVE (#6036). A listen that fails, most often
    EADDRINUSE, is said on one line and the site stops with exit 1 by
    returning, as everything here does: it is a start that did not happen,
@@ -94,7 +92,9 @@ function listenFailed(e) {
   process.exitCode = 1;
 }
 
-const server = http.createServer((req, res) => {
+applyDeletionRequests();
+
+http.createServer((req, res) => {
   // Both halves matter. A throw before the first await arrives here as an
   // exception, and one after it arrives as a rejected promise.
   let done;
@@ -107,10 +107,8 @@ const server = http.createServer((req, res) => {
   if (done && typeof done.catch === 'function') {
     done.catch((e) => failed(req, res, e));
   }
-});
-server.once('error', listenFailed);
-server.listen(PORT, BIND, function () {
-  server.off('error', listenFailed);
+}).once('error', listenFailed).listen(PORT, BIND, function () {
+  this.off('error', listenFailed);
   /* THE PORT IT GOT (#6136). Given THORNSWOOD_DOCS_PORT=0 the system hands
      the site a free port as it listens, and the line below says which. A
      copy handed a port somebody else chose and let go can find it taken
