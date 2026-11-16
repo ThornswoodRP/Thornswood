@@ -10,8 +10,17 @@ menus, the load order. GitHub's runners have no graphics card or Skyrim, so
 this is the in-game exception to keeping work off One.
 
 Each `.json` here is one list. `dev-release.json` is the run after a dev
-release: Play from the launcher, the scroll and the choice page, the world,
-our journal, the inventory and the game's menu, with a screenshot of each.
+release: Play from the launcher, the scroll and the choice page, creation
+when the character is new, the world, our journal, the inventory and the
+game's menu, with a screenshot of each.
+
+Creation comes only for a character the server has not got. The launcher
+keeps one list of characters for both servers, so a character made on main
+reads "not on this server" on dev, and playing it makes a new one there. The
+race menu then opens in the hall. The run presses R, the menu's Done, then
+takes Home on the K panel the way a person does (Whiterun, Review, Confirm),
+and waits for the trip to the town. For a character the server has, the race
+menu never opens, and those steps are skipped.
 
 ## On your machine
 
@@ -28,8 +37,10 @@ screenshot. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
 setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, `-InstallPlugin` copies
 this repository's plugin into a build released before it, and `-Publish` puts
-the run on the GitHub Release of the newest Dev Deployment and a line on that
-Deployment. It ends 0 only when every step passed.
+the run on a draft Release of its own, `real-client-<run>`, and a line on the
+newest Dev Deployment that links it. A build's own Release cannot take it,
+because Releases here are immutable once published. A draft makes no tag and
+only the team sees it, and the ten newest runs are kept. It ends 0 only when every step passed.
 
 An install on the main channel is put on dev for the run, as the Server
 card's switch does it: the launcher takes dev's package by itself when it
@@ -50,6 +61,7 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"page","js":"<expression>"}` | the expression, run in the game's page every half second, gives true, a number other than 0 or a word. It may click things on the way, as a person would. |
 | `{"do":"wait","for":"world"}` | the character stands in a cell with no loading screen or main menu up. |
 | `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the game says that menu opened (`"open":false`: closed). |
+| `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | the runner pressed that key in the game window, as a DirectInput scan code (J is 36, I 23, Tab 15, Escape 1). |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |

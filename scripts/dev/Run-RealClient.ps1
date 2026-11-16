@@ -7,8 +7,8 @@
   a person does, and walks the game through a list of steps with the test
   plugin, game\plugins\thornswood-test.js (#5197). Writes what happened and a
   screenshot after each step that asks for one into temp\real-client\<run>,
-  and with -Publish puts them on the GitHub Release of the newest Dev
-  Deployment and a line on that Deployment.
+  and with -Publish puts them on a draft Release of their own, which only
+  the team sees, with a line on the newest Dev Deployment that links it.
 
   WHY. Some failures only show in the real game: the frozen choice page, the
   journal that crashed it, the launcher's Play, the collection's load order.
@@ -88,6 +88,36 @@ if ($veloRoot -and [string]::Equals($veloRoot, $Root, [StringComparison]::Ordina
 }
 $runFile = Join-Path $platform 'thornswood-test-run.json'
 $resultsFile = Join-Path $platform 'thornswood-test-results.jsonl'
+
+# The plugin appends a line to the results file for each thing it does, while
+# this reads it. A read must let that append go on: [IO.File]::ReadAllLines
+# opens the file sharing reading only, so an append that came at that moment
+# failed, its line was never written, and the run waited 30 s for a screenshot
+# it had never been asked for (#5197, 16 Nov). The file is opened sharing
+# writing and deleting, as launcher.log is below, and only whole lines are
+# taken: a line the plugin is still writing is read once its end is there.
+$script:resultsReadAt = 0
+function Read-NewResultLines {
+    if (-not (Test-Path -LiteralPath $resultsFile)) { return @() }
+    $fs = [IO.File]::Open($resultsFile, 'Open', 'Read', 'ReadWrite, Delete')
+    try {
+        $have = $fs.Length - $script:resultsReadAt
+        if ($have -le 0) { return @() }
+        [void]$fs.Seek($script:resultsReadAt, 'Begin')
+        $buf = New-Object byte[] $have
+        $n = 0
+        while ($n -lt $buf.Length) {
+            $got = $fs.Read($buf, $n, $buf.Length - $n)
+            if ($got -le 0) { break }
+            $n += $got
+        }
+        if ($n -le 0) { return @() }
+        $end = [Array]::LastIndexOf($buf, [byte]10, $n - 1)
+        if ($end -lt 0) { return @() }
+        $script:resultsReadAt += $end + 1
+        return @([Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ })
+    } finally { $fs.Dispose() }
+}
 $ackFile = Join-Path $platform 'thornswood-test-ack.txt'
 $logFile = Join-Path $Out 'run.log'
 
@@ -326,7 +356,7 @@ try {
     }
 
     $deadline = (Get-Date).AddMinutes($Minutes)
-    $read = 0
+    $script:resultsReadAt = 0
     $sawGame = $false
     $shots = 0
     while ($true) {
@@ -335,11 +365,7 @@ try {
         if ($proc) { if (-not $sawGame) { Say "The game is up, process $($proc.Id)" }; $sawGame = $true }
         elseif ($sawGame) { $result = 'crashed'; $note = 'the game closed before the run ended'; break }
 
-        $lines = @()
-        if (Test-Path -LiteralPath $resultsFile) {
-            $all = [IO.File]::ReadAllLines($resultsFile)
-            if ($all.Count -gt $read) { $lines = $all[$read..($all.Count - 1)]; $read = $all.Count }
-        }
+        $lines = @(Read-NewResultLines)
         $ended = $false
         foreach ($line in $lines) {
             if (-not $line.Trim()) { continue }
@@ -419,13 +445,40 @@ if ($Publish) {
     Compress-Archive -Path (Join-Path $Out '*') -DestinationPath $zip -Force
     $md = Join-Path (Split-Path $Out) ("real-client-$runId.md")
     Copy-Item -LiteralPath (Join-Path $Out 'summary.md') -Destination $md -Force
-    gh release upload $tag $zip $md --repo $Repo --clobber
-    if ($LASTEXITCODE -ne 0) { throw "Could not put the run on the release $tag" }
+    # The run goes on a draft Release of its own. The build's Release cannot
+    # take it: Releases here are immutable once published, and GitHub refused
+    # the upload with 422 (16 Nov). A draft is never published, so it makes no
+    # tag and only the team sees it, which suits screenshots of somebody's
+    # game; every reader of Releases here leaves drafts out, as the content
+    # builds' drafts rely on (#5191).
+    $relTag = "real-client-$runId"
+    $files = @($md, $zip) + @(Get-ChildItem -LiteralPath $Out -Filter '*.png' | ForEach-Object { $_.FullName })
+    $relUrl = (gh release create $relTag @files --repo $Repo --draft --target $dep.sha --title "Real game run $runId on $tag" --notes-file $md | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0 -or -not $relUrl) { throw "Could not put the run on a draft Release $relTag" }
+    $relUrl = ([string]$relUrl).Trim()
+    Say "The run is on the draft Release $relTag ($relUrl)."
+    # The ten newest runs stay, as the content builds keep a few drafts: a
+    # run is read while its build is the one being tried.
+    $rels = @()
+    for ($page = 1; $page -le 50; $page++) {
+        $got = @(gh api "repos/$Repo/releases?per_page=100&page=$page" | ConvertFrom-Json | ForEach-Object { $_ })
+        if ($LASTEXITCODE -ne 0) { throw "Could not list the Releases to find older runs" }
+        $rels += $got
+        if ($got.Count -lt 100) { break }
+    }
+    $old = @($rels |
+        Where-Object { $_.draft -and ([string]$_.tag_name).StartsWith('real-client-') } |
+        Sort-Object { [datetime]$_.created_at } -Descending | Select-Object -Skip 10)
+    foreach ($r in $old) {
+        gh api --method DELETE "repos/$Repo/releases/$($r.id)" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not take down the older run $($r.tag_name)" }
+        Say "Took down the older run $($r.tag_name)."
+    }
     $state = (gh api "repos/$Repo/deployments/$($dep.id)/statuses?per_page=1" | ConvertFrom-Json | Select-Object -First 1).state
     if (-not $state) { $state = 'success' }
     $desc = ("Real game run: $result. $note")
     if ($desc.Length -gt 140) { $desc = $desc.Substring(0, 137) + '...' }
-    $body = @{ state = $state; description = $desc; log_url = "https://github.com/$Repo/releases/download/$tag/real-client-$runId.md"; auto_inactive = $false } | ConvertTo-Json -Compress
+    $body = @{ state = $state; description = $desc; log_url = $relUrl; auto_inactive = $false } | ConvertTo-Json -Compress
     $body | gh api --method POST "repos/$Repo/deployments/$($dep.id)/statuses" --input - | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not say the run on Deployment $($dep.id)" }
     Say "On Deployment $($dep.id) ($tag), its state left $state."

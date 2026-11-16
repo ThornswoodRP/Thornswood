@@ -14,16 +14,23 @@
 //   - each kind of step passes on what it waits for, asks the runner and
 //     waits for its answer, and the run ends with a done line and an end ask;
 //   - a step that times out fails, asks for a screenshot named after it, and
-//     ends the run as failed;
+//     ends the run as failed, unless it is a wait with skip, which passes
+//     over the steps that deal with what it waited for (creation, for a
+//     character the server has not got);
 //   - every step in tests/real-client/*.json is one the plugin knows, and the
 //     runner names the same three files the plugin does;
 //   - the runner's Windows helper compiles under PowerShell 7, where pwsh is;
 //   - an install on main is put on dev for the run as the launcher's Server
 //     card does, Play waits for dev's launcher, and the channel goes back
-//     after, byte for byte (on a config.json in the system's temp folder).
+//     after, byte for byte (on a config.json in the system's temp folder);
+//   - -Publish puts the run on a draft Release of its own, since a build's
+//     Release is immutable once published, and the Deployment links it;
+//   - the runner reads the results file sharing writing, so the plugin's
+//     append never fails under it, and takes only whole lines (on a file in
+//     the system's temp folder).
 //
-// Reads only, but for that config.json in a folder of its own in the
-// system's temp, removed after.
+// Reads only, but for that config.json and that results file, each in a
+// folder of its own in the system's temp, removed after.
 'use strict';
 const REPO_DIR = require('path').join(__dirname, '..');
 const fs = require('fs');
@@ -197,6 +204,40 @@ function game(opts) {
   yes('nothing more after that', g.lines().length === before);
 }
 
+// --------------------------------------- a wait for what may not come ----
+// Creation, for a character the server has not got: the race menu opens in
+// the hall. For one it has, the wait runs out and the creation steps after it
+// are passed over, and the run goes on.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: true, timeout: 1000, skip: 2 },
+    { do: 'key', code: 19 },
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: false },
+    { do: 'end' }
+  ] });
+  g.frame(); g.frame(1100);
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a wait with skip that runs out passes, saying so', st.length >= 1 && st[0].ok === true && /RaceSex Menu to open, so the next 2 step\(s\) are skipped/.test(st[0].note));
+  yes('  and the next two steps are skipped, asking the runner nothing', st.length === 3 && st[1].note === 'skipped' && st[2].note === 'skipped' &&
+      !g.lines().some(function (l) { return l.t === 'ask'; }));
+  g.frame(); g.frame();
+  const done = g.lines().filter(function (l) { return l.t === 'done'; });
+  yes('  and the run goes on to its end, passed', done.length === 1 && done[0].ok === true && done[0].passed === 4);
+}
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: true, timeout: 1000, skip: 1 },
+    { do: 'key', code: 19 },
+    { do: 'end' }
+  ] });
+  g.frame();
+  g.menu('RaceSex Menu', true);
+  g.frame();
+  g.frame();
+  const asks = g.lines().filter(function (l) { return l.t === 'ask'; });
+  yes('when it comes, the steps after it run', asks.length === 1 && asks[0].do === 'key' && asks[0].arg === 19);
+}
+
 // ------------------------------------------------------ a failing step ----
 {
   const g = game({ steps: [
@@ -288,6 +329,44 @@ function game(opts) {
     const said = (r.stdout || '') + (r.stderr || '');
     yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
     if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+  }
+
+  // -Publish: a draft Release of the run's own, since a build's Release is
+  // immutable once published (GitHub's 422 on 16 Nov), linked from the
+  // Deployment, and older runs past the newest ten taken down.
+  yes('-Publish puts the run on a draft Release of its own, never on the build\'s Release',
+      /gh release create \$relTag @files --repo \$Repo --draft --target \$dep\.sha/.test(RUNNER) && !/gh release upload/.test(RUNNER));
+  yes('  and the Deployment\'s line links that draft', /log_url = \$relUrl;/.test(RUNNER));
+  yes('  and only the runs\' own drafts past the newest ten are taken down',
+      /Where-Object \{ \$_\.draft -and \(\[string\]\$_\.tag_name\)\.StartsWith\('real-client-'\) \}[\s\S]*Select-Object -Skip 10/.test(RUNNER));
+
+  // The results file: read sharing writing, so the plugin's append never
+  // fails under the read and loses its line (16 Nov), and only whole lines.
+  yes('the runner reads the results file sharing writing, never with ReadAllLines',
+      !/ReadAllLines\(\$resultsFile\)/.test(RUNNER) &&
+      /\[IO\.File\]::Open\(\$resultsFile, 'Open', 'Read', 'ReadWrite, Delete'\)/.test(RUNNER) &&
+      /\$lines = @\(Read-NewResultLines\)/.test(RUNNER));
+  const rf = RUNNER.indexOf('$script:resultsReadAt = 0\nfunction Read-NewResultLines');
+  const re = rf >= 0 ? RUNNER.indexOf('\n}\n', rf) : -1;
+  yes('the runner has Read-NewResultLines', rf >= 0 && re > rf);
+  if (ver.status === 0 && rf >= 0 && re > rf) {
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-'));
+    const file = path.join(dir, 'results.jsonl');
+    fs.writeFileSync(file, '{"t":"start"}\n{"t":"ask","n":1}\n{"t":"ask","n"');
+    const script = '$ErrorActionPreference = "Stop"\n$resultsFile = ' + JSON.stringify(file).replace(/"/g, "'") + '\n' +
+      RUNNER.slice(rf, re + 3) +
+      "'FIRST ' + (@(Read-NewResultLines) -join '|')\n" +
+      "'NONE ' + (@(Read-NewResultLines).Count)\n" +
+      "[IO.File]::AppendAllText($resultsFile, ':2}' + [char]10)\n" +
+      "'SECOND ' + (@(Read-NewResultLines) -join '|')\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    yes('it takes the whole lines and leaves a line still being written',
+        ((/FIRST (.*)/.exec(out) || [])[1] || '').trim() === '{"t":"start"}|{"t":"ask","n":1}' && ((/NONE (.*)/.exec(out) || [])[1] || '').trim() === '0');
+    yes('  and takes that line once its end is there, once', ((/SECOND (.*)/.exec(out) || [])[1] || '').trim() === '{"t":"ask","n":2}');
+    if (!/SECOND/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 
   // The runner's channel functions on a config.json as the launcher writes

@@ -176,6 +176,22 @@ function fail(note) {
   waitingAsk = ask('shot', 'fail-' + at);
   stepAt = Date.now();
 }
+// A wait with "skip": n that does not see what it waits for in its time is
+// no failure: what it waits for happens only sometimes (creation, for a
+// character the server has not got), and the next n steps are the ones that
+// deal with it, so they are passed over and said so.
+function skipOn(note) {
+  const s = steps[at];
+  const n = Math.max(0, Math.floor(Number(s.skip) || 0));
+  write({ t: 'step', i: at, do: s.do, ok: true, ms: Date.now() - stepAt, note: note + ', so the next ' + n + ' step(s) are skipped' });
+  passed++;
+  next();
+  for (let k = 0; k < n && at < steps.length; k++) {
+    write({ t: 'step', i: at, do: steps[at].do, ok: true, ms: 0, note: 'skipped' });
+    passed++;
+    next();
+  }
+}
 function next() {
   at++;
   prevAt = stepAt;
@@ -228,7 +244,10 @@ sp.on('tick', function () {
         fail('no such wait: ' + s.for);
         return;
       }
-      if (late) { fail('waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world')); }
+      if (late) {
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world');
+        if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
+      }
       return;
     }
     case 'page': {
