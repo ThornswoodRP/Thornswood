@@ -396,7 +396,10 @@ namespace $ns
 }
 "@
 $compiled = $true
-try { $null = Add-LauncherType -Source $cs }
+# ReadUiGoneRecord says a caught exception through Failure (#4633): the real
+# one, in this namespace, beside the stand-in Swallow above.
+$failureCs = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Failure.cs')).Replace('namespace Thornswood', 'namespace ' + $ns)
+try { $null = Add-LauncherType -Source $cs, $failureCs }
 catch { $compiled = $false; Write-Host ('      ' + $_.Exception.Message) }
 Yes 'OwnGame''s Skip and Foreign and Keep''s Seed and Forget compile as lifted, with the .NET SDK the launcher builds with' $compiled
 if (-not $compiled) { Done }
@@ -582,7 +585,7 @@ namespace $emptyNs {
 }
 "@
     $emptyExe = $null
-    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
+    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $failureCs.Replace("namespace $ns", "namespace $emptyNs"), $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
     catch { Write-Host ('      ' + $_.Exception.Message.Trim()) }
     Yes 'the lifted OwnGame with an empty ui-gone.json embedded builds with the .NET SDK the launcher builds with' ($null -ne $emptyExe)
     $emptySaid = ''

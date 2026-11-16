@@ -108,7 +108,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                OnEvent("log", "microphone refused: " + ex.Message);
+                OnEvent("log", "microphone refused: " + Failure.Why("VoiceAudio, the microphone", ex, "the microphone"));
                 OnEvent("status", "no microphone");
             }
             finally
@@ -264,7 +264,7 @@ namespace Thornswood
                 }
                 OnEvent("log", "the speakers went away again, so nobody is heard until the launcher starts again");
             }
-            catch (Exception ex) { OnEvent("log", "could not play voice: " + ex.Message); }
+            catch (Exception ex) { OnEvent("log", "could not play voice: " + Failure.Why("VoiceAudio, playing", ex, "the speakers")); }
             finally
             {
                 if (mm != 0) AvRevertMmThreadCharacteristics(mm);

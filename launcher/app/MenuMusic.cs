@@ -139,7 +139,7 @@ namespace Thornswood
             catch (Exception ex)
             {
                 playback = null;
-                Stamp("Menu music: did not start (" + ex.Message + ")");
+                Stamp("Menu music: did not start (" + Failure.Why("MenuMusic, starting", ex) + ")");
             }
         }
 
@@ -291,7 +291,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    Stamp("Menu music: stopped (" + ex.Message + ")");
+                    Stamp("Menu music: stopped (" + Failure.Why("MenuMusic, playing", ex) + ")");
                 }
                 finally
                 {
@@ -411,7 +411,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    say("Menu music: could not name the mixer entry (" + ex.Message + ")");
+                    say("Menu music: could not name the mixer entry (" + Failure.Why("MenuMusic, the mixer entry", ex) + ")");
                 }
                 finally
                 {

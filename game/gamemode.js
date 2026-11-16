@@ -539,29 +539,30 @@ function idOf(descriptor) {
 }
 
 /**
- * Try to put a line on somebody's screen. Debug.Notification is implemented on
- * the server, but it finds its target actor through the Papyrus stack, which is
- * empty when the call starts here rather than in a game event. So this may well
- * do nothing, and nothing is allowed to depend on it: the log line below is the
- * one that is guaranteed.
+ * The log's copy of a line said to somebody. say() below is what puts it on
+ * their screen, and every caller sends both.
+ *
+ * This used to call Debug.Notification too. The server's native finds its
+ * actor through the Papyrus stack, which is empty when the call starts here,
+ * so it never reached a screen and the engine logged "Native
+ * Debug.Notification errored with Invalid stackId was passed to
+ * GetDefaultActor (0)" for every line (eight on the live server on 15 Nov
+ * 2026). Worse, seven callers sent the line through this alone and never
+ * through say(), so nobody saw them: the crafting time at a bench, the
+ * profession said at login, and the answers at mammoth carcasses, quest
+ * retrieval spots, quest fishing waters, geodes and crimson nirnroot.
  */
 function notify(actorId, text) {
   log('say', actorId.toString(16), text);
-  try {
-    mp.callPapyrusFunction('global', 'Debug', 'Notification', null, [text]);
-  } catch (e) {
-    // no stack actor, or the class is not registered. expected; ignore.
-  }
 }
 
 /**
  * A line in somebody's chat.
  *
- * notify() above goes through Debug.Notification, which resolves its target
- * through the Papyrus stack and therefore does nothing when the call starts
- * here. This is the one that works: the voice service is holding everybody's
- * chat socket already, so the line is posted to it over loopback and it puts
- * it on the right screen.
+ * notify() above only writes the log's copy. This is the one that reaches
+ * the person: the voice service is holding everybody's chat socket already,
+ * so the line is posted to it over loopback and it puts it on the right
+ * screen.
  */
 function say(actorId, text) {
   var pid = 0;
@@ -5029,8 +5030,10 @@ function chargenTick() {
         const prof = s && s.prof && P && P.has(P.TABLE.professions, s.prof)
           ? P.TABLE.professions[s.prof] : null;
         if (prof) {
-          notify(actorId, 'Your profession: ' + prof.name +
-                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.');
+          const line = 'Your profession: ' + prof.name +
+                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.';
+          notify(actorId, line);
+          say(actorId, line);
         }
       } catch (e) {
         log('login', actorId.toString(16), 'could not say the profession:', e);
@@ -8238,7 +8241,7 @@ function kindIsContainer(baseDesc) {
 mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   if([0x33fa6,0x846ea,0x846eb].includes(refrId)) {
     if(!casterRefrId)return false;
-    try {notify(casterRefrId,loot(casterRefrId,refrId,mp.get(refrId,'baseDesc')));}
+    try {const line=loot(casterRefrId,refrId,mp.get(refrId,'baseDesc'));if(line){notify(casterRefrId,line);say(casterRefrId,line);}}
     catch(error){try {log('Mammoth dressing refused:',String(error));}catch(logError){}}
     return false;
   }
@@ -8247,7 +8250,8 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
     try {
       const quests=globalThis.__thornswoodQuests;
       const text=quests && typeof quests.onActivate==='function' ? quests.onActivate(casterRefrId,refrId) : null;
-      notify(casterRefrId,text || 'This retrieval source is unavailable for now.');
+      const line=text || 'This retrieval source is unavailable for now.';
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){try {log('Retrieval refused:',String(error));}catch(logError){}}
     return false;
   }
@@ -8256,20 +8260,22 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
     if(!casterRefrId)return false;
     try {
       const base=mp.get(refrId,'baseDesc');
-      notify(casterRefrId,base===questFishBase?fish(casterRefrId,refrId,base):'This quest water is unavailable for now.');
+      const line=base===questFishBase?fish(casterRefrId,refrId,base):'This quest water is unavailable for now.';
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){try {log('Scarce fishing refused:',String(error));}catch(logError){}}
     return false;
   }
   if([0x10fc57,0x10eb24,0x10e994,0x10e955,0x10e8bb,0x10fc4c].includes(refrId)) {
     if(!casterRefrId)return false;
-    try {notify(casterRefrId,drawGeode(casterRefrId,refrId,mp.get(refrId,'baseDesc')));}
+    try {const line=drawGeode(casterRefrId,refrId,mp.get(refrId,'baseDesc'));if(line){notify(casterRefrId,line);say(casterRefrId,line);}}
     catch(error){try {log('Geode work refused:',String(error));}catch(logError){}}
     return false;
   }
   if([0xf3b51,0xf3b54,0xf3b5d,0x10ffac,0x10ffaf,0x10ffb0,0xf3b56,0x10ffa9].includes(refrId)) {
     if(!casterRefrId)return false;
     try {
-      notify(casterRefrId,harvest(casterRefrId,refrId,mp.get(refrId,'baseDesc')));
+      const line=harvest(casterRefrId,refrId,mp.get(refrId,'baseDesc'));
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){
       try {log('Crimson harvesting refused:',String(error));}catch(logError){}
     }
@@ -11302,8 +11308,10 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 
   if (size !== 'small') {
     const what = (row && row.name) ? String(row.name).trim() : 'That';
-    notify(actorId, what + ' takes ' + CRAFT_SIZE_WORDS[size] + '. Stay at the bench until it is made; ' +
-                    'getting up stops the work and keeps your materials.');
+    const line = what + ' takes ' + CRAFT_SIZE_WORDS[size] + '. Stay at the bench until it is made; ' +
+                 'getting up stops the work and keeps your materials.';
+    notify(actorId, line);
+    say(actorId, line);
   }
 });
 
@@ -42819,6 +42827,11 @@ function thornswoodBooks(env) {
     var buy = parseGold(buyRaw);
     var sell = parseGold(sellRaw);
     if (!buy.ok || !sell.ok) { return 'A price is a whole number of gold, or a blank.'; }
+    // A line that pays more for a thing than it asks for it would have a
+    // guild trader buy above its own sell (#4530).
+    if (buy.n !== null && sell.n !== null && buy.n > sell.n) {
+      return 'The buy price on a line cannot be above its sell price.';
+    }
     book.prices = book.prices || [];
     var low = named.name.toLowerCase();
     for (var i = 0; i < book.prices.length; i++) {
@@ -43064,22 +43077,62 @@ function thornswoodBooks(env) {
     return Math.floor(Number(n) + 0.5);
   }
 
-  function sideNumbers(hold, item, side) {
+  /*
+    WHAT A GUILD TRADER IS QUOTED (#4530). One buy and one sell for an
+    item, taken from the same lines, so a trader never offers more for an
+    item than it sells it for. Before, each side was averaged on its own
+    and skipped its own blanks, a hold with no price for one side borrowed
+    that side alone from the other holds, and a price was kept under the
+    label a book used, not the item; any of the three could put the buy
+    above the sell, and someone could sell to the trader and buy it back
+    until its purse was empty.
+
+    So (Patrick, 12 Nov 2026, docs/DECIDED.md): only a line with both a
+    buy and a sell prices a trader. Every label that names the same item
+    (as __thornswoodResolveItem reads it) is one item. A hold's price is
+    the average buy and the average sell of its submitted lines for that
+    item that carry both, with the buy not above the sell. setPrice
+    refuses a line whose buy is above its own sell, and one saved before
+    that rule prices nothing. A line with one side blank stays in the book
+    and shows in J, but no trader uses it. A hold with no such line
+    borrows the other holds' pairs whole, the average of each hold's buy
+    and of each hold's sell, never one side alone. Each pair has its buy
+    at or under its sell, so their averages do too, and rounding keeps the
+    order.
+  */
+  function itemKey(label) {
+    var text = String(label || '').trim();
+    var resolveFn = typeof env.resolve === 'function' ? env.resolve :
+      (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodResolveItem;
+    if (typeof resolveFn === 'function') {
+      // It answers { error } for a name it cannot place, and never throws.
+      var found = resolveFn(text);
+      if (found && !found.error && found.baseId) { return 'item:' + (Number(found.baseId) >>> 0); }
+    }
+    return 'label:' + text.toLowerCase();
+  }
+
+  function pricesBoth(row) {
+    return row && row.buy != null && row.buy !== '' && row.sell != null && row.sell !== '' &&
+      Number(row.buy) <= Number(row.sell);
+  }
+
+  function holdPair(hold, key) {
     var bag = ledgers[hold];
-    var out = [];
-    if (!bag) { return out; }
-    var low = String(item || '').toLowerCase();
+    if (!bag) { return null; }
+    var buys = [];
+    var sells = [];
     for (var id in bag) {
       if (!Object.prototype.hasOwnProperty.call(bag, id)) { continue; }
       var rows = (bag[id] && bag[id].prices) || [];
       for (var i = 0; i < rows.length; i++) {
-        if (String(rows[i].name || '').toLowerCase() !== low) { continue; }
-        var v = rows[i][side];
-        if (v == null || v === '') { continue; }
-        out.push(Number(v));
+        if (!pricesBoth(rows[i]) || itemKey(rows[i].name) !== key) { continue; }
+        buys.push(Number(rows[i].buy));
+        sells.push(Number(rows[i].sell));
       }
     }
-    return out;
+    if (!buys.length) { return null; }
+    return { buy: meanGold(buys), sell: meanGold(sells) };
   }
 
   function meanGold(nums) {
@@ -43089,17 +43142,18 @@ function thornswoodBooks(env) {
     return roundGold(sum / nums.length);
   }
 
-  function sidePrice(hold, item, side) {
-    var own = meanGold(sideNumbers(hold, item, side));
-    if (own !== null) { return own; }
-    var fromHolds = [];
+  function itemPrice(hold, key) {
+    var own = holdPair(hold, key);
+    if (own) { return own; }
+    var buys = [];
+    var sells = [];
     for (var name in ledgers) {
-      if (!Object.prototype.hasOwnProperty.call(ledgers, name)) { continue; }
-      if (name === hold) { continue; }
-      var one = meanGold(sideNumbers(name, item, side));
-      if (one !== null) { fromHolds.push(one); }
+      if (!Object.prototype.hasOwnProperty.call(ledgers, name) || name === hold) { continue; }
+      var pair = holdPair(name, key);
+      if (pair) { buys.push(pair.buy); sells.push(pair.sell); }
     }
-    return meanGold(fromHolds);
+    if (!buys.length) { return { buy: null, sell: null }; }
+    return { buy: meanGold(buys), sell: meanGold(sells) };
   }
 
   function catalog(hold) {
@@ -43110,8 +43164,9 @@ function thornswoodBooks(env) {
     function take(rows) {
       for (var i = 0; i < rows.length; i++) {
         var label = String((rows[i] && rows[i].name) || '').trim();
-        var key = label.toLowerCase();
-        if (!key || seen[key]) { continue; }
+        if (!label) { continue; }
+        var key = itemKey(label);
+        if (seen[key]) { continue; }
         seen[key] = label;
         order.push(key);
       }
@@ -43131,10 +43186,9 @@ function thornswoodBooks(env) {
     }
     var out = [];
     for (var k = 0; k < order.length; k++) {
-      var item = seen[order[k]];
-      var price = guildPrice(name, item);
-      if (price.buy === null && price.sell === null) { continue; }
-      out.push({ name: item, buy: price.buy, sell: price.sell });
+      var price = itemPrice(name, order[k]);
+      if (price.buy === null) { continue; }
+      out.push({ name: seen[order[k]], buy: price.buy, sell: price.sell });
     }
     return out;
   }
@@ -43142,10 +43196,7 @@ function thornswoodBooks(env) {
   function guildPrice(hold, item) {
     var name = String(hold || '').toLowerCase();
     if (!active || !validHold(name)) { return { buy: null, sell: null }; }
-    return {
-      buy: sidePrice(name, item, 'buy'),
-      sell: sidePrice(name, item, 'sell')
-    };
+    return itemPrice(name, itemKey(item));
   }
 
   function submit(actorId, pid, words) {
@@ -46301,13 +46352,30 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     }
     restart.why = why || 'an update';
     restart.mode = (mode === 'restart' || mode === 'notice') ? mode : 'update';
-    broadcast(opening(Math.round(seconds / 60)));
+    broadcast(opening(seconds));
   }
 
-  function opening(mins) {
-    var when = mins >= 1
-      ? mins + (mins === 1 ? ' minute' : ' minutes')
-      : 'under a minute';
+  /*
+    THE OPENING NEVER NAMES MORE TIME THAN IS LEFT (#4541). It used to say
+    Math.round(seconds / 60) minutes, and requests come in part minutes, so
+    30 seconds opened with "1 minute", 90 with "2 minutes" and 150 with "3
+    minutes", and people were put out sooner than they were told. Now it
+    says the whole minutes and then the seconds over, each rounded down, so a
+    whole number of minutes reads as it always did and nothing is promised
+    that is not there.
+  */
+  function timeLeft(seconds) {
+    var total = Math.max(0, Math.floor(seconds));
+    if (total < 1) { return 'under a second'; }
+    var mins = Math.floor(total / 60), secs = total % 60;
+    var m = mins + (mins === 1 ? ' minute' : ' minutes');
+    var s = secs + (secs === 1 ? ' second' : ' seconds');
+    if (!mins) { return s; }
+    return secs ? m + ' and ' + s : m;
+  }
+
+  function opening(seconds) {
+    var when = timeLeft(seconds);
     /*
       Three modes, and only two of them end with anybody put out.
 
@@ -66428,6 +66496,23 @@ module.exports={createQuestOrchardSources,createQuestFishingSources,createQuestH
 return module.exports;})();
 const QUEST_ITEMS = (function () { const module = {exports:{}};
 'use strict';
+/*
+  WHICH ITEMS ARE QUEST ITEMS (#4915). The seven quest tokens in
+  Thornswood-Content.esp, 17000 to 17006, and nothing else. An item is one of
+  them or it is not, so the answer comes from its record and no other test.
+
+  The engine names a form with mp.getDescFromId: "<id>:<plugin>" for a
+  form a plugin holds, and the bare id for a form made while the server runs
+  (FormDesc::FromFormId gives a form at 0xff000000 and up no file, and
+  FormDesc::ToString prints only the id then), which is what a brewed potion
+  or a poison mixed at the lab is. Such a form is in no plugin, so it is not
+  one of the seven. Refusing every name without a plugin made each of those
+  bottles a quest item, and nothing could store, drop, take, trade or load it.
+
+  Still refused: an id that is no form id, and a lookup that throws or answers
+  with something that is no form name, because then which item it is is not
+  known, and a quest token must never get through for that.
+*/
 function createQuestItemPolicy(mp) {
  if(!mp||typeof mp.getDescFromId!=='function')throw new Error('Quest item identity lookup is unavailable');
  const lookup=mp.getDescFromId;
@@ -66436,9 +66521,9 @@ function createQuestItemPolicy(mp) {
   if(!Number.isInteger(baseId)||baseId<=0||baseId>0xffffffff)return true;
   try {
    const desc=Reflect.apply(lookup,mp,[baseId]);
-   if(typeof desc!=='string'||!/^[0-9a-f]{1,8}:[^:\0\r\n]+\.(?:esm|esp|esl)$/i.test(desc))return true;
-   const colon=desc.indexOf(':'),canonical=parseInt(desc.slice(0,colon),16).toString(16)+desc.slice(colon).toLowerCase();
-   return tokens.has(canonical);
+   const named=typeof desc==='string'?/^([0-9a-f]{1,8})(:[^:\0\r\n]+\.(?:esm|esp|esl))?$/i.exec(desc):null;
+   if(!named)return true;
+   return !!named[2]&&tokens.has(parseInt(named[1],16).toString(16)+named[2].toLowerCase());
   }catch(error){return true;}
  }});
 }
