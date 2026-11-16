@@ -28,7 +28,7 @@
   it stops and prints what it found, rather than copying every option over
   the top of every other one and leaving a body that is quietly wrong.
 
-      .\scripts\mods\Add-Bodies.ps1
+      .\scripts\oneoff\Add-Bodies.ps1
 
   Options:
       -SkipRefits      leave out the 842 MB outfit conversion pack

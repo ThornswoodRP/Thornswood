@@ -9,7 +9,7 @@
   This prints what is actually pinned and where it points, then clears the
   caches and restarts Explorer. Nothing is lost. Explorer comes straight back.
 
-      .\scripts\mods\Fix-Icons.ps1
+      .\scripts\dev\Fix-Icons.ps1
 #>
 #Requires -Version 7
 [CmdletBinding()]

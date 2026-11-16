@@ -1,8 +1,8 @@
 <#
   Clean-Everything.ps1
 
-      .\scripts\mods\Clean-Everything.ps1              show what is there, delete nothing
-      .\scripts\mods\Clean-Everything.ps1 -Delete      delete it, after you type DELETE
+      .\scripts\dev\Clean-Everything.ps1              show what is there, delete nothing
+      .\scripts\dev\Clean-Everything.ps1 -Delete      delete it, after you type DELETE
 
   Finds the old installers, build leftovers, temp files, stale backups and old
   GitHub release assets across this machine, the server and the source repository,

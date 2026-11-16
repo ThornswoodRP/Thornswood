@@ -3,7 +3,8 @@
 
       pwsh -NoProfile -File .\tests\test-4232-mods-tools.ps1
 
-  #4232. These tools in scripts\mods were run by no test, so a change to one
+  #4232. These tools in scripts\mods (Audit-Leftovers in scripts\dev since
+  #4740) were run by no test, so a change to one
   had nothing to catch it. This runs each against a scratch folder, with a
   case it must flag and, where one can be made, a case it must pass:
 
@@ -127,10 +128,11 @@ function Run([string]$exe, [string[]]$argv, [hashtable]$vars = @{}) {
 function RunPs([string]$file, [string[]]$argv, [hashtable]$vars = @{}) { return Run $ps (@('-NoProfile', '-File', $file) + $argv) $vars }
 function Show($r) { ($r.Out -split "\r?\n") | Where-Object { $_ } | ForEach-Object { Write-Host "      $_" } }
 
-# A copy of the leftover audit with what it calls, in a scratch repository
-# layout, so the engine it walks is the copy's and not this checkout's.
+# A copy of the leftover audit (scripts\dev since #4740) with what it calls,
+# in a scratch repository layout, so the engine it walks is the copy's and
+# not this checkout's.
 function Copy-Tool([string]$name, [string]$to) {
-    foreach ($rel in @(@('scripts', 'mods', $name), @('scripts', 'release', 'Where.ps1'), @('layout.json'))) {
+    foreach ($rel in @(@('scripts', 'dev', $name), @('scripts', 'release', 'Where.ps1'), @('layout.json'))) {
         $dst = Under $to $rel
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
         Copy-Item -LiteralPath (Under $Repo $rel) -Destination $dst
@@ -138,9 +140,9 @@ function Copy-Tool([string]$name, [string]$to) {
     # What Clean-Leftovers removes, which the audit reads to mark its rows
     # (#4256). Copied when the checkout has it, so a checkout without it
     # fails on what it says below rather than on the copy.
-    $lib = Under $Repo @('scripts', 'mods', 'Leftovers.ps1')
-    if (Test-Path -LiteralPath $lib) { Copy-Item -LiteralPath $lib -Destination (Under $to @('scripts', 'mods', 'Leftovers.ps1')) }
-    return (Under $to @('scripts', 'mods', $name))
+    $lib = Under $Repo @('scripts', 'dev', 'Leftovers.ps1')
+    if (Test-Path -LiteralPath $lib) { Copy-Item -LiteralPath $lib -Destination (Under $to @('scripts', 'dev', 'Leftovers.ps1')) }
+    return (Under $to @('scripts', 'dev', $name))
 }
 # A made-up machine: its install, its home folder and its local app data.
 function Machine([string]$at) {
@@ -236,10 +238,11 @@ try {
     # by both: the audit marks each row Clean leaves, and its total counts only
     # what Clean frees. Machine A gains Thornswood's own leftover in the
     # install and in the dev build's install beside it (Where.ps1 InstallDev).
-    $lib = Under $Mods @('Leftovers.ps1')
-    Yes 'scripts\mods\Leftovers.ps1 says what Clean-Leftovers removes' (Test-Path -LiteralPath $lib)
-    $cleanSrc = [IO.File]::ReadAllText((Join-Path $Mods 'Clean-Leftovers.ps1'))
-    $auditSrc = [IO.File]::ReadAllText((Join-Path $Mods 'Audit-Leftovers.ps1'))
+    $Dev = Join-Path (Join-Path $Repo 'scripts') 'dev'
+    $lib = Under $Dev @('Leftovers.ps1')
+    Yes 'scripts\dev\Leftovers.ps1 says what Clean-Leftovers removes' (Test-Path -LiteralPath $lib)
+    $cleanSrc = [IO.File]::ReadAllText((Join-Path $Dev 'Clean-Leftovers.ps1'))
+    $auditSrc = [IO.File]::ReadAllText((Join-Path $Dev 'Audit-Leftovers.ps1'))
     $loads = ". (Join-Path `$PSScriptRoot 'Leftovers.ps1')"
     Yes '  both scripts load it, and neither names Thornswood.exe.old itself' ($cleanSrc.Contains($loads) -and $auditSrc.Contains($loads) -and -not $cleanSrc.Contains("'Thornswood.exe.old'") -and -not $auditSrc.Contains("'Thornswood.exe.old'"))
     $ownMain = Under $A @('install', 'Launcher', 'Thornswood.exe.old')

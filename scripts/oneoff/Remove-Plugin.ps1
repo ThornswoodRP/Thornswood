@@ -5,7 +5,7 @@
 
   What it used to do, and what is left of it:
 
-      .\scripts\mods\Remove-Plugin.ps1
+      .\scripts\oneoff\Remove-Plugin.ps1
 
   Takes one plugin out of the Thornswood build, reversibly.
 
