@@ -1,5 +1,5 @@
 <#
-  test-4210-password-restarts-site.ps1
+  test-4210-pw-change-restarts-site.ps1
 
   Issue #4210. The site reads its config.json once, when it starts
   (site\lib\config.js). Deploy-Docs.ps1 -Password writes the new member
