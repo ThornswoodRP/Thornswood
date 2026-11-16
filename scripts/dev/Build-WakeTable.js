@@ -4,9 +4,10 @@
 // of its own (#1909). Every worldspace of the load order that is not laid out
 // in Tamriel's coordinates is a key, and its value lists the halls of the
 // dead, temples and inns whose front door stands in that worldspace. It writes
-// the table into game\data\data.json and changes nothing else in it, and
-// writes game\gamemode-tables\DATA.json, the same file laid out for the
-// gamemode to read (#5191).
+// the table to game\data\own-worlds.json, and game\gamemode-tables\DATA.json,
+// the hand-written game\data\data.json with the worldspaces (game\data\worldspaces.json,
+// which Build-WorldspaceTable.js writes) and this table after it, laid out
+// for the gamemode to read (#5191, DataTable.js).
 //
 // WHY
 //
@@ -60,7 +61,7 @@
 //   node scripts\dev\Build-WakeTable.js --print
 //   node scripts\dev\Build-WakeTable.js --data "C:\Thornswood\Game\Data" --plugins "C:\Thornswood\Profile\OwnGame\plugins.txt"
 //
-// --check reads the plugins and says whether data.json and the DATA table hold
+// --check reads the plugins and says whether own-worlds.json and the DATA table hold
 // exactly that table, and writes nothing. --print lists each worldspace's
 // frame and places. Exit code 1 if a plugin that is switched on is not in the
 // Data folder or will not parse, if Tamriel or its walled cities are not
@@ -73,6 +74,7 @@ const { pluginPath, loadOrder } = require('./OwnPlugins.js');
 const zlib = require('zlib');
 const Worlds = require('./Build-WorldspaceTable.js');
 const TABLES = require('./GamemodeTables.js');
+const DT = require('./DataTable.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const TAMRIEL = '3c:Skyrim.esm';
@@ -277,30 +279,17 @@ function readLoadOrder(dataDir, pluginsTxt) {
   return { order: order, tables: t, problems: problems };
 }
 
-// "ownWorlds" and "ownWorldDoors" written into data.json's text as its last
-// keys, laid out the way the rest of the file is (one space a level). Nothing
-// else moves. The gamemode's DATA table is that file laid out
-// (GamemodeTables.js), so it is written from it.
+// own-worlds.json's text for tables ({ ownWorlds, ownWorldDoors }), and the
+// DATA table's text from data.json (handText) with them and the other parts
+// (DataTable.js), or { error }. Until 16 Nov 2026 the two were written into
+// data.json itself, which people edit (#5191, stage 4e).
 const KEYS = ['ownWorlds', 'ownWorldDoors'];
-function install(tables, jsonText) {
-  const nl = '\n';
-  const end = jsonText.lastIndexOf(nl + '}');
-  if (end < 0) { return { error: 'data.json does not end in a closing brace' }; }
-  // Ours are the last keys, so everything from the first of them is rewritten.
-  let at = -1;
-  for (const k of KEYS) { const i = jsonText.indexOf(',' + nl + ' "' + k + '": '); if (i >= 0 && (at < 0 || i < at)) { at = i; } }
-  let json = at >= 0 ? jsonText.slice(0, at) : jsonText.slice(0, end);
-  for (const k of KEYS) { json += ',' + nl + ' "' + k + '": ' + JSON.stringify(tables[k], null, 1).split('\n').join(nl + ' '); }
-  json += jsonText.slice(end);
-  let a, b;
-  try { a = JSON.parse(jsonText); b = JSON.parse(json); }
-  catch (e) { return { error: 'the tables did not land as JSON (' + e.message + ')' }; }
-  for (const k of KEYS) {
-    if (JSON.stringify(b[k]) !== JSON.stringify(tables[k])) { return { error: k + ' did not land as built' }; }
-    delete a[k]; delete b[k];
-  }
-  if (JSON.stringify(a) !== JSON.stringify(b)) { return { error: 'something besides the tables changed' }; }
-  return { json: json };
+function install(tables, handText, parts) {
+  const given = Object.assign({}, parts || {});
+  KEYS.forEach(function (k) { given[k] = tables[k]; });
+  const t = DT.tableText(handText, given);
+  if (t.error) { return { error: t.error }; }
+  return { part: DT.partText(KEYS, given), table: t.text };
 }
 
 function main(args) {
@@ -310,7 +299,8 @@ function main(args) {
   }
   const dataDir = opt('data', 'C:\\Thornswood\\Game\\Data');
   const pluginsTxt = opt('plugins', 'C:\\Thornswood\\Profile\\OwnGame\\plugins.txt');
-  const jsonPath = opt('json', path.join(ROOT, 'game', 'data', 'data.json'));
+  const jsonPath = opt('json', DT.HAND);
+  const outPath = opt('out', path.join(path.dirname(jsonPath), 'own-worlds.json'));
   const tablesDir = opt('tables', TABLES.DIR);
   const check = args.indexOf('--check') !== -1;
 
@@ -321,6 +311,12 @@ function main(args) {
   problems.forEach(function (p) { console.error('FAIL  ' + p); });
   if (problems.length) { console.error('nothing written'); return 1; }
   const jsonText = fs.readFileSync(jsonPath, 'utf8');
+  // The worldspaces the step before writes (Build-WorldspaceTable.js) go
+  // into the DATA table with this one; a checkout without them has not run it.
+  const wsPath = opt('worldspaces', path.join(path.dirname(outPath), 'worldspaces.json'));
+  if (!fs.existsSync(wsPath)) { console.error('FAIL  no ' + wsPath + '; run Build-WorldspaceTable.js first; nothing written'); return 1; }
+  const parts = { worldspaces: JSON.parse(fs.readFileSync(wsPath, 'utf8')).worldspaces };
+  const partNow = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
   const tablePath = TABLES.file('DATA', tablesDir);
   const tableText = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, 'utf8') : null;
   const data = JSON.parse(jsonText);
@@ -339,18 +335,18 @@ function main(args) {
       console.log('  ' + w.padEnd(28) + ws.worlds[w].padEnd(34) + (p ? 'own: ' + (p.length ? p.map(function (x) { return x.kind + ' ' + x.cell; }).join(', ') : 'nowhere to wake') + ', ' + ins + ' door(s) in' : 'Tamriel'));
     });
   }
-  const out = install({ ownWorlds: built.table, ownWorldDoors: built.doors }, jsonText);
+  const out = install({ ownWorlds: built.table, ownWorldDoors: built.doors }, jsonText, parts);
   if (out.error) { console.error('FAIL  ' + out.error + '; nothing written'); return 1; }
-  const same = out.json === jsonText && TABLES.layout(out.json) === tableText;
+  const same = out.part === partNow && out.table === tableText;
   if (check) {
-    if (!same) { console.error('FAIL  data.json or the DATA table is not this load order\'s wake table; run Build-WakeTable.js'); return 1; }
-    console.log('ok    data.json and the DATA table hold this load order\'s wake table');
+    if (!same) { console.error('FAIL  own-worlds.json or the DATA table is not this load order\'s wake table; run Build-WakeTable.js'); return 1; }
+    console.log('ok    own-worlds.json and the DATA table hold this load order\'s wake table');
     return 0;
   }
-  if (same) { console.log('data.json and the DATA table already hold this table'); return 0; }
-  fs.writeFileSync(jsonPath, out.json);
-  TABLES.write('DATA', out.json, tablesDir);
-  console.log('wrote the wake table into ' + jsonPath + ' and ' + tablePath);
+  if (same) { console.log('own-worlds.json and the DATA table already hold this table'); return 0; }
+  fs.writeFileSync(outPath, out.part);
+  TABLES.write('DATA', out.table, tablesDir);
+  console.log('wrote the wake table into ' + outPath + ' and ' + tablePath);
   return 0;
 }
 

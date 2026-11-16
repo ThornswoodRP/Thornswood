@@ -1,6 +1,6 @@
 // test-1896-worldspaces.js
 //
-// #1896. DATA.worldspaces (game/data/data.json, and the DATA line of
+// #1896. DATA.worldspaces (game/data/worldspaces.json, and the DATA line of
 // game/gamemode.js) is the set the server reads as "a worldspace, not a room":
 // resolveArrival, for the temple a death writes and the one a person who comes
 // back dead gets, and climateOf, for which hold's sky somebody stands under.
@@ -12,8 +12,9 @@
 //
 // Which count is decided: every WRLD record of the load order, since that is
 // what the set means. scripts/dev/Build-WorldspaceTable.js reads them out of
-// the plugins and writes the list into data.json and the DATA line, nothing
-// else. MEASURED below is what it read that day, each with the editor id of
+// the plugins and writes the list into worldspaces.json, nothing else; the
+// DATA table is data.json, written by hand, with the built parts after it
+// (DataTable.js, written by Build-WakeTable.js). MEASURED below is what it read that day, each with the editor id of
 // its record.
 //
 // This holds the list to MEASURED, runs the builder against plugins made here
@@ -35,6 +36,8 @@ const TABLES = require('../../tests/gamemode-tables.js');
 const gm = TABLES.joined(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const jsonText = fs.readFileSync(path.join(ROOT, 'game', 'data', 'data.json'), 'utf8');
 const data = JSON.parse(jsonText);
+const DT = require(path.join(ROOT, 'scripts', 'dev', 'DataTable.js'));
+const partText = fs.readFileSync(path.join(ROOT, 'game', 'data', 'worldspaces.json'), 'utf8');
 const Build = require(path.join(ROOT, 'scripts', 'dev', 'Build-WorldspaceTable.js'));
 
 let pass = 0, fail = 0;
@@ -115,8 +118,8 @@ const MEASURED = {
 const m = TABLES.lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
-const ws = data.worldspaces || [];
-yes('the gamemode\'s DATA line holds the same worldspaces as data.json (' + ws.length + ')',
+const ws = JSON.parse(partText).worldspaces || [];
+yes('the gamemode\'s DATA line holds the same worldspaces as worldspaces.json (' + ws.length + ')',
   !!DATA && JSON.stringify(DATA.worldspaces) === JSON.stringify(ws));
 yes('no entry is listed twice, and the list is in the order the builder writes it',
   new Set(ws).size === ws.length && JSON.stringify(ws.slice().sort()) === JSON.stringify(ws));
@@ -263,46 +266,52 @@ yes('a cell group under a worldspace is not read as a worldspace',
 yes('and that is all of them',
   JSON.stringify(Object.keys(got.worlds)) === JSON.stringify(['1ee62:Skyrim.esm', '3c:Skyrim.esm', '800:Dragonborn.esm', 'd7a:Arena.esp']));
 
-// The install changes the list and nothing else. The gamemode's DATA table
-// is data.json laid out (#5191), written from it.
-const small = '{\n "a": 1.0,\n "worldspaces": [\n  "3c:Skyrim.esm",\n  "gone:Skyrim.esm"\n ],\n "solstheim": 2000800\n}\n';
-const smallTable = '{\n"a":1.0,\n"worldspaces":[\n"3c:Skyrim.esm",\n"gone:Skyrim.esm"\n],\n"solstheim":2000800\n}\n';
-const inst = Build.install(['3c:Skyrim.esm', 'd7a:Arena.esp'], small);
-yes('the install writes the list into data.json at its own layout, and nothing else moves',
-  inst.json === '{\n "a": 1.0,\n "worldspaces": [\n  "3c:Skyrim.esm",\n  "d7a:Arena.esp"\n ],\n "solstheim": 2000800\n}\n');
-const crlf = Build.install(['3c:Skyrim.esm', 'd7a:Arena.esp'], small.split('\n').join(CR + '\n'));
-yes('a checkout from before .gitattributes, CRLF, gets the same list, written LF (#3029)',
-  !crlf.error && crlf.json.indexOf('"worldspaces": [\n  "3c:Skyrim.esm",\n  "d7a:Arena.esp"\n ]') >= 0);
-yes('it refuses a data.json with two lists rather than guess which',
-  !!Build.install(['3c:Skyrim.esm'], '{"worldspaces":[],"b":{"worldspaces":[]}}').error);
-yes('the install of the list this load order has today changes nothing',
-  (function () { const r = Build.install(ws, jsonText); return r.json === jsonText; })());
-yes('the gamemode\'s DATA table is data.json laid out',
-  fs.readFileSync(TABLES.file('DATA'), 'utf8') === require(path.join(ROOT, 'scripts', 'dev', 'GamemodeTables.js')).layout(jsonText));
+// The install writes the list to worldspaces.json and nothing else. The DATA
+// table, data.json as written with the built parts after it, is
+// Build-WakeTable.js's (#5191, DataTable.js), and data.json, which people
+// edit, is written by no builder.
+const inst = Build.install(['3c:Skyrim.esm', 'd7a:Arena.esp']);
+yes('the install writes the list as worldspaces.json, one entry a line',
+  inst.part === '{\n "worldspaces": [\n  "3c:Skyrim.esm",\n  "d7a:Arena.esp"\n ]\n}\n');
+yes('and writes nothing else', JSON.stringify(Object.keys(inst)) === '["part"]');
+const small = '{\n "a": 1.0,\n "solstheim": 2000800\n}\n';
+const composed = DT.tableText(small, { worldspaces: ['3c:Skyrim.esm', 'd7a:Arena.esp'] });
+yes('the DATA table made from it is data.json as written, a number not re-spelled, with the list after it',
+  composed.text === '{\n"a":1.0,\n"solstheim":2000800,\n"worldspaces":[\n"3c:Skyrim.esm",\n"d7a:Arena.esp"\n]\n}\n');
+const crlf = DT.tableText(small.split('\n').join(CR + '\n'), { worldspaces: ['3c:Skyrim.esm', 'd7a:Arena.esp'] });
+yes('a checkout from before .gitattributes, CRLF, gets the same table (#3029)', !crlf.error && crlf.text === composed.text);
+yes('a data.json that holds the list itself, which a builder writes, is refused',
+  !!DT.tableText('{"a":1,"worldspaces":[]}', { worldspaces: ['3c:Skyrim.esm'] }).error);
+yes('the install of the list this load order has today changes nothing', Build.install(ws).part === partText);
+yes('the gamemode\'s DATA table is data.json with the built parts, laid out',
+  fs.readFileSync(TABLES.file('DATA'), 'utf8') === DT.tableText(jsonText, DT.readParts()).text);
 
 // The command: --check writes nothing and says no; a missing plugin stops it.
-const j = path.join(tmp, 'data.json'), g = path.join(tmp, 'tables');
-const tableOf = function () { try { return fs.readFileSync(path.join(g, 'DATA.json'), 'utf8'); } catch (e) { return null; } };
-fs.writeFileSync(j, small); fs.mkdirSync(g, { recursive: true }); fs.writeFileSync(path.join(g, 'DATA.json'), smallTable);
+const w = path.join(tmp, 'worldspaces.json');
+const oldPart = '{\n "worldspaces": [\n  "3c:Skyrim.esm",\n  "gone:Skyrim.esm"\n ]\n}\n';
+const read = function (f) { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return null; } };
+const tableBefore = fs.readFileSync(TABLES.file('DATA'), 'utf8');
+fs.writeFileSync(w, oldPart);
 const quiet = console.log, quietErr = console.error;
 const said = [];
 console.log = function (s) { said.push(String(s)); };
 console.error = function (s) { said.push(String(s)); };
 let c1, c2, c3, c4;
 try {
-  c1 = Build.main(['--data', dir, '--plugins', list, '--json', j, '--tables', g, '--check']);
-  const untouched = fs.readFileSync(j, 'utf8') === small && tableOf() === smallTable;
-  c2 = Build.main(['--data', dir, '--plugins', list, '--json', j, '--tables', g]);
-  c3 = Build.main(['--data', dir, '--plugins', list, '--json', j, '--tables', g, '--check']);
+  c1 = Build.main(['--data', dir, '--plugins', list, '--out', w, '--check']);
+  const untouched = read(w) === oldPart;
+  c2 = Build.main(['--data', dir, '--plugins', list, '--out', w]);
+  c3 = Build.main(['--data', dir, '--plugins', list, '--out', w, '--check']);
   fs.writeFileSync(list, '*Arena.esp\r\n*Not Here.esp\r\n');
-  const before = fs.readFileSync(j, 'utf8');
-  c4 = Build.main(['--data', dir, '--plugins', list, '--json', j, '--tables', g]);
-  c4 = { code: c4, untouched: untouched, kept: fs.readFileSync(j, 'utf8') === before };
+  const before = read(w);
+  c4 = Build.main(['--data', dir, '--plugins', list, '--out', w]);
+  c4 = { code: c4, untouched: untouched, kept: read(w) === before };
 } finally { console.log = quiet; console.error = quietErr; }
 yes('--check on a list that differs says so and writes nothing', c1 === 1 && c4.untouched);
-yes('the build writes it and the DATA table laid out from it, and --check then agrees', c2 === 0 && c3 === 0 &&
-  JSON.parse(fs.readFileSync(j, 'utf8')).worldspaces.length === 4 &&
-  tableOf() === require(path.join(ROOT, 'scripts', 'dev', 'GamemodeTables.js')).layout(fs.readFileSync(j, 'utf8')));
+yes('the build writes the four worldspaces into worldspaces.json, and --check then agrees',
+  c2 === 0 && c3 === 0 && read(w) === Build.install(['1ee62:Skyrim.esm', '3c:Skyrim.esm', '800:Dragonborn.esm', 'd7a:Arena.esp']).part);
+yes('it leaves data.json and the DATA table as they were',
+  read(path.join(ROOT, 'game', 'data', 'data.json')) === jsonText && fs.readFileSync(TABLES.file('DATA'), 'utf8') === tableBefore);
 yes('a plugin switched on and missing from the Data folder stops the build, and nothing is written',
   c4.code === 1 && c4.kept && said.some(function (s) { return s.indexOf('Not Here.esp is switched on') >= 0; }));
 fs.rmSync(tmp, { recursive: true, force: true });
