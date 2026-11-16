@@ -28,6 +28,12 @@ const PARTS = [
 ];
 const ADDED = PARTS.reduce(function (a, p) { return a.concat(p.keys); }, []);
 
+// A file's text, or null when there is none. Read once, with no look first,
+// so nothing can change between the look and the read.
+function readText(f) {
+  try { return fs.readFileSync(f, 'utf8'); } catch (e) { if (e.code === 'ENOENT') { return null; } throw e; }
+}
+
 // A part's file as its builder writes it: its keys, one space a level, LF.
 function partText(keys, value) {
   const o = {};
@@ -59,8 +65,9 @@ function readParts(dir) {
   const out = {};
   PARTS.forEach(function (p) {
     const f = path.join(dir || DATA_DIR, p.file);
-    if (!fs.existsSync(f)) { return; }
-    const v = JSON.parse(fs.readFileSync(f, 'utf8'));
+    const t = readText(f);
+    if (t === null) { return; }
+    const v = JSON.parse(t);
     p.keys.forEach(function (k) { if (v[k] !== undefined) { out[k] = v[k]; } });
   });
   return out;
@@ -73,4 +80,4 @@ function tableText(handText, parts) {
 }
 
 module.exports = { HAND: HAND, DATA_DIR: DATA_DIR, PARTS: PARTS, ADDED: ADDED,
-                   partText: partText, compose: compose, readParts: readParts, tableText: tableText };
+                   partText: partText, readText: readText, compose: compose, readParts: readParts, tableText: tableText };

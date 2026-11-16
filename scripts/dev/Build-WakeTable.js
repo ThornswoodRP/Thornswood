@@ -314,11 +314,12 @@ function main(args) {
   // The worldspaces the step before writes (Build-WorldspaceTable.js) go
   // into the DATA table with this one; a checkout without them has not run it.
   const wsPath = opt('worldspaces', path.join(path.dirname(outPath), 'worldspaces.json'));
-  if (!fs.existsSync(wsPath)) { console.error('FAIL  no ' + wsPath + '; run Build-WorldspaceTable.js first; nothing written'); return 1; }
-  const parts = { worldspaces: JSON.parse(fs.readFileSync(wsPath, 'utf8')).worldspaces };
-  const partNow = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
+  const wsText = DT.readText(wsPath);
+  if (wsText === null) { console.error('FAIL  no ' + wsPath + '; run Build-WorldspaceTable.js first; nothing written'); return 1; }
+  const parts = { worldspaces: JSON.parse(wsText).worldspaces };
+  const partNow = DT.readText(outPath);
   const tablePath = TABLES.file('DATA', tablesDir);
-  const tableText = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, 'utf8') : null;
+  const tableText = DT.readText(tablePath);
   const data = JSON.parse(jsonText);
   const built = buildTable(got.tables, ws.worlds, data.destinations, data.cellToHold);
   const lost = CITIES.filter(function (c) { return !built.frame.has(c); });

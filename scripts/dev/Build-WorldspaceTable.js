@@ -167,7 +167,7 @@ function main(args) {
     list.forEach(function (d) { console.log('  ' + d.padEnd(28) + got.worlds[d]); });
   }
 
-  const partNow = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
+  const partNow = DT.readText(outPath);
   const was = partNow ? (JSON.parse(partNow).worldspaces || []) : [];
   const out = install(list);
   const added = list.filter(function (d) { return was.indexOf(d) < 0; });
