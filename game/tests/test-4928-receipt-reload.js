@@ -176,4 +176,81 @@ try {
 } catch (e) {
   yes('the run finished (' + ((e && e.stack) || e) + ')', false);
 }
+
+/*
+  C, the trade carts (#3158), which name their receipts cart-kind:RUN:n from
+  a counter of their own made the same way. The carts block runs after the
+  ships block, which hands it __thornswoodCargoHands; the ships stay off.
+*/
+try {
+  const c1 = gm.indexOf('// ==== thornswood trade carts ====');
+  const c2 = gm.indexOf('// ==== end thornswood trade carts ====');
+  yes('C0 the trade carts block is in the gamemode', c1 >= 0 && c2 > c1);
+  const cartsSrc = '(function () {\n' + require('../../tests/fixtures/ordinary-quest-items') + gm.slice(a, z) + gm.slice(c1, c2) + '\n})();\n';
+  const cdir = path.join(scratch, 'roads');
+  fs.mkdirSync(path.join(cdir, 'private'), { recursive: true });
+  fs.writeFileSync(path.join(cdir, 'server-settings.json'), JSON.stringify({ privDir: 'private' }));
+  const ROADS = {
+    v: 1,
+    ports: [
+      { key: 'whiterun', name: 'Whiterun stables', hold: 'whiterun', world: CELL, pos: [0, 0, 0], crate: '1a001:Skyrim.esm' },
+      { key: 'riften', name: 'Riften stables', hold: 'riften', world: CELL, pos: [50000, 0, 0], crate: '1a002:Skyrim.esm' }
+    ],
+    routes: [
+      { from: 'whiterun', to: 'riften', minutes: 30 },
+      { from: 'riften', to: 'whiterun', minutes: 30 }
+    ]
+  };
+  const rc = T.adoptRoutes(T.openRegister(null, { driven: true }), ROADS);
+  rc.ships.open(rc.state, 'cart-1', 'whiterun');
+  fs.writeFileSync(path.join(cdir, 'private', 'trade-carts.json'), T.saveRegister(rc));
+  const cstore = {};
+  function cput(id, k, v) { (cstore[id] = cstore[id] || {})[k] = JSON.parse(JSON.stringify(v)); }
+  cput(A, 'inventory', { entries: [{ baseId: IRON, count: 40 }] });
+  cput(A, 'profileId', PID_A); cput(A, 'worldOrCellDesc', CELL); cput(A, 'pos', [10, 0, 0]);
+  cput(A, 'appearance', { name: 'Brynja' });
+  cput(CRATE.solitude, 'worldOrCellDesc', CELL); cput(CRATE.solitude, 'pos', [0, 0, 0]);
+  const cbox = {
+    console: { log: function () { } }, require: require, Buffer: Buffer, JSON: JSON, Math: Math,
+    Date: { now: function () { return clock.now; } },
+    setTimeout: function () { return 1; }, clearTimeout: function () { },
+    log: function () { },
+    __thornswoodIsStaff: function () { return false; },
+    __thornswoodIsAdmin: function () { return false; },
+    __thornswoodToProfile: function () { },
+    mp: {
+      getServerSettings: function () { return { privDir: 'private' }; },
+      get: function (id, k) {
+        if (k === 'onlinePlayers') { return [A]; }
+        const v = (cstore[id] || {})[k];
+        return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+      },
+      set: function (id, k, v) { cput(id, k, v); },
+      getDescFromId: function (id) { return id === CRATE.solitude ? '1a001:Skyrim.esm' : ''; },
+      makeProperty: function () { }
+    }
+  };
+  cbox.globalThis = cbox;
+  vm.createContext(cbox);
+  vm.runInContext(runSrc, cbox, { filename: 'gamemode.js (serverRunId)' });
+  const cIn = function (f) { process.chdir(cdir); try { return f(); } finally { process.chdir(back); } };
+  const cload = function () {
+    cIn(function () { vm.runInContext(cartsSrc, cbox, { filename: 'gamemode.js (trade ships and carts)' }); });
+    return cbox.__thornswoodTradeCarts;
+  };
+  const cnote = function () { return String(((cstore[A] || {}).thornswoodCartView || {}).note || ''); };
+  const cdisk = function () { return JSON.parse(fs.readFileSync(path.join(cdir, 'private', 'trade-carts.json'), 'utf8')); };
+  let tc = cload();
+  cIn(function () { tc.activated(CRATE.solitude, A, 'crate'); });
+  cIn(function () { tc.command(['/cart', 'load', 'cart-1', '5ace4', '0', '3', A.toString(16)], A, PID_A); });
+  yes('C1 before the reload, a load goes onto the cart (' + cnote() + ')', /^Loaded/.test(cnote()));
+  tc = cload();
+  cIn(function () { tc.activated(CRATE.solitude, A, 'crate'); });
+  cIn(function () { tc.command(['/cart', 'load', 'cart-1', '5ace4', '0', '2', A.toString(16)], A, PID_A); });
+  yes('C2 after the reload, a load goes onto the cart too (' + cnote() + ')', /^Loaded/.test(cnote()));
+  const cused = Object.keys(cdisk().cargo.receipts || {});
+  yes('C2 and the register holds two different receipts (' + cused.join(', ') + ')', cused.length === 2);
+} catch (e) {
+  yes('the carts run finished (' + ((e && e.stack) || e) + ')', false);
+}
 done();
