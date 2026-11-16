@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 1
 
 By rank: novice 1, advanced 10, expert 1, master 0.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (1 name). Apple Dumpling.
+
+**Advanced** (10 names). Boiled Creme Treat. Honey Nut Treat. Jazbay Crostata. Jazbay Dumpling. Jelly Dumpling. Juniper Berry Crostata. Juniper Berry Dumpling. Snowberry Crostata. Snowberry Dumpling. Sweet Roll.
+
+**Expert** (1 name). Apple Pie.
+
+**Master.** None.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Apple Dumpling | 1 | novice | Desserts | BYOHCraftingOven | 1 Red Apple, 1 Sack of Flour, 1 Butter |  | yes | `117f9:HearthFires.esm` |

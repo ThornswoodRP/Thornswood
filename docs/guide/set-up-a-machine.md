@@ -118,6 +118,14 @@ git config core.hooksPath .githooks
 
 It prints nothing. From then on `git push` first checks that every script parses and that the writing rules hold in what you are pushing, in about twenty seconds (#5291). When one fails, the push stops and names the file and line; fix it, commit, and push again. A cloud session turns this on by itself.
 
+Then lay the content build over the clone. The content plugin and the tables read out of the load order are built on the box and are not committed (#5191); each merge release keeps the newest as an artifact once its content checks pass, and the harnesses read it:
+
+```powershell
+pwsh scripts/release/Get-ContentBuild.ps1 -Newest
+```
+
+It ends with `SAME KEY` when the build is of your clone's content inputs, or `OTHER KEY` when your clone changes one (a source, a builder or a script a builder loads). Run it again after every pull of main. With `OTHER KEY` a harness that holds a table to a source you changed holds it to the old table, and says nothing of your change until the box builds it; the gate leaves those out of a pull request's checks in the same way, and the merge release runs them over the new build.
+
 From here on, the commands assume PowerShell is inside your clone.
 
 ### Open the folder in Visual Studio Code
