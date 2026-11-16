@@ -174,6 +174,8 @@ async function ask(o) {
       return { status: 200, body: r };
     },
     newestSetup: function (ch) { return (o.setups && o.setups[ch]) || null; },
+    // Which PC asked (#6278, pcs.js): kept here so a check can read it.
+    notePc: function (account, pc) { (o.pcs = o.pcs || []).push([account, pc]); return true; },
     sendJson: null
   };
   let sent = null;

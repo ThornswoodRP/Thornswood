@@ -97,6 +97,14 @@ of wiping everybody. When 1000 gold or more goes to somebody, a line naming
 both and the amount is posted in the staff channel in the Discord, and that
 post stays in the channel.
 
+**This PC.** Each time you press Play, the launcher sends a scrambled form
+of the id Windows gave your PC when it was installed. The scrambling only
+goes one way, so the id itself never leaves your PC, and this site scrambles
+it again with a key only it holds before keeping it beside your Discord
+account. Staff can then see which accounts have played from the same PC, to
+spot a second account of somebody banned. A family PC shared by two people
+looks the same, so it is only shown to staff and never acts on its own.
+
 **Your join number.** When you join the Discord, the bot writes down which
 arrival you were against your Discord id, so the number on the welcome card
 is never handed to two people, and is yours again if you leave and come
@@ -242,6 +250,8 @@ until 24 September 2026, and both are served from here now.
   front door takes the address from Cloudflare only when the connection
   really comes from Cloudflare. That is enforced by the site rather than
   promised: old rows go whenever the log is written or read.
+- **This PC**, the scrambled id above, is kept for 30 days after your
+  account last played from it, then deleted. The site checks every hour.
 - **When you last signed out of the site** is kept for 30 days, so a copy
   of a sign-in made before then is refused. It is the time alone, filed
   under a scrambled form of your Discord id that only this site can make,
@@ -379,8 +389,8 @@ Discord message. Do not send a government identity document.
 A request covers what Thornswood keeps, not your PC: what the launcher keeps
 there is yours, and uninstalling removes it (above).
 
-What deletion means here: your Discord link, your session records and the
-logs your launcher sent with them, your chat, your character, your list of
+What deletion means here: your Discord link, which PCs your account played
+from, your session records and the logs your launcher sent with them, your chat, your character, your list of
 characters and your settings, your answer to the rules, the applications and calls for
 help you sent through the site, your gallery pictures and your join number.
 A ticket in the Discord, and the bot's lines about it in the staff ticket
@@ -404,8 +414,8 @@ back.
 The Owner, the Co-Owner and the Dev rank, who run the site and the servers,
 can see all of it, chat and session records included. The other staff ranks
 see the parts their job needs: the staff who work in the world (Gamemasters
-and Loremasters) see the staff records, the gold and trade log and the
-gallery queue, and calls for
+and Loremasters) see the staff records, which accounts played from the same
+PC, the gold and trade log and the gallery queue, and calls for
 help and reports reach staff in the Discord's staff channels. The logs sent
 when a session ends are read on the site by the Owner, the Co-Owner and the
 Dev rank only; the one line from them that shows a crash or an error is

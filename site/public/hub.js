@@ -375,6 +375,19 @@ function charLine(pid, rec, now) {
 /* The Notes line under one account (#412, #1010): the account's ban if there
    is one, each of its characters with a PK or a ban of its own, then every
    staff note, newest first, each with who wrote it and when. */
+/* The other accounts that played from one of this account's PCs in the
+   last 30 days (the site's pcs.js), by name where the list has one. A
+   shared family PC looks the same, so it is said, never acted on. */
+function pcLine(u) {
+  var others = (u && u.sharesPc) || [];
+  if (!others.length) return '';
+  var names = others.map(function (id) {
+    var o = (S.linked || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return esc((o && (o.name || o.handle)) || 'not linked now') + ' (<code>' + esc(id) + '</code>)';
+  });
+  return '<div class="said">Played from the same PC as ' + names.join(', ') + ' in the last 30 days.</div>';
+}
+
 function linkedNotes(u, rec, now) {
   rec = rec || { bans: {}, notes: {} };
   var id = String(u && u.id || '');
@@ -390,6 +403,7 @@ function linkedNotes(u, rec, now) {
       ' (by ' + esc(b.by || 'staff') + ')</div>';
   }
   chars.forEach(function (pid) { out += charLine(pid, rec, now); });
+  out += pcLine(u);
   if (!notes.length && !b) out += ' <span class="said">no notes yet</span>';
   notes.forEach(function (n) {
     out += '<div class="note">' + esc(n.text || '') + ' <span class="said">(' +

@@ -24,6 +24,7 @@ const { BANS, bansNow, MODLOG, NOTES, PK } = require('./staff');
 const { sweepSignIns } = require('./signins');
 const { sweepLedger } = require('./ledger');
 const { sweepTakeBack } = require('./takeback');
+const { sweepPcs } = require('./pcs');
 const { sweepSignOuts } = require('./auth');
 const { pruneSessionLogs, retentionSay, sessionKey, sessionRows, slogFile,
   SLOGS, sweepSessions, writeSlogSet } = require('./sessions');
@@ -413,7 +414,7 @@ function retentionSweep() {
            signIns: sweepSignIns(now), signOuts: sweepSignOuts(now), inbox: sweepInbox(now),
            staff: sweepStaffRecords(now), moderationLog: sweepModLog(now),
            galleryReports: sweepGalleryReports(now), ledger: sweepLedger(now),
-           takeBack: sweepTakeBack(now),
+           takeBack: sweepTakeBack(now), pcs: sweepPcs(now),
            restoreCopies: sweepRestoreCopies(now) };
 }
 setInterval(retentionSweep, RETENTION_EVERY_MS).unref?.();
