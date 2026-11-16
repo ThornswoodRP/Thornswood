@@ -714,7 +714,8 @@ def policy_gates(policy):
     return tuple(out)
 
 
-GATES = policy_gates(json.load(open(POLICY, encoding='utf-8')))
+with open(POLICY, encoding='utf-8') as _policy:
+    GATES = policy_gates(json.load(_policy))
 
 # What a gate's copy keeps, and which of those hold a form id in their first
 # four bytes. Anything else on the record stops the build.

@@ -93,7 +93,7 @@ const tool = fs.readFileSync(TOOL, 'utf8');
 const policy = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-plugin-policy.json'), 'utf8'));
 yes('B1 the builder takes the gates from the policy, drops XLOC and VMAD, and its verify refuses a gate left locked',
     JSON.stringify((policy.gatesUnlocked || {}).gates) === JSON.stringify(['1b1f1:Skyrim.esm', '42284:Skyrim.esm', '42286:Skyrim.esm']) &&
-    /GATES = policy_gates\(json\.load\(open\(POLICY/.test(tool) &&
+    /GATES = policy_gates\(json\.load\(_policy\)\)/.test(tool) &&
     /GATE_DROP = \{b'XLOC', b'VMAD'\}/.test(tool) && /town gate %s is left locked/.test(tool));
 const front = fs.readFileSync(FRONT, 'utf8');
 yes('F1 the front plugin no longer opens gates on a timer', !/openTheGates|TOWN_GATES|GATE_EVERY_MS/.test(front));

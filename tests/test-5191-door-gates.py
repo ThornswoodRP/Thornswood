@@ -127,7 +127,10 @@ def run(tmp, with_last, policy):
     os.makedirs(tables)
     r = subprocess.run([sys.executable, TOOL, '--data', data, '--plugins', txt, '--out', out,
                         '--tables', tables, '--policy', pol], capture_output=True, text=True)
-    doc = open(out, encoding='utf-8').read() if os.path.exists(out) else None
+    doc = None
+    if os.path.exists(out):
+        with open(out, encoding='utf-8') as fh:
+            doc = fh.read()
     return r.returncode, r.stdout + r.stderr, doc
 
 
@@ -173,12 +176,14 @@ try:
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
-real = json.load(open(POLICY, encoding='utf-8'))
+with open(POLICY, encoding='utf-8') as fh:
+    real = json.load(fh)
 yes('5 the repository\'s policy names the three town gates (#2484)',
     real.get('gatesUnlocked', {}).get('gates') == ['1b1f1:Skyrim.esm', '42284:Skyrim.esm', '42286:Skyrim.esm'])
-last_tool = open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8').read()
+with open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8') as fh:
+    last_tool = fh.read()
 yes('5 Build-LastPlugin.py takes GATES from the policy\'s list and spells none of its own',
-    'GATES = policy_gates(json.load(open(POLICY' in last_tool and '0x01B1F1' not in last_tool)
+    'GATES = policy_gates(json.load(_policy))' in last_tool and '0x01B1F1' not in last_tool)
 
 print('')
 print('%d passed, %d failed' % (passed, failed))

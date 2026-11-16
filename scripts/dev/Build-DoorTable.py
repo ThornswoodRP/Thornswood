@@ -286,7 +286,8 @@ def main():
     # gatesUnlocked, and not from the plugin. A gate no plugin places, or one
     # some other plugin already opens, means the list is out of date, and
     # stops the build.
-    policy = json.load(open(args.policy, encoding='utf-8'))
+    with open(args.policy, encoding='utf-8') as fh:
+        policy = json.load(fh)
     gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
     opened = []
     for g in gates:
