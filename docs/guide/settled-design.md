@@ -105,13 +105,15 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
   `Assembly.Location`; the project's AOT analyzers say when a change is not.
   The harnesses build launcher files with the same .NET SDK at the same
   settings, on any machine (`tests\Launcher-Csc.ps1`,
-  `tests\launcher-csc.js`). C# inside a script that Windows PowerShell 5.1
-  compiles with `Add-Type` (the Framework compiler, as in
-  `scripts\dev\Check-Secrets.ps1`) stays C# 5, and so do the launcher files
-  such a script compiles: `launcher\app\VortexProfileState.cs`
-  (`scripts\mods\LoadOrder.ps1`) and the others `tests\Framework-Csc.ps1`
-  names; `tests\test-vortex-profile-state.ps1`, `test-2791` and `test-2827`
-  hold them to it.
+  `tests\launcher-csc.js`). The launcher files a script loads with
+  `Add-Type` (`launcher\app\VortexProfileState.cs` in
+  `scripts\mods\LoadOrder.ps1`, `Generated.cs` and the two beside it in
+  `scripts\mods\Generated.ps1`, `FromGame*.cs` in `scripts\release\Go.ps1`)
+  compile with the `Add-Type` of pwsh 7, where every script runs (#5356):
+  .NET's own libraries and no package. `test-vortex-profile-state` and
+  `test-2827` hold them to it (#5968). C# that a script still builds for the
+  .NET Framework (`scripts\vps\BotService.cs`, the Windows service host)
+  stays C# 5.
 - Every change goes out as one complete release: launcher, game files and
   server together, never a half.
 

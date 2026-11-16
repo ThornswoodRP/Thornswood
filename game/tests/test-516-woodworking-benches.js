@@ -22,8 +22,8 @@
        repository's own plugins, so a new revision or a content change
        without a rebuild turns this red
     R  the 26 recipes #2529 moved are at the woodworking bench in
-       game/data/recipes.json, and the bench tables open it for the
-       Woodwright
+       game/data/recipes.json with every Woodworker row the forge carried
+       (#3120, #6194), and the bench tables open it for the Woodwright
     S  the real property block over a pretend engine: at start every bench
        stands at its point next to its forge, turned before it is moved, so
        a game near it is sent the right angle; standing them again does
@@ -216,13 +216,24 @@ const furnitureOuts = furnitureDoc.pieces.filter((p) => furnitureDoc.limits.type
 // And the Woodwright's forge rows #3120 moved to its home bench (movedFrom
 // keeps the forge their mod put them at), and the cook's wooden ladle
 // (#3162), a woodwright's, written by Add-ContentRecords.py at the same bench.
+// #3120 moves every Woodworker row its mod put at a smithing forge (the forge
+// or the Skyforge), and #5885 (#5037) the cut ones with the rest, so neither
+// keeps one: 9 people can make and the rest cut (#6194: revision 8's build
+// moved 54, 44 cut off the forge and the Skyforge's Nord Hero Bow, where the
+// table committed before that rule held 9). A temper at the sharpening wheel
+// is never seen by the server and is not moved (Build-RecipeTable.ps1).
+const FORGES = ['CraftingSmithingForge', 'CraftingSmithingSkyforge'];
 const benchMoved = atBench.filter((r) => r.movedFrom).length;
+const madeMoved = atBench.filter((r) => r.movedFrom && r.book !== 'cut').length;
+const leftAtForge = Object.keys(recipes.recipes || {}).concat(Object.keys(recipes.unowned || {}), Object.keys(recipes.refused || {}))
+  .map((k) => (recipes.recipes[k] || (recipes.unowned || {})[k] || (recipes.refused || {})[k]))
+  .filter((r) => r && FORGES.indexOf(r.benchName) >= 0 && r.owner === 'Woodworker');
 const ladles = atBench.filter((r) => r.editorId === 'ThornswoodRecipeToolLadle');
 const movedAt = atBench.length - furnitureOuts.length - benchMoved - ladles.length;
-yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, the 9 #3120 moved off the forge, one for each piece of furniture and the ladle (' +
-    atBench.length + ', ' + benchMoved + ' moved off the forge, ' + furnitureOuts.length + ' of them furniture, ' + ladles.length + ' ladle)',
-    movedAt === 26 && benchMoved === 9 && ladles.length === 1 &&
-    atBench.filter((r) => r.movedFrom).every((r) => r.movedFromName === 'CraftingSmithingForge') &&
+yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, every Woodworker row #3120 moved off the forges (9 people can make, the rest cut), one for each piece of furniture and the ladle (' +
+    atBench.length + ', ' + benchMoved + ' moved off the forges, ' + madeMoved + ' not cut, ' + leftAtForge.length + ' Woodworker rows left at them, ' + furnitureOuts.length + ' of them furniture, ' + ladles.length + ' ladle)',
+    movedAt === 26 && madeMoved === 9 && leftAtForge.length === 0 && ladles.length === 1 &&
+    atBench.filter((r) => r.movedFrom).every((r) => FORGES.indexOf(r.movedFromName) >= 0 && r.owner === 'Woodworker') &&
     furnitureOuts.every((o) => atBench.some((r) => r.out === o)) &&
     atBench.every((r) => r.benchName === 'ThornswoodCraftingWoodworking'));
 const bbb = /const BENCH_BY_BASE = (\{.*\});/.exec(gm);

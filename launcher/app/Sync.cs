@@ -446,7 +446,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    log("Could not put this update's plugin list in place: " + ex.Message + ". Press Fix in the launcher.");
+                    log("Could not put this update's plugin list in place: " + Failure.Why("Sync, the plugin list", ex, "plugins.txt") + ". Press Fix in the launcher.");
                 }
             }
             Swap.RepairConfigs();

@@ -312,8 +312,8 @@ finally:
      bot._watch_lines) = keep
 
 # ------------------------------------------------ nothing but the staff id --
-# #staff-updates (Patrick, 11 Oct), from staff-channel.txt, and never the dev
-# updates channel in dev-channel.txt, where the watchdog spoke until #2501.
+# #staff-updates (Patrick, 11 Oct), from staff-channel.txt, and never
+# #staff-news in dev-channel.txt, where the watchdog spoke until #2501.
 with open(os.path.join(HERE, 'staff-channel.txt')) as f:
     staff_file = int(f.read().strip())
 with open(os.path.join(HERE, 'dev-channel.txt')) as f:

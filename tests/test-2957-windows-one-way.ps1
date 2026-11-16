@@ -27,7 +27,10 @@
        Get-WindowsPath without dot-sourcing tests\Windows.ps1 (or
        tests\Launcher-Csc.ps1, which dot-sources it);
     5. one outside launcher\tests that asks for Windows PowerShell 5.1: box
-       and release code runs in PowerShell 7 since #5356.
+       and release code runs in PowerShell 7 since #5356;
+    6. a node harness or helper (tests\*.js) that starts Windows PowerShell:
+       chrome-audio.js and test-2349-server-log.js did, until #5356, and
+       start pwsh now.
   The same reader is run over planted harnesses, one of each, so a reader that
   finds nothing anywhere cannot pass by accident. Then Windows.ps1 itself:
   Get-BoxPowerShell names the PowerShell 7 running this on every OS; off
@@ -123,6 +126,20 @@ $elsewhere = @($ps51Users | Where-Object { [IO.Path]::GetDirectoryName($_.FullNa
 Yes ('only a launcher harness asks for Windows PowerShell 5.1 (' + ((@($ps51Users | ForEach-Object { $_.Name }) | Sort-Object) -join ', ') + ')') (
     $ps51Users.Count -gt 0 -and $elsewhere.Count -eq 0)
 if ($elsewhere.Count) { Write-Host ('      outside launcher\tests: ' + ($elsewhere -join ', ') + '; box and release code runs in Get-BoxPowerShell (#5356)') }
+
+# A node harness starts PowerShell 7 as well. Read with comments taken out,
+# so a line that tells the history is not a hit.
+$jsStarts = '(spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*[''"`]powershell(\.exe)?[''"`]'
+$jsFiles = @(@($Here) + @(Get-ProductTestFolders $Repo | ForEach-Object { $_.Path }) | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -Filter '*.js' })
+$jsBad = @($jsFiles | Where-Object {
+    $code = [IO.File]::ReadAllText($_.FullName) -replace '(?s)/\*.*?\*/', '' -replace '(?m)^\s*//.*$', ''
+    $code -match $jsStarts } | ForEach-Object { $_.Name })
+Yes ('no node harness starts Windows PowerShell; each starts pwsh (' + $jsFiles.Count + ' read)') ($jsFiles.Count -gt 50 -and $jsBad.Count -eq 0)
+if ($jsBad.Count) { Write-Host ('      starts powershell.exe: ' + ($jsBad -join ', ') + '; start pwsh, the PowerShell every script runs in (#5356)') }
+foreach ($probe in @(@("cp.spawnSync('powershell.exe', ['-NoProfile'])", $true), @("cp.spawn(`"powershell`", [])", $true), @("cp.spawnSync('pwsh', ['-NoProfile'])", $false))) {
+    Yes ('the node reader ' + $(if ($probe[1]) { 'finds' } else { 'passes' }) + ': ' + $probe[0]) (($probe[0] -match $jsStarts) -eq $probe[1])
+}
 
 # ---- 2. the reader, over planted harnesses -----------------------------------
 $plant = Join-Path ([IO.Path]::GetTempPath()) ('ts-2957-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))

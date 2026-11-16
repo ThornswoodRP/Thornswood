@@ -102,7 +102,7 @@ if(enumerationMode || populationEnumerationMode) {
 // Optional isolated previous source supports RED verification without editing
 // the working runtime while its replacement is under review.
 const sourcePath = process.argv[4] || path.join(__dirname,'../../game/gamemode.js');
-const source = fs.readFileSync(sourcePath,'utf8');
+const source = require('../../tests/gamemode-tables.js').joined(fs.readFileSync(sourcePath,'utf8'));
 const context = {Buffer,Math,Date,Number,Map,Set,JSON};
 vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('// NPC SERVER RUNTIME BEGIN'),

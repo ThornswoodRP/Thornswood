@@ -598,7 +598,7 @@ function StartIt {
             # 5, the same I/O and memory priority as at 4. Never 0, which is
             # realtime. Never the default of 7 either (#1968): BelowNormal,
             # I/O priority 1 (low) and memory priority 2, which held the game
-            # server's reads back (#1931). tests\test-service-task-priority.ps1
+            # server's reads back (#1931). scripts\tests\test-service-task-priority.ps1
             # measures all three.
             `$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 1
             # LOCAL SERVICE, Limited, with a SID of its own and the grants on

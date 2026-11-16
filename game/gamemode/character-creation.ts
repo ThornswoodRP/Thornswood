@@ -1290,8 +1290,10 @@ function chargenTick() {
         const prof = s && s.prof && P && P.has(P.TABLE.professions, s.prof)
           ? P.TABLE.professions[s.prof] : null;
         if (prof) {
-          notify(actorId, 'Your profession: ' + prof.name +
-                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.');
+          const line = 'Your profession: ' + prof.name +
+                 (s.half && c.nameOf ? ', ' + c.nameOf(s.half) : '') + '.';
+          notify(actorId, line);
+          say(actorId, line);
         }
       } catch (e) {
         log('login', actorId.toString(16), 'could not say the profession:', e);

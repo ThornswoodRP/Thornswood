@@ -469,7 +469,8 @@ try {
     # A run in progress is never cancelled (#6008): with merges landing every
     # 5 minutes and a release taking 10, cancelling meant no release at all
     # (22 runs cancelled in a row on 12 Nov). GitHub keeps the newest waiting.
-    Yes '  in the release environment, on main only, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$')
+    # On the release job (#5191), after the content job finds the box's build.
+    Yes '  in the release environment, on main only, after the box''s content build is found, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' && ") -and $wf -match '(?m)^\s+needs: content\s*$' -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$' -and $wf -notmatch '(?m)^\s+cancel-in-progress: true\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
     # a merge main has moved past is published only when its workflow files

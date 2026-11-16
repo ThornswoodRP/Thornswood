@@ -448,7 +448,9 @@ __METHODS__
 function Run-Again([string[]]$methods, [string]$label) {
     $src = $again.Replace('__METHODS__', ($methods -join "`r`n`r`n"))
     $built = $null
-    try { $built = Build-LauncherCode -Source $src -Exe }
+    # OwnGameRefreshIfDue says a caught exception through Failure (#4633),
+    # which writes it through the Swallow stand-in above.
+    try { $built = Build-LauncherCode -Source $src -File (Join-Path $AppDir 'Failure.cs') -Exe }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
     Yes "$label builds the way the project builds" ($null -ne $built)
     if (-not $built) { return $null }

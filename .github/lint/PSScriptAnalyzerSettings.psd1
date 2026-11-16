@@ -7,8 +7,8 @@
 # holds this list to the tree, by file, since line numbers move with every edit):
 #   scripts/deploy/Setup-Discord.ps1
 #   scripts/ops/Discord-Hook.ps1
-#   tests/test-prove-secret.ps1
-#   tests/test-secret-channel.ps1
+#   scripts/tests/test-prove-secret.ps1
+#   scripts/tests/test-secret-channel.ps1
 @{
     Severity     = @('Error', 'Warning')
     ExcludeRules = @(

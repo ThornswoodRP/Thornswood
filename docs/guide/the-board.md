@@ -2,6 +2,13 @@
 
 Part of the [Developer Guide](../../Developer-Guide.md), the index of every page and section.
 
+## Contents
+
+- [Everything we need to do goes on the board](#everything-we-need-to-do-goes-on-the-board)
+- [How an issue and a comment are written](#how-an-issue-and-a-comment-are-written)
+- [Test tasks and known issues](#test-tasks-and-known-issues)
+- [What is not a reason to skip an issue](#what-is-not-a-reason-to-skip-an-issue)
+
 ## Everything we need to do goes on the board
 
 The one record of outstanding work is the Thornswood To Do board, a board of
@@ -47,10 +54,12 @@ How to use it:
 - Work that fits an existing issue is an edit or a comment on it, not a
   second issue. Say in it what is left; what was measured goes with the
   evidence ("How an issue and a comment are written", below). A new issue
-  whose title is like an open one's gets a comment naming it
-  (`.github\workflows\duplicate-check.yml`, #5185); if it is the same
-  problem, close the new one as a duplicate of the old, and if not, say on
-  it how it differs. Nothing is closed for you.
+  with the same title as an open one, or asking for the same `deploy\after`
+  step, is closed as a duplicate of it, with a comment naming it
+  (`.github\workflows\duplicate-check.yml`, #5185); reopen it and say how
+  it differs if it is not the same. One whose title is only like an open
+  one's gets a comment naming it; if it is the same problem, close the new
+  one as a duplicate of the old, and if not, say on it how it differs.
 - Uncommitted changes sitting in the repo are outstanding work and belong on
   the board too.
 - Labels: `area:` is the part of the project, `needs: patrick` marks what
@@ -68,8 +77,9 @@ How to use it:
   area. `weekly-review` marks what the weekly project review found,
   `Suggestion` an idea somebody asked for, and `bug` something broken;
   nothing reads these three, they are for people sorting the board.
-  `claimed: <name>` marks who is on an issue ("What this is" says how the
-  Bots use it). Assign yourself when you start one. The stage is Order and
+  `claimed: Bramble`, `claimed: Echo`, `claimed: Magpie`, `claimed: Rift`,
+  `claimed: Sprocket` and `claimed: Wisp` mark which Bot is on an issue
+  ("What this is" says how the Bots use them). Assign yourself when you start one. The stage is Order and
   Status: the `wave:` labels and `needs: the live server` were retired on
   22 Oct (#3192), because nothing read them and Order had replaced them.
 - Status: In Progress the moment work starts, Done when it is merged and only
@@ -117,7 +127,8 @@ How to use it:
   `No test task: nobody would notice this fix.` The Ship reads that line as
   it reads done-on-merge's comment, from anybody, the newer of the two
   winning, and closes the issue when the release carries that merge (#3411).
-  A line with neither a test task nor the no-task line keeps the issue open,
+  It finds the line by searching the open issues' comments, so the issue
+  closes whether or not the board had put its card in Done. A line with neither a test task nor the no-task line keeps the issue open,
   and the Ship names it as trouble. To see what a main Ship
   would close, without closing anything:
   `.\scripts\release\Close-ShippedIssues.ps1 -Commit origin/main -Check`.
@@ -186,8 +197,8 @@ Dev: no step a Claude, the Desk, logs, the box, a harness, a workflow or a
 command could do (a Dev test task is only for what a human dev must do in
 the game; the rest is a "Check (Claude):" comment with its result), and not
 ordinary playtester steps with no staff or dev command (that is Main). Main:
-the fix commit is in the newest `release/main/` tag, and no staff or dev
-command. Known issues: open, no merged pull request names it, no test task.
+the fix commit is in the newest main Release (`main-build-...`, or an older
+`release/main/` tag), and no staff or dev command. Known issues: open, no merged pull request names it, no test task.
 One post per issue per forum. The bot's token needs issues write to comment.
 
 The same rules run on a pull request before it merges (#5199). The check
@@ -198,8 +209,11 @@ its Server line names. It also refuses what only a pull request gets wrong:
 two of one kind for one issue, a Main one longer than the bot's first post,
 a body that also says `Closes #N` for that issue (the merge would close it
 before the test task is copied), and an issue that is closed or is not an
-issue. Main's ruleset requires it beside `Build check result`. A body with
-no test task passes. When it is red, edit the body; the edit runs it again.
+issue, and a test task in another shape (a `## Test task` heading or a
+`Main test task` line with no `Test task for #N:` line), which done-on-merge
+never copies, so its issue would never close. Main's ruleset requires it
+beside `Build check result`. A body with no test task passes, and so does
+one that says none (`No test task: nobody would notice this fix.`). When it is red, edit the body; the edit runs it again.
 To run it on a body before you push:
 `python bot\pr_tasks.py --file <the body, saved as a file>`.
 

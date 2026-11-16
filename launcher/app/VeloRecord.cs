@@ -204,7 +204,7 @@ namespace Thornswood
             string said;
             Manifest m;
             try { m = Get(a.Version, out said); }
-            catch (Exception ex) { return "could not be held to its release record: " + ex.Message; }
+            catch (Exception ex) { return "could not be held to its release record: " + Failure.Why("VeloRecord", ex); }
             PartFile f = m.File(PartOf("dev"), a.FileName) ?? m.File(PartOf("main"), a.FileName);
             if (f == null)
                 return "is not among the Velopack files the signed release record of " + m.Tag + " lists.";

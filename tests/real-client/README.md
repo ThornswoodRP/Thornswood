@@ -15,8 +15,9 @@ our journal, the inventory and the game's menu, with a screenshot of each.
 
 ## On your machine
 
-On a PC with a dev install whose Profile holds `dev-allowed.txt`, the launcher
-and the game closed, from the repository folder:
+On a PC with an install on the dev channel (the launcher's Settings page)
+whose Profile holds `dev-allowed.txt`, the launcher and the game closed, from
+the repository folder:
 
 ```
 pwsh scripts\dev\Run-RealClient.ps1
@@ -25,7 +26,9 @@ pwsh scripts\dev\Run-RealClient.ps1
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
 `results.jsonl`, the launcher's log for the run and a `.png` for each
 screenshot. `-Root` names another install (the default is
-the dev install, as `scripts\release\Where.ps1 InstallDev` finds it), `-Steps` another list, `-InstallPlugin` copies
+the install `scripts\release\Where.ps1 Install` finds, with the launcher the
+setup put in `%LOCALAPPDATA%\Thornswood\current`), and it stops at once when
+that install is not on the dev channel, `-Steps` another list, `-InstallPlugin` copies
 this repository's plugin into a build released before it, and `-Publish` puts
 the run on the GitHub Release of the newest Dev Deployment and a line on that
 Deployment. It ends 0 only when every step passed.

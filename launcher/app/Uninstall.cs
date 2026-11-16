@@ -201,7 +201,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not remove " + dir + ": " + ex.Message +
+                        say("Could not remove " + dir + ": " + Failure.Why("Uninstall, removing " + dir, ex, dir) + "." +
                             "  Nothing uses that folder, so it is safe to delete by hand.");
                 }
             }
@@ -421,7 +421,7 @@ namespace Thornswood
                             "\n\nNothing has been removed. Close Skyrim, press Scan and then Fix on Diagnostics, which puts it back, and try again.");
                     }
                 }
-                catch (Exception ex) { if (ex.Message.StartsWith("Windows'")) throw; }
+                catch (Exception ex) when (ex.GetType() != typeof(Exception)) { Swallow.Note("Uninstall, reading whether " + win + " is redirected", ex); }
             }
 
             // A leftover backup folder means the person's own My Games or

@@ -157,9 +157,9 @@ try {
 
     # ---- the environments counted as main only (#3550) ---------------------
     $g = Facts
-    $g.github.environments = @([ordered]@{ name = 'board'; policy = 'custom'; refs = @('branch:main') }, [ordered]@{ name = 'notices'; policy = 'any'; refs = @() })
+    $g.github.environments = @([ordered]@{ name = 'board'; policy = 'custom'; refs = @('branch:main') }, [ordered]@{ name = 'desk'; policy = 'any'; refs = @() })
     $x = Run $g $wfOk
-    T ($x.Out -match 'RISK  github environment notices admits' -and $x.Out -notmatch 'RISK  github environment board') 'an environment the record counts as main only that GitHub says lets in other refs is a risk'
+    T ($x.Out -match 'RISK  github environment desk admits' -and $x.Out -notmatch 'RISK  github environment board') 'an environment the record counts as main only that GitHub says lets in other refs is a risk'
     T (-not (Test-Path -LiteralPath (Join-Path (Join-Path $repo 'records') 'sign-runners.json'))) 'records\sign-runners.json is gone: no runner of the box signs (#4033)'
 
     $rec0 = Get-Content (Join-Path $repo 'records\runner-isolation.json') -Raw | ConvertFrom-Json

@@ -6,7 +6,10 @@ Part of the bot: bot.py loads it (#5357).
 Two roles somebody can give themselves: News Pings, which the bot pings when
 it posts a change to the live server in #news (bot_news.py), and Updates
 Pings, which it pings when it warns of a live game server restart in #updates
-(bot_restarts.py). One button for each, pressed again to stop.
+(bot_restarts.py). One button for each, pressed again to stop. The staff
+side pings them too: News Pings for a dev release in #staff-news, Updates
+Pings for a dev server restart in #staff-updates (Patrick, 15 Nov 2026), so
+staff who took a role hear of both.
 
 They were under the hold buttons in #choose-your-hold until 12 Nov 2026, when
 Patrick moved them out: "those buttons don't fit well there and also aren't

@@ -28,6 +28,9 @@ So this checks:
   6. the Server Guide, which was what still held #start-here and #disboard
      (the audit of 12 Nov, 5:55 PM), is one bots cannot change, so a build
      names what a person must take off it, and where, as a failure
+  7. the audit's lines on who sees what name the channels from the plan:
+     somebody with no role #rules and #welcome-travelers (the order Patrick
+     read back on 12 Nov), a Member those and the Member channels
 
 Build-Discord.py is imported for real under another name. Every guild and
 channel is a stand-in. Connects to nothing.
@@ -283,6 +286,18 @@ yes('4 the audit names a gated channel on the Welcome Screen and in an Onboardin
 yes('4 the audit says when a default channel is one the plan gates, and names a '
     'deleted one still on the list',
     'onboarding_shut(guild, ob)' in audit and 'which the server no' in audit)
+yes('7 somebody with no role sees #rules and #welcome-travelers, nothing else',
+    B._seen_by(None) == '#rules, #welcome-travelers')
+member_sees = B._seen_by('Member').split(', ')
+yes('7 a Member sees #welcome, #start-here, #disboard, the Tickets, Information, '
+    'Roleplay Guide and Applications channels, and no Playtester channel',
+    all(c in member_sees for c in ('#rules', '#welcome', '#start-here', '#disboard',
+                                   '#get-help', '#news', '#faq', '#lore',
+                                   '#apply-to-playtest', '#welcome-travelers'))
+    and '#general-chat' not in member_sees)
+yes('7 the audit says them from the plan, not a fixed old order',
+    "_seen_by('Member')" in audit and '_seen_by(None)' in audit
+    and 'so Start Here only' not in audit)
 
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))
