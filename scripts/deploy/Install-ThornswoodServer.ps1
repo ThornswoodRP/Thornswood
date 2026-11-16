@@ -303,7 +303,7 @@ if (-not (Test-Path -LiteralPath $waitLib)) {
 # The account the task runs as and what it may reach (#2578). A copy of the
 # functions in ServiceAccount.ps1, kept here rather than sent beside this
 # installer, because every file Publish-Server.ps1 sends is a call in
-# records\remote-commands.json. tests\test-2578-service-principals.ps1 fails
+# records\remote-commands.json. scripts\tests\test-2578-service-principals.ps1 fails
 # when this copy and ServiceAccount.ps1 differ.
 # ---- ServiceAccount.ps1 (copy) ----
 function New-ThornswoodServicePrincipal {
@@ -723,7 +723,7 @@ function GamePortOf([string]$dir) {
 # (#2928). A copy of scripts\deploy\StopAndMove.ps1 below its header, kept
 # here for the reason the ServiceAccount.ps1 copy above is: every file
 # Publish-Server.ps1 sends is a call in records\remote-commands.json.
-# tests\test-2928-stop-and-move.ps1 fails when this copy and StopAndMove.ps1
+# scripts\tests\test-2928-stop-and-move.ps1 fails when this copy and StopAndMove.ps1
 # differ. Until 20 Oct the renames were tried ten times, 0.7 s apart.
 # ---- StopAndMove.ps1 (copy) ----
 
@@ -1312,7 +1312,7 @@ function Remove-ThornswoodOpenTrace($Trace) {
 
 # The server folders' turn, which the nightly backup takes too (#3247). A copy
 # of scripts\deploy\ServerFolderTurn.ps1 below its header, for the reason the
-# StopAndMove.ps1 copy above is; tests\test-3247-server-folder-turn.ps1 fails
+# StopAndMove.ps1 copy above is; scripts\tests\test-3247-server-folder-turn.ps1 fails
 # when the two differ.
 # ---- ServerFolderTurn.ps1 (copy) ----
 
@@ -1793,7 +1793,7 @@ function Register-ServerTask([string]$writer) {
     # to other uses, after which touching them again is a read from the page
     # file. Priority 1 gives memory priority 5, so nothing else sets it.
     #
-    # tests\test-server-task-priority.ps1 registers a task with these settings
+    # scripts\tests\test-server-task-priority.ps1 registers a task with these settings
     # and this command line, and measures the CPU, I/O and memory priority of
     # the program it starts.
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
@@ -2324,7 +2324,7 @@ if (-not (Test-Path -LiteralPath $forBotDir)) { New-Item -ItemType Directory -Pa
     what it replaced, <root>.prev-<stamp> or .undone-<stamp>, is locked the
       same way, since it holds the old settings and data.
 
-  tests\test-server-acl.ps1 runs this on scratch folders and reads it back.
+  scripts\tests\test-server-acl.ps1 runs this on scratch folders and reads it back.
 #>
 # $readers: SIDs given read on the folder and everything in it (the bot's, on for-bot).
 function Lock-ServerDir([string]$dir, [string]$from, [string[]]$readers = @()) {

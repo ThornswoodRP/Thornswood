@@ -310,9 +310,16 @@ public sealed class Server(EnvConfig env, HttpClient http)
     ///  - when any of that does not happen, the stop again, the old files
     ///    back the same way, and the old server started and asked again.
     /// files are the Release's gamemode part (gamemode.js, its stamp and, from
-    /// #5191, gamemode-tables.zip, whose folder is swapped with the files).</summary>
-    public async Task<Outcome> ApplyServerBuild(string zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct, string about = "an update")
+    /// #5191, gamemode-tables.zip, whose folder is swapped with the files).
+    /// zip null keeps the server build the folder runs, whose record is
+    /// record: the stop, swap and start then carry the gamemode and plugins
+    /// alone. plugins are the server's own plugins from the Release (#6175,
+    /// ServerPlugins), by their path under the root to the staged file; they
+    /// are swapped and put back with the rest.</summary>
+    public async Task<Outcome> ApplyServerBuild(string? zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct, string about = "an update",
+        IReadOnlyDictionary<string, string>? plugins = null)
     {
+        plugins ??= new Dictionary<string, string>();
         foreach (var n in ReloadFiles)
             if (!files.ContainsKey(n)) return new Outcome("failure", "the Release's gamemode part has no " + n);
         if (env.Task == "") return new Outcome("failure", "not applied: no scheduled task is named for this server, so the agent cannot stop and start it for a new server build");
@@ -338,11 +345,20 @@ public sealed class Server(EnvConfig env, HttpClient http)
         Dictionary<string, string> sums;
         try
         {
-            sums = ServerBuild.Expand(zip, stage, out var zipRecord);
-            if (ServerBuild.RecordSum(zipRecord) != ServerBuild.RecordSum(record))
-                throw new InvalidDataException("the zip's server-build.json is not the one the signed manifest names");
-            Files.WriteWhole(Path.Combine(stage, "server-build.json"), record);
+            if (zip != null)
+            {
+                sums = ServerBuild.Expand(zip, stage, out var zipRecord);
+                if (ServerBuild.RecordSum(zipRecord) != ServerBuild.RecordSum(record))
+                    throw new InvalidDataException("the zip's server-build.json is not the one the signed manifest names");
+                Files.WriteWhole(Path.Combine(stage, "server-build.json"), record);
+            }
+            else sums = new();
             foreach (var rel in ReloadFiles) Files.Copy(files[rel], Path.Combine(stage, rel));
+            foreach (var (rel, from) in plugins)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(stage, rel))!);
+                Files.Copy(from, Path.Combine(stage, rel));
+            }
             if (files.ContainsKey(Tables.Zip)) Tables.Expand(files[Tables.Zip], Path.Combine(stage, Tables.Dir));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -350,8 +366,8 @@ public sealed class Server(EnvConfig env, HttpClient http)
             TryDelete(stage);
             return new Outcome("failure", "not applied: the new server build could not be staged: " + e.Message);
         }
-        var bad = ServerBuild.Problems(rec, sums, "the Release's server build");
-        try
+        var bad = zip != null ? ServerBuild.Problems(rec, sums, "the Release's server build") : new List<string>();
+        if (zip != null) try
         {
             if (!File.ReadAllText(Path.Combine(stage, "dist_back", "skymp5-server.js")).Contains("[thornswood] gamemode did not load; the error is above"))
                 bad.Add("the new engine does not say how a gamemode load went (it needs the fork from Thornswood #3196)");
@@ -363,7 +379,10 @@ public sealed class Server(EnvConfig env, HttpClient http)
             TryDelete(stage);
             return new Outcome("failure", "not applied: the server build is not the one its record names: " + bad[0]);
         }
-        var want = sums.Keys.Append("server-build.json").Concat(ReloadFiles).ToList();
+        var want = (zip != null ? sums.Keys.Append("server-build.json") : []).Concat(ReloadFiles).Concat(plugins.Keys).ToList();
+        // What the summary names: the plugins, not the settings a new load
+        // order rides in (ServerOrder, #6209).
+        var pluginFiles = plugins.Keys.Where(k => k.StartsWith(ServerPlugins.Dir + "/", StringComparison.Ordinal)).ToList();
         var newBlob = Files.GamemodeBlob(Path.Combine(stage, "gamemode.js"));
         var tablesAt = Path.Combine(Root, Tables.Dir);
         var withTables = files.ContainsKey(Tables.Zip);
@@ -371,8 +390,9 @@ public sealed class Server(EnvConfig env, HttpClient http)
         var newTree = withTables ? Tables.Tree(Path.Combine(stage, Tables.Dir)) : Tables.Tree(tablesAt);
         // Held only when the new gamemode reads tables (see ApplyGamemode).
         var newHeld = Tables.Reads(Path.Combine(stage, "gamemode.js")) ? newTree : "";
-        log($"the stage checks out: server build {rec.Short}, {sums.Count} file(s) held to its record, and gamemode git blob {newBlob}" +
-            (newTree != "" ? $" with tables tree {newTree}" : ""));
+        log((zip != null ? $"the stage checks out: server build {rec.Short}, {sums.Count} file(s) held to its record, and gamemode git blob {newBlob}"
+                         : $"the stage checks out: the server build it runs, {rec.Short}, kept, and gamemode git blob {newBlob}") +
+            (newTree != "" ? $" with tables tree {newTree}" : "") + (plugins.Count > 0 ? $", and {string.Join(", ", plugins.Keys)}" : ""));
 
         Turn turn;
         try { turn = Turn.Take(env.Turn, who, TimeSpan.FromSeconds(env.TurnSeconds), log); }
@@ -402,7 +422,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
 
         async Task<Outcome> SwapUnderHold()
         {
-        Hold.Set(env.Watch, env.Task, $"the deploy agent is swapping in server build {rec.Short} at {Root}", who, 30, log);
+        Hold.Set(env.Watch, env.Task, zip != null ? $"the deploy agent is swapping in server build {rec.Short} at {Root}" : $"the deploy agent is putting in the Release's plugins at {Root}", who, 30, log);
         try
         {
             var stopWhy = StopServer(port, log);
@@ -414,7 +434,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
 
             // The fork files the new record does not list go aside too, so the
             // folder is one build, the way a whole install leaves it.
-            var stale = ServerBuild.FolderForkFiles(Root).Where(r => !sums.ContainsKey(r)).ToList();
+            var stale = zip != null ? ServerBuild.FolderForkFiles(Root).Where(r => !sums.ContainsKey(r)).ToList() : [];
             var placed = new List<string>();
             var aside = new List<string>();
             var why = "";
@@ -459,7 +479,8 @@ public sealed class Server(EnvConfig env, HttpClient http)
             {
                 TryDelete(stage);
                 PruneOld(log);
-                return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", restarted", newBlob, prevName);
+                return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") +
+                    (pluginFiles.Count > 0 ? " and the Release's " + string.Join(" and ", pluginFiles.Select(Path.GetFileName)) : "") + ", restarted", newBlob, prevName);
             }
 
             // The way back: stop what was started, the new files out, the old ones in, and the old server started.

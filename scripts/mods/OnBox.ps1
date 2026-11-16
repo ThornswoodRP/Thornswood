@@ -93,6 +93,15 @@ catch { 'STOP. the run''s folder could not be held through its lock, so nothing 
 # and not the server's copies. Each is made only when an argument names it:
 # server-settings.json holds the server's secrets too, so only its loadOrder
 # is read, and only the file names in it are written.
+#
+# FROM THE RECORD (#5191): -Order is the load order the commit records
+# (ContentPaths.ps1's Get-ThornswoodContentOrder) and -Collection the box's
+# store of the collection's plugins at the record's revision
+# (CollectionStore.ps1). The data folder then takes the store's plugins over
+# the server's, and the plugin list and settings are that order, not the
+# server's: a build for a revision no server runs yet reads the revision's
+# own plugins in the order it will run them. Every plugin of the order has to
+# be in the data folder, or the run stops before the tool.
 function Get-ThornswoodOnBoxScript {
     param(
         [Parameter(Mandatory = $true)][string]$Run,
@@ -103,8 +112,17 @@ function Get-ThornswoodOnBoxScript {
         # What the run lists and brings back when it changes: folders and
         # files of the repository, with forward slashes. Run-OnBox.ps1 adds
         # every file a step of the content chain writes outside these (#3425).
-        [string[]]$Watch = @('game', 'records', 'docs/systems')
+        [string[]]$Watch = @('game', 'records', 'docs/systems'),
+        [string[]]$Order = @(),
+        [string]$Collection = ''
     )
+    if ([bool]$Order.Count -ne [bool]$Collection) { throw '-Order and -Collection go together: the record''s order is run with the record''s plugins.' }
+    foreach ($n in $Order) {
+        if ($n -notmatch '^[^\\/:*?"<>|\r\n]+\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
+    }
+    if ($Collection -match '[''\r\n]') { throw "$Collection is not a folder this can name on the box." }
+    $orderText = (@($Order | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ', ')
+    $fromRecord = [bool]$Order.Count
     foreach ($w in $Watch) {
         if ($w -notmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$' -or $w -match '(^|/)\.\.?(/|$)') { throw "$w is not a path inside the repository to watch." }
     }
@@ -129,8 +147,17 @@ New-Item -ItemType Directory -Force -Path `$data | Out-Null
 foreach (`$f in @(Get-ChildItem -LiteralPath `$plugins -File)) {
   if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
 }
+`$collection = '$Collection'
+if (`$collection) {
+  if (-not (Test-Path -LiteralPath (Join-Path `$collection 'store.json') -PathType Leaf)) { 'STOP. there is no store of the collection''s plugins at ' + `$collection + ' on the box.'; exit 2 }
+  `$laid = 0
+  foreach (`$f in @(Get-ChildItem -LiteralPath `$collection -File | Where-Object { `$_.Name -match '\.(esp|esm|esl)`$' })) {
+    if (`$ours -notcontains `$f.Name.ToLowerInvariant()) { Copy-Item -LiteralPath `$f.FullName -Destination `$data -Force; `$laid++ }
+  }
+}
 foreach (`$f in @(Get-ChildItem -LiteralPath (Join-Path `$repo 'game\content') -File)) { Copy-Item -LiteralPath `$f.FullName -Destination `$data }
-'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with this commit''s own in place of the server''s'
+if (`$collection) { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with the ' + `$laid + ' of the collection''s store at ' + `$collection + ' over them and this commit''s own in place of the server''s' }
+else { 'data      ' + @(Get-ChildItem -LiteralPath `$data -File).Count + ' plugin(s): ' + `$plugins + ', with this commit''s own in place of the server''s' }
 `$store = '$ArchiveStore'
 `$linked = 0
 if (Test-Path -LiteralPath `$store) {
@@ -158,21 +185,27 @@ if (Test-Path -LiteralPath `$storeStrings) {
 if (`$linkedStrings) { 'strings   ' + `$linkedStrings + ' loose string table(s) from ' + `$storeStrings + ', linked, read only' }
 `$pluginList = Join-Path `$run 'plugins.txt'
 `$orderSettings = Join-Path `$run 'server-settings.json'
-if (`$$wantsPlugins -or `$$wantsSettings) {
-  try { `$order = @(([IO.File]::ReadAllText('$ServerRoot\server-settings.json') | ConvertFrom-Json).loadOrder) } catch { `$order = @() }
+`$orderFrom = '$ServerRoot\server-settings.json'
+if (`$$fromRecord) {
+  `$orderFrom = 'the load order this commit records'
+  `$names = @($orderText)
+  `$missing = @(`$names | Where-Object { -not (Test-Path -LiteralPath (Join-Path `$data `$_) -PathType Leaf) })
+  if (`$missing.Count) { 'STOP. ' + `$missing.Count + ' plugin(s) of ' + `$orderFrom + ' are in neither ' + `$plugins + ' nor ' + `$collection + ': ' + (`$missing -join ', '); exit 2 }
+} elseif (`$$wantsPlugins -or `$$wantsSettings) {
+  try { `$order = @(([IO.File]::ReadAllText(`$orderFrom) | ConvertFrom-Json).loadOrder) } catch { `$order = @() }
   `$names = @(`$order | ForEach-Object { [IO.Path]::GetFileName([string]`$_) } | Where-Object { `$_ })
-  if (-not `$names.Count) { 'STOP. ' + '$ServerRoot\server-settings.json' + ' names no loadOrder, so there is no load order to give the tool.'; exit 2 }
+  if (-not `$names.Count) { 'STOP. ' + `$orderFrom + ' names no loadOrder, so there is no load order to give the tool.'; exit 2 }
 }
 if (`$$wantsPlugins) {
   `$masters = @('skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm')
   `$lines = @(`$names | Where-Object { `$masters -notcontains `$_.ToLowerInvariant() } | ForEach-Object { '*' + `$_ })
   [IO.File]::WriteAllLines(`$pluginList, [string[]]`$lines, (New-Object Text.UTF8Encoding(`$false)))
-  'plugins   ' + `$lines.Count + ' line(s) in plugins.txt: the loadOrder of ' + '$ServerRoot\server-settings.json' + ' after the five masters'
+  'plugins   ' + `$lines.Count + ' line(s) in plugins.txt: ' + `$(if (`$$fromRecord) { `$orderFrom } else { 'the loadOrder of ' + `$orderFrom }) + ' after the five masters'
 }
 if (`$$wantsSettings) {
   `$inData = @(`$names | ForEach-Object { (Join-Path `$data `$_).Replace('\', '/') })
   [IO.File]::WriteAllText(`$orderSettings, (ConvertTo-Json -InputObject @{ loadOrder = [string[]]`$inData } -Depth 3), (New-Object Text.UTF8Encoding(`$false)))
-  'settings  ' + `$inData.Count + ' plugin(s) in server-settings.json: the loadOrder of ' + '$ServerRoot\server-settings.json' + ', in the run''s data folder, and nothing else of it'
+  'settings  ' + `$inData.Count + ' plugin(s) in server-settings.json: ' + `$(if (`$$fromRecord) { `$orderFrom + ', in the run''s data folder' } else { 'the loadOrder of ' + `$orderFrom + ', in the run''s data folder, and nothing else of it' })
 }
 
 `$sha = [Security.Cryptography.SHA256]::Create()

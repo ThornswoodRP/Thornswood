@@ -22,7 +22,8 @@
   that OwnGame, Updater's sync and the config reach, and none that uses
   Avalonia: measured on 1 Nov 2026 by building ShipRoot.cs and
   OwnGameShipRoot.cs and adding the file that defines each name the compiler
-  could not find until it built, which came to the 46 below. It cannot
+  could not find until it built, which came to the 46 below, and to 47 when
+  Failure.cs (#4633) became the one place a caught exception becomes words. It cannot
   reference launcher\app\Thornswood.csproj instead: OwnGameShipRoot.cs is a
   part of OwnGame (static partial class), and a partial class cannot span two
   assemblies; it reads OwnGame's private record and numbers, and a copy of
@@ -105,6 +106,7 @@
     <Compile Include="$(ThornswoodApp)Config.cs" />
     <Compile Include="$(ThornswoodApp)DevBuild.cs" />
     <Compile Include="$(ThornswoodApp)Downgrade.cs" />
+    <Compile Include="$(ThornswoodApp)Failure.cs" />
     <Compile Include="$(ThornswoodApp)FromGameArchive.cs" />
     <Compile Include="$(ThornswoodApp)GitHub.cs" />
     <Compile Include="$(ThornswoodApp)Http.cs" />

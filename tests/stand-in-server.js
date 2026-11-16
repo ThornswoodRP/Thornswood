@@ -781,7 +781,19 @@ function world(opts) {
     getActorCellOrWorld: function (a) { const r = store.get(a >>> 0); return r ? r.worldOrCellDesc : ''; },
     getActorName: function (a) { const r = store.get(a >>> 0); return r && r.appearance ? r.appearance.name : ''; },
     getNeighborsByPosition: function (cell, pos) {
-      return online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      /*
+        What WorldState::GetNeighborsByPosition hands back: the forms around
+        the position, the placed references of the cell with them (the fork's
+        LoadCellsTest asks an empty cell and gets its references), and the
+        people online there. A chest, a forge or a loom a harness placed with
+        w.ref is one of them (#4578). The NPCs of the placed cast are not
+        given here.
+      */
+      const out = online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      for (const [rid, r] of store) {
+        if (r && r.type !== 'NPC_' && r.worldOrCellDesc === cell && out.indexOf(rid) < 0) { out.push(rid); }
+      }
+      return out;
     },
     setRaceMenuOpen: function (a, open) { saw(a >>> 0, 'raceMenu', '', !!open); },
     sendCustomPacket: function (u, text) { saw(impl.getUserActor(u), 'packet', '', String(text)); },
@@ -1457,8 +1469,8 @@ let catalogueCache = null;
 function npcCatalogue() {
   if (catalogueCache) { return catalogueCache; }
   const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
-  const at = gm.indexOf('const NPC_POPULATION_DATA = ');
-  const population = JSON.parse(gm.slice(at + 'const NPC_POPULATION_DATA = '.length, gm.indexOf('\n', at)).replace(/;\s*$/, ''));
+  // The catalogue is the table NPC_POPULATION_DATA too (#5191, stage 4).
+  const population = require('./gamemode-tables.js').inGamemode(gm, 'NPC_POPULATION_DATA');
   // The item catalogues are tables beside the gamemode since #5191 (#5427).
   const tables = path.join(REPO_DIR, 'game', 'gamemode-tables');
   const text = [gm].concat(fs.readdirSync(tables).filter(function (n) { return /\.json$/.test(n); }).sort()

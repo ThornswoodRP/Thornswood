@@ -8,7 +8,7 @@
   restore, build and test in a folder of its own (#5740).
 
   WHY. tests\test-pr-release-note.ps1 built tools\ReleaseNotes and
-  tests\test-note-rules-cases.ps1 restored and tested tools\ReleaseNotes.Tests,
+  the release note case harness restored and tested tools\ReleaseNotes.Tests,
   both in the checkout, so both wrote tools\ReleaseNotes\obj. The gate runs
   harnesses side by side, and on Linux share 1 for #5715 one restored that
   folder while the other's dotnet test read it: "Assets file

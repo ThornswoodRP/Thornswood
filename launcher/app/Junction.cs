@@ -86,7 +86,7 @@ namespace Thornswood
                 if (!Directory.Exists(link)) { Directory.CreateDirectory(link); made = true; }
                 Set(link, target, out direct);
             }
-            catch (Exception ex) { direct = ex.Message; }
+            catch (Exception ex) { direct = Failure.Why("Junction, linking directly", ex); }
             if (IsLink(link)) return true;
 
             // Set failed and left behind the empty folder made for it a moment
@@ -113,7 +113,7 @@ namespace Thornswood
                     if (shell.Length == 0) shell = "mklink exit code " + pr.ExitCode;
                 }
             }
-            catch (Exception ex) { shell = ex.Message; }
+            catch (Exception ex) { shell = Failure.Why("Junction, linking through mklink", ex); }
             if (IsLink(link)) return true;
 
             why = (direct ?? "no reason given");

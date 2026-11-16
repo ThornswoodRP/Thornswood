@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
   Lets the box take TCP 80 and 443 only from Cloudflare's ranges, so a forged
-  SYN from anywhere else gets no SYN-ACK back (#2995). -Open puts both back to
-  any address.
+  SYN from anywhere else gets no SYN-ACK back (#2995). -Close takes nothing on
+  either once the site comes through the Cloudflare Tunnel (#5351). -Open puts
+  both back to any address.
 
 .DESCRIPTION
   Issue #2995, Patrick's A on q-2995-syn-fix (21 Oct 2026). The box answered
@@ -34,6 +35,16 @@
   change. -Open is the way back: both rules take any address again. Turn
   Cloudflare's proxy off only after -Open, or the site is shut to everybody.
 
+  -Close (#5351) turns both rules off, once thornswood.net and www come
+  through the tunnel (Install-Tunnel.ps1 -Switch): every visitor then
+  reaches Caddy from cloudflared on 127.0.0.1, and nothing from outside
+  needs 80 or 443. It stops unless cloudflared is ready and carries one
+  request from the box to each name, and unless no other rule lets Caddy
+  take 80 or 443. Caddy's certificate still renews through the tunnel:
+  vps-web-firewall.ps1 says how. A plain run is the way back, and turns both
+  on again scoped to Cloudflare's ranges, as Install-Tunnel.ps1 -Back needs
+  before it puts the names on the box's address.
+
   Nothing restarts: the firewall takes the change at once, and a connection
   already open stays open.
 
@@ -43,6 +54,9 @@
 
 .PARAMETER Open
   Put both rules back to any address.
+
+.PARAMETER Close
+  Turn both rules off, once the tunnel carries the site (#5351).
 
 .PARAMETER Vps
   The box's address. vps.json's by default.
@@ -63,6 +77,7 @@
 
       pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall -Check'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall -Close'
 
   The gate has no -Open: putting the rules back to any address stays a step
   for a machine with the box's key.
@@ -84,6 +99,10 @@
   Cloudflare.
 
 .EXAMPLE
+  .\scripts\vps\Set-WebFirewall.ps1 -Close
+  Takes nothing on 80 and 443, once the tunnel carries the site.
+
+.EXAMPLE
   .\scripts\vps\Set-WebFirewall.ps1 -Open
   Puts 80 and 443 back to any address.
 #>
@@ -91,6 +110,7 @@
 param(
     [switch]$Check,
     [switch]$Open,
+    [switch]$Close,
     [string]$Vps = '',
     [string]$User = '',
     [string]$KnownHosts = '',
@@ -110,6 +130,9 @@ if (-not $KnownHosts) { $KnownHosts = Get-ThornswoodKnownHostsPath -Address $Vps
 if (-not $RangesFile) { $RangesFile = Join-Path (Split-Path -Parent $Here) 'deploy\cloudflare-ranges.txt' }
 
 $BoxScript = Join-Path $Here 'vps-web-firewall.ps1'
+# cloudflared's metrics address, where the box half asks whether the tunnel
+# carries the names (#5351).
+$TunnelRecord = Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $Here)) 'records') 'cloudflare-tunnel.json'
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=10')
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -155,12 +178,15 @@ Say "  $User@$Vps" 'DarkGray'
 if ($OnTheBox) { Say '  here, on the box, through the deploy gate' 'DarkGray' }
 if ($OnTheBox -and $Open) { Die '-Open is not run through the gate. Nothing was changed.' }
 if (-not $OnTheBox -and -not (Get-Command ssh -ErrorAction SilentlyContinue)) { Die 'ssh is not on PATH. Windows ships it: Settings, Apps, Optional features, OpenSSH Client.' }
-if ($Check -and $Open) { Die '-Check only reads, so it does not go with -Open.' }
+if ((@($Check, $Open, $Close) | Where-Object { $_ }).Count -gt 1) { Die 'One of -Check, -Open or -Close, not more. Nothing was changed.' }
 
 Head "1. Cloudflare's ranges"
 try { $ranges = Read-ThornswoodCloudflareRanges $RangesFile } catch { Die ($_.Exception.Message + ' Nothing was changed.') }
 Say ("  " + $ranges.Count + ' ranges from ' + $RangesFile) 'Green'
 $rangeArg = "-Ranges '" + ($ranges -join ',') + "'"
+try { $metrics = [string](Get-Content -LiteralPath $TunnelRecord -Raw | ConvertFrom-Json).metrics } catch { $metrics = '' }
+if ($metrics -notmatch '^127\.0\.0\.1:[0-9]{1,5}$') { Die ("records\cloudflare-tunnel.json names no metrics address on 127.0.0.1 (it says '" + $metrics + "'). Nothing was changed.") }
+$rangeArg += " -Metrics '" + $metrics + "'"
 
 if (-not $OnTheBox) {
     Head "2. The box's own key"
@@ -178,15 +204,16 @@ if ($Check) {
     Done 0
 }
 
-$what = if ($Open) { 'let TCP 80 and 443 in from any address' } else { "let TCP 80 and 443 in only from Cloudflare's " + $ranges.Count + ' ranges' }
+$what = if ($Open) { 'let TCP 80 and 443 in from any address' } elseif ($Close) { 'let nothing in on TCP 80 and 443, since the tunnel carries the site' } else { "let TCP 80 and 443 in only from Cloudflare's " + $ranges.Count + ' ranges' }
 $doIt = $PSCmdlet.ShouldProcess("$User@$Vps", $what)
 Head $(if ($doIt) { '3. On the box' } else { '3. On the box, read only' })
-$mode = @($(if ($Open) { '-Open' } else { '-Apply' }), $rangeArg)
+$mode = @($(if ($Open) { '-Open' } elseif ($Close) { '-Close' } else { '-Apply' }), $rangeArg)
 if (-not $doIt) { $mode += '-DryRun' }
 $box = Invoke-Box ($mode -join ' ')
 if (Has $box.Lines '^STOP ') { Die ('The box stopped (exit ' + $box.Code + '). The lines above say why.') }
 if ($box.Code -ne 0) { Die ('The box did not finish (exit ' + $box.Code + '). Run this with -Check to read where it stands.') }
 if (-not $doIt) { Write-Host ''; Say 'Nothing was changed. Run it again without -WhatIf to make the changes above.' 'Yellow'; Done 0 }
 if ($Open) { Say '  80 and 443 take any address again. Cloudflare''s proxy can be turned off now.' 'Green' }
+elseif ($Close) { Say '  80 and 443 take nothing from outside; the site comes through the tunnel. A plain run opens them to Cloudflare''s ranges again, which Install-Tunnel.ps1 -Back needs first.' 'Green' }
 else { Say '  80 and 443 take only Cloudflare''s ranges. Check-Site.ps1 says whether the site still answers through Cloudflare.' 'Green' }
 Done 0

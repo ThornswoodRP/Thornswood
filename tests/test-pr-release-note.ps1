@@ -5,13 +5,13 @@
 
   Each pull request carries its own release note, checked while it is open,
   and a release's note is joined from them (#5179). This drives the pieces:
-  Get-PrReleaseNote, Get-PrReleaseNoteProblems and Join-PrReleaseNotes in
-  scripts\release\Note-Rules.ps1, the check's own command (thornswood-notes
-  in tools\ReleaseNotes, when the .NET SDK is here), and
-  scripts\release\Collect-ReleaseNotes.ps1 through -PullsFile, and holds the
-  template, the workflow and the guide to the same line.
-  tests\test-note-rules-cases.ps1 holds the two copies of the rules to the
-  same answers.
+  PrNote.Read, PrNote.Problems and PrNote.Join in
+  tools\ReleaseNotes\NoteRules.cs, loaded with Add-Type as the release scripts
+  load it (#5354); the check's own command (thornswood-notes in
+  tools\ReleaseNotes) and the rules' tests (tools\ReleaseNotes.Tests, every
+  case in tests\fixtures\note-rules-cases.json), when the .NET SDK is here;
+  and scripts\release\Collect-ReleaseNotes.ps1 through -PullsFile. It holds
+  the template, the workflow and the guide to the same line.
 
   Read only apart from its own temp folder, which it removes.
 #>
@@ -31,7 +31,8 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-. (Join-Path $Repo 'scripts/release/Note-Rules.ps1')
+Add-Type -Path (Join-Path $Repo 'tools/ReleaseNotes/NoteRules.cs')   # the release note rules (#5354)
+function Read-Note([string]$body) { [Thornswood.ReleaseNotes.PrNote]::Read($body) }
 . (Join-Path $PSScriptRoot 'ReleaseNotes-Copy.ps1')   # thornswood-notes, built from a copy (#5740)
 $pwsh = (Get-Process -Id $PID).Path
 $temp = Join-Path ([IO.Path]::GetTempPath()) ("pr-note-" + [guid]::NewGuid().ToString('N'))
@@ -52,18 +53,18 @@ $template = [IO.File]::ReadAllText((Join-Path $Repo '.github/pull_request_templa
 
 try {
     # ---- reading the line -------------------------------------------------------
-    $n = Get-PrReleaseNote $good
+    $n = Read-Note $good
     Yes 'a note is found' ($n.Found -and -not $n.None)
     Yes 'its headline is the text after Release note:' ($n.Headline -eq 'The forge shows the price before you pay')
     Yes 'the "- " lines directly under it are its details' ($n.Details.Count -eq 1 -and $n.Details[0] -like '- The forge window*')
     Yes 'Refs below a blank line is not a detail' (-not ($n.Text -match 'Refs'))
-    Yes 'none is read as none' ((Get-PrReleaseNote $none).None)
-    Yes 'None. with a capital and a full stop is none' ((Get-PrReleaseNote "Release note: None.").None)
-    Yes 'a bold label is read' ((Get-PrReleaseNote "**Release note:** none").None)
-    Yes 'a line inside an HTML comment is not read' (-not (Get-PrReleaseNote "<!-- Release note: none -->").Found)
+    Yes 'none is read as none' ((Read-Note $none).None)
+    Yes 'None. with a capital and a full stop is none' ((Read-Note "Release note: None.").None)
+    Yes 'a bold label is read' ((Read-Note "**Release note:** none").None)
+    Yes 'a line inside an HTML comment is not read' (-not (Read-Note "<!-- Release note: none -->").Found)
 
     # ---- what is refused --------------------------------------------------------
-    function Problems([string]$body, [string]$author = '') { return @(Get-PrReleaseNoteProblems $body $author) }
+    function Problems([string]$body, [string]$author = '') { return @([Thornswood.ReleaseNotes.PrNote]::Problems($body, $author)) }
     Yes 'a good note passes' ((Problems $good).Count -eq 0)
     Yes 'none passes' ((Problems $none).Count -eq 0)
     Yes 'a body with CRLF line ends, as GitHub''s editor sends it, passes the same' ((Problems ($good -replace "`r?`n", "`r`n")).Count -eq 0)
@@ -87,12 +88,22 @@ try {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $built = Join-Path $temp 'notes'
         # From a copy in its own temp folder (#5740): built in the checkout, it
-        # wrote tools\ReleaseNotes\obj while tests\test-note-rules-cases.ps1,
-        # beside it in the gate, read the same folder.
+        # wrote tools\ReleaseNotes\obj while another harness beside it in the
+        # gate read the same folder.
         $before = Get-NotesTreeState $Repo
         Copy-NotesProjects $Repo (Join-Path $temp 'src')
         $null = & $dotnet.Source build (Join-Path $temp 'src/tools/ReleaseNotes') -c Release -o $built --verbosity quiet --disable-build-servers 2>&1
         Yes 'thornswood-notes builds' ($LASTEXITCODE -eq 0)
+        # The rules' own tests, every case in the fixture, from the locked
+        # packages, in the same copy.
+        $tests = Join-Path $temp 'src/tools/ReleaseNotes.Tests'
+        $r = & $dotnet.Source restore $tests --locked-mode --disable-build-servers 2>&1
+        if ($LASTEXITCODE -ne 0) { Yes 'dotnet restore on tools/ReleaseNotes.Tests from the locked packages' $false; $r | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" } }
+        else {
+            $t = & $dotnet.Source test $tests --no-restore --disable-build-servers 2>&1
+            Yes 'dotnet test on tools/ReleaseNotes.Tests' ($LASTEXITCODE -eq 0)
+            if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 20 | ForEach-Object { Write-Host "      $_" } }
+        }
         $after = Get-NotesTreeState $Repo
         Yes ('  from a copy: the checkout''s tools/ReleaseNotes is as this found it, so a harness beside it reads it whole (' + (Compare-NotesTreeState $before $after) + ')') ($before -ceq $after)
         function Run-Check([string]$body, [string]$author = '') {
@@ -117,15 +128,16 @@ try {
     $b1 = "Release note: The forge shows the price before you pay`n- The forge window lists each metal a piece takes and how much."
     $b2 = "Release note: Hunters can skin rabbits again`n- Skinning a rabbit gives its pelt and meat."
     $b3 = "Release note: none"
-    $j = Join-PrReleaseNotes @([pscustomobject]@{ Number = 1; Body = $b1 }, [pscustomobject]@{ Number = 2; Body = $b3 }, [pscustomobject]@{ Number = 3; Body = $b2 })
+    function Join-Notes([string[]]$bodies) { [Thornswood.ReleaseNotes.PrNote]::Join($bodies) }
+    $j = Join-Notes @($b1, $b3, $b2)
     $jl = @($j -split "`n")
     Yes 'the first note''s headline is the title' ($jl[0] -eq 'The forge shows the price before you pay')
     Yes 'a later note''s headline is a "- " line' ($jl -contains '- Hunters can skin rabbits again')
     Yes 'none is left out' ($jl.Count -eq 4)
-    Yes 'the joined note passes the Ship rules' ((@(Get-NoteShapeProblems $j) + @(Get-NoteProblems $j)).Count -eq 0)
-    $j2 = Join-PrReleaseNotes @([pscustomobject]@{ Number = 1; Body = $b1 }, [pscustomobject]@{ Number = 2; Body = $b1.Replace('The forge shows the price before you pay', 'Prices show at every forge now') })
+    Yes 'the joined note passes the Ship rules' (@([Thornswood.ReleaseNotes.NoteRules]::AllProblems($j)).Count -eq 0)
+    $j2 = Join-Notes @($b1, $b1.Replace('The forge shows the price before you pay', 'Prices show at every forge now'))
     Yes 'a line already there is not written twice' (@($j2 -split "`n" | Where-Object { $_ -like '- The forge window*' }).Count -eq 1)
-    Yes 'only none joins to nothing' ((Join-PrReleaseNotes @([pscustomobject]@{ Number = 1; Body = $b3 })) -eq '')
+    Yes 'only none joins to nothing' ((Join-Notes @($b3)) -eq '')
 
     # ---- the collector ----------------------------------------------------------
     function Run-Collect($pulls) {
@@ -143,11 +155,26 @@ try {
     $r = Run-Collect @(@{ number = 1; title = 'a'; body = $b3; author = 'x' })
     Yes 'Collect ends 3 when every change says none' ($r.Code -eq 3 -and $r.Out -match 'NONE')
 
+    # Main Server changes (Patrick, 12 Nov 2026): a pull request that changed
+    # only the Discord bot or the site goes live on the merge, so its note is
+    # posted in #news by the bot and kept out of the build's.
+    $r = Run-Collect @(@{ number = 1; title = 'a'; body = $b1; author = 'x'; files = @('launcher/app/Forge.cs') },
+                       @{ number = 5; title = 'Discord'; body = $b2; author = 'x'; files = @('bot/bot_rules_gate.py', 'site/data/site/privacy.md', 'docs/systems/discord.md', 'tests/test-x.js') })
+    Yes 'a pull request that changed only the bot and the site is left out of the build note, and said to be a Main Server change' ($r.Code -eq 0 -and $r.Note -match '^The forge shows the price' -and $r.Note -notmatch 'Hunters' -and $r.Out -match 'main server.*#5 Discord')
+    $r = Run-Collect @(@{ number = 5; title = 'Discord'; body = $b2; author = 'x'; files = @('bot/bot.py') })
+    Yes 'Collect ends 3 when every change is a Main Server change, so the build gets the quiet note' ($r.Code -eq 3)
+    $r = Run-Collect @(@{ number = 6; title = 'Both'; body = $b2; author = 'x'; files = @('bot/bot.py', 'game/gamemode/forge.ts') })
+    Yes 'one that changed the bot and the game is in the build note' ($r.Code -eq 0 -and $r.Note -match 'Hunters')
+    $r = Run-Collect @(@{ number = 7; title = 'Docs'; body = $b2; author = 'x'; files = @('docs/guide/x.md', 'tests/test-y.ps1') })
+    Yes 'one that changed only docs and tests is in the build note, since it changed nothing live' ($r.Code -eq 0 -and $r.Note -match 'Hunters')
+    $ms = Get-Content -LiteralPath (Join-Path $Repo 'scripts/release/main-server-paths.json') -Raw | ConvertFrom-Json
+    Yes 'the live paths are the bot and the site' ((@($ms.live) -join ',') -eq 'bot/,site/')
+
     # ---- the builds leave nothing running (#5753) ----------------------------------
     # A dotnet build, test, run, publish or pack with the build servers on
     # leaves VBCSCompiler (and MSBuild's node) running after it, which the
     # gate's runner then kills and names as left behind. So every one of them
-    # in the two release note harnesses takes --disable-build-servers, as
+    # in this harness takes --disable-build-servers, as
     # tests\Launcher-Csc.ps1 does. Read from the harnesses' own code, so it
     # holds where there is no SDK too.
     function Get-ServerBuilds([string]$path) {
@@ -159,10 +186,10 @@ try {
             [pscustomobject]@{ Line = $c.Extent.StartLineNumber; Off = -not @($e | Where-Object { $_.Extent.Text -eq '--disable-build-servers' }).Count }
         }
     }
-    foreach ($h in 'test-pr-release-note.ps1', 'test-note-rules-cases.ps1') {
+    foreach ($h in @('test-pr-release-note.ps1')) {
         $calls = @(Get-ServerBuilds (Join-Path $PSScriptRoot $h))
         $on = @($calls | Where-Object { $_.Off })
-        Yes ("$h builds with the build servers off, so it leaves nothing running (" + $calls.Count + ' build(s)' + $(if ($on.Count) { ', servers on at line ' + (@($on | ForEach-Object { $_.Line }) -join ', ') } else { '' }) + ')') ($calls.Count -ge 1 -and -not $on.Count)
+        Yes ("$h builds with the build servers off, so it leaves nothing running (" + $calls.Count + ' build(s)' + $(if ($on.Count) { ', servers on at line ' + (@($on | ForEach-Object { $_.Line }) -join ', ') } else { '' }) + ')') ($calls.Count -ge 2 -and -not $on.Count)
     }
 
     # ---- the template, the workflow and the guide say the same line -------------

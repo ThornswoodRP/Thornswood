@@ -21,8 +21,9 @@ WHAT IT HOLDS, for each "Test task for #N" block in the body:
     (Dev for "Server: Dev", Main otherwise), the same function the bot posts
     with, so the two can never disagree; whether the fix is in the newest
     main release is not asked, because it never is before the merge;
-  - a Main body fits the first post the bot makes of it (bot.TASK_BODY_ROOM),
-    since the bot cuts a Main one there and the rest would never be seen;
+  - a Main body fits the one post the bot makes of it (TASK_BODY_ROOM),
+    which is one of post_problems' rules since 12 Nov: the bot used to cut a
+    longer one there, and now refuses it as this check does;
   - one block per issue and kind in the pull request (the bot posts the last
     one of each kind and nobody would see the first);
   - with an issue reader (the workflow passes one, from the run's own token):
@@ -30,6 +31,16 @@ WHAT IT HOLDS, for each "Test task for #N" block in the body:
     done-on-merge.yml passes over a closed one and the test task is lost;
   - the body does not also say Closes, Fixes or Resolves #N, which closes
     the issue at the merge, before done-on-merge.yml can copy the task.
+
+A TEST TASK IN ANOTHER SHAPE is refused too, when the body has no block:
+a heading or a line that starts "Test task", "Test tasks", "Main test
+task" or "Dev test task" ("## Test task (Dev)", "Main test task, for two
+members of staff:"). done-on-merge.yml copies only the shape below, so one
+written any other way never reached its issue, the issue never went to Done,
+and no Ship closed it: 15 Nov, the Bots' pull requests #5853, #5856, #5956,
+#6067, #6070 and #6115 all passed this check that way and left their issues
+open. A line that says none ("Test tasks: none", or a heading whose next
+line says it) is a body with no test task, and passes.
 
 THE GRAMMAR is done-on-merge.yml's, line for line: a line "Test task for #N:
 <title>" starts a block; a heading, a "---" line, a line starting with an
@@ -79,6 +90,11 @@ RULE = re.compile(r'^\s*---\s*$')
 EMOJI = re.compile(r'^\s*[\U00010000-\U0010FFFF]')
 DEV_LINE = re.compile(r'^\s*Server\s*:\s*Dev\s*(\n|$)')
 SERVER_LINE = re.compile(r'^\s*server\s*:\s*(dev|main)\s*$', re.I)
+# A line that reads as a test task but is not done-on-merge.yml's shape, and
+# the word that says there is none.
+LOOSE = re.compile(r'^\s*(?:#{1,6}\s*)?(?:\*\*|__)?(?:(?:main|dev)\s+)?test\s+tasks?\b', re.I)
+NONE = re.compile(r'\bnone\b', re.I)
+FENCE = re.compile(r'^\s*(```|~~~)')
 # What closes an issue at the merge (GitHub's closing keywords).
 CLOSES = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b', re.I)
 
@@ -103,6 +119,35 @@ def blocks(body):
     for b in out:
         b['steps'] = '\n'.join(b.pop('rest')).strip()
         b['kind'] = 'Dev' if DEV_LINE.match(b['steps']) else 'Main'
+    return out
+
+
+def loose(body):
+    """[(line number, line), ...]: the lines of a body with no "Test task for
+       #N:" block that read as a test task in another shape, which
+       done-on-merge.yml would never copy. Empty when the body has a block
+       (a heading over the blocks is only a heading), and for a line that
+       says none, or whose next line with text does, and inside a fenced
+       block or an HTML comment (the template's own notes, left in)."""
+    if blocks(body):
+        return []
+    # An HTML comment is blanked, its line breaks kept, so the line numbers
+    # said stay the body's own.
+    text = re.sub(r'<!--.*?(-->|$)', lambda m: '\n' * m.group(0).count('\n'),
+                  str(body or '').replace('\r\n', '\n'), flags=re.S)
+    lines = text.split('\n')
+    out, fenced = [], False
+    for i, line in enumerate(lines):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        m = None if fenced else LOOSE.match(line)
+        if not m:
+            continue
+        nxt = next((x for x in lines[i + 1:] if x.strip()), '')
+        if NONE.search(line[m.end():]) or NONE.search(nxt[:40]):
+            continue
+        out.append((i + 1, line.strip()))
     return out
 
 
@@ -145,14 +190,10 @@ def problems(body, read_issue=None, bot=None):
         # reads a comment: its title, its Server line and its body.
         issue_stub = {'number': b['issue'], 'title': b['title']}
         title, text, server, _c, _u = bot._all_marked(
-            issue_stub, [{'body': comment_of(b)}], bot.TASK_MARK, room=None)[0]
+            issue_stub, [{'body': comment_of(b)}], bot.TASK_MARK)[0]
         channel = 'dev' if b['kind'] == 'Dev' else 'main'
         rules = list(bot.post_problems(channel, b['title'], text, server=server,
                                        fix_in_main=None))
-        if channel == 'main' and len(text) > bot.TASK_BODY_ROOM:
-            rules.append('Format: the steps are %d characters; the bot posts a Main '
-                         'test task in one message of %d, and cuts the rest.'
-                         % (len(text), bot.TASK_BODY_ROOM))
         key = (b['issue'], b['kind'])
         if key in seen:
             rules.append('Duplicates: this pull request has another %s test task for '
@@ -266,6 +307,18 @@ def main(argv):
         print('FAIL  an issue the body names could not be read from GitHub, so the check did not finish: %s' % e)
         return 1
     if not results:
+        stray = loose(body)
+        for n, line in stray:
+            why = ('line %d, "%s", reads as a test task, but done-on-merge.yml copies only a '
+                   '"Test task for #N: <title>" line with its steps under it, so this one would '
+                   'never reach its issue and no Ship would close it. Write it in that shape (the '
+                   'pull request template has it), or write "No test task: nobody would notice '
+                   'this fix." when nobody would.' % (n, line[:80]))
+            print('FAIL  ' + why)
+            if os.environ.get('GITHUB_ACTIONS') == 'true':
+                print('::error title=Test task in another shape::' + why)
+        if stray:
+            return 1
         print('PASS  no "Test task for #N:" line in the body, so there is nothing to check')
         return 0
     bad = 0

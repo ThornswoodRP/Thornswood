@@ -119,7 +119,7 @@ try {
             version = 1; builtBy = 'planted'; collection = '7essxf'; revision = 6
             mods    = @(
                 [ordered]@{ modId = 100; name = 'Alpha'; author = 'a'; files = @(@{ fileId = 1000 }); plugins = @('A.esm', 'L.esl'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/100?tab=description'; ours = $true; reading = $null },
-                [ordered]@{ modId = 200; name = 'Beta'; author = 'b'; files = @(@{ fileId = 2000 }); plugins = @('B.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/200?tab=description'; reading = [ordered]@{ read = '2026-11-01'; by = 'a planted reading'; collections = 'allowed'; terms = @{ 'Upload permission' = 'yes' } } },
+                [ordered]@{ modId = 200; name = 'Beta'; author = 'b'; files = @(@{ fileId = 2000 }); plugins = @('B.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/200?tab=description'; reading = [ordered]@{ read = '2026-11-01'; by = 'a planted reading'; collections = 'allowed'; terms = @{ 'Upload permission' = 'You can upload this file to other sites but you must credit me as the creator of the file' } } },
                 [ordered]@{ modId = 300; name = 'Gamma'; author = 'c'; files = @(@{ fileId = 3000 }); plugins = @('C.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/300?tab=description'; ours = $true; reading = $null },
                 [ordered]@{ modId = 777; name = 'Unread'; author = 'u'; files = @(@{ fileId = 7770 }); plugins = @('D.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/777?tab=description'; reading = $null },
                 [ordered]@{ modId = 192001; name = 'Thornswood Content'; author = 't'; files = @(@{ fileId = 829844 }); plugins = @('Thornswood-Content.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/192001?tab=description'; ours = $true; reading = $null }
@@ -152,18 +152,30 @@ try {
 
     # Revision 6's shape: its own list leaves a plugin out, so it is installed
     # switched off, and the servers load it, as the launcher's plugin list
-    # switches it on. A rule may name it and chain through it, and it is not
-    # taken out.
-    $r = Invoke-Check (New-Fixture 'off' { param($c)
+    # switches it on. A rule may name it, and it is not taken out. $cAfter is
+    # C.esp's rule and $offAfter Off.esp's.
+    $offShape = { param($c, [string[]]$cAfter, [string[]]$offAfter)
             $m = @($c.Record.mods)
             $c.Record.mods = @($m[0], $m[1], $m[2], [pscustomobject][ordered]@{ modId = 400; fileId = 4000; name = 'Delta'; plugins = @('Off.esp') }, $m[3])
-            $c.Record.plugins = @($c.Record.plugins) + @([pscustomobject][ordered]@{ name = 'Off.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = @('B.esp') })
-            (Find $c 'C.esp').after = @('Off.esp')
+            $c.Record.plugins = @($c.Record.plugins) + @([pscustomobject][ordered]@{ name = 'Off.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = $offAfter })
+            (Find $c 'C.esp').after = $cAfter
             $pm = @($c.Permissions.mods)
             $c.Permissions.mods = @($pm[0], $pm[1], $pm[2], [ordered]@{ modId = 400; name = 'Delta'; author = 'd'; files = @(@{ fileId = 4000 }); plugins = @('Off.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/400?tab=description'; ours = $true; reading = $null }, $pm[3], $pm[4])
             $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Off.esp'; size = 1; sha256 = ('0' * 64) })
-            $c.Last.loadOrder = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'A.esm', 'L.esl', 'B.esp', 'Off.esp', 'C.esp', 'Thornswood-Content.esp') })
-    Yes 'C2b a plugin installed switched off that the servers load: a rule may name it and chain through it, and it is not taken out' ($r.Code -eq 0 -and $r.Out -match 'YES') $r.Out
+            $c.Last.loadOrder = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'A.esm', 'L.esl', 'B.esp', 'Off.esp', 'C.esp', 'Thornswood-Content.esp') }
+    $r = Invoke-Check (New-Fixture 'off' { param($c) & $offShape $c @('Off.esp', 'B.esp') @('B.esp') })
+    Yes 'C2b a plugin installed switched off that the servers load: a rule may name it, and it is not taken out' ($r.Code -eq 0 -and $r.Out -match 'YES') $r.Out
+
+    # #4728: the collection's own list does not load a plugin switched off, so
+    # its rules hold nothing there, and a plugin held under the one above it
+    # only through it is held by nothing (CommonClothes.esp under Apocalypse,
+    # through RaceMenuMorphsCBBE.esp).
+    $r = Invoke-Check (New-Fixture 'off-only' { param($c) & $offShape $c @('Off.esp') @('B.esp') })
+    Yes 'C2e a full plugin held under the one above it only through one switched off: NO' ($r.Code -eq 1 -and $r.Out -match 'no rule keeps C\.esp after B\.esp') $r.Out
+    # #4728: the servers load it, so on their order a rule has to name it
+    # (CBBE.esp, which no rule named).
+    $r = Invoke-Check (New-Fixture 'off-unnamed' { param($c) & $offShape $c @('B.esp') @() })
+    Yes 'C2f a full plugin switched off that the servers load and no rule names: NO' ($r.Code -eq 1 -and $r.Out -match 'the servers load Off\.esp and no rule names it') $r.Out
 
     # #4603: the layout of a revision puts the plugins switched off after the
     # list, in name order, and the draft is held to the record in that order.

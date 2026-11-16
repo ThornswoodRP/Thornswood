@@ -279,7 +279,7 @@ namespace Thornswood
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
                     Say("");
-                    Say("  It would not move: " + e.Message);
+                    Say("  It would not move: " + Failure.Say("InstallSteps, moving it aside", e));
                     Say("  Close Skyrim, Vortex and the launcher, then run this again.");
                     throw Die("The old Game folder is in the way and the launcher will read it instead.");
                 }
@@ -449,7 +449,7 @@ namespace Thornswood
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + e.Message + "). " +
+                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
                               "Check the disk has room and nothing has those files open, then run this again.");
                 }
                 done += new FileInfo(from).Length;
@@ -567,22 +567,23 @@ namespace Thornswood
         /// Thornswood's own Skyrim folder, as the window's card left it. The
         /// launcher makes the folder itself (OwnGame.Make) once Vortex has
         /// deployed, so all this does is answer its question in advance and
-        /// name Vortex's folder. The same check as the launcher's
-        /// OwnGame.PointAt: a Skyrim, with Vortex's record in it. Anything
-        /// else is said and left out, never a stop, because the launcher's
-        /// own Settings button can still set it.
+        /// name Vortex's folder. The tick is always written, ticked or not:
+        /// an absent MakeOwnGame reads as ticked (Config.MakeOwnGame), so the
+        /// box left unticked has to say so. Vortex's folder gets the same
+        /// check as the launcher's OwnGame.PointAt: a Skyrim, with Vortex's
+        /// record in it. Anything else is said and left out, never a stop,
+        /// because the launcher's own Settings button can still set it.
         /// </summary>
         Dictionary<string, JsonNode> OwnFolderCard()
         {
             var own = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
             string vortex = choice.VortexGame ?? "";
-            if (!choice.MakeOwnGame && vortex.Length == 0) return own;
             Head("Thornswood's own Skyrim folder");
+            own["MakeOwnGame"] = JsonValue.Create(choice.MakeOwnGame);
             if (choice.MakeOwnGame)
-            {
-                own["MakeOwnGame"] = JsonValue.Create(true);
                 Say("  On. The launcher makes it by itself once Vortex has deployed the Thornswood collection.");
-            }
+            else
+                Say("  Off. The launcher asks before it makes it.");
             if (vortex.Length > 0)
             {
                 string vg = vortex.Trim().Trim('"').Trim().TrimEnd('\\');
@@ -702,7 +703,7 @@ namespace Thornswood
             catch (Exception e) when (e is UnauthorizedAccessException || e is IOException || e is InvalidOperationException ||
                                       e is System.Security.Principal.IdentityNotMappedException || e is PlatformNotSupportedException)
             {
-                Say("  config.json could not be kept to this account only: " + e.Message);
+                Say("  config.json could not be kept to this account only: " + Failure.Say("InstallSteps, config.json's rights", e, "config.json"));
             }
         }
 
@@ -802,7 +803,11 @@ namespace Thornswood
             if (choice.MakeOwnGame)
             {
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
-                Say("Skyrim folder by itself and restarts.");
+                Say("Skyrim folder by itself, then makes the rest from your game:");
+                Say("Thornswood-Last.esp, the plugin order, and the animation and body");
+                Say("files, which Pandora and BodySlide build in their own windows.");
+                Say("Then it takes a newer launcher if there is one and restarts once.");
+                Say("Nothing needs a press of Fix.");
             }
             if (ownFirst || madeOwn) Say("Nothing was written into your Steam copy of Skyrim.");
             if (madeOwn) Say("Thornswood's own folder was updated in place.");

@@ -356,7 +356,7 @@ namespace Thornswood
                 }
                 if (line != null) OnCandidate(line);
             }
-            catch (Exception ex) { Debug("ice: " + s.Host + " could not be asked: " + ex.Message); }
+            catch (Exception ex) { Debug("ice: " + s.Host + " could not be asked: " + Failure.Why("VoiceIce, " + s.Host, ex, s.Host)); }
             finally { Gathered(); }
         }
 
@@ -423,7 +423,7 @@ namespace Thornswood
                 OnCandidate(line);
                 foreach (IPEndPoint r in askFor) Permit(r);
             }
-            catch (Exception ex) { Debug("ice: the relay could not be asked: " + ex.Message); }
+            catch (Exception ex) { Debug("ice: the relay could not be asked: " + Failure.Why("VoiceIce, the relay", ex, "the relay")); }
             finally { Gathered(); }
         }
 
