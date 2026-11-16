@@ -798,11 +798,13 @@ full text.
 
 Thornswood publishes this itself, as its own mod: Nexus Mods mod 192762,
 https://www.nexusmods.com/skyrimspecialedition/mods/192762, by EvilPatrick06.
-Revision 4 of the collection (`7essxf`, published 21 October 2026, revision id
-813945) carries version 1.0.1, file 823485, uploaded on 20 October, and it is
-not optional. Nexus gives that file as 152,002,702 bytes, and the archive it
+Revision 8, the newest published revision of the collection (`7essxf`) and
+the one `records\collection.json` follows, carries version 1.0.1, file
+823485, uploaded on 20 October, and it is not optional. Revision 3 was the
+first to carry that file, and none since has moved it
+(`docs\COLLECTION-REVISIONS.md`). Nexus gives that file as 152,002,702 bytes, and the archive it
 serves has md5 `74ef6a9f5cf0a5ba7dbab9c00cb67491`, the md5 the collection
-pins. Revision 3 carries the same file; revisions 1 and 2 carry version
+pins. Revisions 1 and 2 carry version
 1.0.0, under "Version 1.0.0, which revisions 1 and 2 still install" below.
 
 It is the largest thing somebody else wrote that Thornswood hands out: 67
@@ -895,7 +897,7 @@ from that file:
 - Require distributors and external end users to agree to terms that
   protect it at least as much as the licence does. Patrick decided on
   20 October 2026 (#421, option A) that the Client Runtime's README says so,
-  and the README of 1.0.1, the version revisions 3 and 4 install, does: by
+  and the README of 1.0.1, the version every revision since 3 installs, does: by
   installing the file you accept Microsoft's terms for it, use it only with
   the Thornswood client, keep its copyright and other notices as they are,
   do not hand it on apart from the mod, and Microsoft gives no warranty for
