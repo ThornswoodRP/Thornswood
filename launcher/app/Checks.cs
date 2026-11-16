@@ -168,7 +168,9 @@ namespace Thornswood
 
         static void CollectionReadFailed(string where, Exception ex)
         {
-            string why = where + ": " + ex.GetType().Name + ": " + ex.Message;
+            // Failure.Plain: the reason as Why says it, without noting it, so
+            // the same failure on every redraw is compared, not written (#4350).
+            string why = where + ": " + Failure.Plain(ex, null);
             lock (collectionWhyGate)
             {
                 if (why == lastCollectionWhy) return;

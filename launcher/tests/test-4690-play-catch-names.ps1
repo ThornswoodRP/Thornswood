@@ -26,13 +26,15 @@
        seconds), and a different reason is noted again
     5. no collection reader in Checks.cs ends in a catch that only returns
 
-  Compiled with Add-Type, so it needs no .NET SDK. Nothing connects anywhere.
+  Compiled with Add-LauncherType (tests\Launcher-Csc.ps1), the compiler the
+  launcher's build runs. Nothing connects anywhere.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent (Split-Path -Parent $Here)
+. (Join-Path (Join-Path $repo 'tests') 'Launcher-Csc.ps1')
 $app = Join-Path $repo 'launcher\app'
 if (-not (Test-Path -LiteralPath $app)) { $app = Join-Path $repo 'launcher/app' }
 
@@ -110,6 +112,9 @@ namespace T4690_$n {
     public static List<string> Said = new List<string>();
     public static void Note(string where, Exception e) { Said.Add("Swallowed in " + where + ": " + e.GetType().Name + ": " + e.Message); }
   }
+  static class Failure {
+    public static string Plain(Exception e, string what) { return e.Message; }
+  }
   static class VortexProfileState {
     public static string Why = "state.v2 is not a LevelDB: bad magic";
     public static int CollectionRevision(string dir, string slug) { throw new InvalidDataException(Why); }
@@ -125,7 +130,7 @@ namespace T4690_$n {
 }
 "@
 $T = $null
-try { Add-Type -TypeDefinition $src -Language CSharp; $T = "T4690_$n.Checks" -as [type] }
+try { $asm = Add-LauncherType -Source $src; $T = $asm.GetType("T4690_$n.Checks") }
 catch { Write-Host $_.Exception.Message -ForegroundColor DarkGray }
 Yes '  the lifted readers compile' ($null -ne $T)
 if ($T) {
