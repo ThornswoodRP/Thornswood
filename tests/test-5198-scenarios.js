@@ -68,7 +68,8 @@ const NOT_HERE = {
   'cut-items.md': 'items the last plugin takes out of the game; no server step',
   'discord.md': 'the Discord bot (bot/), which has harnesses of its own',
   'people.md': 'the index of the People table; each row is its own system here',
-  'station-placement.md': 'where the content plugin stands the stations; no server step'
+  'station-placement.md': 'where the content plugin stands the stations; no server step',
+  'who-makes-it.md': 'who makes each item the world hands out, a page Check-Makers.js writes from the tables; no server step'
 };
 
 /*

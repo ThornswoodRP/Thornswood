@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 4
 
 By rank: novice 21, advanced 10, expert 9, master 5.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (21 names). Bar Stool. Bed. Bedroll. Chest. Crude Fishing Pole. Double Bed. Drum. Dwarven Arrow. Dwarven Bolt. Fine Bench. Fine Chair. Fine Double Bed. Fish Trap. Flute. Iron Arrow. Large Chest. Lute. Splint. Wooden Bench. Wooden Chair. Wooden Ladle.
+
+**Advanced** (8 names). Crossbow. Nordic Arrow. Nordic Bow. Orcish Arrow. Orcish Bow. Riekling Spear. Steel Arrow. Steel Bolt.
+
+**Expert** (9 names). Dwarven Bow. Dwarven Crossbow. Elven Arrow. Elven Bow. Falmer Arrow. Falmer Bow. Fine Fishing Pole. Glass Arrow. Glass Bow.
+
+**Master** (5 names). Ebony Arrow. Ebony Bow. Master Fishing Pole. Stalhrim Arrow. Stalhrim Bow.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Dwarven Arrow | 24 | novice | Arrows and bolts | ThornswoodCraftingWoodworking | 1 Firewood, 1 Dwarven Metal Ingot |  | yes | `b652:Dawnguard.esm` |
