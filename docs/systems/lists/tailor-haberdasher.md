@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 1
 
 By rank: novice 118, advanced 26, expert 10, master 17.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (85 names). Alik'r Hood. Alik'r Warrior Garb. Bandage. Belted Tunic. Blacksmith's Apron. Boots. Boy's Blue Tunic. Boy's Green Tunic. Boy's Grey Tunic. Boy's Red Tunic. Boy's Yellow Tunic. Chef's Hat. Chef's Tunic. Clothes. College Boots. Cowl. Cuffed Boots. Dark Alik'r Hood. Dark Hammerfell Garb. Dark Redguard Boots. Dunmer Hooded Outfit. Dunmer Outfit. Dunmer Shoes. Embroidered Garment. Fine Armguards. Fine Boots. Fine Clothes. Fine Hat. Fine Raiment. Footwraps. Fur Collar - Loose. Fur Collar - Tight. Fur Hood. Fur Hood - Black. Fur Hood - White. Fur Mantle. Fur Mantle - Black. Fur Mantle - White. Fur-Trimmed Cloak. Fur-lined Boots. Girl's Blue Dress. Girl's Green Dress. Girl's Grey Dress. Girl's Red Dress. Girl's Yellow Dress. Gloves. Hammerfell Garb. Hat. Jester's Boots. Jester's Clothes. Jester's Gloves. Jester's Hat. Leather Cape. Miner's Clothes. Mourner's Clothes. Mourner's Hat. Noble Clothes. Pleated Shoes. Ragged Boots. Ragged Cap. Ragged Trousers. Redguard Boots. Refined Tunic. Riekling Belted Tunic. Riekling Footwraps. Riekling Fur Cloak. Roughspun Tunic. Sewing Kit. Shoes. Shrouded Hand Wraps. Shrouded Hood. Shrouded Shoes. Tavern Clothes. Telvanni Shoes. Temple Priest Boots. Temple Priest Hood. Thread. Ulfric's Armguards. Ulfric's Boots. Ulfric's Clothes. Vampire Boots. Vampire Gloves. Vampire Hood. Wedding Dress. Wedding Sandals.
+
+**Advanced** (23 names). Apotheus Scarf. Bandana. Bandana, Tied. College of Winterhold Cloak. Eyepatch. Linen Cape (Black). Linen Cape (Blue). Linen Cape (Green). Linen Cape (Purple). Linen Cape (Red). Linen Cape (White). Linen Cape (Yellow). Redguard Knight Cape. Seadog Cape. Shaman Unarmored Boots. Shaman Unarmored Gloves. Thread. Tribunal Unarmored Hood Black. Tribunal Unarmored Hood Blue. Tribunal Unarmored Hood Green. Tribunal Unarmored Hood Red. Tribunal Unarmored Hood White. Wedding Wreath.
+
+**Expert** (10 names). Bosmer Mask. Dwarven Mage Unarmored Boots. Dwarven Mage Unarmored Gauntlets. Fur Cloak (Black). Fur Cloak (Brown). Fur Cloak (Snowy Sabre). Fur Cloak (Vale Sabre). Fur Cloak (White). Gilded Wristguards. Shaman Unarmored Cap.
+
+**Master** (17 names). Bosmer Engraved Shoulder Cape. Bosmer Full Cape. Bosmer Shoulder Cape. Dwarven Mage Unarmored Hood. Ebony Mage Unarmored Boots. Ebony Mage Unarmored Gloves. Ebony Mage Unarmored Hood. Tribunal Unarmored Boots Black. Tribunal Unarmored Boots Blue. Tribunal Unarmored Boots Green. Tribunal Unarmored Boots Red. Tribunal Unarmored Boots White. Tribunal Unarmored Gloves Black. Tribunal Unarmored Gloves Blue. Tribunal Unarmored Gloves Green. Tribunal Unarmored Gloves Red. Tribunal Unarmored Gloves White.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Fine Armguards | 1 | novice | Gloves | MCE_CraftingLoom | 2 Leather Strips, 2 Leather |  | yes | `989:MoreCraftableEquipment.esp` |

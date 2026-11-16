@@ -10,7 +10,9 @@ is not, is at the bottom of each of those pages and not in the middle of
 them.
 
 The item lists sit in [systems/lists](systems/lists/README.md). They are
-generated from the recipe, harvest, ore and hunt tables.
+generated from the recipe, harvest, ore and hunt tables. [Who makes what
+the world hands out](systems/who-makes-it.md) is generated from the same
+tables by the makers check.
 
 ## Contents
 

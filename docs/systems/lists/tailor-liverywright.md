@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 8
 
 By rank: novice 63, advanced 10, expert 5, master 4.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (61 names). Adept Hood. Adept Robes. Apprentice Hood. Archmage's Boots. Archmage's Hood. Archmage's Robes. Black Cowl. Black Robes. Blue Cowl. Blue Robes. Boots. Brown Cowl. Brown Robes. Cultist Boots. Cultist Gloves. Cultist Robes. Embellished Robes. Emperor's Robes. Expert Robes. Green Cowl. Green Robes. Grey Cowl. Grey Robes. Greybeard's Boots. Greybeard's Hood. Greybeard's Robes. Hooded Archmage's Robes. Hooded Black Robes. Hooded Blue Robes. Hooded Brown Robes. Hooded Green Robes. Hooded Grey Robes. Hooded Monk Robes. Hooded Necromancer Robes. Hooded Red Robes. Mage Robes. Master Robes. Monk Cowl. Monk Robes. Moth Priest Robes. Moth Priest Sandals. Mythic Dawn Boots. Mythic Dawn Gloves. Mythic Dawn Hood. Mythic Dawn Hooded Robes. Mythic Dawn Robes. Necromancer Cowl. Necromancer Robes. Novice Hood. Novice Robes. Psijic Boots. Psijic Gloves. Psijic Hood. Psijic Robes. Ragged Robes. Red Cowl. Red Robes. Shrouded Robes. Telvanni Robes. Temple Priest Robes. Vampire Robes.
+
+**Advanced** (10 names). Dark Brotherhood Cloak. Dawngaurd Cloak. Hjaalmarch Guard Cloak. Markarth Guard Cloak. Pale Guard Cloak. Riften Guard Cloak. Solitude Guard Cloak. Stormcloak Cloak. Whiterun Guard Cloak. Winterhold Guard Cloak.
+
+**Expert** (5 names). Dwarven Mage Unarmored Robe. Shaman Unarmored Robe. Tribunal Unarmored Robe Black. Tribunal Unarmored Robe Blue. Tribunal Unarmored Robe Green.
+
+**Master** (4 names). Cultist Mask. Ebony Mage Unarmored Robe. Tribunal Unarmored Robe Red. Tribunal Unarmored Robe White.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Cultist Gloves | 1 | novice | Gloves | MCE_CraftingLoom | 2 Leather, 1 Thread |  | yes | `952:MoreCraftableEquipment.esp` |

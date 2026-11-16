@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 5
 
 By rank: novice 2, advanced 1, expert 1, master 1.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (2 names). Poor Charcoal. Tool Handle.
+
+**Advanced** (1 name). Charcoal.
+
+**Expert** (1 name). Charcoal Briquette.
+
+**Master** (1 name). Coke.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Poor Charcoal | 1 | novice | Other goods | ThornswoodCraftingCharcoalKiln | 2 Firewood |  | yes | `15480:Thornswood-Content.esp` |

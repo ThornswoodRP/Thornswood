@@ -4,6 +4,20 @@ Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. 1
 
 By rank: novice 4, advanced 4, expert 3, master 1.
 
+The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.
+
+## Names that reach the server
+
+**Novice** (4 names). Potion of Minor Healing. Potion of Minor Magicka. Potion of Minor Stamina. Poultice.
+
+**Advanced** (4 names). Physicker's Remedy. Potion of Healing. Potion of Magicka. Potion of Stamina.
+
+**Expert** (3 names). Potion of Plentiful Healing. Potion of Resist Fire. Potion of Resist Shock.
+
+**Master** (1 name). Potion of Vigorous Healing.
+
+## Every recipe
+
 | Item | Makes | Rank | Kind | Bench | Asks for | Race | Server asked | Id |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Potion of Minor Healing | 1 | novice | Other food and drink | ThornswoodCraftingAlchemy | 1 Imp Stool, 1 Eye of Sabre Cat |  | yes | `154f0:Thornswood-Content.esp` |
