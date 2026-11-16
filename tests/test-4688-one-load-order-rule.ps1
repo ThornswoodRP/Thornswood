@@ -156,6 +156,7 @@ try {
         'scripts/release/Export-ServerPayload.ps1' = 'the built order, its paths pointed at the box'
         'scripts/vps/Restore-Server.ps1'           = 'a restored order, its paths pointed at its own folder'
         'scripts/vps/vps-dev-instance.ps1'         = 'the live order, its paths pointed at the dev folder'
+        'scripts/bot/Check-Character.js'           = 'a restore rehearsal''s own order, one plugin moved to the end on purpose so the check reads ids by plugin (#6237), the order before kept beside it'
         'scripts/mods/Fix-QuickLoot.ps1'           = 'retired by #1179, refuses to run'
         'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
         'tools/DeployAgent/ServerOrder.cs'         = 'the order a Release was built for, from its catalogue, pointed at the server''s plugins (#6209)'
