@@ -47,7 +47,7 @@
   function tblog() {
     var a = ['[thornswood take back]'];
     for (var i = 0; i < arguments.length; i++) { a.push(arguments[i]); }
-    try { console.log(a.join(' ')); } catch (e) { }
+    try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
   }
 
   try {
@@ -154,7 +154,7 @@
     });
   }
 
-  if (g.__thornswoodTakeBackTimer) { try { clearInterval(g.__thornswoodTakeBackTimer); } catch (e) { } }
+  if (g.__thornswoodTakeBackTimer) { try { clearInterval(g.__thornswoodTakeBackTimer); } catch (e) { /* nothing to stop: an earlier load's timer is already gone */ } }
   state.asking = false;
   g.__thornswoodTakeBackTimer = setInterval(function () {
     try { turn(); } catch (e) { state.asking = false; tblog('the turn threw:', String((e && e.message) || e)); }
