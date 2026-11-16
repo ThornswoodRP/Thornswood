@@ -16,8 +16,11 @@ says how. From Nexus to a release it goes like this:
 2. The records follow in a pull request of their own:
    `collection-plugins.json` (written by
    `scripts/mods/New-CollectionPluginRecord.ps1` from the revision's plugins),
-   `collection-dropped.json`, `collection-permissions.json`, and the record's
-   `revision`.
+   `collection-dropped.json`, `collection-permissions.json`, the record's
+   `revision`, and `load-order.json`, the order the servers run and every
+   build reads, which `pwsh scripts/mods/Set-LoadOrder.ps1` moves to the new
+   revision once the others are its (`tests/test-5191-load-order.ps1` stays
+   red until it does).
 3. The box builds again what is read from the plugins: the NPC catalogue
    (`game/data/npc-population.json`) and the Last plugin's recipe and record
    (`game/data/last-plugin.recipe`, `game/data/last-plugin.json`), through
