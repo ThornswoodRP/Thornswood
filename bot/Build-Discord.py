@@ -515,9 +515,8 @@ for _name in FACTION_OFFICE_ROLES:
 # reads and nothing creates is the Banned mistake below.
 ROLES.append(('Business Owner', 0xA08C6A, False, NONE))
 
-# Joined, and answered the rules and age questions (#3317). Member sees the
-# front door, Information and #general-chat, read only, and asks in
-# #travelers-questions; Playtester opens the rest.
+# Joined, and answered the rules and age questions (#3317). Member applies,
+# opens tickets and asks in #travelers-questions; Playtester opens the rest.
 ROLES.append(('Member', 0x8D9682, False, NONE))
 
 # THE ONE A BAN DEPENDS ON, and it was never created.
@@ -559,8 +558,11 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 #        read         everybody reads, the council posts
 #        membersread  Member, Playtester and staff read, the council posts
 #        open         Playtester and staff talk, invisible to everybody else
-#        staffbump    Member and Playtester read and run no command, staff talk
-#                     and run commands (#disboard: staff bump, Patrick, 12 Nov)
+#        staffbump    everybody reads and runs no command, staff talk and run
+#                     commands (#disboard: staff bump, Patrick, 12 Nov)
+#        openread     everybody reads, Playtester and staff talk (#general-chat:
+#                     somebody who has not applied sees it is alive, Patrick,
+#                     16 Nov)
 #        testersread  Playtester and staff read, the council posts
 #        pathfind     the same people as open; the Playtesters category's own
 #        hold         a hold's hall: its Citizen, Jarl and officers, and HOLD_STAFF
@@ -583,15 +585,16 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 # other (the Loremasters reading the GM event plans, #3317).
 #
 # THE GATE (Patrick, 12 Nov 2026, page cards q-discord-hand-given-member and
-# q-discord-readback, A). Somebody who joins sees #rules and
-# #welcome-travelers, and talks in neither. Reacting to the bot's message in
-# #rules gives Member (bot_rules_gate.py, #5841), and the reaction is the
-# record that they accept the rules and are 18 or over. Member reads the
-# welcome and about channels and applies: the rest of Start Here, Tickets,
-# Applications, Information and the Roleplay Guide. Member also reads
-# #general-chat and asks in #travelers-questions (Patrick, 16 Nov 2026), so
-# somebody who has not applied sees the server talking and has somewhere to
-# ask. Playtester, given when a
+# q-discord-readback, A; widened 16 Nov 2026: "keep those avaialble but than
+# lock the #apply channels untill they accept the rules and get the #member
+# role than once they do that they can apply than once approved they can
+# chat in general chat"). Somebody who joins reads Start Here, Information,
+# the Roleplay Guide, #welcome-travelers, #general-chat and
+# #travelers-questions, and talks in none of them, so they see the server is
+# alive before they apply. Reacting to the bot's message in #rules gives
+# Member (bot_rules_gate.py, #5841), and the reaction is the record that
+# they accept the rules and are 18 or over. Member applies, opens tickets
+# and asks in #travelers-questions. Playtester, given when a
 # playtest application is approved, opens everything else that is not staff.
 # Staff see their own space and Staff, and the council sees every space. From
 # #3317 (22 Oct) until then somebody with no role saw Start Here, Tickets and
@@ -662,9 +665,9 @@ PLAN = [
  ('Start Here', [
    dict(kind='text',  name='rules',       key='RULES',    mode='read',
         topic='Seven rules. Read them.', post=True),
-   dict(kind='text',  name='welcome',     key='WELCOME',  mode='membersread',
+   dict(kind='text',  name='welcome',     key='WELCOME',  mode='read',
         topic="Start here.", post=True),
-   dict(kind='text',  name='start-here',  key='START',    mode='membersread',
+   dict(kind='text',  name='start-here',  key='START',    mode='read',
         topic="How to actually get in and play.", post=True),
    # Where the Disboard listing is bumped. It was #say-hello until Patrick
    # renamed it #dishboard on 10 Nov 2026, and #disboard by 12 Nov (the audit
@@ -682,25 +685,25 @@ PLAN = [
         topic='Something happened and it should not have. Only you and staff see it.'),
  ]),
  ('Information', [
-   dict(kind='announce', name='news',     key='NEWS',     mode='membersread',
+   dict(kind='announce', name='news',     key='NEWS',     mode='read',
         topic='What changed, every time it changes.', post=True),
-   dict(kind='text',  name='updates',     key='UPDATES',  mode='membersread',
+   dict(kind='text',  name='updates',     key='UPDATES',  mode='read',
         topic="Restarts and outages. Check here before asking why you can't connect."),
-   dict(kind='text',  name='faq',         key='FAQ',      mode='membersread',
+   dict(kind='text',  name='faq',         key='FAQ',      mode='read',
         topic='Read this before you ask.', post=True),
  ]),
  # The rules of play and the world, read only, each with its changelog
  # (#3317). Both were in the talk categories before.
  ('Roleplay Guide', [
-   dict(kind='text',  name='game-rules',  key='GAMERULES', mode='membersread',
+   dict(kind='text',  name='game-rules',  key='GAMERULES', mode='read',
         topic='How roleplay works here. Nine rules, and what we let slide.',
         post=True, was=(('Thornswood', 'game-rules'), ('In Character', 'game-rules'))),
-   dict(kind='text',  name='lore',        key='LORE',     mode='membersread',
+   dict(kind='text',  name='lore',        key='LORE',     mode='read',
         topic='4E 252. What happened and who you can be.', post=True,
         was=(('In Character', 'lore'),)),
    # The sixteen factions, lore/factions.md as Patrick approved it on 22 Oct
    # (#3317), with its changelog like the rest.
-   dict(kind='text',  name='factions',    key='FACTIONS', mode='membersread',
+   dict(kind='text',  name='factions',    key='FACTIONS', mode='read',
         topic='The sixteen factions of 4E 252: who they are, where they keep, '
               'who leads them.', post=True),
  ]),
@@ -734,20 +737,18 @@ PLAN = [
         topic='A card for everybody who joins, posted by the bot. React to the '
               'rules in <#RULES> for the Member role.',
         was=(('Thornswood', 'welcome-travelers'),)),
-   # Somebody who has not applied yet asks here, before Playtester opens
-   # anything else: Member talks, Playtester and staff read and answer
-   # (Patrick, 16 Nov 2026: "what would we name the channel they can post
-   # in?", then "travelers-questions").
-   dict(kind='text',  name='travelers-questions', key='QUESTIONS', mode='open',
+   # Somebody who has not applied yet asks here: everybody reads it, a
+   # Member asks, Playtester and staff answer (Patrick, 16 Nov 2026: "what
+   # would we name the channel they can post in?", then
+   # "travelers-questions"). Asking takes Member, the rules accepted.
+   dict(kind='text',  name='travelers-questions', key='QUESTIONS', mode='openread',
         extra_roles=('Member',),
         topic='Questions before you apply, or about anything you have read so '
               'far. Ask here and staff will answer.'),
-   # Member reads it and does not post, so somebody who has not applied
+   # Everybody reads it and does not post, so somebody who has not applied
    # sees the server is alive; Playtester and staff talk (Patrick, 16 Nov
-   # 2026: "make Start Here and General Chat Read Only at the member level
-   # before applying").
-   dict(kind='text',  name='general-chat', key='GENERAL', mode='open',
-        read_extra=('Member',),
+   # 2026: "once approved they can chat in general chat").
+   dict(kind='text',  name='general-chat', key='GENERAL', mode='openread',
         topic="Out of character chat for everyone. Talk Thornswood, Skyrim, or "
               "whatever's on your mind, and keep it friendly. Bug reports go in "
               "<#RESULTS>, screenshots and clips go in <#MEDIA>.",
@@ -1023,8 +1024,8 @@ CATEGORY_MODE = {
     'Start Here': 'public',
     'Tickets': 'membersread',
     'Applications': 'membersread',
-    'Information': 'membersread',
-    'Roleplay Guide': 'membersread',
+    'Information': 'read',
+    'Roleplay Guide': 'read',
     'Out of Character': 'open',
     'In Character': 'open',
     'Playtesters': 'pathfind',
@@ -1333,7 +1334,7 @@ def _also(guild, roles, out, extra, talk):
 
 # The modes whose readers are roles by name, not a hold's, a faction's or
 # a staff space's own, which the Member line has no need of.
-_PLAIN_MODES = ('membersread', 'open', 'pathfind', 'staffbump', 'testersread')
+_PLAIN_MODES = ('membersread', 'open', 'openread', 'pathfind', 'staffbump', 'testersread')
 
 
 def _seen_by(role):
@@ -1344,7 +1345,7 @@ def _seen_by(role):
     for _, chans in PLAN:
         for ch in chans:
             mode = ch.get('mode')
-            if mode in ('read', 'public'):
+            if everyone_reads(mode):
                 names.append('#' + ch['name'])
             elif role is not None and mode in _PLAIN_MODES:
                 readers, talkers, _ = mode_audience(mode)
@@ -1369,10 +1370,10 @@ def mode_audience(mode, hold=None, space=None, faction=None):
         return (), (), COUNCIL_ROLES
     if mode == 'membersread':
         return ('Member',) + tester, (), COUNCIL_ROLES
-    if mode in ('open', 'pathfind'):
+    if mode in ('open', 'pathfind', 'openread'):
         return (), tester, ()
     if mode == 'staffbump':
-        return ('Member', 'Playtester'), STAFF, ()
+        return (), STAFF, ()
     if mode == 'testersread':
         return tester, (), COUNCIL_ROLES
     if mode in ('hold', 'holdread', 'holdcourt', 'holdguard'):
@@ -1470,19 +1471,25 @@ def overwrites(guild, mode, roles, hold=None, needs=BOT_NEEDS, extra=None,
                                              create_private_threads=False,
                                              send_messages_in_threads=True)
     if mode == 'staffbump':
-        # The readers run no command (a /bump is one); staff talk and get
-        # the commands back.
-        reader = discord.PermissionOverwrite(view_channel=True,
-                                             read_message_history=True,
-                                             send_messages=False,
-                                             create_public_threads=False,
-                                             send_messages_in_threads=False,
-                                             use_application_commands=False)
+        # Everybody reads and runs no command (a /bump is one), by
+        # @everyone's read only overwrite; staff talk and get the commands
+        # back.
         talk = discord.PermissionOverwrite(view_channel=True,
                                            send_messages=True,
                                            read_message_history=True,
                                            use_application_commands=True)
-    out = {ev: read_only if mode == 'read' else deny_all}
+    if mode == 'openread':
+        # @everyone's read only overwrite takes posting, threads and commands
+        # away, and a role's overwrite gives back only what it names, so the
+        # talkers get every one of them back: in #general-chat a Playtester
+        # still answers in a thread and runs a command.
+        talk = discord.PermissionOverwrite(view_channel=True,
+                                           send_messages=True,
+                                           read_message_history=True,
+                                           create_public_threads=True,
+                                           send_messages_in_threads=True,
+                                           use_application_commands=True)
+    out = {ev: read_only if everyone_reads(mode) else deny_all}
     for names, ow in ((readers, reader), (talkers, talk), (posters, poster)):
         for n in names:
             r = _named(guild, roles, n)
@@ -2871,7 +2878,7 @@ async def keep_onboarding_off(guild):
 # other Onboarding setting as they are.
 def everyone_reads(mode):
     """Whether a mode lets @everyone read."""
-    return mode in ('public', 'read')
+    return mode in ('public', 'read', 'staffbump', 'openread')
 
 
 def plan_modes():
@@ -3120,8 +3127,8 @@ ROLE_DOES = {
                'DISBOARD and any added later. A build gives it.',
     'Playtester': 'Plays the main build. Opens the Discord past Information.',
     'Member': 'Reacted to the rules in #rules, which says 18 or over and the '
-              'rules accepted. Sees Start Here, Applications and Information, '
-              'reads #general-chat and asks in #travelers-questions.',
+              'rules accepted. Applies, opens tickets and asks in '
+              '#travelers-questions.',
     'Banned': 'Takes the site and the game away (site/server.js, access.banned).',
     'Thalmor Boot-Licker': 'A Patreon tier; Patreon gives and takes it.',
     'Talos Worshiper': 'A Patreon tier; Patreon gives and takes it.',
@@ -3191,7 +3198,7 @@ def _audience_words(mode, hold=None, space=None, read_extra=(), extra=(), factio
     readers = tuple(readers) + tuple(read_extra or ())
     talkers = tuple(talkers) + tuple(extra or ())
     see = readers + talkers + posters
-    if mode == 'read':
+    if everyone_reads(mode):
         return ('everybody', _names_words(talkers + posters),
                 _names_words(posters) if posters else '')
     return (_names_words(see), _names_words(talkers + posters) if talkers or posters else 'nobody',
@@ -3268,7 +3275,8 @@ def layout():
     w('')
     w('| Mode | Sees | Talks | Posts |')
     w('|---|---|---|---|')
-    for mode in ('public', 'read', 'membersread', 'staffbump', 'open', 'pathfind',
+    for mode in ('public', 'read', 'membersread', 'staffbump', 'open', 'openread',
+                 'pathfind',
                  'testersread',
                  'staff', 'staffread', 'council'):
         r, t, p = _audience_words(mode)
