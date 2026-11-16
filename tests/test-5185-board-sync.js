@@ -370,7 +370,9 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
         const page = Number(/page=(\d+)/.exec(p.split('per_page')[1])[1]);
         const all = o.open.concat([{ number: 4000, title: 'a pull request', pull_request: {} }]);
         out = all.slice((page - 1) * 100, page * 100);
-      } else if (m === 'POST') out = { id: 1 };
+      } else if (m === 'GET' && /^repos\/[^/]+\/[^/]+\/issues\/\d+$/.test(p)) {
+        out = Object.assign({ number: Number(p.split('/').pop()), title: 'from GitHub', state: 'open', body: '', labels: [] }, o.me || {});
+      } else if (m === 'POST' || m === 'PATCH') out = { id: 1 };
       return { ok: status < 400, status: status, text: async () => JSON.stringify(out) };
     };
     return { f, writes };
@@ -394,6 +396,43 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   yes('  no --issue is exit 2', d.code === 2);
   d = await find(['--issue', '5'], { open: OPEN }, { GITHUB_TOKEN: '' });
   yes('  no token is exit 2', d.code === 2);
+
+  // ---- an exact repeat is closed (15 Nov: commenting never stopped one)
+  yes('a title is read the same without case, spaces or punctuation',
+      D.sameTitle('Nightly  checks failed!') === D.sameTitle('nightly checks: FAILED'));
+  yes('a step is read from its file and from the deploy agent\'s line',
+      JSON.stringify(D.stepsOf('The step file deploy/after/4549-after-mining-log.json asks. Step 4584-look-prompt-log#2 of deploy/after.')) ===
+      JSON.stringify([{ file: '4549-after-mining-log', step: null }, { file: '4584-look-prompt-log', step: 2 }]));
+  const EX = [
+    { number: 6039, title: 'Check in game: On dev, mine a vein with a pickaxe', body: 'From #4549. Step 4549-after-mining-log#1 of deploy/after.', labels: ['check: in game'] },
+    { number: 6040, title: 'Check in game: second step', body: 'Step 4584-look-prompt-log#1 of deploy/after.', labels: ['check: in game'] },
+    { number: 5798, title: 'The install window says Thornswood runs from its own folder', body: '', labels: [] },
+    { number: 5528, title: 'Staff notice from claude', body: 'x', labels: ['notice: staff'] },
+  ];
+  const ex = (n, t, b, l) => D.exactRepeat({ number: n, title: t, body: b || '', labels: l || [] }, EX);
+  yes('#6111 is a repeat of #6039: it names the same step file',
+      (ex(6111, 'Dev check: front log lines after one mining swing', 'The step file deploy/after/4549-after-mining-log.json asks for them.') || {}).number === 6039);
+  yes('  another step of the same file is not', ex(6200, 'Check in game: a later step', 'Step 4584-look-prompt-log#2 of deploy/after.') === null);
+  yes('  the same step again is', (ex(6201, 'Check in game: again', 'Step 4584-look-prompt-log#1 of deploy/after.') || {}).number === 6040);
+  yes('#5799 is a repeat of #5798: the same title, read without case or punctuation',
+      (ex(5799, 'The install window says thornswood runs from its own folder.') || {}).number === 5798);
+  yes('  an older issue is never closed for a newer one', ex(5700, EX[2].title) === null);
+  yes('  a staff notice is never closed for its title, which is meant to repeat',
+      ex(5600, 'Staff notice from claude', 'y', ['notice: staff']) === null);
+  yes('  nor is an issue closed for a staff notice\'s title', ex(5601, 'Staff notice from claude') === null);
+  yes('  a title that is only alike is not an exact repeat', ex(6202, 'The install window says Thornswood runs from the wrong folder') === null);
+  const cc = D.closeCommentFor({ number: 5798, title: EX[2].title, why: 'it has the same title' });
+  yes('  the closing comment names the open issue and how to undo it, plainly',
+      /^Closed as a duplicate of #5798, which is open: it has the same title\./.test(cc) && /reopen this one/.test(cc) && !/---|Claude|Generated|@/.test(cc));
+  d = await find(['--issue', '5799'], { open: pad.concat(EX), me: { title: EX[2].title.toUpperCase() } });
+  yes('run: an exact repeat gets the one comment and is closed as a duplicate',
+      d.code === 0 && d.writes.length === 2 && d.writes[0].method === 'POST' && /#5798/.test(d.writes[0].body.body) &&
+      d.writes[1].method === 'PATCH' && d.writes[1].path === 'repos/' + HERE + '/issues/5799' &&
+      d.writes[1].body.state === 'closed' && d.writes[1].body.state_reason === 'duplicate');
+  d = await find(['--issue', '5799', '--dry-run'], { open: EX, me: { title: EX[2].title } });
+  yes('  a dry run closes nothing and says it', d.code === 0 && d.writes.length === 0 && /dry run, not closed/.test(d.out));
+  d = await find(['--issue', '5799'], { open: EX, me: { title: EX[2].title, state: 'closed' } });
+  yes('  one already closed is left be', d.code === 0 && d.writes.length === 0 && /closed already/.test(d.out));
 
   const dup = read('.github/workflows/duplicate-check.yml');
   yes('duplicate-check.yml runs when an issue is opened, on main, on GitHub\'s runner',

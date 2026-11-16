@@ -155,6 +155,7 @@ function Build {
     $D = Join-Path $Site 'data'
     Put (Join-Path $D 'linked.json') ('{"' + $ME + '":{"name":"Me","profiles":[' + $P1 + ',' + $P2 + ']},"' + $YOU + '":{"name":"You","profiles":[' + $PY + ',' + $P2 + ']},"' + $THEM + '":{"name":"Them","profiles":[' + $PT + ']}}')
     Put (Join-Path $D 'rules-accepted.json') ('{"' + $ME + '":{"yes":true},"' + $YOU + '":{"yes":true}}')
+    Put (Join-Path $D 'settings.json') ('{"' + $ME + '":{"at":1,"files":{"launcher.json":"{}"}},"' + $YOU + '":{"at":1,"files":{"launcher.json":"{}"}}}')
     Put (Join-Path $D 'signins.json') ('[{"id":"' + $ME + '","ip":"203.0.113.1"},{"id":"' + $YOU + '","ip":"203.0.113.2"},{"id":"' + $ME + '","ip":"203.0.113.3"}]')
     Put (Join-Path $D 'sessions.json') ('[{"session":"s1","who":"' + $ME + '","profile":' + $P1 + '},{"session":"s2","who":"' + $ME + '","profile":' + $P1 + ',"start":100000,"end":200000,"keep":true},{"session":"s3","who":"' + $YOU + '","profile":' + $PY + '},{"session":"s4","who":"' + $THEM + '","profile":' + $PT + '}]')
     Put (Join-Path $D 'session-logs\s1.json') ('{"session":"s1","who":"' + $ME + '","logs":{"launcher.log":"x"}}')
@@ -395,19 +396,20 @@ try {
     Yes 'a dry run now shows each service that still has the request waiting' (
         $c -eq 0 -and (Said 'waiting\s+the site has a request for them it takes at its next start') -and (Said 'waiting\s+the live game server has a request') -and
         (Said 'waiting\s+the dev game server has a request') -and (Said 'waiting\s+live voice has a request') -and (Said 'waiting\s+dev voice has a request') -and (Said 'waiting\s+the bot has a request'))
+    # A list the live server has taken is still a request waiting there, and is
+    # no register left naming them (#4920). Put back as it was after.
+    $req = Join-Path $Live 'private\deleted-characters.json'
+    $took = Join-Path $Live 'private\deleted-characters.taken.json'
+    Move-Item -LiteralPath $req -Destination $took
+    $c = Run (@('-DiscordId', $ME) + $roots)
+    Yes '  and a list the server has taken is still waiting there, and is never counted as left' (
+        $c -eq 0 -and (Said 'waiting\s+the live game server has a request') -and -not (Said 'deleted-characters\.taken\.json'))
+    Move-Item -LiteralPath $took -Destination $req
 
-    # ---- each service starts, the way it starts on the box
+    # ---- each service starts, the way it starts on the box. The site first
+    # (#4470): it can start before a game server does, and the game server
+    # still holds the character until it starts.
     $node = (Get-Command node).Source
-    $writer = Join-Path $Repo 'scripts\vps\Server-Log.js'
-    foreach ($R in $Live, $Dev, $Vl, $Vd) {
-        Put (Join-Path $R 'exit.js') 'process.exit(0);'
-        Push-Location -LiteralPath $R
-        try { & $node $writer --log (Join-Path $R 'server.log') exit.js | Out-Null } finally { Pop-Location }
-        Remove-Item -LiteralPath (Join-Path $R 'exit.js') -Force
-    }
-    $logs = (Get (Join-Path $Live 'server.log')) + (Get (Join-Path $Vl 'server.log'))
-    Yes 'server-log.js took the game server''s and voice''s requests as each started, and said so with counts' (
-        $logs -match 'deletions: saves: characters 1, cards 1' -and $logs -match 'deletions: chat: chat lines 2' -and $logs -notmatch "$P1|$ME")
     $driver = Join-Path $T 'site-start.js'
     Put $driver @'
 const fs = require('fs'), path = require('path');
@@ -418,13 +420,33 @@ const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== en
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
 new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS', 'TROUBLE_FILE', 'ROSTER', 'INBOX',
-  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
+  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
   path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
   path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
-  path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'));
+  path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
+  path.join(D, 'settings.json'));
 '@
     $siteSaid = @(& $node $driver $Repo $Site 2>&1 | ForEach-Object { "$_" }) -join "`n"
     Yes 'the site took its request as it started, and said so with counts' ($siteSaid -match 'deletion requests: 1 person\(s\): .*done, and the request is gone' -and -not (Test-Path (Join-Path $Site 'data\deletion-requests.json')))
+    # The site has let go of their link, so its linked.json no longer names
+    # their character; the game servers have not started and still hold it.
+    # The dry run still shows both as waiting, by the characters the record
+    # wrote down (#4470).
+    $c = Run (@('-DiscordId', $ME) + $roots)
+    if (-not (Said 'waiting\s+the live game server has a request')) { Show }
+    Yes '  and with the site started first, a dry run still shows each game server waiting, by the characters in the record (#4470)' (
+        $c -eq 0 -and (Said 'Discord id 111111111111111111: 1 character') -and (Said 'waiting\s+the live game server has a request') -and
+        (Said 'waiting\s+the dev game server has a request') -and -not (Said 'waiting\s+the site has a request') -and -not (Said 'nothing of theirs on this box'))
+    $writer = Join-Path $Repo 'scripts\vps\Server-Log.js'
+    foreach ($R in $Live, $Dev, $Vl, $Vd) {
+        Put (Join-Path $R 'exit.js') 'process.exit(0);'
+        Push-Location -LiteralPath $R
+        try { & $node $writer --log (Join-Path $R 'server.log') exit.js | Out-Null } finally { Pop-Location }
+        Remove-Item -LiteralPath (Join-Path $R 'exit.js') -Force
+    }
+    $logs = (Get (Join-Path $Live 'server.log')) + (Get (Join-Path $Vl 'server.log'))
+    Yes 'server-log.js took the game server''s and voice''s requests as each started, and said so with counts' (
+        $logs -match 'deletions: saves: characters 1, cards 1' -and $logs -match 'deletions: chat: chat lines 2' -and $logs -notmatch "$P1|$ME")
     # The bot needs Python 3.11 or newer and discord.py to be imported at all.
     $pyExe = $null
     foreach ($cand in @(@('py', '-3.12'), @('py', '-3.11'), @('python'))) {
@@ -448,6 +470,8 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
     $lk = J (Join-Path $D 'linked.json')
     Yes 'their Discord link is gone, the others stay' ($null -eq $lk.$ME -and $null -ne $lk.$YOU -and $null -ne $lk.$THEM)
     Yes 'their answer to the rules is gone' ($null -eq (J (Join-Path $D 'rules-accepted.json')).$ME)
+    $st = J (Join-Path $D 'settings.json')
+    Yes 'their settings are gone, the others'' stay (#5939)' ($null -eq $st.$ME -and $null -ne $st.$YOU)
     $si = @(J (Join-Path $D 'signins.json'))
     Yes 'their sign-in rows are gone, with the addresses in them' ($si.Count -eq 1 -and $si[0].id -eq $YOU)
     $ss = @(J (Join-Path $D 'sessions.json'))
@@ -503,8 +527,10 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
             if ($before["$rel\private\$f"] -ne (Get-FileHash (Join-Path $PV $f)).Hash) { $same = $false; Write-Host "        changed: $tag private\$f" }
         }
         Yes "$tag`: every game register, the staff log and the door log are as they were (the game server lets go, not this)" $same
-        $list = J (Join-Path $PV 'deleted-characters.json')
-        Yes "$tag`: the list stays for the gamemode's registers, with the saves marked done" ($list.done.saves -gt 0 -and @($list.done.PSObject.Properties).Count -eq 1)
+        # The server took the request into its own list and keeps its marks there (#4920).
+        $list = J (Join-Path $PV 'deleted-characters.taken.json')
+        Yes "$tag`: the list stays for the gamemode's registers, taken, with the saves marked done" (
+            -not (Test-Path (Join-Path $PV 'deleted-characters.json')) -and $list.done.saves -gt 0 -and @($list.done.PSObject.Properties).Count -eq 1)
     }
     $old = Join-Path $Box 'Thornswood-Server.prev-20260930-000000'
     Yes 'an old copy with no private folder loses their discarded change form' (-not (Test-Path (Join-Path $old 'world-before-1\changeForms\_discarded-1\ff000a08.json')))

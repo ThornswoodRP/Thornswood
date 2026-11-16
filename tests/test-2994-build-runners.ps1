@@ -20,7 +20,7 @@
   github-admin.yml asks and Set-BuildRunners.ps1 starts; the rules this test
   held Set-BuildRunners.ps1 to before (a listed runner gets the label, any
   other loses it, an off-box runner never has it, a record whose runners
-  GitHub does not have stops) are held there by tests\test-3107-admin.js,
+  GitHub does not have stops) are held there by scripts\tests\test-3107-admin.js,
   against stand-in runner lists. Asks GitHub nothing. A few seconds.
 #>
 $ErrorActionPreference = 'Stop'
@@ -81,8 +81,8 @@ Yes '  and the pull request record too, for a box runner by number and an off-bo
 $set = [IO.File]::ReadAllText((Under @('scripts', 'deploy', 'Set-BuildRunners.ps1')))
 Yes 'Set-BuildRunners.ps1 starts github-admin.yml' ($set.Contains("`$workflow = 'github-admin.yml'") -and $set.Contains('Start-ThornswoodWorkflow'))
 Yes '  and changes no label itself' ($set -notmatch 'actions/runners/|/labels')
-Yes 'tests\test-3107-admin.js holds the rules' ((Test-Path -LiteralPath (Under @('tests', 'test-3107-admin.js'))) -and
-    ([IO.File]::ReadAllText((Under @('tests', 'test-3107-admin.js')))).Contains('a record whose runners GitHub has none of is refused'))
+Yes 'scripts\tests\test-3107-admin.js holds the rules' ((Test-Path -LiteralPath (Under @('scripts', 'tests', 'test-3107-admin.js'))) -and
+    ([IO.File]::ReadAllText((Under @('scripts', 'tests', 'test-3107-admin.js')))).Contains('a record whose runners GitHub has none of is refused'))
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

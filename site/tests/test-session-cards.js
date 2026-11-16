@@ -102,7 +102,9 @@ yes('the page never calls the note endpoint', src.indexOf('/api/session-note') <
   session on the live server that was never on it, which is exactly what
   somebody would later be asked to account for.
 */
-eval(grab('sessionTable'));
+// sessionTable names a row's characters through sessionChars (#4643), so the
+// two are lifted together.
+eval(grab('sessionTable') + '\n' + grab('sessionChars'));
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

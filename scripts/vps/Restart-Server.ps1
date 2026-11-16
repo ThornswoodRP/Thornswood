@@ -15,8 +15,8 @@
   Check first, then decide, rather than finding out afterwards.
 
   The game and dev servers' restart is said in Discord first (#5784): with
-  nobody on, Request-Restart.ps1 says it (#updates for the live server, the
-  dev updates channel for dev) a minute ahead and this waits the minute out,
+  nobody on, Request-Restart.ps1 says it (#updates for the live server,
+  #staff-updates for dev) a minute ahead and this waits the minute out,
   and once the server is started again the notice says it is back. -Now
   says nothing ahead; a restart Request-Restart -ThenRestart counted down
   was said by it, and is said to be back here.
@@ -140,6 +140,15 @@ Start-Sleep -Seconds 12
 "@
   $out | ForEach-Object { Say "  $_" }
   if ("$out" -match 'NO SUCH SERVICE') { Die "There is no service called $($it.Svc) on the VPS. Install-Bot.ps1 puts it there." }
+  # What came back is the restart's result, not only something to show
+  # (#4204): Request-Restart.ps1 reads this script's exit code alone, and
+  # said everybody was restarted while the service was down.
+  $could = @($out | Where-Object { "$_" -match '^COULD NOT RESTART: ' })
+  if ($could.Count) { Die "$($it.Svc) was not restarted. $($could[0])" }
+  $state = @($out | Where-Object { "$_" -match '^state ' } | Select-Object -Last 1)
+  if (-not $state.Count -or "$($state[0])" -ne 'state Running') {
+    Die ("$($it.Svc) did not come back: " + $(if ($state.Count) { "its $($state[0]) after the restart" } else { 'the box said no state after the restart' }) + '. The watchdog takes it up; Get-Logs says why.')
+  }
 } else {
   $out = Remote ($ThornswoodRestartNoticeText + @"
 $(Get-ThornswoodHoldScript -Script 'Restart-Server.ps1')
@@ -147,7 +156,8 @@ $(Get-ThornswoodHoldScript -Script 'Restart-Server.ps1')
 Set-ThornswoodHold -Target '$($it.Task)' -Why 'restarting it' -By `$HoldBy
 Stop-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
 Start-Sleep -Seconds 4
-Start-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
+# A start the box refuses is said, never let go silently (#4204).
+try { Start-ScheduledTask -TaskName '$($it.Task)' -ErrorAction Stop } catch { 'COULD NOT START: ' + `$_.Exception.Message }
 Clear-ThornswoodHold -Target '$($it.Task)'
 # A restart said to be coming in Discord is said to be over (#5784): back
 # once the resources port takes a connection, the swap's own sign, within the
@@ -160,8 +170,8 @@ if ($($it.Port) -gt 0) {
     `$c = New-Object Net.Sockets.TcpClient
     try { `$c.Connect('127.0.0.1', $($it.Port)); `$up = `$true } catch { Start-Sleep -Seconds 2 } finally { `$c.Dispose() }
   }
-  if (`$up) { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State back }
-  else { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State down }
+  if (`$up) { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State back; 'PORT UP' }
+  else { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State down; 'PORT DOWN' }
 }
 Start-Sleep -Seconds 12
 `$t = Get-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
@@ -169,6 +179,16 @@ if (`$t) { 'state ' + `$t.State } else { 'NO SUCH TASK: $($it.Task)' }
 "@)
   $out | ForEach-Object { Say "  $_" }
   if ("$out" -match 'NO SUCH TASK') { Die "There is no scheduled task called $($it.Task) on the VPS." }
+  # The restart's result, as for a service above (#4204).
+  $could = @($out | Where-Object { "$_" -match '^COULD NOT START: ' })
+  if ($could.Count) { Die "$($it.Task) was stopped and not started again. $($could[0])" }
+  $state = @($out | Where-Object { "$_" -match '^state ' } | Select-Object -Last 1)
+  if (-not $state.Count -or "$($state[0])" -ne 'state Running') {
+    Die ("$($it.Task) did not come back: " + $(if ($state.Count) { "its $($state[0]) after the start" } else { 'the box said no state after the start' }) + '. The watchdog takes it up; Get-Logs says why.')
+  }
+  if ($it.Port -gt 0 -and -not @($out | Where-Object { "$_" -eq 'PORT UP' }).Count) {
+    Die "$($it.Task) is running but nothing answered on port $($it.Port) in 170 seconds, so it did not come up. Discord was told it is down; Get-Logs says why."
+  }
 }
 
 # ------------------------------------------------------------- did it come back

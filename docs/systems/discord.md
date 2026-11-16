@@ -6,6 +6,14 @@ change the plan and run that, and `bot/tests/test-3317-layout.py` fails when
 the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live
 server differs from this page. Issue #3317 is where it was set out.
 
+## Contents
+
+- [The staff council](#the-staff-council)
+- [Roles, top of the list first](#roles-top-of-the-list-first)
+- [Who a mode lets in](#who-a-mode-lets-in)
+- [Categories and channels, in order](#categories-and-channels-in-order)
+- [Retired](#retired)
+
 ## The staff council
 
 Each staff category has a lead, and the leads are the council: they
@@ -52,6 +60,7 @@ Holders of Moderator also talk in the Gamemasters space.
 | Moderator | #6FA05A | yes | moderator set | the build | Moderates the Discord only. No staff powers in the game. |
 | Content Creator | #D2603F | yes | nothing of its own | the build | Thornswood's own social media and content, not community creators. |
 | Support | #C9B46A | yes | support set | the build | Answers help tickets and playtest applications, and gives Playtester. |
+| Clanker | #00E5FF | yes | nothing of its own | the build | Every bot in the server: Thornswood, Patreon, Jockie Music, DISBOARD and any added later. A build gives it. |
 | Jarl of Whiterun | #E0C56A | yes | nothing of its own | the build | The seat of Whiterun. Applied for on its own application. |
 | Jarl of Solitude | #E0C56A | yes | nothing of its own | the build | The seat of Solitude. Applied for on its own application. |
 | Jarl of Windhelm | #E0C56A | yes | nothing of its own | the build | The seat of Windhelm. Applied for on its own application. |
@@ -157,10 +166,10 @@ Holders of Moderator also talk in the Gamemasters space.
 | Blades Officer | #A08560 | no | nothing of its own | the build | An Officer of Blades: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Volkihar Clan Officer | #A08560 | no | nothing of its own | the build | An Officer of Volkihar Clan: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Business Owner | #A08C6A | no | nothing of its own | the build | Owns a business book in the game. Support gives it. |
-| Member | #8D9682 | no | nothing of its own | the build | Joined and answered the rules and age questions. Sees Start Here, Applications and Information. |
+| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Sees Start Here, Applications and Information. |
 | Banned | #4A4A4A | no | nothing of its own | the build | Takes the site and the game away (site/server.js, access.banned). |
-| News Pings | #8D9682 | no | left to what makes it | bot.py |  |
-| Updates Pings | #8D9682 | no | left to what makes it | bot.py |  |
+| News Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
+| Updates Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
 
 @everyone keeps what the server gives it; the build does not change it,
 and the audit prints it. Every other role opens exactly the channels
@@ -190,7 +199,7 @@ tidies there. A staff space mode is said for the space it names.
 | public | everybody | everybody | everybody |
 | read | everybody | the council | the council |
 | membersread | everybody on staff, Member, Playtester | the council | the council |
-| memberstalk | everybody | everybody on staff, Member, Playtester | - |
+| staffbump | everybody on staff, Member, Playtester | everybody on staff | - |
 | open | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | testersread | everybody on staff, Playtester | the council | the council |
@@ -215,18 +224,18 @@ Category mode: public.
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #rules | text | read | everybody | the council | posts: the council; written by the build from content.py RULES, with its Changelog thread; topic: Seven rules. Read them. |
-| #welcome | text | read | everybody | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
-| #start-here | text | read | everybody | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
-| #dishboard | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #say-hello in Start Here; topic: Dishboard bumps. |
+| #welcome | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
+| #start-here | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
+| #disboard | text | staffbump | everybody on staff, Member, Playtester | everybody on staff | was #dishboard in Start Here; was #say-hello in Start Here; topic: Disboard bumps. |
 
 ### Tickets
 
-Category mode: public.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #get-help | text | read | everybody | the council | posts: the council; topic: It will not install, start or connect. Open a ticket below. |
-| #report-someone | text | read | everybody | the council | posts: the council; topic: Something happened and it should not have. Only you and staff see it. |
+| #get-help | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: It will not install, start or connect. Open a ticket below. |
+| #report-someone | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Something happened and it should not have. Only you and staff see it. |
 
 ### Information
 
@@ -240,23 +249,23 @@ Category mode: membersread.
 
 ### Roleplay Guide
 
-Category mode: testersread.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #game-rules | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py GAMERULES, with its Changelog thread; was #game-rules in Thornswood; was #game-rules in In Character; topic: How roleplay works here. Nine rules, and what we let slide. |
-| #lore | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
-| #factions | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py FACTIONS, with its Changelog thread; topic: The sixteen factions of 4E 252: who they are, where they keep, who leads them. |
+| #game-rules | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py GAMERULES, with its Changelog thread; was #game-rules in Thornswood; was #game-rules in In Character; topic: How roleplay works here. Nine rules, and what we let slide. |
+| #lore | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
+| #factions | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py FACTIONS, with its Changelog thread; topic: The sixteen factions of 4E 252: who they are, where they keep, who leads them. |
 
 ### Applications
 
-Category mode: public.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #apply-to-playtest | text | read | everybody | the council | posts: the council; topic: How you get into the world. Pick the application below. |
-| #apply-for-a-seat | text | read | everybody | the council | posts: the council; topic: Jarl and Faction Leader, answered in character. Only open seats are listed. |
-| #apply-for-staff | text | read | everybody | the council | posts: the council; topic: Gamemaster, Loremaster, Moderator, Dev and Content Creator. |
+| #apply-to-playtest | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: How you get into the world. Pick the application below. |
+| #apply-for-a-seat | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Jarl and Faction Leader, answered in character. Only open seats are listed. |
+| #apply-for-staff | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Gamemaster, Loremaster, Moderator, Dev and Content Creator. |
 
 ### Out of Character
 
@@ -264,7 +273,7 @@ Category mode: open. It was Thornswood.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #welcome-travelers | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. Say hello in #general-chat. |
+| #welcome-travelers | text | read | everybody | the council | posts: the council; was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. React to the rules in #rules for the Member role. |
 | #general-chat | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
 | #media | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #media in Thornswood; topic: Screenshots and clips. Talk about one in a thread under it. |
 | #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |
@@ -620,7 +629,7 @@ Category mode: staff.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #staff-announcements | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; topic: Announcements for every staff member. The council posts here. |
+| #staff-news | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; was #staff-announcements in Staff; topic: Every dev release, and announcements for every staff member. The council posts here. |
 | #council-decisions | text | staffread | everybody on staff | the council | posts: the council; topic: Every council decision, with its date. The council posts here. |
 | #staff-updates | text | staff | everybody on staff | everybody on staff | never made by the build; topic: Only what every staff member must act on: a restart, an outage, or a change to how staff work. The bot and the watchdog post here. |
 | #staff-general | text | staff | everybody on staff | everybody on staff | topic: Nobody else can see this. |
@@ -712,6 +721,6 @@ Categories retired by the plan, removed by `-Prune` once empty: Help, The Holds,
 
 Channel names the build no longer wants, removed by `-Prune`: tech-help, looking-for-group, off-topic, downloads, links-and-credits, Small Table, The Longhouse, Away, screenshots, clips, bot-commands, The Bannered Mare, The Road, test-these, test-tasks-archive, tickets-and-applications, tickets, seats.
 
-Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
+Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-news, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
 
 Roles never deleted: every Jarl, Citizen and office role, and every faction's Leader, member and Officer role.

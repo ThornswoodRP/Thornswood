@@ -124,7 +124,7 @@ if (-not ($region.Success -and $block.Success)) { Write-Host ""; Write-Host "$($
 $stubs = $stubs.Replace('__OWNGAME__', $region.Groups[1].Value.TrimEnd() + "`n" + $block.Groups[1].Value.TrimEnd())
 $sources = @($stubs)
 $usings = New-Object 'Collections.Generic.SortedSet[string]'
-foreach ($f in 'Enforce.cs', 'AutoJoin.cs', 'Hold.cs', 'Watched.cs', 'ChannelWait.cs') {
+foreach ($f in 'Enforce.cs', 'AutoJoin.cs', 'Hold.cs', 'Watched.cs', 'ChannelWait.cs', 'Failure.cs') {
     $cs = Get-Content -LiteralPath (Join-Path $app $f) -Raw
     # One compile of several files: their usings go to the top, once each.
     foreach ($u in [regex]::Matches($cs, '(?m)^using [\w.]+;\s*$')) { $null = $usings.Add($u.Value.Trim()) }

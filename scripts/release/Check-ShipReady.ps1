@@ -83,7 +83,7 @@ function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Ho
 # somebody's decision rather than a command. $who is who runs it. $level is
 # 'need' for what would stop a Ship, and 'warn' for what does not stop one but
 # gets in the way of something around it (the live deploys); a warn
-# never changes the verdict. tests\test-ship-ready.ps1 lifts this and the
+# never changes the verdict. scripts\tests\test-ship-ready.ps1 lifts this and the
 # functions below out of the script and runs them.
 function New-Row([string]$what, [bool]$ok, [string]$detail, [string]$fix, [string]$who = 'either', [string]$level = 'need') {
   return [pscustomobject]@{ What = $what; Ok = $ok; Detail = $detail; Fix = $fix; Who = $who; Level = $level }
@@ -412,11 +412,11 @@ try {
     if ($colWhy) {
         Say ('  note  ' + $colCfg + ' does not read (' + $colWhy + '), so which collection it names, and its revision, were not checked') 'Yellow'
     } elseif ($cs.Known) {
-        Ready 'the collection here is the newest Vortex knows of' (-not $cs.Behind) `
+        Ready 'the collection here is the newest published on Nexus' (-not $cs.Behind) `
             ("revision {0}, newest {1}" -f $cs.Have, $cs.Newest) `
             'Update the collection in Vortex, let it deploy, then Deploy-Gamemode and ship. A release built from a stale collection turns away everybody who installed the current one.' 'patrick'
     } else {
-        Say '  note  could not read the collection revision from Vortex, so it was not checked' 'DarkGray'
+        Say ('  note  the collection revision was not checked: ' + $cs.Why) 'DarkGray'
     }
 } catch { Say ('  note  the collection revision check did not run: ' + $_.Exception.Message) 'DarkGray' }
 # Ship stops on this too (Assert-VortexProfile, #557): it reads the load order

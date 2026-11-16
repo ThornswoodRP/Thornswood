@@ -132,6 +132,7 @@ namespace Thornswood
                 }
             }
             catch (Exception ex) { Swallow.Note("Register.Ensure", ex); }
+            HideVelopackEntry();
         }
 
         /// <summary>
@@ -158,6 +159,52 @@ namespace Thornswood
             return false;
         }
 
+
+        /// <summary>
+        /// Keeps this entry the only Thornswood in Installed apps under
+        /// Velopack (#5932).
+        ///
+        /// Velopack's setup writes an entry of its own for the app it
+        /// installs, Uninstall\{its app id}, whose button runs Update.exe
+        /// --uninstall. Beside the one Ensure writes, a Velopack install showed
+        /// Thornswood twice, and Velopack's half of the pair removed only the
+        /// launcher's own folder: not Root, and not before Windows' Skyrim
+        /// folders were pointed back, which Uninstall.Begin will not skip.
+        /// Velopack has no setting to leave its entry out (vpk pack has none),
+        /// so the entry stays, for Velopack's own uninstall to remove, and is
+        /// marked SystemComponent, which Windows does not list. Thornswood's
+        /// uninstall, the one listed, runs Velopack's at its end
+        /// (Uninstall.AppUninstaller), so nothing is lost by hiding it.
+        /// </summary>
+        static void HideVelopackEntry()
+        {
+            try
+            {
+                if (!Velo.Installed) return;
+                var l = Velo.Locator;
+                if (string.IsNullOrEmpty(l.AppId) || string.IsNullOrEmpty(l.UpdateExePath)) return;
+                HideEntry(Registry.CurrentUser, Root + "\\" + l.AppId, l.UpdateExePath);
+            }
+            catch (Exception ex) { Swallow.Note("Register.HideVelopackEntry", ex); }
+        }
+
+        /// <summary>
+        /// Marks the entry at keyPath SystemComponent when its uninstall is
+        /// updateExe's, this install's Velopack, and touches nothing else.
+        /// True when it is marked. Apart from Ensure so a test can point it
+        /// at a scratch key.
+        /// </summary>
+        public static bool HideEntry(RegistryKey hive, string keyPath, string updateExe)
+        {
+            using (RegistryKey k = hive.OpenSubKey(keyPath, true))
+            {
+                if (k == null) return false;
+                string un = k.GetValue("UninstallString") as string ?? "";
+                if (!un.StartsWith("\"" + updateExe + "\"", StringComparison.OrdinalIgnoreCase)) return false;
+                k.SetValue("SystemComponent", 1, RegistryValueKind.DWord);
+                return true;
+            }
+        }
 
         /// <summary>Takes the entry out. Called on the way through an uninstall.</summary>
         public static void Forget()

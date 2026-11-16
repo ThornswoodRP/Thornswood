@@ -8,7 +8,7 @@
   it in front of the game server swap block (Deploy-Server,
   Deploy-DevGamemode, and their -PutBack), Install-ThornswoodServer.ps1
   carries an exact copy, and so does vps-nightly-backup.ps1, which runs on its
-  own on the box. tests\test-3247-server-folder-turn.ps1 fails when a copy
+  own on the box. scripts\tests\test-3247-server-folder-turn.ps1 fails when a copy
   and this file differ. It is not in StopAndMove.ps1, whose rule is that
   nothing in it sleeps or tries again (#2928): this waits for its turn, which
   is not a rename tried again. Keep it ASCII: Windows PowerShell 5.1 on the

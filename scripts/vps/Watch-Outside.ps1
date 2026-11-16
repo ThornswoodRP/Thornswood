@@ -6,7 +6,9 @@
   again when it is fixed.
 
       ./Watch-Outside.ps1                     look once and print it; remembers and posts nothing
-      ./Watch-Outside.ps1 -Run -Folder state  one scheduled pass: remember, tell, post (what the workflow runs)
+      ./Watch-Outside.ps1 -Run -Folder state  one pass: remember, tell, post
+      ./Watch-Outside.ps1 -Run -Folder state -For 55
+                                              a pass every -Minutes by the clock for 55 minutes (what the workflow runs, #4170)
       ./Watch-Outside.ps1 -TestPost           post one test message through WATCH_WEBHOOK
       ./Watch-Outside.ps1 -Export <folder>    write the public repository's files into <folder>
       .\scripts\vps\Watch-Outside.ps1 -Remove take the old scheduled task off a Windows machine (One), from an administrator shell
@@ -160,6 +162,7 @@
 param(
   [string]$Folder   = '',
   [int]$Minutes     = 5,
+  [int]$For         = 0,
   [string]$Export   = '',
   [string]$TaskName = 'Thornswood Watch Outside',
   [switch]$Run,
@@ -676,7 +679,7 @@ function Paths($dir) {
   return @{
     Outages = (Join-Path $dir 'outages.txt'); Due = (Join-Path $dir 'due.txt')
     Alerts = (Join-Path $dir 'alerts.jsonl'); Sent = (Join-Path $dir 'alerts-sent.txt')
-    Log = (Join-Path $dir 'watch.log')
+    Log = (Join-Path $dir 'watch.log'); Last = (Join-Path $dir 'last-check.txt')
   }
 }
 $hookRx = '^https://((ptb|canary)\.)?discord(app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$'
@@ -747,6 +750,40 @@ function Took($from, $to) {
   return ('about ' + [math]::Round($m / 1440.0, 1) + ' days')
 }
 
+# ------------------------------------------------- when it last checked ---
+# GitHub's schedule trigger does not keep an interval (#4170): asked for
+# every five minutes, it started this a median 11 minutes apart in October,
+# and from 2 to 12 Nov 2026 3 to 5 times a day. So the workflow keeps the
+# clock itself (Invoke-WatchFor, below), and every pass writes when it
+# checked into last-check.txt in the state folder. A message says how long
+# before it the check before it was, which is measured, never a cadence it
+# was promised. And a pass more than $GapMinutes after the one before tells
+# staff once that the watcher was not checking in between: that is the
+# chain of runs broken and waiting for the schedule to start it again.
+$GapMinutes = 15
+$script:PreviousCheck = $null
+$script:ThisCheck = $null
+
+function Read-Last($P) {
+  if (-not (Test-Path -LiteralPath $P.Last)) { return $null }
+  try { return [datetime]::Parse(("" + (Get-Content -LiteralPath $P.Last -Raw)).Trim(), $null, 'RoundtripKind') } catch { return $null }
+}
+
+function Save-Last($P, $t) { Set-Content -LiteralPath $P.Last -Value $t.ToString('o') -Encoding ASCII }
+
+# The words a message carries about the check before it.
+function Since-Before {
+  if (-not $script:PreviousCheck -or -not $script:ThisCheck) { return 'It remembers no check before this one.' }
+  return ('The check before this one was ' + (Took $script:PreviousCheck $script:ThisCheck) + ' earlier.')
+}
+
+# Once, on the first pass after a gap longer than $GapMinutes.
+function Tell-Gap($P, $prev, $now) {
+  if (-not $prev) { return }
+  if (($now - $prev).TotalMinutes -le $GapMinutes) { return }
+  Tell $P @{ Name = 'gap' } 'gap' 'The outside watcher was not checking' ('for ' + (Took $prev $now) + ', from ' + (Shown $prev) + ' to ' + (Shown $now) + '. Anything outside the VPS that broke and came back in between was not seen; anything still wrong is told from this check on. Each run of it checks for under an hour and then starts the next; when that chain breaks it waits for GitHub''s schedule, which has started it as seldom as every 8 hours.')
+}
+
 # One message into the outbox. The run log gets its id, not its words.
 function Tell($P, $c, $kind, $head, $body) {
   $now = Get-Now
@@ -774,7 +811,7 @@ function Observe($P, $o, $c, $res, $S) {
       $since = [datetime]::Parse($st.Since, $null, 'RoundtripKind')
       $why = $res.Why
       if ($why -and $why -notmatch '^https?:') { $why = $why.Substring(0, 1).ToUpper() + $why.Substring(1) }
-      Tell $P $c 'down' ($c.Say + ' ' + $c.Fails + '.') ($why + '. First noticed ' + (Shown $since) + '. Checked from outside the VPS, on GitHub''s servers, about every ' + $S.Minutes + ' minutes. ' + $c.Fix)
+      Tell $P $c 'down' ($c.Say + ' ' + $c.Fails + '.') ($why + '. First noticed ' + (Shown $since) + '. Checked from outside the VPS, on GitHub''s servers. ' + (Since-Before) + ' ' + $c.Fix)
     }
     return
   }
@@ -871,7 +908,16 @@ function Invoke-Watch($S, $P, [switch]$Remember) {
   }
   $now = Get-Now
   $o = @{}; $due = @{}
-  if ($Remember) { $o = Read-Outages $P; $due = Read-Due $P }
+  if ($Remember) {
+    $o = Read-Outages $P; $due = Read-Due $P
+    # When the check before this one was, and a gap since it told (#4170).
+    # Only a pass that is online counts as a check, so a runner that could
+    # not reach anything leaves the time where it was.
+    $script:PreviousCheck = Read-Last $P
+    $script:ThisCheck = $now
+    Tell-Gap $P $script:PreviousCheck $now
+    Save-Last $P $now
+  }
   $seen = [ordered]@{}
   foreach ($c in (Get-Checks $S)) {
     if ($Remember -and -not (Is-Due $c $due $now)) { continue }
@@ -897,6 +943,32 @@ function Invoke-Watch($S, $P, [switch]$Remember) {
     Trim-Files $P
   }
   return $seen
+}
+
+# Waits until $t. The harness puts its own clock here.
+function Wait-Until([datetime]$t) {
+  $left = ($t - (Get-Now)).TotalMilliseconds
+  if ($left -gt 0) { Start-Sleep -Milliseconds ([int]$left) }
+}
+
+# -Run -For: one pass every $S.Minutes by the clock, each started that long
+# after the one before started, however long a pass took, for $for minutes,
+# and no pass started that could not end inside them. GitHub's schedule
+# trigger does not keep an interval (#4170), so the clock is kept here and
+# the workflow starts the next run when this one ends. 55 minutes, because
+# the runners' App token minted at the start of a run lasts an hour.
+# Returns how many passes it made.
+function Invoke-WatchFor($S, $P, [int]$for) {
+  $every = [math]::Max(1, [int]$S.Minutes)
+  $start = Get-Now
+  $made = 0
+  for ($at = 0; $at + $every -le [math]::Max($for, $every); $at += $every) {
+    if ($made) { Wait-Until ($start.AddMinutes($at)) }
+    $seen = Invoke-Watch $S $P -Remember
+    if ($null -ne $seen) { Write-Results $seen }
+    $made++
+  }
+  return $made
 }
 
 # What the run log says for one result: the outcome, and the line only when
@@ -1003,6 +1075,11 @@ if ($Run) {
   if (-not $Folder) { Say '  STOP. -Run needs -Folder, where it remembers what is down between runs.' 'Red'; exit 1 }
   if (-not [IO.Path]::IsPathRooted($Folder)) { $Folder = [IO.Path]::GetFullPath((Join-Path (Get-Location).Path $Folder)) }
   $P = Paths $Folder
+  if ($For -gt 0) {
+    $made = Invoke-WatchFor $S $P $For
+    Write-Host ('  ' + $made + ' passes, one every ' + $S.Minutes + ' minutes by the clock')
+    exit 0
+  }
   $seen = Invoke-Watch $S $P -Remember
   if ($null -eq $seen) { exit 0 }
   Write-Results $seen
@@ -1022,7 +1099,7 @@ if ($TestPost) {
   $where = Webhook-Channel $url
   if (-not $where.Channel) { $url = $null; Say ('  STOP. Discord would not say where that webhook posts: ' + $where.Why + '. Nothing was posted.') 'Red'; Done 1 }
   if ($S.StaffChannel -and $where.Channel -ne $S.StaffChannel) { $url = $null; Say '  STOP. That webhook does not post in #staff-updates. Make one there and put it in the secret. Nothing was posted.' 'Red'; Done 1 }
-  $why = Send-Webhook $url ('**Test from the outside watcher.** It runs on GitHub''s servers, off the VPS and off One, and asks the site, both update feeds, the certificate, the address, the registration, the build runners and the Nexus collection about every ' + $Minutes + ' minutes, and posts here when one breaks and again when it is fixed.')
+  $why = Send-Webhook $url ('**Test from the outside watcher.** It runs on GitHub''s servers, off the VPS and off One, and asks the site, both update feeds, the certificate, the address, the registration, the build runners and the Nexus collection. Each run of it checks every ' + $Minutes + ' minutes by its own clock for under an hour and then starts the next. It posts here when one breaks and again when it is fixed, and when it was not checking for more than ' + $GapMinutes + ' minutes.')
   $url = $null
   if ($why) { Say ('  Discord did not take it: ' + $why) 'Red'; Done 1 }
   Say '  posted in #staff-updates; look in the channel' 'Green'

@@ -16,7 +16,7 @@ do not, nothing is missing.
 Nexus, and a collection is a Vortex thing: Mod Organizer cannot install it.
 
 Where Thornswood's files go is one box in the install window, **Give
-Thornswood a Skyrim folder of its own**, and it starts unticked. Ticked,
+Thornswood a Skyrim folder of its own**, and it starts ticked. Left ticked,
 Thornswood writes nothing of its own into the Skyrim you already have on Steam,
 so that copy stays yours to play and mod however you like: once Vortex has
 deployed, the launcher builds a game folder of its own, `Game` in the install
@@ -24,7 +24,7 @@ folder on the same drive as Skyrim, out of your Steam copy and what Vortex put
 into it, and after that it only takes Vortex's files from there. The mods and
 Skyrim's archives are hard links, which take no extra space, and the launcher
 checks the archives before every Play; everything else is Thornswood's own
-copy. Left unticked, Thornswood's own files go into your Steam copy, with a
+copy. Unticked, Thornswood's own files go into your Steam copy, with a
 list of what went there, and the launcher asks before it builds the folder.
 Vortex keeps the mods in a profile of their own, so switching back to your
 usual profile and running Purge Mods leaves your own Skyrim the way it was.
@@ -86,7 +86,17 @@ The link is on the [Downloads](/downloads) page, on the card above Play and on
 the launcher's Diagnostics page. Each opens the revision of the collection the
 server was built against and names its number. Install that revision, not a
 newer one Nexus may show first: a newer one keeps Play shut until the server
-catches up. Vortex takes it from there: it makes a profile for Thornswood,
+catches up.
+
+A new Nexus account has two stops before Vortex can start. First, some of the
+collection's mods are marked adult, and Nexus hides the collection until you
+turn on adult content in your Nexus Mods settings. In some countries Nexus
+asks you to verify your age first. Second, on a free account Vortex opens
+each file's page on Nexus and you press **Slow download** there, once for
+each file: 120 files, from 111 mods. A Premium account downloads them without
+pressing anything.
+
+After that, Vortex takes it from there: it makes a profile for Thornswood,
 downloads every mod from its own author, and deploys them. Give it time.
 
 When the server later moves to a newer revision, update the collection inside

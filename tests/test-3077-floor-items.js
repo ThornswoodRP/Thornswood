@@ -148,7 +148,7 @@ const last = made.buf ? readPlugin(made.path, 'Thornswood-Last.esp') : { recs: [
 if (!made.buf) { console.log('SKIP  P, N2, N3, N5: ' + made.why); }
 const gates = new Set(manifest.gatesUnlocked || []);
 // The hold-only plants and ores switched off outside their hold (#3150) are
-// tests/test-3150-hold-builder.js's and the builder's --verify.
+// game/tests/test-3150-hold-builder.js's and the builder's --verify.
 const holdOff = new Set((manifest.holdOnly && manifest.holdOnly.off) || []);
 const refs = last.recs.filter((r) => r.tag === 'REFR' && !gates.has(r.desc) && !holdOff.has(r.desc));
 const bad = refs.filter((r) => {
@@ -170,7 +170,7 @@ yesR('P3 and they are the ones it says: their ids hash to its refsSha256', () =>
 // the records its row carries. Immersive Armors carries none (Patrick, 22 Oct
 // 2026, q-613-ia-recipes: its 6 floor items and their cell headers were never
 // his to carry); the server holds those floor items off instead
-// (tests/test-613-set-in-game.js).
+// (game/tests/test-613-set-in-game.js).
 const policy = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-plugin-policy.json'), 'utf8'));
 const rows = policy.notCopiedFrom || [];
 const never = rows.map((r) => r.plugin);

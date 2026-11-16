@@ -81,13 +81,16 @@ if (-not ((Test-Path -LiteralPath $Checker) -and (Test-Path -LiteralPath $Baseli
 # -Scripts, -Js, -Py and -Root pass on to it when given; without them it reads
 # the real scripts\ and installer\ (#2711) and the real site\, voice\ and bot\
 # (#2736), which is what section 1 wants and the copies below do not.
-function Run-Check([string]$app, [string]$base, [switch]$List, [string[]]$Scripts, [string[]]$Js, [string[]]$Py, [string]$Root) {
+function Run-Check([string]$app, [string]$base, [switch]$List, [string[]]$Scripts, [string[]]$Js, [string[]]$Py, [string[]]$Cs, [string]$Root) {
     $global:LASTEXITCODE = 0
     $a = @{ AppDir = $app; Baseline = $base }
     if ($List) { $a.List = $true }
     if ($null -ne $Scripts) { $a.ScriptDirs = $Scripts }
     if ($null -ne $Js) { $a.JsDirs = $Js }
     if ($null -ne $Py) { $a.PyDirs = $Py }
+    # A caller that names its own folders names its whole tree, so the C#
+    # outside the launcher (#4132) is read only when it names that too.
+    if ($null -ne $Cs) { $a.CsDirs = $Cs } elseif ($null -ne $Js) { $a.CsDirs = @() }
     if ($Root) { $a.Root = $Root }
     $out = & $Checker @a 6>&1 | Out-String
     return @{ Code = $LASTEXITCODE; Out = $out }
@@ -444,6 +447,66 @@ try {
     Yes ("one more except: pass in bot\bot.py goes red at {0} against {1}" -f ($mayPy + 1), $mayPy) ($r.Code -eq 1 -and $r.Out -match ("bot\\bot\.py has {0} silent catches and the baseline allows {1}" -f ($mayPy + 1), $mayPy))
     [IO.File]::WriteAllText($realPy, $pyText)
 
+    # ---- 3d. the game, the tools' C# and the launcher's mover (#4132) ------------
+    #
+    # Until #4132 nothing read game\, tools\ or launcher\move\: the gamemode's
+    # TypeScript parts, the plugins and overlays, the deploy agent that runs
+    # the servers on the box, the release notes tool and the launcher's
+    # mover. In one week 101 empty catches landed there unseen, the stall
+    # keeper's lapse clock write and the character switch's combat check
+    # among them. A tree of its own with every folder the checker reads by
+    # default, and the checker run with its defaults, so what is checked is
+    # what it reads when nobody names a folder, as on every pull request.
+    $gRoot = Join-Path $tmp 'repo-game'
+    foreach ($d in 'launcher\app', 'launcher\move', 'scripts', 'installer', 'site', 'voice', 'bot', 'game\gamemode', 'game\plugins', 'game\ui', 'tools\DeployAgent', 'tools\DeployAgent.Tests') {
+        New-Item -ItemType Directory -Force -Path (Join-Path $gRoot $d) | Out-Null
+    }
+    $gBase = Join-Path $tmp 'game-baseline.txt'
+    [IO.File]::WriteAllText($gBase, "# the rule`r`n")
+    function Run-GameCheck([switch]$List) {
+        $global:LASTEXITCODE = 0
+        $a = @{ AppDir = (Join-Path $gRoot 'launcher\app'); Baseline = $gBase; Root = $gRoot }
+        if ($List) { $a.List = $true }
+        $out = & $Checker @a 6>&1 | Out-String
+        return @{ Code = $LASTEXITCODE; Out = $out }
+    }
+    $r = Run-GameCheck
+    Yes 'a tree with no empty catch in the game or the tools passes' ($r.Code -eq 0)
+    if ($r.Code -ne 0) { Write-Host $r.Out }
+
+    $gameCounted = [ordered]@{
+        'game\gamemode\planted.ts'      = "export function f(): void {`r`n  try { g(); } catch (e: unknown) { }`r`n}`r`n"
+        'game\plugins\planted.js'       = "try { x(); } catch (e) { }`r`n"
+        'game\ui\planted.js'            = "p.catch(() => {});`r`n"
+        'game\planted.js'               = "try { x(); } catch {}`r`n"
+        'tools\DeployAgent\Planted.cs'  = "class P { void M() { try { M(); } catch (System.Exception) { } } }`r`n"
+        'launcher\move\Planted.cs'      = "class P`r`n{`r`n    void M()`r`n    {`r`n        try { M(); }`r`n        catch`r`n        {`r`n        }`r`n    }`r`n}`r`n"
+    }
+    foreach ($k in $gameCounted.Keys) {
+        $p = Join-Path $gRoot $k
+        [IO.File]::WriteAllText($p, $gameCounted[$k])
+        $r = Run-GameCheck
+        Yes ("an empty catch in {0} goes red, named by its path from the root and allowed none" -f $k) (
+            $r.Code -eq 1 -and $r.Out -match ([regex]::Escape($k) + ' has 1 silent catches and the baseline allows 0'))
+        Remove-Item -LiteralPath $p -Force
+    }
+
+    # Not read: the gamemode.js Build-Gamemode.js joins from the parts (its
+    # catches are the parts', counted there), the deploy agent's harnesses,
+    # and a vendored minified library under the overlays.
+    $gameSkipped = [ordered]@{
+        'game\gamemode.js'                          = "try { x(); } catch (e) { }`r`n"
+        'tools\DeployAgent.Tests\PlantedTests.cs'   = "class T { void M() { try { M(); } catch { } } }`r`n"
+        'game\ui\vendor-1.0.0.min.js'               = "try{x()}catch(e){}`r`n"
+    }
+    foreach ($k in $gameSkipped.Keys) {
+        $p = Join-Path $gRoot $k
+        [IO.File]::WriteAllText($p, $gameSkipped[$k])
+        $r = Run-GameCheck
+        Yes ("an empty catch in {0} is not read" -f $k) ($r.Code -eq 0)
+        Remove-Item -LiteralPath $p -Force
+    }
+
     # ---- 4. Swallow.Note, compiled and called ----------------------------------
     #
     # The real Swallow.cs under a namespace of its own, with a stand-in Paths
@@ -468,6 +531,7 @@ namespace $ns
             catch (System.Exception ex) { Swallow.Note(where, ex); }
         }
         public static void Nothing(string where) { Swallow.Note(where, null); }
+        public static string Refused() { return LauncherLog.Refused(); }
     }
 }
 "@
@@ -496,17 +560,18 @@ namespace $ns
         Yes 'Note does not throw before the log path is set' ($null -eq $threw)
 
         $threw = $null
-        $missing = Join-Path $tmp 'no-such-folder\launcher.log'
+        $missing = Join-Path (Join-Path $tmp 'no-such-folder') 'launcher.log'
         try { $door::SetLog($missing); $door::Fail('folder missing', 'x') } catch { $threw = $_ }
         Yes 'Note does not throw when the log folder is missing' ($null -eq $threw)
         Yes 'and does not make the folder' (-not (Test-Path -LiteralPath (Split-Path -Parent $missing)))
+        Yes 'and keeps the record in memory with the reason the write was refused' ($door::Refused().Contains('Swallowed in folder missing') -and $door::Refused().Contains('launcher.log refused: DirectoryNotFoundException'))
 
         if ($OnWindows) {
             $threw = $null
             $held = New-Object IO.FileStream($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
             try { $door::SetLog($log); $door::Fail('log held open', 'x') } catch { $threw = $_ }
             finally { $held.Dispose() }
-            Yes 'Note does not throw when something else has the log open' ($null -eq $threw)
+            Yes 'Note retains a refused log record and reason without escaping its catch' ($null -eq $threw -and $door::Refused().Contains('log held open') -and $door::Refused().Contains('launcher.log refused: IOException'))
         } else {
             Write-Host 'SKIP  4, the log held open: a file held with no sharing refuses a write only on Windows'
         }
@@ -517,7 +582,7 @@ namespace $ns
     $body = [regex]::Replace($src, '(?m)^\s*///.*$|//.*$', '')
     Yes 'Swallow.cs never calls Shell.Log' ($body -notmatch '\bLog\s*\(')
     Yes 'Swallow.cs touches no control, window or dispatcher' ($body -notmatch 'txtStatus|Dispatcher|MessageBox|System\.Windows')
-    Yes 'Swallow.cs writes straight to Paths.LogFile' ($body -match 'Paths\.LogFile' -and $body -match 'File\.AppendAllText')
+    Yes 'Swallow.cs writes through the one gated writer' ($body -match 'Paths\.LogFile' -and $body -match 'FileMode\.Append' -and $body -match 'lock \(gate\)')
 
     Yes 'Swallow.cs has no silent catch of its own' (-not ([regex]'\bcatch\s*(\([^)]*\))?\s*\{\s*\}').IsMatch($src))
 }

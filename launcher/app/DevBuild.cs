@@ -140,7 +140,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not remove the dev build: " + ex.Message;
+                return "Could not remove the dev build: " + Failure.Say("DevBuild, removing the dev build", ex);
             }
             // Every shortcut that ran it, the pinned taskbar copy among them,
             // asked by what it runs rather than by name (#3205).
@@ -165,7 +165,15 @@ namespace Thornswood
             // ASCII would reach rmdir and del as different bytes and the dev
             // build would still be sitting there afterwards.
             sb.Append("chcp 65001 >nul\r\n");
-            sb.Append("ping 127.0.0.1 -n 4 >nul\r\n");
+            // Until this launcher has really gone, not for a guessed three
+            // seconds: while it runs it holds files in the folder (the menu
+            // theme in Profile\Music among them), and an rmdir that comes
+            // first leaves the folder behind. The same wait Uninstall.Script
+            // makes.
+            int pid = Process.GetCurrentProcess().Id;
+            sb.Append(":wait\r\n");
+            sb.Append("tasklist /fi \"PID eq " + pid + "\" | find \"" + pid + "\" >nul 2>&1\r\n");
+            sb.Append("if not errorlevel 1 ( timeout /t 1 /nobreak >nul & goto wait )\r\n");
             sb.Append("rmdir /s /q \"" + root + "\"\r\n");
             // Found now, while this exe is still here to match against: every
             // shortcut that runs it, the pinned taskbar copy among them (#3205).

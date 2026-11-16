@@ -262,6 +262,19 @@ try:
     yes('M12 no em dash and never the forbidden word',
         chr(0x2014) not in idle and ('pla' + 'yer') not in idle.lower())
 
+    # M15: a big move of gold, flagged by the gold and trade log (#6270),
+    # says the server and the gamemode's sentence, and pings nobody.
+    gold = bot.moderation_text('live', {
+        'did': 'gold', 'by': 2002, 'byName': 'Bjorn', 'who': 2002, 'whoName': 'Bjorn',
+        'why': 'Aela (profile 1001) handed 5000 gold to Bjorn (profile 2002) in a trade.'})
+    yes('M15 a gold flag says the server and the sentence the gamemode wrote',
+        gold == '**Gold flagged on the live server:** Aela (profile 1001) handed 5000 gold to '
+                'Bjorn (profile 2002) in a trade.')
+    yes('M15 the gamemode writes it', "did: 'gold'" in gm and 'gold' in bot._MOD_DID)
+    gold_ping = bot.moderation_text('dev', {'did': 'gold', 'why': '@everyone <@&111111111111111111>'})
+    yes('M15 nothing in it pings anybody',
+        '@everyone' not in gold_ping and '<@&111111111111111111>' not in gold_ping)
+
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the
     # building and its hold in the why, and each reads as who did what where.

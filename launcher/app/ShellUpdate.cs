@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 
 namespace Thornswood
@@ -103,7 +105,7 @@ namespace Thornswood
             if (LauncherCheckDue(loud))
             {
                 try { launcher = Updater.CheckLauncher(cfg); asked = true; }
-                catch (Exception ex) { launcherWhy = ex.Message; }
+                catch (Exception ex) { launcherWhy = Failure.Why("ShellUpdate, the launcher's update", ex); }
                 // The notes of the Releases this channel's Deployment reached,
                 // here on the check's own thread, so the News tab has them
                 // (#5187, ReleaseNews.cs). Never throws.
@@ -243,9 +245,20 @@ namespace Thornswood
             if (!cfg.AutoUpdate) return;
             if (!updatePending || pendingLauncher == null) return;
             if (playing) return;
+            // The first setup's Fix is running in a folder just made, and
+            // takes the update itself at its end, as its one restart
+            // (FirstSetupRestart). Taken here it would close the launcher
+            // while Pandora or BodySlide build.
+            if (restartAfterFirstFix) return;
             // One update at a time. The one going in is followed by Fix,
             // which takes a newer one last (FixRest).
             if (updating) return;
+            // Nor while a Fix runs: it takes the update itself, last
+            // (FixRest), once its own work is done. Taken here, the update
+            // reached its close while the scan after the last update was
+            // still running, the close was held back for it and never made
+            // again, and the launcher sat on Updating (#6129, 15 Nov 2026).
+            if (fixing) return;
             // An update never closes a game nobody asked it to. A Skyrim the
             // launcher did not start is not "playing", and RunUpdate would
             // ask to close it; the card waits for Install now instead.
@@ -322,8 +335,59 @@ namespace Thornswood
         /// </summary>
         static string updateTried = null;
 
+        /*
+          THE UPDATE HANDED TO VELOPACK, KEPT ACROSS THE RESTART (#6129).
+          updateTried lived only in this process, and a launcher update goes
+          in after it has ended: Velopack's Update.exe puts it in, and when it
+          cannot it starts this launcher again. The new process had no
+          updateTried, found the same update, and took it again. On 15 Nov
+          2026 that went round every 15 seconds from 11:16 AM, each time
+          failing on the same held folder, until GitHub's allowance for the
+          address ran out. So the version handed over is written beside the
+          log as the launcher ends, and the next start reads it: still on
+          another version means it did not go in, and it is tried, as
+          updateTried, with the line Velopack's own log gave.
+        */
+        static string HandedFile { get { return Paths.ProfileDir == null ? null : Path.Combine(Paths.ProfileDir, "launcher-update-handed.txt"); } }
+
+        /// <summary>The last thing before Velo.ExitApply: which update this launcher hands to Velopack, or none.</summary>
+        static void HandOverUpdate(string version)
+        {
+            try
+            {
+                string file = HandedFile;
+                if (file == null) return;
+                if (version == null) { if (File.Exists(file)) File.Delete(file); return; }
+                File.WriteAllText(file, version);
+            }
+            catch (Exception ex) { Swallow.Note("Shell.HandOverUpdate", ex); }
+        }
+
+        /// <summary>
+        /// At start, once the window is up: an update the last launcher handed
+        /// to Velopack that did not go in is said, with Velopack's reason, and
+        /// marked tried, so neither the automatic update nor Fix takes it
+        /// again by itself. Install now still does.
+        /// </summary>
+        static void SayHandedUpdate()
+        {
+            string file = HandedFile;
+            if (file == null || !File.Exists(file)) return;
+            string version = File.ReadAllText(file).Trim();
+            File.Delete(file);
+            if (version.Length == 0 || version == Updater.Version) return;
+            updateTried = version;
+            string why = Velo.LastError();
+            Log("Launcher " + version + " did not go in when the last launcher closed; this is still " + Updater.Version + "." +
+                (why.Length > 0 ? " Velopack said: " + why : "") +
+                " It is not taken again by itself. Install now takes it once that is put right.");
+        }
+
         /// <param name="after">Run on the window's thread when the update failed without restarting the launcher, or null. Install now runs Fix after it (#3201).</param>
-        static void RunUpdate(Action<bool> after)
+        static void RunUpdate(Action<bool> after) { Begin(RunUpdateAsync(after)); }
+
+        /// <summary>The update, awaited: RunUpdate's <c>after</c>.</summary>
+        static async Task RunUpdateAsync(Action<bool> after)
         {
             if (playing) { Log("Quit the game first."); return; }
             // One at a time (#3202): an automatic update and a press of
@@ -333,7 +397,7 @@ namespace Thornswood
             if (launcherUpdate == null) { Log("There is no update waiting."); return; }
             // An update writes into the build. A game still holding files open
             // down there turns that into a half written install.
-            if (!ClearStuckGame(true)) return;
+            if (!await ClearStuckGame(true)) return;
             updating = true;
             btnUpdate.IsEnabled = false;
             btnInstallNow.IsEnabled = false;
@@ -392,7 +456,7 @@ namespace Thornswood
                     Updater.Drop(got);
                     Dispatcher.UIThread.Post(delegate
                     {
-                        Log("Update failed: " + ex.Message);
+                        Log("Update failed: " + Failure.Say("ShellUpdate, the update", ex));
                         txtUpdateTitle.Text = "Update failed";
                         updating = false;
                         btnUpdate.IsEnabled = true;

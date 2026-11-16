@@ -32,7 +32,33 @@ const jsonFile = (p, fallback) => {
     return fallback;
   }
 };
-const putJson = (p, o) => putFile(p, () => JSON.stringify(o, null, 2));
+const putJson = (p, o) => {
+  // A store that is there and will not read is never written over (#4447):
+  // the caller read it through jsonFile as its empty fallback, so the write
+  // would be that plus one row, and every row it held would be gone. The
+  // five held files say so through heldNow in putFile; every other store
+  // says so here, each time a write is refused, because each refusal is a
+  // ticket, report or note that was not kept. A missing file is the normal
+  // empty one and is written.
+  if (!heldShape(p)) {
+    const why = unreadable(p);
+    if (why) {
+      console.error('[thornswood-docs] ' + p + ' ' + why + ', so it was not written: it is left as it is to repair from the backup');
+      return false;
+    }
+  }
+  return putFile(p, () => JSON.stringify(o, null, 2));
+};
+// Why a JSON store that is there cannot be used, or '' when it reads or is
+// not there at all. The error's code and never its message, which can carry
+// a piece of the file.
+const unreadable = (p) => {
+  let text;
+  try { text = fs.readFileSync(p, 'utf8'); }
+  catch (e) { return (e && e.code === 'ENOENT') ? '' : 'cannot be read (' + ((e && e.code) || 'unknown') + ')'; }
+  try { JSON.parse(text.replace(/^\uFEFF/, '')); return ''; }
+  catch (e) { return 'will not parse'; }
+};
 const putFile = (p, text) => {
   // Same-folder temp + rename so a crash mid-write cannot leave truncated
   // JSON that jsonFile would then quietly replace with the empty fallback

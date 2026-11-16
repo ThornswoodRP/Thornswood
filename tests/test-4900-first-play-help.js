@@ -64,6 +64,7 @@ const has = (text, words) => text.toLowerCase().indexOf(words.toLowerCase()) >= 
 // ------------------------------------------------- the launcher's own words --
 console.log('The launcher\'s words:');
 const here = read('launcher/app/GeneratedHere.cs') || '';
+const waiting = read('launcher/app/Waiting.cs') || '';
 const play = read('launcher/app/ShellPlay.cs') || '';
 const upkeep = read('launcher/app/Upkeep.cs') || '';
 
@@ -75,8 +76,12 @@ const opening = status ? status[1].split(' on this computer')[0] : '';
 const wait = status ? status[2] : '';
 yes('  its opening words (' + opening + ')', /^Building .+ files$/.test(opening));
 yes('  and its wait (' + wait + ')', wait.length > 0);
+// OffThread (launcher/app/Waiting.cs) puts the wait cursor up while the
+// work runs; it was Waiting until #4582.
 yes('Play runs that build under the wait cursor, its lines to the status line',
-    /Waiting\([\s\S]{0,200}GeneratedHere\.Ensure\(SafeLog\)/.test(play));
+    /OffThread\([\s\S]{0,200}GeneratedHere\.Ensure\(SafeLog\)/.test(play) &&
+    /static async Task OffThread[\s\S]{0,300}HoldWindow\(\)/.test(waiting) &&
+    /StandardCursorType\.Wait/.test(waiting));
 
 // Ask.Tell(notBuilt + "\n\nThe launcher log on the Diagnostics page has each step it took.", ...)
 const stop = /Ask\.Tell\(notBuilt \+ "(?:\\n)*([^"]+)"/.exec(play);
