@@ -39,8 +39,9 @@
   record says and never an address.
 
   WHO. Their Discord id, and their characters: the profile ids linked.json
-  holds for them, which the site checked were theirs when they played, and on
-  a reapply also the ids the record wrote down. A profile id that another
+  holds for them, which the site checked were theirs when they played, and
+  the ids the record wrote down for them, which stay theirs after the site
+  has let go of their link (#4470). A profile id that another
   account also holds is not theirs to delete and is left, and said.
 
   WHAT A REAL RUN REMOVES, the person's own records, in every copy on the box
@@ -376,7 +377,13 @@ if ($Reapply) {
     Say ('record    ' + @($have).Count + ' completed request(s) in ' + $record + $(if ($adds.Count) { ', and ' + $adds.Count + ' more in ' + ($Merge -join ', ') } else { '' }))
     if (-not $people.Count) { Say 'NOTHING TO REAPPLY: no record names a request.'; exit 0 }
 } else {
-    $people = @(@{ discordId = $DiscordId; profiles = @() })
+    # Their characters as the record wrote them down when the request was
+    # made, beside the ones linked.json holds. The site lets go of their link
+    # as it next starts, and a game server that has not started since still
+    # holds those characters and its request for them, so a dry run after the
+    # site started still finds them, and shows that server waiting (#4470).
+    $mine = @(@(Read-Record $record) | Where-Object { $_.discordId -eq $DiscordId } | ForEach-Object { @($_.profiles) } | Sort-Object -Unique)
+    $people = @(@{ discordId = $DiscordId; profiles = @($mine) })
 }
 
 # ------------------------------------------------------------------ node ---
