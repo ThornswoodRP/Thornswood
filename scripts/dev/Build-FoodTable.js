@@ -324,8 +324,7 @@ if (!Object.keys(items).length) {
 } else if (!process.exitCode) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
-    builtBy: 'scripts\dev\Build-FoodTable.js',
-    builtAt: new Date().toISOString(),
+    builtBy: 'scripts\\dev\\Build-FoodTable.js',
     source: 'the ALCH records of the plugins in load order',
     readFrom: 'ENIT for the food and poison flags, FULL for the name',
     note: 'what a kind is WORTH is balance and lives in NEEDS in gamemode.js',
