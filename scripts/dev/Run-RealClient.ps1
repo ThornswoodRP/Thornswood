@@ -134,7 +134,16 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 if (-not ('ThornswoodRealClient.Win' -as [type])) {
-    Add-Type -ReferencedAssemblies System.Drawing, System.Drawing.Primitives -TypeDefinition @'
+    # Under PowerShell 7 Bitmap is in System.Drawing.Common, which needs its own
+    # references to compile against (System.Private.Windows.GdiPlus and more),
+    # and Rectangle is in System.Drawing.Primitives. So the helper is compiled
+    # against the assemblies those types are loaded from and what Bitmap's
+    # assembly references, not by name (16 Nov: CS1069 on One, before Play).
+    $drawing = [System.Drawing.Bitmap].Assembly
+    $drawingRefs = @($drawing.Location, [System.Drawing.Rectangle].Assembly.Location) +
+        @($drawing.GetReferencedAssemblies() | ForEach-Object { [Reflection.Assembly]::Load($_).Location }) |
+        Select-Object -Unique
+    Add-Type -ReferencedAssemblies $drawingRefs -TypeDefinition @'
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;

@@ -16,7 +16,8 @@
 //   - a step that times out fails, asks for a screenshot named after it, and
 //     ends the run as failed;
 //   - every step in tests/real-client/*.json is one the plugin knows, and the
-//     runner names the same three files the plugin does.
+//     runner names the same three files the plugin does;
+//   - the runner's Windows helper compiles under PowerShell 7, where pwsh is.
 //
 // Read only.
 'use strict';
@@ -246,6 +247,28 @@ function game(opts) {
   const cfg = read(path.join('launcher', 'app', 'Config.cs')) || '';
   yes('the runner refuses an install that is not on the dev channel, read as the launcher keeps it',
       /public string UpdateBranch\b/.test(cfg) && /\$cfg\.UpdateBranch/.test(RUNNER) && /if \(\$branch -ne 'dev'\) \{\s*throw/.test(RUNNER));
+}
+
+// The runner's Windows helper is compiled by Add-Type when it starts. On One,
+// under PowerShell 7, it failed with CS1069 (Bitmap is in System.Drawing.Common)
+// before the launcher started (16 Nov). Compile it here the same way, with the
+// text the runner has, wherever PowerShell 7 is.
+{
+  const cp = require('child_process');
+  const from = RUNNER.indexOf("if (-not ('ThornswoodRealClient.Win' -as [type])) {");
+  const end = from >= 0 ? RUNNER.indexOf("\n'@\n}", from) : -1;
+  yes('the runner has its Windows helper block', from >= 0 && end > from);
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  if (ver.status !== 0) {
+    console.log('SKIP  the runner\'s Windows helper compiles under PowerShell 7 (no pwsh here)');
+  } else if (from >= 0 && end > from) {
+    const block = 'Add-Type -AssemblyName System.Drawing\n' + RUNNER.slice(from, end + 5) + '\n' +
+      "if ('ThornswoodRealClient.Win' -as [type]) { 'HELPER OK' }\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(block, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const said = (r.stdout || '') + (r.stderr || '');
+    yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
+    if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+  }
 }
 
 console.log('');
