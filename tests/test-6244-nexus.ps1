@@ -421,6 +421,8 @@ try {
     $wr.Inline((Bytes "+C`r`n+B`r`n+A`r`n"), 'profiles\Thornswood\modlist.txt', $false)
     $modlist = Join-Path $T 'collection-modlist.wabbajack'; $wr.Save($modlist)
     $modlistSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $modlist).Hash.ToLowerInvariant()
+    $wrVersion = [string]([Thornswood.CollectionModlist]::Read($modlist).Version)
+    $modlistHead = 'modlist=' + $modlistSha + ' revision=' + $(if ($wrVersion -match '^(\d+)') { [int]$Matches[1] } else { 0 })
     function Record-Of([string]$mods) { $f = Join-Path $mods 'thornswood-deployment.txt'; if (Test-Path -LiteralPath $f) { return @([IO.File]::ReadAllLines($f)) } return @() }
     $srv.Files['5002'] = $zipB; $srv.Files['5003'] = $zipC
 
@@ -453,7 +455,7 @@ try {
     $links = @($srv.Asked() | Where-Object { $_.Contains('/download_link.json') })
     Yes 'R2 Nexus is asked only for the files not already on this PC' ($links.Count -eq 2 -and -not ($links -join ' ').Contains('/mods/501/'))
     $rec = Record-Of $modsR
-    Yes 'R6 the whole install leaves the record of what goes into the game folder, naming the modlist by its sha256' ($rec.Count -eq 5 -and $rec[0] -eq ('modlist=' + $modlistSha) -and $rec[1].StartsWith('Data\A.esp|A|A.esp|') -and $rec[2].StartsWith('Data\A.ini|A|A.ini|') -and $rec[4].StartsWith('Data\C.esp|C|C.esp|')) ($rec -join ' / ')
+    Yes 'R6 the whole install leaves the record of what goes into the game folder, naming the modlist by its sha256 and its revision' ($rec.Count -eq 5 -and $rec[0] -eq $modlistHead -and $rec[1].StartsWith('Data\A.esp|A|A.esp|') -and $rec[2].StartsWith('Data\A.ini|A|A.ini|') -and $rec[4].StartsWith('Data\C.esp|C|C.esp|')) ($rec -join ' / ')
     $recFile = Join-Path $modsR 'thornswood-deployment.txt'
     [IO.File]::SetLastWriteTimeUtc($recFile, [DateTime]::UtcNow.AddHours(-1))
     $stamp = [IO.File]::GetLastWriteTimeUtc($recFile)
@@ -464,7 +466,7 @@ try {
     [IO.File]::WriteAllLines($recFile, [string[]]@('modlist=an older one', 'Data\Old.esp|Old|Old.esp|0000000000000001|1'))
     $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
     $rec = Record-Of $modsR
-    Yes 'R8 a record for another modlist is written again for this one' ($why -eq '' -and $rec.Count -eq 5 -and $rec[0] -eq ('modlist=' + $modlistSha) -and -not (Test-Path -LiteralPath ($recFile + '.part'))) ($rec -join ' / ')
+    Yes 'R8 a record for another modlist is written again for this one' ($why -eq '' -and $rec.Count -eq 5 -and $rec[0] -eq $modlistHead -and -not (Test-Path -LiteralPath ($recFile + '.part'))) ($rec -join ' / ')
 
     # The person changes A.ini after the install. A run again keeps it; after
     # another modlist's install that left A.ini as it is now, the person has
@@ -477,7 +479,7 @@ try {
     $other = @('modlist=an older one', ('Data\A.ini|A|A.ini|' + [Thornswood.XxHash64]::OfBytes([byte[]]$mine).ToString('x16') + '|' + $mine.Length))
     [IO.File]::WriteAllLines($recFile, [string[]]$other)
     $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
-    Yes 'R11 one still as another modlist''s whole install left it takes this modlist''s copy, and the record is this modlist''s' ($why -eq '' -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($iniAt), [byte[]]$iniA) -and (Record-Of $modsR)[0] -eq ('modlist=' + $modlistSha)) $why
+    Yes 'R11 one still as another modlist''s whole install left it takes this modlist''s copy, and the record is this modlist''s' ($why -eq '' -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($iniAt), [byte[]]$iniA) -and (Record-Of $modsR)[0] -eq $modlistHead) $why
     [IO.File]::WriteAllBytes($iniAt, $mine)
     [IO.File]::WriteAllLines($recFile, [string[]]@('modlist=an older one', ('Data\A.ini|A|A.ini|' + [Thornswood.XxHash64]::OfBytes([byte[]]$iniA).ToString('x16') + '|' + $iniA.Length)))
     $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }

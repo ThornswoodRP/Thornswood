@@ -3505,12 +3505,39 @@ namespace Thornswood
         /// <summary>
         /// The install's record of what goes into the game folder, in
         /// ModsFolder (ModlistSetup.Deployment): a first line naming the
-        /// modlist, then one line a file, the path in the game folder, the
-        /// mod, the path in the mod's folder, its xxHash64 and its size,
-        /// joined with |. Taken off before a changed modlist is installed and
-        /// written once every file is in, so it never speaks for half an install.
+        /// modlist by its sha256 and the collection revision it is
+        /// ("modlist=&lt;sha256&gt; revision=&lt;n&gt;"), then one line a file, the
+        /// path in the game folder, the mod, the path in the mod's folder, its
+        /// xxHash64 and its size, joined with |. Set aside before a changed
+        /// modlist is installed and written once every file is in, so it never
+        /// speaks for half an install.
         /// </summary>
         public const string ModsRecordName = "thornswood-deployment.txt";
+
+        /// <summary>
+        /// The collection revision the last whole install put into
+        /// ModsFolder, from its record's first line. 0 when there is no
+        /// record, which is also an install part way through, or the line
+        /// names none. Checks.CollectionRevision reads it in place of
+        /// Vortex's once the mods come from there.
+        /// </summary>
+        public static int ModsRevision()
+        {
+            string file = Path.Combine(ModsFolder, ModsRecordName);
+            try
+            {
+                if (!File.Exists(file)) return 0;
+                string first;
+                using (var r = new StreamReader(file)) first = r.ReadLine() ?? "";
+                foreach (string part in first.Split(' '))
+                {
+                    int n;
+                    if (part.StartsWith("revision=", StringComparison.Ordinal) && int.TryParse(part.Substring(9), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out n)) return n;
+                }
+            }
+            catch (Exception ex) { Swallow.Note("OwnGame.ModsRevision, " + file, ex); }
+            return 0;
+        }
 
         /// <summary>
         /// The modlist has begun installing into ModsFolder (its mods folder or
