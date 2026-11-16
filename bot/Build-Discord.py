@@ -2310,19 +2310,17 @@ async def post(channel, text, found):
     import re
     text = re.sub(r'<#([A-Z]+)>', lambda m: '#' + m.group(1).lower(), text)
 
-    # The old posts go first, or the new ones would sit under them twice
-    # over. A channel whose old posts cannot be read or removed is left as it
-    # is and named under "did not manage" (#2736): writing beside them is how
-    # a channel came to say its rules twice.
+    # The old posts are found first and taken down last, once every new one
+    # is in (#4493). Until then they went first, and a send Discord refused
+    # left the channel empty or half written and ended the run before the
+    # channels after it. A channel whose old posts cannot be read is left as
+    # it is and named under "did not manage" (#2736): writing beside them is
+    # how a channel came to say its rules twice.
     try:
-        async for old in channel.history(limit=50):
-            if doc_post_of_mine(old, client.user.id):
-                try:
-                    await old.delete()
-                except discord.NotFound:
-                    pass  # gone already, which is what this wanted
+        old_posts = [m async for m in channel.history(limit=50)
+                     if doc_post_of_mine(m, client.user.id)]
     except discord.HTTPException as e:
-        failed.append('#%s was not rewritten: its old posts could not be removed (%s)'
+        failed.append('#%s was not rewritten: its old posts could not be read (%s)'
                       % (channel.name, refused(e)))
         return
 
@@ -2335,10 +2333,38 @@ async def post(channel, text, found):
     if cur.strip():
         chunks.append(cur.strip())
 
-    first = None
-    for c in chunks:
-        m = await channel.send(c)
-        first = first or m
+    sent = []
+    try:
+        for c in chunks:
+            sent.append(await channel.send(c))
+    except discord.HTTPException as e:
+        failed.append('#%s was not rewritten: post %d of %d could not be sent (%s); '
+                      'its old words stay' % (channel.name, len(sent) + 1, len(chunks), refused(e)))
+        # The part that did go would sit under the old words and say them
+        # twice over (#2736), so it comes back out.
+        for m in sent:
+            try:
+                await m.delete()
+            except discord.NotFound:
+                pass  # gone already, which is what this wanted
+            except discord.HTTPException as e2:
+                failed.append('#%s: part of its new words could not be taken back, so it '
+                              'says some twice until the next -Posts (%s)' % (channel.name, refused(e2)))
+                break
+        return
+
+    for old in old_posts:
+        try:
+            await old.delete()
+        except discord.NotFound:
+            pass  # gone already, which is what this wanted
+        except discord.HTTPException as e:
+            failed.append('#%s: its new words are in, but its old posts could not all be '
+                          'removed, so it says them twice until the next -Posts (%s)'
+                          % (channel.name, refused(e)))
+            break
+
+    first = sent[0] if sent else None
     if first:
         try:
             await first.pin()
