@@ -71,10 +71,19 @@ function Test-ThornswoodLoadsAsMaster([string]$Name, $Header) {
 
 # Whether the plugin file at $Path is light, by the rule the engine and the
 # game use: an .esl name, or 0x200 in the TES4 record's flags. A file that is
-# not there, or not a plugin, cannot be told and stops the caller.
+# not there, or not a plugin, cannot be told and stops the caller. Its text is
+# sent up to the box on its own (Check-Chargen.ps1, the dev start point), so
+# it calls nothing else here.
 function Test-ThornswoodPluginLight([string]$Path) {
     if ($Path -match '\.esl$') { return $true }
-    return (Get-ThornswoodPluginKind $Path).Light
+    if (-not (Test-Path -LiteralPath $Path)) { throw "$Path is not on this machine, so whether it is a light plugin cannot be read" }
+    $fs = [IO.File]::OpenRead($Path)
+    try {
+        $b = New-Object byte[] 12
+        $n = $fs.Read($b, 0, 12)
+    } finally { $fs.Close() }
+    if ($n -lt 12 -or [Text.Encoding]::ASCII.GetString($b, 0, 4) -ne 'TES4') { throw "$Path is not a plugin (no TES4 header), so whether it is light cannot be read" }
+    return (([BitConverter]::ToUInt32($b, 8) -band 0x200) -ne 0)
 }
 
 # A plugin file's kind as Get-ThornswoodServerOrder takes it in $Info: Light
