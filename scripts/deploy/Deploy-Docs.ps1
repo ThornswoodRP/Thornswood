@@ -616,17 +616,28 @@ if ($Password) {
   # ssh's standard input from the prompt. What writes it is the same.
   $setTail = Get-ThornswoodSiteConfigSet -ConfigPath "$rootWin\config.json" -Key 'password' -What 'password'
   if ($pwFromBox) {
-    Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ((Get-ThornswoodDocsPasswordSetHead $PasswordFile) + $setTail) |
-      Where-Object { $_ -is [string] } | ForEach-Object { "  $_" }
+    $said = Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ((Get-ThornswoodDocsPasswordSetHead $PasswordFile) + $setTail) |
+      Where-Object { $_ -is [string] }
   } else {
     $setHead = @"
 `$ErrorActionPreference = 'Stop'
 `$pw = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 if (-not `$pw) { 'NOTHING ARRIVED on standard input. Nothing written, the password is unchanged.'; return }
 "@
-    Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script ($setHead + "`n" + $setTail) | ForEach-Object { "  $_" }
+    $said = Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script ($setHead + "`n" + $setTail)
   }
   $newPassword = $null
+  # Held to the line the write says when it worked (#4210): a refused
+  # password file, an unreadable config.json, a throw or no answer at all is
+  # FAILED and ends 1 here, before anything of the deploy is sent. Until then
+  # whatever came back was printed and the deploy carried on.
+  $said = @($said | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  $said | ForEach-Object { "  $_" }
+  if (-not @($said | Where-Object { $_ -match '^set password, \d+ other setting' }).Count) {
+    Write-Host ''
+    Write-Host ('  FAILED    writing the new password into the site''s config.json did not happen. ' + $(if ($said.Count) { 'The box said: ' + $said[-1] } else { 'The box said nothing back.' })) -ForegroundColor Red
+    throw 'The site password was not written, so nothing else of the deploy was sent.'
+  }
 }
 
 if (-not $PutBack) {

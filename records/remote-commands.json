@@ -377,7 +377,7 @@
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodSecretRemote",
-                      "anchor":  "Invoke-ThornswoodSecretRemote -Target \"$User@$Vps\" -SshArgs $ssh -Secret $newPassword -Script ($setHead + \"`n\" + $setTail) | ForEach-Object { \"  $_\" }",
+                      "anchor":  "$said = Invoke-ThornswoodSecretRemote -Target \"$User@$Vps\" -SshArgs $ssh -Secret $newPassword -Script ($setHead + \"`n\" + $setTail)",
                       "does":  "writes a new site password into config.json",
                       "class":  "admin",
                       "reason":  "writes a secret; no gate verb covers secrets"
