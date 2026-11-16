@@ -27682,7 +27682,7 @@ module.exports = {
 
   if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
   g.__thornswoodPackTimer = setInterval(
-    (typeof guard === 'function') ? guard('packTick', packs.settle) : packs.settle, 1000);
+    guard('packTick', packs.settle), 1000);
 
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
@@ -51215,7 +51215,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
   }
   g.__thornswoodFurniturePackTimer = setInterval(
-    (typeof guard === 'function') ? guard('furniturePackTick', g.__thornswoodFurniture.settle) : g.__thornswoodFurniture.settle, 1000);
+    guard('furniturePackTick', g.__thornswoodFurniture.settle), 1000);
 })();
 // ==== end thornswood furniture ====
 

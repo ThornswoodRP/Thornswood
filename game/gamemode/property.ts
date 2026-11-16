@@ -5894,7 +5894,7 @@
 
   if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
   g.__thornswoodPackTimer = setInterval(
-    (typeof guard === 'function') ? guard('packTick', packs.settle) : packs.settle, 1000);
+    guard('packTick', packs.settle), 1000);
 
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.

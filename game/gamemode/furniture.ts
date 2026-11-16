@@ -914,7 +914,7 @@
     try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
   }
   g.__thornswoodFurniturePackTimer = setInterval(
-    (typeof guard === 'function') ? guard('furniturePackTick', g.__thornswoodFurniture.settle) : g.__thornswoodFurniture.settle, 1000);
+    guard('furniturePackTick', g.__thornswoodFurniture.settle), 1000);
 })();
 // ==== end thornswood furniture ====
 
