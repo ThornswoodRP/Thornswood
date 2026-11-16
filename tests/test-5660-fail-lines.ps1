@@ -143,8 +143,11 @@ if (-not $canRun) {
         Yes ('   its annotation carries the harness''s FAIL lines, with the reason under the first (' + $got + ')') ($got -eq 'harness failed (exit 1): its FAIL lines%0AFAIL  the door opens for the holder%0A    the holder has no key%0AFAIL  the key is kept')
         Yes '   and the harness that passed has none' (-not (Annotation $said 'test-2-pass.ps1'))
         $died = Annotation $said 'test-3-dies.ps1'
+        # The child's exit code is negative on Windows: FailFast ends it with
+        # COR_E_FAILFAST, 0x80131623, which is -2146232797 as a signed code
+        # (Gate harnesses 4 of 5 on #6243, 16 Nov 2026); 134 on Linux.
         Yes ('B. a harness whose child died carries the child''s dying line after its FAIL line (' + $died + ')') (
-            $died -match '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit \d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752')
+            $died -match '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit -?\d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752')
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
