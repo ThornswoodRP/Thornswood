@@ -171,5 +171,5 @@ vm.runInContext(source.slice(source.indexOf('// NPC MERCHANT PURSES BEGIN'),sour
   process.chdir(os.tmpdir());
   // Native save storage can still hold handles: retain this isolated evidence
   // directory for inspection rather than deleting files under its worker.
-  process.exit(0);
-})().catch(error=>{console.error(error);process.exit(1);});
+  process.exitCode = 0;
+})().catch(error=>{console.error(error);process.exitCode = 1;});

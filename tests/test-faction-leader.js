@@ -208,4 +208,4 @@ yes('F14 the factions page names the lead seats and the confirmed staff rule, wi
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -138,7 +138,7 @@ try {
 
   // A real start: before the program, said in server.log.
   build();
-  put(path.join(R, 'exit.js'), 'process.exit(0);');
+  put(path.join(R, 'exit.js'), 'process.exitCode = 0;');
   const r = cp.spawnSync(process.execPath, [WRITER, '--log', path.join(R, 'server.log'), 'exit.js'], { cwd: R, encoding: 'utf8' });
   const log = fs.readFileSync(path.join(R, 'server.log'), 'utf8');
   yes('a real start under server-log.js deletes them and says so in server.log',
@@ -200,4 +200,4 @@ try {
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

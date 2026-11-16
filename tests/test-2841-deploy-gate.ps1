@@ -608,8 +608,8 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     [IO.File]::WriteAllText([IO.Path]::Combine($fake, 'scripts', 'vps', 'admin', 'ship-access.js'), @'
 const c = process.env.TW_FAKE_ACCESS;
 if (c === 'long') { process.stdout.write('ghs_' + 'A1.b-'.repeat(60) + '\n'); }
-else if (c === 'refused') { process.stderr.write('ship-access: GitHub gave the App no token (HTTP 403: no)\n'); process.exit(1); }
-else if (c === 'silent') { process.exit(3); }
+else if (c === 'refused') { process.stderr.write('ship-access: GitHub gave the App no token (HTTP 403: no)\n'); process.exitCode = 1; }
+else if (c === 'silent') { process.exitCode = 3; }
 else if (c === 'nothing') { }
 '@)
     function Try-Access([string]$case) {

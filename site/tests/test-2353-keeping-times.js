@@ -243,7 +243,7 @@ async function sweep() {
     await new Promise((ok) => {
       srv.on('exit', ok);
       try { srv.kill(); } catch (e) { ok(); }
-      setTimeout(ok, 3000);
+      setTimeout(ok, 3000).unref();
     });
     return { up, out };
   }
@@ -432,5 +432,5 @@ function page() {
   gameServer();
   page();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

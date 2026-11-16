@@ -44,14 +44,14 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const A0 = gm.indexOf('// ==== thornswood contracts ====');
 const A1 = A0 < 0 ? -1 : gm.indexOf('// ==== end thornswood contracts ====', A0);
 const BLOCK = (A0 < 0 || A1 < 0) ? '' : gm.slice(A0, A1);
 yes('C0 the contracts block is in the gamemode, between its markers', BLOCK.length > 0);
-if (!BLOCK) { done(); }
+if (!BLOCK) { done(); return; }
 
 // ------------------------------------------------------------ the world --
 // Ana (A) and Bjorn (B) stand together in Whiterun; Cyra (C) is across the

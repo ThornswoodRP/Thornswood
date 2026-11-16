@@ -749,7 +749,7 @@ function partFour() {
   for (const l of launchers) { await l.quit(); }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } };
-  if (srv && srv.exitCode === null) { srv.once('exit', () => { rm(); process.exit(fail ? 1 : 0); }); srv.kill(); }
-  else { rm(); process.exit(fail ? 1 : 0); }
-  setTimeout(() => { rm(); process.exit(fail ? 1 : 0); }, 2000).unref();
+  process.exitCode = fail ? 1 : 0;
+  if (srv && srv.exitCode === null) { srv.once('exit', rm); srv.kill(); }
+  else { rm(); }
 });

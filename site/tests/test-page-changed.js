@@ -81,4 +81,4 @@ yes('an unknown hash is absent', JSON.stringify(list).indexOf('00000000000000000
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

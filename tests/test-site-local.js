@@ -389,7 +389,7 @@ function stop(run) {
     if (!run || run.exited) { ok(); return; }
     run.child.once('exit', function () { ok(); });
     try { run.child.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 function ask(port, method, route, body, extra) {
@@ -640,5 +640,5 @@ function breakPages(src) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

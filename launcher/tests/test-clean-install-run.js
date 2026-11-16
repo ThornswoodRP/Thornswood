@@ -63,13 +63,13 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 let doc = null;
 try { doc = fs.readFileSync(DOC, 'utf8').replace(/\r\n/g, '\n'); } catch (e) { doc = null; }
 yes('the checklist exists at ' + path.relative(ROOT, DOC), doc !== null);
-if (doc === null) done();
+if (doc === null) { done(); return; }
 
 // Whitespace is folded on both sides before a quote is looked for, because the
 // public pages wrap their lines and a quote from one should not fail on where

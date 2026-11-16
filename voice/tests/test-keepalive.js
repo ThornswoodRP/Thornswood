@@ -230,11 +230,11 @@ async function open(pid) {
       const at = head.indexOf('\r\n\r\n');
       if (at < 0) { return; }
       s.removeListener('data', onData);
-      resolve({ sock: s, head: head.slice(0, at) });
+      clearTimeout(late); resolve({ sock: s, head: head.slice(0, at) });
     };
     s.on('data', onData);
     s.on('error', reject);
-    setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
   });
 }
 

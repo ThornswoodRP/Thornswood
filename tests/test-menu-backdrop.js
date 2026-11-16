@@ -66,7 +66,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ------------------------------------------------------------ nif reader --
@@ -316,7 +316,7 @@ const LOGO = path.join(MENU, 'logo.nif');
 const AE = path.join(MENU, 'logo01ae.nif');
 yes('game\\menu\\logo.nif is there', fs.existsSync(LOGO));
 yes('game\\menu\\logo01ae.nif is there (without it the vanilla Anniversary plate comes back)', fs.existsSync(AE));
-if (!fs.existsSync(LOGO) || !fs.existsSync(AE)) { done(); }
+if (!fs.existsSync(LOGO) || !fs.existsSync(AE)) { done(); return; }
 
 const logo = readNif(LOGO);
 const ae = readNif(AE);
@@ -423,7 +423,7 @@ yes('the plate is flat: every corner at one depth (' + V.length + ' vertices, z 
 // ----------------------------------------------------------- the texture --
 const DDS = path.join(MENU, 'Mainmenuwallpaper.dds');
 yes('game\\menu\\Mainmenuwallpaper.dds is there', fs.existsSync(DDS));
-if (!fs.existsSync(DDS)) { done(); }
+if (!fs.existsSync(DDS)) { done(); return; }
 const d = fs.readFileSync(DDS);
 const h = d.readUInt32LE(12), w = d.readUInt32LE(16), mips = d.readUInt32LE(28);
 const fourcc = d.toString('latin1', 84, 88);

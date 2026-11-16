@@ -71,7 +71,7 @@ $FillJs = @'
 const fs = require('fs');
 const src = fs.readFileSync(process.env.TS_SERVER, 'utf8');
 const cut = /\/\/ ==== thornswood credits fill ====([\s\S]*?)\/\/ ==== end thornswood credits fill ====/.exec(src);
-if (!cut) { process.stderr.write('the site has no credits fill between its markers'); process.exit(2); }
+if (!cut) { process.stderr.write('the site has no credits fill between its markers'); process.exitCode = 2; return; }
 const fill = new Function(cut[1] + '\nreturn fillCreditsCommits;')();
 const feeds = {};
 if (process.env.TS_PUB) feeds.public = process.env.TS_PUB;

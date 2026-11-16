@@ -2,8 +2,9 @@
 //
 //     node tests/test-6036-process-exit.js
 //
-// No new call to node's exit function, and none left in game/tests or the
-// harnesses Tree checks runs (#6036).
+// No new call to node's exit function, and none left in any harness folder
+// (game/tests, tests and every product's own tests folder) or the harnesses
+// Tree checks runs (#6036).
 //
 // WHY. On Node 24 that call can deadlock with V8's background compiler
 // threads (nodejs/node#64274): the harness prints its result and node never
@@ -16,9 +17,11 @@
 //   1. The real checkout against the real baseline: nothing above it, nothing
 //      below it with its line not lowered, each problem on a FAIL line of
 //      its own.
-//   2. game/tests and the three harnesses Tree checks runs on their own steps
-//      (tests/gate-excluded.txt) call it nowhere, and the baseline names none
-//      of them, so they cannot come back by raising a line.
+//   2. No harness folder, and none of the three harnesses Tree checks runs on
+//      their own steps (tests/gate-excluded.txt), calls it, and the baseline
+//      names none of them, so they cannot come back by raising a line. A
+//      harness folder is tests/ at the root or a tests/ folder anywhere
+//      under it.
 //   2b. A harness another harness runs as its fixture, cut at a marker,
 //      parses up to that marker, so ending it without the exit call never
 //      leaves a block open above the cut.
@@ -50,13 +53,16 @@ problems.forEach((p) => console.log('FAIL  ' + p.replace(/ time\(s\), and the ba
 yes('the checkout matches ' + check.BASELINE + ' (' + problems.length + ' problem(s))', problems.length === 0);
 if (problems.length) console.log('      node scripts/dev/Check-ProcessExit.js --list prints today\'s numbers in the baseline\'s format');
 
-// ---- 2. game/tests and what Tree checks runs
+// ---- 2. the harness folders and what Tree checks runs
 const TREE_CHECKS = ['game/tests/test-other-server-name-gone.js', 'tests/test-old-name-gone.js', 'tests/test-one-engine.js'];
+const harnessFolder = (f) => f.startsWith('tests/') || f.includes('/tests/');
 const inGame = Array.from(have.keys()).filter((f) => f.startsWith('game/tests/'));
 yes('no harness in game/tests calls it (' + inGame.length + ')', inGame.length === 0);
+const inTests = Array.from(have.keys()).filter(harnessFolder);
+yes('nor does any file in another harness folder (' + inTests.join(', ') + ')', inTests.length === 0);
 const inTree = TREE_CHECKS.filter((f) => have.has(f));
 yes('nor do the harnesses Tree checks runs on their own steps (' + inTree.join(', ') + ')', inTree.length === 0);
-const listed = Array.from(base.allowed.keys()).filter((f) => f.startsWith('game/tests/') || TREE_CHECKS.includes(f));
+const listed = Array.from(base.allowed.keys()).filter((f) => harnessFolder(f) || TREE_CHECKS.includes(f));
 yes('and the baseline names none of them (' + listed.join(', ') + ')', listed.length === 0);
 const ws = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'build.yml'), 'utf8');
 yes('those three are the node harnesses build.yml runs on steps of their own', TREE_CHECKS.every((f) => ws.includes('node ' + f)));
