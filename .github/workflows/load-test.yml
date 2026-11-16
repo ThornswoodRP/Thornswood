@@ -44,6 +44,14 @@ on:
         description: 'Seconds each step is measured over'
         required: false
         default: '60'
+      moves:
+        description: 'How bots send moves: change (the game since #6247) or beat (every 130 ms, the game before it)'
+        required: false
+        default: 'change'
+      stand:
+        description: 'Share of the time each bot stands still, 0 to 1'
+        required: false
+        default: '0.5'
   pull_request:
     paths:
       - 'scripts/bot/Load-Test.js'
@@ -118,8 +126,10 @@ jobs:
         env:
           STEPS: ${{ github.event.inputs.steps || '10,20,40,60,80,100' }}
           HOLD: ${{ github.event.inputs.hold || '60' }}
+          MOVES: ${{ github.event.inputs.moves || 'change' }}
+          STAND: ${{ github.event.inputs.stand || '0.5' }}
         run: |
-          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
+          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --moves $env:MOVES --stand $env:STAND --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Keep the result and the server's log

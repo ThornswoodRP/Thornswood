@@ -46,6 +46,10 @@ jobs:
     # It runs a branch's harnesses, so never on a machine of ours (#3550).
     runs-on: windows-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      # The content build, an artifact of a merge release.
+      actions: read
     steps:
       # Every commit and tree, no old file contents (about a second more than
       # a shallow one, measured 1 Nov 2026): the harnesses run the release
@@ -57,6 +61,16 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      # The content build (#5191, stage 4): the newest a merge release kept,
+      # laid over the checkout as the gate's shares lay it (build.yml, "Lay
+      # the newest content build"), since nothing it writes is committed.
+      - name: Lay the newest content build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Newest
+          exit $LASTEXITCODE
 
       - name: Install the eslint the lint harness copies
         if: ${{ contains(inputs.harnesses, 'test-eslint-amp-path') }}

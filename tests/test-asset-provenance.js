@@ -20,7 +20,10 @@
 //      is registered by its path, and every registered path is a file;
 //   3. each registered file's sha256 is the one on record (text files as git
 //      stores them, with LF line endings), so a changed file is looked at
-//      again;
+//      again; the content plugin the box builds at each merge is held by its
+//      build's content-build.json instead, so its entry names the script
+//      that builds it and holds no hash (#5191: every run of the harnesses
+//      lays the newest build, whose plugin is not the one in git);
 //   4. a derived file names a registered source, and a withheld one names the
 //      record that keeps it out, which holds what the entry says: a set in
 //      records\ui-gone.json, or a list in Ship-Rules.ps1 that holds every
@@ -66,6 +69,10 @@ const ASSET = /\.(png|jpe?g|gif|webp|svg|ico|bmp|tga|dds|nif|mp3|mp4|webm|ogg|wa
 const TEXT = /\.(svg|txt|ini|json|xml)$/i;
 const FIELDS = ['path', 'what', 'published', 'source', 'creator', 'licence', 'attribution', 'approved', 'evidence', 'status'];
 const NEEDS_ASK = ['unconfirmed', 'agreed-not-written'];
+// The script that builds a plugin on the box, and what it names (#5191).
+const BOX_BUILD = 'scripts/mods/Build-ContentOnBox.ps1';
+let boxBuild = '';
+try { boxBuild = fs.readFileSync(path.join(ROOT, BOX_BUILD), 'utf8'); } catch (e) { }
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/;
 
 function hashOf(rel) {
@@ -120,6 +127,11 @@ function audit(reg, files, hash, uiGone, shipRules) {
     if (NEEDS_ASK.indexOf(a.status) >= 0 && !(typeof a.ask === 'string' && /^[^:]{2,}: \S/.test(a.ask))) bad.push(name + ': ' + a.status + ' with no ask naming who can answer ("Who: what")');
     if (a.status === 'no-licence-found' && !(Number.isInteger(a.issue) && a.issue > 0)) bad.push(name + ': no licence found, and no issue that carries it');
     if (a.status === 'leaving' && !(Number.isInteger(a.issue) && a.issue > 0)) bad.push(name + ': leaving, and no issue that carries the upload it leaves in');
+    if (a.status === 'built-on-the-box') {
+      if (a.record !== BOX_BUILD) bad.push(name + ': built on the box, but its record is not ' + BOX_BUILD);
+      else if (boxBuild.indexOf("'" + a.path + "'") < 0) bad.push(name + ': built on the box, but ' + BOX_BUILD + ' does not name it');
+      if (a.sha256 !== undefined) bad.push(name + ': built on the box, so its build holds its sha256 and the register holds none');
+    }
     if (a.status === 'withheld' || a.status === 'made-from-game' || a.status === 'made-from-mods' || a.status === 'built-on-each-computer' || a.status === 'made-from-recipe') {
       const m = /^records\/ui-gone\.json#(\w+)$/.exec(a.record || '');
       const r = /^scripts\/release\/Ship-Rules\.ps1#(\w+)$/.exec(a.record || '');
@@ -143,6 +155,7 @@ function audit(reg, files, hash, uiGone, shipRules) {
     }
   }
   for (const a of assets) {
+    if (a.status === 'built-on-the-box') continue;
     if (!/^[0-9a-f]{64}$/.test(a.sha256 || '')) { bad.push(a.path + ': no sha256'); continue; }
     if (files.indexOf(a.path) < 0) { bad.push(a.path + ': registered, but no such file is tracked'); continue; }
     const h = hash(a.path);
@@ -207,6 +220,9 @@ if (reg) {
     (reg.notInRepo || []).some((a) => a.status === 'made-from-recipe' && a.record === 'scripts/release/Ship-Rules.ps1#ShipMadeFromRecipe' &&
       Array.isArray(a.paths) && a.paths.length === 1 && a.paths[0] === 'Data\\Thornswood-Last.esp') &&
     shipList(shipRules, 'ShipMadeFromRecipe').length === 1 && files.indexOf('game/content/Thornswood-Last.esp') < 0);
+  yes('Thornswood-Content.esp is built on the box by Build-ContentOnBox.ps1, which names it, and the register holds no hash for it (#5191)',
+    (reg.assets || []).some((a) => a.path === 'game/content/Thornswood-Content.esp' && a.status === 'built-on-the-box' &&
+      a.record === BOX_BUILD && a.sha256 === undefined) && /\$Plugin = 'game\/content\/Thornswood-Content\.esp'/.test(boxBuild));
   yes('community uploads and the collection\'s mods are dispositioned', (reg.dispositions || []).length >= 2 && (reg.dispositions || []).some((d) => /gallery/i.test(d.what)) && (reg.dispositions || []).some((d) => /collection/i.test(d.what)));
 }
 
@@ -251,6 +267,18 @@ if (reg) {
   const e = copy(); e.notInRepo.find((a) => a.status === 'withheld').record = 'records/ui-gone.json#nothing';
   r = audit(e, files, hashOf, uiGone, shipRules);
   yes('a withheld entry naming no real record is caught', r.some((b) => /withheld, but names no record/.test(b)));
+  {
+    const esp = 'game/content/Thornswood-Content.esp';
+    const odd = (p) => (p === esp ? '0'.repeat(64) : hashOf(p));
+    yes('the plugin the box builds is not held to a hash here: other bytes than git\'s are no finding',
+      !audit(copy(), files, odd, uiGone, shipRules).some((b) => b.indexOf(esp) === 0));
+    const h = copy(); h.assets.find((x) => x.path === esp).sha256 = '0'.repeat(64);
+    yes('  and a hash written into its entry again is caught',
+      audit(h, files, odd, uiGone, shipRules).some((b) => b === esp + ': built on the box, so its build holds its sha256 and the register holds none'));
+    const w = copy(); w.assets.find((x) => x.path === esp).record = 'scripts/mods/Rebuild-ContentTables.ps1';
+    yes('  and so is an entry that names another script as its builder',
+      audit(w, files, hashOf, uiGone, shipRules).some((b) => b.indexOf(esp + ': built on the box, but its record is not') === 0));
+  }
   const f = copy(); f.notInRepo.find((a) => a.record === 'scripts/release/Ship-Rules.ps1#ShipPlatformUnused').paths.push('Data\\Platform\\Fonts\\Tavern.ttf');
   r = audit(f, files, hashOf, uiGone, shipRules);
   yes('a withheld entry naming a path its Ship-Rules list does not hold is caught', r.some((b) => /which does not hold Data\\Platform\\Fonts\\Tavern\.ttf/.test(b)));
