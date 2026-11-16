@@ -148,6 +148,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Fix-MaleBody.ps1](mods/Fix-MaleBody.ps1) | RETIRED. DO NOT RUN. Issue #1179: moved the collection's HIMBO male body aside by hand. |
 | [mods/Fix-QuickLoot.ps1](mods/Fix-QuickLoot.ps1) | RETIRED. DO NOT RUN. Issue #1179: switched on MCMHelper.esp in server-settings.json and plugins.txt by hand. |
 | [mods/Generated.ps1](mods/Generated.ps1) | Thornswood's animation and body files, for a script: what they are, what they were built from, whether the ones in a game folder are current, and the build itself. Dot-sourced by Build-Generated.ps1, Check-CoveredBodies.ps1 and the harnesses. |
+| [mods/Leftovers.ps1](mods/Leftovers.ps1) | What Clean-Leftovers.ps1 -Go removes, in one place, for it and for Audit-Leftovers.ps1 (#4256). |
 | [mods/LoadOrder.ps1](mods/LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [mods/New-CollectionPluginRecord.ps1](mods/New-CollectionPluginRecord.ps1) | Writes records\collection-plugins.json, the collection's plugins with the size and sha256 of each, which the full deploys hold the plugins they send to (#2019, CollectionPlugins.ps1). |
 | [mods/OnBox.ps1](mods/OnBox.ps1) | The two scripts Run-OnBox.ps1 sends to the box (issue #2899): the keeper, which makes the run's folder and removes it, and the run. |

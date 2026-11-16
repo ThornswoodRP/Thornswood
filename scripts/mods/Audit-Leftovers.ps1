@@ -17,6 +17,11 @@
 
   Nothing here is destructive, so it is safe to run while the game is open and
   safe to run twice.
+
+  Of the backups and scratch it finds, only what Leftovers.ps1 names is what
+  Clean-Leftovers.ps1 -Go removes. Its total is that, and every other row is
+  marked "(Clean-Leftovers leaves this)": those are for a person to decide
+  (#4256).
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -28,6 +33,10 @@ param(
     [switch]$NoPause
 )
 
+# What Clean-Leftovers.ps1 -Go removes (#4256): loaded under Stop, as every
+# load is (test-3006), before this measurement's own Continue.
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Leftovers.ps1')
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -121,21 +130,40 @@ File ("BACKUPS, PREVIOUS COPIES AND SCRATCH (everything, no size floor)")
 File ('-' * 70)
 
 $cruft = @()
+# Which of them Clean-Leftovers -Go removes: the one list it removes from
+# (Leftovers.ps1), so a row it leaves is marked and the total is only what
+# it frees (#4256). A leftover in a folder this audit does not walk (the dev
+# build's install) is still one Clean removes, so it is counted too.
+$clean = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($p in @(Get-ThornswoodCleanTargets)) { [void]$clean.Add($p) }
+$seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($t in $totals) {
     foreach ($f in $t.Files) {
-        if ($f.Name -match $cruftRx -or $f.FullName -match $cruftDirRx) {
-            $cruft += [pscustomobject]@{ Path = $f.FullName; Bytes = $f.Length }
+        if ($f.Name -match $cruftRx -or $f.FullName -match $cruftDirRx -or $clean.Contains($f.FullName)) {
+            if ($seen.Add($f.FullName)) { $cruft += [pscustomobject]@{ Path = $f.FullName; Bytes = $f.Length; Clean = $clean.Contains($f.FullName) } }
         }
     }
 }
-$cBytes = ($cruft | Measure-Object -Property Bytes -Sum).Sum
-if (-not $cBytes) { $cBytes = 0 }
-Out2 ("  {0} in {1:n0} file(s)" -f (GB $cBytes), $cruft.Count)
+foreach ($p in $clean) {
+    if (-not $seen.Contains($p) -and (Test-Path -LiteralPath $p -PathType Leaf)) {
+        [void]$seen.Add($p)
+        $cruft += [pscustomobject]@{ Path = $p; Bytes = (Get-Item -LiteralPath $p -Force).Length; Clean = $true }
+    }
+}
+$freed = @($cruft | Where-Object { $_.Clean })
+$fBytes = ($freed | Measure-Object -Property Bytes -Sum).Sum
+if (-not $fBytes) { $fBytes = 0 }
+$left = @($cruft | Where-Object { -not $_.Clean })
+$lBytes = ($left | Measure-Object -Property Bytes -Sum).Sum
+if (-not $lBytes) { $lBytes = 0 }
+Out2 ("  Clean-Leftovers -Go frees {0} in {1:n0} file(s)" -f ((GB $fBytes).Trim()), $freed.Count)
+Out2 ("  and leaves {0} in {1:n0} more for you to decide, each marked below" -f ((GB $lBytes).Trim()), $left.Count)
+$mark = '   (Clean-Leftovers leaves this)'
 foreach ($c in ($cruft | Sort-Object Bytes -Descending)) {
-    File ("    {0}   {1}" -f (MB $c.Bytes), $c.Path)
+    File ("    {0}   {1}{2}" -f (MB $c.Bytes), $c.Path, $(if ($c.Clean) { '' } else { $mark }))
 }
 foreach ($c in ($cruft | Sort-Object Bytes -Descending | Where-Object { $_.Bytes -ge ($MinMB * 1MB) } | Select-Object -First 20)) {
-    Say ("    {0}   {1}" -f (MB $c.Bytes), $c.Path) 'DarkGray'
+    Say ("    {0}   {1}{2}" -f (MB $c.Bytes), $c.Path, $(if ($c.Clean) { '' } else { $mark })) 'DarkGray'
 }
 
 # ------------------------------------------------------------------ out ----

@@ -135,6 +135,11 @@ function Copy-Tool([string]$name, [string]$to) {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
         Copy-Item -LiteralPath (Under $Repo $rel) -Destination $dst
     }
+    # What Clean-Leftovers removes, which the audit reads to mark its rows
+    # (#4256). Copied when the checkout has it, so a checkout without it
+    # fails on what it says below rather than on the copy.
+    $lib = Under $Repo @('scripts', 'mods', 'Leftovers.ps1')
+    if (Test-Path -LiteralPath $lib) { Copy-Item -LiteralPath $lib -Destination (Under $to @('scripts', 'mods', 'Leftovers.ps1')) }
     return (Under $to @('scripts', 'mods', $name))
 }
 # A made-up machine: its install, its home folder and its local app data.
@@ -225,6 +230,35 @@ try {
     $found = if ($text.Contains('BACKUPS, PREVIOUS COPIES AND SCRATCH')) { $text.Substring($text.IndexOf('BACKUPS, PREVIOUS COPIES AND SCRATCH')) } else { $null }
     Yes '  and on a machine with no backups lists nothing of it' ($null -ne $found -and -not $found.Contains($B))
     if ($null -eq $found -or $found.Contains($B)) { Show $r }
+
+    # ---- what the audit says Clean-Leftovers frees (#4256) -------------------------
+    # One definition of what Clean-Leftovers -Go removes, Leftovers.ps1, read
+    # by both: the audit marks each row Clean leaves, and its total counts only
+    # what Clean frees. Machine A gains Thornswood's own leftover in the
+    # install and in the dev build's install beside it (Where.ps1 InstallDev).
+    $lib = Under $Mods @('Leftovers.ps1')
+    Yes 'scripts\mods\Leftovers.ps1 says what Clean-Leftovers removes' (Test-Path -LiteralPath $lib)
+    $cleanSrc = [IO.File]::ReadAllText((Join-Path $Mods 'Clean-Leftovers.ps1'))
+    $auditSrc = [IO.File]::ReadAllText((Join-Path $Mods 'Audit-Leftovers.ps1'))
+    $loads = ". (Join-Path `$PSScriptRoot 'Leftovers.ps1')"
+    Yes '  both scripts load it, and neither names Thornswood.exe.old itself' ($cleanSrc.Contains($loads) -and $auditSrc.Contains($loads) -and -not $cleanSrc.Contains("'Thornswood.exe.old'") -and -not $auditSrc.Contains("'Thornswood.exe.old'"))
+    $ownMain = Under $A @('install', 'Launcher', 'Thornswood.exe.old')
+    $ownDev = Under $A @('install-DevBuild', 'Launcher', 'Thornswood.exe.old')
+    Put $ownMain 'the launcher before its update'
+    Put $ownDev 'the dev launcher before its update'
+    $repC = Join-Path $T 'audit-c.txt'
+    $r = RunPs $audit @('-Report', $repC, '-NoPause') (Machine $A)
+    $text = if (Test-Path -LiteralPath $repC) { [IO.File]::ReadAllText($repC) } else { '' }
+    $rows = @($text -split "\r?\n")
+    function Row([string]$path) { return @($rows | Where-Object { $_.Contains($path) } | Select-Object -First 1) -join '' }
+    $leaves = '(Clean-Leftovers leaves this)'
+    Yes 'the audit marks each row Clean-Leftovers leaves: the backup beside a plugin and the one in Downloads' ((Row $bakData).EndsWith($leaves) -and (Row $bakDown).EndsWith($leaves))
+    Yes '  and not Thornswood''s own leftover, in the install or the dev build''s' ((Row $ownMain) -ne '' -and -not (Row $ownMain).EndsWith($leaves) -and (Row $ownDev) -ne '' -and -not (Row $ownDev).EndsWith($leaves))
+    $wantBytes = (Get-Item -LiteralPath $ownMain).Length + (Get-Item -LiteralPath $ownDev).Length
+    $frees = [regex]::Match($text, 'Clean-Leftovers -Go frees ([0-9.,]+) GB in ([0-9,]+) file\(s\)')
+    Yes ('  and its total counts only what Clean-Leftovers -Go frees: the two, ' + $wantBytes + ' bytes') ($frees.Success -and $frees.Groups[2].Value -eq '2')
+    if (-not $frees.Success) { Show $r }
+    Yes '  and still deletes nothing' ((AllThere @($ownMain, $ownDev, $bakData, $bakDown)) -and (AllThere $keepA))
 
     # ---- Check-FromGame ------------------------------------------------------------
     $noGame = Join-Path $T 'no-game'
