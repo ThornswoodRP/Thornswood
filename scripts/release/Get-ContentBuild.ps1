@@ -61,10 +61,25 @@
   file only from a laid build of its own commit's key that still holds
   (New-ThornswoodArtifact -Content).
 
+  A BUSY FILE STORE (#6359). GitHub answers an artifact's download with a
+  redirect to its own file store, Azure Blob Storage
+  (productionresultssa<n>.blob.core.windows.net), one storage account that
+  many of GitHub's customers share. While that account is over its egress
+  for a moment it answers 503 "Egress is over the account limit" (Azure's
+  ServerBusy) to everybody, whatever we ask: on 16 Nov 2026 it refused a
+  3.6 MB build twice, seconds after the same build came down whole. Azure
+  says to ask again after a wait for exactly these answers, and
+  actions/download-artifact does so for the gate's shares. So -Newest asks
+  again on 408, 429, 500, 502, 503, 504 and a connection that drops, after
+  each wait in -BusyWaits (seconds, or longer when the store's Retry-After
+  says so, at most 120), says each wait and why, and stops after the last,
+  saying the store stayed busy. Any other answer (a 404 for an expired
+  build, a 401) stops at once.
+
   A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
   two files) for -Newest, -ReleasesFile (the list of Releases) and -AssetDir (the two
   files) for GitHub, and -DeploymentFile, where -Ask writes what it would
-  send.
+  send. -ApiUrl points -Newest's download at a stand-in for GitHub's API.
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -84,7 +99,9 @@ param(
     [string]$ArtifactsFile = '',
     [string]$ArtifactDir = '',
     [string]$BuildKey = '',
-    [string]$Kept = ''
+    [string]$Kept = '',
+    [string]$ApiUrl = 'https://api.github.com',
+    [string]$BusyWaits = '5,15,45'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,6 +115,41 @@ if (-not $GitHubRepo) { $GitHubRepo = 'ThornswoodRP/Thornswood' }
 function Stop-Take([string]$Why) { Write-Host ('::error::' + $Why); Write-Host ('STOP. ' + $Why); exit 1 }
 function Say-Output([string]$Line) { if ($Output) { Add-Content -LiteralPath $Output -Value $Line } }
 function Get-Sha256Bytes([byte[]]$B) { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($B)).ToLowerInvariant() }
+
+# Downloads an artifact's zip to $To. GitHub's file store answers a busy
+# moment of its own with 503 "Egress is over the account limit" (A BUSY FILE
+# STORE, above, says why that is outside our control and expected), so a
+# busy answer or a dropped connection is asked again after each wait in
+# -BusyWaits, each wait said; after the last it stops saying so. Any other
+# answer stops at once.
+function Save-ContentArtifact([string]$Uri, [string]$Token, [string]$To, [string]$Id) {
+    $waits = @()
+    foreach ($w in @($BusyWaits.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        if ($w -cnotmatch '^\d{1,3}$') { Stop-Take "-BusyWaits takes whole seconds separated by commas, not $BusyWaits" }
+        $waits += [int]$w
+    }
+    $busy = @(408, 429, 500, 502, 503, 504)
+    $headers = @{ Authorization = "Bearer $Token"; 'X-GitHub-Api-Version' = '2022-11-28' }
+    for ($try = 0; ; $try++) {
+        $status = 0; $why = ''; $after = 0
+        try {
+            $r = Invoke-WebRequest -Uri $Uri -OutFile $To -PassThru -SkipHttpErrorCheck -Headers $headers
+            $status = [int]$r.StatusCode
+            if ($status -ge 200 -and $status -lt 300) { return }
+            $why = "answered $status ($($r.BaseResponse.ReasonPhrase))"
+            $ra = if ($r.Headers -and $r.Headers['Retry-After']) { [string]@($r.Headers['Retry-After'])[0] } else { '' }
+            if ($ra -cmatch '^\d+$') { $after = [Math]::Min([int]$ra, 120) }
+        } catch [System.Net.Http.HttpRequestException], [System.IO.IOException], [System.Threading.Tasks.TaskCanceledException] {
+            # The connection dropped or timed out before the whole answer came.
+            $why = "dropped the connection ($($_.Exception.Message))"
+        }
+        if ($status -and $status -notin $busy) { Stop-Take "GitHub did not give artifact ${Id}: it $why" }
+        if ($try -ge $waits.Count) { Stop-Take "GitHub did not give artifact ${Id}: its file store $why on all $($try + 1) asks, the last after waiting $(($waits | Measure-Object -Sum).Sum) s in all; that store is one GitHub's customers share, so this is GitHub's, not a limit of ours (#6359)" }
+        $wait = [Math]::Max($waits[$try], $after)
+        Write-Host "GitHub's file store $why for artifact $Id; asking again in $wait s (ask $($try + 2) of $($waits.Count + 1); a busy store is GitHub's, #6359)"
+        Start-Sleep -Seconds $wait
+    }
+}
 
 # Holds content-build.json (to the server, and to the key when one is given)
 # and every file in content.zip to the sha256 it names, none more and none
@@ -205,8 +257,7 @@ if ($Newest) {
             # Invoke-WebRequest drops the token when it leaves the host. A
             # developer's checkout has no GH_TOKEN; gh's own sign-in serves.
             $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { (gh auth token) -join '' }
-            try { Invoke-WebRequest -Uri "https://api.github.com/repos/$GitHubRepo/actions/artifacts/$($a.id)/zip" -OutFile $zip -Headers @{ Authorization = "Bearer $tok"; 'X-GitHub-Api-Version' = '2022-11-28' } | Out-Null }
-            catch { Stop-Take "GitHub did not give artifact $($a.id): $($_.Exception.Message)" }
+            Save-ContentArtifact "$($ApiUrl.TrimEnd('/'))/repos/$GitHubRepo/actions/artifacts/$($a.id)/zip" $tok $zip ([string]$a.id)
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             [IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $work 'a'))
             foreach ($n in 'content.zip', 'content-build.json') {
