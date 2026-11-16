@@ -122,7 +122,11 @@ function Write-ThornswoodSealedLog([string]$From) {
 function Read-ThornswoodSealedLog([string]$Repo, [long]$Run) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
-        $jobs = @(& gh api "repos/$Repo/actions/runs/$Run/jobs" --jq '.jobs[].id' 2>&1 | ForEach-Object { "$_" })
+        # Only the jobs that ran: a job GitHub skipped (box-run.yml's "Patrick's
+        # word for a live verb" for any other verb) never ran, has no log, and
+        # its log answers 404, which ended the read before the job that holds
+        # the answer (#6292).
+        $jobs = @(& gh api "repos/$Repo/actions/runs/$Run/jobs" --jq '.jobs[] | select(.conclusion != "skipped") | .id' 2>&1 | ForEach-Object { "$_" })
         if ($LASTEXITCODE -ne 0) { return @{ Bytes = $null; Why = ('the run''s jobs could not be read: ' + ($jobs -join ' ')) } }
         # The log keeps the runner's colours, which a newer gh hands over
         # only when told (Get-GhLogFlags, #5202).

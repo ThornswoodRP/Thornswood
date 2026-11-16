@@ -713,6 +713,20 @@ Yes '  a changed part is refused by the sha256' (-not $l.Bytes -and $l.Why -matc
 $script:fakeLog = @('2026-10-31T04:00:02.0000000Z TWSEAL-LOG NONE')
 $l = Read-ThornswoodSealedLog 'o/r' 1
 Yes '  and a run that wrote none says so' (-not $l.Bytes -and $l.Why -eq 'the run wrote no sealed output')
+# A run whose first job GitHub skipped (box-run.yml's "Patrick's word for a
+# live verb" for any verb not live) has no log for it, and its 404 ended the
+# read before the job that holds the answer (#6292, 16 Nov 2026).
+# The stand-in answers the jobs query the way GitHub's jq would: job 6 was
+# skipped, job 7 ran.
+$script:fakeLog = @($written | ForEach-Object { '2026-10-31T04:00:02.0000000Z ' + $_ })
+function gh {
+    $global:LASTEXITCODE = 0
+    if ("$args" -match '/runs/\d+/jobs') { if ("$args" -match 'select\(\.conclusion != "skipped"\)') { return '7' } else { return @('6', '7') } }
+    if ("$args" -match '/jobs/7/logs') { return $script:fakeLog }
+    $global:LASTEXITCODE = 1; return 'BlobNotFound HTTP 404'
+}
+$l = Read-ThornswoodSealedLog 'o/r' 1
+Yes '  a job GitHub skipped is not read, so the job that ran answers' ($l.Bytes -and [Convert]::ToBase64String($l.Bytes) -eq [Convert]::ToBase64String((Get-Content -LiteralPath $sealedPath -AsByteStream -Raw)))
 Remove-Item -LiteralPath function:\gh
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 $br = Text 'scripts/vps/Box-Run.ps1'
