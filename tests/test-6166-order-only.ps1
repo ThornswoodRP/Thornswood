@@ -19,7 +19,9 @@
 
   It proves:
     - the files the order is made from are the same list in the script and
-      in the agent's LoadOrderPaths
+      in the agent's LoadOrderPaths, and are what the box's content build
+      reads its order from, which -FromRecord writes (#6209)
+    - the -At block leaves the script's own folder, $Here, as it was
     - -At at the checkout's own commit, and at an older commit whose order
       files are the same as main's, goes on
     - -At at a commit main has moved the order past says NOT THIS COMMIT'S
@@ -52,7 +54,15 @@ $block = [regex]::Match($dev, '(?s)# ==== thornswood dev order at ====(.*?)# ===
 Yes 'Deploy-DevGamemode.ps1 has the -At block between its markers' ($block -ne '')
 $inScript = @([regex]::Match($block, '(?s)\$ThornswoodOrderInputs = @\((.*?)\)').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match "'([^']+)'") { $Matches[1] } })
 $inAgent = @([regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match '"([^"]+)"') { $Matches[1] } })
-Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 3 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
+Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 4 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
+# #6209: they are what the box's content build reads its order from, so the
+# order the step writes is the one a Release's tables were built against.
+$contentPaths = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/ContentPaths.ps1')).Replace("`r`n", "`n")
+$orderFn = [regex]::Match($contentPaths, '(?s)function Get-ThornswoodContentOrder \{(.*?)\n\}\n').Groups[1].Value
+Yes '  and each is a file Get-ThornswoodContentOrder reads, the content build''s order (#6209)' ($orderFn -ne '' -and @($inScript | Where-Object { -not $orderFn.Contains("'" + $_ + "'") }).Count -eq 0)
+Yes '  and -FromRecord writes that order, not last-plugin.json''s (#6209)' (
+  $dev.Contains("`$contentOrder = Get-ThornswoodContentOrder -Repo `$repoRoot") -and
+  $dev.Contains("@(`$contentOrder.Names)") -and -not $dev.Contains("`$built.loadOrder) | ForEach-Object { [string]`$_ } | Where-Object { `$_ -and `$_ -ine `$ThornswoodLastPlugin }"))
 
 # ---- the -At block, run in a clone made as the gate makes its own ---------
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('test-6166-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -86,7 +96,9 @@ try {
     # The block reads the repository from the script's own folder.
     $runner = Join-Path $c 'scripts/deploy/run-at.ps1'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $runner) | Out-Null
-    [IO.File]::WriteAllText($runner, "param([string]`$At)`n`$ErrorActionPreference = 'Stop'`n" + $block)
+    # $Here stands for the script's folder, which the script joins every
+    # path to after the block; the block has to leave it as it was.
+    [IO.File]::WriteAllText($runner, "param([string]`$At)`n`$ErrorActionPreference = 'Stop'`n`$Here = 'the-script-folder'`n" + $block + "`nWrite-Host ('HERE=' + `$Here)`n")
     $runner
   }
   function RunAt([string]$runner, [string]$at) {
@@ -105,6 +117,7 @@ try {
   Yes "-At at the checkout's own commit goes on, fetching nothing" ($r.Code -eq 0 -and $r.Out -notmatch "NOT THIS COMMIT'S ORDER" -and $r.Out -notmatch 'past')
   $r = RunAt $atTwo $one
   Yes "-At at an older commit whose order files are main's goes on, and says they are the same" ($r.Code -eq 0 -and $r.Out -match 'every file the order is made from is the same at both')
+  Yes '  and leaves $Here, the script''s folder, as it was (build-1.3.75''s step lost it to a blob id)' ($r.Out -match '(?m)^HERE=the-script-folder$')
   $r = RunAt $atThree $two
   Yes "-At at a commit main moved the order past says NOT THIS COMMIT'S ORDER and ends with 3" ($r.Code -eq 3 -and $r.Out -match "NOT THIS COMMIT'S ORDER")
   Yes '  and names the file that moved, and only that one' ($r.Out -match 'its records/collection-plugins\.json differ' -and $r.Out -notmatch 'last-plugin')
