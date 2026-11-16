@@ -101,7 +101,9 @@
   plugin order the record holds. WabbajackModlist.cs says the format. The
   mods go in MO2's priority by the collection's mod rules, so a file two mods
   share is the one the rules deploy last, as in files.txt; a dinput mod's
-  files go under Root in its folder. The same record writes the same bytes,
+  Data files are its own like any mod's, and what goes beside the game
+  (skse64_loader.exe) goes under Root in its folder, as Root Builder lays it
+  out. The same record writes the same bytes,
   and the modlist's sha256 is printed. This is how the launcher installs
   without Vortex: each Release carries the modlist and its hash.
 
@@ -844,10 +846,13 @@ if ($Record) {
       $e = $byIndex[$i].Entry
       $ax = $script:ArchXx[$i]
       $ml.AddNexusArchive([IO.Path]::GetFileName($archives[$i]), $e.Size, $ax, $GameDomain, $e.ModId, $e.FileId, $e.Name, $e.Version)
-      $base = 'mods\' + $folders[$i] + '\' + $(if ($e.Type -eq 'dinput') { 'Root\' } else { '' })
+      $base = 'mods\' + $folders[$i] + '\'
       foreach ($w in $script:WjFiles[$i]) {
-        if ($w.Delta) { $ml.PatchedFromArchive($ax, $w.Source, $w.FromXx, $w.Delta, $w.Xx, $w.Size, $base + $w.Rel); $patchCount++ }
-        else { $ml.FromArchive($ax, $w.Source, $w.Xx, $w.Size, $base + $w.Rel) }
+        # A dinput mod's Rel is from the game folder: its Data files are the
+        # mod's own, as for any mod, and the rest goes under Root.
+        $to = if ($e.Type -ne 'dinput') { $base + $w.Rel } elseif ($w.Rel -match '^(?i)Data\\(.+)$') { $base + $Matches[1] } else { $base + 'Root\' + $w.Rel }
+        if ($w.Delta) { $ml.PatchedFromArchive($ax, $w.Source, $w.FromXx, $w.Delta, $w.Xx, $w.Size, $to); $patchCount++ }
+        else { $ml.FromArchive($ax, $w.Source, $w.Xx, $w.Size, $to) }
         $fileCount++
       }
       $meta = "[General]`r`ngameName=SkyrimSE`r`nmodid=" + $e.ModId + "`r`nversion=" + $e.Version + "`r`ninstallationFile=" + [IO.Path]::GetFileName($archives[$i]) + "`r`nrepository=Nexus`r`n`r`n[installedFiles]`r`n1\modid=" + $e.ModId + "`r`n1\fileid=" + $e.FileId + "`r`nsize=1`r`n"
