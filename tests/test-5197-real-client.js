@@ -17,9 +17,13 @@
 //     ends the run as failed;
 //   - every step in tests/real-client/*.json is one the plugin knows, and the
 //     runner names the same three files the plugin does;
-//   - the runner's Windows helper compiles under PowerShell 7, where pwsh is.
+//   - the runner's Windows helper compiles under PowerShell 7, where pwsh is;
+//   - an install on main is put on dev for the run as the launcher's Server
+//     card does, Play waits for dev's launcher, and the channel goes back
+//     after, byte for byte (on a config.json in the system's temp folder).
 //
-// Read only.
+// Reads only, but for that config.json in a folder of its own in the
+// system's temp, removed after.
 'use strict';
 const REPO_DIR = require('path').join(__dirname, '..');
 const fs = require('fs');
@@ -244,9 +248,25 @@ function game(opts) {
       /Join-Path \$veloHome 'current\\Thornswood\.exe'/.test(RUNNER) && /& \$where MachineData/.test(RUNNER));
   yes('the runner takes the one install, not the old -DevBuild folder',
       /\$Root = & \$where Install\b/.test(RUNNER) && !/InstallDev/.test(RUNNER));
+  // An install on main is put on dev for the run and back after it, the way
+  // the launcher's Server card switch sets it (16 Nov: the run refused One,
+  // which Patrick had put on main to play).
   const cfg = read(path.join('launcher', 'app', 'Config.cs')) || '';
-  yes('the runner refuses an install that is not on the dev channel, read as the launcher keeps it',
-      /public string UpdateBranch\b/.test(cfg) && /\$cfg\.UpdateBranch/.test(RUNNER) && /if \(\$branch -ne 'dev'\) \{\s*throw/.test(RUNNER));
+  const dev = read(path.join('launcher', 'app', 'DevBuild.cs')) || '';
+  const setBody = (/public static bool Set\(Config cfg, string channel\)\s*\{([\s\S]*?)\n        \}/.exec(dev) || [])[1] || '';
+  const fields = (/\$channelFields = @\(([^)]*)\)/.exec(RUNNER) || [])[1] || '';
+  ['Channel', 'UpdateBranch', 'ServerPort', 'VoicePort', 'VoiceUrl'].forEach(function (n) {
+    yes('the runner sets ' + n + ' as DevBuild.Set does, a field config.json keeps',
+        new RegExp('cfg\\.' + n + ' = ').test(setBody) && fields.indexOf("'" + n + "'") >= 0 &&
+        new RegExp('\\[JsonInclude[^\\]]*\\] public string ' + n + '\\b').test(cfg));
+  });
+  yes('and with the dev ports DevBuild names',
+      /DevPort = "7787"/.test(dev) && /DevVoicePort = "7789"/.test(dev) &&
+      /ServerPort = '7787'; VoicePort = '7789'/.test(RUNNER));
+  yes('the runner puts the channel back in its finally, only when it changed it',
+      /\} finally \{[\s\S]*if \(\$switched\) \{\s*Set-RunChannel \$leftOn/.test(RUNNER));
+  yes('and presses Play only once the launcher in place is dev\'s',
+      /\$ch = Get-InstalledChannel\s*\n\s*if \(\$ch -and \$ch -ne 'dev'\)[\s\S]*?continue[\s\S]*?BtnPlay|\$ch = Get-InstalledChannel\s*\n\s*if \(\$ch -and \$ch -ne 'dev'\)[\s\S]*?continue[\s\S]*?\$btn\.Current\.IsEnabled/.test(RUNNER));
 }
 
 // The runner's Windows helper is compiled by Add-Type when it starts. On One,
@@ -268,6 +288,37 @@ function game(opts) {
     const said = (r.stdout || '') + (r.stderr || '');
     yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
     if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+  }
+
+  // The runner's channel functions on a config.json as the launcher writes
+  // it, in a folder of the system's temp: main to dev, and back byte for byte.
+  const cf = RUNNER.indexOf('$cfgFile = Join-Path $Root');
+  const ce = RUNNER.indexOf('$leftOn = Read-ChannelFields');
+  yes('the runner has its channel functions', cf >= 0 && ce > cf);
+  if (ver.status === 0 && cf >= 0 && ce > cf) {
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-'));
+    const before = '{"ServerIp":"203.0.113.9","ServerPort":"7777","VoicePort":"7778","VoiceUrl":"https://example.invalid/voice/","UpdateBranch":"main","Theme":"Forge","Channel":"","Note":"a \\"quoted\\" word"}';
+    fs.writeFileSync(path.join(dir, 'config.json'), before);
+    const script = '$ErrorActionPreference = "Stop"\n$Root = ' + JSON.stringify(dir).replace(/"/g, "'") + '\n' +
+      RUNNER.slice(cf, ce) +
+      '$leftOn = Read-ChannelFields\n' +
+      "Set-RunChannel ([ordered]@{ Channel = 'dev'; UpdateBranch = 'dev'; ServerPort = '7787'; VoicePort = '7789'; VoiceUrl = (Get-DevVoiceUrl $leftOn.VoiceUrl) })\n" +
+      "'ON DEV ' + ([IO.File]::ReadAllText($cfgFile))\n" +
+      'Set-RunChannel $leftOn\n' +
+      "'BACK ' + ([IO.File]::ReadAllText($cfgFile))\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    const on = (/ON DEV (.*)/.exec(out) || [])[1] || '';
+    let onCfg = null;
+    try { onCfg = JSON.parse(on); } catch (e) { onCfg = null; }
+    yes('on dev, config.json has the five fields as DevBuild.Set gives them',
+        !!onCfg && onCfg.Channel === 'dev' && onCfg.UpdateBranch === 'dev' && onCfg.ServerPort === '7787' &&
+        onCfg.VoicePort === '7789' && onCfg.VoiceUrl === 'https://example.invalid/voice-dev');
+    yes('and every other field as the launcher wrote it', !!onCfg && onCfg.Theme === 'Forge' && onCfg.ServerIp === '203.0.113.9' && onCfg.Note === 'a "quoted" word');
+    yes('put back, config.json is byte for byte what it was', ((/BACK (.*)/.exec(out) || [])[1] || '').trim() === before);
+    if (!onCfg) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 

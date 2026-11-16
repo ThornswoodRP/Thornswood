@@ -15,9 +15,8 @@ our journal, the inventory and the game's menu, with a screenshot of each.
 
 ## On your machine
 
-On a PC with an install on the dev channel (the launcher's Settings page)
-whose Profile holds `dev-allowed.txt`, the launcher and the game closed, from
-the repository folder:
+On a PC with an install whose Profile holds `dev-allowed.txt`, the launcher
+and the game closed, from the repository folder:
 
 ```
 pwsh scripts\dev\Run-RealClient.ps1
@@ -27,11 +26,18 @@ It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
 `results.jsonl`, the launcher's log for the run and a `.png` for each
 screenshot. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
-setup put in `%LOCALAPPDATA%\Thornswood\current`), and it stops at once when
-that install is not on the dev channel, `-Steps` another list, `-InstallPlugin` copies
+setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, `-InstallPlugin` copies
 this repository's plugin into a build released before it, and `-Publish` puts
 the run on the GitHub Release of the newest Dev Deployment and a line on that
 Deployment. It ends 0 only when every step passed.
+
+An install on the main channel is put on dev for the run, as the Server
+card's switch does it: the launcher takes dev's package by itself when it
+starts, and Play is pressed only once the launcher in place is dev's. When the
+run ends the install goes back to the channel it was on, and the launcher
+takes that channel's package at its next start. With automatic updates off
+(Settings, Updates) the launcher never takes dev's package, and the run stops
+at the Play wait and says so.
 
 ## How a step is written
 
