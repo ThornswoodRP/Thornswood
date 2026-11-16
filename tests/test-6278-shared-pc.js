@@ -134,7 +134,6 @@ function ask(method, where, headers, bodyText) {
 }
 const asJson = { 'content-type': 'application/json' };
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
-const dayOf = (t) => { const d = new Date(t); const two = (n) => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()); };
 
 
 const ticketFor = (id, name) => {
