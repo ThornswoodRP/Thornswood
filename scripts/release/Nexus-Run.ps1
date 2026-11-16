@@ -161,7 +161,7 @@ function Get-NexusRunTracked([string]$RepoRoot, [string]$Rel) {
 # each was laid at (Get-ThornswoodLaidBuild). It is the dev server's build,
 # the one every Release carries. Nothing for a path the build does not write.
 function Get-NexusRunLaid([string]$RepoRoot, [string]$Rel) {
-    . (Join-Path $Here '..\mods\ContentPaths.ps1')
+    . (Join-Path $RepoRoot 'scripts/mods/ContentPaths.ps1')
     $built = @(Get-ThornswoodBuiltPaths -Repo $RepoRoot -NotCommitted | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') -or $Rel.StartsWith($_ + '/') })
     if (-not $built.Count) { return @() }
     try { $laid = Get-ThornswoodLaidBuild -Repo $RepoRoot -Server dev }

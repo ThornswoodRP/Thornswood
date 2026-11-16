@@ -213,7 +213,9 @@ try {
     Refused 'a record for the other server' 'is for the main server, not dev' (Plant $built $null $key 'main')
 
     # ---------------------------------------------- 5. the merge release
-    $wf = [IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml'))
+    # A Windows checkout holds the workflows CRLF; each job is cut out at its
+    # next \n  name:\n line, so they are read LF (#6351).
+    $wf = ([IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml')) -replace "`r`n", "`n")
     $job = $wf.Substring($wf.IndexOf("`n  release:"))
     Check '5 it starts again on deployment_status' ($wf -match '(?m)^  deployment_status:')
     Check '5 a content job asks for the build, on main only, on a push or a Content Deployment''s success' (
@@ -244,7 +246,7 @@ try {
         $job -match "\(needs\.checks\.result == 'success' \|\| needs\.checks\.result == 'skipped'\)" -and $job -match "\(needs\.checks-linux\.result == 'success' \|\| needs\.checks-linux\.result == 'skipped'\)")
     # Every other run of the harnesses lays the newest build first.
     foreach ($f in 'build.yml', 'build-pr.yml') {
-        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$f"))
+        $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$f")) -replace "`r`n", "`n")
         Check "6 $f`: the pick lays the newest build, hands its same and commit to the pick, and the build to the shares" (
             $b -match '(?s)  pick:.*?id: content.*?Get-ContentBuild\.ps1 -Newest -Keep .*?- name: Hand the build to the shares.*?name: content-laid\s.*?retention-days: 1.*?CONTENT_SAME: \$\{\{ steps\.content\.outputs\.same \}\}\s+CONTENT_COMMIT: \$\{\{ steps\.content\.outputs\.commit \}\}.*?Run-Gate\.ps1 -Pick')
         foreach ($j in 'gate', 'gate-linux') {
@@ -253,7 +255,7 @@ try {
         }
     }
     foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
-        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])"))
+        $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])")) -replace "`r`n", "`n")
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
         Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build.*?Get-ContentBuild\.ps1 -Newest')
     }
