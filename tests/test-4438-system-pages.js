@@ -138,12 +138,16 @@ yes('3 Add-ContentRecords.py makes the three kits at a bench this test knows',
 const kitRows = {};
 for (const line of section(dur, 'What a kit is made of').split('\n')) {
   const cells = line.split('|').map((c) => c.trim());
-  if (cells.length === 7 && /\S Kit$/.test(cells[1])) {
-    kitRows[cells[1]] = { made: cells[2], bench: cells[3], burns: cells[4], who: cells[5] };
+  if (cells.length === 6 && /\S Kit$/.test(cells[1])) {
+    kitRows[cells[1]] = Object.assign(kitRows[cells[1]] || {}, { made: cells[2], bench: cells[3], who: cells[4] });
+  }
+  if (cells.length === 4 && /\S Kit$/.test(cells[1])) {
+    kitRows[cells[1]] = Object.assign(kitRows[cells[1]] || {}, { burns: cells[2] });
   }
 }
-yes('3 durability.md\'s kit table has a row each, with what the bench burns (Kit, Made of, Bench, Burns, Who)',
-  /\| Kit \| Made of \| Bench \| Burns \| Who \|/.test(dur) && Object.keys(kitRows).length === 3);
+yes('3 durability.md has the kit table and a row each for what the bench burns (Kit, The bench burns)',
+  /\| Kit \| Made of \| Bench \| Who \|/.test(dur) && /\| Kit \| The bench burns \|/.test(dur) &&
+  Object.keys(kitRows).length === 3 && Object.values(kitRows).every((r) => r.made && r.burns));
 for (const kit of Object.keys(recipes)) {
   const r = recipes[kit], row = kitRows[kit] || {};
   if (!r.bench) { yes('3 ' + kit + ' is made at a bench this test knows', false); continue; }
