@@ -129,6 +129,16 @@ link, and the old line goes.
   (Work) and docs/systems/professions.md; re-cost against gold dropped
   21 Oct 2026,
   [#613](https://github.com/EvilPatrick06/Thornswood/issues/613#issuecomment-6326847193).
+- **Guild work pays what staff set, as new gold.** Every good a guild
+  commission asks for starts at a reward price, and staff change it in the
+  game (`/book reward`); a hold's submitted list still sets only what its
+  traders buy and sell. The pay never comes out of the trader's purse.
+  Patrick, 15 Nov 2026, on the report page (q-6180-guild-prices): "Guild
+  work should be set by staff, give them all starting reward prices. The
+  NPCs still wont buy or sell until ledgers are submitted"; 16 Nov 2026:
+  "no dont make it come out of the purse", "othwerwise the economy would
+  have like 0 gold people only start with 40".
+  [#6180](https://github.com/ThornswoodRP/Thornswood/issues/6180).
 - **Forge recipes take no gold coins** as an input, only materials. 21 Oct
   2026, Patrick's answer on the report page (B), on
   [#3115](https://github.com/EvilPatrick06/Thornswood/issues/3115).

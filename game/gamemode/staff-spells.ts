@@ -507,6 +507,111 @@ function thornswoodBooks(env) {
 
   loadStore();
 
+  /*
+    THE GUILD'S REWARD PRICES (#6180). Patrick, 15 Nov 2026, on the page
+    (q-6180-guild-prices): "Guild work should be set by staff, give them all
+    starting reward prices. The NPCs still wont buy or sell until ledgers are
+    submitted". A guild commission pays each good it asks for at the good's
+    reward price, never at a hold's ledger price; the ledgers above still set
+    what a trader buys and sells. Every good a commission asks for has a
+    starting price in the gamemode table COMMISSION_REWARD_PRICES
+    (Build-MerchantTables.js says how it is worked out). Staff change one in
+    the game with /book reward, and what they set is kept here, in the
+    private folder beside the books, by the good's record; a good staff
+    never changed pays its starting price.
+  */
+  // The gamemode hands the table in when it starts the books; a harness that
+  // runs the books block alone gives none, and no good has a reward price.
+  var REWARD_START = env.rewardPrices || { version: 1, items: [] };
+  var rewardStart = {};
+  var rewardOrder = [];
+  (function () {
+    var items = (REWARD_START && Array.isArray(REWARD_START.items)) ? REWARD_START.items : null;
+    if (!items) { throw new Error('The guild\'s starting reward prices cannot be verified.'); }
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      if (!row || typeof row.item !== 'string' || !/^[0-9a-f]{1,8}:[^:]+$/i.test(row.item) ||
+          typeof row.name !== 'string' || !row.name.trim() || !validGold(row.gold) || row.gold === null ||
+          Object.prototype.hasOwnProperty.call(rewardStart, row.item.toLowerCase())) {
+        throw new Error('The guild\'s starting reward prices cannot be verified.');
+      }
+      rewardStart[row.item.toLowerCase()] = { item: row.item, name: row.name, gold: row.gold };
+      rewardOrder.push(row.item.toLowerCase());
+    }
+  })();
+  var rewardSet = {};
+  function rewardsFile() { return path.join(privDir, 'commission-rewards.json'); }
+  (function loadRewards() {
+    if (!fs.existsSync(rewardsFile())) { return; }
+    var doc;
+    try { doc = JSON.parse(fs.readFileSync(rewardsFile(), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { throw new Error('Saved guild reward prices cannot be verified: ' + e.message); }
+    if (!doc || doc.version !== 1 || !doc.items || typeof doc.items !== 'object' || Array.isArray(doc.items)) {
+      throw new Error('Saved guild reward prices cannot be verified.');
+    }
+    for (var key in doc.items) {
+      if (!Object.prototype.hasOwnProperty.call(doc.items, key)) { continue; }
+      // A good no commission asks for any more is kept, so a price staff set
+      // is never lost, and asked for by nothing.
+      if (!/^[0-9a-f]{1,8}:[^:]+$/i.test(key) || key !== key.toLowerCase() ||
+          !validGold(doc.items[key]) || doc.items[key] === null) {
+        throw new Error('Saved guild reward prices cannot be verified.');
+      }
+      rewardSet[key] = doc.items[key];
+    }
+  })();
+
+  function rewardPrice(desc) {
+    var key = String(desc || '').toLowerCase();
+    if (!active || !Object.prototype.hasOwnProperty.call(rewardStart, key)) { return null; }
+    var start = rewardStart[key];
+    var gold = Object.prototype.hasOwnProperty.call(rewardSet, key) ? rewardSet[key] : start.gold;
+    return { item: start.item, name: start.name, gold: gold, start: start.gold };
+  }
+
+  // The good a staff member named: by its name or its record, whole, any case.
+  function rewardGood(words) {
+    var said = words.join(' ').trim().toLowerCase();
+    if (!said) { return null; }
+    if (Object.prototype.hasOwnProperty.call(rewardStart, said)) { return rewardStart[said]; }
+    var hit = null;
+    for (var i = 0; i < rewardOrder.length; i++) {
+      var row = rewardStart[rewardOrder[i]];
+      if (row.name.toLowerCase() === said) {
+        if (hit) { return 'two'; }
+        hit = row;
+      }
+    }
+    return hit;
+  }
+
+  function reward(pid, words) {
+    var r = rolesOf(pid);
+    if (!r.staff && !r.dev) { return 'Only staff set what guild work pays.'; }
+    var last = String(words[words.length - 1] || '').toLowerCase();
+    var setting = words.length >= 2 && (/^(0|[1-9][0-9]{0,9})$/.test(last) || last === 'start');
+    var good = rewardGood(setting ? words.slice(0, -1) : words);
+    if (!good) {
+      return 'Name a good guild work asks for to read its price; add a price in gold to set it, ' +
+             'or start to put it back on its starting price.';
+    }
+    if (good === 'two') { return 'Two goods have that name. Name it by its record instead.'; }
+    var key = good.item.toLowerCase();
+    if (!setting) {
+      var now = rewardPrice(key);
+      return good.name + ' pays ' + now.gold + ' gold each in guild work (it started at ' + now.start + ').';
+    }
+    var gold = last === 'start' ? null : Number(last);
+    if (gold !== null && !validGold(gold)) { return 'That is not a price in gold.'; }
+    var next = JSON.parse(JSON.stringify(rewardSet));
+    if (gold === null || gold === good.gold) { delete next[key]; } else { next[key] = gold; }
+    try { writeJson(rewardsFile(), { version: 1, items: next }); }
+    catch (e) { return 'The server could not save the reward price. Nothing changed.'; }
+    rewardSet = next;
+    return good.name + ' now pays ' + rewardPrice(key).gold + ' gold each in guild work. ' +
+           'Work already taken keeps the pay it was taken at.';
+  }
+
   function byId(id) {
     var want = String(id || '');
     for (var i = 0; i < store.length; i++) {
@@ -1211,6 +1316,7 @@ function thornswoodBooks(env) {
       }
       return said;
     }
+    if (sub === 'reward') { return reward(pid, words); }
     if (sub === 'leave') { return leave(pid, words); }
     if (sub === 'invite') { return invite(actorId, pid, words); }
     if (sub === 'say') { return sayLine(pid, actorId, words); }
@@ -1436,6 +1542,7 @@ function thornswoodBooks(env) {
     books: function () { return active ? JSON.parse(JSON.stringify(store)) : []; },
     guildPrice: guildPrice,
     catalog: catalog,
+    rewardPrice: rewardPrice,
     ledgers: function () { return active ? JSON.parse(JSON.stringify(ledgers)) : {}; }
   };
 }
@@ -1459,7 +1566,7 @@ function thornswoodBooks(env) {
       var cfg = JSON.parse(fs.readFileSync('server-settings.json', 'utf8'));
       if (cfg && cfg.privDir) { privDir = String(cfg.privDir); }
     } catch (e) { }
-    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir });
+    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir, rewardPrices: table('COMMISSION_REWARD_PRICES') });
     g.__thornswoodBooks = api;
     if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('books', api.release); }
     g.__thornswoodBooksTimer = setInterval(function () {
