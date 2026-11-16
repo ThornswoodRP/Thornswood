@@ -24,8 +24,8 @@
 // modlist gets by address (Mod Organizer 2 from its GitHub release) and puts
 // in the pinned unpacker, whose SevenZip.With unpacks what is not a zip, and
 // takes a Nexus file already on this PC or downloaded by hand from Nexus
-// (FromPlaces, ByHand); Nexus Premium downloads wait on Nexus sign-in, the
-// next slice of #6244. The game still
+// (FromPlaces, ByHand). Nexus.cs signs a person in to Nexus and downloads a
+// Premium account's Nexus files. The game still
 // runs from Thornswood's own folder (OwnGame.cs), never inside MO2.
 //
 // A reason a person reads comes from Failure.cs, as every catch's does
