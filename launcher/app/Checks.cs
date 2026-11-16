@@ -157,7 +157,24 @@ namespace Thornswood
                 if (fromState > 0) return fromState;
                 return CollectionRevisionFromFolder(slug);
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevision", ex); return 0; }
+        }
+
+        // The last reason a collection read gave 0 for, so the status that
+        // redraws every two seconds (Shell.cs) writes it once and not each
+        // time: "not confirmed" on the card with no line saying why was #4690.
+        static string lastCollectionWhy;
+        static readonly object collectionWhyGate = new object();
+
+        static void CollectionReadFailed(string where, Exception ex)
+        {
+            string why = where + ": " + ex.GetType().Name + ": " + ex.Message;
+            lock (collectionWhyGate)
+            {
+                if (why == lastCollectionWhy) return;
+                lastCollectionWhy = why;
+            }
+            Swallow.Note(where + ", so the installed collection revision reads as 0", ex);
         }
 
         /// <summary>
@@ -175,7 +192,7 @@ namespace Thornswood
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vortex\\state.v2");
                 return VortexProfileState.CollectionRevision(dir, slug);
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevisionFromState, Vortex's state.v2", ex); return 0; }
         }
         /// <summary>
         /// The legacy fallback: the revision out of the old folder name, or 0.
@@ -207,7 +224,7 @@ namespace Thornswood
                 }
                 return best;
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevisionFromFolder, Vortex's mods folder", ex); return 0; }
         }
 
         /// <summary>

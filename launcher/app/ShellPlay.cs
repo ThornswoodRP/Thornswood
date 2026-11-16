@@ -353,13 +353,13 @@ namespace Thornswood
                     return;
                 }
                 if (putSettings != null) Log(putSettings);
-                try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Play, ThornIni.Ensure", ex); }
                 try
                 {
                     string mic = Mics.Apply(cfg);
                     if (!string.IsNullOrEmpty(mic)) Log("Microphone: " + mic);
                 }
-                catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                catch (Exception ex) { Swallow.Note("Shell.Play, Mics.Apply", ex); }
 
                 // The behavior files and the covered bodies are built here, on
                 // this computer, from the collection's Pandora and BodySlide
@@ -400,9 +400,16 @@ namespace Thornswood
 
                 // And held, read only, until the game closes. Another server's
                 // launcher opened mid-session rewrote them under the game once
-                // (16 Sep, 19:08); it cannot now. See Hold.
+                // (16 Sep, 19:08); it cannot now. See Hold. A hold that fails
+                // leaves them open to that for the whole session, so the log
+                // says so in plain words, not under a step name (#4690).
                 int holding = 0;
-                try { holding = Hold.Take(PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play, dispose", ex); }
+                try { holding = Hold.Take(PresenceLog); }
+                catch (Exception ex)
+                {
+                    Log("The game files are not held this session, so another launcher could change them while the game runs (" +
+                        Failure.Why("Shell.Play, Hold.Take", ex) + ").");
+                }
                 if (holding > 0) Log("Holding " + holding + " of " + cfg.BuildName + "'s game files while the game runs, so nothing else can change them under it.");
 
                 Log("Pointing Skyrim settings and saves at this build.");
@@ -459,12 +466,12 @@ namespace Thornswood
                     string on = Updater.SyncedRelease();
                     if (on.Length > 0) onPack = "game files of " + on;
                 }
-                catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                catch (Exception ex) { Swallow.Note("Shell.Play, Updater.SyncedRelease", ex); }
                 // The display mode rides along because Skyrim itself is known to
                 // go down on alt tab in exclusive fullscreen, and a crash report
                 // with no crash log needs this line to say which mode it was.
                 string mode = "";
-                try { mode = ", " + Display.Mode.ToLowerInvariant(); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { mode = ", " + Display.Mode.ToLowerInvariant(); } catch (Exception ex) { Swallow.Note("Shell.Play, Display.Mode", ex); }
                 Log("Starting the game on launcher " + Updater.Version + ", " + onPack + mode + ".");
 
                 // The site keeps a log of who played, when, and on which
@@ -474,20 +481,20 @@ namespace Thornswood
                 // wrapped, so a site that is down changes nothing about
                 // playing. No character is picked yet: the menu does that, and
                 // the end carries whoever was chosen.
-                try { Discord.NewSession(); } catch (Exception ex) { Swallow.Note("Shell.Play, dispose", ex); }
+                try { Discord.NewSession(); } catch (Exception ex) { Swallow.Note("Shell.Play, Discord.NewSession", ex); }
                 int startedAs = chosenId;
                 ThreadPool.QueueUserWorkItem(delegate
                 {
-                    try { Discord.SessionStart(startedAs); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                    try { Discord.SessionStart(startedAs); } catch (Exception ex) { Swallow.Note("Shell.Play, Discord.SessionStart", ex); }
                 });
 
                 // "Playing Thornswood" in Discord, with the headcount and the
                 // Download and Discord buttons, for as long as the game runs.
                 // Off this thread entirely; a Discord that is not running is
                 // simply nothing said.
-                try { Presence.Start(cfg, PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { Presence.Start(cfg, PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play, Presence.Start", ex); }
 
-                try { File.WriteAllText(Paths.PlayedFile, DateTime.Now.ToString("o")); } catch (Exception ex) { Swallow.Note("Shell.Play, write", ex); }
+                try { File.WriteAllText(Paths.PlayedFile, DateTime.Now.ToString("o")); } catch (Exception ex) { Swallow.Note("Shell.Play, writing Paths.PlayedFile", ex); }
                 playStartedAt = DateTime.Now;
                 Stats.StartedPlaying();
                 BuildStatRow();
