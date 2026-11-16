@@ -25,6 +25,21 @@
 // before it takes its name in downloads. The modlist is the signed record's
 // part, so that is the hash that decides.
 //
+// AN ARCHIVE ALREADY ON THIS PC is taken before anything is downloaded
+// (FromPlaces): Vortex has downloaded these same Nexus files for the
+// collection into its own downloads folder, and a person may have one in their
+// Downloads folder. Any file there of the archive's size is held to the
+// modlist's xxHash64, whatever its name, and only then taken: linked out of
+// Vortex's folder (copied when it is on another drive), so Vortex keeps its
+// own, and moved out of the person's Downloads. Install holds every archive
+// to its hash again before it unpacks one.
+//
+// A NEXUS FILE DOWNLOADED BY HAND (ByHand), as a free Nexus account does:
+// the launcher opens that file's page on Nexus, the person presses Manual
+// Download there, and the file is taken from their Downloads folder the same
+// way once it lands, then the next page opens. No nxm:// handler is taken
+// over, so a person's own Vortex or Mod Organizer keeps it.
+//
 // The game is not touched here, and nothing runs from what is fetched but
 // 7-Zip.
 
@@ -32,8 +47,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Thornswood
 {
@@ -103,9 +121,7 @@ namespace Thornswood
         {
             string dir = Path.Combine(tools, Folder);
             string exe = Path.Combine(dir, Kept[0].Name);
-            bool all = true;
-            foreach (Pin k in Kept) if (!Holds(Path.Combine(dir, k.Name), k)) all = false;
-            if (all) return exe;
+            if (Kept.All(k => Holds(Path.Combine(dir, k.Name), k))) return exe;
 
             string work = Path.Combine(tools, Folder + ".fetch");
             if (Directory.Exists(work)) Directory.Delete(work, true);
@@ -150,7 +166,7 @@ namespace Thornswood
         }
     }
 
-    static class ModlistFetch
+    static partial class ModlistFetch
     {
         static readonly Regex ReleaseFile = new Regex(@"^https://github\.com/([A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100})/releases/download/([A-Za-z0-9._-]{1,200})/([A-Za-z0-9._%-]{1,200})$");
 
@@ -186,6 +202,216 @@ namespace Thornswood
                 File.Move(got, to, true);
             }
             finally { if (File.Exists(got)) File.Delete(got); }
+        }
+
+        /// <summary>A folder where this PC may already hold archives of the modlist.</summary>
+        public sealed class Place
+        {
+            public string Folder;
+            /// <summary>
+            /// True for the person's own Downloads, where a file is moved out.
+            /// False for another manager's downloads (Vortex's), which keeps its
+            /// own: the file is linked, or copied when it is on another drive.
+            /// </summary>
+            public bool Move;
+        }
+
+        // A file looked at once: its size and time when it was hashed, so a
+        // look again (ByHand looks every second) hashes only what changed.
+        sealed class Seen
+        {
+            public long Size;
+            public DateTime Written;
+            public ulong Hash;
+        }
+
+        /// <summary>
+        /// Takes every archive of <paramref name="missing"/> that is already in
+        /// one of <paramref name="places"/> (the folder itself, not below it,
+        /// under any name) into <paramref name="downloads"/> under its own name:
+        /// only a file of the archive's size whose xxHash64 is the modlist's.
+        /// Returns the ones still missing, in their order.
+        /// </summary>
+        public static List<ModlistArchive> FromPlaces(IList<ModlistArchive> missing, IList<Place> places, string downloads, Action<string> say)
+        {
+            return FromPlaces(missing, places, downloads, say, new Dictionary<string, Seen>());
+        }
+
+        static List<ModlistArchive> FromPlaces(IList<ModlistArchive> missing, IList<Place> places, string downloads, Action<string> say, Dictionary<string, Seen> seen)
+        {
+            var left = new List<ModlistArchive>(missing);
+            foreach (Place p in places)
+            {
+                if (left.Count == 0) break;
+                if (string.IsNullOrEmpty(p.Folder) || !Directory.Exists(p.Folder)) continue;
+                var bySize = new Dictionary<long, List<FileInfo>>();
+                try
+                {
+                    foreach (FileInfo f in new DirectoryInfo(p.Folder).EnumerateFiles())
+                    {
+                        List<FileInfo> l;
+                        if (!bySize.TryGetValue(f.Length, out l)) bySize[f.Length] = l = new List<FileInfo>();
+                        l.Add(f);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // A folder this account cannot list holds nothing to take;
+                    // the archive is downloaded instead.
+                    Swallow.Note("ModlistFetch.FromPlaces, list " + p.Folder, ex);
+                    continue;
+                }
+                foreach (ModlistArchive a in left.ToList())
+                {
+                    List<FileInfo> files;
+                    if (!bySize.TryGetValue(a.Size, out files)) continue;
+                    FileInfo hit = files.OrderBy(f => f.Name == a.Name ? 0 : 1).FirstOrDefault(f => HashOf(f, seen) == a.Hash);
+                    if (hit == null) continue;
+                    Take(a, hit.FullName, p.Move, downloads);
+                    files.Remove(hit);
+                    left.Remove(a);
+                    if (say != null) say((p.Move ? "Took " : "Found ") + a.Say() + " in " + p.Folder);
+                }
+            }
+            return left;
+        }
+
+        // The file's xxHash64, or none when it cannot be read now (a browser
+        // may still hold it), and it is looked at again next time.
+        static ulong? HashOf(FileInfo f, Dictionary<string, Seen> seen)
+        {
+            Seen s;
+            if (seen.TryGetValue(f.FullName, out s) && s.Size == f.Length && s.Written == f.LastWriteTimeUtc) return s.Hash;
+            ulong h;
+            try { h = XxHash64.OfFile(f.FullName); }
+            catch (Exception ex)
+            {
+                Swallow.Note("ModlistFetch.HashOf, read " + f.FullName, ex);
+                return null;
+            }
+            seen[f.FullName] = new Seen { Size = f.Length, Written = f.LastWriteTimeUtc, Hash = h };
+            return h;
+        }
+
+        static void Take(ModlistArchive a, string from, bool move, string downloads)
+        {
+            Directory.CreateDirectory(downloads);
+            string to = Path.Combine(downloads, a.Name);
+            string got = to + ".got";
+            try
+            {
+                if (File.Exists(got)) File.Delete(got);
+                if (move) File.Move(from, got);
+                else if (!(OperatingSystem.IsWindows() && CreateHardLink(got, from, IntPtr.Zero))) File.Copy(from, got);
+                File.Move(got, to, true);
+            }
+            catch (Exception ex) { throw new ModlistStop(a.Say() + " is on this PC at " + from + ", and could not be taken into " + downloads + ": " + Failure.Why("ModlistFetch.Take, " + a.Name, ex, to) + "."); }
+            finally { if (File.Exists(got)) File.Delete(got); }
+        }
+
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateHardLinkW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool CreateHardLink(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+
+        [LibraryImport("shell32.dll")]
+        private static partial int SHGetKnownFolderPath(in Guid rfid, uint dwFlags, IntPtr hToken, out IntPtr ppszPath);
+
+        // FOLDERID_Downloads.
+        static readonly Guid DownloadsFolder = new Guid("374DE290-123F-4565-9164-39C4925E467B");
+
+        /// <summary>The person's own Downloads folder, where Windows says it is.</summary>
+        public static string MyDownloads()
+        {
+            IntPtr p;
+            int hr = SHGetKnownFolderPath(DownloadsFolder, 0, IntPtr.Zero, out p);
+            try
+            {
+                if (hr != 0) throw new ModlistStop("Windows did not say where your Downloads folder is (" + hr.ToString("X8") + ").");
+                return Marshal.PtrToStringUni(p);
+            }
+            finally { Marshal.FreeCoTaskMem(p); }
+        }
+
+        /// <summary>
+        /// The folders where Vortex keeps Skyrim Special Edition's downloads,
+        /// worked out as Vortex works them out (getDownloadPath.ts): its setting,
+        /// or {USERDATA}\downloads when it has none, with {USERDATA} and
+        /// {USERNAME} put in (any case), the game's id joined on, and a
+        /// relative one taken from Vortex's own folder. Its default folder is
+        /// in the list too, for an install whose setting moved after it
+        /// downloaded. Every file found there is held to its hash, so a folder
+        /// that is not Vortex's only finds nothing.
+        /// </summary>
+        public static List<string> VortexDownloads(string setting, string userData, string userName)
+        {
+            var folders = new List<string>();
+            foreach (string pattern in new[] { setting, null })
+            {
+                string p = string.IsNullOrEmpty(pattern) ? Path.Combine("{USERDATA}", "downloads") : pattern;
+                p = Regex.Replace(p, @"\{userdata\}", userData.Replace("$", "$$"), RegexOptions.IgnoreCase);
+                p = Regex.Replace(p, @"\{username\}", userName.Replace("$", "$$"), RegexOptions.IgnoreCase);
+                p = Path.Combine(p, "skyrimse");
+                if (!Path.IsPathFullyQualified(p)) p = Path.GetFullPath(Path.Combine(userData, p));
+                if (!folders.Contains(p, StringComparer.OrdinalIgnoreCase)) folders.Add(p);
+            }
+            return folders;
+        }
+
+        /// <summary>
+        /// Where this PC may hold the modlist's archives: Vortex's downloads,
+        /// then the person's own Downloads.
+        /// </summary>
+        public static List<Place> Places()
+        {
+            var places = new List<Place>();
+            string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vortex");
+            string setting = null;
+            string state = Path.Combine(userData, "state.v2");
+            if (Directory.Exists(state))
+            {
+                try { setting = VortexProfileState.DownloadsSetting(state); }
+                catch (Exception ex) { Swallow.Note("ModlistFetch.Places, read Vortex's download folder setting", ex); }
+            }
+            foreach (string f in VortexDownloads(setting, userData, Environment.UserName)) places.Add(new Place { Folder = f, Move = false });
+            places.Add(new Place { Folder = MyDownloads(), Move = true });
+            return places;
+        }
+
+        /// <summary>The page on Nexus with the Manual Download button for one file.</summary>
+        public static string Page(ModlistArchive a)
+        {
+            return "https://www.nexusmods.com/skyrimspecialedition/mods/" + a.ModId + "?tab=files&file_id=" + a.FileId;
+        }
+
+        /// <summary>
+        /// The Nexus files of <paramref name="missing"/>, downloaded by hand:
+        /// opens the page of the first one still missing through
+        /// <paramref name="open"/>, takes each that lands in
+        /// <paramref name="folder"/> (any of them, in any order), and opens the
+        /// next, until every one is here or <paramref name="stop"/> says so.
+        /// Returns the ones still missing.
+        /// </summary>
+        public static List<ModlistArchive> ByHand(IList<ModlistArchive> missing, string folder, string downloads, Action<string> open, Action<string> say, Func<bool> stop, int everyMs)
+        {
+            foreach (ModlistArchive a in missing)
+                if (a.Kind != "nexus") throw new ModlistStop(a.Say() + " is not a Nexus file, so it is not downloaded by hand.");
+            var seen = new Dictionary<string, Seen>();
+            var places = new[] { new Place { Folder = folder, Move = true } };
+            List<ModlistArchive> left = FromPlaces(missing, places, downloads, say, seen);
+            string opened = null;
+            while (left.Count > 0 && !stop())
+            {
+                string page = Page(left[0]);
+                if (page != opened)
+                {
+                    if (say != null) say("Press Manual Download on Nexus for " + left[0].Say() + "; it is taken from " + folder + " when it lands (" + left.Count + " to go)");
+                    open(page);
+                    opened = page;
+                }
+                Thread.Sleep(everyMs);
+                left = FromPlaces(left, places, downloads, say, seen);
+            }
+            return left;
         }
     }
 }
