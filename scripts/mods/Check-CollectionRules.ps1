@@ -170,7 +170,7 @@ if (-not (Test-Path -LiteralPath $Collection -PathType Leaf)) {
     # Only a .7z needs 7-Zip. A .zip is opened with what .NET has, so on a
     # machine without 7-Zip an empty .zip still holds no collection.json, and
     # saying 7-Zip is missing would send somebody to install it for nothing.
-    if ($archives[0].Extension -ne '.zip' -and -not (Get-SevenZipPath)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
+    if ($archives[0].Extension -ne '.zip' -and -not (Find-SevenZip)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
     Stop-Check ("no loose collection.json in {0}, and none could be read out of {1}: {2}. Unpack it and pass the collection.json with -Collection." -f $collectionFolder, $archives[0].Name, $why)
   }
   Stop-Check "no collection.json at $Collection"

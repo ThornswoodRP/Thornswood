@@ -41,8 +41,8 @@ $all = @(Get-ChildItem -LiteralPath $Scripts -Recurse -File -Include '*.ps1', '*
 function RelOf($f) { return ($f.FullName.Substring($Repo.Length + 1) -replace '\\', '/') }
 
 # ------------------------------------------------------------------ O
-$definers = @($all | Where-Object { [IO.File]::ReadAllText($_.FullName) -match '(?m)^\s*function\s+[\w-]*SevenZip[\w-]*\b' } | ForEach-Object { RelOf $_ })
-Yes 'O1 the only script under scripts that defines a 7-Zip function is scripts/release/SevenZip.ps1' ($definers.Count -eq 1 -and $definers[0] -eq $finderRel) ($definers -join ', ')
+$definers = @($all | Where-Object { [IO.File]::ReadAllText($_.FullName) -match '(?m)^\s*function\s+(Find|Get)-[\w-]*SevenZip[\w-]*\b' } | ForEach-Object { RelOf $_ })
+Yes 'O1 the only script under scripts that defines a function finding 7-Zip (Find- or Get-) is scripts/release/SevenZip.ps1' ($definers.Count -eq 1 -and $definers[0] -eq $finderRel) ($definers -join ', ')
 $finds = @($all | Where-Object { ([IO.File]::ReadAllText($_.FullName) -split "`n" | Where-Object { $_ -match '(?m)^\s*function\s+Find-SevenZip\b' }).Count } | ForEach-Object { RelOf $_ })
 Yes 'O2 Find-SevenZip is defined once' ($finds.Count -eq 1) ($finds -join ', ')
 $spots = @($all | Where-Object { (RelOf $_) -ne $finderRel -and [IO.File]::ReadAllText($_.FullName) -match '(?i)7-Zip[\\/]+7z\.exe|resources[\\/]+7z\.exe' } | ForEach-Object { RelOf $_ })
