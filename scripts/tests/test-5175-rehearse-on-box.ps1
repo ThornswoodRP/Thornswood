@@ -62,10 +62,22 @@ try {
 function At([string]$s) { return $src.IndexOf($s) }
 $restore = At "Join-Path `$Here 'Restore-Server.ps1'"
 $wall = At "Step '5. the firewall"
-$start = At 'Start-Process -FilePath $nodeExe'
-$bot = At '$out7 = & $nodeExe $check'
-$fin = At 'finally {'
-Yes 'the order is restore, firewall, node, bot' ($restore -gt 0 -and $restore -lt $wall -and $wall -lt $start -and $start -lt $bot)
+$start = At "Step '6. start the rehearsal server'"
+$bot = At "Invoke-Check `$json`n"
+$fin = At "finally {`n  Step '8."
+Yes 'the order is restore, firewall, node, bot' ($restore -gt 0 -and $restore -lt $wall -and $wall -lt $start -and $start -lt $bot -and $src.IndexOf("Start-Rehearsal`n", $start) -lt $bot)
+Yes '  node is started by Start-Rehearsal and the bot run by Invoke-Check, both defined before the run' ($src.IndexOf('function Start-Rehearsal') -lt $restore -and $src.IndexOf('function Invoke-Check') -lt $restore -and $src -match "function Start-Rehearsal[\s\S]*Start-Process -FilePath \`$nodeExe" -and $src -match "function Invoke-Check[\s\S]*& \`$nodeExe \`$check --root")
+
+# -Reorder (#6237): after the first check passes, the load order changes,
+# node starts again on it, and the same check must pass with a plugin the
+# character's ids name at another slot.
+$re = At "if (`$Reorder) {"
+$reText = if ($re -gt 0) { $src.Substring($re, $fin - $re) } else { '' }
+Yes '-Reorder runs only after the first check passed, and before finally' ($re -gt $bot -and $re -lt $fin)
+Yes '  it stops node, changes the order with Check-Character.js --reorder and needs its REORDERED line' ($reText.IndexOf('Stop-Rehearsal') -ge 0 -and $reText.IndexOf('Stop-Rehearsal') -lt $reText.IndexOf('--reorder') -and $reText -match "-like 'REORDERED \*'")
+Yes '  it starts node again taking only the new process''s endpoint, then checks again' ($reText.IndexOf('--reorder') -lt $reText.IndexOf('Start-Rehearsal -Own') -and $reText.IndexOf('Start-Rehearsal -Own') -lt $reText.IndexOf('Invoke-Check $json2') -and $src -match 'OwningProcess -eq \$script:Server\.Id')
+Yes '  and passes only when a plugin the character''s ids name moved' ($reText -match 'if \(-not \$changed\.Count\) \{ Fail' -and $reText -match 'LOAD ORDER CHECK PASSED')
+Yes 'the gate''s Rehearse-Restore verb takes -Reorder' ((Get-Content -LiteralPath (Join-Path $Root 'scripts\vps\gate\verbs.json') -Raw | ConvertFrom-Json).verbs.'Rehearse-Restore'.params.Reorder -eq 'switch')
 Yes 'the restore is a rehearsal held to the profile id' ($src -match "Restore-Server\.ps1'\) -Backup \`$Backup -Root \`$Root -Which \`$Which -KeyFile \`$KeyFile -Expect \`$ProfileId -Work \`$Work -Rehearse")
 Yes 'it needs RESTORE OK and REHEARSAL READY before it goes on' ($src -match "notmatch 'RESTORE OK'" -and $src -match "notmatch 'REHEARSAL READY'")
 Yes 'it stops when door.json is still there' ($src -match "private\\door\.json'\)\) \{ Fail")
