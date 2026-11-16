@@ -69,6 +69,31 @@ const commissionRows=activation.commissions.map(pin=>{
   return Object.assign({},row,{sourceHash:pin.sha256,itemType:type,
     ...(row.deliveryVersion===2?{itemTypes:ranked.find(source=>source.id===row.id).itemTypes}:{})});
 });
+// THE GUILD'S STARTING REWARD PRICES (#6180, Patrick's answer on the page,
+// 15 Nov 2026, q-6180-guild-prices: "Guild work should be set by staff, give
+// them all starting reward prices. The NPCs still wont buy or sell until
+// ledgers are submitted"). A commission pays each good's count times its
+// reward price; staff change a price in the game (/book reward), and the
+// traders' own buying and selling still come only from submitted ledgers.
+// Each good starts at the median, over the commissions that ask for it, of
+// its share of a tier's pay spread evenly over that commission's goods:
+// about 15 gold for novice work, 30 for advanced, 60 for expert and 120 for
+// master. At least 1 gold, rounded to the nearest gold.
+const REWARD_TARGETS={novice:15,advanced:30,expert:60,master:120};
+const itemNames=TABLES.read('ITEM_NAMES',tablesDir);
+const nameOf={};
+for(const key of Object.keys(itemNames)){const pair=itemNames[key];if(Array.isArray(pair)&&!nameOf[String(pair[1]).toLowerCase()])nameOf[String(pair[1]).toLowerCase()]=String(pair[0]);}
+const shares={};
+for(const row of commissionRows){
+  const target=REWARD_TARGETS[row.tier],goods=row.goods,count=goods.reduce((sum,good)=>sum+good.count,0);
+  if(!target||!count)throw new Error('Commission '+row.id+' has no tier pay or no goods.');
+  for(const good of goods)(shares[good.item]=shares[good.item]||[]).push(target/count);
+}
+const median=list=>{const sorted=list.slice().sort((a,b)=>a-b),mid=sorted.length>>1;return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;};
+const rewardPrices={version:1,targets:REWARD_TARGETS,items:Object.keys(shares).sort().map(item=>{
+  const record=roles.records[item];
+  return {item,name:nameOf[item.toLowerCase()]||record.edid,gold:Math.max(1,Math.round(median(shares[item])))};
+})};
 const roleItems = new Set(Object.values(roles.tables).flatMap(table => Object.values(table).flat()));
 const stage = {version:1,history:roster.history,merchants:roster.merchants,tables:roles.tables,
   types:Object.fromEntries(Array.from(roleItems,desc=>[desc,roles.records[desc].type]))};
@@ -79,6 +104,7 @@ const tables = {
   MERCHANT_COMMISSION_ROWS: commissionRows, MERCHANT_ORCHARD: orchardData, MERCHANT_RETRIEVALS: retrievalData,
   MERCHANT_SCARCE_LONGFIN: scarceLongfin, MERCHANT_SCARCE_GEODES: scarceGeodes, MERCHANT_SCARCE_HARVEST: scarceHarvest,
   MERCHANT_SCARCE_FISHING: scarceFishing, MERCHANT_KILL_SCENES: expandedRows,
+  COMMISSION_REWARD_PRICES: rewardPrices,
 };
 if (opts['--check']) {
   const stale = Object.keys(tables).filter(name => !TABLES.isCurrent(name, tables[name], tablesDir));

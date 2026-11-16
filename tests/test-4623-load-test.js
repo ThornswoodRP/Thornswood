@@ -60,7 +60,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { LoadBot, MOVE_MS, REPEAT_MS, STAND_CYCLE_MS, PAY_SAID, PAY_STEP_MS, pairUp, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
 const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
@@ -251,6 +251,18 @@ function moveRuleChecks() {
   h.b.lastMove = now; now += MOVE_MS + 1; h.b.advance(now);
   yes('  and one handed to it again after HostStop starts again with a move', h.c.sent.filter((x) => x.m.t === 2 && x.m.idx === 21).length === 3);
 
+  const r = walker('change');
+  const prop = { t: 22, idx: 21, propName: 'isOpen', dataDump: 'true' };
+  r.b.noteRepeat(prop, now); r.b.noteRepeat(Object.assign({}, prop), now + 5);
+  yes('a message that comes again, the same, within REPEAT_MS is counted as a copy', r.b.repeats === 1);
+  r.b.noteRepeat(Object.assign({}, prop, { dataDump: 'false' }), now + 6);
+  r.b.noteRepeat(Object.assign({}, prop), now + 10 + REPEAT_MS);
+  yes('  and one that differs, or comes later, is not', r.b.repeats === 1);
+  r.c.queue.push({ type: 'message', message: { t: 2, idx: 21, data: { pos: [0, 0, 0] } } });
+  r.c.queue.push({ type: 'message', message: { t: 2, idx: 21, data: { pos: [0, 0, 0] } } });
+  r.b.pump();
+  yes('  and moves are never counted, since each is its own', r.b.repeats === 1);
+
   const o = walker('beat');
   o.b.stand = 1;
   for (let i = 0; i < 4; i++) { o.b.lastMove = now; now += MOVE_MS + 1; o.b.advance(now); }
@@ -403,9 +415,9 @@ function questChecks() {
   b.pump();
   yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
   yes('  each row by its kind and state', b.played['questRow:commission:locked'] === 2);
-  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. No submitted buy price is available for this work.' })]);
+  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. Staff have set no reward for this work.' })]);
   b.pump();
-  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noPrice'] === 1);
+  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noReward'] === 1);
   view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
   b.pump();
   step();
@@ -457,6 +469,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
     const BOOKS = JSON.stringify({ books: [{ id: 'b1' }, { id: 'b2' }], ledgers: { winterhold: { b1: {}, b2: {} }, whiterun: { b1: {} }, riften: {} } });
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
+    const REWARDS = JSON.stringify({ version: 1, items: { '5b6a0:skyrim.esm': 9, 'db5d2:skyrim.esm': 4 } });
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -473,13 +487,19 @@ async function boxChecks() {
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
       !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() &&
-      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+      fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'books.json,commission-rewards.json,door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('  and the guild reward prices staff set, counted (#6180)',
+      fs.readFileSync(path.join(out, 'private', 'commission-rewards.json'), 'utf8') === REWARDS && r.rewardsSet === 2);
     yes('  and a copy of the hold price lists the traders quote every commission from, counted by hold and naming nobody (#6180)',
       fs.readFileSync(path.join(out, 'private', 'books.json'), 'utf8') === BOOKS && r.prices.lists === 3 && r.prices.holds.join(',') === 'whiterun 1,winterhold 2' &&
       !fs.lstatSync(path.join(out, 'private', 'books.json')).isSymbolicLink());
     fs.unlinkSync(path.join(inst, 'private', 'books.json'));
     const bare = server.fromInstalled({ from: inst, out: path.join(tmp, 'c8'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
     yes('  a server nobody has submitted a price list to gives a copy with none, and says so', bare.prices.lists === 0 && !fs.existsSync(path.join(tmp, 'c8', 'private', 'books.json')));
+    fs.unlinkSync(path.join(inst, 'private', 'commission-rewards.json'));
+    const unset = server.fromInstalled({ from: inst, out: path.join(tmp, 'c9'), shape: 'crowd', seats: '50', port: '7797', 'voice-port': '7799' });
+    yes('  and one where staff set no reward price keeps the starting prices, with no file of its own', unset.rewardsSet === 0 && !fs.existsSync(path.join(tmp, 'c9', 'private', 'commission-rewards.json')));
+    fs.writeFileSync(path.join(inst, 'private', 'commission-rewards.json'), REWARDS);
     fs.writeFileSync(path.join(inst, 'private', 'books.json'), BOOKS);
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
@@ -582,7 +602,7 @@ function mathChecks() {
   const reading = (at, cpuUs, rss, up, upD, down, downD, busy, total) => ({ at, server: { at, user: cpuUs, system: 0, rss, heap: 0 }, proxy: { up, upDatagrams: upD, down, downDatagrams: downD }, cpu: { busy, total } });
   const a = reading(0, 0, 100 * 1048576, 0, 0, 0, 0, 0, 0);
   const b = reading(10000, 5e6, 150 * 1048576, 10000, 100, 50000, 500, 4000, 10000);
-  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80], movesSentPerBot: [20, 40], settledSent: 5 }, { cpuMs: 1000, movesReadPerBot: [90], movesSentPerBot: [0], settledSent: 0 }];
+  const bots = [{ cpuMs: 2000, movesReadPerBot: [70, 80], movesSentPerBot: [20, 40], settledSent: 5, repeatsRead: 30 }, { cpuMs: 1000, movesReadPerBot: [90], movesSentPerBot: [0], settledSent: 0 }];
   const w = windowOf(a, b, bots, 10);
   yes('cores are the server\'s CPU time over the samples\' own times (5 s in 10 s is 0.5)', Math.abs(w.serverCores - 0.5) < 1e-9);
   yes('memory is the working set at the end, in MB', w.serverRssMB === 150);
@@ -590,6 +610,7 @@ function mathChecks() {
   yes('the runner\'s busy share and the bots\' cores are read', w.machineBusy === 0.4 && w.botCores === 0.3);
   yes('moves read are a second, per walking bot, with the fewest', w.movesReadPerBotPerS === 8 && w.fewestMovesReadPerS === 7);
   yes('moves sent are a second, per walking bot, and settled ones a second in all', w.movesSentPerBotPerS === 2 && w.settledSentPerS === 0.5);
+  yes('copies read are a second, per person (30 by 10 people in 10 s is 0.3)', Math.abs(w.repeatsReadPerBotPerS - 0.3) < 1e-9);
   const base = { serverCores: 0.1, serverRssMB: 100 };
   const p = perPerson(w, base);
   yes('per person is against step 0: (0.5 - 0.1) / 10 cores, (150 - 100) / 10 MB', Math.abs(p.cores - 0.04) < 1e-9 && p.memoryMB === 5);
@@ -597,7 +618,7 @@ function mathChecks() {
   yes('step 0 has no per person numbers', perPerson(Object.assign({}, w, { people: 0 }), base) === null);
   const md = markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'change', stand: 0.5, steps: [{ people: 10, window: w, perPerson: p }, { people: 20, stopped: 'the runner was 95% busy' }], problem: '' });
   yes('the summary has a row a step and says where it stopped', /\| 10 \| 0\.500 \| 150 \|/.test(md) && /Stopped at 20: the runner was 95% busy/.test(md));
-  yes('  and says how the bots sent their moves and how much they stood', /stands still 50% of the time/.test(md) && /only when it changed, then once settled/.test(md) && /\| 2\.0 \| 8\.0 \| 40% \|/.test(md));
+  yes('  and says how the bots sent their moves and how much they stood', /stands still 50% of the time/.test(md) && /only when it changed, then once settled/.test(md) && /\| 2\.0 \| 8\.0 \| 0\.30 \| 40% \|/.test(md));
   yes('  or that they sent on every look', /on every look, as the game did before/.test(markdown({ shape: 'crowd', started: 'now', engine: 'abc', blob: '0123456789abcdef', cores: 4, moves: 'beat', stand: 0, steps: [], problem: '' })));
 }
 

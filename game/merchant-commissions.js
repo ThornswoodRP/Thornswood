@@ -297,19 +297,15 @@ function createCommissions(deps) {
     new Set(all.map(row=>row.reference)).size!==size)throw Error('The complete commission ledger cannot be verified.');
   return all.filter(row=>row.state!==null).map(row=>{STATE.spendable(row.state);return row.state;});
  }
+ // The staff's reward price for the good (#6180, Patrick, 15 Nov 2026,
+ // q-6180-guild-prices): guild work is set by staff, every good it asks for has
+ // a starting reward price, and staff change it in the game. The hold ledgers
+ // (deps.prices) set only what the trader itself buys and sells.
  function quoteGood(row,good) {
-  const catalog=deps.prices.catalog(row.bookHold)||[],matches=[];
-  for(const item of catalog) {
-   const resolved=deps.resolve(item.name);
-   if(resolved&&!resolved.error&&resolved.baseId===good.itemId) {
-    const price=deps.prices.quote(row.bookHold,item.name);
-    if(price&&Number.isSafeInteger(price.buy)&&price.buy>=0&&price.buy<=2147483647&&
-      Number.isSafeInteger(price.buy*good.count)&&price.buy*good.count<=2147483647)
-     matches.push({unit:price.buy,name:resolved.name||item.name});
-   }
-  }
-  // Ambiguous names or two aliases are never a guess at an accepted promise.
-  return matches.length===1?matches[0]:null;
+  const price=deps.rewards&&typeof deps.rewards.price==='function'?deps.rewards.price(good.itemDesc):null;
+  if(!price||!Number.isSafeInteger(price.gold)||price.gold<0||price.gold>2147483647||
+    !Number.isSafeInteger(price.gold*good.count)||price.gold*good.count>2147483647||typeof price.name!=='string'||!price.name)return null;
+  return {unit:price.gold,name:price.name};
  }
  function quoted(row) {
   const parts=row.deliveryVersion===2?row.goods:[row],goods=[];
@@ -354,12 +350,10 @@ function createCommissions(deps) {
    const activeCool=Object.keys(jobs.cool).filter(key=>at-STATE.cooldownAt(jobs.cool[key])<STATE.cooldownWait(jobs.cool[key])).length;
    const room=jobs.serial<Number.MAX_SAFE_INTEGER&&Object.keys(jobs.held).length<STATE.MAX_HELD&&
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
-   const funds=quote&&STATE.spendable(state)>=quote.gold;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'No submitted buy price is available for this work.':
-     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':
-     !open&&!funds?'The trader cannot reserve this payment.':'';
+     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
     state:open?'open':cooldown?'cooldown':!gate?'locked':reason?'unavailable':'available',
@@ -395,7 +389,7 @@ function createCommissions(deps) {
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
      {hash:row.sourceHash,...quote.goods[0]},at=now();
-   const accepted=STATE.reserve(jobs,human,id,terms,at,state.purse);
+   const accepted=STATE.reserve(jobs,human,id,terms,at);
    if(!accepted.ok)return accepted;
    const next=Object.assign({},state,{commissions:accepted.next});
    const saved=deps.settlement.changeCommissions(merchant,state,next,human,()=>current(true,quote),{kind:'reserve',job:id,terms,at});
@@ -420,7 +414,8 @@ function createCommissions(deps) {
     debit=outgoing.inventory;stock=deps.addStock(stock,outgoing.entries,good.item.name);
    }
   }catch(error){return {ok:false,why:'short'};}
-  const next={purse:state.purse-held.gold,stock,supply:copy(state.supply||{}),commissions:completed.next};
+  // The pay is new gold: the trader's purse is the same after (#6180).
+  const next={purse:state.purse,stock,supply:copy(state.supply||{}),commissions:completed.next};
   const moved=deps.settlement.begin({merchantId:merchant,humanId:actor,profileId:human.profileId,kind:'commission',
    previous:state,next,expected,debit,credit:held.gold?[{baseId:15,count:held.gold}]:[],caller:()=>current(false)});
   // A turn-in finishes once the save storage acknowledges it, a later tick (#5419): the trader says it then.

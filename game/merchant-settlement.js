@@ -254,7 +254,12 @@ function createSettlement(deps) {
     var moved=pending.kind==='buy'?difference(stockRows(previous.stock),stockRows(next.stock),true):
       difference(stockRows(next.stock),stockRows(previous.stock),true);
     if(!moved.length || moved.some(function(row) {return row.entry.baseId===15;})) throw new Error('Merchant goods cannot be verified.');
-    var gold=pending.kind==='buy'?next.purse-previous.purse:previous.purse-next.purse;
+    // A commission's pay is new gold (#6180): the trader's purse stays as it
+    // was, and the person is paid the promise's gold. A turn-in saved before
+    // that took the pay from the purse, and it finishes as it was saved.
+    var gold=pending.kind==='buy'?next.purse-previous.purse:pending.kind==='commission'?goldCount(credit):previous.purse-next.purse;
+    if(pending.kind==='commission'&&next.purse!==previous.purse&&next.purse!==previous.purse-gold)
+      throw new Error('Merchant transfer does not conserve goods and gold.');
     if(gold<0 || gold>MAX_COUNT || (pending.kind==='buy'?
       goldCount(removed)!==gold || goodsDigest(credit)!==goodsDigest(moved):
       removed.some(function(row) {return row.entry.baseId===15;}) || goodsDigest(removed)!==goodsDigest(moved) || goldCount(credit)!==gold))
@@ -595,7 +600,7 @@ function createSettlement(deps) {
       if(!equal(canonical(prior),canonical(replacement))||!action||!['reserve','cancel'].includes(action.kind)||
         !Number.isSafeInteger(action.at)||action.at<=0||action.at>now())throw new Error('Commission metadata action cannot be verified.');
       var changed=action.kind==='reserve'?
-        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at,state.purse):
+        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at):
         COMMISSION_STATE.cancel(state.commissions,human,action.job,action.token,action.at);
       if(!changed.ok||!equal(canonical(changed.next),canonical(next.commissions)))
         throw new Error('Commission metadata transition cannot be verified.');

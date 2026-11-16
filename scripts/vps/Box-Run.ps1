@@ -19,8 +19,9 @@
   again on the box. What runs is always that script of main as main is on
   GitHub when the box reads it, never this checkout. A live verb
   (Deploy-Server, Publish-Server-Main) names the commit of main Patrick gave
-  his word for with -Build, and the box refuses it once main is anywhere
-  else.
+  his word for with -Build, and the box runs it from that commit, also once
+  main has moved past it, and refuses a commit that is not on main
+  (Ops #379).
 
   HOW. It starts box-run.yml on main of the private ops repository,
   ThornswoodRP/Thornswood-Ops, where the VPS runners are registered since

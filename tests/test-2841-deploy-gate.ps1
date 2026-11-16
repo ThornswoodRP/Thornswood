@@ -543,9 +543,19 @@ if (-not $gitExe) { Write-Host 'SKIP: the submodule move needs git' -ForegroundC
         Yes '  and a submodule never fetched stays unfetched' ($r2.Code -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $bare 'engine/skymp/a.txt')))
     } finally { Remove-Item -LiteralPath $sm -Recurse -Force -ErrorAction SilentlyContinue }
 }
-Yes 'a live verb runs only when main is at the build it named, checked after the fetch' ($brokerCode.Contains('if ($req.Build -and $req.Build -cne $commit)') -and
+Yes 'a live verb runs from the build it named, checked after the fetch and before the verb runs' ($brokerCode.Contains('if ($req.Build -and $req.Build -cne $commit)') -and
     $brokerCode.IndexOf('if ($req.Build -and $req.Build -cne $commit)') -gt $brokerCode.IndexOf('$commit = Update-Checkout') -and
     $brokerCode.IndexOf('if ($req.Build -and $req.Build -cne $commit)') -lt $brokerCode.IndexOf('Invoke-Child ([string]$Cfg.pwsh)'))
+# Ops #379: main moved between Patrick's answer and the run, twice on 15 Nov.
+# The checkout goes back to the named commit only when it is on main, and the
+# line is held again to that commit's own verbs.json.
+$useNamed = $brokerCode.Substring($brokerCode.IndexOf('function Use-NamedBuild'))
+$useNamed = $useNamed.Substring(0, $useNamed.IndexOf("`n}") + 2)
+Yes '  when main moved on, the named commit must be an ancestor of main before anything is checked out' ($useNamed.IndexOf("'merge-base', '--is-ancestor', `$Build, 'refs/remotes/origin/main'") -gt 0 -and
+    $useNamed.IndexOf("'merge-base', '--is-ancestor'") -lt $useNamed.IndexOf("'checkout', '--quiet', '--force', '--detach', `$Build"))
+Yes '  and a commit not on main is refused, with nothing run' ($brokerCode -match "if \(-not \(Use-NamedBuild \`$req\.Build\)\) \{ Send \('@REFUSED")
+Yes '  and the line is held again to the named commit''s verbs.json, still a live line for that build' ($brokerCode -match '\$commit = \$req\.Build\s+try \{ \$req = Test-ThornswoodGateRequest' -and $brokerCode.Contains('if ($req.Build -cne $commit) { Send (''@REFUSED the line at '''))
+Yes '  and the checkout it ran from is the named commit, read back' ($useNamed.Contains("(`$o.Out -join '') -cne `$Build"))
 Yes 'the script is the verb''s from verbs.json, under the checkout' ($brokerCode.Contains('Join-Path $Repo ($req.Script.Replace(''/'', ''\'')'))
 Yes 'the program starts with no shell, and nothing on its input' ($brokerCode.Contains('$si.UseShellExecute = $false') -and $brokerCode.Contains('$p.StandardInput.Close()') -and $brokerCode -notmatch 'Invoke-Expression|\biex\b|cmd(\.exe)? /c')
 Yes 'a run past its time is ended with everything it started' ($brokerCode.Contains('taskkill.exe" @(''/T'', ''/F'', ''/PID'''))

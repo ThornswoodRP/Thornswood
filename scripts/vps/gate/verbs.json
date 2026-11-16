@@ -905,7 +905,6 @@
         "scripts/dev/Build-CastTable.py",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
-        "scripts/dev/Build-ResourceLocations.py",
         "scripts/dev/Build-StationSites.py",
         "scripts/dev/Build-WoodworkingBenches.py",
         "scripts/dev/MerchantRoster.py",
@@ -1199,7 +1198,8 @@
       "fixed": ["-NoPause"],
       "params": {
         "Which": "^(live|dev)$",
-        "ProfileId": "^[0-9]{1,10}$"
+        "ProfileId": "^[0-9]{1,10}$",
+        "Reorder": "switch"
       },
       "out": "-Out"
     },

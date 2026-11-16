@@ -7,6 +7,7 @@
 
       pwsh scripts/vps/Box-Run.ps1 -Line 'Start-Backup'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Rehearse-Restore -Which dev -ProfileId 1909688825'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Rehearse-Restore -Which dev -ProfileId 1909688825 -Reorder'
 
   Until now it ran on One: the backup was fetched there, the server put
   together there by hand, and somebody at the game loaded a character. The
@@ -39,13 +40,25 @@
     7. scripts\bot\Check-Character.js --host 127.0.0.1: the bot reads the
        character from the restored world, logs in as it and compares what
        the server sends. CHARACTER CHECK OK is the rehearsal's pass.
+    7b. With -Reorder, a load order change (#6237): node is stopped,
+       Check-Character.js --reorder moves the earliest full plugin no other
+       plugin needs as a master to the end of server-settings.json's
+       loadOrder, so every full plugin after it loads a slot earlier, node
+       starts again on that order and the bot checks the character again.
+       It passes only when the check passes again and a plugin the
+       character's ids name is at another slot than in step 7: a world
+       that kept raw load order ids would send items and the cell from the
+       wrong plugin and fail it. LOAD ORDER CHECK PASSED says which moved.
+       Ids the gamemode keeps in its own properties are not checked here
+       (#6245).
     8. node is stopped with its tree and both folders are deleted, whatever
        happened above: the unpacked backup holds the bot token and the site
        keys. The end of the server's own log is printed first.
 
   Prints REHEARSAL PASSED and exits 0 only when every step passed; anything
-  else exits 1. -Out (the gate fills it) gets character-check.json and
-  rehearsal.json, which hold no secret. It never writes the Last rehearsed
+  else exits 1. -Out (the gate fills it) gets character-check.json (and
+  character-check-reordered.json with -Reorder) and rehearsal.json, which
+  hold no secret. It never writes the Last rehearsed
   line of RESTORING.md in the ops repo: the session that ran it does, from
   what this printed.
 
@@ -63,6 +76,7 @@ param(
   [string]$Root = 'C:\Thornswood-Rehearsal',
   [string]$Work = 'C:\Thornswood-Rehearsal-Work',
   [int]$ListenMinutes = 5,
+  [switch]$Reorder,
   [string]$Out = '',
   [switch]$NoPause
 )
@@ -155,7 +169,44 @@ function Stop-Rehearsal {
   }
 }
 
+# node on the folder, waited for until it listens on the game port. -Own
+# takes only an endpoint of this process, for a start after a stop, where
+# the last one's endpoint could still be read.
+function Start-Rehearsal([switch]$Own) {
+  $so = Join-Path $Work 'node.out.txt'; $se = Join-Path $Work 'node.err.txt'
+  $script:Server = Start-Process -FilePath $nodeExe -ArgumentList 'dist_back/skymp5-server.js' -WorkingDirectory $Root -RedirectStandardOutput $so -RedirectStandardError $se -WindowStyle Hidden -PassThru
+  Say ('  node ' + $script:Server.Id + ' started in ' + $Root)
+  $until = (Get-Date).AddMinutes($ListenMinutes)
+  $up = $false
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Seconds 2
+    if ($script:Server.HasExited) { break }
+    $udp = @(Get-NetUDPEndpoint -LocalPort ([int]$rh.port) -ErrorAction SilentlyContinue | Where-Object { -not $Own -or $_.OwningProcess -eq $script:Server.Id })
+    if ($udp.Count) { $up = $true; break }
+  }
+  if (-not $up) {
+    Get-Content -LiteralPath $so, $se -Tail 20 -ErrorAction SilentlyContinue | ForEach-Object { Say ('  | ' + $_) }
+    if ($script:Server.HasExited) { Fail ('node ended with ' + $script:Server.ExitCode + ' before it listened on ' + $rh.port + '.') }
+    Fail ('node did not listen on UDP ' + $rh.port + ' within ' + $ListenMinutes + ' minutes.')
+  }
+  Say ('  listening on UDP ' + $rh.port + ' after ' + [int]((Get-Date) - $script:Server.StartTime).TotalSeconds + ' s')
+}
+
+# The bot's check, its lines said and its record copied to -Out. Fails the
+# run unless it ends CHARACTER CHECK OK.
+function Invoke-Check([string]$json) {
+  $o = & $nodeExe $check --root $Root --profile $ProfileId --host 127.0.0.1 --port ([string]$rh.port) --out $json 2>&1
+  $rc = $LASTEXITCODE
+  $o | ForEach-Object { Say ('  ' + $_) }
+  if ($Out) {
+    if (-not (Test-Path -LiteralPath $Out)) { New-Item -ItemType Directory -Path $Out -Force | Out-Null }
+    foreach ($f in @($json, (Join-Path $Root 'rehearsal.json'))) { if (Test-Path -LiteralPath $f) { Copy-Item -LiteralPath $f -Destination $Out -Force } }
+  }
+  if ($rc -ne 0 -or ($o | Out-String) -notmatch 'CHARACTER CHECK OK') { Fail ('Check-Character.js did not end CHARACTER CHECK OK (exit ' + $rc + ').') }
+}
+
 $result = 1
+$moved = ''
 try {
   if ($ServerRoots.Values -contains $Root.TrimEnd('\') -or $ServerRoots.Values -contains $Work.TrimEnd('\')) { Fail ('-Root and -Work are never a server folder.') }
   $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
@@ -222,34 +273,30 @@ try {
   Step '6. start the rehearsal server'
   $mem = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB)
   Say ('  ' + $mem + ' MB of memory free before it starts')
-  $so = Join-Path $Work 'node.out.txt'; $se = Join-Path $Work 'node.err.txt'
-  $script:Server = Start-Process -FilePath $nodeExe -ArgumentList 'dist_back/skymp5-server.js' -WorkingDirectory $Root -RedirectStandardOutput $so -RedirectStandardError $se -WindowStyle Hidden -PassThru
-  Say ('  node ' + $script:Server.Id + ' started in ' + $Root)
-  $until = (Get-Date).AddMinutes($ListenMinutes)
-  $up = $false
-  while ((Get-Date) -lt $until) {
-    Start-Sleep -Seconds 2
-    if ($script:Server.HasExited) { break }
-    $udp = @(Get-NetUDPEndpoint -LocalPort ([int]$rh.port) -ErrorAction SilentlyContinue)
-    if ($udp.Count) { $up = $true; break }
-  }
-  if (-not $up) {
-    Get-Content -LiteralPath $so, $se -Tail 20 -ErrorAction SilentlyContinue | ForEach-Object { Say ('  | ' + $_) }
-    if ($script:Server.HasExited) { Fail ('node ended with ' + $script:Server.ExitCode + ' before it listened on ' + $rh.port + '.') }
-    Fail ('node did not listen on UDP ' + $rh.port + ' within ' + $ListenMinutes + ' minutes.')
-  }
-  Say ('  listening on UDP ' + $rh.port + ' after ' + [int]((Get-Date) - $script:Server.StartTime).TotalSeconds + ' s')
+  Start-Rehearsal
 
   Step '7. the bot loads the character'
   $json = Join-Path $Work 'character-check.json'
-  $out7 = & $nodeExe $check --root $Root --profile $ProfileId --host 127.0.0.1 --port ([string]$rh.port) --out $json 2>&1
-  $rc = $LASTEXITCODE
-  $out7 | ForEach-Object { Say ('  ' + $_) }
-  if ($Out) {
-    if (-not (Test-Path -LiteralPath $Out)) { New-Item -ItemType Directory -Path $Out -Force | Out-Null }
-    foreach ($f in @($json, (Join-Path $Root 'rehearsal.json'))) { if (Test-Path -LiteralPath $f) { Copy-Item -LiteralPath $f -Destination $Out } }
+  Invoke-Check $json
+
+  if ($Reorder) {
+    Step '7b. a load order change, and the same check again'
+    Stop-Rehearsal
+    $script:Server = $null
+    $said = @(& $nodeExe $check --root $Root --reorder 2>&1 | ForEach-Object { "$_" })
+    $said | ForEach-Object { Say ('  ' + $_) }
+    if ($LASTEXITCODE -ne 0 -or -not @($said | Where-Object { $_ -like 'REORDERED *' }).Count) { Fail 'Check-Character.js --reorder did not change the load order.' }
+    Start-Rehearsal -Own
+    $json2 = Join-Path $Work 'character-check-reordered.json'
+    Invoke-Check $json2
+    $a = (Get-Content -LiteralPath $json -Raw | ConvertFrom-Json).plugins
+    $b = (Get-Content -LiteralPath $json2 -Raw | ConvertFrom-Json).plugins
+    $changed = @()
+    if ($a) { foreach ($n in $a.PSObject.Properties.Name) { if ($b -and [string]$b.$n -ne [string]$a.$n) { $changed += ($n + ' ' + $a.$n + ' to ' + $b.$n) } } }
+    if (-not $changed.Count) { Fail ('no plugin character ' + $ProfileId + '''s ids name moved, so the check after the change proved nothing about ids by plugin. Run it with a character that carries items from a plugin after the one that moved.') }
+    $moved = $changed -join ', '
+    Say ('  LOAD ORDER CHECK PASSED: the character loaded the same with ' + $moved)
   }
-  if ($rc -ne 0 -or ($out7 | Out-String) -notmatch 'CHARACTER CHECK OK') { Fail ('Check-Character.js did not end CHARACTER CHECK OK (exit ' + $rc + ').') }
   $result = 0
 }
 catch {
@@ -287,6 +334,6 @@ finally {
 }
 
 Say ''
-if ($result -eq 0) { Say ('REHEARSAL PASSED: ' + (Split-Path -Leaf $Backup) + ' restored on the box and character ' + $ProfileId + ' loaded by the bot as the backup holds it, in ' + [int]((Get-Date) - $started).TotalSeconds + ' s') }
+if ($result -eq 0) { Say ('REHEARSAL PASSED: ' + (Split-Path -Leaf $Backup) + ' restored on the box and character ' + $ProfileId + ' loaded by the bot as the backup holds it' + $(if ($moved) { ', and again after a load order change moved ' + $moved } else { '' }) + ', in ' + [int]((Get-Date) - $started).TotalSeconds + ' s') }
 else { Say ('REHEARSAL FAILED: ' + $script:Failed) }
 exit $result

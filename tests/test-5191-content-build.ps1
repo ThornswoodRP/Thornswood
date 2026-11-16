@@ -95,7 +95,6 @@ $sites = if (Test-Path -LiteralPath $sitesAt) { ' with ' + [IO.File]::ReadAllTex
 if ($Script -eq 'scripts/mods/Add-ContentRecords.py') { W 'game/content/Thornswood-Content.esp' ("plugin for $Server from $src$sites") }
 elseif ($Script -eq 'scripts/dev/Build-StationSites.py') { W 'game/data/station-sites.json' ('sites over ' + [IO.File]::ReadAllText((Join-Path $co 'game/data/x.json'))) }
 elseif ($Script -eq 'scripts/dev/Build-NpcPopulation.py') { W 'game/data/npc-population.json' $env:TS5191_MOVED }
-elseif ($Script -eq 'scripts/dev/Build-ResourceLocations.py') { W 'game/data/resource-locations.json' 'resources in the moved order' }
 elseif ($Script -eq 'scripts/mods/Rebuild-ContentTables.ps1') {
     $plugin = [IO.File]::ReadAllText((Join-Path $co 'game/content/Thornswood-Content.esp'))
     $without = $(if ($Arguments -contains '-WithoutLast') { ' without the Last plugin' } else { '' })
@@ -158,15 +157,14 @@ try {
     $r1 = Run
     if ($r1.Code -ne 0) { Write-Host $r1.Text }
     Yes '1 a first build ends 0 and says BUILT with its key, and the commit it is from' ($r1.Code -eq 0 -and $r1.Key -and ($r1.Lines -contains "FROM $base"))
-    Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, the catalogue''s builders in that order, then the chain' (
-        $r1.Calls.Count -eq 4 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
+    Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, the catalogue in that order, then the chain' (
+        $r1.Calls.Count -eq 3 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
         $r1.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
-        $r1.Calls[2] -eq 'dev scripts/dev/Build-ResourceLocations.py --settings {settings} --strings-dir {data}' -and
-        $r1.Calls[3] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
+        $r1.Calls[2] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
     $kept = Join-Path (Join-Path $cache 'dev') $r1.Key
     $rec = [IO.File]::ReadAllText((Join-Path $kept 'build.json')) | ConvertFrom-Json
     $names = @($rec.files.PSObject.Properties | ForEach-Object { $_.Name })
-    $want = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/resource-locations.json', 'game/data/x.json', 'game/gamemode-tables/X.json', 'docs/systems/lists/a.md', 'docs/systems/lists/deep/b.md')
+    $want = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json', 'game/data/x.json', 'game/gamemode-tables/X.json', 'docs/systems/lists/a.md', 'docs/systems/lists/deep/b.md')
     Yes ('1 the build keeps the plugin and every file the chain writes, a folder whole: ' + ($names -join ', ')) (
         $names.Count -eq $want.Count -and -not @($want | Where-Object { $names -notcontains $_ }).Count)
     Yes '1 the plugin kept is the one the tool wrote, not the one committed' (
@@ -177,7 +175,7 @@ try {
     Yes '1 -Out gets every file of the build and build.json as content-build.json' (
         -not @($want | Where-Object { -not (Test-Path -LiteralPath (Join-Path $out $_)) }).Count -and
         (Sha (Join-Path $out 'content-build.json')) -eq (Sha (Join-Path $kept 'build.json')))
-    Yes '7 every tool is given the collection''s store' ($script:stores.Count -eq 4 -and -not @($script:stores | Where-Object { $_ -ne $store }).Count)
+    Yes '7 every tool is given the collection''s store' ($script:stores.Count -eq 3 -and -not @($script:stores | Where-Object { $_ -ne $store }).Count)
     Yes '7 an order records\load-order.json already is is not moved, and the line says so' ($r1.Text -match 'collection abc revision 3, 9 plugins, as records\\load-order\.json records it' -and $rec.collection.moved -eq $false)
     Yes '1 no .part folder is left' (-not @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | Where-Object { $_.Name -like '*.part' }).Count)
 
@@ -192,7 +190,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $kept 'files/game/data/x.json'), 'tampered')
     Fresh
     $r3 = Run
-    Yes '3 a kept build whose file is not its sha256 is built again' ($r3.Code -eq 0 -and $r3.Key -eq $r1.Key -and ($r3.Lines -contains "BUILT $($r1.Key)") -and $r3.Calls.Count -eq 4)
+    Yes '3 a kept build whose file is not its sha256 is built again' ($r3.Code -eq 0 -and $r3.Key -eq $r1.Key -and ($r3.Lines -contains "BUILT $($r1.Key)") -and $r3.Calls.Count -eq 3)
     Yes '3   and the file is right again' ([IO.File]::ReadAllText((Join-Path $kept 'files/game/data/x.json')) -eq 'table of plugin for dev from {"v":1}')
 
     # ---- 6. a file outside the inputs ---------------------------------------
@@ -209,14 +207,14 @@ try {
     TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'source v2') | Out-Null
     $v2 = (TGit @('rev-parse', 'HEAD')) -join ''
     $r4 = Run -Keep 1
-    Yes '4 a changed input is a new key and a new build' ($r4.Code -eq 0 -and $r4.Key -and $r4.Key -ne $r1.Key -and $r4.Calls.Count -eq 4 -and ($r4.Lines -contains "FROM $v2"))
+    Yes '4 a changed input is a new key and a new build' ($r4.Code -eq 0 -and $r4.Key -and $r4.Key -ne $r1.Key -and $r4.Calls.Count -eq 3 -and ($r4.Lines -contains "FROM $v2"))
     Yes '4   built from the new source' ([IO.File]::ReadAllText((Join-Path $out 'game/content/Thornswood-Content.esp')) -eq 'plugin for dev from {"v":2}')
     Yes '4 with -Keep 1, only the newest build of the server stays' (
         @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | ForEach-Object { $_.Name }) -join ',' -eq $r4.Key)
     Fresh $v2
     $r4m = Run -Server main
     Yes '4 the main server''s build of the same commit has a key of its own, built against main''s plugins' (
-        $r4m.Code -eq 0 -and $r4m.Key -ne $r4.Key -and $r4m.Calls.Count -eq 4 -and $r4m.Calls[0] -like 'main *' -and
+        $r4m.Code -eq 0 -and $r4m.Key -ne $r4.Key -and $r4m.Calls.Count -eq 3 -and $r4m.Calls[0] -like 'main *' -and
         (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'main') $r4m.Key)) -and (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'dev') $r4.Key)))
 
     # ---- 12. without the Last plugin ---------------------------------------
@@ -226,8 +224,8 @@ try {
     $r12 = Run -WithoutLast
     if ($r12.Code -ne 0) { Write-Host $r12.Text }
     Yes '12 -WithoutLast builds the commit as a build does, with the chain told -WithoutLast' (
-        $r12.Code -eq 0 -and $r12.Calls.Count -eq 4 -and $r12.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
-        $r12.Calls[3] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins} -WithoutLast')
+        $r12.Code -eq 0 -and $r12.Calls.Count -eq 3 -and $r12.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
+        $r12.Calls[2] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins} -WithoutLast')
     Yes '12   and names the one file that differs from the build kept for the key, and no other' (
         @($r12.Lines | Where-Object { $_ -like 'DIFFERS *' }) -join ',' -eq 'DIFFERS game/data/x.json' -and
         ($r12.Lines -contains "WITHOUT-LAST $($r4.Key)") -and ($r12.Lines -contains "FROM $v2"))
@@ -268,16 +266,14 @@ try {
     $rev4 = (TGit @('rev-parse', 'HEAD')) -join ''
     $r8 = Run
     if ($r8.Code -ne 0) { Write-Host $r8.Text }
-    Yes '8 a revision that adds plugins moves the order, and the catalogue''s builders run in it between the plugin''s tool and the chain' (
-        $r8.Code -eq 0 -and $r8.Calls.Count -eq 4 -and $r8.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
+    Yes '8 a revision that adds plugins moves the order, and the catalogue runs in it between the plugin''s tool and the chain' (
+        $r8.Code -eq 0 -and $r8.Calls.Count -eq 3 -and $r8.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
         $r8.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
-        $r8.Calls[2] -eq 'dev scripts/dev/Build-ResourceLocations.py --settings {settings} --strings-dir {data}' -and
-        $r8.Calls[3] -like 'dev scripts/mods/Rebuild-ContentTables.ps1 *')
+        $r8.Calls[2] -like 'dev scripts/mods/Rebuild-ContentTables.ps1 *')
     Yes '8   and says what it adds' ($r8.Text -match 'revision 4, 11 plugins, moved from the 9 records\\load-order\.json records, adding M\.esp, New\.esp')
     $k8 = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $cache 'dev') $r8.Key) 'build.json')) | ConvertFrom-Json
-    Yes '8   and keeps what the catalogue''s builders wrote' (
+    Yes '8   and keeps what the catalogue wrote' (
         [IO.File]::ReadAllText((Join-Path $out 'game/data/npc-population.json')) -eq 'the moved catalogue' -and
-        [IO.File]::ReadAllText((Join-Path $out 'game/data/resource-locations.json')) -eq 'resources in the moved order' -and
         $k8.collection.revision -eq 4 -and $k8.collection.moved -eq $true)
 
     # The rule itself, on the records alone.

@@ -64,6 +64,14 @@ A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff 
 | `/stall end` | Ends somebody's keeping of a market stall, logged. End this claim on the stall's panel sends it (#3160) |
 | `/cart staff`, `/cart draft`, `/cart confirm <base>`, `/cart add <stop>`, `/cart bring <cart>` | The cart stops and roads: opens them, drafts and confirms a change, puts a new cart at a stop, and brings in a cart on the road. Cart stops and roads on the Office page of K opens them (#3158) |
 
+## Guild work
+
+Staff. Typed in chat.
+
+| Command | What it does |
+| --- | --- |
+| `/book reward <good>`, `/book reward <good> <gold>`, `/book reward <good> start` | Reads, sets or puts back on its starting price what a good pays each in guild commissions (#6180). Name the good as the panel does, or by its record: `/book reward fur boots 12`, `/book reward 86983:Skyrim.esm 9`. Work already taken keeps the pay it was taken at. A hold's submitted price list still sets only what its traders buy and sell |
+
 ## Crafting
 
 Staff.
