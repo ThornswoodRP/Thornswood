@@ -54,6 +54,13 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
+# What case B wants from the annotation of a harness whose child died: its
+# FAIL line naming the child's exit, then the child's dying line. The exit is
+# whatever the system gives a .NET fail fast: 134 on Linux (SIGABRT),
+# -2146232797 (0x80131623) on Windows (#6257). Case 12 holds it to both, and
+# to failing without the dying line, on every machine.
+$DIED_SAYS = '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit \d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752'
+
 # ---- A. the function, as the runner has it -------------------------------------------
 $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
 $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-FailSaid' }, $true)
@@ -111,6 +118,16 @@ if ($null -ne $fn) {
         ': its FAIL lines%0AFAIL  the child gave nothing back (exit 134)%0Aand what it printed of a process dying%0AProcess terminated. planted for 5752%0AUnhandled exception.'))
 }
 
+# ---- 12. what case B wants, against what each system really writes (#6257) ----------------
+# As the Windows gate share wrote it on merge queue run 43780604606, and as
+# a Linux share writes it.
+$onWindows = 'harness failed (exit 1): its FAIL lines%0AFAIL  the child gave nothing back (exit -2146232797)%0Aand what it printed of a process dying%0AProcess terminated. planted for 5752'
+$onLinux = 'harness failed (exit 1): its FAIL lines%0AFAIL  the child gave nothing back (exit 134)%0Aand what it printed of a process dying%0AProcess terminated. planted for 5752'
+$noDying = 'harness failed (exit 1): its FAIL lines%0AFAIL  the child gave nothing back (exit -2146232797)'
+Yes '12. case B takes the annotation the Windows share writes, with a fail fast''s negative exit' ($onWindows -match $DIED_SAYS)
+Yes '    and the one a Linux share writes' ($onLinux -match $DIED_SAYS)
+Yes '    and not one without the dying line' ($noDying -notmatch $DIED_SAYS)
+
 # ---- B. the runner writes it -------------------------------------------------------------
 $canRun = $OnWindows -or (Test-Path -LiteralPath '/proc/stat')
 if (-not $canRun) {
@@ -143,8 +160,7 @@ if (-not $canRun) {
         Yes ('   its annotation carries the harness''s FAIL lines, with the reason under the first (' + $got + ')') ($got -eq 'harness failed (exit 1): its FAIL lines%0AFAIL  the door opens for the holder%0A    the holder has no key%0AFAIL  the key is kept')
         Yes '   and the harness that passed has none' (-not (Annotation $said 'test-2-pass.ps1'))
         $died = Annotation $said 'test-3-dies.ps1'
-        Yes ('B. a harness whose child died carries the child''s dying line after its FAIL line (' + $died + ')') (
-            $died -match '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit \d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752')
+        Yes ('B. a harness whose child died carries the child''s dying line after its FAIL line (' + $died + ')') ($died -match $DIED_SAYS)
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
