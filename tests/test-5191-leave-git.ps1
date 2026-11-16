@@ -21,7 +21,8 @@
     4. the box build carries what each step wrote, ignored as it is, to the
        steps after it, and a box run sends a built file only once the
        commit has it;
-    5. the workflows and cloud sessions that read a table lay a build first;
+    5. the workflows and cloud sessions that read a table lay a build first,
+       and the hourly revision check, which reads none, lays nothing;
     6. the old way is gone: Rebuild-PullTables.ps1, Rebuild-OnBox.ps1, the
        Rebuild-ContentTables verb and Run-OnBox.ps1 -Out.
 
@@ -183,10 +184,15 @@ Check '4 a box run sends a built file only once the commit has it' (
     $run.IndexOf('$builtNow =') -lt $run.IndexOf('New-ThornswoodArtifact -Component tools'))
 
 # ------------------------------------- 5. workflows and cloud sessions lay it
-foreach ($wf in @('collection-record.yml', 'nexus-run.yml', 'collection-revision.yml')) {
+foreach ($wf in @('collection-record.yml', 'nexus-run.yml')) {
     $y = Src ".github/workflows/$wf"
     Check "5 $wf lays the newest build, with the Actions read it takes" ($y -match '(?m)^\s+- name: Lay the newest content build' -and $y -match '\./scripts/release/Get-ContentBuild\.ps1 -Newest' -and $y -match '(?m)^\s+actions: read')
 }
+# Check-CollectionRevisions.ps1 reads only records\collection-plugins.json
+# (committed), Nexus and the two Releases, so its hourly job lays nothing and
+# its token stays at reading the code and editing issues (#4068).
+$y = Src '.github/workflows/collection-revision.yml'
+Check '5 collection-revision.yml reads nothing built, so it lays nothing and asks no Actions read' ($y -notmatch 'Get-ContentBuild' -and $y -notmatch 'actions: read')
 Check '5 a cloud session lays the newest build at its start' ((Src 'scripts/dev/Setup-CloudSession.sh') -match 'pwsh -NoProfile -File scripts/release/Get-ContentBuild\.ps1 -Newest')
 Check '5 the guide''s new machine lays it' ((Src 'docs/guide/set-up-a-machine.md') -match 'pwsh scripts/release/Get-ContentBuild\.ps1 -Newest')
 
