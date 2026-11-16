@@ -182,8 +182,26 @@ db.changeForms.insertMany([
         $left = (Shell $db 'print(db.changeForms.find().sort({ formDesc: 1 }).toArray().map(d => d.formDesc).join(","))') -join ''
         Yes ('and moves its NPCs out of it, keeping the character and the chest: ' + $left) (-not @($move | Where-Object { $_ -like 'STOP|*' -or $_ -like 'FAILED|*' }).Count -and $left.Trim() -eq 'a01,b00')
         Yes 'with the NPC kept on disk' (Test-Path -LiteralPath (Join-Path $scratch 'world-mongo-20261116-020001/changeForms/_discarded-20261116-020001/12345_Skyrim.esm.json'))
+
+        # Wipe-Saves' move, as it is sent to the box, on a MongoDB world.
+        $wipe = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/ops/Wipe-Saves.ps1')).Replace("`r`n", "`n")
+        $at = $wipe.IndexOf("Head 'Moving the old storage aside'")
+        $open = $wipe.IndexOf('Remote @"', $at); $start = $wipe.IndexOf("`n", $open) + 1; $end = $wipe.IndexOf("`n" + '"@', $start)
+        $db = 'thornswood-wteste'
+        $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "a01", profileId: 5001, recType: 1 }, { formDesc: "13164:Skyrim.esm", profileId: -1, recType: 0 }])'
+        Settings $db
+        $rootsLit = "'" + $scratch + "'"; $movesLit = "'world','private\characters.json'"; $wipeDoneLit = "'farms'"; $stamp = '20261116-0300'
+        Remove-Item -LiteralPath (Join-Path $scratch 'private') -Recurse -Force -EA SilentlyContinue
+        $moveText = $ExecutionContext.InvokeCommand.ExpandString($wipe.Substring($start, $end - $start))
+        $r = RunBody $moveText @()
+        $left = (Shell $db 'print(db.changeForms.countDocuments({}))') -join ''
+        $before = Join-Path $scratch 'world-before-20261116-0300/changeForms'
+        Yes ('Wipe-Saves empties a MongoDB world: ' + (($r.Out | Where-Object { $_ -match '^(moved|FAILED|RELEASE)' }) -join ' / ')) ($left.Trim() -eq '0' -and -not @($r.Out | Where-Object { $_ -like 'FAILED*' }).Count)
+        Yes 'into world-before-<stamp>\changeForms, one file per form, as a file world is set aside' ((Test-Path -LiteralPath (Join-Path $before 'a01.json')) -and (Test-Path -LiteralPath (Join-Path $before '13164_Skyrim.esm.json')) -and -not (Test-Path -LiteralPath (Join-Path $scratch 'world-mongo-20261116-0300')))
+        Yes 'and names its character on the release list' (@($r.Out | Where-Object { $_ -like 'RELEASE|*|0|1|*' }).Count -eq 1)
     } finally {
         Remove-Item Env:THORNSWOOD_MONGOSH -ErrorAction SilentlyContinue
+        $null = Shell 'thornswood-wteste' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestd' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtestc' 'db.dropDatabase()'
         $null = Shell 'thornswood-wtest' 'db.dropDatabase()'

@@ -762,10 +762,12 @@
     "Wipe-Dev": {
       "script": "scripts/ops/Wipe-Saves.ps1",
       "reads": [
+        "scripts/deploy/World.ps1",
         "scripts/ops/Release-List.ps1",
         "scripts/vps/Send-Script.ps1",
         "scripts/vps/ServerHold.ps1",
-        "scripts/vps/Vps.ps1"
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
       ],
       "timeoutMinutes": 15,
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
