@@ -29,11 +29,22 @@
     D  Download asks Nexus for the file's link and puts the file in downloads
        under its name, so the install finds it; a file that is not the
        modlist's is not kept; a free account is told to use Manual Download
-       without asking Nexus; nobody signed in is told to sign in.
+       without asking Nexus; nobody signed in is told to sign in;
+    R  ModlistSetup.Run installs a modlist whole: 7-Zip and Mod Organizer 2
+       from GitHub (the stand-in answers GitHub's API too), a Nexus file
+       already in Vortex's folder taken from there, and the rest from Nexus
+       for a Premium account, which is asked only for those; a run again asks
+       nothing; a free account's run stopped before its files land keeps what
+       it got and says how to go on, and pressed again opens each file's page
+       in turn and puts every file in place;
+    M  VeloRecord.Modlist writes the modlist a Release's signed record names,
+       from that Release through GitHub's API, only when it is the sha256 and
+       size the record gives; a record with no modlist says so.
 
   Builds the launcher from launcher\app\Thornswood.csproj with the modlist
   writer beside it (tests\Launcher-Csc.ps1) and calls these by reflection, with
-  Nexus.Users and Nexus.Api at the stand-in and the tokens sealed as plain
+  Nexus.Users, Nexus.Api and GitHub.OtherApi at the stand-in, a stand-in 7-Zip
+  that unpacks zips, and the tokens sealed as plain
   text (Secrets.cs is Windows only). Nothing leaves 127.0.0.1. Writes only
   under a folder of its own in the temp folder, removed at the end.
 #>
@@ -72,6 +83,8 @@ public class TsNexusStandIn
     public string RefuseToken = "";
     public int Issued;
     public readonly Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>();
+    // GitHub's API, for the whole install: each path answers with its bytes.
+    public readonly Dictionary<string, byte[]> Answers = new Dictionary<string, byte[]>();
     public readonly List<string> Seen = new List<string>();
 
     public string[] Asked() { lock (Seen) return Seen.ToArray(); }
@@ -141,6 +154,12 @@ public class TsNexusStandIn
                 Json(c, 200, Token()); return;
             }
             Json(c, 400, "{\"error\":\"unsupported_grant_type\"}"); return;
+        }
+        if (path.StartsWith("/repos/"))
+        {
+            byte[] g;
+            if (Answers.TryGetValue(path, out g)) { Send(c, 200, path.Contains("/assets/") ? "application/octet-stream" : "application/json", g); return; }
+            Json(c, 404, "{\"message\":\"Not Found\"}"); return;
         }
         if (path.StartsWith("/cdn/"))
         {
@@ -312,6 +331,166 @@ try {
     $srv.Premium = $false; [void](Sign-In); $srv.Clear()
     $why = Stop-Of { Down }
     Yes 'D6 a free account is told to use Manual Download, without asking Nexus' ($why.Contains('Premium account only') -and $srv.Asked().Count -eq 0) $why
+
+    # ------------------------------------------------------------------ R ----
+    # The whole install, ModlistSetup.Run: 7-Zip and Mod Organizer 2 from
+    # GitHub (this stand-in answers GitHub's API too), one Nexus file already
+    # in Vortex's folder, the rest from Nexus for a Premium account, then by
+    # hand for a free one. Every archive is a zip, and the stand-in 7-Zip
+    # unpacks zips.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $G = $asm.GetType('Thornswood.GitHub')
+    $SZ = $asm.GetType('Thornswood.SevenZip')
+    $PinT = $asm.GetType('Thornswood.SevenZip+Pin')
+    $Setup = $asm.GetType('Thornswood.ModlistSetup')
+    $StepsT = $asm.GetType('Thornswood.ModlistSetup+Steps')
+    $PlaceT = $asm.GetType('Thornswood.ModlistFetch+Place')
+    $G.GetField('OtherApi', $flags).SetValue($null, $base + '/repos/')
+    [void]$G.GetMethod('Forget', $flags).Invoke($null, @())
+    function Sha([byte[]]$b) { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($b)).ToLowerInvariant() }
+    function Zip([hashtable]$files) {
+        $ms = New-Object IO.MemoryStream
+        $za = New-Object IO.Compression.ZipArchive($ms, [IO.Compression.ZipArchiveMode]::Create, $true)
+        try { foreach ($k in ($files.Keys | Sort-Object)) { $st = $za.CreateEntry($k).Open(); try { $b = [byte[]]$files[$k]; $st.Write($b, 0, $b.Length) } finally { $st.Dispose() } } } finally { $za.Dispose() }
+        return ,($ms.ToArray())
+    }
+    function New-Pin([string]$name, [byte[]]$b) {
+        $p = [Activator]::CreateInstance($PinT)
+        $PinT.GetField('Name').SetValue($p, $name); $PinT.GetField('Size').SetValue($p, [long]$b.Length); $PinT.GetField('Sha256').SetValue($p, (Sha $b))
+        return $p
+    }
+    function Release([string]$repo, [string]$tag, $assets) {
+        $list = @(foreach ($x in $assets) {
+            $srv.Answers['/repos/' + $repo + '/releases/assets/' + $x.id] = [byte[]]$x.bytes
+            '{"id":' + $x.id + ',"url":"' + $base + '/repos/' + $repo + '/releases/assets/' + $x.id + '","name":"' + $x.name + '","size":' + $x.bytes.Length + ',"state":"uploaded","digest":"sha256:' + (Sha $x.bytes) + '"}'
+        })
+        $srv.Answers['/repos/' + $repo + '/releases/tags/' + $tag] = (Bytes ('{"tag_name":"' + $tag + '","name":"' + $tag + '","draft":false,"prerelease":false,"published_at":"2025-08-03T00:00:00Z","assets":[' + ($list -join ',') + ']}'))
+    }
+    $unpacker = Bytes 'a stand-in for 7zr.exe'
+    $exeB = Bytes 'a stand-in for 7z.exe'; $dllB = Bytes 'a stand-in for 7z.dll'
+    $installer = Zip @{ '7z.exe' = $exeB; '7z.dll' = $dllB }
+    $SZ.GetField('Unpacker', $flags).SetValue($null, (New-Pin '7zr.exe' $unpacker))
+    $SZ.GetField('Installer', $flags).SetValue($null, (New-Pin '7z2501-x64.exe' $installer))
+    $keptPins = [Array]::CreateInstance($PinT, 2)
+    $keptPins.SetValue((New-Pin '7z.exe' $exeB), 0); $keptPins.SetValue((New-Pin '7z.dll' $dllB), 1)
+    $SZ.GetField('Kept', $flags).SetValue($null, $keptPins)
+    Release 'ip7z/7zip' '25.01' @(@{ id = 11; name = '7zr.exe'; bytes = $unpacker }, @{ id = 12; name = '7z2501-x64.exe'; bytes = $installer })
+    # The stand-in 7-Zip: x -o<into> [--] <archive> [names], for zips.
+    $SZ.GetField('Run', $flags).SetValue($null, [Func[string, Collections.Generic.IList[string], Tuple[int, string]]] {
+        param($exe, $argv)
+        $out = (@($argv) | Where-Object { $_.StartsWith('-o') } | Select-Object -First 1).Substring(2)
+        $rest = @(@($argv) | Where-Object { -not $_.StartsWith('-') -and $_ -ne 'x' })
+        New-Item -ItemType Directory -Path $out -Force | Out-Null
+        $za = [IO.Compression.ZipFile]::OpenRead($rest[0])
+        try {
+            foreach ($e in $za.Entries) {
+                if ($rest.Count -gt 1 -and $rest[1..($rest.Count - 1)] -notcontains $e.FullName) { continue }
+                $to = Join-Path $out $e.FullName
+                New-Item -ItemType Directory -Path (Split-Path -Parent $to) -Force | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $to, $true)
+            }
+        } finally { $za.Dispose() }
+        return [Tuple]::Create(0, '')
+    })
+
+    $mo2Exe = Bytes 'a stand-in for ModOrganizer.exe'
+    $mo2Zip = Zip @{ 'ModOrganizer.exe' = $mo2Exe }
+    Release 'ModOrganizer2/modorganizer' 'v2.5.2' @(@{ id = 21; name = 'Mod.Organizer-2.5.2.7z'; bytes = $mo2Zip })
+    $espA = Bytes 'plugin A'; $espB = Bytes 'plugin B'; $espC = Bytes 'plugin C'
+    $zipA = Zip @{ 'A.esp' = $espA }; $zipB = Zip @{ 'B.esp' = $espB }; $zipC = Zip @{ 'C.esp' = $espC }
+    $hx = { param($b) [Thornswood.XxHash64]::OfBytes([byte[]]$b) }
+    $wr = New-Object Thornswood.Layout.Modlist
+    $wr.AddHttpArchive('Mod.Organizer-2.5.2.7z', $mo2Zip.Length, (& $hx $mo2Zip), 'https://github.com/ModOrganizer2/modorganizer/releases/download/v2.5.2/Mod.Organizer-2.5.2.7z')
+    $wr.AddNexusArchive('A-501-1-0.zip', $zipA.Length, (& $hx $zipA), 'skyrimspecialedition', 501, 5001, 'A', '1.0')
+    $wr.AddNexusArchive('B-502-1-0.zip', $zipB.Length, (& $hx $zipB), 'skyrimspecialedition', 502, 5002, 'B', '1.0')
+    $wr.AddNexusArchive('C-503-1-0.zip', $zipC.Length, (& $hx $zipC), 'skyrimspecialedition', 503, 5003, 'C', '1.0')
+    $wr.FromArchive((& $hx $mo2Zip), 'ModOrganizer.exe', (& $hx $mo2Exe), $mo2Exe.Length, 'ModOrganizer.exe')
+    $wr.FromArchive((& $hx $zipA), 'A.esp', (& $hx $espA), $espA.Length, 'mods\A\A.esp')
+    $wr.FromArchive((& $hx $zipB), 'B.esp', (& $hx $espB), $espB.Length, 'mods\B\B.esp')
+    $wr.FromArchive((& $hx $zipC), 'C.esp', (& $hx $espC), $espC.Length, 'mods\C\C.esp')
+    $wr.Inline((Bytes '[General]'), 'ModOrganizer.ini', $false)
+    $modlist = Join-Path $T 'collection-modlist.wabbajack'; $wr.Save($modlist)
+    $srv.Files['5002'] = $zipB; $srv.Files['5003'] = $zipC
+
+    $vortexR = Join-Path $T 'vortex-r'; $handR = Join-Path $T 'hand-r'
+    New-Item -ItemType Directory -Path $vortexR, $handR -Force | Out-Null
+    [IO.File]::WriteAllBytes((Join-Path $vortexR 'A renamed.zip'), $zipA)
+    function New-Steps($open, $stop) {
+        $st = [Activator]::CreateInstance($StepsT)
+        $places = [Activator]::CreateInstance([Collections.Generic.List`1].MakeGenericType($PlaceT))
+        $p = [Activator]::CreateInstance($PlaceT); $PlaceT.GetField('Folder').SetValue($p, [string]$vortexR); $PlaceT.GetField('Move').SetValue($p, $false); $places.Add($p)
+        $listT = [Collections.Generic.IList`1].MakeGenericType($PlaceT)
+        $StepsT.GetField('Places').SetValue($st, [Linq.Expressions.Expression]::Lambda([Func`1].MakeGenericType($listT), [Linq.Expressions.Expression]::Constant($places, $listT)).Compile())
+        $StepsT.GetField('HandFolder').SetValue($st, [Func[string]] ([Linq.Expressions.Expression]::Lambda([Func[string]], [Linq.Expressions.Expression]::Constant([string]$handR)).Compile()))
+        $StepsT.GetField('Open').SetValue($st, $open)
+        if ($stop) { $StepsT.GetField('Stop').SetValue($st, $stop) }
+        $StepsT.GetField('EveryMs').SetValue($st, 10)
+        return $st
+    }
+    $setupRun = $Setup.GetMethod('Run', $flags)
+    function Run-Setup([string]$mods, $steps) { return $setupRun.Invoke($null, [object[]]@([string]$modlist, [string]$mods, [string](Join-Path $mods 'tools'), [string](Join-Path $T 'Game'), $steps.psobject.BaseObject)) }
+
+    $srv.Premium = $true; [void](Sign-In); $srv.Clear()
+    $modsR = Join-Path $T 'Mods-premium'
+    $script:pages = @()
+    $noPages = [Action[string]] { param($page) $script:pages += $page }
+    $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
+    $all = @('ModOrganizer.exe', 'ModOrganizer.ini', 'mods/A/A.esp', 'mods/B/B.esp', 'mods/C/C.esp') | ForEach-Object { Join-Path $modsR $_ }
+    $have = @($all | Where-Object { Test-Path -LiteralPath $_ })
+    Yes 'R1 a Premium account''s install: 7-Zip and Mod Organizer 2 from GitHub, one file from Vortex''s folder, the rest from Nexus, then every file in place' ($why -eq '' -and $have.Count -eq 5 -and $script:pages.Count -eq 0 -and (Test-Path -LiteralPath (Join-Path $vortexR 'A renamed.zip'))) ($why + ' | ' + ($all | Where-Object { $have -notcontains $_ }) -join ', ')
+    $links = @($srv.Asked() | Where-Object { $_.Contains('/download_link.json') })
+    Yes 'R2 Nexus is asked only for the files not already on this PC' ($links.Count -eq 2 -and -not ($links -join ' ').Contains('/mods/501/'))
+    $srv.Clear()
+    $why = Stop-Of { Run-Setup $modsR (New-Steps $noPages $null) }
+    Yes 'R3 a run again asks Nexus nothing and takes nothing' ($why -eq '' -and @($srv.Asked() | Where-Object { $_.Contains('/download_link.json') }).Count -eq 0) $why
+
+    $srv.Premium = $false; [void](Sign-In)
+    $modsF = Join-Path $T 'Mods-free'
+    $script:pages = @()
+    $script:looks = 0
+    $soon = [Func[bool]] { $script:looks++; return $script:looks -gt 5 }
+    $why = Stop-Of { Run-Setup $modsF (New-Steps $noPages $soon) }
+    Yes 'R4 a free account''s run that stops before the files land keeps what it got and says how to go on' ($why.Contains('2 of the modlist''s Nexus files are not downloaded yet') -and $why.Contains('press Install again') -and $script:pages.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $modsF 'downloads/A-501-1-0.zip')) -and (Test-Path -LiteralPath (Join-Path $modsF 'downloads/Mod.Organizer-2.5.2.7z'))) $why
+    $hand = [Action[string]] {
+        param($page) $script:pages += $page
+        $id = ([Uri]$page).Query -replace '.*file_id=', ''
+        [IO.File]::WriteAllBytes((Join-Path $handR ('download ' + $id + '.zip')), [byte[]]$srv.Files[$id])
+    }
+    $script:pages = @()
+    $why = Stop-Of { Run-Setup $modsF (New-Steps $hand $null) }
+    $have = @(@('ModOrganizer.exe', 'mods/A/A.esp', 'mods/B/B.esp', 'mods/C/C.esp') | Where-Object { Test-Path -LiteralPath (Join-Path $modsF $_) })
+    Yes 'R5 pressed again, each file''s Nexus page opens in turn, each is taken as it lands, and every file is in place' ($why -eq '' -and $script:pages.Count -eq 2 -and $have.Count -eq 4 -and @(Get-ChildItem -LiteralPath $handR).Count -eq 0) ($why + ' | ' + ($script:pages -join ' '))
+
+    # ------------------------------------------------------------------ M ----
+    # The modlist the Release's signed record names, VeloRecord.Modlist, from
+    # this repository's Release through GitHub's API.
+    $G.GetField('Api', $flags).SetValue($null, $base + '/repos/ThornswoodRP/Thornswood')
+    $mlB = [IO.File]::ReadAllBytes($modlist)
+    Release 'ThornswoodRP/Thornswood' 'build-1.3.99' @(@{ id = 31; name = 'collection-modlist.wabbajack'; bytes = $mlB })
+    $VR = $asm.GetType('Thornswood.VeloRecord')
+    $ManT = $asm.GetType('Thornswood.VeloRecord+Manifest'); $PartT = $asm.GetType('Thornswood.VeloRecord+PartFile')
+    function New-Record([string]$sha, [long]$size, [bool]$withPart) {
+        $mm = [Activator]::CreateInstance($ManT); $ManT.GetProperty('Tag').SetValue($mm, 'build-1.3.99')
+        $parts = [Activator]::CreateInstance([Collections.Generic.Dictionary`2].MakeGenericType([string], $PartT.MakeArrayType()))
+        if ($withPart) {
+            $pf = [Activator]::CreateInstance($PartT); $PartT.GetProperty('Name').SetValue($pf, 'collection-modlist.wabbajack'); $PartT.GetProperty('Sha256').SetValue($pf, $sha); $PartT.GetProperty('Size').SetValue($pf, $size)
+            $arr = [Array]::CreateInstance($PartT, 1); $arr.SetValue($pf, 0); $parts.Add('modlist', $arr)
+        }
+        $ManT.GetProperty('Parts').SetValue($mm, $parts)
+        return $mm
+    }
+    function Get-Modlist($record, [string]$file) {
+        try { [void]$VR.GetMethod('Modlist').Invoke($null, [object[]]@($record.psobject.BaseObject, $file)); return '' }
+        catch { $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }; return $e.Message }
+    }
+    $mlTo = Join-Path $T 'Mods-record/collection-modlist.wabbajack'
+    $why = Get-Modlist (New-Record (Sha $mlB) $mlB.Length $true) $mlTo
+    Yes 'M1 the modlist the signed record names comes from the Release, held to its sha256 and size' ($why -eq '' -and (Test-Path -LiteralPath $mlTo) -and [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($mlTo), $mlB)) $why
+    Remove-Item -LiteralPath $mlTo
+    $why = Get-Modlist (New-Record (Sha (Bytes 'another modlist')) $mlB.Length $true) $mlTo
+    Yes 'M2 a modlist that is not the one the record lists is refused, and nothing is written' ($why.Contains('is not the one its signed release record lists') -and @(Get-ChildItem -LiteralPath (Split-Path -Parent $mlTo)).Count -eq 0) $why
+    $why = Get-Modlist (New-Record '' 0 $false) $mlTo
+    Yes 'M3 a record with no modlist says this Release has none' ($why.Contains('lists no collection-modlist.wabbajack')) $why
 }
 finally {
     $srv.Stop()

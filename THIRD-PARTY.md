@@ -422,6 +422,7 @@ file carries outside code and the file does not carry that project's notice.
 | `FromGameMath.cs` | numpy, OpenBLAS, LAPACK's `dgesv` | no | It does the arithmetic Build-NoticeBoard.py does with numpy in the same order and rounding, so the meshes come out the same bytes, and says what that order is. The order was measured from the results (19 Oct), not copied from their code: the inverse is a 3 by 3 LU solve written out by hand, and nothing in it is OpenBLAS's or LAPACK's source. |
 | `FromGameArchive.cs` | LZ4 | no | It decodes the LZ4 frame and block format the game's archives use, written from that published format and the BSA layout. Build-NoticeBoard.py calls the lz4 package for this; the launcher has its own short decoder instead, and no code of the lz4 library is in it. |
 | `ModlistFetch.cs` | 7-Zip | no | It downloads 7-Zip 25.01's own `7zr.exe` and installer from 7-Zip's GitHub release, each held to a sha256 it pins, takes `7z.exe` and `7z.dll` out of the installer with `7zr.exe`, and runs `7z.exe` to unpack the modlist's archives (#6244). It runs 7-Zip as a program; no code of 7-Zip is in it. |
+| `ModlistSetup.cs` | 7-Zip | no | It runs the modlist install in order: 7-Zip and Mod Organizer 2 through `ModlistFetch.cs`, the Nexus files, then the install itself (#6244). It names 7-Zip as one of those steps; no code of 7-Zip is in it. |
 
 ## The SkyMP client runtime, built from the fork
 
