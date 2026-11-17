@@ -1,6 +1,6 @@
 # Collection revisions
 
-The collection is on revision 8 of 7essxf on Nexus Mods, as
+The collection is on revision 9 of 7essxf on Nexus Mods, as
 `records/collection-plugins.json` records it, every plugin with its size and
 sha256. `tests/test-4533-collection-revision-docs.js` holds this page and
 every other page to that record, so a page that names an older revision as the
@@ -34,8 +34,18 @@ says how. From Nexus to a release it goes like this:
    revision. Main follows from the feed only when Patrick says so for that
    build.
 
-For revision 8, steps 1 and 2 are done. Step 3, for Improved Eyes Skyrim.esp,
-is #4176.
+For revision 9, steps 1 and 2 are done. Its collection plugins and their
+load order are unchanged from revision 8. The merge builds the content again
+on the box before its release.
+
+## Revision 9
+
+Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44159851290).
+
+PapyrusUtil SE 3.9 supplies the configuration reader used by the CBBE 3BA
+physics manager. It adds no plugin and changes no plugin index. The revision
+also carries the recorded load-after rules for CBBE.esp,
+RaceMenuMorphsCBBE.esp and Improved Eyes Skyrim.esp.
 
 ## Revision 8
 
