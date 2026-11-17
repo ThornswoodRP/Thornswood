@@ -11,7 +11,9 @@ When the face is done they are dressed in a plain tunic and boots. A
 riekling is dressed in the riekling cut of the same tunic and in
 footwraps instead, because the tunic and boots are cut for the other peoples and
 do not fit a riekling (Patrick, 12 October 2026). The
-panel behind K opens on its own. On it:
+panel behind K opens on its own. It keeps the keyboard until creation is
+complete: K, Escape and waiting do not dismiss it or release movement in
+the hall. Close Skyrim remains available and asks for confirmation. On it:
 
 - **Home.** The town they wake in. This one is required before they leave
   the hall. Confirming it sends them to that town's start spot, not its inn
