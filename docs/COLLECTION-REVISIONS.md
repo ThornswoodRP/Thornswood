@@ -42,8 +42,9 @@ on the box before its release.
 
 Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44159851290).
 
-PapyrusUtil SE 3.9 supplies the configuration reader used by the CBBE 3BA
-physics manager. It adds no plugin and changes no plugin index. The revision
+PapyrusUtil SE 3.9 was added as the physics manager's configuration reader.
+That file targets Skyrim 1.5.97, while Thornswood runs 1.6.1170; it needs
+the AE 4.6 file instead. No plugin or plugin index changed. The revision
 also carries the recorded load-after rules for CBBE.esp,
 RaceMenuMorphsCBBE.esp and Improved Eyes Skyrim.esp.
 

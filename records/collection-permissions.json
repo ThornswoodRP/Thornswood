@@ -720,23 +720,23 @@
       "author": "exiledviper meh321",
       "files": [
         {
-          "fileId": 122686,
-          "name": "PapyrusUtil SE - Modders Scripting Utility Functions - PapyrusUtil SE - Scripting Utility Functions",
-          "version": "3.9"
+          "fileId": 462773,
+          "name": "PapyrusUtil AE SE - Scripting Utility Functions",
+          "version": "4.6"
         }
       ],
       "plugins": [],
       "page": "https://www.nexusmods.com/skyrimspecialedition/mods/13048?tab=description",
       "reading": {
         "read": "2026-11-17",
-        "by": "Owner supplied the page section for this change",
+        "by": "Owner supplied this mod's page section; reused for its 1.6.1170 file",
         "collections": "not stated",
         "terms": {
           "Author's instructions": "The supplied section has no additional instructions.",
           "File credits": "exiledviper: continued maintenance and refactoring of the original plugin source. meh321: original version and idea. SKSE team: making the plugin possible. milzschnitte: suggestions.",
           "Donation Points system": "This mod is opted-in to receive Donation Points."
         },
-        "version": "3.9"
+        "version": "4.6"
       }
     },
     {
