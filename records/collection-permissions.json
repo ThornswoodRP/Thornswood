@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/release/collection-permissions.js update",
   "collection": "7essxf",
-  "revision": 8,
+  "revision": 9,
   "mods": [
     {
       "modId": 198,
@@ -721,7 +721,7 @@
       "files": [
         {
           "fileId": 122686,
-          "name": "PapyrusUtil SE - Scripting Utility Functions",
+          "name": "PapyrusUtil SE - Modders Scripting Utility Functions - PapyrusUtil SE - Scripting Utility Functions",
           "version": "3.9"
         }
       ],
