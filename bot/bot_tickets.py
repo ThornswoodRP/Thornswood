@@ -40,6 +40,7 @@ KINDS = [
     ('moderator',   'Apply: Moderator',     'The unglamorous one. Tickets, reports, difficult people.'),
     ('dev',         'Apply: Dev',           'Server, launcher, site, mods. Anything that compiles.'),
     ('creator',     'Apply: Content Creator', 'Video, streams, screenshots, writing about the place.'),
+    ('support',     'Apply: Support',       'Help with installing, updating and connecting; read playtest applications.'),
     ('report',      'Report somebody',      'Something happened and it should not have.'),
     ('help',        'I need help',          'It will not install, will not start, or will not connect.'),
 ]
@@ -56,6 +57,7 @@ ROLE_FOR = {
     'moderator':  'Moderator',
     'dev':        'Dev',
     'creator':    'Content Creator',
+    'support':    'Support',
 }
 
 # Every job asks the same three things, because the answers that matter are the
@@ -232,6 +234,8 @@ QUESTIONS = {
         'Languages, projects, a repo link. Papyrus and C# are the useful ones here.'),
     'creator': _job('making things about Thornswood',
         'Channel, streams, a portfolio, anything you have put out.'),
+    'support': _job('helping players',
+        'Install, update or connection problems you have helped solve, and applications you have reviewed.'),
     'report': [
         ('Who, and where?', 'Name and the channel or the place in the world.', False),
         ('What happened?', 'What they did, what you did, and roughly when.', True),
@@ -271,9 +275,9 @@ SEAT_RULE_STAFF = ('Owner', 'Co-Owner',
                    'Lead Moderator', 'Moderator',
                    'Lead Content Creator', 'Content Creator',
                    'Lead Support', 'Support')
-# The applications that make somebody staff. Apply: Lead and Apply: Support
-# join this when they are on the panel.
-STAFF_JOB_KINDS = ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator')
+# The applications that make somebody staff. Apply: Lead joins this when it
+# is on the panel.
+STAFF_JOB_KINDS = ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator', 'support')
 # A faction's leader role uses its short name, as Build-Discord.py makes it.
 FACTION_SHORT = {'Thalmor Remnant': 'Thalmor', 'The Companions': 'Companions'}
 # Djinn, 12 Oct 2026. On the public panel, word for word.
