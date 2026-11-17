@@ -576,7 +576,7 @@ DOCS = {
 }
 
 # Waiting on their lead's and Patrick's approval (#3317, 10d). Never posted.
-DRAFTS = ('TESTERRULES', 'DEVRULES', 'LORERULES', 'MODRULES',
+DRAFTS = ('DEVRULES', 'LORERULES', 'MODRULES',
           'CONTENTRULES', 'SUPPORTRULES')
 
 # THE CHANGELOGS (#3317, Patrick, 22 Oct: "any of the rules and documentation
@@ -589,6 +589,9 @@ DRAFTS = ('TESTERRULES', 'DEVRULES', 'LORERULES', 'MODRULES',
 # write is the one the refusal prints (Build-Discord.py, check_docs), and
 # the pull request's build prints it too (tests/test-3457-doc-change-lines.py).
 CHANGES = {
+    'TESTERRULES': [
+        ('2026-11-17', 'The playtesting rules are now available: where to find test tasks, report problems and join sessions.', '149088876c87'),
+    ],
     'RULES': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Bugs now go in #test-findings, since #bugs is gone.', '8c8eaaa1c0c2'),
         ('2026-10-22', 'The application that asks whether you accept these is in its own channel now.', 'a61e1b4d9c57'),
