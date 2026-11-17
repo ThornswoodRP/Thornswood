@@ -2293,6 +2293,13 @@ async def changelog_drift(channel, key, me_id):
             if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
                 linked = True
                 break
+        discussion = any(s.get('post_prefix') for _, specs in PLAN for s in specs
+                         if s['name'] == channel.name)
+        if not linked and discussion:
+            async for m in channel.pins(limit=None):
+                if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
+                    linked = True
+                    break
         if not linked:
             out.append('its post does not link its Changelog thread; -Posts writes the link')
     except discord.HTTPException as e:
@@ -2329,8 +2336,8 @@ def doc_post_of_mine(message, me_id):
 
 
 async def post(channel, text, found):
-    """Put the words in, replacing anything this bot put there before, so the
-       rules can be edited in content.py and re run rather than in Discord."""
+    """Publish a maintained document. In a discussion channel, replace only
+       its owned guide posts and preserve the conversation."""
     if channel is None or text is None:
         return
     for token, ch in found.items():
@@ -2347,15 +2354,16 @@ async def post(channel, text, found):
                    if s['name'] == channel.name), None)
     if prefix:
         text = text.strip()
-    if prefix and (text.split('\n', 1)[0] != prefix or len(text) > 1900):
+    if prefix and text.split('\n\n', 1)[0] != prefix:
         failed.append('#%s was not rewritten: its discussion guide must start '
-                      'with its heading and fit in one message' % channel.name)
+                      'with its heading' % channel.name)
         return
     # The Changelog thread is this document's durable identity. A bot reply
     # can quote the heading without being the guide that this run owns.
     def guide_owner(words):
-        match = re.search(r'(?:^|\n)\*Last changed [^\n]+ Every change is in the '
-                          r'Changelog thread, (<#\d+>)\.\*$', words)
+        match = re.fullmatch(r'\*Last changed \d{1,2} [A-Z][a-z]{2} \d{4}: [^\n]+ '
+                             r'Every change is in the Changelog thread, (<#\d+>)\.\*',
+                             words.rsplit('\n\n', 1)[-1])
         return match[1] if match else None
 
     owner = guide_owner(text) if prefix else None
@@ -2363,6 +2371,53 @@ async def post(channel, text, found):
         failed.append('#%s was not rewritten: its discussion guide needs its '
                       'Changelog thread before it can be identified' % channel.name)
         return
+
+    chunks, cur = [], ''
+    if prefix:
+        paragraphs = text.split('\n\n')
+        footer = paragraphs[-1]
+        if not footer.startswith('*Last changed '):
+            failed.append('#%s was not rewritten: its discussion guide needs its '
+                          'Changelog thread footer in a paragraph of its own' % channel.name)
+            return
+        # Every part carries the document's heading and Changelog identity,
+        # and is pinned. A later update can find all of them after busy chat.
+        body = paragraphs[1:-1]
+        if not any(p.strip() for p in body):
+            failed.append('#%s was not rewritten: its discussion guide is empty' % channel.name)
+            return
+        single_room = 1900 - len(prefix) - len(footer) - 4
+        whole = '\n\n'.join(body)
+        parts = 1 if len(whole) <= single_room else 2
+        while True:
+            label = '*Part %d of %d*' % (parts, parts)
+            room = single_room if parts == 1 else single_room - len(label) - 2
+            groups, current = [], []
+            for para in body:
+                if len(para) > room:
+                    failed.append('#%s was not rewritten: each guide paragraph must '
+                                  'fit in one message' % channel.name)
+                    return
+                if current and len('\n\n'.join(current + [para])) > room:
+                    groups.append('\n\n'.join(current))
+                    current = []
+                current.append(para)
+            if current:
+                groups.append('\n\n'.join(current))
+            if len(str(len(groups))) == len(str(parts)):
+                break
+            parts = len(groups)
+        for i, group in enumerate(groups, 1):
+            part = '*Part %d of %d*\n\n' % (i, len(groups)) if len(groups) > 1 else ''
+            chunks.append(prefix + '\n\n' + part + group + '\n\n' + footer)
+    else:
+        for para in text.split('\n\n'):
+            if len(cur) + len(para) + 2 > 1900:
+                chunks.append(cur.strip())
+                cur = ''
+            cur += para + '\n\n'
+        if cur.strip():
+            chunks.append(cur.strip())
     def managed(m):
         return (doc_post_of_mine(m, client.user.id)
                 and (not prefix or (m.content.split('\n', 1)[0] == prefix
@@ -2388,22 +2443,18 @@ async def post(channel, text, found):
                       % (channel.name, refused(e)))
         return
 
-    chunks, cur = [], ''
-    for para in text.split('\n\n'):
-        if len(cur) + len(para) + 2 > 1900:
-            chunks.append(cur.strip())
-            cur = ''
-        cur += para + '\n\n'
-    if cur.strip():
-        chunks.append(cur.strip())
-
     sent = []
     try:
-        for c in chunks:
+        for i, c in enumerate(chunks, 1):
+            doing = 'post %d of %d could not be sent' % (i, len(chunks))
             sent.append(await channel.send(c))
+        if prefix:
+            for i, m in enumerate(sent, 1):
+                doing = 'post %d of %d could not be pinned' % (i, len(sent))
+                await m.pin()
     except discord.HTTPException as e:
-        failed.append('#%s was not rewritten: post %d of %d could not be sent (%s); '
-                      'its old words stay' % (channel.name, len(sent) + 1, len(chunks), refused(e)))
+        failed.append('#%s was not rewritten: %s (%s); '
+                      'its old words stay' % (channel.name, doing, refused(e)))
         # The part that did go would sit under the old words and say them
         # twice over (#2736), so it comes back out.
         for m in sent:
@@ -2412,9 +2463,19 @@ async def post(channel, text, found):
             except discord.NotFound:
                 pass  # gone already, which is what this wanted
             except discord.HTTPException as e2:
-                failed.append('#%s: part of its new words could not be taken back, so it '
-                              'says some twice until the next -Posts (%s)' % (channel.name, refused(e2)))
-                break
+                pin_state = 'not pinned'
+                if prefix:
+                    try:
+                        await m.unpin()
+                        pin_state = 'not pinned'
+                    except discord.NotFound:
+                        continue
+                    except discord.HTTPException:
+                        pin_state = 'pin status unknown'
+                failed.append('#%s: replacement message %s could not be taken back '
+                              '(%s; %s). Its old words stay; remove this replacement '
+                              'before publishing again.'
+                              % (channel.name, m.id, refused(e2), pin_state))
         return
 
     for old in old_posts:
@@ -2429,7 +2490,7 @@ async def post(channel, text, found):
             break
 
     first = sent[0] if sent else None
-    if first:
+    if first and not prefix:
         try:
             await first.pin()
         except discord.HTTPException as e:
