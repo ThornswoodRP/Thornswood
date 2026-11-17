@@ -3,8 +3,8 @@
 
   Makes the next revision of the Thornswood collection on Nexus Mods (slug
   7essxf), as a draft, from the revision published now with mods moved to a
-  new Nexus file (-Mod), added (-Add), given new installer answers (-Answers)
-  or taken out (-Remove), plugins given a new load rule (-Rule) or their light
+  new Nexus file (-Mod), added (-Add), given new installer answers (-Answers),
+  given fresh reference tags (-RefreshTag) or taken out (-Remove), plugins given a new load rule (-Rule) or their light
   flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft
   (-Publish) or discards one (-Discard) (#2914).
 
