@@ -484,7 +484,7 @@
       rows: []
     },
     home: {
-      title: 'Home',
+      title: 'Starting Location',
       lead: 'The town you start in. You arrive at a quiet spot in or near it, not in its inn.',
       rows: []   // the server sends the towns while you are new
     },
@@ -783,6 +783,8 @@
     'color:#e9d19b;background:rgba(0,0,0,.25);font-family:inherit;cursor:pointer}',
     '#ts-skills .tsbtn.primary{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#ts-skills .tsbtn.primary.off{opacity:.35;pointer-events:none}',
+    '#ts-skills .tsbtn:disabled{color:#89857c;border-color:rgba(137,133,124,.4);cursor:default}',
+    '#ts-skills .tsbtn:focus-visible{outline:2px solid #e9d19b;outline-offset:3px}',
     // Close Skyrim once it is armed, the colours of the character page's own
     // Close the game when it asks the second time (thornswood-select.js).
     '#ts-skills .tsbtn.danger{border-color:#e9a27a;color:#f6c9b0;background:rgba(120,40,30,.45)}',
@@ -877,6 +879,8 @@
         '<div class="tsbtn ghost" data-act="switch">Change character</div>' +
         '<div class="tsbtn ghost" data-act="help">Help</div>' +
         '<div class="tsbtn ghost" data-act="settings">Settings</div>' +
+        '<button type="button" class="tsbtn ghost" data-act="back">Back</button>' +
+        '<button type="button" class="tsbtn ghost" data-act="next">Next</button>' +
         '<div class="tsbtn ghost" data-act="close"><span>Close</span><span class="key">K</span></div>' +
         '<div class="tsbtn primary" data-act="confirm">Confirm</div>' +
       '</div></div>' +
@@ -890,6 +894,8 @@
   var elStatus = root.querySelector('.status');
   var elConfirm = root.querySelector('[data-act="confirm"]');
   var elClose = root.querySelector('[data-act="close"]');
+  var elBack = root.querySelector('[data-act="back"]');
+  var elNext = root.querySelector('[data-act="next"]');
   // Help (#1633), beside Close: the help panel, and this one put down. Never
   // while creating, where this panel is the whole of what there is to do.
   var elHelp = root.querySelector('[data-act="help"]');
@@ -1633,6 +1639,36 @@
   /* Another section: the top row, and the status line back to the hint. */
   function goTo(sec) { section = sec; rowAt = 0; status = ''; statusKind = ''; }
 
+  // Use the sidebar's actual order, including its reference and conditional
+  // pages. Only pages with a choice gate Next; neither button sends a pick.
+  function canCreationNext() {
+    if (!creating()) return false;
+    if (section === 'profession') {
+      var p = softProf();
+      return haveProf() || !!later.profession || !!(p && p.whole);
+    }
+    if (section === 'class') return haveClass() || !!later['class'] || !!softClass();
+    if (section === 'home') return haveHome() || !!softHome();
+    return true;
+  }
+  function drawCreationNav() {
+    var cr = creating();
+    var at = sections.indexOf(section);
+    elBack.style.display = cr && at > 0 ? '' : 'none';
+    elNext.style.display = cr && at >= 0 && at < sections.length - 1 ? '' : 'none';
+    elNext.disabled = !canCreationNext();
+  }
+  function creationStep(direction) {
+    if (!creating() || (direction !== -1 && direction !== 1)) return;
+    var at = sections.indexOf(section);
+    var next = at + direction;
+    if (at < 0 || next < 0 || next >= sections.length || (direction === 1 && !canCreationNext())) return;
+    goTo(sections[next]);
+    draw();
+    elBody.tabIndex = -1;
+    elBody.focus();
+  }
+
   // ------------------------------------------------------------------ draw --
   /*
     Everything head, nav and body are drawn from, as one string. When the
@@ -1734,6 +1770,7 @@
     }
     drawProgress();
     drawFoot();
+    drawCreationNav();
   }
 
   /*
@@ -1757,7 +1794,7 @@
     if (creating()) {
       elTitle.textContent = 'Begin your life in Thornswood';
       elWho.textContent = '';
-      elWho.appendChild(el('div', '', 'Choose a home. Your class and profession can be chosen here too, or later in the world. Nothing is sent until you press Confirm in Review.'));
+      elWho.appendChild(el('div', '', 'Use Next and Back to work through the tabs. Choose a Starting Location; class and profession can wait until later. Confirm in Review sends your choices and takes you there.'));
       return;
     }
     elTitle.textContent = DATA[section] ? DATA[section].title : '';
@@ -1799,7 +1836,7 @@
       soft = softHome();
       return soft ? { t: soft.t, c: 'chosen' } : { t: 'choose one', c: 'need' };
     }
-    if (sec === 'review') return (haveHome() || softHome()) ? { t: 'ready to begin', c: 'chosen' } : { t: 'needs a home', c: 'need' };
+    if (sec === 'review') return (haveHome() || softHome()) ? { t: 'ready to begin', c: 'chosen' } : { t: 'needs a starting location', c: 'need' };
     if (sec === 'spells') {
       var sp = pointsLeft();
       var m = markedCount();
@@ -3446,9 +3483,9 @@
     if (haveClass()) out.push({ k: 'Class', v: nameOf('class', mine['class']), c: 'set' });
     else if ((soft = softClass())) out.push({ k: 'Class', v: soft.t, c: 'chosen' });
     else out.push({ k: 'Class', v: later['class'] ? 'later' : 'not chosen yet', c: 'dim' });
-    if (haveHome()) out.push({ k: 'Home', v: cap(mine.home) + (holdOf(mine.home) ? ', ' + holdOf(mine.home) : ''), c: 'set' });
-    else if ((soft = softHome())) out.push({ k: 'Home', v: soft.t + (soft.hold ? ', ' + soft.hold : ''), c: 'chosen' });
-    else out.push({ k: 'Home', v: 'not chosen yet', c: 'need' });
+    if (haveHome()) out.push({ k: 'Starting Location', v: cap(mine.home) + (holdOf(mine.home) ? ', ' + holdOf(mine.home) : ''), c: 'set' });
+    else if ((soft = softHome())) out.push({ k: 'Starting Location', v: soft.t + (soft.hold ? ', ' + soft.hold : ''), c: 'chosen' });
+    else out.push({ k: 'Starting Location', v: 'not chosen yet', c: 'need' });
     return out;
   }
   function drawReview() {
@@ -3460,7 +3497,7 @@
       wrap.appendChild(row);
     });
     elBody.appendChild(wrap);
-    elBody.appendChild(el('p', 'lead', 'A home is the one thing that has to be chosen. The rest can wait for the world.'));
+    elBody.appendChild(el('p', 'lead', 'A Starting Location is required. Class and profession can wait until you are in the world. Confirm takes you to your starting location.'));
   }
 
   function drawTree() {
@@ -3544,24 +3581,10 @@
   }
 
   /*
-    The status line and the two buttons: three elements, set in place, never
-    rebuilt. In the world Confirm sits under every section that sends.
-
-    CLOSE IS THERE WHILE CREATING NOW, and it used to be hidden.
-
-    Djinn, 21 September: "There is no way to leave the character creation
-    screen except to make a character then log out. this needs a resolution."
-    The old note here said Escape and K shut the panel "and the server's
-    reminder brings it back", which is exactly the complaint written down as
-    though it were the design: you could shut it and it reopened thirty
-    seconds later, so you could not shut it.
-
-    Hiding the button did not stop anybody leaving either, since Escape
-    already worked. All it did was hide that leaving was possible, from the
-    people most likely to want it. The button is honest about what it does
-    now, and closing tells the server, which holds the reminder off for ten
-    minutes instead of thirty seconds. Nothing about the character is decided
-    by it.
+    Footer controls are updated in place. In creation only Review offers
+    Confirm, and Close Skyrim asks twice; K and Escape cannot dismiss it.
+    Back and Next are drawn separately from the status cache because their
+    state depends on the current tab even when its hint has not changed.
   */
   function drawFoot() {
     var cr = creating();
@@ -3642,8 +3665,8 @@
       return 'Mark the staff spells you want, then press Unlock. One staff spell point each, no tome needed.';
     }
     if (section === 'review') {
-      if (!(haveHome() || softHome())) return 'Pick a home first. Confirm sends everything you chose to the server.';
-      return 'Confirm sends everything you chose to the server and takes you to your home town.';
+      if (!(haveHome() || softHome())) return 'Pick a Starting Location first. Confirm sends everything you chose to the server.';
+      return 'Confirm sends everything you chose to the server and takes you to your starting location.';
     }
     // The later lines are creation's: the mark is only ever set there.
     if (section === 'class') {
@@ -3658,7 +3681,7 @@
       if (creating()) return 'Pick a profession and its half and move on, or choose later and pick it in the world. Nothing is sent until Confirm.';
       return 'Pick a profession and its half, then confirm.';
     }
-    if (section === 'home') return haveHome() ? 'Home is set.' : 'Pick the town you will start in and move on to Review. A home is the one thing you must choose before you leave the hall.';
+    if (section === 'home') return haveHome() ? 'Starting Location is set.' : 'Pick the town you will start in, then press Next to Review. A Starting Location is required before you leave the hall.';
     return '';
   }
 
@@ -4294,6 +4317,9 @@
   */
   function onKey(e) {
     if (root.className === 'gone') return;
+    // Native footer buttons own Enter and Space; the row shortcuts below
+    // must not turn keyboard navigation into a choice or confirmation.
+    if ((e.target === elBack || e.target === elNext) && (e.key === 'Enter' || e.key === ' ')) return;
     // A number being typed into the Office page's rent (#1638) is the box's,
     // Enter and the arrows included. Escape still closes. And the terms of a
     // contract (#4561), K among them: a contract may say "keep".
@@ -4360,6 +4386,8 @@
   }
   window.addEventListener('keydown', onKey, true);
   elConfirm.onclick = confirm;
+  elBack.onclick = function () { creationStep(-1); };
+  elNext.onclick = function () { creationStep(1); };
   elClose.onclick = function () { closeButton(); };
   // The help opens first, so the keyboard is never let go between the two.
   elHelp.onclick = function () {

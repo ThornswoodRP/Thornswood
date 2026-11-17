@@ -147,7 +147,7 @@ You arrive dressed in a plain tunic and boots in a quiet stone hall.
 The race menu opens there to make your face, with your clothes kept on as you
 change race. When you are done, the panel behind **K** opens by itself. That panel is
 where the rest is chosen: your profession and the half of it you will make your
-own, your class, and your Home, the town you start in. Those are the choices
+own, your class, and your Starting Location, the town you start in. Those are the choices
 on the [Professions](/classes) page.
 
 Only the town has to be chosen before you leave the hall. Your class and

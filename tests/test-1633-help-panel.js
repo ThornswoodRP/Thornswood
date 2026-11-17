@@ -442,8 +442,8 @@ attempt('D', function () {
         j.told.indexOf('thornswood-front journal:closed') !== -1);
   }
   {
-    yes('D3 the K panel has Help and Settings beside Close',
-        skills.indexOf("'<div class=\"tsbtn ghost\" data-act=\"help\">Help</div>' +\n        '<div class=\"tsbtn ghost\" data-act=\"settings\">Settings</div>' +\n        '<div class=\"tsbtn ghost\" data-act=\"close\">") !== -1);
+    yes('D3 the K panel has Help and Settings with navigation beside Close',
+        skills.indexOf("'<div class=\"tsbtn ghost\" data-act=\"help\">Help</div>' +\n        '<div class=\"tsbtn ghost\" data-act=\"settings\">Settings</div>' +\n        '<button type=\"button\" class=\"tsbtn ghost\" data-act=\"back\">Back</button>' +\n        '<button type=\"button\" class=\"tsbtn ghost\" data-act=\"next\">Next</button>' +\n        '<div class=\"tsbtn ghost\" data-act=\"close\">") !== -1);
     yes('D3 and hides it while creating, where this panel is all there is to do',
         /elHelp\.style\.display = cr \? 'none' : '';/.test(between(skills, '  function drawFoot() {', '\n  }\n') || ''));
     const click = between(skills, '  elHelp.onclick = function () {', '\n  };\n');
