@@ -394,7 +394,9 @@ $sw = Join-Path $T 'swap-runtime.json'
 Put $sw ('[{"modId":"192762","fileId":"812346","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Thornswood Client Runtime"}]')
 $o1 = Join-Path $T 'map-collection.json'; $o2 = Join-Path $T 'map-payload.json'
 $said = NodeSaid $js $cj $sw $o1 $o2
-Yes 'nexus-collection.js changes only the runtime entry''s version, file id, md5 and size' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('Thornswood Client Runtime' + "`t" + 'version' + "`t" + '1.0.0' + "`t" + '1.0.2|Thornswood Client Runtime' + "`t" + 'source.fileId' + "`t" + '809366' + "`t" + '812346|Thornswood Client Runtime' + "`t" + 'source.md5' + "`t" + 'c515679068f6563750b1ca1f9260031f' + "`t" + $md5 + '|Thornswood Client Runtime' + "`t" + 'source.fileSize' + "`t" + '148896610' + "`t" + '300000'))
+Yes 'nexus-collection.js moves the runtime entry and reports its changed archive fields' ($LASTEXITCODE -eq 0 -and (@($said | Select-Object -First 4) -join '|') -eq ('Thornswood Client Runtime' + "`t" + 'version' + "`t" + '1.0.0' + "`t" + '1.0.2|Thornswood Client Runtime' + "`t" + 'source.fileId' + "`t" + '809366' + "`t" + '812346|Thornswood Client Runtime' + "`t" + 'source.md5' + "`t" + 'c515679068f6563750b1ca1f9260031f' + "`t" + $md5 + '|Thornswood Client Runtime' + "`t" + 'source.fileSize' + "`t" + '148896610' + "`t" + '300000'))
+$tagLine = @($said)[-1] -split "`t"
+Yes 'the moved runtime gets a fresh tag, reported as its fifth change' (@($said).Count -eq 5 -and $tagLine.Count -eq 4 -and $tagLine[1] -ceq 'source.tag' -and $tagLine[2] -ceq 'Km2wtoJLmxn' -and $tagLine[3] -cmatch '^[A-Za-z0-9_-]{10}$' -and $tagLine[3] -cne $tagLine[2])
 $wantPayload = '{"adult_content":false,"collection_manifest":{"info":{"author":"EvilPatrick06","author_url":null,"name":"Thornswood","description":null,"summary":null,"domain_name":"skyrimspecialedition","game_versions":["1.6.1170.0"]},"mods":[' +
     '{"name":"Thornswood Content","version":"1.2","optional":false,"domain_name":"skyrimspecialedition","source":{"type":"nexus","mod_id":"192001","file_id":"811029","md5":"ee881bf2a869d0810113a82ca1405445","file_size":null,"update_policy":"exact","logical_filename":"Thornswood Content","file_expression":null,"url":null,"adult_content":null},"author":"EvilPatrick06"},' +
     '{"name":"Thornswood Client Runtime","version":"1.0.2","optional":false,"domain_name":"skyrimspecialedition","source":{"type":"nexus","mod_id":"192762","file_id":"812346","md5":"' + $md5 + '","file_size":null,"update_policy":"exact","logical_filename":"Thornswood Client Runtime","file_expression":null,"url":null,"adult_content":null},"author":"EvilPatrick06"},' +
@@ -402,7 +404,7 @@ $wantPayload = '{"adult_content":false,"collection_manifest":{"info":{"author":"
     '{"name":"A Hashed Mod","version":"2.0","optional":true,"domain_name":"skyrimspecialedition","source":{"type":"nexus","mod_id":"1111","file_id":"2222","md5":"00000000000000000000000000000001","file_size":null,"update_policy":"exact","logical_filename":"Hashed","file_expression":null,"url":null,"adult_content":null},"author":"Someone"}' +
     ']},"collection_schema_id":1}'
 Yes 'the collection_data is Vortex''s mapping: empty strings to null, ids as strings, file_size dropped by filterInfo, schema 1' ((Test-Path -LiteralPath $o2) -and ([IO.File]::ReadAllText($o2, [Text.Encoding]::UTF8)) -ceq $wantPayload)
-& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),t=fs.readFileSync(process.argv[2],'utf8'),b=JSON.parse(t);const layout=t===JSON.stringify(b,undefined,2);const r=b.mods[1];r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;process.exitCode=layout&&JSON.stringify(a)===JSON.stringify(b)?0:1" $cj $o1
+& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),t=fs.readFileSync(process.argv[2],'utf8'),b=JSON.parse(t);const layout=t===JSON.stringify(b,undefined,2);const r=b.mods[1];r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;r.source.tag=a.mods[1].source.tag;process.exitCode=layout&&JSON.stringify(a)===JSON.stringify(b)?0:1" $cj $o1
 Yes 'and the rest of collection.json is as it was, in the layout Vortex writes' ($LASTEXITCODE -eq 0)
 Put $sw ('[{"modId":"1111","fileId":"999","version":"9","md5":"' + $md5 + '","fileSize":1,"logicalFilename":"x"}]')
 $null = & $node.Source $js $cj $sw (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>$null
@@ -424,8 +426,10 @@ $said = NodeSaid $js $cj $sw $o1 $o2
 $want = @("patches.Thornswood-Content.esp`t023593E0`tdropped", "modRules[0].reference.fileMD5`tee881bf2a869d0810113a82ca1405445`t$md5",
     "modRules[0].reference.fileExpression`tThornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil`t$tcExpr", "modRules[0].reference.versionMatch`t1.2.0`t1.3.0",
     "version`t1.2`t1.3", "source.fileId`t811029`t812399", "source.md5`tee881bf2a869d0810113a82ca1405445`t$md5", "source.fileSize`t660022`t1") | ForEach-Object { "Thornswood Content`t" + $_ }
-Yes 'a dropped patch goes, and the rule that names Thornswood Content gets the new md5, file name and version, each said' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ($want -join '|'))
-& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const c=b.mods[0],r=b.modRules[0];if('patches' in c){process.exitCode=2;return};if(JSON.stringify(r.source)!==JSON.stringify(a.modRules[0].source)){process.exitCode=3;return};c.patches=a.mods[0].patches;c.version='1.2';Object.assign(c.source,{fileId:811029,md5:'ee881bf2a869d0810113a82ca1405445',fileSize:660022});const k=Object.keys(c);k.splice(k.indexOf('patches'),1);k.splice(k.indexOf('source')+1,0,'patches');const o={};for(const x of k)o[x]=c[x];b.mods[0]=o;Object.assign(r.reference,{fileExpression:'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil',fileMD5:'ee881bf2a869d0810113a82ca1405445',versionMatch:'1.2.0'});process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj $o1
+Yes 'a dropped patch goes, and its ordering rule gets the changed archive fields' ($LASTEXITCODE -eq 0 -and @($said).Count -eq $want.Count + 1 -and (@($said | Select-Object -First $want.Count) -join '|') -eq ($want -join '|'))
+$tagLine = @($said)[-1] -split "`t"
+Yes 'the moved content archive also reports a fresh reference tag' ($tagLine.Count -eq 4 -and $tagLine[1] -ceq 'source.tag' -and $tagLine[2] -ceq 'QXsOYonzPMT' -and $tagLine[3] -cmatch '^[A-Za-z0-9_-]{10}$' -and $tagLine[3] -cne $tagLine[2])
+& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const c=b.mods[0],r=b.modRules[0];if('patches' in c){process.exitCode=2;return};if(JSON.stringify(r.source)!==JSON.stringify(a.modRules[0].source)){process.exitCode=3;return};c.patches=a.mods[0].patches;c.version='1.2';c.source.tag=a.mods[0].source.tag;Object.assign(c.source,{fileId:811029,md5:'ee881bf2a869d0810113a82ca1405445',fileSize:660022});const k=Object.keys(c);k.splice(k.indexOf('patches'),1);k.splice(k.indexOf('source')+1,0,'patches');const o={};for(const x of k)o[x]=c[x];b.mods[0]=o;Object.assign(r.reference,{fileExpression:'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil',fileMD5:'ee881bf2a869d0810113a82ca1405445',versionMatch:'1.2.0'});process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj $o1
 Yes 'and nothing else in collection.json changes' ($LASTEXITCODE -eq 0)
 Put $sw (TcSwap '{"Thornswood-Content.esp":"023593e0"}' '')
 $said = NodeSaid $js $cj $sw $o1 $o2
@@ -774,7 +778,7 @@ Yes 'the upload is the archive built, bound to its md5' ($up -and $up.md5 -eq (G
 $x = Join-Path $T 'unpacked'
 & $sz x -y ('-o' + $x) $built | Out-Null
 Yes 'the archive holds collection.json, patches and the empty bundled folder, as Vortex packs them' ((Test-Path -LiteralPath (Join-Path $x 'collection.json')) -and (Test-Path -LiteralPath (Join-Path $x 'patches\Thornswood Content\Thornswood-Content.esp.diff')) -and (Test-Path -LiteralPath (Join-Path $x 'bundled') -PathType Container))
-& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2'){process.exitCode=2;return};r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;const i=b.info;if(i.description!=='## About\n\nA made-up collection for the harness.'||i.summary!=='A made-up collection.'||i.installInstructions!=='Add it in Vortex.'){process.exitCode=3;return};i.description=a.info.description;i.installInstructions=a.info.installInstructions;delete i.summary;process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj (Join-Path $x 'collection.json')
+& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const r=b.mods[1];if(r.source.fileId!==812346||r.version!=='1.0.2'){process.exitCode=2;return};r.version='1.0.0';r.source.fileId=809366;r.source.md5='c515679068f6563750b1ca1f9260031f';r.source.fileSize=148896610;r.source.tag=a.mods[1].source.tag;const i=b.info;if(i.description!=='## About\n\nA made-up collection for the harness.'||i.summary!=='A made-up collection.'||i.installInstructions!=='Add it in Vortex.'){process.exitCode=3;return};i.description=a.info.description;i.installInstructions=a.info.installInstructions;delete i.summary;process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj (Join-Path $x 'collection.json')
 Yes 'its collection.json is revision 2''s with only the runtime entry moved, and the page''s text from the page record (#4537)' ($LASTEXITCODE -eq 0)
 $rv = (State).collection.revisions.PSObject.Properties['3']
 if ($rv) { $rv = $rv.Value }
@@ -1132,6 +1136,27 @@ $mut = @((Since $n0) | Where-Object { $_.path -eq '/v2/graphql' -and ([string]$_
 YesR '-Discard discards the draft with discardRevision and reads back that none is waiting' ($r.Code -eq 0 -and $r.Out -match 'Revision 4 is discarded, and no draft is waiting' -and $null -ne $mut -and $mut.key -eq 'right' -and [string]$mut.json.variables.collectionId -eq '515846' -and [int]$mut.json.variables.revisionNumber -eq 4 -and $null -eq (State).collection.draft -and $null -eq (State).collection.revisions.PSObject.Properties['4']) $r
 $r = Run 'New-NexusRevision.ps1' @('-Discard', '4')
 YesR 'discarding it again is refused' ($r.Code -eq 1 -and $r.Out -match 'Reading revision 4 was refused') $r
+
+# #6449: repair the published entry's identity without changing its archive.
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-RefreshTag', '192762', '-WhatIf')
+$tagAfter = Join-Path $T 'tag-after'
+$tagBefore = Join-Path $T 'tag-before'
+& $sz x -y ('-o' + $tagAfter) (Join-Path $T 'scratch/nexus-revision-7essxf/out/collection_4.7z') | Out-Null
+& $sz x -y ('-o' + $tagBefore) $draft3 | Out-Null
+& $node.Source $js '--check-tags' $tagBefore $tagAfter '192762'
+YesR '-RefreshTag -WhatIf builds an identity-only repair of the published revision, with no Nexus writes' ($r.Code -eq 0 -and $LASTEXITCODE -eq 0 -and @(Writes @(Since $n0)).Count -eq 0) $r
+foreach ($case in @(
+    @(@('-RefreshTag', '999'), 'no one entry', 'an absent mod'),
+    @(@('-RefreshTag', '0'), 'distinct positive', 'zero'),
+    @(@('-RefreshTag', '192762,192762'), 'distinct positive', 'duplicate targets'),
+    @(@('-RefreshTag', '192762', '-Rule', $ruJson), 'repairs identities alone', 'a rule change'),
+    @(@('-RefreshTag', '192762', '-Publish', '3'), 'takes no', 'publishing'),
+    @(@('-RefreshTag', '192762', '-Discard', '3'), 'takes no', 'discarding'))) {
+    $n0 = Count
+    $r = Run 'New-NexusRevision.ps1' ($case[0] + @('-WhatIf'))
+    YesR ('-RefreshTag rejects ' + $case[2] + ' before writing') ($r.Code -eq 1 -and $r.Out -match $case[1] -and @(Writes @(Since $n0)).Count -eq 0) $r
+}
 
 # ---- the key, across every run ---------------------------------------------------
 Yes ('no run printed the key, in ' + $script:outs.Count + ' runs') (@($script:outs | Where-Object { $_.Contains($KEY) }).Count -eq 0)
