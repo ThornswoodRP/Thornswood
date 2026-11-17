@@ -549,6 +549,36 @@ at the same time.
 by the Owner, the Co-Owner and the staff leads.
 """
 
+# Kept to docs/systems/classes.md, professions.md and gold.md. These rules
+# also hold at the source of Main's current release; no planned feature is
+# presented as something already available.
+ECONOMY = """
+# Server progression and economy
+
+**Your work.** Choose one gathering class and one profession, then a
+sub-profession. They are separate choices: a Miner who is a Smith can
+gather their own ore; a Smith who is a Hunter needs somebody else's ore.
+Press K to see your choices, progress and recipe book.
+
+**Progression.** Work earns rank: novice, advanced, expert, then master.
+The work count starts again at each rank: 100 pieces to advanced, 250 to
+expert, then 600 to master. A rank is earned through work, not bought
+with gold.
+
+**Making and trading.** Classes supply raw materials; professions turn
+them into goods. Work with other people to get what your own choices
+cannot gather or make. In a trade, both people put their offer on
+the table and both agree before anything changes hands.
+
+**Gold.** A new character receives 40 gold once, not on every login.
+Traders have a finite purse. Buying and selling moves gold between you
+and the trader; a trader who runs out does not receive another starting
+purse. Gold does not buy a class, profession, rank or skill point.
+
+Discuss progression and the economy here. Put ideas in <#SUGGESTIONS>
+and problems in <#RESULTS>, after checking <#KNOWN>.
+"""
+
 # The sixteen factions of 4E 252 (#3317): lore/factions.md, which Patrick
 # approved on 22 Oct, read out of the file so #factions and the repository
 # cannot disagree. Setup-Discord -OnBox sends the file with this one.
@@ -559,6 +589,7 @@ with open(_FACTIONS_MD, encoding='utf-8') as _f:
 
 # Every channel the build writes, by its key in PLAN: its words.
 DOCS = {
+    'ECONOMY': ECONOMY,
     'RULES': RULES,
     'WELCOME': WELCOME,
     'START': START,
@@ -588,6 +619,9 @@ DRAFTS = ()
 # write is the one the refusal prints (Build-Discord.py, check_docs), and
 # the pull request's build prints it too (tests/test-3457-doc-change-lines.py).
 CHANGES = {
+    'ECONOMY': [
+        ('2026-11-17', 'The progression and economy guide is restored from the documented game rules, with a maintained copy and change history.', '3d28ca99767a'),
+    ],
     'DEVRULES': [
         ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'a0a7157c0e1f'),
     ],
