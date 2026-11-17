@@ -234,7 +234,7 @@ QUESTIONS = {
         'Languages, projects, a repo link. Papyrus and C# are the useful ones here.'),
     'creator': _job('making things about Thornswood',
         'Channel, streams, a portfolio, anything you have put out.'),
-    'support': _job('helping players',
+    'support': _job('helping people',
         'Install, update or connection problems you have helped solve, and applications you have reviewed.'),
     'report': [
         ('Who, and where?', 'Name and the channel or the place in the world.', False),
