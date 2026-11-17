@@ -1,6 +1,6 @@
 # Collection revisions
 
-The collection is on revision 9 of 7essxf on Nexus Mods, as
+The collection is on revision 10 of 7essxf on Nexus Mods, as
 `records/collection-plugins.json` records it, every plugin with its size and
 sha256. `tests/test-4533-collection-revision-docs.js` holds this page and
 every other page to that record, so a page that names an older revision as the
@@ -34,9 +34,19 @@ says how. From Nexus to a release it goes like this:
    revision. Main follows from the feed only when Patrick says so for that
    build.
 
-For revision 9, steps 1 and 2 are done. Its collection plugins and their
-load order are unchanged from revision 8. The merge builds the content again
+For revision 10, steps 1 and 2 are done. Its collection plugins and their
+load order are unchanged from revision 9. The merge builds the content again
 on the box before its release.
+
+## Revision 10
+
+Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44181409514).
+
+PapyrusUtil AE SE 4.6 replaces the incompatible 3.9 file from revision 9.
+The author targets this file at Skyrim 1.6.1170, the runtime Thornswood pins.
+It supplies the configuration reader the CBBE 3BA physics manager calls.
+No collection plugin or plugin index changed. Native loading and the warning
+still have to be checked on the matching dev release before main follows.
 
 ## Revision 9
 
