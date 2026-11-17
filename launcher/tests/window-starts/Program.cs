@@ -102,6 +102,7 @@ namespace Thornswood.Tests
             win.Close();
 
             MusicSliderKeys();
+            NewsPictureChecks.Run(Check);
 
             Console.WriteLine(fails == 0 ? "the window starts" : fails + " check(s) failed");
             return fails == 0 ? 0 : 1;

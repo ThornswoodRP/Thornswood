@@ -398,6 +398,7 @@ namespace Thornswood
         // What changed in that release, one line each: the "- " lines of the
         // Release's notes.
         public string[] details = null;
+        public NewsPicture image = null;
 
         // Which build this note came out on. Empty is a release main's
         // Deployment has reached, the build everybody plays. "dev" is one

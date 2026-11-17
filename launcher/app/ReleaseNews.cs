@@ -217,6 +217,8 @@ namespace Thornswood
                 bool bullet = line.StartsWith("- ", StringComparison.Ordinal);
                 string said = bullet ? line.Substring(2).Trim() : line;
                 if (said.Length == 0) continue;
+                NewsPicture picture = n.title.Length > 0 && n.image == null ? NewsPictures.Parse(said) : null;
+                if (picture != null) { n.image = picture; continue; }
                 if (n.title.Length == 0) n.title = said;
                 else if (bullet) details.Add(said);
                 else lines.Add(said);

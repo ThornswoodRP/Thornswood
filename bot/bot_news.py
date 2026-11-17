@@ -246,6 +246,31 @@ def _cut(body):
     return body
 
 
+def news_picture(line):
+    """One captioned first-party screenshot, matching the site and launcher."""
+    m = re.fullmatch(r'!\[([^\]\r\n]{1,160})\]\((https://thornswood\.net/news-[a-z0-9][a-z0-9-]{0,119}\.(?:png|jpg|webp))\)', line)
+    if not m:
+        return None
+    alt = m[1].strip()
+    if not alt or re.search(r'[\x00-\x1f\x7f]', alt):
+        return None
+    return {'url': m[2], 'alt': alt}
+
+
+def _news_picture_lines(lines):
+    image, rest = None, []
+    for line in lines:
+        said = line.strip()
+        if said.startswith('- '):
+            said = said[2:].strip()
+        picture = news_picture(said) if image is None else None
+        if picture:
+            image = picture
+        else:
+            rest.append(line)
+    return image, rest
+
+
 def news_post_parts(channel, doc, areas=None):
     """The embed's title, description, footer, colour and time: the note's
        headline as the title, the rest under it, blue for dev and gold for
@@ -270,7 +295,9 @@ def news_post_parts(channel, doc, areas=None):
     if areas:
         footer.append(', '.join(areas))
     footer.append('build ' + _version(tag))
+    image, rest = _news_picture_lines(rest)
     return {'title': title, 'description': _cut('\n'.join(rest).strip()),
+            'image': image,
             'footer': ' \u00b7 '.join(footer),
             'color': DEV_COLOUR if dev else MAIN_COLOUR,
             'author': 'Thornswood dev' if dev else 'Thornswood',
@@ -281,7 +308,9 @@ def main_server_parts(note, areas, at=None):
     """A Main Server change's post in #news: its headline, its lines, and
        the footer "Main Server · Discord"."""
     head, details = note
+    image, details = _news_picture_lines(details)
     return {'title': head[:250], 'description': _cut('\n'.join(details)),
+            'image': image,
             'footer': ' \u00b7 '.join(['Main Server'] + ([', '.join(areas)] if areas else [])),
             'color': MAIN_COLOUR, 'author': 'Thornswood', 'at': at}
 
@@ -431,6 +460,9 @@ async def _news_send(channel, parts, said_once):
     e.set_author(name=parts['author'], url=SITE, icon_url=logo)
     e.set_thumbnail(url=logo)
     e.set_footer(text=parts['footer'], icon_url=logo)
+    if parts.get('image'):
+        e.set_image(url=parts['image']['url'])
+        e.add_field(name='Screenshot', value=parts['image']['alt'], inline=False)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)
     # A post pings News Pings, the role its button in #welcome promises

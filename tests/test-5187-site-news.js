@@ -48,6 +48,7 @@ const block = server.slice(from, to);
 function load(opts) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-5801-news-'));
   const env = {
+    newsPictures: require('../site/public/news-pictures'),
     NEWS: path.join(root, 'news.json'),
     setup: opts.setup || null,
     releases: opts.releases || null,
@@ -61,7 +62,7 @@ function load(opts) {
   };
   const quiet = { log: (m) => env.log.push(m), error: (m) => env.log.push(m) };
   const make = new Function('env', 'console',
-    'const { NEWS, newestSetup, releaseNotes, feedFile, readJsonQuiet, putJson } = env;\n' +
+    'const { NEWS, newestSetup, releaseNotes, feedFile, readJsonQuiet, putJson, newsPictures } = env;\n' +
     block + '\nreturn { publicNews, refreshNews, noteOf, newsOf, newsKey, newsVersion, newsDate, NEWS_KEEP, NEWS_QUIET };');
   env.api = make(env, quiet);
   env.page = () => { try { return JSON.parse(fs.readFileSync(env.NEWS, 'utf8')); } catch (e) { return null; } };
@@ -72,6 +73,11 @@ const rel = (tag, body, at, name) => ({ tag, name: name === undefined ? 'Release
 async function main() {
   // ---- 1. one Release as a note -----------------------------------------
   let t = load({});
+  for (const c of require('./fixtures/news-picture-cases.json')) {
+    const n = t.api.noteOf('A clearer character panel\n- Keep this text\n- ' + c.line, '2026-11-17T23:00:00Z');
+    yes('screenshot note: ' + c.line, JSON.stringify(n.image || null) === JSON.stringify(c.image) &&
+      n.details[0] === 'Keep this text' && (c.image ? n.details.length === 1 : n.details[1] === c.line));
+  }
   const n = t.api.noteOf('Restarts are announced on Discord\n- Before the server restarts, #updates says when.\nAnd one plain line.\r\n- A second change.\n',
     '2026-11-11T21:20:11Z');
   yes('the first line is the title, "- " lines the details, any other line the text',

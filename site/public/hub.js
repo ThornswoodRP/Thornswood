@@ -2385,6 +2385,7 @@ function drawNews() {
         ? '<div class="det">' + n.details.map(function (d) {
             return '<span>' + esc(d) + '</span>'; }).join('') + '</div>'
         : '') +
+      window.ThornswoodNewsPictures.html(n.image) +
       ((n.files && n.files.length)
         ? '<details><summary>' + n.files.length + ' files</summary><ul>' +
           n.files.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') +

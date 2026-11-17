@@ -239,6 +239,8 @@ namespace Thornswood
                     if (box.Children.Count > 0) sp.Children.Add(box);
                 }
 
+                if (n.image != null) sp.Children.Add(NewsPictures.View(n.image, Res("Muted"), Open));
+
                 var b = new Border();
                 b.BorderBrush = Res("Line");
                 b.BorderThickness = new Thickness(0, 0, 0, 1);
