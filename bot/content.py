@@ -566,8 +566,8 @@ expert, then 600 to master. A rank is earned through work, not bought
 with gold.
 
 **Making and trading.** Classes supply raw materials; professions turn
-them into goods. Work with other players to get what your own choices
-cannot gather or make. In a player trade, both people put their offer on
+them into goods. Work with other people to get what your own choices
+cannot gather or make. In a trade, both people put their offer on
 the table and both agree before anything changes hands.
 
 **Gold.** A new character receives 40 gold once, not on every login.
@@ -620,7 +620,7 @@ DRAFTS = ()
 # the pull request's build prints it too (tests/test-3457-doc-change-lines.py).
 CHANGES = {
     'ECONOMY': [
-        ('2026-11-17', 'The progression and economy guide is restored from the documented game rules, with a maintained copy and change history.', '9b5f5072787c'),
+        ('2026-11-17', 'The progression and economy guide is restored from the documented game rules, with a maintained copy and change history.', '3d28ca99767a'),
     ],
     'DEVRULES': [
         ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'a0a7157c0e1f'),
