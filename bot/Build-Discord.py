@@ -2293,6 +2293,13 @@ async def changelog_drift(channel, key, me_id):
             if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
                 linked = True
                 break
+        discussion = any(s.get('post_prefix') for _, specs in PLAN for s in specs
+                         if s['name'] == channel.name)
+        if not linked and discussion:
+            async for m in channel.pins(limit=None):
+                if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
+                    linked = True
+                    break
         if not linked:
             out.append('its post does not link its Changelog thread; -Posts writes the link')
     except discord.HTTPException as e:
