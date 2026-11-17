@@ -555,25 +555,61 @@ by the Owner, the Co-Owner and the staff leads.
 ECONOMY = """
 # Server progression and economy
 
-**Your work.** Choose one gathering class and one profession, then a
-sub-profession. They are separate choices: a Miner who is a Smith can
-gather their own ore; a Smith who is a Hunter needs somebody else's ore.
-Press K to see your choices, progress and recipe book.
+**Your choices.** Take one gathering class and one profession, then a
+sub-profession. They are independent: a Miner who is a Smith can gather
+ore; a Smith who is a Hunter needs somebody else's ore. Press K for your
+choices, progress and recipe book. Gathering supplies materials;
+professions turn them into goods. Trade for what you cannot gather or
+make.
 
-**Progression.** Work earns rank: novice, advanced, expert, then master.
-The work count starts again at each rank: 100 pieces to advanced, 250 to
-expert, then 600 to master. A rank is earned through work, not bought
-with gold.
+**Earning rank.** Work takes you from novice to advanced, expert and
+master. The count starts again at each rank: 100 pieces, then 250, then
+600, for 950 in all. Each new rank gives a skill-tree point. Gold does
+not buy a class, profession, rank or skill point. Work costs rest, and
+tools wear out, so keep suitable tools and recover your rest.
 
-**Making and trading.** Classes supply raw materials; professions turn
-them into goods. Work with other people to get what your own choices
-cannot gather or make. In a trade, both people put their offer on
-the table and both agree before anything changes hands.
+**The Merchant's Guild.** This is the NPC traders of the holds. It is
+not a guild people can join: there are no membership dues or discounts.
+Each trader starts with 250 gold once and no items in stock. Buying from
+people reduces its purse and fills its shelves; selling those goods
+increases its purse and reduces its stock. An empty purse cannot buy,
+and an empty shelf cannot sell. Neither gold nor stock resets at login.
 
-**Gold.** A new character receives 40 gold once, not on every login.
-Traders have a finite purse. Buying and selling moves gold between you
-and the trader; a trader who runs out does not receive another starting
-purse. Gold does not buy a class, profession, rank or skill point.
+**Prices belong to the hold.** Businesses and factions submit their
+ledger prices to that specific hold. Its traders use the average of the
+submitted buy prices and the average of the submitted sell prices for
+each item. A line needs both prices to count; zero is a valid price. An
+item with no complete submitted price in any hold is not traded by the
+guild. Averages round to the nearest gold, with halves rounded up. Holds
+can charge different prices. With no complete local price, other holds'
+submitted buy and sell prices are used together, never one side alone.
+Two people trading directly agree their own price.
+
+**NPC quests and new gold.** When a trader offers a retrieval or kill
+quest, it pays the stated reward as newly created gold on completion.
+That payment does not come from the trader's purse and is not limited by
+what it can afford to buy. Guild commissions also pay newly created
+gold, separately from the purse. Follow the named target and place, and
+return any required quest item. Each quest has its own personal cooldown
+after completion.
+
+**Goods and scarce resources.** A supply request buys five goods at that
+hold's buy price from the trader's purse, like a sale. Its purse must
+cover the goods. After completing it, that character waits six hours for
+the same supply from that trader. This differs from a quest's new-gold
+reward.
+
+Some quests open a named scarce-resource site. Meet its gates and return
+the required amount; only then is the allowed extra yours. Leaving
+unfinished returns the draw and closes the site, without starting a
+cooldown. Check the offer's class, profession, rank and other
+requirements.
+
+**Your money and trade.** A new character receives 40 gold once, not on
+every login. Gathering, making goods, trading and the work NPCs offer
+support each other. In a trade between two people, both put an offer on
+the table and both agree before anything changes hands. Travel, board
+postings and other services spend gold; earning it does not buy rank.
 
 Discuss progression and the economy here. Put ideas in <#SUGGESTIONS>
 and problems in <#RESULTS>, after checking <#KNOWN>.
@@ -621,6 +657,7 @@ DRAFTS = ()
 CHANGES = {
     'ECONOMY': [
         ('2026-11-17', 'The progression and economy guide is restored from the documented game rules, with a maintained copy and change history.', '3d28ca99767a'),
+        ('2026-11-17', 'The guide explains NPC quest rewards, the Merchant\'s Guild, starting purses and stock, and the prices each hold takes from submitted business and faction ledgers.', 'e8d0b9aa4390'),
     ],
     'DEVRULES': [
         ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'a0a7157c0e1f'),
