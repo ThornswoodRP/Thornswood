@@ -27,8 +27,8 @@
   has to be made before leaving the hall; class and profession can be left
   for later with the last card in each of those sections and picked in the
   world from this same panel, one Confirm at a time. There is no Close
-  button while creating (Escape and K still shut it, and the server's
-  reminder opens it again). The panel closes itself on the home's answer.
+  button while creating. Escape and K keep it open until creation is
+  complete. The panel closes itself on the server's answer.
 
   NOTHING HERE DECIDES ANYTHING. It reads what the server says this character
   is and sends what was picked. Every rule in the rulebook, one class only,
@@ -4114,19 +4114,11 @@
   function leave() { closing = false; status = ''; statusKind = ''; later = {}; api.close(); }
 
   /*
-    Shut by hand: the Close button, or Escape.
-
-    While creating this also tells the server, which holds its reminder off
-    for ten minutes instead of pushing the panel back in thirty seconds. That
-    difference is the whole of Djinn's "there is no way to leave the character
-    creation screen": closing already worked, it just did not last.
-
-    Only from the two deliberate ways out. leave() above is creation ENDING
-    and must not send it, and the server ignores it once the stage is past
-    choosing anyway, so the two guards agree.
+    Closing a panel never dismisses unfinished creation. Its Close Skyrim
+    button remains available, with its own two-press confirmation.
   */
   function closeByHand() {
-    if (creating()) { tell('pick', 'later'); }
+    if (creating()) return;
     api.close();
   }
 
@@ -4155,10 +4147,9 @@
     reminder again from nothing on the next login (the seenAt check in its
     'choosing' stage), so a session that is ending has nothing to hold off.
 
-    Outside creation the button is Close and puts the panel down, as it
-    always has. Escape and K still put the panel down while creating;
-    neither of them closes the game, which is why the K key cap is not
-    shown beside Close Skyrim.
+    Outside creation the button is Close and puts the panel down. During
+    creation Escape and K keep it open; neither closes the game, which is
+    why the K key cap is not shown beside Close Skyrim.
   */
   var QUIT_ARM_MS = 5000;
   var QUIT_BACK_MS = 6000;
@@ -4399,6 +4390,7 @@
       tell('refresh');   // the server says again what this character is
     },
     close: function () {
+      if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed

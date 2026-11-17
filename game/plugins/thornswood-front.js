@@ -9198,6 +9198,9 @@
       // Sitting at the character choice is not a stuck keyboard, it is the one
       // thing to do there. Only while it is up: see menuGone.
       if (who === 'select' && choiceUp()) { continue; }
+      // Creation owns input until the server confirms it is complete.
+      // Reading its choices is not a stuck keyboard (#6431).
+      if (who === 'skills' && skillsCreating) { continue; }
       if (!claims[who] || !claimedAt[who]) { continue; }
       if (now - claimedAt[who] > 120000) {
         log('the ' + who + ' claim has held the keyboard for two minutes, closing it and taking it back');
