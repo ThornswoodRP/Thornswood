@@ -188,6 +188,7 @@ function runClient(env, input, waitMs) {
   // A stand-in for the cloud proxy: answers CONNECT and pipes, or refuses.
   let connects = [];
   let refuseTunnel = false;
+  const proxyTunnels = new Set();
   const proxy = net.createServer((s) => {
     s.on('error', () => {});
     s.once('data', (d) => {
@@ -199,6 +200,11 @@ function runClient(env, input, waitMs) {
         s.write('HTTP/1.1 200 Connection established\r\n\r\n');
         s.pipe(up); up.pipe(s);
       });
+      // A reset client has no end event for pipe() to forward (#5459).
+      s.once('close', () => up.destroy());
+      up.once('close', () => s.destroy());
+      proxyTunnels.add(up);
+      up.once('close', () => proxyTunnels.delete(up));
       up.on('error', () => s.destroy());
     });
   });
@@ -364,6 +370,9 @@ function runClient(env, input, waitMs) {
       yes('  naming the upgrade as the stage it waits at', /box bridge: still opening ws:\/\/localhost:\d+\/box\/ after 0\.\d s, waiting 0\.\d s for the answer to the upgrade; before that /.test(err));
       yes('  and how long the proxy\'s tunnel took before it', /the proxy's tunnel to localhost:\d+ \d+ ms/.test(err));
 
+      yes('a deliberately killed client leaves no proxy tunnel open',
+          await waitFor(() => proxyTunnels.size === 0, 1000));
+
       if (process.platform !== 'win32') {
         const h = spawn(process.execPath, [path.join(DIR, 'connect.js')], { env: Object.assign({}, e, { THORNSWOOD_BOX_SLOW_MS: '60000' }) });
         let herr = '';
@@ -418,7 +427,7 @@ function runClient(env, input, waitMs) {
         delete e.HTTPS_PROXY; delete e.https_proxy;
         const c = spawn(process.execPath, [path.join(DIR, 'connect.js')], { env: e });
         const out = []; let n = 0; let err = '';
-        let next = 0;
+        let next = 0, feedTimer = null;
         c.stderr.on('data', (d) => { err += d; });
         c.stdout.on('data', (d) => {
           out.push(d); n += d.length;
@@ -426,17 +435,17 @@ function runClient(env, input, waitMs) {
           if (n >= input.length) c.stdin.end();
         });
         const stop = setTimeout(() => c.kill(), 30000);
-        c.on('close', (code) => { clearTimeout(stop); resolve({ code, out: Buffer.concat(out), err }); });
+        c.on('close', (code) => { clearTimeout(stop); clearTimeout(feedTimer); resolve({ code, out: Buffer.concat(out), err }); });
         c.stdin.on('error', () => {});
         let at = 0;
         // Input waits a piece past the next mark until the output has
         // passed it, so whatever hit() does lands with input still to send.
         (function feed() {
           if (at >= input.length) return;
-          if (next < marks.length && at > marks[next] + 65536) return setTimeout(feed, 5);
+          if (next < marks.length && at > marks[next] + 65536) return (feedTimer = setTimeout(feed, 5));
           c.stdin.write(input.subarray(at, at + 65536));
           at += 65536;
-          setTimeout(feed, 5);
+          feedTimer = setTimeout(feed, 5);
         })();
       });
     }
