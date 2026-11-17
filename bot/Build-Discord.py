@@ -756,7 +756,8 @@ PLAN = [
    dict(kind='text',  name='media',       key='MEDIA',    mode='open',
         topic='Screenshots and clips. Talk about one in a thread under it.',
         was=(('Thornswood', 'media'),)),
-   dict(kind='text',  name='server-progression-and-economy', mode='open',
+   dict(kind='text',  name='server-progression-and-economy', key='ECONOMY', mode='open',
+        post=True, post_prefix='# Server progression and economy',
         topic='How the server grows and how its economy works: what you have '
               'seen, and what you would change. Ideas go in <#SUGGESTIONS>.',
         was=(('Thornswood', 'server-progression-and-economy'),)),
@@ -2340,6 +2341,33 @@ async def post(channel, text, found):
     import re
     text = re.sub(r'<#([A-Z]+)>', lambda m: '#' + m.group(1).lower(), text)
 
+    # A guide in an open discussion owns only its headed post. Other bot
+    # replies, as well as members' messages, remain part of that discussion.
+    prefix = next((s.get('post_prefix') for _, specs in PLAN for s in specs
+                   if s['name'] == channel.name), None)
+    if prefix:
+        text = text.strip()
+    if prefix and (text.split('\n', 1)[0] != prefix or len(text) > 1900):
+        failed.append('#%s was not rewritten: its discussion guide must start '
+                      'with its heading and fit in one message' % channel.name)
+        return
+    # The Changelog thread is this document's durable identity. A bot reply
+    # can quote the heading without being the guide that this run owns.
+    def guide_owner(words):
+        match = re.search(r'(?:^|\n)\*Last changed [^\n]+ Every change is in the '
+                          r'Changelog thread, (<#\d+>)\.\*$', words)
+        return match[1] if match else None
+
+    owner = guide_owner(text) if prefix else None
+    if prefix and not owner:
+        failed.append('#%s was not rewritten: its discussion guide needs its '
+                      'Changelog thread before it can be identified' % channel.name)
+        return
+    def managed(m):
+        return (doc_post_of_mine(m, client.user.id)
+                and (not prefix or (m.content.split('\n', 1)[0] == prefix
+                     and guide_owner(m.content) == owner)))
+
     # The old posts are found first and taken down last, once every new one
     # is in (#4493). Until then they went first, and a send Discord refused
     # left the channel empty or half written and ended the run before the
@@ -2347,8 +2375,14 @@ async def post(channel, text, found):
     # it is and named under "did not manage" (#2736): writing beside them is
     # how a channel came to say its rules twice.
     try:
-        old_posts = [m async for m in channel.history(limit=50)
-                     if doc_post_of_mine(m, client.user.id)]
+        old_posts = [m async for m in channel.history(limit=50) if managed(m)]
+        if prefix:
+            # Discussion can push the guide out of the recent messages.
+            # Its pin remains the stable way to find and replace that copy.
+            async for m in channel.pins(limit=None):
+                if (managed(m)
+                        and all(old.id != m.id for old in old_posts)):
+                    old_posts.append(m)
     except discord.HTTPException as e:
         failed.append('#%s was not rewritten: its old posts could not be read (%s)'
                       % (channel.name, refused(e)))

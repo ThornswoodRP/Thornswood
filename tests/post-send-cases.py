@@ -143,6 +143,13 @@ class Channel(object):
             raise HTTPException(500, 'Internal Server Error')
         return self.put(ME, content)
 
+    def pins(self, limit=None):
+        async def walk():
+            for m in list(self.messages):
+                if m.pinned:
+                    yield m
+        return walk()
+
     def mine(self):
         return [m.content for m in self.messages if m.author.id == ME and m.type == 'default']
 
@@ -158,6 +165,7 @@ space = {
     'RULES_GATE_FIRST_LINE': GATE,
     'CHECK': False, 'POSTS': True,
     'C': types.SimpleNamespace(DRAFTS=()),
+    'PLAN': [],
     'doc_with_footer': lambda key, thread=None: TEXTS[key],
 }
 
@@ -271,6 +279,35 @@ yes('7   #how-to-join is written', TEXTS['GUIDE'] in good.mine()
 yes('7   #rules keeps its old words, and is the one named',
     [c for c in bad.mine() if not c.startswith(GATE)] == OLD
     and '#rules' in failed() and '#how-to-join' not in failed())
+
+# A guide in a discussion channel owns only its headed post, not the chat.
+prefix = '# Server progression and economy'
+footer = '\n\n*Last changed 17 Nov 2026: Guide updated. Every change is in the Changelog thread, <#123456789>.*'
+space['PLAN'] = [('Out of Character', [dict(name='server-progression-and-economy', post_prefix=prefix)])]
+ch = Channel('server-progression-and-economy')
+old_guide = ch.put(ME, prefix + '\n\nOld guide.' + footer)
+old_guide.pinned = True
+member = ch.put(SOMEONE, 'How does trading work?')
+member.pinned = True
+discussion = ch.put(ME, 'A reply to the discussion.')
+discussion.pinned = True
+similar = ch.put(ME, prefix + '\n\nQ&A: A discussion reply.')
+similar.pinned = True
+for i in range(60):
+    ch.put(SOMEONE, 'A later discussion message %d' % i)
+raised = run(space['post'](ch, '\n' + prefix + '\n\nCurrent guide.' + footer + '\n', {}))
+yes('8 a discussion guide replaces only its old guide and is pinned',
+    raised is None and member in ch.messages and discussion in ch.messages
+    and similar in ch.messages
+    and old_guide not in ch.messages and ch.messages[-1].pinned)
+before = list(ch.messages)
+raised = run(space['post'](ch, prefix + '\n\n' + 'x' * 1900, {}))
+yes('8 an oversized discussion guide is refused before any message changes',
+    raised is None and ch.messages == before and 'one message' in failed())
+raised = run(space['post'](ch, prefix + '\n\nMalformed footer. Every change is in the Changelog thread, <#123456789>.*', {}))
+yes('8 a malformed guide footer is refused before any message changes',
+    raised is None and ch.messages == before and ch.messages[-1].pinned
+    and 'needs its Changelog thread' in failed())
 
 print('')
 print('%d failed' % len(FAIL))
