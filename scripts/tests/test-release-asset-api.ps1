@@ -48,6 +48,9 @@ function Done {
 
 . (Join-Path $Repo 'scripts\release\Read-JsonFile.ps1')
 . (Join-Path $Repo 'scripts\release\Release-Baseline.ps1')
+$realTransfer = (Get-Item Function:\Invoke-ReleaseAssetTransfer).ScriptBlock
+$script:stallApiBody = ''
+$script:stallApiMetadata = ''
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('release-asset-api-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
@@ -123,6 +126,19 @@ function Invoke-WebRequest {
     [IO.File]::WriteAllBytes($OutFile, $byId[[int]$m.Groups[1].Value])
 }
 
+# Only the GitHub endpoint is replaced; the stalled-body cases below execute
+# the production streaming implementation against a real loopback socket.
+function Invoke-ReleaseAssetTransfer {
+    param([string]$Url, [hashtable]$Headers, [string]$Part, [Threading.CancellationToken]$CancellationToken)
+    if ($Part) {
+        if ($script:stallApiBody) { return (& $realTransfer $script:stallApiBody @{ 'User-Agent' = 'Thornswood-Asset-Test' } $Part $CancellationToken) }
+        Invoke-WebRequest -Uri $Url -Headers $Headers -OutFile $Part -UseBasicParsing
+    } else {
+        if ($script:stallApiMetadata) { return (& $realTransfer $script:stallApiMetadata @{ 'User-Agent' = 'Thornswood-Asset-Test' } '' $CancellationToken) }
+        Invoke-RestMethod -Uri $Url -Headers $Headers
+    }
+}
+
 try {
     $f = Get-FeedAssetFile "$site/feed-dev/assets/$ownSha" $ownSha (Join-Path $tmp 'own') '' $site
     Yes '1. the bytes the site sends itself are read as before' ((Sha ([IO.File]::ReadAllBytes($f))) -eq $ownSha)
@@ -142,15 +158,17 @@ try {
     Yes '4. bytes that are not their sha256 are still refused' ($said -match 'is not the bytes its name says' -and -not (Test-Path -LiteralPath (Join-Path $tmp 'bad')))
     $said = ''
     try { Save-SiteAsset "$site/feed-dev/assets/elsewhere" (Join-Path $tmp 'elsewhere.part') } catch { $said = $_.Exception.Message }
-    Yes '   a redirect to anything but a Release''s file is refused, naming it' ($said -match 'example\.com/elsewhere' -and $said -match 'not a GitHub Release')
+    Yes '   an unsupported redirect is refused without logging its URL' ($said -match 'not a GitHub Release' -and $said -notmatch 'example\.com|elsewhere')
 
     # Headers and the first body byte arrive immediately; the rest never
     # arrives within the requested complete-transfer budget. The socket is
     # bound to port zero before the worker starts, without a free-port race.
+    foreach ($route in 'site', 'GitHub redirect', 'GitHub metadata') {
+    $body = if ($route -eq 'site') { $own } else { $a1 }
     $stall = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
     $stall.Start()
     $stallUrl = 'http://127.0.0.1:' + $stall.LocalEndpoint.Port
-    $stallJob = Start-ThreadJob -ArgumentList $stall, $own -ScriptBlock {
+    $stallJob = Start-ThreadJob -ArgumentList $stall, $body -ScriptBlock {
         param($server, $body)
         $socket = $null
         try {
@@ -172,16 +190,25 @@ try {
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $said = ''
     try {
-        try { [void](Get-FeedAssetFile "$stallUrl/feed-dev/assets/$ownSha" $ownSha $existing '' $stallUrl ([TimeSpan]::FromSeconds(1))) }
+        $fetchUrl = "$stallUrl/feed-dev/assets/$ownSha"; $fetchSha = $ownSha; $fetchSite = $stallUrl
+        if ($route -ne 'site') {
+            if ($route -eq 'GitHub metadata') { $script:ReleaseAssetIds = @{}; $script:stallApiMetadata = $stallUrl }
+            else { $script:stallApiBody = $stallUrl }
+            $fetchUrl = "$site/feed-dev/assets/$a1Sha"; $fetchSha = $a1Sha; $fetchSite = $site
+        }
+        try { [void](Get-FeedAssetFile $fetchUrl $fetchSha $existing '' $fetchSite ([TimeSpan]::FromSeconds(1))) }
         catch { $said = $_.Exception.Message }
         $clock.Stop()
-        Yes '5. the deadline includes the body after headers have arrived' ($said -match 'timed out' -and $clock.Elapsed.TotalSeconds -lt 3)
-        Yes '   a stalled transfer leaves the verified destination unchanged' ([IO.File]::ReadAllText($existing) -ceq 'already verified bytes')
-        Yes '   a stalled transfer leaves no partial file to accept later' (-not (Test-Path -LiteralPath ($existing + '.part')))
+        Yes ("5. the $route deadline includes the body after headers have arrived") ($said -match 'timed out' -and $clock.Elapsed.TotalSeconds -lt 3)
+        Yes ("   a stalled $route transfer leaves the verified destination unchanged") ([IO.File]::ReadAllText($existing) -ceq 'already verified bytes')
+        Yes ("   a stalled $route transfer leaves no partial file to accept later") (-not (Test-Path -LiteralPath ($existing + '.part')))
     } finally {
+        $script:stallApiBody = ''
+        $script:stallApiMetadata = ''
         $stall.Stop()
         Stop-Job $stallJob -ErrorAction SilentlyContinue
         Remove-Job $stallJob -Force -ErrorAction SilentlyContinue
+    }
     }
 }
 finally {
