@@ -1,8 +1,8 @@
 'use strict';
 // The Python a harness runs the bot with (issue #2437).
 //
-// The bot runs on Python 3.12 (Install-Bot.ps1) and bot\_pyguard.py refuses
-// anything below 3.10. Plain python is whichever is first on PATH, and on One
+// The bot runs on Python 3.12 (Install-Bot.ps1) and bot\_pyguard.py checks
+// the supported versions. Plain python is whichever is first on PATH, and on One
 // that is 3.9.13, so a harness that ran plain python imported a bot that
 // refused to load, read no output, and failed checks that said nothing about
 // the bot (test-help-report.js, 4 of 45, measured 12 Oct).
@@ -14,7 +14,7 @@
 // hash-pinned bot\requirements.txt does not install (discord.py wants
 // audioop-lts there, which it does not pin).
 // Each candidate is asked to import _pyguard and discord from bot\, so the
-// version floor is the bot's own and not a copy of it, and a Python without
+// supported versions come from the bot's guard, and a Python without
 // the bot's libraries is passed over the same way.
 //
 // find() returns { cmd, args } for the first candidate that loads both, with
