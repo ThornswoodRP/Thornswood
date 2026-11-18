@@ -64,9 +64,20 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the game says that menu opened (`"open":false`: closed). |
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
-| `{"do":"key","code":36}` | the runner pressed that key in the game window, as a DirectInput scan code (J is 36, I 23, Tab 15, Escape 1). |
+| `{"do":"key","code":36}` | Windows accepted both scan-code events while the game window had keyboard focus before and after injection (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
 | `{"do":"end"}` | always; the runner closes the game. |
 
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
+
+The runner replies with the request number, `ok` and `note` in
+`thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:
+the old runner's numeric reply cannot pass a key step. Accepted input alone
+does not prove the game or browser handled the key; follow it with a menu,
+message or page check for the expected result. The focus checks and
+Windows input are separate calls, so a focus change between those calls
+cannot be ruled out by a successful acknowledgement.
+
+PowerShell 7 must be available to run the harness regression test, including
+its fake Windows focus and input cases; missing PowerShell fails the test.

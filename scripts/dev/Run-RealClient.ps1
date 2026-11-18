@@ -22,8 +22,8 @@
   and deletes that, then writes one JSON line per event to
   thornswood-test-results.jsonl. A line {"t":"ask","n":N,"do":"shot"|"key"}
   is something only this script can do: a screenshot of the game window, or a
-  real key press through Windows. This does it and writes N to
-  thornswood-test-ack.txt, which is when the plugin's step is over. The run
+  real key press through Windows. This writes {n:N,ok:true|false,note:...} to
+  thornswood-test-ack.txt; the plugin fails a rejected key step. The run
   ends at the plugin's {"t":"done"} line, when the game closes by itself (a
   crash, said so), or after -Minutes.
 
@@ -280,7 +280,29 @@ namespace ThornswoodRealClient {
 }
 
 function Get-GameProcess {
-    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+    # A living process may temporarily have no window. Keep it so a queued
+    # key can fail with "no game window" instead of being called a crash.
+    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Invoke-GameKey([IntPtr]$handle, [uint16]$code) {
+    if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
+            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard' }
+        }
+    }
+    # Check before SendInput: acknowledging a key after noticing another
+    # foreground window counted undelivered keys as passed steps.
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent' }
+    }
+    $sent = [ThornswoodRealClient.Win]::TapScan($code)
+    if ($sent -ne 2) { return @{ ok = $false; note = "SendInput sent $sent of 2 events" } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window lost the keyboard during input' }
+    }
+    return @{ ok = $true; note = '2 events, game window focused' }
 }
 
 # ---------------------------------------------------------------- the run --
@@ -377,20 +399,20 @@ try {
                 'done' { $result = $(if ($o.ok) { 'passed' } else { 'failed' }); $note = "$($o.passed) of $($o.steps) steps passed. $($o.note)" }
                 'ask' {
                     $proc = Get-GameProcess
+                    $reply = [ordered]@{ n = $o.n; ok = $true; note = '' }
                     if ($o.do -eq 'shot') {
                         $shots++
                         $name = ('{0:00}-{1}.png' -f $shots, ($o.arg -replace '[^\w\-]', '_'))
                         $how = if ($proc) { [ThornswoodRealClient.Win]::Shot($proc.MainWindowHandle, (Join-Path $Out $name)) } else { 'no game window' }
                         Say "shot $name ($how)"
                     } elseif ($o.do -eq 'key') {
-                        if ($proc) {
-                            [void][ThornswoodRealClient.Win]::SetForegroundWindow($proc.MainWindowHandle)
-                            $sent = [ThornswoodRealClient.Win]::TapScan([uint16]$o.arg)
-                            $fg = [ThornswoodRealClient.Win]::GetForegroundWindow()
-                            Say ("key $($o.arg) sent ($sent events" + $(if ($fg -ne $proc.MainWindowHandle) { ', but the game window does not have the keyboard' } else { '' }) + ')')
-                        } else { Say "key $($o.arg): no game window" }
+                        $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
+                        $delivery = Invoke-GameKey $handle ([uint16]$o.arg)
+                        $reply.ok = $delivery.ok
+                        $reply.note = $delivery.note
+                        Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
                     } elseif ($o.do -eq 'end') { $ended = $true }
-                    [IO.File]::WriteAllText($ackFile, [string]$o.n)
+                    [IO.File]::WriteAllText($ackFile, ($reply | ConvertTo-Json -Compress))
                 }
             }
         }
