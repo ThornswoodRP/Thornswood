@@ -331,7 +331,7 @@ namespace Thornswood
             // ------------------------------------------------- the files
             Head("Installing the mods");
             List<string> files = PayloadFiles(payload);
-            RecordIntoGame(files);
+            RecordIntoGame(files, gameDir);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
             CopyPayload(payload, files, gameDir);
             Say("  Done");
@@ -379,13 +379,26 @@ namespace Thornswood
         // copy then, and a list an earlier install left stays as it is,
         // because it is what the launcher takes back out of the Steam copy
         // once the folder is made (OwnGame.CleanSteamCopy).
-        void RecordIntoGame(List<string> files)
+        void RecordIntoGame(List<string> files, string gameDir)
         {
             if (ownFirst || madeOwn || files.Count == 0) return;
             Directory.CreateDirectory(ProfileDir);
             string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
-            File.WriteAllLines(manifest, files, new UTF8Encoding(false));
-            Say("  " + files.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
+            // Only the previous ownership record and this package can name
+            // files here. Never take names from the contents of the Steam copy.
+            var owned = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(manifest))
+                foreach (string line in File.ReadLines(manifest))
+                {
+                    string rel = line.Trim().Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                    if (rel.Length != 0) owned.Add(rel);
+                }
+            // Like a launcher update, a pre-existing name we do not already
+            // own is not ours to claim. Leave its contents alone too.
+            files.RemoveAll(rel => !owned.Contains(rel) && File.Exists(Path.Combine(gameDir, rel)));
+            foreach (string rel in files) owned.Add(rel);
+            File.WriteAllLines(manifest, owned, new UTF8Encoding(false));
+            Say("  " + owned.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
         }
 
         // A hard link is one file under two names. A copy writes into the file
