@@ -50,15 +50,25 @@ try {
         RefusesUnchanged $root ('refuses unexpected '+($bad.Keys -join ','))
     }
     $root=Fixture; '{broken' | Set-Content (Join-Path $root 'server-settings.json'); RefusesUnchanged $root 'refuses malformed settings'
+    $root=Fixture; $file=Join-Path $root 'server-settings.json'; $raw=[IO.File]::ReadAllText($file); [IO.File]::WriteAllText($file,('['+$raw+']')); RefusesUnchanged $root 'refuses array settings root'
     $root=Fixture; '{"source":{"commit":"different"}}' | Set-Content (Join-Path $root 'server-build.json'); RefusesUnchanged $root 'refuses another source engine'
     foreach ($commitValue in @('[]','["b0b869cb31667738c791b97067b693e8f5b59b00"]')) {
         $root=Fixture; ('{"source":{"commit":'+$commitValue+'}}') | Set-Content (Join-Path $root 'server-build.json'); RefusesUnchanged $root 'refuses non-scalar engine source'
     }
-    Assert-ThornswoodMainPolicyDeployment ([pscustomobject]@{commit='dd4c7c336131b0d741327db31a6cffc1a5c7c949';name='build-1.3.93'})
+    foreach ($badBuild in @('[{"source":{"commit":"b0b869cb31667738c791b97067b693e8f5b59b00"}}]','{"source":[{"commit":"b0b869cb31667738c791b97067b693e8f5b59b00"}]}')) {
+        $root=Fixture; $badBuild | Set-Content (Join-Path $root 'server-build.json'); RefusesUnchanged $root 'refuses malformed source record shape'
+    }
+    Assert-ThornswoodMainPolicyDeployment @{commit='dd4c7c336131b0d741327db31a6cffc1a5c7c949';name='build-1.3.93'}
     foreach ($badRecord in @(@{commit=@();name='build-1.3.93'}, @{commit='dd4c7c336131b0d741327db31a6cffc1a5c7c949';name=@()}, @{commit=@('dd4c7c336131b0d741327db31a6cffc1a5c7c949');name='build-1.3.93'}, @{commit='different';name='build-1.3.93'})) {
-        $threw=$false; try { Assert-ThornswoodMainPolicyDeployment ([pscustomobject]$badRecord) } catch { $threw=$true }
+        $threw=$false; try { Assert-ThornswoodMainPolicyDeployment $badRecord } catch { $threw=$true }
         Yes 'refuses malformed or different deployment record' $threw
     }
+    $threw=$false; try { Assert-ThornswoodMainPolicyDeployment @(@{commit='dd4c7c336131b0d741327db31a6cffc1a5c7c949';name='build-1.3.93'}) } catch { $threw=$true }
+    Yes 'refuses array deployment record' $threw
+    $root=Fixture; $file=Join-Path $root 'server-settings.json'; $hash=(Get-FileHash $file).Hash
+    $threw=$false
+    try { Invoke-ThornswoodMainGameplayPolicies $root { param($stage,$file,$backup) [IO.File]::Move($file,$backup); throw 'injected ReplaceFile failure after backup move' } } catch { $threw=$true }
+    Yes 'restores original on Windows partial replacement failure' ($threw -and (Test-Path $file) -and (Get-FileHash $file).Hash -ceq $hash)
     $root=Fixture; 'existing backup' | Set-Content (Join-Path $root 'server-settings.json.before-6466'); RefusesUnchanged $root 'does not overwrite an existing migration backup'
     $root=Fixture; $file=Join-Path $root 'server-settings.json'
     $raw=[IO.File]::ReadAllText($file).Replace('"maxPlayers": 30', '"maxPlayers": 30, "precise": 123456789012345678901234567890')

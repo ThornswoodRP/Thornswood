@@ -20,8 +20,9 @@ $ErrorActionPreference = 'Stop'
 $backupRoot = 'C:\Thornswood-Backup'
 if (-not (Test-Path -LiteralPath $backupRoot -PathType Container)) { throw 'The shared server-folder turn is unavailable. Nothing changed.' }
 $turn = Enter-ThornswoodServerFolderTurn $backupRoot 'Stage-MainGameplayPolicies #6466' 0 { param($m) Write-Host $m }
+if ($null -eq $turn) { throw 'The shared server-folder turn was not acquired. Nothing changed.' }
 try {
-    $record = Get-Content -LiteralPath 'C:\Thornswood-Deploys\current\thornswood-server.json' -Raw | ConvertFrom-Json
+    $record = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText('C:\Thornswood-Deploys\current\thornswood-server.json')) -AsHashtable -NoEnumerate
     Assert-ThornswoodMainPolicyDeployment $record
     $result = Invoke-ThornswoodMainGameplayPolicies 'C:\Thornswood-Server'
     Write-Host ("Main gameplay policies: $result. No process was restarted or reloaded.")
