@@ -625,8 +625,9 @@ all of it, `harness_bot.source()`, `tests\bot-files.js` or `tests\BotFiles.ps1`.
 
 ## Running the bot's tests
 
-The bot and its tests need Python 3.11 or newer (Pillow 13 needs it, #1401),
-and the bot runs on 3.12.
+The bot and its tests support Python 3.11 and 3.12. Use 3.12 to match the
+live bot and cloud test setup. On 3.13 and newer, `discord.py` needs
+`audioop-lts`, which is not in the hash-locked requirements.
 On a Windows PC with more than one Python installed, plain `python` is
 whichever comes first on PATH (on One that is 3.9), so run them with the
 launcher:

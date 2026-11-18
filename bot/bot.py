@@ -113,7 +113,7 @@ It is written to keep going when a piece of it fails. A card that will not
 draw still gets a greeting, a site that is down still gets a thread, and a
 thread that cannot be made still gets an answer to the person who asked.
 """
-# First, before anything else: Python 3.11 or newer, or a plain message
+# First, before anything else: a supported Python, or a plain message
 # saying so (#2276). Shared with every bot test.
 import _pyguard  # noqa: F401
 import json
