@@ -368,22 +368,40 @@ using System;
 namespace ThornswoodRealClient {
   public static class Win {
     public static IntPtr Foreground;
-    public static bool Activate, MoveOnActivate, LoseOnSend;
-    public static uint Sent;
+    public static bool Activate, MoveOnActivate, LoseOnHold, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
+    public static uint DownSent, UpSent;
     public static int Calls;
+    public static string Events = "";
     public static bool SetForegroundWindow(IntPtr h) {
       if (Activate && MoveOnActivate) Foreground = h;
       return Activate;
     }
     public static IntPtr GetForegroundWindow() { return Foreground; }
-    public static uint TapScan(ushort scan) {
-      Calls++; if (LoseOnSend) Foreground = new IntPtr(99); return Sent;
+    public static uint SendScan(ushort scan, bool up) {
+      Calls++; Events += up ? "U;" : "D;";
+      if (up) {
+        Down = false;
+        if (ThrowUp) throw new Exception("release error");
+        return UpSent;
+      }
+      if (ThrowDown) throw new Exception("press error");
+      Down = DownSent == 1;
+      return DownSent;
+    }
+    public static void Hold(int ms) {
+      Events += "H" + ms + ";";
+      // A current-state reader samples between down and up, like the CEF
+      // listener. Buffered native events alone cannot establish this.
+      SawDown = Down;
+      if (LoseOnHold) Foreground = new IntPtr(99);
+      if (ThrowHold) throw new Exception("hold error");
     }
   }
 }
 '@
 ${keyFunction[0]}
 ${gameProcessFunction[0]}
+function Start-Sleep([int]$Milliseconds) { [ThornswoodRealClient.Win]::Hold($Milliseconds) }
 function Get-Process { $script:fakeProcess }
 $script:fakeProcess = [pscustomobject]@{ MainWindowHandle = [IntPtr]::Zero }
 $p = Get-GameProcess
@@ -393,42 +411,52 @@ if ($p) {
 }
 $script:fakeProcess = $null
 if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
-function Case($name, $handle, $foreground, $activate, $move, $sent, $lose) {
+function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false) {
   [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
   [ThornswoodRealClient.Win]::Activate = $activate
   [ThornswoodRealClient.Win]::MoveOnActivate = $move
-  [ThornswoodRealClient.Win]::Sent = $sent
-  [ThornswoodRealClient.Win]::LoseOnSend = $lose
+  [ThornswoodRealClient.Win]::DownSent = $down
+  [ThornswoodRealClient.Win]::UpSent = $up
+  [ThornswoodRealClient.Win]::LoseOnHold = $lose
+  [ThornswoodRealClient.Win]::ThrowDown = $throwDown
+  [ThornswoodRealClient.Win]::ThrowHold = $throwHold
+  [ThornswoodRealClient.Win]::ThrowUp = $throwUp
+  [ThornswoodRealClient.Win]::Down = $false
+  [ThornswoodRealClient.Win]::SawDown = $false
   [ThornswoodRealClient.Win]::Calls = 0
+  [ThornswoodRealClient.Win]::Events = ''
   $r = Invoke-GameKey ([IntPtr]$handle) 36
-  @{name=$name; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls} | ConvertTo-Json -Compress
+  @{name=$name; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
 }
-Case 'missing' 0 0 $true $true 2 $false
-Case 'denied' 42 99 $false $false 2 $false
-Case 'not-foreground' 42 99 $true $false 2 $false
-Case 'zero' 42 42 $true $true 0 $false
-Case 'partial' 42 42 $true $true 1 $false
-Case 'lost' 42 42 $true $true 2 $true
-Case 'already' 42 42 $false $false 2 $false
-Case 'activated' 42 99 $true $true 2 $false
+Case 'missing' 0 0 $true $true 1 1 $false
+Case 'denied' 42 99 $false $false 1 1 $false
+Case 'not-foreground' 42 99 $true $false 1 1 $false
+Case 'zero-down' 42 42 $true $true 0 1 $false
+Case 'zero-up' 42 42 $true $true 1 0 $false
+Case 'lost' 42 42 $true $true 1 1 $true
+Case 'press-error' 42 42 $true $true 1 1 $false $true
+Case 'hold-error' 42 42 $true $true 1 1 $false $false $true
+Case 'release-error' 42 42 $true $true 1 1 $false $false $false $true
+Case 'already' 42 42 $false $false 1 1 $false
+Case 'activated' 42 99 $true $true 1 1 $false
 `;
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
     yes('a living process without a window reaches the failed-key path instead of the crashed exit',
         /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
     yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
-    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 8);
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 11);
     ['missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
     });
-    ['zero', 'partial', 'lost'].forEach(function (name) {
+    ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': rejected delivery cannot pass', !!c && !c.ok && c.calls === 1 && !!c.note);
+      yes(name + ': rejected delivery cannot pass, and always attempts release', !!c && !c.ok && c.calls === 2 && /U;$/.test(c.events) && !!c.note);
     });
     ['already', 'activated'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': both events delivered while focused', !!c && c.ok && c.calls === 1);
+      yes(name + ': snapshot input sees the held key before release', !!c && c.ok && c.calls === 2 && c.sawDown && c.events === 'D;H120;U;');
     });
     if (r.status !== 0) { console.log(r.stderr || r.stdout); }
   }

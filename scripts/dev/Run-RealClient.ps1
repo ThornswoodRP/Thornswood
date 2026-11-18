@@ -233,13 +233,13 @@ namespace ThornswoodRealClient {
     [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public INPUTUNION u; }
     [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] inputs, int size);
 
-    // The game reads DirectInput scan codes, so the key goes as a scan code,
-    // down then up, the way a keyboard sends it.
-    public static uint TapScan(ushort scan) {
-      INPUT[] i = new INPUT[2];
+    // One transition per call. Invoke-GameKey holds the key between them so
+    // the browser's current-state input reader can observe a down state.
+    public static uint SendScan(ushort scan, bool up) {
+      INPUT[] i = new INPUT[1];
       i[0].type = 1; i[0].u.ki.wScan = scan; i[0].u.ki.dwFlags = 0x0008;
-      i[1].type = 1; i[1].u.ki.wScan = scan; i[1].u.ki.dwFlags = 0x0008 | 0x0002;
-      return SendInput(2, i, Marshal.SizeOf(typeof(INPUT)));
+      if (up) i[0].u.ki.dwFlags |= 0x0002;
+      return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
     }
 
     // The game window's picture, the game and our page over it. PrintWindow
@@ -297,12 +297,34 @@ function Invoke-GameKey([IntPtr]$handle, [uint16]$code) {
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent' }
     }
-    $sent = [ThornswoodRealClient.Win]::TapScan($code)
-    if ($sent -ne 2) { return @{ ok = $false; note = "SendInput sent $sent of 2 events" } }
+    $why = ''
+    try {
+        $down = [ThornswoodRealClient.Win]::SendScan($code, $false)
+        if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" }
+        else {
+            # A human-length tap, below key-repeat delay. The pinned engine's
+            # DInputHook samples GetDeviceState for its CEF listener: down+up
+            # in one SendInput can be gone before that snapshot, even though
+            # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
+            Start-Sleep -Milliseconds 120
+            if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+                $why = 'the game window lost the keyboard during input'
+            }
+        }
+    } catch { $why = 'the key press failed: ' + $_.Exception.Message }
+    finally {
+        # Release even if down, the hold, or the focus check failed. This is
+        # cleanup, including after focus loss; no second key-down is tried.
+        try {
+            $up = [ThornswoodRealClient.Win]::SendScan($code, $true)
+            if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" }
+        } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+    }
+    if ($why) { return @{ ok = $false; note = $why.TrimStart(';', ' ') } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         return @{ ok = $false; note = 'the game window lost the keyboard during input' }
     }
-    return @{ ok = $true; note = '2 events, game window focused' }
+    return @{ ok = $true; note = 'key-down, held 120 ms, key-up; game window focused' }
 }
 
 # ---------------------------------------------------------------- the run --
