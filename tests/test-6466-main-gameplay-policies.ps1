@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')
 . (Join-Path $PSScriptRoot '../scripts/ops/MainGameplayPolicies.ps1')
 . (Join-Path $PSScriptRoot '../scripts/vps/gate/GateRules.ps1')
 $tmp = Join-Path $PSScriptRoot ('../temp/policies-' + [guid]::NewGuid().ToString('N'))
@@ -23,7 +24,7 @@ function RefusesUnchanged($root, $what) {
 try {
     $root = Fixture
     $file = Join-Path $root 'server-settings.json'
-    if ($IsWindows) {
+    if ($OnWindows) {
         $acl=Get-Acl $file
         $acl.SetAccessRuleProtection($true,$false)
         $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -39,7 +40,7 @@ try {
     $after.Remove('thornswoodLoadOrderRefuse'); $after.bannedEspmCharacterRaceIds=@()
     Yes 'preserves every other key including secrets, capacity and nested arrays' (($after | ConvertTo-Json -Depth 30 -Compress) -ceq ($original | ConvertTo-Json -Depth 30 -Compress))
     Yes 'backs up exact original bytes' ((Get-FileHash ($file+'.before-6466')).Hash -ceq $beforeHash)
-    if ($IsWindows) { Yes 'retains the settings access rules' ((Get-Acl $file).Sddl -ceq (Get-Acl ($file+'.before-6466')).Sddl) }
+    if ($OnWindows) { Yes 'retains the settings access rules' ((Get-Acl $file).Sddl -ceq (Get-Acl ($file+'.before-6466')).Sddl) }
     $hash = (Get-FileHash $file).Hash
     Yes 'repeat is a no-op' ((Invoke-ThornswoodMainGameplayPolicies $root) -eq 'unchanged' -and (Get-FileHash $file).Hash -eq $hash)
     foreach ($bad in @(@{thornswoodServer='dev'}, @{thornswoodServer=@()}, @{thornswoodServer=@('main')}, @{port=7779}, @{port=@()}, @{port=@(7777)}, @{bannedEspmCharacterRaceIds=@(42)}, @{bannedEspmCharacterRaceIds=@('1078794')}, @{thornswoodLoadOrderRefuse=$false}, @{thornswoodLoadOrderRefuse='True'})) {

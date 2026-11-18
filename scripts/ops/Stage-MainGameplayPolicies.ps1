@@ -1,3 +1,4 @@
+#Requires -Version 7
 <#
   One-time migration for #6466, after the Owner requested all Dev gameplay
   policies on Main. Only Bramble runs this live gate verb on its normal,

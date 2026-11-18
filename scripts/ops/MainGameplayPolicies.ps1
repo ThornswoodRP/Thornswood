@@ -1,3 +1,4 @@
+#Requires -Version 7
 # One-time migration for #6466. Internal filesystem operation, not a gate API.
 # The gate entry supplies Main's fixed root; tests supply isolated fixtures.
 function Assert-ThornswoodMainPolicyDeployment($Record) {
