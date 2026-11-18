@@ -1,5 +1,13 @@
 # Proximity voice and chat
 
+The launcher's established DTLS reader finishes an empty read when its own
+connection is being disposed. The transport's normal close sends
+`close_notify`; treating that local retirement as an I/O failure would send
+a fatal alert to the other end instead. Cancellation before a transport is
+established still interrupts the handshake, and unexpected remote alerts
+remain logged. `tests/test-voice-dtls-shutdown.js` parks the real loopback
+reader in that shutdown window and checks both those error paths.
+
 ## What it is
 
 `voice-server.js` is one file of node with nothing to install from npm; it

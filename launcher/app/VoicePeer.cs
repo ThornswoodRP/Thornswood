@@ -96,7 +96,7 @@ namespace Thornswood
         volatile SrtpSessionContext srtp;
         volatile bool closed;
         int dtlsStarted;
-        DtlsTransport dtls;
+        volatile DtlsTransport dtls;
         string remoteFingerprint = "";
         string remoteSetup = "";
         ushort seq;
@@ -304,7 +304,17 @@ namespace Thornswood
             public int Receive(byte[] buf, int off, int len, int waitMillis) { return Receive(buf.AsSpan(off, len), waitMillis); }
             public int Receive(Span<byte> buffer, int waitMillis)
             {
-                if (p.closed) throw new IOException("the connection is closed");
+                if (p.closed)
+                {
+                    // Dispose retires media before calling dtls.Close(). An
+                    // established reader can reach here between those steps.
+                    // IOException would make BouncyCastle send fatal alert80
+                    // instead of Close's close_notify to the still-live peer.
+                    // Let that read finish normally while Close owns the wire.
+                    // With no established transport, preserve handshake abort.
+                    if (p.dtls != null) return -1;
+                    throw new IOException("the connection is closed");
+                }
                 byte[] d;
                 if (!p.dtlsIn.TryTake(out d, waitMillis)) return -1;
                 int n = Math.Min(d.Length, buffer.Length);
