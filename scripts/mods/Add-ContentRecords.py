@@ -481,6 +481,7 @@ CONTENTS = (
     (r'(MISC ThornswoodMiscTool(Handle|Shears|Alembic|RuneKnife)|'
      r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe))$',
      'own', 'tools and handles'),
+    (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
     (r'(MISC ThornswoodMisc(Master)?Key(Mold)?|COBJ ThornswoodRecipeKey(Mold)?)$', 'own', 'keys and molds'),
     (r'(MISC ThornswoodMisc(Pole\w+|FishTrap)|FLOR ThornswoodFish\w+|COBJ ThornswoodRecipe(Pole\w+|FishTrap))$',
