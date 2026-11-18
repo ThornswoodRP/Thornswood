@@ -265,6 +265,12 @@ async function launcherHalf() {
   yes('seventy seconds with nothing from the service and the session looks for it again',
       lost && h.dials().length === 2);
   yes('and says so in the log', h.says(/^nothing from the voice server for \d+ s, so looking for it again$/));
+  const summary = h.host('debug').filter((s) => s.startsWith('{"event":"voice_socket_closed"'))
+    .map(JSON.parse).find((s) => s.peer === 5 && s.reason === 'silent');
+  yes('the native close correlates the peer and counts queued heartbeats and received answers',
+      !!summary && summary.pingQueued > 0 && summary.pongRx === 20 && summary.rxMessages === 21 && summary.rxReceives === 21);
+  yes('the native close separates completed writes from a pending send',
+      !!summary && summary.queued === summary.written && summary.unwritten === 0 && summary.writeError === '' && summary.sendState === 'complete');
 
   for (const l of launchers) {
     const sw = l.swallowed();

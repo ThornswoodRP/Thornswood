@@ -351,6 +351,13 @@ function textFrame(obj) {
   const h2 = await (await fetch('http://127.0.0.1:' + PORT + '/health')).json();
   check('/health counts it', h2.closedSilent >= 1, true);
   check('and the service log says so', await logSays(/answered nothing for \d+ s/), true);
+  check('a silent close has a structured transport summary',
+        await logSays(/"event":"voice_socket_closed"[^\n]*"reason":"silent"/), true);
+  const summaries = () => log.split('\n').filter((line) => line.startsWith('{"event":"voice_socket_closed"'))
+    .map((line) => JSON.parse(line));
+  const quietSummary = summaries().find((s) => s.reason === 'silent');
+  check('the silent summary separates attempted heartbeats from received bytes',
+        !!quietSummary && quietSummary.pingTx >= 2 && quietSummary.rxBytes === 0 && quietSummary.pongRx === 0, true);
 
   // One that answers every ping the way a browser does stays, however long.
   const talks = await open(519);
@@ -418,6 +425,15 @@ function textFrame(obj) {
         shut && h3.peers === 0, true);
   check('at once, not found silent later (' + (h3.closedSilent - silentBefore) + ' closed for silence)',
         h3.closedSilent - silentBefore, 0);
+  check('an ended connection also records its heartbeat summary',
+        await logSays(/"event":"voice_socket_closed"[^\n]*"reason":"end"[^\n]*"peer":[1-9]/), true);
+  const activeSummary = summaries().find((s) => s.reason === 'end' && s.peer > 0);
+  check('the summary correlates the joined peer and counts both heartbeat types',
+        !!activeSummary && activeSummary.pongRx > 0 && activeSummary.appPingRx === 2 && activeSummary.appPongTx === 1, true);
+  check('the close summary has only allowlisted diagnostic fields',
+        !!activeSummary && Object.keys(activeSummary).sort().join(',') ===
+        ['event','reason','peer','ageMs','rxAgeMs','txAgeMs','pingTx','pongRx','appPingRx','appPongTx',
+         'rxBytes','txBytes','queuedBytes','backed','previousTickLagMs','sincePingTickMs','errorCode','closeCode'].sort().join(','), true);
   try { talks.sock.destroy(); } catch (e) { }
 
   console.log('');
