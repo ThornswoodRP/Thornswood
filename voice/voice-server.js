@@ -134,10 +134,8 @@ function peerName(p) {
 const OWNS_REPLY_MAX = 64 * 1024;
 const OWNS_WAIT_MS = 3000;
 function owns(ticket, profileId, then) {
-  if (!SITE || !ticket) { then('unchecked'); return; }
-  let mod;
-  try { mod = SITE.startsWith('https:') ? require('https') : require('http'); }
-  catch (e) { then('unchecked'); return; }
+  if (!SITE || !ticket) { then('unchecked', 'THORNSWOOD_SITE is not set or the ticket is missing'); return; }
+  const mod = /^https:/i.test(SITE) ? require('https') : require('http');
 
   const payload = JSON.stringify({ ticket: ticket, profileId: profileId });
   let done = false;
@@ -151,6 +149,12 @@ function owns(ticket, profileId, then) {
       headers: { 'content-type': 'application/json',
                  'content-length': Buffer.byteLength(payload) }
     }, (resp) => {
+      resp.on('error', () => finish('unchecked', 'ownership response was interrupted'));
+      if (resp.statusCode !== 200) {
+        finish('unchecked', 'ownership endpoint returned HTTP ' + resp.statusCode);
+        req2.destroy();
+        return;
+      }
       let buf = '';
       let size = 0;
       resp.on('data', (d) => {
@@ -159,25 +163,30 @@ function owns(ticket, profileId, then) {
         if (size > OWNS_REPLY_MAX) {
           console.log('[voice] the site\'s answer to the ownership check passed ' + OWNS_REPLY_MAX +
                       ' bytes, so the rest was not read');
+          finish('unchecked', 'ownership response exceeded the size limit');
           req2.destroy();
-          finish('unchecked');
           return;
         }
         buf += d;
       });
       resp.on('end', () => {
-        if (resp.statusCode !== 200) { finish('unchecked'); return; }
         let doc;
-        try { doc = JSON.parse(buf); } catch (e) { finish('unchecked'); return; }
+        try { doc = JSON.parse(buf); } catch (e) {
+          finish('unchecked', 'ownership response was not JSON');
+          return;
+        }
         if (doc && doc.ok === true) { finish('yes'); return; }
         const why = doc && typeof doc.why === 'string' ? doc.why : '';
         finish('no', /^[a-z ]{1,20}$/.test(why) ? why : '');
       });
     });
-  } catch (e) { finish('unchecked'); return; }
+  } catch (e) { finish('unchecked', 'could not start the ownership request'); return; }
 
-  late = setTimeout(() => { req2.destroy(); finish('unchecked'); }, OWNS_WAIT_MS);
-  req2.on('error', () => finish('unchecked'));
+  late = setTimeout(() => {
+    finish('unchecked', 'ownership request reached its deadline');
+    req2.destroy();
+  }, OWNS_WAIT_MS);
+  req2.on('error', () => finish('unchecked', 'ownership request failed in transit'));
   req2.write(payload);
   req2.end();
 }
@@ -2568,8 +2577,7 @@ const server = http.createServer((req, res) => {
           and the launcher asks again on its next try.
         */
         if (verdict !== 'yes') {
-          console.log('[voice] NO TOKEN for profile ' + pid + ': ' +
-                      (SITE ? 'no answer from ' + SITE : 'THORNSWOOD_SITE is not set, so nobody can be asked'));
+          console.log('[voice] NO TOKEN for profile ' + pid + ': ' + why);
           res.writeHead(503, { 'content-type': 'text/plain' }).end('nobody could check this profile, so no token');
           return;
         }

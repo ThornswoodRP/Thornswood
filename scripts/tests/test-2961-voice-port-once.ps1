@@ -90,16 +90,16 @@ $start = $verify.IndexOf('$resPort = ')
 Yes 'the one try is Test-ThornswoodFromOutside $VpsHost $Port $resPort' ($start -gt 0 -and ([regex]::Matches($code, 'Test-ThornswoodFromOutside')).Count -eq 1 -and $verify.Contains('Test-ThornswoodFromOutside $VpsHost $Port $resPort'))
 $decide = [scriptblock]::Create($verify.Substring($start))
 
-function Case([string]$bind, [string]$channel, [string]$voice, [string]$res) {
+function Case([string]$bind, [string]$channel, [string]$voice, [string]$res, [string]$siteOrigin = 'https://example.invalid') {
     $script:said = @()
     $script:asked = @()
     $answers = @{ voice = $voice; res = $res }
     $env:THORNSWOOD_TEST_CASE = ''
     $sb = {
-        param($bind, $channel, $answers)
+        param($bind, $channel, $answers, $siteOrigin)
         $Bind = $bind; $voiceChannel = $channel
         $Port = $(if ($channel -eq 'dev') { 7789 } else { 7778 })
-        $VpsHost = '192.0.2.1'; $Site = 'https://example.invalid'; $Root = 'C:\Voice'; $target = 'a@b'; $TaskName = 'Thornswood Dev Voice'
+        $VpsHost = '192.0.2.1'; $Site = $siteOrigin; $Root = 'C:\Voice'; $target = 'a@b'; $TaskName = 'Thornswood Dev Voice'
         function Get-ThornswoodPortTry([string]$a, [int]$p) {
             $script:asked += $p
             if ($p -eq $Port) { return $answers.voice }
@@ -111,7 +111,7 @@ function Case([string]$bind, [string]$channel, [string]$voice, [string]$res) {
         function Invoke-RestMethod { return [pscustomobject]@{ ok = $true } }
         . $decide
     }
-    & $sb $bind $channel $answers
+    & $sb $bind $channel $answers $siteOrigin
     return [pscustomobject]@{ Said = ($script:said -join "`n"); Asked = $script:asked }
 }
 
@@ -119,6 +119,9 @@ $c = Case '127.0.0.1' 'dev' 'silent for 5 s' 'answered'
 Yes 'loopback, silent, and the dev server answers: correctly shut, in green' ($c.Said -match 'Green: Loopback only, and 192\.0\.2\.1:7789 is correctly shut from out here \(silent for 5 s\)')
 Yes '  asking the dev server''s 7788' ($c.Asked -join ',' -eq '7789,7788')
 Yes '  and says what carries it' ($c.Said -match 'Green: Reached it through https://example\.invalid/voice-dev, which says ok')
+
+$c = Case '127.0.0.1' 'dev' 'silent for 5 s' 'answered' 'http://127.0.0.1:3001'
+Yes 'the local Site still sends the outside check through the public voice route' ($c.Said -match 'Green: Reached it through https://thornswood\.net/voice-dev, which says ok')
 
 $c = Case '127.0.0.1' 'main' 'silent for 5 s' 'silent for 5 s'
 Yes 'loopback, silent, and live''s 3000 silent too (a cloud thread): not known, in yellow' ($c.Said -match 'Yellow: Loopback only, and whether 192\.0\.2\.1:7778 is shut from outside is not known: this machine reaches no raw port on the box')
