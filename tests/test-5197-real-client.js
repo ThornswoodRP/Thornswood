@@ -109,9 +109,12 @@ function game(opts) {
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
     page: function () { fire('browserMessage', { arguments: [].slice.call(arguments) }); },
     // The runner's half: answer every ask so far.
-    ack: function () {
+    ack: function (reply) {
       const asks = lines().filter(function (l) { return l.t === 'ask'; });
-      if (asks.length) { files[ACK] = String(asks[asks.length - 1].n); }
+      if (asks.length) {
+        const ask = asks[asks.length - 1];
+        files[ACK] = JSON.stringify(Object.assign({ n: ask.n, ok: true, note: '' }, reply));
+      }
       return asks;
     }
   };
@@ -259,6 +262,37 @@ function game(opts) {
 }
 
 // -------------------------------------------- the lists and the runner ----
+// A keyboard acknowledgement must say whether delivery succeeded. Merely
+// seeing an ask number (the old runner's reply) cannot prove it did.
+[
+  { reply: { ok: false, note: 'the game window does not have the keyboard' }, ok: false },
+  { reply: { ok: false, note: 'SendInput sent 1 of 2 events' }, ok: false },
+  { reply: { ok: true, note: '2 events, game window focused' }, ok: true }
+].forEach(function (c) {
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.ack(c.reply); g.frame(300);
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('key delivery result reaches the step: ' + c.reply.note,
+      !!step && step.ok === c.ok && step.note === c.reply.note);
+  if (!c.ok) {
+    g.ack(); g.frame(300);
+    const done = g.lines().find(function (l) { return l.t === 'done'; });
+    yes('a rejected key stops the run with zero steps passed', !!done && !done.ok && done.passed === 0);
+  }
+});
+{
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.files[ACK] = '1'; g.frame(300);
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('an old numeric acknowledgement cannot pass a key step', !!step && step.ok === false);
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.ack({ n: 2 }); g.frame(300);
+  yes('an acknowledgement for another request cannot pass a key step',
+      !g.lines().some(function (l) { return l.t === 'step'; }));
+}
+
 {
   const known = [];
   const rx = /case '([a-z]+)':/g;
@@ -320,6 +354,68 @@ function game(opts) {
   const end = from >= 0 ? RUNNER.indexOf("\n'@\n}", from) : -1;
   yes('the runner has its Windows helper block', from >= 0 && end > from);
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  const keyFunction = /function Invoke-GameKey\b[\s\S]*?\n}\n/.exec(RUNNER);
+  yes('the runner has a testable keyboard delivery function', !!keyFunction);
+  if (ver.status === 0 && keyFunction) {
+    // Execute the production PowerShell control flow against fake user32
+    // calls. This neither launches a window nor injects any real input.
+    const script = `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+namespace ThornswoodRealClient {
+  public static class Win {
+    public static IntPtr Foreground;
+    public static bool Activate, MoveOnActivate, LoseOnSend;
+    public static uint Sent;
+    public static int Calls;
+    public static bool SetForegroundWindow(IntPtr h) {
+      if (Activate && MoveOnActivate) Foreground = h;
+      return Activate;
+    }
+    public static IntPtr GetForegroundWindow() { return Foreground; }
+    public static uint TapScan(ushort scan) {
+      Calls++; if (LoseOnSend) Foreground = new IntPtr(99); return Sent;
+    }
+  }
+}
+'@
+${keyFunction[0]}
+function Case($name, $handle, $foreground, $activate, $move, $sent, $lose) {
+  [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
+  [ThornswoodRealClient.Win]::Activate = $activate
+  [ThornswoodRealClient.Win]::MoveOnActivate = $move
+  [ThornswoodRealClient.Win]::Sent = $sent
+  [ThornswoodRealClient.Win]::LoseOnSend = $lose
+  [ThornswoodRealClient.Win]::Calls = 0
+  $r = Invoke-GameKey ([IntPtr]$handle) 36
+  @{name=$name; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls} | ConvertTo-Json -Compress
+}
+Case 'missing' 0 0 $true $true 2 $false
+Case 'denied' 42 99 $false $false 2 $false
+Case 'not-foreground' 42 99 $true $false 2 $false
+Case 'zero' 42 42 $true $true 0 $false
+Case 'partial' 42 42 $true $true 1 $false
+Case 'lost' 42 42 $true $true 2 $true
+Case 'already' 42 42 $false $false 2 $false
+Case 'activated' 42 99 $true $true 2 $false
+`;
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 8);
+    ['missing', 'denied', 'not-foreground'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
+    });
+    ['zero', 'partial', 'lost'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': rejected delivery cannot pass', !!c && !c.ok && c.calls === 1 && !!c.note);
+    });
+    ['already', 'activated'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': both events delivered while focused', !!c && c.ok && c.calls === 1);
+    });
+    if (r.status !== 0) { console.log(r.stderr || r.stdout); }
+  }
   if (ver.status !== 0) {
     console.log('SKIP  the runner\'s Windows helper compiles under PowerShell 7 (no pwsh here)');
   } else if (from >= 0 && end > from) {
