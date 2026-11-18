@@ -10,10 +10,15 @@
   caches and restarts Explorer. Nothing is lost. Explorer comes straight back.
 
       .\scripts\dev\Fix-Icons.ps1
+
+  -NoPause skips the final prompt.
 #>
 #Requires -Version 7
 [CmdletBinding()]
-param([string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install))
+param(
+    [string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),
+    [switch]$NoPause
+)
 
 $ErrorActionPreference = 'Continue'
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -82,4 +87,4 @@ Say 'If the taskbar one is still wrong, right click it, Unpin from taskbar,' 'Gr
 Say 'then open the launcher and pin it again. A pinned shortcut is its own' 'Gray'
 Say 'copy and that is the only way to make Windows redraw it.' 'Gray'
 Write-Host ''
-[void](Read-Host 'Enter to close')
+if (-not $NoPause) { [void](Read-Host 'Enter to close') }

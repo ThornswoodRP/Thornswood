@@ -70,7 +70,10 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'LoadOrder.ps1')
 
-function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
+function Say($m, $c = 'Gray') {
+  if ($m -match '^\s*(STOP\.|PASS\b|NO\s|NOT THE SERVER)') { Write-Output $m }
+  else { Write-Host $m -ForegroundColor $c }
+}
 function Stop-Check([string]$m) {
   Write-Host ''
   Say "  STOP. $m" 'Red'
@@ -338,9 +341,9 @@ if ($failed) {
   exit 1
 }
 if ($checked -lt $targets.Count) {
-  Say '  PASS for every server that answered. The one that did not was not checked.' 'Green'
+  Write-Output '  PASS for every server that answered. The one that did not was not checked.'
 } else {
-  Say '  PASS' 'Green'
+  Write-Output '  PASS'
 }
 Write-Host ''
 exit 0

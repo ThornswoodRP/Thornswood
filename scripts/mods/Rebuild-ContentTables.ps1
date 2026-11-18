@@ -324,14 +324,14 @@ if ($changed.Count) {
 }
 if ($stopped) {
     Say ''
-    Say ('STOP. ' + $stopped + '. The steps after it did not run.') 'Red'
+    Write-Output ('STOP. ' + $stopped + '. The steps after it did not run.')
     exit 1
 }
 if ($unregistered.Count) {
     Say ''
-    Say ('STOP. records\asset-provenance.json does not hold ' + ($unregistered -join ', ') + ' the way this reads it; its hash was not written.') 'Red'
+    Write-Output ('STOP. records\asset-provenance.json does not hold ' + ($unregistered -join ', ') + ' the way this reads it; its hash was not written.')
     exit 1
 }
 Say ''
-Say ('All {0} builders ran. Run the harnesses next: the ones that hold a table to the plugin bytes are test-2468, test-2551, test-516 and test-asset-provenance.' -f $steps.Count) 'Green'
+Write-Output ('All {0} builders ran. Run the harnesses next: the ones that hold a table to the plugin bytes are test-2468, test-2551, test-516 and test-asset-provenance.' -f $steps.Count)
 exit 0
