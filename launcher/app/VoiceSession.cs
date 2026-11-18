@@ -328,9 +328,14 @@ namespace Thornswood
             public readonly CancellationTokenSource Stop = new CancellationTokenSource();
             public readonly Channel<string> Out = Channel.CreateUnbounded<string>();
             public bool Open;
+            public long StartedAt, ReceivedAt, WrittenAt;
+            public int Peer, PingQueued, PongRx, RxMessages, RxReceives, Queued, Written;
+            public Task Sending;
+            public string WriteError = "";
+            public bool Reported;
         }
 
-        void Send(Action<Utf8JsonWriter> write)
+        void Send(Action<Utf8JsonWriter> write, bool ping = false)
         {
             if (ws == null || !ws.Open) return;
             var ms = new MemoryStream();
@@ -340,7 +345,11 @@ namespace Thornswood
                 write(w);
                 w.WriteEndObject();
             }
-            ws.Out.Writer.TryWrite(Encoding.UTF8.GetString(ms.ToArray()));
+            if (ws.Out.Writer.TryWrite(Encoding.UTF8.GetString(ms.ToArray())))
+            {
+                ws.Queued++;
+                if (ping) ws.PingQueued++;
+            }
         }
 
         /*
@@ -446,11 +455,11 @@ namespace Thornswood
                     " s, so looking for it again");
                 Sock dead = ws;
                 ws = null;
-                Close(dead);
+                Close(dead, "silent");
                 Lost();
                 return;
             }
-            Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "ping"); });
+            Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "ping"); }, true);
         }
 
         /* The socket is gone, however it went. */
@@ -462,8 +471,44 @@ namespace Thornswood
             Later(RetryIn());
         }
 
-        static void Close(Sock s)
+        void SocketSummary(Sock s, string reason, int closeCode = 0, string error = "")
         {
+            if (s.Reported) return;
+            s.Reported = true;
+            long now = Now();
+            Task sending = s.Sending;
+            TaskStatus status = sending == null ? TaskStatus.Created : sending.Status;
+            string writeError = s.WriteError;
+            string sendState = sending == null ? (writeError.Length > 0 ? "failed" : "none")
+                : status == TaskStatus.Faulted ? "failed" : status == TaskStatus.Canceled ? "canceled"
+                : status == TaskStatus.RanToCompletion ? "complete" : "pending";
+            if (status == TaskStatus.Faulted)
+            {
+                Exception e = sending.Exception.GetBaseException();
+                writeError = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+            }
+            using (var ms = new MemoryStream())
+            {
+                using (var w = new Utf8JsonWriter(ms))
+                {
+                    w.WriteStartObject();
+                    w.WriteString("event", "voice_socket_closed"); w.WriteString("reason", reason);
+                    w.WriteNumber("peer", s.Peer); w.WriteNumber("ageMs", now - s.StartedAt);
+                    w.WriteNumber("rxAgeMs", now - s.ReceivedAt); w.WriteNumber("txAgeMs", now - s.WrittenAt);
+                    w.WriteNumber("pingQueued", s.PingQueued); w.WriteNumber("pongRx", s.PongRx);
+                    w.WriteNumber("rxMessages", s.RxMessages); w.WriteNumber("queued", s.Queued);
+                    w.WriteNumber("rxReceives", s.RxReceives); w.WriteString("sendState", sendState);
+                    w.WriteNumber("written", s.Written); w.WriteNumber("unwritten", s.Queued - s.Written);
+                    w.WriteString("writeError", writeError); w.WriteNumber("closeCode", closeCode);
+                    w.WriteString("error", error); w.WriteEndObject();
+                }
+                Quiet(Encoding.UTF8.GetString(ms.ToArray()));
+            }
+        }
+
+        void Close(Sock s, string reason = "closed")
+        {
+            SocketSummary(s, reason);
             s.Out.Writer.TryComplete();
             s.Stop.Cancel();
             if (s.Ws == null) return;
@@ -558,7 +603,7 @@ namespace Thornswood
             // The token goes with the handshake, as the protocol after
             // 'thornswood', and is what says who we are (#1337). It is never
             // in the url, which is written to the launcher's log.
-            var s = new Sock();
+            var s = new Sock { StartedAt = Now(), ReceivedAt = Now(), WrittenAt = Now() };
             ws = s;
             _ = Pump(s, new Uri(url), new[] { "thornswood", token });
         }
@@ -577,6 +622,7 @@ namespace Thornswood
             {
                 if (ws != s) return;
                 Quiet("the voice server did not answer (" + Failure.Plain(e, "the voice server") + ")");
+                SocketSummary(s, "handshake", error: e.GetType().Name);
                 ws = null;
                 Lost();
                 return;
@@ -588,25 +634,41 @@ namespace Thornswood
 
             var buf = new byte[64 * 1024];
             var acc = new MemoryStream();
+            int closeCode = 0;
+            bool closeFrame = false;
+            string error = "";
             try
             {
                 while (ws == s)
                 {
                     WebSocketReceiveResult r = await s.Ws.ReceiveAsync(buf, CancellationToken.None);
-                    if (r.MessageType == WebSocketMessageType.Close) break;
+                    if (r.MessageType == WebSocketMessageType.Close)
+                    {
+                        closeFrame = true; closeCode = (int)(r.CloseStatus ?? 0); break;
+                    }
+                    s.ReceivedAt = Now(); s.RxReceives++;
                     acc.Write(buf, 0, r.Count);
                     if (!r.EndOfMessage) continue;
                     string text = Encoding.UTF8.GetString(acc.GetBuffer(), 0, (int)acc.Length);
                     acc.SetLength(0);
-                    if (ws == s) Message(text);
+                    if (ws == s)
+                    {
+                        s.RxMessages++;
+                        Message(text);
+                    }
                 }
             }
             // A socket the server closed or never opened is looked for again
             // (Lost); its reason is the debug line, not a swallowed
             // exception on every reconnect (Failure.Plain).
-            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + Failure.Plain(e, "the voice server") + ")"); }
+            catch (Exception e)
+            {
+                error = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+                if (ws == s) Quiet("the voice server's socket closed (" + Failure.Plain(e, "the voice server") + ")");
+            }
             if (ws != s) return;
             ws = null;
+            SocketSummary(s, closeFrame ? "close_frame" : "receive", closeCode, error);
             Close(s);
             Lost();
         }
@@ -623,10 +685,20 @@ namespace Thornswood
                 {
                     string m;
                     while (s.Out.Reader.TryRead(out m))
-                        await s.Ws.SendAsync(Encoding.UTF8.GetBytes(m), WebSocketMessageType.Text, true, CancellationToken.None);
+                    {
+                        s.Sending = null;
+                        s.Sending = s.Ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(m)),
+                            WebSocketMessageType.Text, true, CancellationToken.None);
+                        await s.Sending;
+                        s.Written++; s.WrittenAt = Now();
+                    }
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + Failure.Plain(e, "the voice server") + ")"); }
+            catch (Exception e)
+            {
+                s.WriteError = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+                if (ws == s) Quiet("could not write to the voice server (" + Failure.Plain(e, "the voice server") + ")");
+            }
         }
 
         void Opened(Sock s)
@@ -689,11 +761,12 @@ namespace Thornswood
             {
                 JsonElement m = doc.RootElement;
                 string t = Str(m, "t");
-                if (t == "pong") return;
+                if (t == "pong") { if (ws != null) ws.PongRx++; return; }
                 // In, so the next loss starts again from two seconds.
                 if (t == "welcome")
                 {
                     myPeer = (int)Num(m, "peer");
+                    if (ws != null) ws.Peer = myPeer;
                     myProfile = cfg.ProfileId;
                     tries = 0;
                     Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "talk"); w.WriteBoolean("on", talking); });

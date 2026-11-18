@@ -53,6 +53,27 @@
   */
   var SPENT = '';
 
+  // One bounded close report. The service's existing peer number correlates
+  // it with the other end; never include a token, endpoint or message body.
+  function heartbeatSummary(socket, reason, ev) {
+    var s = socket && socket.heartbeat;
+    if (!s || s.reported) return;
+    s.reported = true;
+    try { console.log('[chat] heartbeat ' + JSON.stringify({ event:'voice_socket_closed', reason:reason,
+      peer:s.peer, ageMs:Date.now()-s.started, rxAgeMs:Date.now()-s.heard,
+      pingTx:s.pingTx, pongRx:s.pongRx, rxMessages:s.rxMessages,
+      txMessages:s.txMessages, txAgeMs:Date.now()-s.written,
+      bufferedBytes:Number(socket.bufferedAmount)||0, closeCode:Number(ev && ev.code)||0,
+      clean:!!(ev && ev.wasClean) })); } catch (e) {
+      // A failed diagnostic sink must not stop socket cleanup or recovery.
+    }
+  }
+  function sendFrame(socket, obj) {
+    socket.send(JSON.stringify(obj));
+    socket.heartbeat.txMessages++;
+    socket.heartbeat.written = Date.now();
+  }
+
   // Colours from the launcher's own palette so the chat looks like the rest of
   // the build rather than like a web page.
   var C_NAME = '#c6aa6d';
@@ -312,6 +333,8 @@
     var socket;
     try {
       socket = new WebSocket(url(), ['thornswood', token]);
+      socket.heartbeat = { started:Date.now(), heard:Date.now(), written:Date.now(), peer:0,
+        pingTx:0, pongRx:0, rxMessages:0, txMessages:0, reported:false };
       ws = socket;
     } catch (e) {
       retry();
@@ -332,22 +355,25 @@
       var join = { t: 'join', profileId: ME, name: NAME };
       if (!carriesVoice) { join.voice = false; }
       try {
-        ws.send(JSON.stringify(join));
+        sendFrame(ws, join);
       } catch (e) { }
     };
 
     socket.onmessage = function (ev) {
       if (ws !== socket) return;
       heard = Date.now();
+      socket.heartbeat.heard = heard;
+      socket.heartbeat.rxMessages++;
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (!msg || !msg.t) return;
-      if (msg.t === 'pong') return;
+      if (msg.t === 'pong') { socket.heartbeat.pongRx++; return; }
 
       if (msg.t === 'welcome') {
         tries = 0;
         joined = true;
         peerId = Number(msg.peer) || 0;
+        socket.heartbeat.peer = peerId;
         forget();
         fanout(msg);
         if (!renaming) note('Chat is on. Press enter to talk.', C_SYS);
@@ -355,7 +381,7 @@
         // Anything typed while the socket was down goes now rather than being
         // lost, which is what an unacknowledged send would have been.
         while (queue.length) {
-          try { ws.send(JSON.stringify(chatFrame(queue.shift()))); }
+          try { sendFrame(ws, chatFrame(queue.shift())); }
           catch (e) { break; }
         }
         return;
@@ -423,7 +449,8 @@
       // logged: they arrive several times a second.
     };
 
-    socket.onclose = function () {
+    socket.onclose = function (ev) {
+      heartbeatSummary(socket, socket.heartbeat.intent || 'close', ev);
       if (ws !== socket) return;
       ws = null;
       lost();
@@ -493,13 +520,14 @@
     if (!ws || ws.readyState !== 1 || !joined) return;
     if (Date.now() - heard > SILENT_AFTER) {
       var dead = ws;
+      heartbeatSummary(dead, 'silent');
       ws = null;
       dead.onopen = dead.onclose = dead.onerror = dead.onmessage = null;
       try { dead.close(); } catch (e) { }
       lost();
       return;
     }
-    try { ws.send(JSON.stringify({ t: 'ping' })); } catch (e) { }
+    try { sendFrame(ws, { t: 'ping' }); ws.heartbeat.pingTx++; } catch (e) { }
   }, PING_EVERY);
 
   // --------------------------------------------------------------- dice ---
@@ -622,7 +650,7 @@
     // flag, so a line held through an outage keeps it.
     var item = press ? { text: text, press: true } : text;
     if (ws && ws.readyState === 1 && joined) {
-      try { ws.send(JSON.stringify(chatFrame(item))); return true; }
+      try { sendFrame(ws, chatFrame(item)); return true; }
       catch (e) { }
     }
     // Held rather than dropped, and capped so a long outage does not grow
@@ -698,14 +726,14 @@
       if (!carriesVoice) return;
       carriesVoice = false;
       if (ws && ws.readyState === 1) {
-        try { ws.send(JSON.stringify({ t: 'voice', on: false })); } catch (e) { }
+        try { sendFrame(ws, { t: 'voice', on: false }); } catch (e) { }
       }
     },
 
     /** Raw send, for message kinds this file has no opinion about. */
     post: function (obj) {
       if (!ws || ws.readyState !== 1 || !joined) { return false; }
-      try { ws.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
+      try { sendFrame(ws, obj); return true; } catch (e) { return false; }
     },
 
     /** The service's id for this connection, 0 until the welcome arrives. */
@@ -731,6 +759,7 @@
         // Ours, not an outage. In creation the name lands right after the
         // race menu, and this close used to say "Chat lost the server" there.
         if (joined) renaming = true;
+        ws.heartbeat.intent = 'rename';
         try { ws.close(); } catch (e) { }
       } else {
         connect();
@@ -773,6 +802,7 @@
       if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
         tries = 0;
         if (joined) renaming = true;
+        ws.heartbeat.intent = 'character';
         try { ws.close(); } catch (e) { }
       } else {
         connect();

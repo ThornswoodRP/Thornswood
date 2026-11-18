@@ -79,7 +79,7 @@ function codeOf(src) {
   yes('the socket is still torn down afterwards',
       // The frame is written inline since #2817 took out the bye variable
       // and the catch around it; what matters is that close follows it.
-      /this\.socket\.write\(Buffer\.from\(\[0x88, 2, 0x03, 0xe8\]\)\);[\s\S]{0,80}this\.close\(\);/.test(c));
+      /this\.socket\.write\(Buffer\.from\(\[0x88, 2, 0x03, 0xe8\]\)\);[\s\S]{0,80}this\.close\('close_frame'\);/.test(c));
 }
 
 // ----------------------------------------------------- an oversized body answers

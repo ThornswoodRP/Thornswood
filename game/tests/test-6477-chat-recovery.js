@@ -8,9 +8,9 @@ const chat = fs.readFileSync(path.join(root, 'game/ui/thornswood-chat.js'), 'utf
 const front = fs.readFileSync(path.join(root, 'game/plugins/thornswood-front.js'), 'utf8');
 let passed = 0, failed=0;
 function check(name, run) { try { run(); passed++; console.log('PASS ' + name); } catch(e) { failed++; console.log('FAIL '+name+': '+e.message); } }
-function page() {
+function page(brokenLog) {
   let now = 1000000, next = 1;
-  const timers = new Map(), sockets = [], lines = [], asks = [];
+  const timers = new Map(), sockets = [], lines = [], asks = [], logs = [];
   function add(fn, ms, every) { const id = next++; timers.set(id, {fn, at: now + ms, every}); return id; }
   function advance(ms) {
     const end = now + ms;
@@ -36,11 +36,31 @@ function page() {
     thornswoodChat:{add(parts){lines.push(parts.map(p=>p.text).join(''));}},
     skyrimPlatform:{sendMessage(to,what){if(String(what).startsWith('token? '))asks.push(what);}}
   };
-  vm.runInNewContext(chat, {window,WebSocket:Socket,Date:{now:()=>now},console,Math,JSON,Object,Array,Number,String,isFinite,parseInt,
+  vm.runInNewContext(chat, {window,WebSocket:Socket,Date:{now:()=>now},console:{log:text=>{if(brokenLog)throw Error('no log sink');logs.push(text);}},Math,JSON,Object,Array,Number,String,isFinite,parseInt,
     setTimeout:(fn,ms)=>add(fn,ms,0),clearTimeout:id=>timers.delete(id),
     setInterval:(fn,ms)=>add(fn,ms,ms),clearInterval:id=>timers.delete(id)});
-  return {window,sockets,lines,asks,advance};
+  return {window,sockets,lines,asks,logs,advance};
 }
+check('a failed diagnostic sink cannot prevent chat cleanup and recovery', () => {
+  const p=page(true); p.sockets[0].admit(); p.advance(100000);
+  assert(p.lines.some(l=>l.includes('Chat lost the server')));
+  assert(p.asks.includes('token? 7'));
+  p.window.thornswoodNet.setToken('after-log-failed');
+  assert.equal(p.sockets[1].token,'after-log-failed');
+});
+check('a silent chat reports its peer and heartbeat counters once without payloads', () => {
+  const p=page(), socket=p.sockets[0]; socket.admit();
+  p.advance(25000); socket.say({t:'pong'});
+  p.advance(100000);
+  const reports=p.logs.filter(l=>l.startsWith('[chat] heartbeat ')).map(l=>JSON.parse(l.slice(17)));
+  assert.equal(reports.length,1);
+  assert.equal(reports[0].reason,'silent');
+  assert.equal(reports[0].peer,1);
+  assert.equal(reports[0].pongRx,1);
+  assert(reports[0].pingTx>0 && reports[0].rxAgeMs>=70000);
+  assert.deepEqual(Object.keys(reports[0]).sort(),
+    ['event','reason','peer','ageMs','rxAgeMs','pingTx','pongRx','rxMessages','txMessages','txAgeMs','bufferedBytes','closeCode','clean'].sort());
+});
 check('a late old close cannot mark the replacement disconnected or stop its heartbeats', () => {
   const p=page(), old=p.sockets[0]; old.admit();
   p.window.thornswoodNet.setName('Renamed');
@@ -53,6 +73,8 @@ check('a late old close cannot mark the replacement disconnected or stop its hea
   assert.equal(replacement.readyState,1);
   assert(!p.lines.some(x=>x.includes('retired socket must not speak')));
   old.finishClose();
+  assert.equal(p.logs.filter(l=>l.startsWith('[chat] heartbeat ')).length,1);
+  assert.equal(JSON.parse(p.logs.find(l=>l.startsWith('[chat] heartbeat ')).slice(17)).reason,'rename');
   assert(!p.lines.some(x=>x.includes('Chat lost the server')));
   p.advance(26000);
   assert(replacement.sent.some(x=>x.t==='ping'));
