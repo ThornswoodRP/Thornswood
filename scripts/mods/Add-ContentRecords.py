@@ -2991,6 +2991,19 @@ def main():
     sha = hashlib.sha256(out).hexdigest()
     print('  %s bytes, sha256 %s' % (format(len(out), ','), sha))
 
+    # The last plugin is built after this one; an older copy is not evidence
+    # that a reference in this build resolves.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('plugin_clean',
+                                                  os.path.join(os.path.dirname(__file__), 'Check-PluginClean.py'))
+    clean = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(clean)
+    order = [name for name in clean.own_plugins.load_order(args.plugins)
+             if name.lower() != 'thornswood-last.esp']
+    if not clean.check_build(PLUGIN, out, args.masters, order):
+        print('STOP. The masters check did not pass. Nothing was written.')
+        return 1
+
     have = open(args.out, 'rb').read() if os.path.isfile(args.out) else None
     if args.check:
         print('')

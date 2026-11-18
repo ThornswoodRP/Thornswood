@@ -147,8 +147,11 @@
     "Read-NexusFile": {
       "script": "scripts/release/Read-NexusFile.ps1",
       "reads": [
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/PluginRuleLoops.ps1",
         "scripts/mods/last_recipe.py",
