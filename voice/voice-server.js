@@ -1328,6 +1328,14 @@ class Sock {
         return;
       }
       let len = b1 & 0x7f;
+      // A control PING is one whole frame with at most125bytes (RFC6455§5.5).
+      // Reject invalid shapes before echoing them as a control PONG.
+      if (op === 0x9 && (!(b0 & 0x80) || len > 125)) {
+        this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea])); // protocol error1002
+        this.close('protocol');
+        return;
+      }
+
       let off = 2;
 
       if (len === 126) {
@@ -1338,14 +1346,6 @@ class Sock {
         const big = this.buf.readBigUInt64BE(2);
         if (big > 1000000n) { this.close('frame_limit'); return; }
         len = Number(big); off = 10;
-      }
-
-      // A control PING is one whole frame with at most125bytes (RFC6455§5.5).
-      // Reject invalid shapes before echoing them as a control PONG.
-      if (op === 0x9 && (!(b0 & 0x80) || len > 125)) {
-        this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea])); // protocol error1002
-        this.close('protocol');
-        return;
       }
 
       let mask = null;

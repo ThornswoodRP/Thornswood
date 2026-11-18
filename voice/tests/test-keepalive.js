@@ -261,14 +261,15 @@ function frames(sock, on) {
     buf = Buffer.concat([buf, d]);
     for (;;) {
       if (buf.length < 2) { return; }
-      let len = buf[1] & 0x7f, off = 2;
+      const header = { fin: !!(buf[0] & 0x80), masked: !!(buf[1] & 0x80), lengthCode: buf[1] & 0x7f };
+      let len = header.lengthCode, off = 2;
       if (len === 126) { if (buf.length < 4) { return; } len = buf.readUInt16BE(2); off = 4; }
       else if (len === 127) { if (buf.length < 10) { return; } len = Number(buf.readBigUInt64BE(2)); off = 10; }
       if (buf.length < off + len) { return; }
       const op = buf[0] & 0x0f;
       const body = buf.slice(off, off + len);
       buf = buf.slice(off + len);
-      on(op, body);
+      on(op, body, header);
     }
   });
 }
@@ -379,9 +380,9 @@ function pingFrame(data, fin = true) {
   let onPongFrame = null, onPong = null;
   const talksGone = waitFor();
   talks.sock.on('close', () => { talksClosed = true; talksGone.hit(); });
-  frames(talks.sock, (op, body) => {
+  frames(talks.sock, (op, body, header) => {
     if (op === 9) { if (!talks.sock.writableEnded) { talks.sock.write(PONG); } return; }
-    if (op === 0xa) { if (onPongFrame) { onPongFrame(body); } return; }
+    if (op === 0xa) { if (onPongFrame) { onPongFrame(body, header); } return; }
     if (op !== 1) { return; }
     try { got.push(JSON.parse(body.toString('utf8'))); } catch (e) { }
     if (got[got.length - 1] && got[got.length - 1].t === 'pong' && onPong) { onPong(); }
@@ -422,13 +423,15 @@ function pingFrame(data, fin = true) {
   for (const payload of [Buffer.alloc(0), Buffer.from([0, 1, 0x80, 0xfe, 0xff]),
     Buffer.from(Array.from({ length: 125 }, (_, i) => (i * 67) & 255))]) {
     heard = waitFor();
-    let echoed = null;
-    onPongFrame = (body) => { echoed = Buffer.from(body); heard.hit(); };
+    let echoed = null, pongHeader = null;
+    onPongFrame = (body, header) => { echoed = Buffer.from(body); pongHeader = header; heard.hit(); };
     talks.sock.write(pingFrame(payload));
     check('the ' + payload.length + 'byte control PING gets a PONG', await heard, true);
     onPongFrame = null;
     check('the ' + payload.length + 'byte PONG echoes the exact binary payload',
       echoed !== null && echoed.equals(payload), true);
+    check('the ' + payload.length + 'byte PONG is final, unmasked and short-encoded',
+      pongHeader && pongHeader.fin && !pongHeader.masked && pongHeader.lengthCode === payload.length, true);
   }
 
   /*
@@ -463,19 +466,26 @@ function pingFrame(data, fin = true) {
 
   // An invalid control PING cannot be echoed as a malformed control PONG.
   // These are small loopback protocol cases, not a flood or a live probe.
-  for (const [label, payload, fin, profile] of [
-    ['oversized', Buffer.alloc(126), true, 521],
-    ['fragmented', Buffer.from('proof'), false, 522]]) {
+  for (const [label, frame, profile] of [
+    ['oversized', pingFrame(Buffer.alloc(126)), 521],
+    ['fragmented', pingFrame(Buffer.from('proof'), false), 522],
+    // Header-only declared length: no large allocation or transmission.
+    ['64-bit oversized', Buffer.from([0x89, 0xff, 0, 0, 0, 0, 0, 0x0f, 0x42, 0x41]), 523]]) {
     const invalid = await open(profile);
     const reply = waitFor();
-    let result = null;
+    let result = null, sawPong = false;
+    const ended = waitFor();
+    invalid.sock.once('close', ended.hit);
     frames(invalid.sock, (op, body) => {
-      if (op === 8 || op === 0xa) { result = { op, body }; reply.hit(); }
+      if (op === 0xa) sawPong = true;
+      if (op === 8 || op === 0xa) { if (!result) result = { op, body }; reply.hit(); }
     });
-    invalid.sock.write(pingFrame(payload, fin));
+    invalid.sock.write(frame);
     const received = await reply;
     check(label + ' control PING is refused with protocol close1002',
       received && result && result.op === 8 && result.body.length >= 2 && result.body.readUInt16BE(0) === 1002, true);
+    check(label + ' control PING closes without any PONG',
+      await ended && !sawPong, true);
     invalid.sock.destroy();
   }
 
