@@ -2,10 +2,8 @@
 
 Armour and weapons. The largest craft in the book.
 
-- [Platewright](smith/platewright.md). 2198 recipes. 864 reach the
-  server. 1334 are tempering and do not.
-- [Edgewright](smith/edgewright.md). 700 recipes. 299 reach the
-  server. 401 are the sharpening wheel and do not.
+- [Platewright](smith/platewright.md) makes armour. See the [Platewright recipe list](../lists/smith-platewright.md).
+- [Edgewright](smith/edgewright.md) makes weapons. See the [Edgewright recipe list](../lists/smith-edgewright.md).
 
 The forge opens for a Smith from novice, and for the Tailors and the
 Woodwright who have rows there; it does not open for anybody else. The
@@ -64,8 +62,7 @@ should take. That is the 120% repair now: an Edgewright's Weapon Kit
 on a weapon, a Platewright's Armor Kit on armour, past new. Below
 Master a smith mends with their own kit to 100%, like anybody else;
 at Master, to 120% (Patrick, 26 October, #3442). See
-[Durability](../durability.md). The armour table and the sharpening
-wheel are still in the lists and marked server asked: no.
+[Durability](../durability.md). Tempering is not in the open recipe lists.
 
 ## What you are handed
 

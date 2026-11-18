@@ -3,7 +3,7 @@
 Weapons and armour, as magic rather than as metal.
 
 - [Bladebinder](enchanter/bladebinder.md) makes staves and unlocks the
-  spells a staff can bind. 161 staves, all of them reach the server.
+  spells a staff can bind. See the [Bladebinder recipe list](../lists/enchanter-bladebinder.md).
 - [Wardweaver](enchanter/wardweaver.md) enchants armour and clothing.
   The effects that are allowed are [Enchantments](../enchantments.md).
   There is no recipe row for them.
