@@ -354,6 +354,7 @@ function game(opts) {
   const end = from >= 0 ? RUNNER.indexOf("\n'@\n}", from) : -1;
   yes('the runner has its Windows helper block', from >= 0 && end > from);
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  yes('PowerShell 7 is available for the required keyboard delivery regressions', ver.status === 0);
   const keyFunction = /function Invoke-GameKey\b[\s\S]*?\n}\n/.exec(RUNNER);
   yes('the runner has a testable keyboard delivery function', !!keyFunction);
   if (ver.status === 0 && keyFunction) {
@@ -417,7 +418,7 @@ Case 'activated' 42 99 $true $true 2 $false
     if (r.status !== 0) { console.log(r.stderr || r.stdout); }
   }
   if (ver.status !== 0) {
-    console.log('SKIP  the runner\'s Windows helper compiles under PowerShell 7 (no pwsh here)');
+    console.log('      Install PowerShell 7 to run the keyboard delivery regressions and compile the Windows helper.');
   } else if (from >= 0 && end > from) {
     const block = 'Add-Type -AssemblyName System.Drawing\n' + RUNNER.slice(from, end + 5) + '\n' +
       "if ('ThornswoodRealClient.Win' -as [type]) { 'HELPER OK' }\n";

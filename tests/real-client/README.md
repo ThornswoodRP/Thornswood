@@ -75,4 +75,9 @@ The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:
 the old runner's numeric reply cannot pass a key step. Accepted input alone
 does not prove the game or browser handled the key; follow it with a menu,
-message or page check for the expected result.
+message or page check for the expected result. The focus checks and
+Windows input are separate calls, so a focus change between those calls
+cannot be ruled out by a successful acknowledgement.
+
+PowerShell 7 must be available to run the harness regression test, including
+its fake Windows focus and input cases; missing PowerShell fails the test.
