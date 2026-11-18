@@ -16,6 +16,21 @@ try {
  $mt=$asm.GetType('Thornswood.Mics',$true)
  $pt=$asm.GetType('Thornswood.Paths',$true)
  $cfg=[Activator]::CreateInstance($ct)
+ $mainDirect='wss://main-signal.thornswood.net:44789/voice/'
+ Yes 'canonical default Main uses its own trusted socket' ($cfg.VoiceSocket() -eq $mainDirect -and $cfg.VoiceBase() -eq 'https://thornswood.net/voice')
+ $cfg.Channel='MAIN'
+ Yes 'explicit Main channel keeps the canonical dedicated route' ($cfg.VoiceSocket() -eq $mainDirect)
+ $cfg.Channel='preview'
+ Yes 'an unknown channel keeps the legacy socket' ($cfg.VoiceSocket() -eq 'wss://thornswood.net/voice/')
+ $cfg.Channel='';$cfg.ServerPort='7787'
+ Yes 'Main with a mismatched game port keeps its derived socket' ($cfg.VoiceSocket() -ne $mainDirect)
+ $cfg.ServerPort='7777';$cfg.VoicePort='7789'
+ Yes 'Main with a mismatched voice port keeps its derived socket' ($cfg.VoiceSocket() -ne $mainDirect)
+ $cfg.VoicePort='7778';$cfg.ServerAddress='private.example.invalid'
+ Yes 'a custom Main game address never acquires direct signaling' ($cfg.VoiceSocket() -ne $mainDirect)
+ $cfg.ServerAddress=$canonical;$cfg.VoiceUrl='https://custom.example.invalid/voice'
+ Yes 'a custom Main service preserves its HTTPS issuer and socket' ($cfg.VoiceBase() -eq $cfg.VoiceUrl -and $cfg.VoiceSocket() -eq 'wss://custom.example.invalid/voice/')
+ $cfg.VoiceUrl=''
  $cfg.MicrophoneName='Fixture microphone'
  $null=$dt.GetMethod('Set').Invoke($null,@($cfg,'dev'))
  $direct='wss://dev-signal.thornswood.net:44789/voice-dev/'
@@ -46,8 +61,12 @@ try {
  $null=$dt.GetMethod('Set').Invoke($null,@($cfg,'main'))
  $null=$mt.GetMethod('Apply').Invoke($null,@($cfg))
  $text=[IO.File]::ReadAllText($ini)
- Yes 'switching Main rewrites the stale Dev socket' ($text -match '(?m)^VoiceSocketUrl = wss://thornswood.net/voice/\r?$' -and -not $text.Contains('dev-signal.thornswood.net'))
- Yes 'Main socket and token base remain canonical' ($cfg.VoiceSocket() -eq 'wss://thornswood.net/voice/' -and $cfg.VoiceBase() -eq 'https://thornswood.net/voice')
+ Yes 'switching Main rewrites the stale Dev socket' ($text -match ('(?m)^VoiceSocketUrl = '+[regex]::Escape($mainDirect)+'\r?$') -and -not $text.Contains('dev-signal.thornswood.net'))
+ Yes 'Main socket and token base remain canonical' ($cfg.VoiceSocket() -eq $mainDirect -and $cfg.VoiceBase() -eq 'https://thornswood.net/voice')
+ $null=$dt.GetMethod('Set').Invoke($null,@($cfg,'dev'))
+ $null=$mt.GetMethod('Apply').Invoke($null,@($cfg));$text=[IO.File]::ReadAllText($ini)
+ Yes 'switching back to Dev rewrites the stale Main socket' ($text -match ('(?m)^VoiceSocketUrl = '+[regex]::Escape($direct)+'\r?$') -and -not $text.Contains('main-signal.thornswood.net'))
+ Yes 'both channel switches keep exactly one socket key' (([regex]::Matches($text,'(?m)^VoiceSocketUrl\s*=')).Count -eq 1)
 } finally {
  if(Test-Path -LiteralPath $work){Remove-Item -LiteralPath $work -Recurse -Force}
 }
