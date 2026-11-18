@@ -145,6 +145,11 @@ namespace Thornswood
                             using var doc = JsonDocument.Parse(json);
                             var root = doc.RootElement;
                             string kind = root.GetProperty("t").GetString();
+                            if (kind == "ping")
+                            {
+                                side.Message(new { t = "pong" });
+                                continue;
+                            }
                             if (kind != "sdp" && kind != "ice" && kind != "voice-restart") continue;
                             int id = root.GetProperty("to").GetInt32();
                             var target = Array.Find(Sides, x => x.Id == id);
@@ -253,12 +258,14 @@ namespace Thornswood
             using var mixed = new Room(old, modern);
             Check("mixed-version baseline is a secured real transport", mixed.Wait(() => Secure(old.Pc(5)) && Secure(modern.Pc(4)), 12000));
             var oldPc = old.Pc(5); var modernPc = modern.Pc(4);
+            var modernSocket = Get(modern.Session, "ws");
             Call(modernPc, "State", "failed"); mixed.Pump();
             Check("legacy ignore causes no reverse offer or unrelated teardown", old.Pc(5) == oldPc && modern.Pc(4) == modernPc && Count(modern, "voice-restart") == 1);
             modern.Clock.Advance(30001, mixed.Pump);
             Check("ignored request ends in one bounded, honest failure notice", modern.Events.FindAll(x => x.Contains("could not reach")).Count == 1);
             modern.Clock.Advance(60000, mixed.Pump);
-            Check("no unbounded request/rejoin retry follows legacy ignore", Count(modern, "voice-restart") == 1 && old.Pc(5) == oldPc);
+            Check("no unbounded request/rejoin retry follows legacy ignore", Count(modern, "voice-restart") == 1 && old.Pc(5) == oldPc &&
+                (int)Get(modern.Session, "myPeer") == 5 && ReferenceEquals(Get(modern.Session, "ws"), modernSocket) && modern.Rec(4) != null && modern.Pc(4) == modernPc);
             return JsonSerializer.Serialize(new { checks });
         }
 
