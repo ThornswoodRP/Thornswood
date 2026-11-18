@@ -69,6 +69,8 @@ namespace Thornswood
         {
             readonly DatagramTransport inner;
             int armed = 1;
+            int reads;
+            public int Reads { get { return Volatile.Read(ref reads); } }
             public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
             public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
             public readonly ManualResetEventSlim Returned = new ManualResetEventSlim();
@@ -78,6 +80,7 @@ namespace Thornswood
             public int Receive(byte[] b, int o, int n, int wait) { return Receive(b.AsSpan(o, n), wait); }
             public int Receive(Span<byte> b, int wait)
             {
+                Interlocked.Increment(ref reads);
                 bool held = Interlocked.Exchange(ref armed, 0) != 0;
                 if (held) { Entered.Set(); if (!Release.Wait(5000)) throw new TimeoutException("fixture read barrier"); }
                 try { return inner.Receive(b, wait); }
@@ -106,6 +109,7 @@ namespace Thornswood
                     // Fail() runs after the transport returns. Observe it over
                     // longer than one receive period without changing timers.
                     Wait(() => IsFailed(layer), 1200);
+                    Check("retired established reader never polls empty reads", barrier.Reads == 1);
                     Check("local orderly retirement never marks DTLS failed", !IsFailed(layer));
                     Check("local retirement sends no fatal alert to the live peer", !IsFailed(Layer(pair.B)));
                 }
