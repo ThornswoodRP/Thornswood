@@ -142,7 +142,8 @@ $Listener = {
         # Keep the OS-assigned endpoint bound while publishing it. Selecting
         # a free port in the parent and releasing it races other fixtures.
         $port = $l.LocalEndpoint.Port
-        [IO.File]::WriteAllText($ready, [string]$port)
+        [IO.File]::WriteAllText(($ready + '.pending'), [string]$port)
+        [IO.File]::Move(($ready + '.pending'), $ready)
         for ($served = 0; $served -lt 20; $served++) {
             $client = $l.AcceptTcpClient()
             $path = ''
