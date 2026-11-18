@@ -13,6 +13,7 @@
     "made-from-game": "Bethesda's own file, edited, or put together from Bethesda's: it never ships. The launcher, and Go.ps1, make it on each machine from that machine's own game archives (#2827), so nobody is handed the game's files. Its record is the Ship-Rules.ps1 list that keeps it out of every pack and the installer. Nothing to ask.",
     "made-from-mods": "One of the collection's mods' own files, edited: it never ships. The launcher, and Go.ps1, make it on each machine from that machine's own copy of the mod, out of its archive (#3113), so nobody is handed the mod's file. Its record is the Ship-Rules.ps1 list that keeps it out of every pack and the installer. Nothing to ask.",
     "built-on-each-computer": "Built by the launcher on each computer, in Thornswood's own game folder, with the collection's own Pandora and BodySlide from the game's and the collection's mods' own files (#3715): it never ships and is never listed as removed, so nobody is handed it. Its record is the Ship-Rules.ps1 list that names it. It is still somebody else's work: its licence and attribution say whose, for the credits. Nothing to ask.",
+    "built-on-the-box": "Thornswood's own plugin, built by the box at each merge from this repository's sources against the collection's plugins (#5191, scripts/mods/Build-ContentOnBox.ps1). It ships in every pack and the installer. A build's content-build.json holds it by sha256, and Get-ContentBuild.ps1 refuses a build whose files are not those hashes, so the register holds none: a hash here would change with every load order and be one more generated file in git. Its record is the script that builds it. Nothing to ask.",
     "made-from-recipe": "Thornswood's own plugin, built here, that copies records out of the game's and the collection's plugins (#2791): it never ships and is never listed as removed, so nobody is handed those records. A release carries only its recipe, Thornswood's own work, and the launcher makes the plugin before every Play from that recipe and the person's own plugins; the box makes the servers' copy the same way at each deploy. Its record is the Ship-Rules.ps1 list that names it. The records it copies stay their authors': its licence says whose. Nothing to ask.",
     "not-published": "In this private repository only; nobody outside the team receives it."
   },
@@ -613,7 +614,7 @@
     },
     {
       "path": "game/content/Thornswood-Content.esp",
-      "sha256": "d60f6410a2c20f6114ec20f40e9c00f80913e2cc71e60505ff1af2616199105b",
+      "record": "scripts/mods/Build-ContentOnBox.ps1",
       "what": "Thornswood's own plugin, 285,240 bytes on 1 Nov (#1387, the study desk activator wearing Skyrim's NobleDesk01 and its four placements, one in each of the College's halls; #3162, the bench trades' tools: the shears, the alembic and the rune knife, and the forge recipes for those three and Skyrim's own hammer, and a woodworking recipe for Skyrim's own wooden ladle; #3470, the ten potion recipes a Physicker makes at the alchemy lab, from Skyrim's own Minor Healing to Resist Shock, each at its effect's rank; #3153, the high, hangover and withdrawal screens' image space modifiers beside the drunk one; #3163, the Spoiled Food record a piece of food becomes when its days run out, and its effect, written from its own numbers in the burnt meal's look; #3152, the four festival feasts, a fine record of each wearing the same vanilla dish's look, the four festival brews in the tea's cup, their eight cooking pot and oven recipes, and the feast and brew effects; #3349, the ten passage books' words, plain town lines written by the tool; #2993, its header's description built from the records it holds; #1373, seven inert retrieval items, eight authored longfin markers, a non-skill ledger and its activation reference, with their required Bethesda cell parents; #2906, the Burnt Meal, a fine dish beside each of the 63 cooked dishes wearing its plain dish's look, and the burnt and fine effects; #2790, Dawnstar's western mine cell, identical to Bethesda's and holding none of its placements, taken out; #2962, the four creation menus nothing showed, the trade menu and the town menu, taken out; #2487, the key recipe carries a condition that is never true, so no forge lists it; #2679, the furniture items and their woodworking recipes, written from game/data/furniture.json; #1382, three teas, their cooking pot recipes and their effect, and the drunk screen's image space modifier; the well bucket and its 18 placements beside the wells, and the water bucket on the bank at Riverwood and Lake Honrich, with the cells and worldspaces they stand in copied from the winning masters). Every record in it is written by scripts/mods/Add-ContentRecords.py from its own numbers, or is Bethesda's own record it overrides: the cells and the worldspace its placements stand in, copied from the winning master, and the house part and woodworking recipe overrides. Its placements of the kiln, the salt quarry, the hive, the alchemy lab and the study desk stand where scripts/dev/Build-StationSites.py measured Thornswood's own spots (game/data/station-sites.json). Until #400 its header said its crafting and gathering content was salvaged from another server's plugin; scripts/mods/content-salvaged.json lists every salvaged record and that none is left.",
       "published": "Every pack and the installer on both channels. Not on Nexus Mods yet: Thornswood Content 1.2 carries the plugin from before #2553, registered as its own entry, until the next Thornswood Content file carries this one (#2793)",
       "source": "Remade under #2553 (Patrick, 15 Oct, option B on #2177): the salvaged keywords, stations, charcoal and recipes are written from Thornswood's rulebook and pointers to Bethesda's own records; the other server's placements, its 57 of Thornswood's stations included (Patrick, 16 Oct, A on #2553), and its changes to Skyrim's own placements are gone.",
@@ -622,7 +623,7 @@
       "attribution": "None asked",
       "approved": "Patrick publishes it as Thornswood Content on Nexus Mods (EvilPatrick06); Patrick, 15 Oct, #2177 B: remade as Thornswood's own; Patrick, 16 Oct, #2553 A: its stations at Thornswood's own spots",
       "evidence": "THIRD-PARTY.md, Thornswood Content; scripts/mods/content-salvaged.json; tests/test-2553-salvaged-gone.js; tests/test-2553-station-sites.js.",
-      "status": "ours"
+      "status": "built-on-the-box"
     },
     {
       "path": "bot/thornswood-bot-1024.png",
@@ -727,6 +728,19 @@
       "attribution": "None asked; the contributor terms ask for none",
       "approved": "Patrick, 27 Oct 2026, on the report page (q-3688-unrecorded-art, A): Djinn made it",
       "evidence": "docs/guide/tools.md, H. Dev Build.",
+      "status": "ours"
+    },
+    {
+      "path": "site/public/news-creation-panel-20261117-6ee8d406.png",
+      "sha256": "6ee8d406864965d805d4494acc000f6b81703c32c83aca81bf19215a9b4eb5f3",
+      "what": "An unedited in-game screenshot of the creation K panel with Starting Location and bottom-right Back, disabled Next and Close Skyrim.",
+      "published": "The website, Discord News and launcher News, as a captioned screenshot.",
+      "source": "Captured from Dev build1.3.92 on17November2026 during fresh-character acceptance;2560by1600pixels,2936753bytes.",
+      "creator": "Capture and interface: Thornswood. The scene includes Skyrim by Bethesda Game Studios and the collection's mods.",
+      "licence": "Project capture under the contributor terms in LICENSING.md. Underlying game and mod artwork keep their own rights; this registers the screenshot, not a right to redistribute those assets separately.",
+      "attribution": "Thornswood interface; Skyrim and its underlying artwork remain Bethesda's.",
+      "approved": "Patrick,17November2026: include a screenshot of the new K panel in the next News and verify its handling in Discord, the website and the app.",
+      "evidence": "The owner's screenshot request for #6455 and the in-game capture on Dev build1.3.92; its bytes are held by the sha256 in this entry.",
       "status": "ours"
     }
   ],

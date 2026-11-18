@@ -159,6 +159,19 @@ public sealed class GitHub(string api, string repo, ITokenSource tokens, HttpCli
         return c.Files.SelectMany(f => new[] { f.Name, f.Previous ?? "" }).Where(n => n != "").ToList();
     }
 
+    /// <summary>One file of the repository as it is at a commit, its bytes
+    /// (Contents: read). A commit id names its tree for good, so what this
+    /// reads at a Release's commit is what that commit holds.</summary>
+    public async Task<byte[]> FileAt(string path, string commit, CancellationToken ct)
+    {
+        var at = $"{RepoPath}/contents/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}?ref={Uri.EscapeDataString(commit)}";
+        using var req = await Request(HttpMethod.Get, at, "application/vnd.github.raw", ct);
+        using var res = await http.SendAsync(req, ct);
+        var b = await res.Content.ReadAsByteArrayAsync(ct);
+        if (!res.IsSuccessStatusCode) throw new GitHubException("GET", at, (int)res.StatusCode, "");
+        return b;
+    }
+
     sealed class Compare { [JsonPropertyName("files")] public List<CompareFile>? Files { get; set; } }
     sealed class CompareFile
     {

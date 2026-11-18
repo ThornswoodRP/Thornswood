@@ -7,7 +7,7 @@
 #
 # PULL REQUESTS that touch the rules, their tests, the fixture or this file:
 # dotnet test on tools/ReleaseNotes.Tests from the locked packages (every
-# case in tests/fixtures/note-rules-cases.json), and tests/test-note-rules.ps1,
+# case in tests/fixtures/note-rules-cases.json), and scripts/tests/test-note-rules.ps1,
 # which compiles NoteRules.cs with Add-Type the way the scripts do, so a
 # change that pwsh cannot compile fails here and not at a Ship.
 # Read only, no secret.
@@ -19,7 +19,7 @@ on:
       - 'tools/ReleaseNotes/**'
       - 'tools/ReleaseNotes.Tests/**'
       - 'tests/fixtures/note-rules-cases.json'
-      - 'tests/test-note-rules.ps1'
+      - 'scripts/tests/test-note-rules.ps1'
       - '.github/workflows/release-notes.yml'
   workflow_dispatch:
 
@@ -36,10 +36,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
       - name: The C# rules against the fixture
@@ -51,4 +53,4 @@ jobs:
           dotnet test tools/ReleaseNotes.Tests --no-restore
       - name: The rules as the release scripts load them
         shell: pwsh
-        run: ./tests/test-note-rules.ps1
+        run: ./scripts/tests/test-note-rules.ps1

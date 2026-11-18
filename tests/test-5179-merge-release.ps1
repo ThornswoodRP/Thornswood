@@ -149,6 +149,22 @@ try {
     Yes '  or the game files did' (Test-MergeReleaseVelopack -LauncherVersion '2026.1031.1915' -GameZipSha256 'g2' -Previous $prev)
     Yes '  or there is no Release before' (Test-MergeReleaseVelopack -LauncherVersion '2026.1031.1915' -GameZipSha256 'g1')
     Yes '  and not when neither moved, so the launcher before is carried' (-not (Test-MergeReleaseVelopack -LauncherVersion '2026.1031.1915' -GameZipSha256 'G1' -Previous $prev))
+    # The files beside Game against those of the package dev is on (#6298).
+    function SF([string[]]$pairs) { [pscustomobject]@{ schema = 1; commit = 'c'; channel = 'dev'; files = @($pairs | ForEach-Object { $a = $_ -split '=', 2; [pscustomobject]@{ path = $a[0]; size = 1; sha256 = $a[1] } }) } }
+    $sfBefore = SF @('config.json=c1', 'profile/plugins.txt=p7', 'profile/loadorder.txt=l7')
+    Yes 'a new reference load order alone is a new package' (Test-MergeReleaseSetupChanged -SetupFiles (SF @('config.json=c1', 'profile/plugins.txt=p8', 'profile/loadorder.txt=l8')) -Before $sfBefore)
+    Yes '  and the same files in another order with the hex in capitals are not' (-not (Test-MergeReleaseSetupChanged -SetupFiles (SF @('profile/loadorder.txt=L7', 'config.json=c1', 'profile/plugins.txt=P7')) -Before $sfBefore))
+    Yes '  a file added is, and a package that lists none is' ((Test-MergeReleaseSetupChanged -SetupFiles (SF @('config.json=c1', 'profile/plugins.txt=p7', 'profile/loadorder.txt=l7', 'applied.txt=a1')) -Before $sfBefore) -and
+        (Test-MergeReleaseSetupChanged -SetupFiles $sfBefore))
+    $threw = $false; try { [void](Test-MergeReleaseSetupChanged -SetupFiles (SF @())) } catch { $threw = $true }
+    Yes '  and a list that names no file stops it' $threw
+    $devRels = @(
+        [pscustomobject]@{ tag_name = 'build-1.3.9'; draft = $false; published_at = '2026-11-16T03:00:00Z'; assets = @([pscustomobject]@{ name = 'releases.dev.json' }) },
+        [pscustomobject]@{ tag_name = 'build-1.3.11'; draft = $false; published_at = '2026-11-16T04:00:00Z'; assets = @([pscustomobject]@{ name = 'game.zip' }) },
+        [pscustomobject]@{ tag_name = 'build-1.3.10'; draft = $false; published_at = '2026-11-16T03:30:00Z'; assets = @([pscustomobject]@{ name = 'releases.dev.json' }) },
+        [pscustomobject]@{ tag_name = 'build-1.3.12'; draft = $true; published_at = $null; assets = @([pscustomobject]@{ name = 'releases.dev.json' }) })
+    Yes 'the package dev is on is the newest published Release with dev''s feed' ([string](Get-MergeReleaseDevPackage -Releases $devRels).tag_name -eq 'build-1.3.10' -and
+        $null -eq (Get-MergeReleaseDevPackage -Releases @($devRels[1])))
 
     # ---- the Release before -----------------------------------------------------------
     $rd = Join-Path $tmp 'releases'
@@ -202,8 +218,9 @@ try {
     Yes '  and a Release with none has none' ($null -eq (Get-VelopackFullOf -Release ([pscustomobject]@{ tag_name = 'x'; assets = @() }) -Channel dev))
     $wf = [IO.File]::ReadAllText((Join-Path $Repo '.github/workflows/merge-release.yml'))
     Yes 'merge-release.yml takes the delta''s base from dev''s newest Release by its time, only when numbered below this one, and never by vpk download' (
-        $wf -notmatch 'vpk download github' -and $wf -match 'Get-VelopackFullOf -Release \$before\[0\] -Channel dev' -and
-        $wf -match '\[version\]\$was\.Version -lt \[version\]\$env:VERSION' -and $wf -match "Sort-Object \{ \`$_\.published_at \} -Descending")
+        $wf -notmatch 'vpk download github' -and $wf -match 'Get-VelopackFullOf -Release \$on -Channel dev' -and $wf.Contains('$on = Get-MergeReleaseDevPackage -Releases $rels') -and
+        $wf -match '\[version\]\$was\.Version -lt \[version\]\$env:VERSION' -and
+        [IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/MergeRelease.ps1')) -match "Sort-Object \{ \`$_\.published_at \} -Descending")
 
     # ---- main's launcher package, for promote-main.yml (#5181) ---------------------
     Yes 'build tags order by their number' ((Get-MergeReleaseOrder 'build-1.3.27') -gt (Get-MergeReleaseOrder 'build-1.3.21') -and
@@ -469,7 +486,8 @@ try {
     # A run in progress is never cancelled (#6008): with merges landing every
     # 5 minutes and a release taking 10, cancelling meant no release at all
     # (22 runs cancelled in a row on 12 Nov). GitHub keeps the newest waiting.
-    Yes '  in the release environment, on main only, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$')
+    # On the release job (#5191), after the content job finds the box's build.
+    Yes '  in the release environment, on main only, after the box''s content build is found, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' && ") -and $wf -match '(?m)^\s+needs: content\s*$' -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$' -and $wf -notmatch '(?m)^\s+cancel-in-progress: true\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
     # a merge main has moved past is published only when its workflow files
@@ -553,6 +571,14 @@ try {
     Yes 'the game files are built first, against the Release before''s list held to its manifest (#4825)' ($gameAt -gt 0 -and $launcherAt -gt $gameAt -and
         $wf.Contains("gh release download `$env:PREVIOUS -R `$env:GITHUB_REPOSITORY -p 'game-files.json'") -and $wf.Contains("`$a['PreviousList'] = `$plist") -and
         $wf.Contains('is not the one its manifest names'))
+    $setupAt = $wf.IndexOf('- name: Build the files the install reads beside the game files')
+    Yes 'the setup files are built on every run before the launcher step, which builds a package when dev''s differ from the package dev is on (#6298)' (
+        $setupAt -gt $gameAt -and $launcherAt -gt $setupAt -and -not $wf.Substring($setupAt, 900).Contains('if: ${{') -and
+        $wf.Contains('SETUP_DEV_LIST: ${{ steps.setup.outputs.dev_list }}') -and
+        $wf.Contains('$setupMoved = Test-MergeReleaseSetupChanged -SetupFiles $setupNow -Before $setupBefore') -and
+        $wf.Contains("-p 'manifest.json' -p 'setup-files.dev.json'") -and $wf.Contains('is not the one its manifest names') -and
+        $wf.Contains('$on = Get-MergeReleaseDevPackage -Releases $rels') -and
+        $wf -match "(?m)^\s+- 'scripts/release/Reference-List\.ps1'\s*$")
     Yes 'the setup files are built for dev and for main' ($wf.Contains("foreach (`$ch in 'dev', 'main')") -and
         $wf.Contains("Build-SetupFiles.ps1 -Out `$out -GameRoot (Join-Path `$env:RUNNER_TEMP 'game-root') -Channel `$ch") -and $wf.Contains('"setup-files.$ch.json"'))
     Yes 'Velopack is pinned and packs both channels from the same files, signing its programs only' ($wf -match "VPK_VERSION: '\d+\.\d+\.\d+'" -and $wf.Contains('--channel $ch') -and

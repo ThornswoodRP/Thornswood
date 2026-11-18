@@ -110,7 +110,10 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-steam-updates-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 $asm = $null
-try { $asm = Add-LauncherType -File $src } catch { Write-Host ('      ' + $_.Exception.Message) }
+# SteamUpdates says a caught exception through Failure (#4633), which writes
+# it through Swallow; this harness has no launcher.log, so a stand-in.
+$swallowStandIn = 'namespace Thornswood { static class Swallow { public static void Note(string where, System.Exception e) { } } }'
+try { $asm = Add-LauncherType -File $src, (Join-Path (Split-Path -Parent $src) 'Failure.cs') -Source $swallowStandIn } catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'it builds on its own, the way the project builds it' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 

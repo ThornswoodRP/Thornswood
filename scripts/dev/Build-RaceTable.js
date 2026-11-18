@@ -219,6 +219,7 @@ function walk(b, start, end) {
 }
 
 const order = loadedOrder(pluginsTxt(), DATA);
+if (!order) return;
 here.order = order;
 for (const file of order) {
   const full = pluginPath(DATA, file);
@@ -279,7 +280,6 @@ if (!Object.keys(rows).length) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-RaceTable.js',
-    builtAt: new Date().toISOString(),
     source: 'the RACE records of the plugins in load order',
     note: 'which recipes a race owns is in game\\data\\recipes.json; this only says what the races are',
     count: Object.keys(rows).length,

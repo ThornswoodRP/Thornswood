@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const PAGES = ['terms', 'privacy', 'rules'];
 const EXPECT = {
   terms: '2026-10-26',
-  privacy: '2026-11-12',
+  privacy: '2026-11-16',
   rules: '2026-10-26'
 };
 const MONTHS = [null, 'January', 'February', 'March', 'April', 'May', 'June',
@@ -81,4 +81,4 @@ yes('an unknown hash is absent', JSON.stringify(list).indexOf('00000000000000000
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

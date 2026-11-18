@@ -12,7 +12,9 @@ Every other channel of the plan took its overwrites.
 So this checks:
 
   1. onboarding_shut names the default channels whose plan mode shuts
-     @everyone out (#start-here, #disboard), and not one @everyone reads
+     @everyone out (#get-help and #apply-to-playtest stand in for them since
+     16 Nov, when #start-here and #disboard opened to everybody), and not
+     one @everyone reads
      (#rules, #welcome-travelers) or one the plan does not name
   2. keep_onboarding_channels takes those off the list and keeps the rest,
      in one edit that names only the default channels (Onboarding itself,
@@ -28,6 +30,10 @@ So this checks:
   6. the Server Guide, which was what still held #start-here and #disboard
      (the audit of 12 Nov, 5:55 PM), is one bots cannot change, so a build
      names what a person must take off it, and where, as a failure
+  7. the audit's lines on who sees what name the channels from the plan:
+     somebody with no role reads Start Here, Information, the Roleplay Guide,
+     #welcome-travelers, #general-chat and #travelers-questions (Patrick,
+     16 Nov), a Member those and the ticket and application channels
 
 Build-Discord.py is imported for real under another name. Every guild and
 channel is a stand-in. Connects to nothing.
@@ -102,13 +108,13 @@ class Guild(object):
         return sorted(self.channels[i].name for i in self.ob.default_channel_ids)
 
 
-NAMES = ['rules', 'start-here', 'disboard', 'welcome-travelers', 'somewhere-else']
-LIVE = ['rules', 'start-here', 'disboard', 'welcome-travelers', 'somewhere-else']
+NAMES = ['rules', 'get-help', 'apply-to-playtest', 'welcome-travelers', 'somewhere-else']
+LIVE = ['rules', 'get-help', 'apply-to-playtest', 'welcome-travelers', 'somewhere-else']
 
 # ------------------------------------------------------------------ 1 --
 g = Guild(NAMES, LIVE)
-yes('1 the default channels the plan gates are named: #start-here and #disboard',
-    [n for _i, n in B.onboarding_shut(g, g.ob)] == ['start-here', 'disboard'])
+yes('1 the default channels the plan gates are named: #get-help and #apply-to-playtest',
+    [n for _i, n in B.onboarding_shut(g, g.ob)] == ['get-help', 'apply-to-playtest'])
 yes('1 #rules and #welcome-travelers, which @everyone reads, are not',
     B.everyone_reads(dict((s['name'], s['mode']) for _c, sp in B.PLAN for s in sp
                           if s['kind'] != 'voice')['rules'])
@@ -120,8 +126,8 @@ B.CHECK = True
 B.failed = []
 said = quiet(B.keep_onboarding_channels(g))
 B.CHECK = False
-yes('3 -Check says it would take #start-here and #disboard off, and changes nothing',
-    'would' in said and '#start-here' in said and '#disboard' in said and not g.edits)
+yes('3 -Check says it would take #get-help and #apply-to-playtest off, and changes nothing',
+    'would' in said and '#get-help' in said and '#apply-to-playtest' in said and not g.edits)
 
 # ------------------------------------------------------------------ 2 --
 said = quiet(B.keep_onboarding_channels(g))
@@ -129,7 +135,7 @@ yes('2 a build takes them off in one edit', len(g.edits) == 1
     and g.names() == ['rules', 'somewhere-else', 'welcome-travelers'])
 yes('2 the edit sends only the default channels: not Onboarding on or off, its '
     'prompts or its mode', list(g.edits[0]) == ['default_channels', 'reason'])
-yes('2 and says what it took', '#start-here' in said and '#disboard' in said
+yes('2 and says what it took', '#get-help' in said and '#apply-to-playtest' in said
     and not B.failed)
 quiet(B.keep_onboarding_channels(g))
 yes('3 a second run asks Discord for nothing', len(g.edits) == 1)
@@ -158,12 +164,12 @@ r = Guild(NAMES, LIVE, refuse=True)
 B.failed = []
 quiet(B.keep_onboarding_channels(r))
 yes('3 a refusal is said as a failure, naming the channels',
-    len(B.failed) == 1 and '#start-here' in B.failed[0])
+    len(B.failed) == 1 and '#get-help' in B.failed[0])
 B.failed = []
 
 # ------------------------------------------------------------------ 5 --
 # The live build of 12 Nov, 5:20 PM: with both off the default list, Discord
-# still refused to gate #start-here and #disboard. The Welcome Screen and
+# still refused to gate #get-help and #apply-to-playtest. The Welcome Screen and
 # Onboarding's answers point people at channels too.
 
 
@@ -178,7 +184,7 @@ class Screen(object):
 
 
 w = Guild(NAMES, ['rules'])
-w.screen = Screen(w, ['rules', 'start-here', 'disboard', 'welcome-travelers'])
+w.screen = Screen(w, ['rules', 'get-help', 'apply-to-playtest', 'welcome-travelers'])
 w.screen_edits = []
 
 
@@ -190,14 +196,14 @@ async def _edit_screen(**kw):
     w.screen_edits.append(kw)
 w.welcome_screen = _screen
 w.edit_welcome_screen = _edit_screen
-yes('5 the Welcome Screen channels the plan gates are named: #start-here and #disboard',
-    [n for _i, n in B.welcome_shut(w, w.screen)] == ['start-here', 'disboard'])
+yes('5 the Welcome Screen channels the plan gates are named: #get-help and #apply-to-playtest',
+    [n for _i, n in B.welcome_shut(w, w.screen)] == ['get-help', 'apply-to-playtest'])
 B.CHECK = True
 B.failed = []
 said = quiet(B.keep_welcome_screen(w))
 B.CHECK = False
 yes('5 -Check says it would take them off the Welcome Screen and changes nothing',
-    'would' in said and '#start-here' in said and not w.screen_edits)
+    'would' in said and '#get-help' in said and not w.screen_edits)
 said = quiet(B.keep_welcome_screen(w))
 sent = w.screen_edits[0] if w.screen_edits else {}
 yes('5 a build takes them off in one edit, keeping the others with their words',
@@ -217,7 +223,7 @@ quiet(B.keep_welcome_screen(n))
 yes('5 a server with no Welcome Screen is left alone, and that is no failure', not B.failed)
 
 # The audit of 12 Nov, 5:55 PM: the Server Guide was what still held
-# #start-here and #disboard.
+# #get-help and #apply-to-playtest.
 GUIDE = {'guild_id': '1', 'enabled': True,
          'welcome_message': {'author_ids': ['5'], 'message': 'Welcome in'},
          'new_member_actions': [{'channel_id': '102', 'action_type': 1, 'title': 'Bump us'},
@@ -230,9 +236,9 @@ async def _read(guild):
 B.read_server_guide = _read
 B.failed = []
 said = quiet(B.tell_server_guide(w))
-yes('6 a build says, as a failure, that #start-here, #disboard and a deleted channel are '
+yes('6 a build says, as a failure, that #get-help, #apply-to-playtest and a deleted channel are '
     'in the Server Guide, and where a person takes them off',
-    len(B.failed) == 1 and '#start-here' in B.failed[0] and '#disboard' in B.failed[0]
+    len(B.failed) == 1 and '#get-help' in B.failed[0] and '#apply-to-playtest' in B.failed[0]
     and 'deleted' in B.failed[0] and B.GUIDE_WHERE in B.failed[0])
 src_b = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
 yes('6 and never sends the guide: Discord answers a bot "403 Bots cannot use this '
@@ -263,9 +269,9 @@ ob = types.SimpleNamespace(prompts=[types.SimpleNamespace(title='Why are you her
 guide = {'enabled': True, 'new_member_actions': [{'channel_id': '102', 'title': 'Bump'}],
          'resource_channels': [{'channel_id': '100', 'title': 'Rules'}]}
 yes('5 the Server Guide channels the plan gates are named, wherever in it they are',
-    B.guide_shut(w, guide) == {'disboard'})
+    B.guide_shut(w, guide) == {'apply-to-playtest'})
 yes('5 an Onboarding answer that points to a gated channel is named',
-    B.prompt_shut(w, ob) == ['Why are you here: To chat: #start-here'])
+    B.prompt_shut(w, ob) == ['Why are you here: To chat: #get-help'])
 
 # ------------------------------------------------------------------ 4 --
 src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
@@ -283,6 +289,28 @@ yes('4 the audit names a gated channel on the Welcome Screen and in an Onboardin
 yes('4 the audit says when a default channel is one the plan gates, and names a '
     'deleted one still on the list',
     'onboarding_shut(guild, ob)' in audit and 'which the server no' in audit)
+none_sees = B._seen_by(None).split(', ')
+yes('7 somebody with no role reads Start Here, Information, the Roleplay Guide, '
+    '#welcome-travelers, #general-chat and #travelers-questions (Patrick, 16 Nov), '
+    'and no ticket or application channel',
+    all(c in none_sees for c in ('#rules', '#welcome', '#start-here', '#disboard',
+                                 '#news', '#updates', '#faq', '#game-rules', '#lore',
+                                 '#factions', '#welcome-travelers', '#general-chat',
+                                 '#travelers-questions'))
+    and not any(c in none_sees for c in ('#get-help', '#report-someone',
+                                         '#apply-to-playtest', '#apply-for-a-seat',
+                                         '#apply-for-staff', '#media')))
+member_sees = B._seen_by('Member').split(', ')
+yes('7 a Member sees those and the ticket and application channels, and no other '
+    'Playtester channel',
+    all(c in member_sees for c in none_sees + ['#get-help', '#report-someone',
+                                               '#apply-to-playtest', '#apply-for-a-seat',
+                                               '#apply-for-staff'])
+    and not any(c in member_sees for c in ('#media', '#suggestions',
+                                           '#choose-your-hold')))
+yes('7 the audit says them from the plan, not a fixed old order',
+    "_seen_by('Member')" in audit and '_seen_by(None)' in audit
+    and 'so Start Here only' not in audit)
 
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))

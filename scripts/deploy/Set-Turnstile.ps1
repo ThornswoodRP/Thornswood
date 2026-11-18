@@ -127,6 +127,27 @@ if (`$told -eq '$PublicSiteKey') { if ('$want' -eq 'on') { 'the report form is t
 else { 'THE REPORT FORM IS TOLD ' + (`$(if (`$told) { 'ANOTHER KEY' } else { 'NO KEY' })) + ', so the check is not ' + '$want' }
 "@
 
+# What came back is held to the line each step of that tail says when it
+# worked (#4210), so a refusal, a throw, the form told another key, or no
+# answer at all is FAILED and ends 1. Until then both ways below printed
+# whatever came back and ended 0.
+function Assert-TurnstileSaid($lines) {
+  $said = @($lines | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  foreach ($l in $said) { Write-Host "  $l" -ForegroundColor $(if ($l -cmatch '^[A-Z]{3,} [A-Z]') { 'Red' } else { 'Gray' }) }
+  $form = if ($want -eq 'on') { '^the report form is told the site key: the check is on$' } else { '^the report form is told no key: the check is off$' }
+  foreach ($step in @(
+      @('writing the site key into the site''s config.json', '^set turnstileSiteKey, \d+ other setting'),
+      @('writing the secret into the site''s config.json', '^set turnstileSecret, \d+ other setting'),
+      @('starting the site again on them', '^site restarted$'),
+      @(('the report form saying the check is ' + $want), $form))) {
+    if (-not @($said | Where-Object { $_ -match $step[1] }).Count) {
+      Write-Host ''
+      Write-Host ('  FAILED    ' + $step[0] + ' did not happen. ' + $(if ($said.Count) { 'The box said: ' + $said[-1] } else { 'The box said nothing back.' })) -ForegroundColor Red
+      exit 1
+    }
+  }
+}
+
 if (-not $FromCloudflare) {
   $secret = ''
   if (-not $Off) {
@@ -135,12 +156,13 @@ if (-not $FromCloudflare) {
   }
   Write-Host ''
   Write-Host ('Turning the report form''s Turnstile check ' + $want + '...')
-  Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $secret -Script (@"
+  $said = Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $secret -Script (@"
 `$ErrorActionPreference = 'Stop'
 `$pw = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 `$turnstileSecret = `$pw
-"@ + "`r`n" + $farTail) | ForEach-Object { "  $_" }
+"@ + "`r`n" + $farTail)
   $secret = $null
+  Assert-TurnstileSaid $said
   return
 }
 
@@ -169,7 +191,7 @@ $sealed = $a.Text
 if ($sealed -notmatch '^[A-Za-z0-9+/]+={0,2}$') { Die 'the workflow''s answer is not a sealed value. Nothing was sent to the box.' }
 
 Say '3. The box opens it, asks Cloudflare for the widget''s secret, and writes the keys'
-Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script (@"
+$said = Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script (@"
 `$ErrorActionPreference = 'Stop'
 `$sealed = '$sealed'
 $(Get-ThornswoodUnsealBlock)
@@ -189,4 +211,5 @@ catch {
 if (-not `$w -or -not `$w.success -or -not `$w.result -or -not [string]`$w.result.secret) { 'CLOUDFLARE ANSWERED WITHOUT THE WIDGET''S SECRET. Nothing was changed.'; return }
 if ([string]`$w.result.sitekey -ne '$PublicSiteKey') { 'CLOUDFLARE ANSWERED FOR ANOTHER WIDGET. Nothing was changed.'; return }
 `$turnstileSecret = [string]`$w.result.secret; `$w = `$null
-"@ + "`r`n" + $farTail) | ForEach-Object { "  $_" }
+"@ + "`r`n" + $farTail)
+Assert-TurnstileSaid $said

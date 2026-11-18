@@ -80,6 +80,44 @@ yes('Main refuses staff or dev commands (that is Dev)',
         'Main test tasks: these steps'))
 yes('Main lets /helpme through', P('main', 'Help', '1. Type /helpme in chat.', server='Main', fix_in_main=True) == [])
 
+
+# What main runs (fix_in_main): the newest published main Release. Main goes
+# out on main-<build> through promote-main.yml since 3 Nov 2026, and the
+# release/main/ tags stopped on 2 Nov, so reading the tags refused every Main
+# test task build-1.3.55 closed on 15 Nov.
+def fake(routes):
+    calls = []
+
+    def get(url):
+        calls.append(url)
+        for k, v in routes.items():
+            if url.endswith(k):
+                return v
+        return None
+    return get, calls
+
+
+RELS = [{'tag_name': 'content-dev-1', 'draft': True},
+        {'tag_name': 'build-1.3.60', 'draft': False, 'prerelease': True},
+        {'tag_name': 'main-build-1.3.60', 'draft': True},
+        {'tag_name': 'main-build-1.3.55', 'draft': False},
+        {'tag_name': 'release/main/20261102-121621', 'draft': False}]
+get, calls = fake({'/releases?per_page=100&page=1': RELS})
+yes('the newest published main Release is what main runs, not a draft, a build or an old release/main tag',
+    bot.latest_main_release(get) == 'main-build-1.3.55')
+yes('  and it reads no tags to find it', not any('matching-refs' in c for c in calls))
+get, calls = fake({'/releases?per_page=100&page=1': RELS, '/pulls/5': {'merge_commit_sha': 'abc'},
+                   '/compare/main-build-1.3.55...abc': {'status': 'behind'}})
+yes('a fix the newest main Release carries is in main',
+    bot.fix_in_main([{'number': 5, 'merged_at': '2026-11-12T00:32:54Z'}], [], get) is True)
+get, calls = fake({'/releases?per_page=100&page=1': RELS, '/compare/main-build-1.3.55...def': {'status': 'ahead'}})
+yes('a fix merged after it is not', bot.fix_in_main([], ['def'], get) is False)
+page1 = [{'tag_name': 'build-1.3.%d' % i, 'draft': False} for i in range(100)]
+get, calls = fake({'/releases?per_page=100&page=1': page1, '/releases?per_page=100&page=2': RELS[3:]})
+yes('a main Release on the second page of Releases is found', bot.latest_main_release(get) == 'main-build-1.3.55')
+get, calls = fake({'/releases?per_page=100&page=1': [{'tag_name': 'build-1.3.1', 'draft': False}]})
+yes('with no main Release at all, whether main has it is unknown', bot.fix_in_main([], ['def'], get) is None)
+
 # Known issues
 yes('Known refuses a closed issue', has(P('known', 'X', 'y', issue={'state': 'closed'}), 'Known issues: the issue is closed'))
 yes('Known refuses a merged pull request', has(P('known', 'X', 'y', issue={'state': 'open'}, merged_pr=True), 'Known issues: a merged'))
@@ -146,13 +184,14 @@ yes('the comment does not start "Test task:" or "Known issue:"',
 # Main release check
 def fake(status):
     def get(url):
-        if 'matching-refs' in url:
-            return [{'ref': 'refs/tags/release/main/20261001-000000'},
-                    {'ref': 'refs/tags/release/main/20261017-205912'}]
+        if '/releases?' in url:
+            return [{'tag_name': 'build-1.3.60', 'draft': False},
+                    {'tag_name': 'main-build-1.3.55', 'draft': False},
+                    {'tag_name': 'release/main/20261102-121621', 'draft': False}]
         if '/pulls/' in url:
             return {'merge_commit_sha': 'abc'}
         if '/compare/' in url:
-            yes('compares against the newest main tag', 'release/main/20261017-205912...abc' in url)
+            yes('compares against the newest main Release', 'main-build-1.3.55...abc' in url)
             return {'status': status}
         raise AssertionError(url)
     return get
@@ -161,7 +200,7 @@ def fake(status):
 prs = [{'number': 9, 'merged_at': '2026-10-10T00:00:00Z'}]
 yes('fix in the release: behind counts', bot.fix_in_main(prs, [], fake('behind')) is True)
 yes('fix not in the release: ahead does not', bot.fix_in_main(prs, [], fake('ahead')) is False)
-yes('no tags read: unknown', bot.fix_in_main(prs, [], lambda u: (_ for _ in ()).throw(OSError())) is None)
+yes('no Releases read: unknown', bot.fix_in_main(prs, [], lambda u: (_ for _ in ()).throw(OSError())) is None)
 
 # A dev pass refuses: nothing posted, one comment, and none on the next pass
 ISSUE = {'number': 41, 'title': 'Log', 'state': 'open', 'updated_at': '2026-10-22T10:00:00Z',

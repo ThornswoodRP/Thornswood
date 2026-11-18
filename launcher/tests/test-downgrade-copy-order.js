@@ -109,7 +109,9 @@ yes('F3: each file is copied by its path, its old name taken off first',
 // so the card and Try again button stay.
 yes('F3: a locked file stops the run through Stop, so the card and Try again button stay',
     /throw new Exception\("Could not put " \+ f\.Rel/.test(take) &&
-    /catch \(Exception ex\)\s*\{\s*return Stop\(ex\.Message, log, status\);\s*\}/.test(run));
+    // The reason is said through Failure, which names the file and the next
+    // step and writes the exception to launcher.log (#4633).
+    /catch \(Exception ex\)\s*\{\s*return Stop\(Failure\.Say\("Downgrade, putting the files in place", ex\), log, status\);\s*\}/.test(run));
 yes('F3: the build is read again after the copy, and a wrong one stops through Stop',
     /bool right = File\.Exists\(targetExe\) && !Wrong\(cfg, targetExe\);/.test(run));
 
@@ -128,4 +130,4 @@ yes('F4: a folder this run never saw start is still refused as leftover',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

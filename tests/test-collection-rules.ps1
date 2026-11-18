@@ -62,7 +62,7 @@ $shell = (Get-Process -Id $PID).Path
 # rather than failing. Nothing else is taken from here: the script under test
 # still runs as a child process.
 . (Join-Path $Here 'scripts\mods\LoadOrder.ps1')
-$sevenZip = Get-SevenZipPath
+$sevenZip = Find-SevenZip
 
 # Where the check unpacks an export archive to. Taken before anything runs so
 # the finally block takes away only what this run added and leaves any cache

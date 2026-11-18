@@ -32,7 +32,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -68,34 +67,15 @@ function scratch(name, invite) {
   }));
   return { dir, secret };
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-// Waits for the site's own "[thornswood-docs] listening on ...:port" line
-// rather than polling the port (#1727).
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const end = (e) => { clearTimeout(late); srv.stdout.removeListener('data', said); srv.stderr.removeListener('data', err); srv.removeListener('close', gone); if (e) { srv.kill(); bad(e); } else { ok(); } };
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(); } };
-    const err = (d) => { out += d; };
-    const gone = (code) => end(new Error('site stopped (exit ' + code + ') before it was listening:\n' + out));
-    const late = setTimeout(() => end(new Error('site not listening in 15 s:\n' + out)), 15000);
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', err);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(s) {
-  const port = await freePort();
+  let port = 0;
   const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  await listening(srv, port);
+  await siteFiles.listening(srv).then((r) => (port = r.port, r));
   return { port, srv };
 }
 function request(port, method, where, headers, body) {
@@ -283,5 +263,5 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -14,10 +14,12 @@
                         picks the launcher's feed and its Velopack channel;
                         the install merges it into the install folder's own
       profile\          plugins.txt and loadorder.txt, the reference load
-                        order of the release the game files were built over
-                        (dev's, its :golden:), fetched from the site by their
-                        sha256 (#3412), so the load order matches the
-                        files
+                        order: the lists of the release the game files were
+                        built over (dev's, its :golden:), fetched from the
+                        site by their sha256 (#3412), made over in the
+                        order records\load-order.json gives, the one the
+                        server runs this Release on (Reference-List.ps1,
+                        #6298)
       applied.txt       every pack the -Channel feed lists, so a fresh
                         install does not offer the whole history of the
                         project as pending updates (the install writes it
@@ -159,7 +161,13 @@ foreach ($f in 'plugins.txt', 'loadorder.txt') {
     if (-not $url) { throw "The dev feed's record is not an asset on the site ($([string]$ptr.url)), so its $f cannot be fetched beside it." }
     [void](Get-FeedAssetFile $url $sha (Join-Path (Join-Path $files 'profile') $f) $sd $SiteUrl)
 }
-Say "  profile\: plugins.txt and loadorder.txt of release $([string]$ptr.id)" 'Green'
+# The reference list is the order this commit's records give, the one the
+# server is put on with this Release (#6298): the record's lists made over
+# from records\load-order.json (Reference-List.ps1).
+. (Join-Path $Here 'Reference-List.ps1')
+$added = @(Set-ThornswoodReferenceList (Join-Path $files 'profile') $RepoDir)
+Say ("  profile\: plugins.txt and loadorder.txt of release $([string]$ptr.id), made over in records\load-order.json's order" +
+     $(if ($added.Count) { ', enabling ' + ($added -join ', ') } else { '' })) 'Green'
 
 # ---- applied.txt: every pack the channel's feed lists
 $ids = @()

@@ -201,7 +201,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not remove " + dir + ": " + ex.Message +
+                        say("Could not remove " + dir + ": " + Failure.Why("Uninstall, removing " + dir, ex, dir) + "." +
                             "  Nothing uses that folder, so it is safe to delete by hand.");
                 }
             }
@@ -421,7 +421,7 @@ namespace Thornswood
                             "\n\nNothing has been removed. Close Skyrim, press Scan and then Fix on Diagnostics, which puts it back, and try again.");
                     }
                 }
-                catch (Exception ex) { if (ex.Message.StartsWith("Windows'")) throw; }
+                catch (Exception ex) when (ex.GetType() != typeof(Exception)) { Swallow.Note("Uninstall, reading whether " + win + " is redirected", ex); }
             }
 
             // A leftover backup folder means the person's own My Games or
@@ -752,8 +752,8 @@ namespace Thornswood
                 try { full = Path.GetFullPath(t); }
                 catch { continue; }
                 if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
-                sb.AppendLine("rmdir /s /q \"" + full + "\" 2>nul");
-                sb.AppendLine("del /f /q \"" + full + "\" 2>nul");
+                sb.AppendLine("rmdir /s /q \"" + CmdPath(full) + "\" 2>nul");
+                sb.AppendLine("del /f /q \"" + CmdPath(full) + "\" 2>nul");
             }
 
             // An empty _quarantine is just a folder with a worrying name.
@@ -763,7 +763,7 @@ namespace Thornswood
             // put back or taken away, the folder itself is nothing. rmdir
             // without /s refuses a folder with anything at all in it, so this
             // takes the empty one and cannot touch the other.
-            sb.AppendLine("rmdir \"" + Path.Combine(Paths.Root, "_quarantine") + "\" 2>nul");
+            sb.AppendLine("rmdir \"" + CmdPath(Path.Combine(Paths.Root, "_quarantine")) + "\" 2>nul");
 
             // Then the install folder, on the same rule and for the same
             // reason. It used to be tried only when both boxes said delete,
@@ -772,7 +772,7 @@ namespace Thornswood
             // trying it always is safe: anything left keeps it, which is the
             // point, and an install that really did remove everything no longer
             // leaves an empty Thornswood behind.
-            sb.AppendLine("rmdir \"" + Paths.Root + "\" 2>nul");
+            sb.AppendLine("rmdir \"" + CmdPath(Paths.Root) + "\" 2>nul");
 
             // Then the launcher itself: Velopack's uninstall takes its folder,
             // its shortcuts and its Installed apps entry (AppUninstaller). Run
@@ -786,19 +786,34 @@ namespace Thornswood
             if (!string.IsNullOrEmpty(updateExe))
             {
                 if (!string.IsNullOrEmpty(rootRecord))
-                    sb.AppendLine("del /f /q \"" + rootRecord + "\" 2>nul");
-                sb.AppendLine("if exist \"" + updateExe + "\" call \"" + updateExe + "\" --uninstall --silent");
+                    sb.AppendLine("del /f /q \"" + CmdPath(rootRecord) + "\" 2>nul");
+                sb.AppendLine("if exist \"" + CmdPath(updateExe) + "\" call \"" + CmdPath(updateExe) + "\" --uninstall --silent");
             }
 
-            // Last, say what survived and why.
-            if (note != null)
+            // Last, say what survived and why. An empty note is no note: cmd
+            // reads del /f /q "" as every file in its working folder (#6382).
+            if (!string.IsNullOrEmpty(note))
             {
-                sb.AppendLine("powershell -NoProfile -ExecutionPolicy Bypass -File \"" + note + "\" >nul 2>&1");
-                sb.AppendLine("del /f /q \"" + note + "\" >nul 2>&1");
+                sb.AppendLine("powershell -NoProfile -ExecutionPolicy Bypass -File \"" + CmdPath(note) + "\" >nul 2>&1");
+                sb.AppendLine("del /f /q \"" + CmdPath(note) + "\" >nul 2>&1");
             }
 
             sb.AppendLine("del /f /q \"%~f0\" >nul 2>&1");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// A path as the handover script must write it (#4683). cmd expands
+        /// %...% in a .cmd file, inside quotes too, and setlocal does not stop
+        /// it: a path with one % reached rmdir and del with the sign dropped,
+        /// and one with two reached them with the part between read as a
+        /// variable, another folder than the one the fence above checked. In a
+        /// .cmd file %% is read as one %, so every path goes in with each %
+        /// doubled and reaches the delete exactly as it was checked.
+        /// </summary>
+        static string CmdPath(string path)
+        {
+            return path.Replace("%", "%%");
         }
         /// <summary>
         /// The note that comes up once everything has been deleted, listing what

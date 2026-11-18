@@ -484,7 +484,7 @@ namespace Thornswood
                 return 0;
             }
             T = args[0];
-            foreach (string scene in new string[] { "chosen-vortex-first", "chosen-vortex-after", "chosen-downgrade", "not-chosen" })
+            foreach (string scene in new string[] { "chosen-vortex-first", "chosen-vortex-after", "chosen-downgrade", "not-chosen", "chosen-package" })
             {
                 try
                 {
@@ -492,6 +492,7 @@ namespace Thornswood
                     if (scene == "chosen-vortex-after") ChosenVortexAfter();
                     if (scene == "chosen-downgrade") ChosenDowngrade();
                     if (scene == "not-chosen") NotChosen();
+                    if (scene == "chosen-package") ChosenPackage();
                 }
                 catch (Exception ex)
                 {
@@ -506,6 +507,96 @@ namespace Thornswood
         static bool Under(string path, string dir)
         {
             return Path.GetFullPath(path).StartsWith(Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // A fresh Velopack install has no legacy installed-into-game list or
+        // release sync. Cache a fictional already-authenticated release record;
+        // Game and Setup still check their lists against that record's hashes.
+        static void ChosenPackage()
+        {
+            Scene s = Open("chosen-package");
+            Deploy(s, DateTime.UtcNow.AddMinutes(-10));
+            StartWrites(s, "pack1");
+            string package = Path.Combine(s.Dir, "package");
+            string script = "Data/Scripts/PackageFixture.pex";
+            string legacy = "Data\\LegacyFixture.pex";
+            Put(Path.Combine(s.Payload, legacy), "an older release's file");
+            File.AppendAllText(Path.Combine(Paths.ProfileDir, "release-files.txt"), legacy + "\n");
+            byte[] plugin = Encoding.ASCII.GetBytes("fixture last plugin");
+            var recipe = new List<byte>(new byte[] { 84, 83, 76, 82, 1 });
+            recipe.AddRange(BitConverter.GetBytes((uint)plugin.Length));
+            recipe.AddRange(SHA256.HashData(plugin));
+            recipe.Add(0); // no source plugins: a literal-only fictional recipe
+            recipe.Add(0); recipe.Add((byte)plugin.Length); recipe.AddRange(plugin);
+            var entries = new Dictionary<string, byte[]> {
+                { "Data/Thornswood-Last.recipe", recipe.ToArray() },
+                { script, Encoding.ASCII.GetBytes("fixture script") }
+            };
+            var rows = new List<VeloRecord.GameFile>();
+            foreach (var e in entries)
+            {
+                string rel = e.Key.Replace('/', Path.DirectorySeparatorChar);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(s.Payload, rel)));
+                File.WriteAllBytes(Path.Combine(s.Payload, rel), e.Value);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(package, "Game", rel)));
+                File.WriteAllBytes(Path.Combine(package, "Game", rel), e.Value);
+                rows.Add(new VeloRecord.GameFile { Path = e.Key, Size = e.Value.Length, Sha256 = VeloRecord.Sha256(e.Value) });
+            }
+            string tag = "build-1.3.65530", commit = new string('b', 40);
+            byte[] game = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new VeloRecord.GameList { Schema = 1, Commit = commit, Files = rows.ToArray() });
+            byte[] setup = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new VeloRecord.GameList { Schema = 1, Channel = "main", Commit = commit, Files = new VeloRecord.GameFile[0] });
+            Put(Path.Combine(Paths.ProfileDir, "GitHub", tag, "game-files.json"), Encoding.UTF8.GetString(game));
+            Put(Path.Combine(Paths.ProfileDir, "GitHub", "main-" + tag, "setup-files.main.json"), Encoding.UTF8.GetString(setup));
+            var manifest = new VeloRecord.Manifest { Tag = tag, Commit = commit, Parts = new Dictionary<string, VeloRecord.PartFile[]> {
+                { "game", new[] { new VeloRecord.PartFile { Name = "game-files.json", Sha256 = VeloRecord.Sha256(game), Size = game.Length } } },
+                { "main", new[] { new VeloRecord.PartFile { Name = "setup-files.main.json", Sha256 = VeloRecord.Sha256(setup), Size = setup.Length } } }
+            } };
+            var held = (Dictionary<string, VeloRecord.Manifest>)typeof(VeloRecord).GetField("held", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).GetValue(null);
+            held[tag] = manifest;
+            var current = typeof(Velopack.Locators.VelopackLocator).GetField("_current", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            object before = current.GetValue(null);
+            current.SetValue(null, new Velopack.Locators.TestVelopackLocator("Thornswood", "1.3.65530", package, package, s.Dir, Path.Combine(package, "Update.exe"), "main"));
+            try
+            {
+                OwnGame.Make(s.Cfg, null);
+                Start(s);
+                Deploy(s, DateTime.UtcNow); // setup's first changed-deployment refresh
+                OwnGame.Refresh(s.Cfg, null);
+                string lastRecipe = Path.Combine(Paths.Game, "Data", "Thornswood-Last.recipe");
+                string shippedScript = Path.Combine(Paths.Game, script.Replace('/', Path.DirectorySeparatorChar));
+                Yes("package: first refresh keeps the installed recipe", File.Exists(lastRecipe));
+                Yes("package: first refresh keeps another shipped script", File.Exists(shippedScript));
+                Yes("package: the installed version excludes an older sync's ownership",
+                    !Updater.ReleaseFiles().Contains(legacy) && !File.Exists(Path.Combine(Paths.Game, legacy)));
+                // An affected older install has lost the files AND their own-
+                // folder record. The package must diagnose that independently.
+                File.Delete(lastRecipe); File.Delete(shippedScript);
+                var kept = new List<string>();
+                string record = Path.Combine(OwnGame.Dir, "files.txt");
+                foreach (string line in File.ReadAllLines(record))
+                    if (!line.Contains("Thornswood-Last.recipe") && !line.Contains("PackageFixture.pex")) kept.Add(line);
+                File.WriteAllLines(record, kept);
+                var issues = new List<Issue>();
+                typeof(Upkeep).GetMethod("LostFiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                    .Invoke(null, new object[] { s.Cfg, true, false, issues });
+                Yes("package: Scan diagnoses files removed from the old folder record", issues.Exists(i => i.Kind == IssueKind.OursLost));
+                issues.Add(Issue.Of(IssueKind.Update, "fixture update waiting", "fixture", "fixture", false));
+                Upkeep.FixOnDisk(s.Cfg, issues, m => Say(s, m));
+                Yes("package: one Fix restores the installed recipe and script even with an update waiting", File.Exists(lastRecipe) && File.Exists(shippedScript));
+                Yes("package: that same Fix builds the missing last plugin", LastPlugin.IsCurrent(Paths.Game));
+                // A cached list is untrusted until its signed hash is checked.
+                // A valid old sync must not become a destructive fallback.
+                string cached = Path.Combine(Paths.ProfileDir, "GitHub", tag, "game-files.json");
+                File.WriteAllText(cached, "{}");
+                Deploy(s, DateTime.UtcNow.AddMinutes(1));
+                var ownBefore = Snap(Paths.Game);
+                bool refused = false;
+                try { OwnGame.Refresh(s.Cfg, null); }
+                catch (Exception ex) { refused = ex.Message.Contains("game-files.json"); }
+                Yes("package: an unauthenticated list stops refresh before any file changes", refused && Same(ownBefore, Snap(Paths.Game)));
+                File.WriteAllBytes(cached, game);
+            }
+            finally { current.SetValue(null, before); held.Remove(tag); }
         }
 
         // ---- 1 --------------------------------------------------------------
@@ -921,13 +1012,15 @@ function Install([string]$name, [bool]$own, [bool]$newer) {
     foreach ($k in $before.Keys) { $pre[$k] = $before[$k] }
     [IO.File]::WriteAllLines((Join-Path $dir 'steam-before.txt'), [string[]]@($before.Keys | Sort-Object | ForEach-Object { $_ + '|' + ($before[$_] -split '\|')[0] + '|' + ($before[$_] -split '\|')[1] }))
     # The load order check reads this PC's own AppData. Off Windows that is
-    # $XDG_DATA_HOME, pointed at the pretend one; Windows answers its own
-    # folder whatever the environment says, so there it may be this PC's.
+    # $XDG_DATA_HOME, pointed at the pretend one. Every install here is one
+    # with no own folder made yet, where a missing list is the collection's
+    # to bring (#4680), so on Windows, which answers its own folder whatever
+    # the environment says, no MISS is left over either.
     $oldXdg = $env:XDG_DATA_HOME
     $env:XDG_DATA_HOME = $local
     try { $out = @(Invoke-LauncherExe $exe install $root $package (Join-Path $dir 'steam') $game $(if ($own) { '1' } else { '0' }) 2>&1 | ForEach-Object { "$_" }) }
     finally { $env:XDG_DATA_HOME = $oldXdg }
-    $misses = @($out | Where-Object { $_ -match '\[MISS\]' } | Where-Object { -not ($OnWindows -and $_ -match 'Load order') })
+    $misses = @($out | Where-Object { $_ -match '\[MISS\]' })
     $ran = (@($out | Where-Object { $_ -match '^install: done' }).Count -eq 1) -and $misses.Count -eq 0
     Yes "$name, installer: it ran through to its checks, and nothing it installs is missing" $ran
     if (-not $ran) { $out | Select-Object -Last 25 | ForEach-Object { Write-Host "      $_" } }
@@ -935,7 +1028,7 @@ function Install([string]$name, [bool]$own, [bool]$newer) {
 }
 
 # ---- 1-3: the installer with Thornswood's own folder chosen --------------------
-foreach ($case in @(@{ Name = 'chosen-vortex-first'; Newer = $false }, @{ Name = 'chosen-vortex-after'; Newer = $false }, @{ Name = 'chosen-downgrade'; Newer = $true })) {
+foreach ($case in @(@{ Name = 'chosen-vortex-first'; Newer = $false }, @{ Name = 'chosen-vortex-after'; Newer = $false }, @{ Name = 'chosen-downgrade'; Newer = $true }, @{ Name = 'chosen-package'; Newer = $false })) {
     $r = Install $case.Name $true $case.Newer
     $n = $case.Name
     Yes "${n}, installer: the Steam copy is byte and time identical after it" (SameSnap $r.Before $r.After)

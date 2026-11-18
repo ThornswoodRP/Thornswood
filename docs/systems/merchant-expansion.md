@@ -4,6 +4,14 @@ Patrick's requirements of 12 October 2026 replace the earlier unrestricted
 trader count and locked quest lineup. This is the implementation contract;
 it does not describe a completed release.
 
+## Contents
+
+- [Roster and tables](#roster-and-tables)
+- [Item catalogue and runtime admission](#item-catalogue-and-runtime-admission)
+- [Quests](#quests)
+- [Existing accepted work](#existing-accepted-work)
+- [Build order and checks](#build-order-and-checks)
+
 ## Roster and tables
 
 Patrick clarified during alpha testing that current merchant purses, stock
@@ -127,9 +135,11 @@ adding many offers must not create an uncapped new daily gold faucet.
 
 ## Existing accepted work
 
-The ten currently bound contracts have retained-trade routes before any old
-trader is retired. Their existing quantities, rewards and cooldowns stay saved;
-these routes do not add new tiers or enable the thirteen unbound contracts.
+The ten original mine and kill contracts below have retained-trade routes.
+Their existing quantities, rewards and cooldowns stay saved, and the routes
+add no new tiers. The other thirteen original works, six scarce works and
+seven retrievals, are bound as well, so all 23 have their specialists
+([Appointed specialists for original work](merchant-legacy-offers.md)).
 
 | Legacy work | Retained trade | Hold rule |
 | --- | --- | --- |
@@ -147,14 +157,15 @@ travels through the quest commit and is checked after native lookups, immediatel
 before changing the character. Closing or replacing that conversation refuses
 the old action. This check is kept only in the working request, never saved on
 the character. Existing actor identities and inventory receipts remain fenced
-by the native transaction. The current roleless roster keeps its earlier offers
-until the six-trade roster and its item tables are explicitly activated together.
+by the native transaction. The six-trade roster and its item tables are
+switched on together, and each trader offers its own trade's work.
 
 Quest rank checks read the saved character record without initializing or
 migrating it. A missing, unreadable or malformed record refuses eligibility;
 opening an offer cannot replace progression after a failed read. Only a valid
-saved rank qualifies. Existing character initialization owns migration. This
-does not enable the expanded profession, half and school quest catalogue.
+saved rank qualifies. Existing character initialization owns migration. The
+expanded profession, half and school catalogue is switched on by its
+activation list ([Merchant quest catalogue](merchant-quest-catalogue.md)).
 
 `game/quest-eligibility.js` supplies the shared eligibility contract.
 `createQuestEligibility({table, spellIds})` captures the canonical progression
@@ -184,7 +195,7 @@ an identity callback from invalidating standing after it was checked, or a
 panel closed during a read from authorizing work. Scarce harvesting also keeps
 its existing class-rank gate at the final inventory write.
 Turn-in, cancellation and kill credit preserve accepted work without rechecking
-eligibility. No new quest, unbound objective, roster cut or reward is enabled.
+eligibility.
 
 ## Build order and checks
 
@@ -330,8 +341,8 @@ Local checks include `node game/tests/test-merchant-trading.js`,
 `node game/tests/test-merchant-settlement.js`,
 `node game/tests/test-merchant-pending-preflight.js`,
 `node game/tests/test-merchant-conservation.js`,
-`node game/tests/test-merchant-deployment.js` and
-`node scripts/dev/Build-MerchantGamemode.js --check`.
+`node game/tests/test-merchant-deployment.js`, `node scripts/dev/Build-MerchantTables.js --check`
+and `node scripts/dev/Build-MerchantGamemode.js --check`.
 These source changes include no game playtests or operational steps. Changes
 merge only after the required exact-head Launcher builds gate, and no change
 is described as live before its release.

@@ -34,7 +34,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -51,27 +50,6 @@ function yes(what, cond, why) {
 
 const BROWSER = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-// Waits for the site's own "[thornswood-docs] listening on ...:port" line
-// rather than polling the port (#1727).
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const end = (e) => { clearTimeout(late); srv.stdout.removeListener('data', said); srv.stderr.removeListener('data', err); srv.removeListener('close', gone); if (e) { srv.kill(); bad(e); } else { ok(); } };
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(); } };
-    const err = (d) => { out += d; };
-    const gone = (code) => end(new Error('site stopped (exit ' + code + ') before it was listening:\n' + out));
-    const late = setTimeout(() => end(new Error('site not listening in 15 s:\n' + out)), 15000);
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', err);
-    srv.on('close', gone);
-  });
-}
 function ask(port, where, accept) {
   return new Promise((ok) => {
     const h = {};
@@ -135,12 +113,12 @@ const LAUNCHER_ROUTES = [
       gameCheckPort: 1, onlineFile: path.join(dir, 'online.json')
     }, null, 2));
 
-    const port = await freePort();
+    let port = 0;
     srv = spawn(process.execPath, [path.join(dir, 'server.js')], {
       cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
     });
-    await listening(srv, port);
+    await siteFiles.listening(srv).then((r) => (port = r.port, r));
 
     console.log('A. a browser is shown a page with a way back:');
     for (const [where, what, codes] of BROWSER_ERRORS) {
@@ -174,5 +152,5 @@ const LAUNCHER_ROUTES = [
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.log('      the scratch folder was not removed: ' + e.message); }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

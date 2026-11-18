@@ -88,7 +88,7 @@ function listening(srv, port) {
   ('close', which comes after 'exit'), rather than for a guessed time, so
   each service is let go before the next part starts (#1960). Node frees
   the process and pipe handles a moment after even that, which is why the
-  harness ends by setting process.exitCode and not by process.exit().
+  harness ends by setting process.exitCode and not by calling node's exit.
 */
 function stopped(srv) {
   return new Promise((ok) => {
@@ -203,11 +203,11 @@ async function main() {
       crypto.createHmac('sha256', SECRET).update(ADMIN_ID + '|Admin|' + at).digest('hex').slice(0, 32);
     const adminCookie = 'twa=' + encodeURIComponent(raw);
 
-    const port = await freePort();
+    let port = 0;
     const srv = spawn(process.execPath, ['server.js'], {
       cwd: site,
       env: Object.assign({}, process.env, {
-        THORNSWOOD_DOCS_PORT: String(port),
+        THORNSWOOD_DOCS_PORT: '0',
         THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
         THORNSWOOD_DOCS_LOCAL: '1',
         THORNSWOOD_DEPLOYS_DIR: store,
@@ -220,7 +220,7 @@ async function main() {
     try {
       let up = false;
       for (let i = 0; i < 120 && !up; i++) {
-        if (out.indexOf('listening on ') >= 0) { up = true; break; }
+        if (siteFiles.saidPort(out)) { port = siteFiles.saidPort(out); up = true; break; }
         if (srv.exitCode !== null) break;
         await wait(50);
       }
@@ -304,13 +304,14 @@ async function main() {
     Ended rather than exited (#1960). Measured with process._getActiveHandles()
     at this line: the last voice service's ChildProcess (killed, SIGTERM) and
     a destroyed pipe were still listed, node still letting go of them, gone
-    1 to 2 ms later. process.exit() in that moment tripped libuv's
+    1 to 2 ms later. Calling node's exit in that moment tripped libuv's
     "!(handle->flags & UV_HANDLE_CLOSING)" (src\win\async.c:76, exit 127) on
     node 24 on Windows in 5 of 5 runs after all checks had passed, and so
     test-1703-test-ports.js, which runs three copies, failed all three. So
     the code is set and node leaves once everything is let go. The catch
-    below still exits, because after a throw a service may be left running.
+    below sets it too: each service is stopped in its own finally, so a
+    throw leaves none running (#6036).
   */
   process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exit(1); });
+main().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exitCode = 1; });

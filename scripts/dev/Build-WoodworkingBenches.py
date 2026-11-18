@@ -576,8 +576,16 @@ def collection_stop(plugins, ours, data):
     Both ways round (#4423): each plugin read, except ours, is in the record
     with the record's bytes; and each plugin the record lists is in the order.
     Asking only the first let a table be built without a plugin the collection
-    installs, with nothing saying so."""
-    record = json.load(io.open(COLLECTION_PLUGINS, encoding='utf-8'))
+    installs, with nothing saying so.
+
+    The record itself is read through own_plugins.read_collection_plugins, so
+    one at a version this checkout does not know, with a plugin twice or a
+    row short of a field, or no record at all, is a STOP naming the file
+    (#4279)."""
+    try:
+        record = own_plugins.read_collection_plugins(COLLECTION_PLUGINS)
+    except ValueError as exc:
+        return 'STOP. %s' % exc
     rec = {r['name'].lower(): r for r in record['plugins']}
     other = [pl.name for pl in plugins if pl.name not in ours and
              (pl.name.lower() not in rec or rec[pl.name.lower()]['sha256'].lower() != pl.sha256)]

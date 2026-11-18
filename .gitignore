@@ -61,7 +61,7 @@ bot/heartbeat.json.tmp
 bot/roots.pem
 bot/roots.pem.tmp
 
-# The dev build's own news webhook, for the dev updates channel. Same rule as
+# The dev build's own news webhook, for #staff-news. Same rule as
 # news-webhook.txt above: anyone holding the URL can post as the bot.
 bot/dev-webhook.txt
 
@@ -156,3 +156,54 @@ bot/data/
 # and its setup is its own, so the folder is ignored rather than moved.
 # Patrick, report page, 22 Oct 2026.
 /.codex-remote-attachments/
+
+# What the box's content build writes (#5191, stage 4e). Nothing generated is
+# committed (Patrick's B on #5191, 1 Nov 2026): the box builds the content
+# plugin and every table at deploy (scripts\mods\Build-ContentOnBox.ps1), and
+# a checkout lays that build (scripts\release\Get-ContentBuild.ps1 -Newest, or
+# -Take for its own commit's). The list is every path the chain of
+# scripts\mods\content-tables.json writes, less the few it names committed;
+# tests\test-5191-leave-git.ps1 holds the two to each other.
+/game/content/Thornswood-Content.esp
+/game/data/npc-population.json
+/game/data/hunts.json
+/game/data/ores.json
+/game/data/harvests.json
+/game/data/races.json
+/game/data/food.json
+/game/data/ingredients.json
+/game/data/spells.json
+/game/data/fires.json
+/game/data/warmth.json
+/game/data/waters.json
+/game/plugins/thornswood-table-placed-waters.js
+/game/data/weather.json
+/game/data/worldspaces.json
+/game/data/own-worlds.json
+/game/data/doors.json
+/game/data/jails.json
+/game/data/wells.json
+/game/data/cast.json
+/game/data/recipes.json
+/game/data/recost.json
+/game/data/last-plugin.recipe
+/game/data/last-plugin.json
+/game/data/crime-factions.json
+/game/plugins/thornswood-table-no-bounty-factions.js
+/game/data/resource-locations.json
+/docs/FISHING-SPOTS.csv
+/docs/HANGING-GAME-SPOTS.csv
+/docs/HUNTING-SPOTS.csv
+/game/data/building-holds.json
+/game/data/woodworking-benches.json
+/game/data/market-stalls.json
+/game/plugins/thornswood-table-stall-spots.js
+/game/data/merchant-role-tables.json
+/game/data/merchant-retrievals.json
+/tests/fixtures/merchant-retrieval-records.json
+/game/data/merchant-scarce-geodes.json
+/game/data/merchant-scarce-harvest.json
+/game/data/item-sources.json
+/game/ui/thornswood-profession-guides.js
+/docs/systems/lists/
+/game/gamemode-tables/

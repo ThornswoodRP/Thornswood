@@ -33,7 +33,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
@@ -75,12 +74,6 @@ function ticket(id) {
 const T = (id) => 'ticket=' + encodeURIComponent(ticket(id));
 const TYPE = { '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.webm': 'video/webm' };
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(method, where, headers, body) {
@@ -131,10 +124,10 @@ function leaks(b) {
 }
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
@@ -155,8 +148,9 @@ function leaks(b) {
     srv.stdout.on('data', look);
   });
   try {
-    for (let i = 0; i < 100 && out.indexOf('listening on ') < 0 && srv.exitCode === null; i++) await wait(50);
-    if (out.indexOf('listening on ') < 0) throw new Error('the scratch site never came up:\n' + out);
+    for (let i = 0; i < 100 && !siteFiles.saidPort(out) && srv.exitCode === null; i++) await wait(50);
+    if (!siteFiles.saidPort(out)) throw new Error('the scratch site never came up:\n' + out);
+    PORT = siteFiles.saidPort(out);
 
     for (const c of cases) {
       const file = c.name + c.ext;
@@ -220,9 +214,9 @@ function leaks(b) {
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
   console.error(e);
   fs.rmSync(dir, { recursive: true, force: true });
-  process.exit(1);
+  process.exitCode = 1;
 });

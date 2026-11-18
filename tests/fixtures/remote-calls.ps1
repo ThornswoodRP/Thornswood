@@ -13,7 +13,9 @@ $RemoteCallLinesAbove = 3
 function Get-RemoteCalls([string]$Root) {
     $found = New-Object System.Collections.Generic.List[object]
     $files = Get-ChildItem -LiteralPath (Join-Path $Root 'scripts') -Recurse -File |
-        Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' } | Sort-Object FullName
+        Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' } |
+        # Not the scripts' own harnesses in scripts\tests (#5341): their calls go to stand-ins.
+        Where-Object { $_.FullName.Substring($Root.Length) -notmatch '^[\\/]scripts[\\/]tests[\\/]' } | Sort-Object FullName
     foreach ($f in $files) {
         $tokens = $null; $errs = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errs)

@@ -30,7 +30,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -41,7 +41,7 @@ function slice(src, start, end) {
 
 const TRADE = slice(gm, '// ==== thornswood trade ====', '// ==== end thornswood trade ====');
 yes('the trade block is in the gamemode', TRADE !== null);
-if (TRADE === null) { done(); }
+if (TRADE === null) { done(); } else {
 
 // ------------------------------------------------------------ the engine --
 const ENTRY_FIELDS = ['baseId', 'count', 'health', 'enchantmentId', 'maxCharge',
@@ -370,3 +370,4 @@ attempt('moveById and saleById with a piece', function () {
 }
 
 done();
+}

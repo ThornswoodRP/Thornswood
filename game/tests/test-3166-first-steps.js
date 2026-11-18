@@ -65,7 +65,7 @@ function done() {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function copy(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
@@ -91,7 +91,7 @@ function traderOf(hold, role) {
 }
 const WCOOK = traderOf('whiterun', 'Cook'), RCOOK = traderOf('riften', 'Cook'), WSMITH = traderOf('whiterun', 'Smith');
 yes('P0 the guild lists a Cook in Whiterun and in Riften, and a Smith in Whiterun', !!WCOOK && !!RCOOK && !!WSMITH);
-if (!WCOOK || !RCOOK || !WSMITH) { done(); }
+if (!WCOOK || !RCOOK || !WSMITH) { done(); } else {
 function idOfRef(ref) { return parseInt(ref.split(':')[0], 16); }
 const COOK = idOfRef(WCOOK.ref), RIFTEN_COOK = idOfRef(RCOOK.ref);
 const OTHER = idOfRef(traderOf('whiterun', 'Alchemist').ref);
@@ -251,7 +251,7 @@ function saved() { return new Map(JSON.parse(JSON.stringify(Array.from(store.ent
 
 let proc = boot();
 yes('P1 the whole gamemode loads over the stand-in' + (proc.err ? ' (it threw: ' + proc.err.message + ')' : ''), !proc.err);
-if (proc.err) { done(); }
+if (proc.err) { done(); } else {
 proc.run(30000);
 yes('P1 the first steps block is loaded', !!proc.box.__thornswoodFirstSteps);
 
@@ -434,7 +434,7 @@ yes('H3 and the Cook has nothing to say to them after it', cookSaid(PID2, at).le
   try { vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
   const api = win.thornswoodSkills;
   yes('U0 the K panel runs in a stand-in document', ran && !!api);
-  if (!api) { done(); }
+  if (api) {
   const root = docu.body.children[0];
   const nav = root._q['.nav'], body = root._q['.body'], confirmBtn = root._q['[data-act="confirm"]'];
   const navNames = function () {
@@ -466,6 +466,7 @@ yes('H3 and the Cook has nothing to say to them after it', cookSaid(PID2, at).le
   yes('U5 not while creating', navNames().indexOf('First steps') < 0);
   api.setData(null, { panel: Object.assign({}, shown, { firstSteps: undefined }) });
   yes('U6 and gone once the server stops sending it', navNames().indexOf('First steps') < 0);
+  }
 }
 
 // ------------------------------------------------- W. the words on the page --
@@ -485,3 +486,4 @@ yes('H3 and the Cook has nothing to say to them after it', cookSaid(PID2, at).le
 // -------------------------------------------------------------- Z. timers --
 yes('Z no timer threw' + (proc.threw.length ? ': ' + proc.threw.slice(0, 3).join(' | ') : ''), proc.threw.length === 0);
 done();
+}}

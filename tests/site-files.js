@@ -20,6 +20,17 @@
     siteFiles.copy(dir, other, patch)   another copy's server.js (and its
                                         lib\ when it has one), each file's
                                         text through patch(text, rel)
+    siteFiles.listening(child)          a copy started on port 0: resolves
+                                        with { port, out } once it has said
+                                        the port the system gave it
+    siteFiles.saidPort(text)            that port from what a copy printed,
+                                        0 while it has not said it
+
+  A copy a harness runs is started with THORNSWOOD_DOCS_PORT=0 and asked
+  nothing until it has said its port (#6136). A port the harness takes from
+  the system and lets go can be taken by somebody else before the copy
+  listens on it: on the Linux gate a copy exited with EADDRINUSE on the port
+  freePort() had just closed, with four to six harnesses running at once.
 
   Where a harness takes another copy of the site to run against, other is
   that copy's server.js; one from before the split is the whole program.
@@ -52,6 +63,8 @@ function files(p) {
     const rel = 'lib/' + m[1] + '.js';
     if (out.indexOf(rel) < 0) out.push(rel);
   }
+  // News uses the same image code on the server and in the browser.
+  if (fs.existsSync(path.join(w.app, 'public/news-pictures.js'))) out.push('public/news-pictures.js');
   return out;
 }
 
@@ -75,4 +88,35 @@ function copy(dir, p, patch) {
   }
 }
 
-module.exports = { APP, files, source, copy };
+// The port in a copy's "[thornswood-docs] listening on <address>:<port>"
+// line, 0 while it has not said one.
+function saidPort(text) {
+  const m = /\[thornswood-docs\] listening on \S+:(\d+)\r?\n/.exec(String(text));
+  return m ? Number(m[1]) : 0;
+}
+
+// Waits for a copy started on port 0 to say the port it got. Rejects when
+// the copy stops first, or says nothing in ms (15 s), with what it printed.
+function listening(child, ms) {
+  return new Promise((ok, bad) => {
+    let out = '';
+    let late = null;
+    const end = (e) => {
+      clearTimeout(late);
+      child.stdout.removeListener('data', said);
+      child.stderr.removeListener('data', said);
+      child.removeListener('exit', gone);
+      if (e) { bad(e); } else { ok({ port: saidPort(out), out: out }); }
+    };
+    const said = (d) => { out += d; if (saidPort(out)) { end(null); } };
+    const gone = (code) => end(new Error('the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
+    child.stdout.on('data', said);
+    child.stderr.on('data', said);
+    child.on('exit', gone);
+    late = setTimeout(() => end(new Error('the site did not say it was listening within ' + Math.round((ms || 15000) / 1000) +
+                                         ' seconds. It printed:\n' + out)), ms || 15000);
+    if (child.exitCode !== null) { gone(child.exitCode); }
+  });
+}
+
+module.exports = { APP, files, source, copy, listening, saidPort };

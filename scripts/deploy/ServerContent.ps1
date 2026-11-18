@@ -9,8 +9,8 @@
   PowerShell 7.
 
   WHY, issue #2308. On 11 Oct the dev Ship 20261011-221215-dev sent clients a
-  new Data\Thornswood-Content.esp (146,381 bytes), posted to the dev updates
-  channel, told the dev server to restart and pushed its tag, while the dev
+  new Data\Thornswood-Content.esp (146,381 bytes), posted to
+  #staff-news, told the dev server to restart and pushed its tag, while the dev
   server still had the old one (146,446 bytes). Ship and the server deploy
   are two runs, and nothing in the release asked what the server held. For
   eight minutes every dev client that updated held a content plugin the

@@ -18,6 +18,7 @@ const { GALLERY, GPENDING, GREPORTS, UPMETA } = require('./uploads');
 const { LINKED } = require('./discord');
 const { ROSTER } = require('./roster');
 const { ATTEMPTS } = require('./signins');
+const { PCS } = require('./pcs');
 const { SESSIONS, SLOGS } = require('./sessions');
 const { TROUBLE_FILE } = require('./trouble');
 const { SETTINGS } = require('./your-settings');
@@ -85,7 +86,7 @@ function applyDeletionRequests() {
   }
 
   const SPEC = [
-    ['linked', LINKED, {}], ['rules', RULES_OK, {}], ['signins', ATTEMPTS, []], ['sessions', SESSIONS, []],
+    ['linked', LINKED, {}], ['rules', RULES_OK, {}], ['signins', ATTEMPTS, []], ['pcs', PCS, []], ['sessions', SESSIONS, []],
     ['trouble', TROUBLE_FILE, []], ['roster', ROSTER, {}], ['inbox', INBOX, []], ['pending', GPENDING, []],
     ['gallery', GALLERY, []], ['reports', GREPORTS, []], ['umeta', UPMETA, {}], ['settings', SETTINGS, {}]
   ];
@@ -124,6 +125,7 @@ function applyDeletionRequests() {
       if (keep.length !== f[k].v.length) { gone(label, f[k].v.length - keep.length); f[k].v = keep; f[k].dirty = true; }
     };
     filter('signins', (x) => !(isObj(x) && String(x.id) === id), 'sign-in rows');
+    filter('pcs', (x) => !(isObj(x) && String(x.id) === id), 'PC rows');
     const kept = new Set(), ended = new Set();
     filter('sessions', (x) => {
       if (!(isObj(x) && String(x.who) === id)) return true;

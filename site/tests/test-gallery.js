@@ -38,7 +38,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -102,12 +101,6 @@ function ticket(id, name) {
   return 'tk1.' + b + '.' + crypto.createHmac('sha256', SECRET).update('ticket:' + b).digest('hex').slice(0, 32);
 }
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 function wait(ms) { return new Promise((ok) => setTimeout(ok, ms)); }
 
 let PORT = 0;
@@ -153,11 +146,11 @@ const JPG = Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex');
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'data', f), 'utf8')); } catch (e) { return null; } };
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat')
@@ -170,7 +163,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir,
   try {
     let up = false;
     for (let i = 0; i < 100 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
+      if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }
@@ -467,10 +460,10 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir,
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

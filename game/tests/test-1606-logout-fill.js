@@ -40,7 +40,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -52,7 +52,7 @@ function slice(start, end) {
 const needsBlock = slice('// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 const propBlock = slice('// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the needs and property blocks are in the gamemode', !!needsBlock && !!propBlock);
-if (!needsBlock || !propBlock) { done(); }
+if (!needsBlock || !propBlock) { done(); } else {
 
 const HOUR = 3600000;
 const MIN = 60000;
@@ -510,3 +510,4 @@ bedTick();
 
 try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 done();
+}

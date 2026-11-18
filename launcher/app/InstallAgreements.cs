@@ -32,6 +32,14 @@ namespace Thornswood
             "I have read and agree to the Rules",
         };
 
+        /// <summary>
+        /// What a screen reader says for each page's link, in the order of
+        /// Pages, which names its page: the words it shows are "Read them"
+        /// twice (#4693). The same as Acceptance.LinkNames in the launcher's
+        /// own terms window (#4329).
+        /// </summary>
+        public static readonly string[] LinkNames = { "Read the Terms and Conditions", "Read the Privacy Policy", "Read the Rules" };
+
         /// <summary>The age box, which sits above the three.</summary>
         public const string AgeWords = "I am 18 or over. Thornswood is an adult server.";
 
@@ -124,7 +132,7 @@ namespace Thornswood
                     try { shas[i] = PageSha(FetchPage(http, Pages[i])); }
                     catch (Exception e) when (e is HttpRequestException || e is System.Threading.Tasks.TaskCanceledException || e is JsonException)
                     {
-                        say("  The site did not answer for the " + Pages[i] + " page (" + e.Message + "), so its version is recorded empty.");
+                        say("  The site did not answer for the " + Pages[i] + " page (" + Failure.Why("InstallAgreements, " + Pages[i], e, "thornswood.net") + "), so its version is recorded empty.");
                         shas[i] = "";
                     }
                 }
@@ -136,7 +144,7 @@ namespace Thornswood
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                say("Could not note what you accepted: " + e.Message);
+                say("Could not note what you accepted: " + Failure.Say("InstallAgreements, noting what was accepted", e));
             }
         }
     }

@@ -4,6 +4,9 @@
 //     node scripts\mods\Check-CreationForms.js --data <a Data folder> --plugins <its plugins.txt>
 //     node scripts\mods\Check-CreationForms.js --write records\update-creation-club.json
 //
+// With no --plugins it reads C:\Thornswood\Profile\LocalAppData\plugins.txt,
+// whatever --data is.
+//
 // Does anything in the load order, or anything the gamemode hands out, need
 // Creation Club content that plain Special Edition does not load? Exit 0 when
 // nothing does, 1 when something does, and 0 with a SKIP on a machine with no
@@ -419,13 +422,28 @@ function main() {
   console.log('');
   console.log('  THORNSWOOD  -  does anything need Creation Club content?');
   const update = path.join(data, 'Update.esm');
-  if (!fs.existsSync(update) || !fs.existsSync(list)) {
+  // SKIP is the answer only where there is no game to read (#4542). A --write
+  // run is asked for a file, so with no game it fails: it wrote nothing.
+  if (!fs.existsSync(update)) {
     console.log('');
-    console.log('  SKIP. No game folder and plugin list on this machine, so there is');
-    console.log('  nothing to read. This is the answer on a build runner.');
+    if (write) {
+      console.log('  NOT WRITTEN. ' + write + ' is read out of Update.esm, and there is none at');
+      console.log('    ' + update);
+      return 1;
+    }
+    console.log('  SKIP. No game folder on this machine, so there is nothing to read.');
+    console.log('  This is the answer on a build runner.');
     console.log('    looked for ' + update);
-    console.log('    and        ' + list);
     return 0;
+  }
+  // The game is here, so the list of what it loads has to be too: without it
+  // nothing below reads a single plugin.
+  if (!fs.existsSync(list)) {
+    console.log('');
+    console.log('  NOT READ. The game folder is here but its plugin list is not, so no plugin');
+    console.log('  could be read. Name the list with --plugins.');
+    console.log('    looked for ' + list);
+    return 1;
   }
 
   const updateBuf = fs.readFileSync(update);
@@ -463,6 +481,9 @@ function main() {
     }
   }
   console.log('  ' + read + ' enabled plugins read, ' + absent.length + ' named but not in Data');
+  // A plugin the list switches on and Data does not have was never read, so
+  // nothing here can say it needs nothing (#4542).
+  for (const n of absent) { bad++; console.log('  NOT READ  ' + n + ' is switched on in the list but is not in ' + data); }
 
   const every = gamemodeUses(cc, null, true);
   const gm = every.filter(function (h) { return !h.allowed; });
@@ -472,7 +493,8 @@ function main() {
 
   console.log('');
   if (bad) {
-    console.log('  Something above needs Creation Club content that Special Edition does not load.');
+    console.log('  Something above needs Creation Club content that Special Edition does not load,');
+    console.log('  or was not read. A plugin not read comes from the right --data and --plugins.');
     console.log('  A plugin comes out through the collection and one complete release; a gamemode row');
     console.log('  comes out of the table script that wrote it.');
     return 1;

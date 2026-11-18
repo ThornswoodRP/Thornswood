@@ -11,6 +11,26 @@ the file, a colon, and a name it declares or its own words, never a line
 number (#1075, #2416). Search the file for what follows the colon.
 `tests\test-1075-script-citations.js` fails when a cited name goes away.
 
+## Contents
+
+- [Why it is one file](#why-it-is-one-file)
+- [Where its source is](#where-its-source-is)
+- [How the blocks find each other](#how-the-blocks-find-each-other)
+- [The map](#the-map)
+- [Startup and settings](#startup-and-settings)
+- [Character creation](#character-creation)
+- [The door](#the-door)
+- [Professions, benches and BENCH_ACCESS](#professions-benches-and-bench_access)
+- [Spells, tomes and staff spells](#spells-tomes-and-staff-spells)
+- [Property, offices, rent and gold](#property-offices-rent-and-gold)
+- [Needs](#needs)
+- [Chat and commands](#chat-and-commands)
+- [How it talks to the plugins](#how-it-talks-to-the-plugins)
+- [Where its data lives on the VPS](#where-its-data-lives-on-the-vps)
+- [Generated tables](#generated-tables)
+- [Deploying it](#deploying-it)
+- [Tests that read it](#tests-that-read-it)
+
 ## Why it is one file
 
 `requireTemp()` in skymp5-server copies the file to a temp folder and requires
@@ -376,16 +396,18 @@ because each reads the one before.
 | `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT` | `Build-DoorTable.py` | `doors.json` | `Build-DoorTable.py:changed = gamemode_tables.write(name` |
 | `BENCH_BY_BASE`, `BENCH_ACCESS` | `Build-BenchTable.py`, from `recipes.json` | none | `Build-BenchTable.py:gamemode_tables.write('BENCH_BY_BASE'` |
 | `SPELL_IDS` | `Build-SpellTable.ps1` | `spells.json` | `Build-SpellTable.ps1:Write-GamemodeTable 'SPELL_IDS'` |
-| `DATA` | `Install-GamemodeConsts.js` | `data.json` | `Install-GamemodeConsts.js` |
-| `DATA.worldspaces`, inside `DATA` | `Build-WorldspaceTable.js`, from the WRLD records of the load order | `data.json` (`worldspaces`) | `Build-WorldspaceTable.js:install`, the list and nothing else of the line |
-| `DATA.ownWorlds` and `DATA.ownWorldDoors`, inside `DATA` | `Build-WakeTable.js`, from the doors, rooms and locations of the load order | `data.json` (`ownWorlds`, `ownWorldDoors`) | `Build-WakeTable.js:install`, the two tables and nothing else of the line |
+| `DATA` | `Build-WakeTable.js`, `data.json` as written with `worldspaces.json` and `own-worlds.json` after it (`DataTable.js`) | `data.json`, `worldspaces.json`, `own-worlds.json` | `Build-WakeTable.js:TABLES.write('DATA'` |
+| `DATA.worldspaces`, inside `DATA` | `Build-WorldspaceTable.js`, from the WRLD records of the load order | `worldspaces.json` | `Build-WorldspaceTable.js:install` |
+| `DATA.ownWorlds` and `DATA.ownWorldDoors`, inside `DATA` | `Build-WakeTable.js`, from the doors, rooms and locations of the load order | `own-worlds.json` | `Build-WakeTable.js:install` |
 | `STATIONS` | `Install-GamemodeConsts.js` | `stations.json` | `Install-GamemodeConsts.js` |
 | `ITEMS` | `Install-GamemodeConsts.js` | `items.json` | `Install-GamemodeConsts.js` |
 | `CHARGEN` | `Install-GamemodeConsts.js` | `chargen.json` | `Install-GamemodeConsts.js` |
 
-`DATA`, `STATIONS`, `ITEMS` (`gamemode.js:DATA`, `gamemode.js:STATIONS`, `gamemode.js:ITEMS`, at the top) and `CHARGEN` (`gamemode.js:CHARGEN`)
+`STATIONS`, `ITEMS` (`gamemode.js:STATIONS`, `gamemode.js:ITEMS`, at the top) and `CHARGEN` (`gamemode.js:CHARGEN`)
 are installed from checked-in JSON by `scripts\dev\Install-GamemodeConsts.js`
-(`data.json`, `stations.json`, `items.json`, `chargen.json` under `game\data`).
+(`stations.json`, `items.json`, `chargen.json` under `game\data`), and its
+`--check` also holds `DATA` (`gamemode.js:DATA`) to `data.json` with the built
+parts after it.
 They are not read out of the plugins: the values were recovered into JSON when
 `tools\thornswood-src` was retired (5d1f3f0). Edit the JSON, then run the
 installer. `--check` proves the gamemode matches.
@@ -393,8 +415,11 @@ installer. `--check` proves the gamemode matches.
 The one part of them that is read out of the plugins is `DATA.worldspaces`,
 the set `WORLDSPACES` reads as a worldspace rather than a room (#1896): every
 WRLD record of the load order, overrides counted as the record they override.
-`scripts\dev\Build-WorldspaceTable.js` writes it into `data.json` and the DATA
-table, and `--check` says whether both hold the load order's list. Run it when
+`scripts\dev\Build-WorldspaceTable.js` writes it into `game\data\worldspaces.json`,
+and `--check` says whether that holds the load order's list. `data.json` is
+written by hand only: `DATA` is `data.json` as written with `worldspaces.json`
+and `own-worlds.json` after it, which `Build-WakeTable.js` writes
+(`scripts\dev\DataTable.js`, #5191). Run it when
 a plugin that adds a worldspace comes into the load order. Its two readers,
 `resolveArrival` and `climateOf`, pick the same hold for a worldspace in the
 set or out of it, because `cellToHold` names no worldspace; what the set
@@ -416,8 +441,8 @@ worldspace with no place of its own wakes them where a death in that hold
 would (`came-in-by`); with no door written down it wakes at the fallback
 temple, logged `own-world-no-door` or `own-world-no-hold`. `climateOf` still
 measures such a worldspace against the mainland's map. Run it with
-Build-WorldspaceTable.js, and `--check` says whether both places hold what the
-load order says. Older comments named
+Build-WorldspaceTable.js; it writes `game\data\own-worlds.json` and the DATA
+table, and `--check` says whether both hold what the load order says. Older comments named
 `respawn-holds.json`; that file never lived in this repository.
 `fires.json` is not in the gamemode: it goes into `thornswood-front.js`.
 

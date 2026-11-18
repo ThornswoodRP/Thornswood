@@ -9,7 +9,7 @@ news_post_parts, news_once).
 It holds:
   - the files are read in the agent's shape; no folder is no news, a file
     that does not read is left out;
-  - a dev release (dev, site or the bot) goes to the dev updates channel and
+  - a dev release (dev, site or the bot) goes to #staff-news and
     a main one to #news, each tag once however many places it reached;
   - the notes merge-release.yml writes when nothing people would notice
     changed, empty notes, and a release deployed over a day ago are written
@@ -20,6 +20,10 @@ It holds:
     and gold for main, no Claude Code footer, long notes cut at a line;
   - a Main Server change (only the bot or the site) is posted in #news once,
     labelled Main Server, read from the pull requests the Release carries;
+  - its note is read by tools/ReleaseNotes/NoteRules.cs, the one copy of the
+    rule, through pwsh's Add-Type, so "release note:" in any case counts as
+    the check reads it, and nothing in bot/ reads the line itself (#6004);
+    the bot is sent NoteRules.cs with its code;
   - a post that fails is tried again next pass and the releases after it in
     that channel wait; the other channel goes on;
   - the record is saved after each one and keeps the newest 200 a channel;
@@ -36,6 +40,7 @@ sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
 import asyncio
 import json
+import re
 import shutil
 import tempfile
 import time
@@ -111,7 +116,7 @@ finally:
 state, w = {}, World()
 done = run(state, w, [doc('dev', 'build-1', at=NOW - 30), doc('site', 'build-1', at=NOW - 20),
                       doc('discord', 'build-1', at=NOW - 10)])
-yes('a release that reached dev, the site and the bot is one post, in the dev updates channel',
+yes('a release that reached dev, the site and the bot is one post, in #staff-news',
     done == [('dev', 'build-1', 'post')] and len(w.posts) == 1 and w.posts[0][0] == 'dev')
 yes('it is written down with its message', state['said']['dev']['build-1']['message'] == 501 and w.saves == 1)
 run(state, w, [doc('dev', 'build-1')])
@@ -200,12 +205,38 @@ yes('  the build changes touched the game server, the launcher, voice and Discor
     info['areas'] == ['game server', 'launcher', 'voice', 'Discord'])
 yes('  the change that touched only the bot, the site, docs and tests is a Main Server change, with its note',
     info['live'] == [(5934, ('React to the rules to get in', ['- Reacting gives Member.']), ['site', 'Discord'])])
+if shutil.which('pwsh'):
+    notes = bot.pr_release_notes([
+        'release note: Lower case counts\n- As the check reads it.',
+        '<!-- Release note: hidden -->\n**Release note:** Bold counts',
+        'Release note: none',
+        'No line here.'])
+    yes('the note is PrNote.Read\'s: any case, outside comments, none and no line are nothing (#6004)',
+        notes == [('Lower case counts', ['- As the check reads it.']), ('Bold counts', []), None, None])
+else:
+    print('SKIP  no pwsh here to compile tools/ReleaseNotes/NoteRules.cs with')
+yes('  and with no bodies the rules are not asked', bot.pr_release_notes([]) == [])
+def _text(path):
+    with open(path, encoding='utf-8') as fh:
+        return fh.read()
+
+
+_bot_dir = os.path.join(HERE)
+_readers = [f for f in os.listdir(_bot_dir) if f.endswith('.py')
+            and re.search(r'Release note:\(', _text(os.path.join(_bot_dir, f)))]
+yes('  nothing in bot/ reads the line itself (got %r)' % (_readers,), _readers == [])
+_root = os.path.dirname(HERE)
+_install = _text(os.path.join(_root, 'scripts', 'deploy', 'Install-Bot.ps1'))
+_part = _text(os.path.join(_root, 'scripts', 'release', 'App-Part.ps1'))
+yes('  NoteRules.cs goes to the box beside the bot, by Install-Bot.ps1 and in the bot\'s Release part',
+    "$send['NoteRules.cs'] = (Join-Path $Repo 'tools\\ReleaseNotes\\NoteRules.cs')" in _install
+    and "Add-One 'NoteRules.cs' 'tools/ReleaseNotes/NoteRules.cs'" in _part)
 yes('  a tag that is not a build Release is not read', bot.release_about('main-build-1.3.20', get=fake_get) is None)
 yes('a Main Server change is only the bot or the site, with docs and tests beside',
     bot.is_main_server_change(['bot/bot.py', 'docs/x.md']) and bot.is_main_server_change(['site/lib/x.js'])
     and not bot.is_main_server_change(['bot/bot.py', 'scripts/x.ps1'])
     and not bot.is_main_server_change(['docs/x.md', 'tests/y.js']) and not bot.is_main_server_change([]))
-ms = json.load(open(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
+ms = json.loads(_text(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
 yes('  the same paths Collect-ReleaseNotes.ps1 reads',
     sorted(ms['live']) == sorted(p for p, a in bot.AREAS if a in bot.LIVE_AREAS)
     and tuple(ms['neutral']) == bot.NEUTRAL)
@@ -273,13 +304,162 @@ yes('the record keeps the newest 200 a channel', len(state['said']['dev']) == bo
 src = harness_bot.source()
 yes('the loop is started with the others', 'asyncio.create_task(watch_release_news())' in src)
 yes('dev news goes to the id in dev-channel.txt',
-    bot.DEV_NEWS_ID == int(open(os.path.join(HERE, 'dev-channel.txt')).read().strip()))
+    bot.DEV_NEWS_ID == int(_text(os.path.join(HERE, 'dev-channel.txt')).strip()))
 # #news was named by no file until 9 Nov, so no main release was ever posted.
 yes('main news goes to the id in news-channel.txt, which is there',
-    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(open(os.path.join(HERE, 'news-channel.txt')).read().strip()))
+    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(_text(os.path.join(HERE, 'news-channel.txt')).strip()))
 yes('the folder is the one the agent writes', bot.NEWS_DIR == r'C:\Thornswood-Deploys\for-bot'
     or os.environ.get('THORNSWOOD_NEWS_DIR'))
 
 print()
+with open(os.path.join(HERE, '..', 'tests', 'fixtures', 'news-picture-cases.json'), encoding='utf-8') as f:
+    picture_cases = json.load(f)
+for index, case in enumerate(picture_cases):
+    yes('screenshot contract case ' + str(index), bot.news_picture(case['line']) == case['image'])
+line = picture_cases[0]['line']
+parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text\n- ' + line})
+yes('release post extracts the screenshot without losing text', parts['image'] == picture_cases[0]['image'] and parts['description'] == '- Keep the text')
+parts = bot.main_server_parts(('A clearer character panel', ['- Keep the text', '- ' + line]), ['Discord'])
+yes('live change post also extracts its screenshot', parts['image'] == picture_cases[0]['image'] and parts['description'] == '- Keep the text')
+parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n' + line})
+yes('a bare image line stays literal without becoming a screenshot', parts['image'] is None and parts['description'].startswith('`!['))
+parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- ![Panel](https://example.com/news-panel.png)'})
+yes('a rejected image cannot become a masked external link', parts['image'] is None and parts['description'].startswith('`- !['))
+class NewsPictureChannel:
+    guild = None
+    async def send(self, **kwargs):
+        self.sent = kwargs
+        return object()
+ch = NewsPictureChannel()
+before_channel = bot.client.get_channel
+before_picture_ready = bot._news_picture_ready
+try:
+    bot.client.get_channel = lambda cid: ch
+    async def picture_ready(image):
+        return True
+    bot._news_picture_ready = picture_ready
+    pic = {'url': picture_cases[0]['image']['url'], 'alt': '||The panel||'}
+    parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text'})
+    parts['image'] = pic
+    asyncio.run(bot._news_send('dev', parts, set()))
+    embed = ch.sent['embed'].to_dict()
+    yes('real Discord embed carries the image and a full screenshot link', embed['image']['url'] == pic['url'] and '[Open full screenshot]' in embed['fields'][0]['value'])
+    yes('Discord caption is literal rather than a spoiler', embed['fields'][0]['value'].startswith('`||The panel||`'))
+    ch.sent = None
+    async def picture_missing(image):
+        return False
+    bot._news_picture_ready = picture_missing
+    yes('Discord waits rather than posting a missing screenshot', asyncio.run(bot._news_send('dev', parts, set())) is None and ch.sent is None)
+finally:
+    bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
+
+# Exercise the actual HEAD request and redirect policy on a loopback fixture.
+import http.server
+import threading
+
+class PictureServer(http.server.BaseHTTPRequestHandler):
+    seen = []
+    def do_HEAD(self):
+        self.seen.append(('HEAD', self.path))
+        self.send_response(302 if self.path == '/redirect' else 200)
+        if self.path == '/redirect':
+            self.send_header('Location', '/picture')
+        kinds = {'/coalesced': 'image/png; charset=binary, text/html',
+                 '/quoted': 'image/png; name="panel,wide.png"',
+                 '/unterminated': 'image/png; name="unterminated'}
+        self.send_header('Content-Type', kinds.get(self.path, 'image/png ; charset=binary'))
+        if self.path == '/conflict':
+            self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+    def do_GET(self):
+        self.seen.append(('GET', self.path))
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+
+server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), PictureServer)
+worker = threading.Thread(target=server.serve_forever, daemon=True)
+worker.start()
+try:
+    url = 'http://127.0.0.1:%d' % server.server_port
+    yes('HEAD accepts valid media-type whitespace', asyncio.run(bot._news_picture_ready({'url': url + '/picture'})))
+    refused = not asyncio.run(bot._news_picture_ready({'url': url + '/redirect'}))
+    yes('HEAD refuses redirects without following or changing method', refused and PictureServer.seen == [('HEAD', '/picture'), ('HEAD', '/redirect')])
+    yes('HEAD refuses conflicting media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/conflict'})))
+    yes('HEAD refuses coalesced media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/coalesced'})))
+    yes('HEAD accepts a comma inside a quoted MIME parameter', asyncio.run(bot._news_picture_ready({'url': url + '/quoted'})))
+    yes('HEAD refuses an unterminated quoted MIME parameter', not asyncio.run(bot._news_picture_ready({'url': url + '/unterminated'})))
+finally:
+    server.shutdown()
+    server.server_close()
+    worker.join()
+
+before_channel = bot.client.get_channel
+before_picture_ready = bot._news_picture_ready
+before_wait_for = bot.asyncio.wait_for
+try:
+    bot.client.get_channel = lambda cid: ch
+    ch.sent = None
+    deadlines = []
+    cancellations = []
+    async def short_deadline(awaitable, timeout):
+        deadlines.append(timeout)
+        return await before_wait_for(awaitable, timeout=0.02)
+    bot.asyncio.wait_for = short_deadline
+    async def slow_request():
+        release = asyncio.Event()
+        async def blocked_picture(image):
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancellations.append(True)
+                raise
+            return True
+        bot._news_picture_ready = blocked_picture
+        result = await before_wait_for(bot._news_send('dev', parts, set()), timeout=2)
+        before_release = ch.sent is None
+        release.set()
+        # Keep the loop alive after the late result could arrive. A detached
+        # send must not disappear under asyncio.run's shutdown cancellation.
+        await asyncio.sleep(0.05)
+        return result, before_release
+    result, before_release = asyncio.run(slow_request())
+    yes('publisher cancels at its total deadline and never posts a late image', deadlines == [8] and cancellations == [True] and result is None and before_release and ch.sent is None)
+finally:
+    bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
+    bot.asyncio.wait_for = before_wait_for
+
+# A result and its timeout can become ready in the same event-loop turn.
+# Return success during cancellation, with the monotonic deadline already
+# elapsed, without sleeping through the production eight-second budget.
+import types
+news_module = sys.modules['bot_news']
+before_clock = news_module.time
+try:
+    clock = [100.0]
+    news_module.time = types.SimpleNamespace(monotonic=lambda: clock[0])
+    bot.client.get_channel = lambda cid: ch
+    bot.asyncio.wait_for = short_deadline
+    ch.sent = None
+    async def late_picture(image):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            clock[0] = 109.0
+            return True
+    bot._news_picture_ready = late_picture
+    async def late_result():
+        result = await bot._news_send('dev', parts, set())
+        await asyncio.sleep(0.05)
+        return result
+    yes('publisher refuses a successful result delivered after its absolute deadline', asyncio.run(late_result()) is None and ch.sent is None)
+finally:
+    news_module.time = before_clock
+    bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
+    bot.asyncio.wait_for = before_wait_for
 print('%d failed' % len(FAIL) if FAIL else 'all passed')
 sys.exit(1 if FAIL else 0)

@@ -31,6 +31,8 @@ else does.
 | `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |
 | `/api/roster` | POST | the game server, with the bot's key, when its book of characters changes (`game\gamemode.js`) |
 | `/api/economy`, `/dev/api/economy` | POST | each game server, with the bot's key, every five minutes: what each hold gathered, crafted and traded, by the day, for the hub's Hold economy page (#3164, the hold economy block in `game\gamemode.js`) |
+| `/api/ledger`, `/dev/api/ledger` | POST | each game server, with the bot's key, every 15 seconds while there are rows: each trade and each move of gold between people, by account and character, for the hub's Gold and trades page (#6270, the ledger block in `game\gamemode.js`) |
+| `/api/takeback`, `/dev/api/takeback` | POST | each game server, with the bot's key in a header, every 30 seconds: what it did with the take-back asks an admin made on the hub's Gold and trades page, and the asks still waiting for it (#6271, the take back block in `game\gamemode.js`) |
 | `/api/office`, `/dev/api/office` | POST | each game server, with the bot's key in a header, when a Jarl names or removes their hold's Court, Steward or Guard on the Office page of K; the site checks the Jarl's role again and sets the Discord role with the bot's token, and the game reads it back through `/api/allowed` (#2551, `game\gamemode.js`) |
 | `/api/play/owns` | POST | the voice service, on every `/token`: before it hands out a voice token for a character, whether the launcher's sign in holds that character (`voice\voice-server.js`) |
 | `/api/ticket` | POST | the Discord bot, for a support ticket (`bot\bot_core.py`) |
@@ -117,6 +119,15 @@ token, which Releases hold the setup programs and the move program.
 where nothing answers, so what its copy serves never depends on the live
 Releases (#5547).
 
+### Settings for where it listens and what it reads
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `THORNSWOOD_DOCS_EXPOSE` | unset | `1` opens the site on every address as plain HTTP, with a warning at every start. Unset, or anything else, keeps it on 127.0.0.1, and `THORNSWOOD_DOCS_LOCAL=1` keeps it there even when this is `1` (`lib\base.js`). |
+| `THORNSWOOD_TRUSTED_PROXIES` | empty | Comma separated addresses of proxies on another box whose `X-Forwarded-For` the site believes, for the report limit and the sign in log. Loopback, which is Caddy, is always believed, and only the last forwarded hop is taken (`lib\limits.js`). |
+| `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
+| `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
+
 To see the door answer, from a second window:
 
 ```
@@ -156,7 +167,7 @@ shell's history would keep it. `-Password` reads the `config.json`
 on the VPS, changes the member password in it and keeps every other setting.
 A `config.json` there that will not read as JSON, an empty one included, is
 left exactly as it is and the password is not changed.
-`tests\test-docs-password.ps1` runs that part of the script against copies.
+`scripts\tests\test-docs-password.ps1` runs that part of the script against copies.
 
 `GET /api/deploys` says which commit, zip and hash each part on the box runs
 and when each last went out, read from the records the deploy scripts leave
@@ -224,7 +235,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
 | `/api/gallery/approved` | DELETE | staff | `{name}`; a `deleteFile` is no longer read | `200 {ok,removed,removedApproved,removedPending,fileDeleted}`; takes the name off `gallery.json` and off the pending queue, which is how staff turn down a waiting picture (there is no Reject); clears reports on that name; deletes the file, unless the picture had an open report, when it is kept unshown for `GALLERY_HOLD_DAYS` (#2352); `400` with no name |
-| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved |
+| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved; a repeat from the same account on the same picture updates its first row and keeps its id; `429` with `Retry-After` past the report limit (five an hour, twenty a day, per account) |
 | `/api/gallery/reports` | GET | staff | none | `200 {reports:[...]}` |
 | `/api/gallery/report/dismiss` | POST | staff | `{id}` | `200 {ok,removed}` |
 

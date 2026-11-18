@@ -155,6 +155,7 @@ function walk(b, start, end, mast, self) {
 }
 
 const order = loadedOrder(PLUGINS_TXT, DATA);
+if (!order) return;
 let parsed = 0;
 for (const pl of order) {
   const p = pluginPath(DATA, pl);
@@ -230,7 +231,6 @@ if (process.exitCode === 1) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-WeatherTable.js',
-    builtAt: new Date().toISOString(),
     source: 'the WTHR records of ' + parsed + ' plugins in load order',
     readFrom: 'DATA byte 0 for the wind speed, DATA byte 11 for the classification flags, ' +
               'and s for a rainy or snowy weather whose editor id names it a storm',

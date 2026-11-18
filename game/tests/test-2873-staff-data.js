@@ -65,7 +65,7 @@ yes('S4 the line is set before any code runs (it sits with the other inlined dat
 // only the merchant install's own copy, and first steps read the file from
 // beside the gamemode, so on a server it found no Cook. It is in STAFF_DATA now.
 const CARRIED_ELSEWHERE = {
-  'guild-sites.json': 'MERCHANT_GUILD_SITES, written by Build-MerchantGamemode.js'
+  'guild-sites.json': 'MERCHANT_GUILD_SITES, written by Build-MerchantTables.js'
 };
 const reads = new Set();
 gm.replace(/'data',\s*'([^']+\.json)'/g, function (m, name) { reads.add(name); return m; });
@@ -150,4 +150,4 @@ const gx = fs.readFileSync(path.join(ROOT, 'tests', 'gate-excluded.txt'), 'utf8'
 yes('G1 this harness is on the gate of build.yml and build-pr.yml (not in tests/gate-excluded.txt, #3009)', !/^game\/tests\/test-2873-staff-data\.js\s/m.test(gx));
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

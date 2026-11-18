@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -26,7 +27,7 @@ namespace Thornswood
         /// game that is actually on screen is somebody's session, so that one
         /// is asked about first. Returns false when the way is still blocked.
         /// </summary>
-        static bool ClearStuckGame(bool askIfVisible)
+        static async Task<bool> ClearStuckGame(bool askIfVisible)
         {
             if (!Checks.GameRunning())
             {
@@ -56,8 +57,9 @@ namespace Thornswood
             }
 
             Log("Closing what is left of Skyrim...");
-            int n;
-            string still = CloseGameWaiting(out n);
+            var gone = await CloseGameAway();
+            int n = gone.closed;
+            string still = gone.still;
             if (still.Length > 0)
             {
                 Log("Skyrim would not close. " + still);
@@ -71,26 +73,47 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Ends the game and whatever it left behind, with the window still
-        /// drawing while it waits (Waiting). Returns what is still running
-        /// afterwards, as a sentence, or "" when everything went.
+        /// Ends the game and whatever it left behind, off the window's thread
+        /// (OffThread). Gives back how many processes closed and what is
+        /// still running afterwards, as a sentence, or "" when everything went.
         /// </summary>
-        static string CloseGameWaiting(out int closed)
+        static async Task<(int closed, string still)> CloseGameAway()
         {
             int n = 0;
             string still = "";
             stallDoing = "closing Skyrim";
             try
             {
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     n = Checks.CloseGame();
                     still = Checks.StuckReport();
                 });
             }
             finally { stallDoing = null; }
-            closed = n;
-            return still ?? "";
+            return (n, still ?? "");
+        }
+
+        /// <summary>
+        /// Quit game, once the person has said yes (Shell.cs, btnQuitGame):
+        /// the game closed off the window's thread, and what would not close
+        /// said.
+        /// </summary>
+        static async Task QuitGameNow()
+        {
+            Log("Closing Skyrim...");
+            var gone = await CloseGameAway();
+            if (gone.still.Length > 0)
+            {
+                Log("Skyrim would not close. " + gone.still);
+                Ask.Tell("Skyrim would not close.\n\n" + gone.still, "Thornswood", Ask.Icon.Warning);
+                DrawStatus();
+                return;
+            }
+            Log(gone.closed > 0 ? "Closed Skyrim." : "Skyrim was already gone.");
+            // The two second tick does the rest: puts the Windows folders
+            // back, records the session and turns Play on again.
+            DrawStatus();
         }
 
         /// <summary>
@@ -103,7 +126,7 @@ namespace Thornswood
         /// character on the server. It reads as the game being broken. It is
         /// one window nobody opened.
         /// </summary>
-        static bool EnsureServer()
+        static async Task<bool> EnsureServer()
         {
             try
             {
@@ -122,11 +145,11 @@ namespace Thornswood
                 }
 
                 // Up to forty eight seconds of waiting on the server to answer,
-                // and the window has to keep drawing through it or Windows
-                // offers to close the launcher instead. SafeLog, because what
-                // Start says now comes from another thread.
+                // off the window's thread, or Windows offers to close the
+                // launcher instead. SafeLog, because what Start says now
+                // comes from another thread.
                 string why = null;
-                Waiting(delegate { why = SkyMp.Start(cfg, SafeLog); });
+                await OffThread(delegate { why = SkyMp.Start(cfg, SafeLog); });
                 if (why == null) { Log("The server is up."); return true; }
 
                 Log(why);
@@ -135,12 +158,15 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not check the server: " + ex.Message);
+                Log("Could not check the server: " + Failure.Say("ShellPlay, checking the server", ex, "the server"));
                 return true;
             }
         }
 
-        static void Play()
+        /// <summary>Play, from the button, a game coming back and StartPlay's callbacks: starts PlayAsync (Begin).</summary>
+        static void Play() { Begin(PlayAsync()); }
+
+        static async Task PlayAsync()
         {
             try
             {
@@ -155,7 +181,7 @@ namespace Thornswood
                 if (updatePending) { Log("An update is going in. Play comes back when it is done."); return; }
                 if (collectionBarUp) { Log(CollectionHeldLine()); return; }
                 if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Play comes back when it is done."); return; }
-                if (OwnGameRefreshIfDue()) return;
+                if (await OwnGameRefreshIfDue()) return;
 
                 if (!File.Exists(Paths.Loader)) { Log("skse64_loader.exe is missing from this build."); return; }
                 if (!File.Exists(Paths.MpClient)) { Log("MpClientPlugin.dll is missing, so this build has no multiplayer in it."); return; }
@@ -163,7 +189,7 @@ namespace Thornswood
                 // Starting a second one on top of a copy that never exited is
                 // how people end up staring at a launcher that says the game is
                 // running while their screen says otherwise.
-                if (!ClearStuckGame(true)) return;
+                if (!await ClearStuckGame(true)) return;
 
                 // Skyrim's archives this folder shares with the Steam copy still
                 // hold 1.6.1170's bytes (#1217). The change time is all that is
@@ -175,7 +201,7 @@ namespace Thornswood
                 if (OwnGame.Active)
                 {
                     string archives = null;
-                    Waiting(delegate { archives = OwnGame.CheckShared(OwnGame.Source(cfg), PresenceLog); });
+                    await OffThread(delegate { archives = OwnGame.CheckShared(OwnGame.Source(cfg), PresenceLog); });
                     if (archives != null)
                     {
                         Log("Not launching. " + archives);
@@ -185,11 +211,27 @@ namespace Thornswood
                     }
                 }
 
+                // The main menu with no Bethesda logo, the notice board's
+                // meshes and the mods' menus with no gold values are made from
+                // this machine's own game, never shipped (#2827, #3113,
+                // MadeFromGame). Only what is missing or changed is
+                // written; a game that cannot make them still plays, and the
+                // line says why. Before the plugin list is judged (#6181):
+                // Thornswood-Last.esp is one of them and the server's list
+                // names it, so judging first refused a game that had not made
+                // it yet as "a mod the server needs is not installed", and
+                // Play never reached the step that makes it.
+                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
+                catch (Exception ex)
+                {
+                    Log("The files made from your game could not be written (" + Failure.Why("Shell.Play, the files made from the game", ex) + ").");
+                }
+
                 // Checked again here, not just at startup, because the player's
                 // own mods folder and the plugin list can both change in between.
                 int blockers = 0, absent = 0;
                 List<Issue> found = null;
-                Waiting(delegate { found = Verify.Run(cfg); });
+                await OffThread(delegate { found = Verify.Run(cfg); });
                 foreach (Issue i in found)
                 {
                     if (!i.Blocking) continue;
@@ -199,7 +241,7 @@ namespace Thornswood
                 if (blockers > 0)
                 {
                     Log("Not launching. " + blockers + " problem" + (blockers == 1 ? "" : "s") + " with your mod list would desync everyone.");
-                    RunScan();
+                    await RunScanAsync(false);
                     DrawStatus();
                     // Diagnostics, where Scan and Fix are since #607 and which
                     // the rail still shows. It was the Mods page until #982,
@@ -248,7 +290,7 @@ namespace Thornswood
                 // every Play with nothing comparing them first, so a big one is
                 // a visible stall on the window's own thread.
                 int mine = 0;
-                Waiting(delegate { mine = Verify.DeployPersonal(); });
+                await OffThread(delegate { mine = Verify.DeployPersonal(); });
                 if (mine > 0) Log("Copied in " + mine + " of your own files.");
 
                 // Several of these mods rewrite their own ini when Skyrim
@@ -298,10 +340,10 @@ namespace Thornswood
                 // on this PC's old settings would send them back over the
                 // account's when it closes.
                 string putSettings = null, settingsWhy = null;
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     try { putSettings = YourSettings.PutInPlace(); }
-                    catch (Exception ex) { settingsWhy = ex.Message; }
+                    catch (Exception ex) { settingsWhy = Failure.Why("ShellPlay, the game's settings", ex); }
                 });
                 if (settingsWhy != null)
                 {
@@ -311,13 +353,13 @@ namespace Thornswood
                     return;
                 }
                 if (putSettings != null) Log(putSettings);
-                try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Play, ThornIni.Ensure", ex); }
                 try
                 {
                     string mic = Mics.Apply(cfg);
                     if (!string.IsNullOrEmpty(mic)) Log("Microphone: " + mic);
                 }
-                catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                catch (Exception ex) { Swallow.Note("Shell.Play, Mics.Apply", ex); }
 
                 // The behavior files and the covered bodies are built here, on
                 // this computer, from the collection's Pandora and BodySlide
@@ -327,14 +369,13 @@ namespace Thornswood
                 // or a nude body stops Play: the animations would be missing
                 // and the bodies would have no underwear (#405).
                 string notBuilt = null, built = null;
-                Waiting(delegate
+                await OffThread(delegate
                 {
                     try { built = GeneratedHere.Ensure(SafeLog); }
-                    catch (GeneratedStop ex) { notBuilt = ex.Message; }
+                    catch (GeneratedStop ex) { notBuilt = Failure.Say("ShellPlay, the generated files", ex); }
                     catch (Exception ex)
                     {
-                        Swallow.Note("Shell.Play, the animation and body files", ex);
-                        notBuilt = "Thornswood's animation and body files could not be built (" + ex.Message.TrimEnd('.') + ").";
+                        notBuilt = "Thornswood's animation and body files could not be built (" + Failure.Why("Shell.Play, the animation and body files", ex) + ").";
                     }
                 });
                 if (built != null) Log(built);
@@ -346,20 +387,7 @@ namespace Thornswood
                     return;
                 }
 
-                // The main menu with no Bethesda logo, the notice board's
-                // meshes and the mods' menus with no gold values are made from
-                // this machine's own game, never shipped (#2827, #3113,
-                // MadeFromGame). Only what is missing or changed is
-                // written; a game that cannot make them still plays, and the
-                // line says why.
-                try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
-                catch (Exception ex)
-                {
-                    Swallow.Note("Shell.Play, the files made from the game", ex);
-                    Log("The files made from your game could not be written (" + ex.Message.TrimEnd('.') + ").");
-                }
-
-                if (!EnsureServer()) return;
+                if (!await EnsureServer()) return;
 
                 // Another SkyMP server's launcher may have rewritten the page
                 // the front plugin loads, or the client, or dropped its own
@@ -372,9 +400,16 @@ namespace Thornswood
 
                 // And held, read only, until the game closes. Another server's
                 // launcher opened mid-session rewrote them under the game once
-                // (16 Sep, 19:08); it cannot now. See Hold.
+                // (16 Sep, 19:08); it cannot now. See Hold. A hold that fails
+                // leaves them open to that for the whole session, so the log
+                // says so in plain words, not under a step name (#4690).
                 int holding = 0;
-                try { holding = Hold.Take(PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play, dispose", ex); }
+                try { holding = Hold.Take(PresenceLog); }
+                catch (Exception ex)
+                {
+                    Log("The game files are not held this session, so another launcher could change them while the game runs (" +
+                        Failure.Why("Shell.Play, Hold.Take", ex) + ").");
+                }
                 if (holding > 0) Log("Holding " + holding + " of " + cfg.BuildName + "'s game files while the game runs, so nothing else can change them under it.");
 
                 Log("Pointing Skyrim settings and saves at this build.");
@@ -431,12 +466,12 @@ namespace Thornswood
                     string on = Updater.SyncedRelease();
                     if (on.Length > 0) onPack = "game files of " + on;
                 }
-                catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                catch (Exception ex) { Swallow.Note("Shell.Play, Updater.SyncedRelease", ex); }
                 // The display mode rides along because Skyrim itself is known to
                 // go down on alt tab in exclusive fullscreen, and a crash report
                 // with no crash log needs this line to say which mode it was.
                 string mode = "";
-                try { mode = ", " + Display.Mode.ToLowerInvariant(); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { mode = ", " + Display.Mode.ToLowerInvariant(); } catch (Exception ex) { Swallow.Note("Shell.Play, Display.Mode", ex); }
                 Log("Starting the game on launcher " + Updater.Version + ", " + onPack + mode + ".");
 
                 // The site keeps a log of who played, when, and on which
@@ -446,20 +481,20 @@ namespace Thornswood
                 // wrapped, so a site that is down changes nothing about
                 // playing. No character is picked yet: the menu does that, and
                 // the end carries whoever was chosen.
-                try { Discord.NewSession(); } catch (Exception ex) { Swallow.Note("Shell.Play, dispose", ex); }
+                try { Discord.NewSession(); } catch (Exception ex) { Swallow.Note("Shell.Play, Discord.NewSession", ex); }
                 int startedAs = chosenId;
                 ThreadPool.QueueUserWorkItem(delegate
                 {
-                    try { Discord.SessionStart(startedAs); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                    try { Discord.SessionStart(startedAs); } catch (Exception ex) { Swallow.Note("Shell.Play, Discord.SessionStart", ex); }
                 });
 
                 // "Playing Thornswood" in Discord, with the headcount and the
                 // Download and Discord buttons, for as long as the game runs.
                 // Off this thread entirely; a Discord that is not running is
                 // simply nothing said.
-                try { Presence.Start(cfg, PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
+                try { Presence.Start(cfg, PresenceLog); } catch (Exception ex) { Swallow.Note("Shell.Play, Presence.Start", ex); }
 
-                try { File.WriteAllText(Paths.PlayedFile, DateTime.Now.ToString("o")); } catch (Exception ex) { Swallow.Note("Shell.Play, write", ex); }
+                try { File.WriteAllText(Paths.PlayedFile, DateTime.Now.ToString("o")); } catch (Exception ex) { Swallow.Note("Shell.Play, writing Paths.PlayedFile", ex); }
                 playStartedAt = DateTime.Now;
                 Stats.StartedPlaying();
                 BuildStatRow();
@@ -468,7 +503,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                string reason = ex.Message == null ? "" : ex.Message;
+                string reason = Failure.Why("ShellPlay, starting the game", ex);
 
                 // The whole thing still goes to the log file, because Log
                 // writes there before the bar trims anything, and the log is

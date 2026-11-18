@@ -7,7 +7,7 @@
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-DevGamemode -Restart'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Docs -Site'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Get-Logs -Dev -Lines 2000'
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Rebuild-ContentTables -Server dev'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Build-Content -Server dev'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Server -GamemodeOnly -Build <main's full commit>'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Watch-Services -Install'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Hold-Server -Service dev -Why "swapping the ledger" -Minutes 45'
@@ -19,8 +19,9 @@
   again on the box. What runs is always that script of main as main is on
   GitHub when the box reads it, never this checkout. A live verb
   (Deploy-Server, Publish-Server-Main) names the commit of main Patrick gave
-  his word for with -Build, and the box refuses it once main is anywhere
-  else.
+  his word for with -Build, and the box runs it from that commit, also once
+  main has moved past it, and refuses a commit that is not on main
+  (Ops #379).
 
   HOW. It starts box-run.yml on main of the private ops repository,
   ThornswoodRP/Thornswood-Ops, where the VPS runners are registered since
@@ -30,6 +31,14 @@
   (Grant-BoxAccess.ps1 -Deploy puts it there), and asks the gate over the box's own sshd on 127.0.0.1 with
   this script's -OnTheBox half. The key logs in as thornswood-deploy and can
   only hand the gate a line (scripts\vps\gate\Gate.ps1).
+
+  A LIVE LINE IS BRAMBLE'S, ON PATRICK'S TAP (#4989). A verb verbs.json
+  marks "build" changes what people play on, so its line goes to the box
+  only when Bramble starts it, on Patrick's tap on its Main card in the
+  Hermes Agents app, which names main's commit and that exact line and is
+  used once. box-run.yml sends a live line on only when Bramble's App
+  started the run. A session works under a person's sign-in, so this
+  refuses a live line before anything starts: ask Bramble for it.
 
   WHAT COMES BACK, AND TO WHOM. A deploy prints paths and a Get-Logs run
   brings back the servers' logs, and a run's log and files are readable by
@@ -106,7 +115,7 @@ if ($OnTheBox) {
         Write-ThornswoodPrivateFile -Path $keyFile -Text ($keyText.Replace("`r`n", "`n").TrimEnd() + "`n")
         $keyText = $null
         # The box's own sshd, its host keys held to the checkout's vps.json
-        # pins in a known_hosts of this run's own, as staff-notice.yml does.
+        # pins in a known_hosts of this run's own.
         $pinned = Get-ThornswoodVpsCommitted
         $knownHosts = Join-Path $work 'known_hosts'
         try { $null = Add-ThornswoodKnownHost -Address '127.0.0.1' -KnownHosts $knownHosts -Pinned @($pinned.hostKeys) }
@@ -142,7 +151,7 @@ if ($OnTheBox) {
                     }
                     $parts.Remove($name)
                 }
-                elseif ($l -match '^@REFUSED (.*)$') { $r.Refused = $Matches[1] }
+                elseif ($l -match '^@REFUSED (.*)$') { $r.Refused = $Matches[1]; [IO.File]::AppendAllText($out, 'gate: REFUSED ' + $Matches[1] + "`n", $utf8) }
                 elseif ($l -match '^@END (-?[0-9]+)$') { $r.Code = [int]$Matches[1] }
                 elseif ($l -and $l -notmatch 'post-quantum|store now, decrypt later|openssh\.com/pq\.html') { [IO.File]::AppendAllText($out, 'ssh: ' + $l + "`n", $utf8) }
             }
@@ -209,6 +218,8 @@ if ($OnTheBox) {
         }
 
         # The seal, to the session that asked, or nothing leaves the runner.
+        # Why the run stopped goes in it too, so the output always says it.
+        if ($refused) { [IO.File]::AppendAllText($out, 'box-run: REFUSED ' + $refused + "`n", $utf8) }
         if ($recipient) {
             $to = if ($env:BOX_RUN_SEALED) { $env:BOX_RUN_SEALED } else { Join-Path $base 'box-run.sealed' }
             $n = Save-ThornswoodSealed (Join-Path $work 'out') $recipient $to
@@ -232,6 +243,7 @@ $minutes = 30
 if (-not $Run) {
     $req = Test-ThornswoodGateRequest -Line $Line -Verbs (Read-ThornswoodGateVerbs (Join-Path $Here 'gate\verbs.json'))
     if (-not $req.Ok) { Die $req.Why }
+    if ($req.Build) { Die ($req.Verb + ' changes what people play on, so only Bramble starts it, on Patrick''s tap on its Main card in the Hermes Agents app naming main''s commit and this exact line. The box run refuses a live line anybody else starts, so ask Bramble for it. Nothing was run.') }
     if ($req.Minutes) { $minutes = $req.Minutes }
     # A key for this run alone. Its public half goes with the run; its
     # private half stays here.

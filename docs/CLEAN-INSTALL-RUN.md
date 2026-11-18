@@ -10,6 +10,21 @@ every row, this is a plan and not a record, and the right assumption is that
 something in it is wrong. The run is how to find out which part. It is held to
 the same standard as `RESTORING.md` in the ops repo.
 
+## Contents
+
+- [Why](#why)
+- [The shape being tested](#the-shape-being-tested)
+- [Who does what](#who-does-what)
+- [Before the run](#before-the-run)
+- [How to fill in a row](#how-to-fill-in-a-row)
+- [The run](#the-run)
+- [Questions asked](#questions-asked)
+- [Commands](#commands)
+- [What the build should show, by row](#what-the-build-should-show-by-row)
+- [What the code predicts](#what-the-code-predicts)
+- [After the run](#after-the-run)
+- [Shrinking the list next time](#shrinking-the-list-next-time)
+
 ## Why
 
 Nobody has installed Thornswood on a clean machine and written down what
@@ -27,12 +42,18 @@ The one that ships today. It has three parts, and a run that reaches a lit PLAY
 button has been through all three.
 
 1. The installer on the Downloads page, `Thornswood-Setup.exe`, is Velopack's
-   setup program from a GitHub Release (#4824). It puts down the launcher with
-   Thornswood's own files and starts it, and the launcher's first start asks
-   where to install and puts those files into the Steam copy of Skyrim
-   (`launcher\app\InstallWindow.cs`, `launcher\app\InstallSteps.cs`). Nothing
-   the collection provides is in it, so the install uses the Steam copy rather
-   than make a Skyrim of its own.
+   setup program from a GitHub Release (#4824), signed on GitHub's runner like
+   the launcher it carries (`docs\SIGNED-RELEASES.md`). It puts down the
+   launcher with Thornswood's own files beside it, downloads nothing, and
+   starts the launcher. The launcher's first start is the Thornswood Setup
+   window: where to install, Thornswood's own Skyrim folder (ticked as it
+   starts), and an age box and three agreement boxes that lock Install. Install
+   runs in that window, every line of it also going to
+   `C:\Thornswood\Profile\setup-log.txt` (`launcher\app\InstallWindow.cs`,
+   `launcher\app\InstallSteps.cs`). With the own folder ticked, nothing is
+   written into the Steam copy of Skyrim. Nothing the collection provides is in
+   the installer, so the install reads the Steam copy rather than make a Skyrim
+   of its own.
 2. Vortex deploys the Nexus collection into that same Steam copy.
 3. The launcher makes Thornswood's own game folder, `C:\Thornswood\Game`, out
    of what Vortex deployed: the big files as hard links, so the collection is
@@ -40,19 +61,18 @@ button has been through all three.
    place. Then it runs Scan and Fix in that folder, takes a newer launcher if
    there is one, and restarts once, into that folder (`launcher\app\OwnGame.cs`,
    `launcher\app\ShellOwnGame.cs`, `FirstSetupRestart` in
-   `launcher\app\ShellScanFix.cs`, #5937). This is the settled design in the ops repo's CLAUDE.md, and
-   the launcher will not start the game out of the shared Steam copy at all.
+   `launcher\app\ShellScanFix.cs`, #5937). This is the settled design in the
+   Developer Guide (`docs\guide\settled-design.md`), and the launcher will not
+   start the game out of the shared Steam copy at all.
 
 The To Do entry that asked for this list named the Steam copy with Vortex as the
 shape to test, on the grounds that the own folder had not reached main. It has:
-CLAUDE.md was corrected on 18 Sep, and the own folder is where a new install
-ends up.
+the settled design was corrected on 18 Sep, and the own folder is where a new
+install ends up.
 
-Row 20 settles which shape the downloaded installer really is. For this shape
-the setup console says `Thornswood installs into this copy.` If it says
-`This folder will be read from only.` instead, the installer on the site is the
-older standalone shape. Write that down and stop, because the rest of this list
-describes something that download does not do.
+Row 20 reads the Steam copy the way the install sees it. The setup window says
+`Thornswood installs into this copy.` under the heading The base game, and
+says what to do when the build is not 1.6.1170.
 
 ## Who does what
 
@@ -112,7 +132,7 @@ a key.
   is a purchase.
 - A Nexus Mods account made for this run, free, without Premium, because that
   is what a stranger has. On a free account Vortex can ask for a click on the
-  Nexus site for every mod in the collection, and row 33 counts them.
+  Nexus site for every mod in the collection, and row 31 counts them.
 - A Discord account that has never been in the Thornswood server, so the
   application is walked too. Staff remove it afterwards.
 
@@ -178,13 +198,13 @@ Start menu.
 | # | Step | Clock | Seen, word for word | A stranger would instead |
 | --- | --- | --- | --- | --- |
 | 15 | Open https://thornswood.net/downloads and download the installer. Write down the file name, its size, the SHA-256 the page prints under it, and every warning the browser shows. Then measure the downloaded file's SHA-256 (M8) and write down whether the two match. | | | |
-| 16 | Run it. Write down the Windows warning word for word, and what had to be pressed to get past it. | | | |
-| 17 | Read the setup window before pressing anything. Write down the folder it offers, the free space line under the drives, and the Installing from box. Also copy what it says about the Steam copy when Thornswood's own Skyrim folder is chosen: it does not install into the Skyrim you already have on Steam, and that copy is left as it is. | | | |
-| 18 | Leave the folder at `C:\Thornswood`, tick the box that says 18 or over, and press Install. Write down the download's size, its speed and when it finished. | | | |
-| 19 | Write down the unpacking count, and when the black setup console opened. | | | |
-| 20 | Write down the console's first lines, up to the heading The base game, including whether it says Thornswood installs into this copy. If it says this Skyrim is not build 1.6.1170, write down what it says to do: open the launcher and press Downgrade, so Steam downloads 1.6.1170's files and Thornswood makes its own game folder from them, while the Steam copy stays on the build it is on. Do not change anything in Steam. | | | |
-| 21 | Screenshot the console once it prints Checking, before it can close, and copy every line marked ok, next or MISS. | | | |
-| 22 | Write down how the console ended: whether it opened the launcher itself or waited for Enter, and its last lines. | | | |
+| 16 | Run it. Write down every Windows prompt word for word, what had to be pressed to get past each one, and the publisher Windows names: the setup program is signed, so it should not read Unknown publisher. Then write down what Velopack's setup showed while it put the launcher down, and when the Thornswood Setup window opened. | | | |
+| 17 | Read the Thornswood Setup window before pressing anything. Write down the folder it offers under Install to, the drive buttons with their free space, and the lines under them about Skyrim's drive and the room. Also copy what it says about the Steam copy with the box for Thornswood's own Skyrim folder left ticked, as it starts: it does not install into the Skyrim you already have on Steam, and that copy is left as it is. | | | |
+| 18 | Leave the folder at `C:\Thornswood` and the own folder box ticked. Tick the age box and the three boxes for the Terms and Conditions, the Privacy Policy and the Rules, and write down what each Read link opened and whether Install stayed off until all four were ticked. Then press Install. | | | |
+| 19 | Write down when the install's lines started under the window and how long the bar ran, with the count of files and MB it says it is copying. | | | |
+| 20 | Write down the window's first lines, up to the heading The base game, including whether it says Thornswood installs into this copy. If it says this Skyrim is not build 1.6.1170, write down what it says to do: open the launcher and press Downgrade, so Steam downloads 1.6.1170's files and Thornswood makes its own game folder from them, while the Steam copy stays on the build it is on. Do not change anything in Steam. | | | |
+| 21 | Once the window prints Checking, copy every line marked ok, next or MISS, from the window or from `C:\Thornswood\Profile\setup-log.txt`. | | | |
+| 22 | Write down how the install ended: whether the launcher's own window opened by itself, or the setup window stopped with a reason and a Close button, and its last lines. | | | |
 
 ### The launcher's first look
 
@@ -192,7 +212,7 @@ Start menu.
 | --- | --- | --- | --- | --- |
 | 23 | If the launcher did not open by itself, open Thornswood from the desktop. Write down the words on the Play button and every card above it. | | | |
 | 24 | Write down every Windows prompt the launcher raised on its first start: firewall, microphone, administrator. | | | |
-| 25 | Measure whether the installer's scratch folder is still on the disk now that the launcher has started (M3). | | | |
+| 25 | Measure that no installer scratch folder is on the disk (M3). The setup program unpacks nothing outside its own folders, so it should print False and no line from the log. | | | |
 
 ### The build
 
@@ -202,29 +222,27 @@ Start menu.
 | 27 | When the launcher says it is done, measure the build again (M2) and write down the build the Play page shows. | | | |
 | 28 | The launcher does not ask about Steam's Updates after Downgrade, because the downgrade never changes the Steam copy. The question is asked on the way in, and only when Skyrim is already on 1.6.1170, Thornswood has no folder of its own yet, and Steam is open. If it appeared, copy it word for word and write down what the tester did with it. If a downgrade was needed first, write that the question did not appear. With Steam running, write down what Skyrim's Properties, Updates page shows under Automatic Updates, and whether Steam's Downloads page has Skyrim queued for an update again. | | | |
 
-### Discord in the launcher
-
-The join page puts this after the collection. The launcher's collection card
-used to ask for it first and keep the collection shut until it was done; since
-#428 the collection opens without it, because anyone can download in the alpha.
-The list still takes it here, and row 30 records which order the tester really
-took.
-
-| # | Step | Clock | Seen, word for word | A stranger would instead |
-| --- | --- | --- | --- | --- |
-| 29 | Press Connect Discord where the launcher offers it. Write down the card's words first, then every page the browser showed, and whether it closed itself. | | | |
-| 30 | Write down which the tester reached for first, the collection or Connect Discord, and why. | | | |
-
 ### The collection
 
 | # | Step | Clock | Seen, word for word | A stranger would instead |
 | --- | --- | --- | --- | --- |
-| 31 | Open the collection from the launcher's card or from the Downloads page. Write down which, and the revision the Nexus page shows. | | | |
-| 32 | Add it to Vortex and start the install. Write down every dialog, including the switch for skipping plugin rules, and leave that switch as it comes. | | | |
-| 33 | Write down how many mods asked for a click on the Nexus site, and when the last one finished downloading. | | | |
-| 34 | Write down the name of the Vortex profile the collection made, and whether Vortex switched to it by itself. | | | |
-| 35 | Write down every dialog at deployment: external changes, file conflicts, sorting, missing masters. | | | |
-| 36 | Measure whether the Address Library arrived in the Steam copy, and whether Start On Save did too (M4). Do not add or remove either by hand. | | | |
+| 29 | Open the collection from the launcher's card or from the Downloads page. Write down the card's words first, which, and the revision the Nexus page shows. | | | |
+| 30 | Add it to Vortex and start the install. Write down every dialog, including the switch for skipping plugin rules, and leave that switch as it comes. | | | |
+| 31 | Write down how many mods asked for a click on the Nexus site, and when the last one finished downloading. | | | |
+| 32 | Write down the name of the Vortex profile the collection made, and whether Vortex switched to it by itself. | | | |
+| 33 | Write down every dialog at deployment: external changes, file conflicts, sorting, missing masters. | | | |
+| 34 | Measure whether the Address Library arrived in the Steam copy, and whether Start On Save did too (M4). Do not add or remove either by hand. | | | |
+
+### Discord in the launcher
+
+The launcher puts this after the collection, and so does the join page. Since
+#428 the collection opens without it, because anyone can download in the alpha.
+Row 36 records which order the tester really took.
+
+| # | Step | Clock | Seen, word for word | A stranger would instead |
+| --- | --- | --- | --- | --- |
+| 35 | Press Connect Discord where the launcher offers it. Write down the words around the button first, then every page the browser showed, and whether it closed itself. | | | |
+| 36 | Write down which the tester reached for first, the collection or Connect Discord, and why. | | | |
 
 ### Thornswood's own folder
 
@@ -284,9 +302,10 @@ it is.
 (Get-Item 'C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edition\SkyrimSE.exe').Length
 ```
 
-**M3, the installer's scratch folder.** The first line prints True while
-`C:\Thornswood-setup` is still there. The second prints the launcher's own line
-from when it cleared the folder, and nothing if it has not.
+**M3, no installer scratch folder.** The installer from before Velopack unpacked
+into `C:\Thornswood-setup`, and the launcher still clears one it finds. Today's
+setup program makes none, so the first line should print False, and the second,
+the launcher's own line from clearing one, should print nothing.
 
 ```powershell
 Test-Path C:\Thornswood-setup
@@ -393,7 +412,12 @@ tester confused by a list that no longer matches.
 | 17 | `This puts Thornswood's own content on your PC.` | `launcher\app\InstallWindow.cs` |
 | 17 | `that copy is left as it is, for you to play and mod however you like.` | `launcher\app\InstallWindow.cs` |
 | 17 | `C:\Thornswood` | `launcher\app\InstallPlace.cs` |
+| 17 | `Give Thornswood a Skyrim folder of its own` | `launcher\app\InstallWindow.cs` |
 | 18 | `I am 18 or over. Thornswood is an adult server.` | `launcher\app\InstallAgreements.cs` |
+| 18 | `I have read and accept the Terms and Conditions` | `launcher\app\InstallAgreements.cs` |
+| 18 | `I have read and accept the Privacy Policy` | `launcher\app\InstallAgreements.cs` |
+| 18 | `I have read and agree to the Rules` | `launcher\app\InstallAgreements.cs` |
+| 19 | `Installing. What it is doing shows below, and Thornswood opens by itself when it is done.` | `launcher\app\InstallWindow.cs` |
 | 20 | `Thornswood installs into this copy.` | `launcher\app\InstallSteps.cs` |
 | 20 | `This Skyrim is not build 1.6.1170, which is the one the server runs.` | `launcher\app\InstallSteps.cs` |
 | 20 | `Thornswood installs anyway. Open the launcher and press Downgrade:` | `launcher\app\InstallSteps.cs` |
@@ -406,7 +430,6 @@ tester confused by a list that no longer matches.
 | 23 | `DOWNGRADE FIRST` | `launcher\app\Shell.cs` |
 | 23 | `Skyrim is on the wrong build` | `launcher\app\Shell.cs` |
 | 23 | `Thornswood is sharing one Skyrim with every other server on this machine` | `launcher\app\ShellOwnGame.cs` |
-| 25 | `MB the installer left behind on your drive.` | `launcher\app\Shell.cs` |
 | 26 | `Downgrade Skyrim to 1.6.1170?` | `launcher\app\Shell.cs` |
 | 26 | `Do not type or click while Steam's window is in front, or the keys go to the wrong place.` | `launcher\app\Shell.cs` |
 | 26 | `Getting Skyrim 1.6.1170.` | `launcher\app\Downgrade.cs` |
@@ -416,7 +439,7 @@ tester confused by a list that no longer matches.
 | 29 | `Your mods are not installed yet` | `launcher\app\Shell.cs` |
 | 29 | `Open the collection` | `launcher\app\Shell.cs` |
 | 29 | `INSTALL THE MODS FIRST` | `launcher\app\Shell.cs` |
-| 31 | `https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf` | `launcher\app\Config.cs` |
+| 29 | `https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf` | `launcher\app\Config.cs` |
 | 37 | `MAKE THORNSWOOD'S OWN FOLDER` | `launcher\app\Shell.cs` |
 | 38 | `Making Thornswood's own Skyrim folder, which every install has unless its box was unticked.` | `launcher\app\ShellOwnGame.cs` |
 | 38 | `Making Thornswood's own Skyrim folder:` | `launcher\app\OwnGame.cs` |
@@ -438,25 +461,23 @@ tester confused by a list that no longer matches.
 Read out of the code before anybody has run it, so the run can prove each one
 right or wrong. To Do entries are named by title, because their numbers move.
 
-- **The setup console may call a good install broken (rows 21 and 22).** In
+- **The setup window may call a good install broken (rows 21 and 22).** In
   this shape `launcher\app\InstallSteps.cs` finishes with six checks and excuses
-  two of them, the script extender and the Address Library, as things the
-  collection brings next. The other four count. Game 1.6.1170 reads the Steam
-  copy, which Steam has just installed on a newer build, and Load order looks
-  for a plugins.txt under `%LOCALAPPDATA%\Skyrim Special Edition`, which nothing
-  may have written yet on a machine where Skyrim has never started and the
-  collection is not in. Either one fails, and then the console says the checks
-  failed, tells the person to send staff a screenshot, waits for Enter, and does
-  not open the launcher. No To Do entry covers this yet.
-- **Two different ways to fix the build (rows 20 and 26).** The console says to
-  pick 1.6.1170 under Betas in Steam. The launcher and the join page use the
-  Downgrade button, which asks Steam for the old build through Steam's console.
-  Row 20 records whether Steam's Betas list offers 1.6.1170 at all. Since
-  24 Sep the button asks first, naming the three lines it will type into
-  Steam's console, so row 26 starts with a Yes or No. The keystrokes
-  themselves are still owned by "Downgrade drives Valve's own window by
-  synthesised keystrokes at a measured pixel offset, with no consent screen".
-  The two instructions disagreeing has no entry.
+  three of them: the script extender and the Address Library, which the
+  collection brings next, and a Steam copy on another build, which the
+  launcher's Downgrade button answers. The other three count. Load order looks
+  for a plugins.txt under `%LOCALAPPDATA%\Skyrim Special Edition`, which
+  nothing may have written yet on a machine where Skyrim has never started and
+  the collection is not in. If it fails, the window says the checks failed,
+  tells the person to send staff a screenshot, and stops with a Close button
+  instead of opening the launcher. No To Do entry covers this yet.
+- **One way to fix the build (rows 20 and 26).** The setup window and the
+  launcher both send the person to the Downgrade button, which asks Steam for
+  the old build through Steam's console. Since 24 Sep the button asks first,
+  naming the three lines it will type into Steam's console, so row 26 starts
+  with a Yes or No. The keystrokes themselves are still owned by "Downgrade
+  drives Valve's own window by synthesised keystrokes at a measured pixel
+  offset, with no consent screen".
 - **Steam taking Skyrim back to the newer build (row 28).** Once a downgrade
   has worked, the launcher asks whether to set Skyrim's Automatic Updates in
   Steam to "Wait until I launch the game", and asks for Steam to be exited
@@ -486,14 +507,17 @@ right or wrong. To Do entries are named by title, because their numbers move.
   to be, and since 24 Sep the launcher's First time card asks for a name that
   belongs in Skyrim and not your own, and says nothing about saving. So the
   console now disagrees with the launcher it opens. No entry.
-- **The Address Library and Start On Save (rows 36 and 41).** The Address
+- **The Address Library and Start On Save (rows 34 and 41).** The Address
   Library is expected missing unless the collection delivers it, owned by "The
   launcher never checks the Address Library, so a whole class of failure reads
   as green". Start On Save in the own folder is a finding against issue #394,
   which took it out.
-- **SmartScreen (row 16).** Owned by "Nothing is code signed: SmartScreen warns
-  forever, and one GitHub login is all that stands between a stranger and every
-  installed machine".
+- **SmartScreen (row 16).** The setup program and the launcher are signed
+  through Azure Artifact Signing on GitHub's runner (`docs\SIGNED-RELEASES.md`),
+  so Windows should name the publisher and never Unknown publisher. A new
+  signed publisher has little reputation yet, so a soft SmartScreen ask can
+  still come up, and the help page tells people to press More info, then Run
+  anyway. Row 16 records which one this run met.
 - **Updates on the first open (row 43).** An installer older than the last
   release offers what came after it. One built with no record of the packs it
   already holds offers every pack ever published, and `scripts\dev\Check-Outside.ps1`
@@ -517,12 +541,11 @@ right or wrong. To Do entries are named by title, because their numbers move.
   carries the plugin order in its "load after" rules
   (`scripts\mods\Check-CollectionRules.ps1` reads them), and this row is the
   proof that a clean install lands in the server's order.
-- **An old README in the scratch folder (row 25).** The installer unpacks into
-  `C:\Thornswood-setup` with a READ ME FIRST.txt that still describes the old
-  multiplayer mod's installer and says no Nexus account or Vortex is needed. The launcher
-  clears the folder on its first start (`launcher\app\Shell.cs`), so a stranger only
-  meets it if they look before then. Owned by "The repository's own docs still
-  describe the old product".
+- **No scratch folder (row 25).** The installer from before Velopack unpacked
+  into `C:\Thornswood-setup` with a read me that described the old multiplayer
+  mod's installer. Today's setup program unpacks nothing there, and the
+  launcher only clears such a folder when an old install left one
+  (`launcher\app\Shell.cs`). A clean machine should have none.
 
 ## After the run
 
@@ -546,8 +569,9 @@ right or wrong. To Do entries are named by title, because their numbers move.
   the measuring rows are pasted rather than typed. `scripts\dev\Check-Outside.ps1`
   already scripts the outside half: what the feed, GitHub, Steam and Nexus
   answer a stranger.
-- The setup console keeps no record of itself, which is why rows 20 to 22 lean
-  on a screenshot taken in time. A transcript in `C:\Thornswood\Profile` would
-  make those rows a copy.
+- The setup window writes every line it shows to
+  `C:\Thornswood\Profile\setup-log.txt`, so rows 20 to 22 can be pasted from
+  that file rather than typed off the screen. M7 could copy it out with the
+  launcher's log.
 - The rest stays by hand. Every prompt, warning and wait in it is what a
   stranger meets, and timing that is the reason for the run.

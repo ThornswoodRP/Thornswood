@@ -168,4 +168,4 @@ yes('B3 its verify refuses a plugin whose quest does not set the value',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

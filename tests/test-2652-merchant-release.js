@@ -65,10 +65,10 @@ function done() {
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 yes('S0 the purse service, the release block and the NPC startup are where this looks', !!purseSrc && !!releaseSrc && !!startup);
-if (!purseSrc || !releaseSrc || !startup) { done(); }
+if (!purseSrc || !releaseSrc || !startup) { done(); return; }
 
 // ---------------------------------------------------------------- S
 const ask = "globalThis.__thornswoodRelease('merchants',merchants.release)";
@@ -292,8 +292,9 @@ try {
   const rp = p1.purses.release(whoOf([P1], [A3]));
   const after3 = readFile(dir3);
   const c9 = after3.entries['9:Skyrim.esm'].commissions, c8 = after3.entries['8:Skyrim.esm'].commissions;
-  yes('P1 a promise held for them goes by profile, and its gold is the trader\'s to spend again',
-      !(pkey(OWN_P1, 'q-iron-1') in c9.held) && COMMISSIONS.spendable(after3.entries['9:Skyrim.esm']) === 300 - 20);
+  // A promise holds none of the purse back: commission pay is new gold (#6180).
+  yes('P1 a promise held for them goes by profile, and the trader\'s whole purse is still its own to spend',
+      !(pkey(OWN_P1, 'q-iron-1') in c9.held) && COMMISSIONS.spendable(after3.entries['9:Skyrim.esm']) === 300);
   yes('P2 somebody else\'s promise stays as it was', JSON.stringify(c9.held[pkey(OWN_PY, 'q-iron-2')]) === JSON.stringify(held(2, OWN_PY, 'q-iron-2', 20)));
   yes('P3 a finished one of theirs cooling down goes by form id; one whose owner names a plugin is never a character',
       !(pkey(OWN_A3, 'q-iron-3') in c9.cool) && c9.cool[pkey(OWN_PLACED, 'q-iron-4')] === NOW - 100);

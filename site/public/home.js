@@ -345,7 +345,8 @@ if (AGE_PATHS[here] && !ageOk()) {
                ? '<ul>' + det.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') +
                  (n.files ? '<li>' + n.files + ' files changed</li>' : '') + '</ul>'
                : '') +
-             '</div>';
+             (window.ThornswoodNewsPictures ? window.ThornswoodNewsPictures.html(n.image)
+               : (n.image && typeof n.image.alt === 'string' ? '<p>' + esc(n.image.alt) + '</p>' : '')) + '</div>';
     });
     show(out);
   }).catch(function () { show('<h1>Every release</h1><p>Could not load it.</p>'); });
@@ -1230,7 +1231,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c
    from the start, and the word comes out of the address so a reload or a
    shared link does not say it again. Only these three words are shown, and
    as text, never as markup. hub.js says the same three lines on its gate,
-   and tests\test-4406-signin-failure-line.js holds the two equal. It is
+   and site\tests\test-4406-signin-failure-line.js holds the two equal. It is
    here with the code that runs as the page loads, not among the helpers
    above show(), which site\tests\test-site-front-resilience.js lifts and
    runs on their own. */

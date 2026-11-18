@@ -51,10 +51,10 @@ with no account.
 <!-- engine-pin:credits -->
 The server's engine recorded for the next release, `scam_native.node`, is
 built from one commit,
-[`326f808a`](https://github.com/ThornswoodRP/skymp/tree/326f808aec30e95468d2c483c12874190ee293b9).
+[`fd30e8fb`](https://github.com/ThornswoodRP/skymp/tree/fd30e8fb8b4abdc004d23898fe997407e8bea764).
 That commit starts from
 [SkyMP](https://github.com/skyrim-multiplayer/skymp) at `2849e676`, and
-[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...326f808a)
+[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...fd30e8fb)
 is the difference between the two.
 <!-- /engine-pin:credits -->
 
@@ -138,11 +138,11 @@ at the bottom of this page, and their sources are on GitHub:
 [Concentus](https://github.com/lostromb/concentus) at commit `6c2328dc`,
 [SharpSRTP](https://github.com/jimm98y/SharpSRTP) at commit `ede1d045` and
 [BouncyCastle](https://github.com/bcgit/bc-csharp) at commit `4007498b`.
-It also carries NLayer 3.0.0, by Mark
+It also carries NLayer 3.0.1, by Mark
 Heath, Andrew Ward and contributors, the MP3 decoder it plays its menu theme
 with, under the MIT licence, which is at the bottom of this page too. Its
 source is [on GitHub](https://github.com/naudio/NLayer), at commit
-`046c7ce4`. And it carries zlib's compressor, from zlib 1.3 by Jean-loup
+`cdd16ea2`. And it carries zlib's compressor, from zlib 1.3 by Jean-loup
 Gailly and Mark Adler, under the zlib licence. It is translated into C# so
 that the main menu the launcher makes from your game comes out the same on
 every machine.
@@ -158,7 +158,7 @@ of this page.
 
 **The launcher is built on** .NET 10 by Microsoft and the .NET Foundation,
 compiled into it so you need nothing installed, under the MIT licence;
-Avalonia 12.1.4, by the AvaloniaUI project, its window and controls, under
+Avalonia 12.1.6, by the AvaloniaUI project, its window and controls, under
 the MIT licence; SkiaSharp 3.119.4 and HarfBuzzSharp 8.3.1.3, by Microsoft,
 under the MIT licence, with Google's Skia, which draws everything, and
 HarfBuzz, which shapes the text, under their own licences, and ANGLE, which
@@ -167,7 +167,7 @@ Nikita Tsukanov, under the MIT licence; and Velopack 1.2.161, by Velopack Ltd,
 Caelan Sayler and Kevin Bost, which installs and updates it, under the MIT
 licence. Their licences are at the bottom of this page, and their sources are
 on GitHub: [.NET](https://github.com/dotnet/dotnet) at commit `0427b9ab`,
-[Avalonia](https://github.com/AvaloniaUI/Avalonia) at commit `2d79ba55` and
+[Avalonia](https://github.com/AvaloniaUI/Avalonia) at commit `cf8e5646` and
 [its ANGLE](https://github.com/AvaloniaUI/angle) at commit `1c898059`,
 [SkiaSharp and HarfBuzzSharp](https://github.com/mono/SkiaSharp) at commits
 `f568ac94` and `2888c737`, [Skia](https://github.com/google/skia),

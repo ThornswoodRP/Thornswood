@@ -519,6 +519,11 @@
    "name": "Water for ENB - Patch - Generic Landscape Patch.esp",
    "sha256": "d535e088e0b2996ccc76832323476a87281e178e4aa10c567250402fc4b7562e",
    "size": 133302
+  },
+  {
+   "name": "Improved Eyes Skyrim.esp",
+   "sha256": "e7e66190e4e2063482a8f92e60fd40c35e31c510abfeadcc80c8b5688cc51780",
+   "size": 447637
   }
  ],
  "builtBy": "scripts/dev/Build-StationSites.py",

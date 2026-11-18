@@ -49,7 +49,7 @@ TICKET_DESKS = [
     ('report-someone',    ('report',)),
     ('apply-to-playtest', ('playtest',)),
     ('apply-for-a-seat',  ('jarl', 'faction')),
-    ('apply-for-staff',   ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator')),
+    ('apply-for-staff',   ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator', 'support')),
 ]
 # Every channel a ticket thread can be off.
 TICKET_NAMES = [d for d, _k in TICKET_DESKS] + [n for n in TICKETS
@@ -230,7 +230,7 @@ FACTION_THREAD_FAILED = ('This application could not be opened. '
 # unlike the webhook files next to it, so the id is not a secret. Install-Bot
 # sends it with the code.
 #
-# NOT dev-channel.txt. That one is the dev updates channel, where dev releases
+# NOT dev-channel.txt. That one is #staff-news, where dev releases
 # are announced, and only Set-DevNews.ps1 reads it, to check the dev release
 # webhook. The watchdog read it until 12 Oct (#2501), from a comment here that
 # called that channel "the staff channel", so every outage and the disk
@@ -262,7 +262,7 @@ WATCH_ID = _int_env('WATCH_CHANNEL_ID', _staff_channel_id())
 # The channel that hears about a session that went wrong: the same one.
 #
 # It once read `_staff_channel_id() or _dev_channel_id()`, so with no
-# staff-channel.txt it took the dev updates channel's id and never reached the
+# staff-channel.txt it took #staff-news's id and never reached the
 # name lookup in _trouble_channel. The first deploy on 22 September logged
 # "speaking in #news": right kind of place, wrong place, and it would have put
 # every crash report in with the release announcements.

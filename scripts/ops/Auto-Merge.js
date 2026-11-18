@@ -24,7 +24,13 @@
 // Patrick's: a workflow, the deploy gate, a verb list, a script a verb runs
 // or a file a verb reads from main to decide what it does on the box, such as
 // the keys Grant-BoxKey puts there (BOX_DIRS, VERB_LISTS, and the scripts and
-// 'reads' main's two verb lists name; #5726). And a
+// 'reads' main's two verb lists name; #5726). A Claude session's
+// (CLAUDE_BRANCH) counts as somebody else's here, though GitHub names
+// Patrick as its author: cloud threads open their pull requests with his
+// sign-in, and 17 that changed what runs on the box merged that way with no
+// card between 13 and 15 Nov 2026 (Ops #353; Patrick's A on his page, 15 Nov
+// 2026: "Claude branches wait for the card"). It waits for his Main card in
+// the Hermes app, which Bramble opens, like a Bot's. And a
 // Bot's (BOT_BRANCH) without Bramble's approving review at its head commit:
 // Bramble reviews the Bots' work and turns auto-merge on for it itself.
 //
@@ -60,6 +66,9 @@ const OUTSIDE_LABEL = 'outside work';
 // policy.yaml, branches.pattern), and Bramble's App, whose review counts.
 const BOT_BRANCH = /^(bramble|rift|sprocket|echo|magpie|wisp)\/[0-9]+-[a-z0-9][a-z0-9-]{0,60}$/;
 const BRAMBLE = /^thornswood-bramble(\[bot\])?$/;
+// A Claude session's branch: claude/<what>, from a cloud thread or a session
+// on a machine of the team's (CLAUDE.md, "On the shipping machine").
+const CLAUDE_BRANCH = /^claude\//;
 
 // The scripts main's verb lists name, and what each verb says it reads from
 // main ('reads': a file, or a folder ending in /), read from the checkout.
@@ -132,8 +141,10 @@ function judge(pr, base, scripts) {
   if (pr.isInMergeQueue) return [false, 'already in the queue'];
   if (pr.mergeable === 'CONFLICTING') return [false, 'it conflicts with ' + base + '; its owner brings ' + base + ' in'];
   const box = boxFiles(pr.paths || [], scripts || []);
-  if (box.length && who !== PATRICK) {
-    return [false, 'it changes what runs on the live box (' + box.slice(0, 3).join(', ') + (box.length > 3 ? ', ...' : '') + '), and only Patrick\'s goes on by itself'];
+  if (box.length && (who !== PATRICK || CLAUDE_BRANCH.test(pr.headRefName || ''))) {
+    const named = box.slice(0, 3).join(', ') + (box.length > 3 ? ', ...' : '');
+    if (who === PATRICK) return [false, 'a Claude session\'s branch that changes what runs on the live box (' + named + '); it merges on Patrick\'s Main card, which Bramble opens'];
+    return [false, 'it changes what runs on the live box (' + named + '), and only Patrick\'s goes on by itself'];
   }
   if (BOT_BRANCH.test(pr.headRefName || '')) {
     const reviewed = ((pr.reviews || {}).nodes || []).some((r) => r.author && BRAMBLE.test(r.author.login) && r.commit && r.commit.oid === pr.headRefOid);
@@ -207,12 +218,18 @@ function github(token) {
 module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, OUTSIDE_LABEL, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const repo = process.env.REPO, token = process.env.GH_TOKEN;
-  if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); process.exit(2); }
+  if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); return 2; }
   let scripts;
   try { scripts = verbScripts(require('path').join(__dirname, '..', '..')); }
-  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); process.exit(1); }
+  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); return 1; }
   sweep(repo, github(token), (l) => console.log(l), { dryRun: process.argv.includes('--dry-run'), scripts })
-    .then((code) => process.exit(code))
-    .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exit(1); });
+    .then((code) => { process.exitCode = code; })
+    .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exitCode = 1; });
 }

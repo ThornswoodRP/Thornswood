@@ -51,4 +51,4 @@ try {
   } else { yes('the recorded version is known for the current-runtime case', false); }
 } finally { fs.rmSync(T, { recursive: true, force: true }); }
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

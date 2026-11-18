@@ -4,9 +4,14 @@
       .\scripts\mods\Check-CollectionRules.ps1
       .\scripts\mods\Check-CollectionRules.ps1 -List "$env:LOCALAPPDATA\Skyrim Special Edition\plugins.txt"
       .\scripts\mods\Check-CollectionRules.ps1 -Collection <collection.json or its folder> -List <plugins.txt> -Data <Data folder>
+      .\scripts\mods\Check-CollectionRules.ps1 -Root <a Thornswood install>
 
   Whether the plugin rules the Nexus collection carries hold a clean install
   to a plugin list's order. Entry 274 on the To Do List.
+
+  -Root is the Thornswood install the defaults are under (Where.ps1 Install
+  when it is not given): -List is its Profile\Default\plugins.txt, -Data its
+  Game\Data, and the collection's address is read from its config.json.
 
   WHY IT EXISTS. Revisions 2 to 4 of the old ombo2a collection carried no
   plugin rules at all, so a first-time person installed, got whatever order
@@ -23,7 +28,7 @@
   that and the new plugin floats, which is the same load order mismatch this
   entry exists to stop, arriving one revision later with nobody connecting
   the two." Nothing read the rules against a list, so nothing would have said
-  so. This does. It says NO, and exits 1, for any of five things:
+  so. This does. It says NOT HELD, and exits 1, for any of five things:
 
     - a full plugin the list enables that no rule names. It floats. The next
       upload needs a rule loading it after the full plugin above it.
@@ -165,7 +170,7 @@ if (-not (Test-Path -LiteralPath $Collection -PathType Leaf)) {
     # Only a .7z needs 7-Zip. A .zip is opened with what .NET has, so on a
     # machine without 7-Zip an empty .zip still holds no collection.json, and
     # saying 7-Zip is missing would send somebody to install it for nothing.
-    if ($archives[0].Extension -ne '.zip' -and -not (Get-SevenZipPath)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
+    if ($archives[0].Extension -ne '.zip' -and -not (Find-SevenZip)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
     Stop-Check ("no loose collection.json in {0}, and none could be read out of {1}: {2}. Unpack it and pass the collection.json with -Collection." -f $collectionFolder, $archives[0].Name, $why)
   }
   Stop-Check "no collection.json at $Collection"

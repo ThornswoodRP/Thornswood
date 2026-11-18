@@ -23,7 +23,10 @@ const cp = require('child_process');
 
 const CONNECT = path.join(__dirname, 'connect.js');
 
+const open = new Set();
 const server = net.createServer((sock) => {
+  open.add(sock);
+  sock.on('close', () => open.delete(sock));
   const c = cp.spawn(process.execPath, [CONNECT], { stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
   sock.on('error', () => {});
   c.stdin.on('error', () => {});
@@ -39,5 +42,11 @@ server.listen(0, '127.0.0.1', () => {
   process.stdout.write(server.address().port + '\n');
 });
 
-process.stdin.on('end', () => process.exit(0));
+// When standard input ends, the port closes and every connection with it,
+// which tells each connect.js its input is done; node ends once they have,
+// with no call to its exit function, which can hang on Node 24 (#6036).
+process.stdin.on('end', () => {
+  server.close();
+  for (const sock of open) sock.destroy();
+});
 process.stdin.resume();

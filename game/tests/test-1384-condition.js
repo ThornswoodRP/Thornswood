@@ -59,8 +59,8 @@ yes('the block hands over its factory and its kits', typeof create === 'function
 if (typeof create !== 'function') {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // ------------------------------------------------------------------ records --
 
@@ -121,6 +121,19 @@ function testKits(withItems) {
 
 // -------------------------------------------------------------------- world --
 
+function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+const MADE = (function () {
+  const recipes = {}, access = { forge: { name: 'CraftingSmithingForge', rows: [] }, loom: { name: 'MCE_CraftingLoom', rows: [] } };
+  [[IRON_SWORD, 'Smith', 'forge'], [GLASS_SWORD, 'Smith', 'forge'], [EBONY_ARMOR, 'Smith', 'forge'],
+   [STALHRIM, 'Smith', 'forge'], [STEEL_ARMOR, 'Smith', 'forge'], [LEATHER, 'Smith', 'forge'],
+   [SHIELD, 'Smith', 'forge'], [ROBES, 'Tailor', 'loom'], [GLOVES, 'Tailor', 'loom']].forEach(function (m, i) {
+    const id = 'recipe' + i;
+    recipes[id] = { out: 'id' + m[0].toString(16), owner: m[1] };
+    access[m[2]].rows.push(id);
+  });
+  return { recipes: recipes, access: access };
+})();
+
 const PERSON = 0xff000058, OTHER = 0xff000059, NPC = 0x1a2b3, CHEST = 0x10ab1, CAVE_CHEST = 0x20cd2;
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -133,8 +146,16 @@ function world(opts) {
     rolls: (opts.rolls || []).slice(), said: [], logs: [], queue: [], writes: 0, refuseWrite: false,
     shown: []
   };
+  // Who makes what, and where (#4578): the smith's pieces at a forge, the
+  // tailor's at a loom. Everybody here stands where both are, unless w.at
+  // says otherwise; test-4578-repair-at-bench.js drives the rest.
+  w.at = {};
   w.api = create({
     kits: testKits(opts.kitsMade !== false),
+    recipes: function () { return MADE.recipes; },
+    benchAccess: function () { return MADE.access; },
+    descOf: function (id) { return 'id' + Number(id).toString(16); },
+    benchesHere: function (id) { return own(w.at, id) ? w.at[id].slice() : ['forge', 'loom']; },
     now: function () { return w.t; },
     random: function () { return w.rolls.length ? w.rolls.shift() : 0.99; },
     later: function (fn) { w.queue.push(fn); },
@@ -409,7 +430,7 @@ function row(baseId, cond, name) { return { baseId: baseId, cond: cond, name: na
   const w = world();
   w.packs[PERSON] = [{ baseId: IRON_SWORD, count: 1, name: 'Iron Sword (120%)' },
                      { baseId: WEAPON_KIT, count: 1 }];
-  w.states[PERSON] = COOK;
+  w.states[PERSON] = PLATE;
   const r = w.api.repairWithKit(PERSON, row(IRON_SWORD, 120, 'Iron Sword'));
   yes('a piece at 120% is not pulled down to 100% by somebody else\'s repair, and no kit is used',
       !r.ok && /at 120%/.test(r.line) && w.writes === 0);
@@ -477,7 +498,9 @@ function row(baseId, cond, name) { return { baseId: baseId, cond: cond, name: na
                      { baseId: GLOVES, count: 1, name: 'Fine Gloves (70%)', worn: true },
                      { baseId: GOLD_RING, count: 1 },
                      { baseId: WEAPON_KIT, count: 2 }];
-  w.states[PERSON] = COOK;
+  // A smith below Master: a Weapon Kit mends to 100% (#3442), and the
+  // gloves are a tailor's work (#4578).
+  w.states[PERSON] = EDGE_NOVICE;
   const said = w.api.panel(PERSON, []);
   const v = w.shown.length === 1 && w.shown[0].id === PERSON ? w.shown[0].view : null;
   yes('the inventory key draws the panel on the owner\'s own view, and says nothing in the chat',
@@ -932,6 +955,7 @@ function recName(w, id, i) { return w.records[id].inv.entries[i].name; }
   const w = world();
   w.packs[PERSON] = [{ baseId: IRON_SWORD, count: 1, name: 'Iron Sword (40%)' }, { baseId: WEAPON_KIT, count: 1 }];
   w.records[PERSON] = recordOf([{ baseId: IRON_SWORD, count: 1, worn: true, name: 'Iron Sword (40%)' }]);
+  w.states[PERSON] = PLATE;
   const r = w.api.repairWithKit(PERSON, row(IRON_SWORD, 40, 'Iron Sword'));
   yes('a repair of a worn piece to 100% renames it plain in the record too',
       r.ok && w.count(PERSON, IRON_SWORD, '') === 1 && recName(w, PERSON, 0) === undefined && w.recordWrites === 1);
@@ -940,8 +964,9 @@ function recName(w, id, i) { return w.records[id].inv.entries[i].name; }
   const w = world();
   w.packs[PERSON] = [{ baseId: IRON_SWORD, count: 1, name: 'Iron Sword (40%)' }, { baseId: WEAPON_KIT, count: 1 }];
   w.records[PERSON] = recordOf([{ baseId: STEEL_ARMOR, count: 1, worn: true }]);
-  w.api.repairWithKit(PERSON, row(IRON_SWORD, 40, 'Iron Sword'));
-  yes('a repair of a piece nobody wears writes nothing to the record', w.recordWrites === 0);
+  w.states[PERSON] = PLATE;
+  const r = w.api.repairWithKit(PERSON, row(IRON_SWORD, 40, 'Iron Sword'));
+  yes('a repair of a piece nobody wears writes nothing to the record', r.ok && w.recordWrites === 0);
 }
 {
   const w = world();
@@ -1000,4 +1025,5 @@ yes("the engine's hook before a character is handed over is the block's", /g\.__
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

@@ -295,7 +295,7 @@ function get(port, route) {
   fs.copyFileSync(path.join(path.dirname(VOICE), 'headlines.js'), path.join(dir, 'headlines.js'));
   SITE = await siteThatSaysYes();
   // What a box installed before this still holds.
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>Thornswood Voice</title><p>the old page</p>');
   fs.writeFileSync(path.join(dir, 'public', 'voice.js'), "'use strict'; // the old page's script");
   const PORT = await freePort('127.0.0.1');
@@ -355,5 +355,5 @@ function get(port, route) {
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });

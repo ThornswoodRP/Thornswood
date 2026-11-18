@@ -34,7 +34,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -77,7 +77,7 @@ yes('the needs and injury blocks, the craft gate, the two roads and the forge pi
     !!FORGE_HERE_SRC && !!AT_FORGE_SRC && !!TOUCHED_SRC && !!BENCH_BY_BASE && !!STATIONS && !!FORGE &&
     MOLD_REACH > 0 && DOOR_MEMORY_MS > 0);
 if (!NEEDS_SRC || !HURT_SRC || !GATE_SRC || !CRAFT_SRC || !KEY_SRC ||
-    !FORGE_HERE_SRC || !AT_FORGE_SRC || !TOUCHED_SRC || !BENCH_BY_BASE || !STATIONS || !FORGE) { done(); }
+    !FORGE_HERE_SRC || !AT_FORGE_SRC || !TOUCHED_SRC || !BENCH_BY_BASE || !STATIONS || !FORGE) { done(); } else {
 
 function baseOf(keyword) {
   return Object.keys(BENCH_BY_BASE).filter(function (b) { return BENCH_BY_BASE[b] === keyword; })[0];
@@ -322,3 +322,4 @@ Object.keys(ROADS).forEach(function (name) {
 }
 
 done();
+}

@@ -43,7 +43,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -117,47 +116,22 @@ function scratch(name, discord) {
     [ADMIN_D]: { id: ADMIN_D, name: 'Aela', profiles: [1001] },
     [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
   }));
+  // Make the site's clock one second ahead of this process. A replacement
+  // sign in must follow the site's recorded sign out, not a guess from the
+  // harness clock. This makes that ordering error repeat on every OS.
+  fs.writeFileSync(path.join(dir, 'clock.cjs'),
+    'const now = Date.now; Date.now = () => now() + 1000;\n');
   return { dir, secret, password };
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/* Waits for this run's site to say it is listening on its port (#1727). */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const mm = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (mm && Number(mm[1]) === port) end(null);
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(s) {
-  const port = await freePort();
-  const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
+  let port = 0;
+  const srv = spawn(process.execPath, ['--require', path.join(s.dir, 'clock.cjs'), path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  await listening(srv, port);
+  await siteFiles.listening(srv).then((r) => (port = r.port, r));
   return { port, srv };
 }
 /* Exactly the headers given, and nothing a browser would add on its own. */
@@ -294,11 +268,19 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     r = await request(port, 'POST', '/api/logout', { cookie: admin, origin: OWN });
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
-    // Signing out ends that sign in on the site too (#4405), so the checks
-    // below, which need staff signed in, sign in again. The new cookie is
-    // made one millisecond after the sign out had answered, so it is later
-    // than the time the site kept for the sign out, whatever the clock does.
-    const again = cookieFor(A.secret, ADMIN_D, 'Aela', Date.now() + 1);
+    // Signing out ends that sign in on the site too (#4405). The checks
+    // below need a new sign in, strictly after the site's recorded sign out.
+    // Date.now() + 1 in this process did not establish that order (#5834):
+    // another process can report a later clock value. Read the site record
+    // instead, with no sleep, retry or change to authentication.
+    const signOutKey = crypto.createHmac('sha256', A.secret).update('signout|' + ADMIN_D).digest('hex').slice(0, 32);
+    const endedAt = Number(read(A.dir, 'data/signouts.json', {})[signOutKey]);
+    if (!Number.isFinite(endedAt) || endedAt <= 0) throw new Error('the site did not record the sign out');
+    const madeAgain = endedAt + 1;
+    console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
+    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    yes('the ended sign in is still refused (' + r.status + ')', r.status === 401);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
@@ -358,5 +340,5 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     for (const d of [A.dir, B.dir]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { } }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

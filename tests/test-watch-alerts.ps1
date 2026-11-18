@@ -584,7 +584,7 @@ try {
     $script:certWhy = 'it runs out on 30 September 2026 03:00, in 1 day, and the line is 14'
     Step 1
     Yes 'Caddy''s certificate running out is told once, in words' ((Said '^\*\*The certificate Caddy holds for thornswood\.net needs a look\.\*\* It runs out on 30 September 2026 03:00, in 1 day') -eq 1)
-    Yes '  saying where to look, and that 443 must still take Cloudflare' ("$($script:said[0].Text)" -match 'Caddy''s log in C:\\Thornswood-Caddy' -and "$($script:said[0].Text)" -match 'Set-WebFirewall\.ps1 -Check')
+    Yes '  saying where to look, and that the tunnel must carry the names for the renewal' ("$($script:said[0].Text)" -match 'Caddy''s log in C:\\Thornswood-Caddy' -and "$($script:said[0].Text)" -match 'Set-WebFirewall\.ps1 -Check says whether the tunnel carries both names')
     Yes '  asking about the site''s own name' ($script:certAsked -eq 'https://thornswood.net/')
     Yes '  and restarting nothing for it' ($script:runs.Count -eq 0)
     $script:certWhy = ''

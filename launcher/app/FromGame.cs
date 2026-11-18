@@ -127,7 +127,7 @@ namespace Thornswood
             var f = new FromGameFile { Rel = r.Path, Expected = r.Sha256 };
             byte[] src;
             try { src = new GameArchives(data, new[] { r.Archive }).Read(r.Source); }
-            catch (Exception ex) { f.Problem = "could not read " + r.Source + " from " + r.Archive + ": " + ex.Message; return f; }
+            catch (Exception ex) { f.Problem = "could not read " + r.Source + " from " + r.Archive; f.Error = ex; return f; }
             string have = Sha256(src);
             if (have != r.SourceSha256)
             {
@@ -229,7 +229,8 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                board.Problem = box.Problem = "could not be made from the game's meshes: " + ex.Message;
+                board.Problem = box.Problem = "could not be made from the game's meshes";
+                board.Error = box.Error = ex;
                 return l;
             }
             Checked(board, boardBytes);
@@ -384,6 +385,14 @@ namespace Thornswood
         public string Expected;
         /// <summary>Why it was not made, or null when Bytes is the file.</summary>
         public string Problem;
+        /// <summary>
+        /// The exception behind Problem, when one was caught. Problem says
+        /// what could not be made in this file's own words and never carries
+        /// the exception's Message; the launcher's side says the exception
+        /// through Failure, which this file does not reach because scripts
+        /// compile FromGame*.cs on their own (#4633).
+        /// </summary>
+        public Exception Error;
         /// <summary>Not made because the game is set to another language than English (#4007, LastPlugin).</summary>
         public bool NotEnglish;
     }

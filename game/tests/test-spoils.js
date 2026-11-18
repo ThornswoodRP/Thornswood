@@ -17,7 +17,7 @@
 // chased that with timers. Now the engine never puts a record's contents in a
 // container (forbiddenBaseContainer, #3078), so this block does not touch a
 // container at all, and this file checks that it does not: no write, no mark,
-// no timer. tests\test-3078-containers-empty.js checks the setting itself.
+// no timer. scripts\tests\test-3078-containers-empty.js checks the setting itself.
 //
 // It drives the REAL spoils block out of gamemode.js over a fake mp and a fake
 // clock, the way test-needs.js does.
@@ -204,4 +204,4 @@ if (block) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -35,7 +35,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -84,10 +83,13 @@ const discord = http.createServer((req, res) => {
                       roles: m === 'play' ? ['r1'] : (m === 'banned' ? ['r2'] : []) });
   };
   if (mode === 'hang') { held.add(res); return; }
-  if (mode === 'slow') { setTimeout(answer, SLOW_MS); return; }
+  if (mode === 'slow') { const t = setTimeout(() => { waiting.delete(t); answer(); }, SLOW_MS); waiting.add(t); return; }
   answer();
 });
 const sockets = new Set();
+// A slow answer still waiting when the harness is done is dropped with the
+// rest, so node can end as soon as the harness does (#6036).
+const waiting = new Set();
 discord.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
 
 // ------------------------------------------------------- the scratch site --
@@ -119,45 +121,6 @@ fs.writeFileSync(path.join(dir, 'fake-discord.js'), [
   "};"
 ].join('\n'));
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 const cookieFor = (id) => {
   const at = String(Date.now());
   const name = 'Visitor ' + id;
@@ -222,14 +185,14 @@ function pageChecks() {
 (async function main() {
   pageChecks();
   const dport = await new Promise((ok) => discord.listen(0, '127.0.0.1', () => ok(discord.address().port)));
-  port = await freePort();
+  port = 0;
   const site = spawn(process.execPath, ['-r', path.join(dir, 'fake-discord.js'), path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           FAKE_DISCORD_PORT: String(dport) })
   });
   try {
-    yes('the scratch site starts', await listening(site, port).then(() => true));
+    yes('the scratch site starts', await siteFiles.listening(site).then((r) => (port = r.port, r)).then(() => true));
     let r;
 
     // --------------------------------------------------- not signed in --
@@ -334,9 +297,10 @@ function pageChecks() {
     try { site.kill(); } catch (e) { }
     held.forEach((res) => { try { res.destroy(); } catch (e) { } });
     sockets.forEach((s) => { try { s.destroy(); } catch (e) { } });
+    waiting.forEach(clearTimeout);
     discord.close();
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

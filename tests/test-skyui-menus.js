@@ -31,14 +31,14 @@ function skipped(what) { skip++; console.log('SKIP  ' + what); }
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed' + (skip ? ', ' + skip + ' skipped' : ''));
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const SCRIPT = path.join(REPO, 'scripts', 'mods', 'Check-SkyUIMenus.js');
 let C = null;
 try { C = require(SCRIPT); } catch (e) { console.log('      ' + e.message); }
 yes('scripts\\mods\\Check-SkyUIMenus.js is there and loads', !!C);
-if (!C) { done(); }
+if (!C) { done(); return; }
 
 // ------------------------------------------------------------------ bytes
 

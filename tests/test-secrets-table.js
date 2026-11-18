@@ -95,7 +95,7 @@ const want = [
   ['the Discord client secret', /client secret/i],
   ['the Discord bot token', /bot token/i],
   ['the #news webhook', /#news webhook/i],
-  ['the dev updates webhook', /dev updates webhook/i],
+  ['the #staff-news webhook', /#staff-news webhook/i],
   ['the voice join token key', /voice/i],
   ['the backup passphrase', /backup passphrase/i],
   ['GitHub access', /github/i],
@@ -359,4 +359,4 @@ yes('the section never says player', !/\bplayers?\b/i.test(section));
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

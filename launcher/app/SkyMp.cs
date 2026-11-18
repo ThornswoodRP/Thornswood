@@ -50,17 +50,17 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Where a local server lives. The build folder is checked first because
-        /// that is what a machine compiling SkyMP ends up with; a Server folder
-        /// beside the game is what a packaged copy gets.
+        /// Where a local server lives: Settings' Server folder when one is set,
+        /// then Server in the install folder, which is what a packaged copy
+        /// gets. Somebody running a server built from the fork points Server
+        /// folder at its build; no machine's own folder is compiled in (#4682).
         /// </summary>
         public static string ServerDir(Config cfg)
         {
             string[] tries = new string[]
             {
                 cfg == null ? null : cfg.ServerFolder,
-                Path.Combine(Paths.Root, "Server"),
-                "C:\\Thornswood\\skymp\\build\\dist\\server"
+                Path.Combine(Paths.Root, "Server")
             };
             foreach (string t in tries)
             {
@@ -189,7 +189,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not start the server: " + ex.Message;
+                return "Could not start the server: " + Failure.Say("SkyMp, starting the server", ex);
             }
         }
 

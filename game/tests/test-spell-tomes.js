@@ -54,8 +54,8 @@ yes('the rules, the character store, the spell tomes block and the staff spells 
     RULES !== null && CHARACTER !== null && TOMES !== null && STAFF !== null);
 if (RULES === null || CHARACTER === null || TOMES === null || STAFF === null) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // ------------------------------------------------------------ the records --
 
@@ -381,4 +381,5 @@ function points(actor) { const s = srv.C.stateOf(actor); return (s.spells && s.s
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

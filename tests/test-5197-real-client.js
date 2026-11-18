@@ -14,11 +14,23 @@
 //   - each kind of step passes on what it waits for, asks the runner and
 //     waits for its answer, and the run ends with a done line and an end ask;
 //   - a step that times out fails, asks for a screenshot named after it, and
-//     ends the run as failed;
+//     ends the run as failed, unless it is a wait with skip, which passes
+//     over the steps that deal with what it waited for (creation, for a
+//     character the server has not got);
 //   - every step in tests/real-client/*.json is one the plugin knows, and the
-//     runner names the same three files the plugin does.
+//     runner names the same three files the plugin does;
+//   - the runner's Windows helper compiles under PowerShell 7, where pwsh is;
+//   - an install on main is put on dev for the run as the launcher's Server
+//     card does, Play waits for dev's launcher, and the channel goes back
+//     after, byte for byte (on a config.json in the system's temp folder);
+//   - -Publish puts the run on a draft Release of its own, since a build's
+//     Release is immutable once published, and the Deployment links it;
+//   - the runner reads the results file sharing writing, so the plugin's
+//     append never fails under it, and takes only whole lines (on a file in
+//     the system's temp folder).
 //
-// Read only.
+// Reads only, but for that config.json and that results file, each in a
+// folder of its own in the system's temp, removed after.
 'use strict';
 const REPO_DIR = require('path').join(__dirname, '..');
 const fs = require('fs');
@@ -97,9 +109,12 @@ function game(opts) {
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
     page: function () { fire('browserMessage', { arguments: [].slice.call(arguments) }); },
     // The runner's half: answer every ask so far.
-    ack: function () {
+    ack: function (reply) {
       const asks = lines().filter(function (l) { return l.t === 'ask'; });
-      if (asks.length) { files[ACK] = String(asks[asks.length - 1].n); }
+      if (asks.length) {
+        const ask = asks[asks.length - 1];
+        files[ACK] = JSON.stringify(Object.assign({ n: ask.n, ok: true, note: '' }, reply));
+      }
       return asks;
     }
   };
@@ -192,6 +207,40 @@ function game(opts) {
   yes('nothing more after that', g.lines().length === before);
 }
 
+// --------------------------------------- a wait for what may not come ----
+// Creation, for a character the server has not got: the race menu opens in
+// the hall. For one it has, the wait runs out and the creation steps after it
+// are passed over, and the run goes on.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: true, timeout: 1000, skip: 2 },
+    { do: 'key', code: 19 },
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: false },
+    { do: 'end' }
+  ] });
+  g.frame(); g.frame(1100);
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a wait with skip that runs out passes, saying so', st.length >= 1 && st[0].ok === true && /RaceSex Menu to open, so the next 2 step\(s\) are skipped/.test(st[0].note));
+  yes('  and the next two steps are skipped, asking the runner nothing', st.length === 3 && st[1].note === 'skipped' && st[2].note === 'skipped' &&
+      !g.lines().some(function (l) { return l.t === 'ask'; }));
+  g.frame(); g.frame();
+  const done = g.lines().filter(function (l) { return l.t === 'done'; });
+  yes('  and the run goes on to its end, passed', done.length === 1 && done[0].ok === true && done[0].passed === 4);
+}
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'RaceSex Menu', open: true, timeout: 1000, skip: 1 },
+    { do: 'key', code: 19 },
+    { do: 'end' }
+  ] });
+  g.frame();
+  g.menu('RaceSex Menu', true);
+  g.frame();
+  g.frame();
+  const asks = g.lines().filter(function (l) { return l.t === 'ask'; });
+  yes('when it comes, the steps after it run', asks.length === 1 && asks[0].do === 'key' && asks[0].arg === 19);
+}
+
 // ------------------------------------------------------ a failing step ----
 {
   const g = game({ steps: [
@@ -213,6 +262,37 @@ function game(opts) {
 }
 
 // -------------------------------------------- the lists and the runner ----
+// A keyboard acknowledgement must say whether delivery succeeded. Merely
+// seeing an ask number (the old runner's reply) cannot prove it did.
+[
+  { reply: { ok: false, note: 'the game window does not have the keyboard' }, ok: false },
+  { reply: { ok: false, note: 'SendInput sent 1 of 2 events' }, ok: false },
+  { reply: { ok: true, note: '2 events, game window focused' }, ok: true }
+].forEach(function (c) {
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.ack(c.reply); g.frame(300);
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('key delivery result reaches the step: ' + c.reply.note,
+      !!step && step.ok === c.ok && step.note === c.reply.note);
+  if (!c.ok) {
+    g.ack(); g.frame(300);
+    const done = g.lines().find(function (l) { return l.t === 'done'; });
+    yes('a rejected key stops the run with zero steps passed', !!done && !done.ok && done.passed === 0);
+  }
+});
+{
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.files[ACK] = '1'; g.frame(300);
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('an old numeric acknowledgement cannot pass a key step', !!step && step.ok === false);
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 36 }, { do: 'end' }] });
+  g.frame(); g.ack({ n: 2 }); g.frame(300);
+  yes('an acknowledgement for another request cannot pass a key step',
+      !g.lines().some(function (l) { return l.t === 'step'; }));
+}
+
 {
   const known = [];
   const rx = /case '([a-z]+)':/g;
@@ -235,8 +315,283 @@ function game(opts) {
   });
   yes('the runner presses the launcher\'s Play by its name in MainWindow.axaml',
       /AutomationIdProperty, 'BtnPlay'/.test(RUNNER) && /x:Name="BtnPlay"/.test(read(path.join('launcher', 'app', 'MainWindow.axaml'))));
+  // A launcher from the setup is a Velopack install in %LOCALAPPDATA%\Thornswood,
+  // not <install>\Launcher (15 Nov: the run stopped on "Not there" on One).
+  const place = read(path.join('launcher', 'app', 'InstallPlace.cs')) || '';
+  yes('the runner finds a Velopack launcher by the record the launcher writes',
+      /"install-root\.txt"/.test(place) && /'install-root\.txt'/.test(RUNNER) &&
+      /Join-Path \$veloHome 'current\\Thornswood\.exe'/.test(RUNNER) && /& \$where MachineData/.test(RUNNER));
+  yes('the runner takes the one install, not the old -DevBuild folder',
+      /\$Root = & \$where Install\b/.test(RUNNER) && !/InstallDev/.test(RUNNER));
+  // An install on main is put on dev for the run and back after it, the way
+  // the launcher's Server card switch sets it (16 Nov: the run refused One,
+  // which Patrick had put on main to play).
+  const cfg = read(path.join('launcher', 'app', 'Config.cs')) || '';
+  const dev = read(path.join('launcher', 'app', 'DevBuild.cs')) || '';
+  const setBody = (/public static bool Set\(Config cfg, string channel\)\s*\{([\s\S]*?)\n        \}/.exec(dev) || [])[1] || '';
+  const fields = (/\$channelFields = @\(([^)]*)\)/.exec(RUNNER) || [])[1] || '';
+  ['Channel', 'UpdateBranch', 'ServerPort', 'VoicePort', 'VoiceUrl'].forEach(function (n) {
+    yes('the runner sets ' + n + ' as DevBuild.Set does, a field config.json keeps',
+        new RegExp('cfg\\.' + n + ' = ').test(setBody) && fields.indexOf("'" + n + "'") >= 0 &&
+        new RegExp('\\[JsonInclude[^\\]]*\\] public string ' + n + '\\b').test(cfg));
+  });
+  yes('and with the dev ports DevBuild names',
+      /DevPort = "7787"/.test(dev) && /DevVoicePort = "7789"/.test(dev) &&
+      /ServerPort = '7787'; VoicePort = '7789'/.test(RUNNER));
+  yes('the runner puts the channel back in its finally, only when it changed it',
+      /\} finally \{[\s\S]*if \(\$switched\) \{\s*Set-RunChannel \$leftOn/.test(RUNNER));
+  yes('and presses Play only once the launcher in place is dev\'s',
+      /\$ch = Get-InstalledChannel\s*\n\s*if \(\$ch -and \$ch -ne 'dev'\)[\s\S]*?continue[\s\S]*?BtnPlay|\$ch = Get-InstalledChannel\s*\n\s*if \(\$ch -and \$ch -ne 'dev'\)[\s\S]*?continue[\s\S]*?\$btn\.Current\.IsEnabled/.test(RUNNER));
+}
+
+// The runner's Windows helper is compiled by Add-Type when it starts. On One,
+// under PowerShell 7, it failed with CS1069 (Bitmap is in System.Drawing.Common)
+// before the launcher started (16 Nov). Compile it here the same way, with the
+// text the runner has, wherever PowerShell 7 is.
+{
+  const cp = require('child_process');
+  const from = RUNNER.indexOf("if (-not ('ThornswoodRealClient.Win' -as [type])) {");
+  const end = from >= 0 ? RUNNER.indexOf("\n'@\n}", from) : -1;
+  yes('the runner has its Windows helper block', from >= 0 && end > from);
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  yes('PowerShell 7 is available for the required keyboard delivery regressions', ver.status === 0);
+  const keyFunction = /function Invoke-GameKey\b[\s\S]*?\n}\n/.exec(RUNNER);
+  const gameProcessFunction = /function Get-GameProcess\b[\s\S]*?\n}\n/.exec(RUNNER);
+  yes('the runner has a testable keyboard delivery function', !!keyFunction);
+  yes('the runner has a testable process lookup', !!gameProcessFunction);
+  if (ver.status === 0 && keyFunction && gameProcessFunction) {
+    // Execute the production PowerShell control flow against fake user32
+    // calls. This neither launches a window nor injects any real input.
+    const script = `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+namespace ThornswoodRealClient {
+  public static class Win {
+    public static IntPtr Foreground;
+    public static bool Activate, MoveOnActivate, LoseOnHold, LoseOnUp, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
+    public static uint DownSent, UpSent;
+    public static int Calls;
+    public static int NativeCalls;
+    public static string Events = "";
+    public static bool SetForegroundWindow(IntPtr h) {
+      NativeCalls++;
+      if (Activate && MoveOnActivate) Foreground = h;
+      return Activate;
+    }
+    public static IntPtr GetForegroundWindow() { NativeCalls++; return Foreground; }
+    public static uint SendScan(ushort scan, bool up) {
+      Calls++; NativeCalls++; Events += (up ? "U" : "D") + scan + ";";
+      if (up) {
+        Down = false;
+        if (LoseOnUp) Foreground = new IntPtr(99);
+        if (ThrowUp) throw new Exception("release error");
+        return UpSent;
+      }
+      if (ThrowDown) throw new Exception("press error");
+      Down = DownSent == 1;
+      return DownSent;
+    }
+    public static void Hold(int ms) {
+      Events += "H" + ms + ";";
+      // A current-state reader samples between down and up, like the CEF
+      // listener. Buffered native events alone cannot establish this.
+      SawDown = Down;
+      if (LoseOnHold) Foreground = new IntPtr(99);
+      if (ThrowHold) throw new Exception("hold error");
+    }
+  }
+}
+'@
+${keyFunction[0]}
+${gameProcessFunction[0]}
+function Start-Sleep([int]$Milliseconds) { [ThornswoodRealClient.Win]::Hold($Milliseconds) }
+function Get-Process { $script:fakeProcess }
+$script:fakeProcess = [pscustomobject]@{ MainWindowHandle = [IntPtr]::Zero }
+$p = Get-GameProcess
+if ($p) {
+  $r = Invoke-GameKey $p.MainWindowHandle 36
+  if (-not $r.ok) { 'WINDOWLESS ALIVE: ' + $r.note }
+}
+$script:fakeProcess = $null
+if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
+function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false, $loseOnUp=$false, $code=36) {
+  [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
+  [ThornswoodRealClient.Win]::Activate = $activate
+  [ThornswoodRealClient.Win]::MoveOnActivate = $move
+  [ThornswoodRealClient.Win]::DownSent = $down
+  [ThornswoodRealClient.Win]::UpSent = $up
+  [ThornswoodRealClient.Win]::LoseOnHold = $lose
+  [ThornswoodRealClient.Win]::LoseOnUp = $loseOnUp
+  [ThornswoodRealClient.Win]::ThrowDown = $throwDown
+  [ThornswoodRealClient.Win]::ThrowHold = $throwHold
+  [ThornswoodRealClient.Win]::ThrowUp = $throwUp
+  [ThornswoodRealClient.Win]::Down = $false
+  [ThornswoodRealClient.Win]::SawDown = $false
+  [ThornswoodRealClient.Win]::Calls = 0
+  [ThornswoodRealClient.Win]::NativeCalls = 0
+  [ThornswoodRealClient.Win]::Events = ''
+  $r = Invoke-GameKey ([IntPtr]$handle) $code
+  @{name=$name; code=$code; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; nativeCalls=[ThornswoodRealClient.Win]::NativeCalls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
+}
+Case 'unsupported' 42 99 $true $true 1 1 $false -code 200
+Case 'zero-code' 42 99 $true $true 1 1 $false -code 0
+Case 'fraction' 42 99 $true $true 1 1 $false -code 36.4
+Case 'rounded-boundary' 42 99 $true $true 1 1 $false -code 127.4
+Case 'preserved-fraction' 42 99 $true $true 1 1 $false -code '127.00000000000000001'
+Case 'missing' 0 0 $true $true 1 1 $false
+Case 'denied' 42 99 $false $false 1 1 $false
+Case 'not-foreground' 42 99 $true $false 1 1 $false
+Case 'zero-down' 42 42 $true $true 0 1 $false
+Case 'zero-up' 42 42 $true $true 1 0 $false
+Case 'lost' 42 42 $true $true 1 1 $true -code 1
+Case 'press-error' 42 42 $true $true 1 1 $false $true
+Case 'hold-error' 42 42 $true $true 1 1 $false $false $true
+Case 'release-error' 42 42 $true $true 1 1 $false $false $false $true
+Case 'release-focus' 42 42 $true $true 1 1 $false -loseOnUp $true
+Case 'already' 42 42 $false $false 1 1 $false
+Case 'activated' 42 99 $true $true 1 1 $false -code 23
+`;
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
+    yes('a living process without a window reaches the failed-key path instead of the crashed exit',
+        /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
+    yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 17);
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': invalid code cannot query or change native focus', !!c && !c.ok && c.nativeCalls === 0);
+    });
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
+    });
+    ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error', 'release-focus'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': rejected delivery cannot pass, and releases the requested key',
+          !!c && !c.ok && c.calls === 2 && c.events.endsWith('U' + c.code + ';') && c.events.startsWith('D' + c.code + ';') && !!c.note);
+    });
+    ['already', 'activated'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': snapshot input sees the requested held key before release',
+          !!c && c.ok && c.calls === 2 && c.sawDown && c.events === 'D' + c.code + ';H120;U' + c.code + ';');
+    });
+    if (r.status !== 0) { console.log(r.stderr || r.stdout); }
+  }
+  if (ver.status !== 0) {
+    console.log('      Install PowerShell 7 to run the keyboard delivery regressions and compile the Windows helper.');
+  } else if (from >= 0 && end > from) {
+    const block = 'Add-Type -AssemblyName System.Drawing\n' + RUNNER.slice(from, end + 5) + '\n' +
+      "if ('ThornswoodRealClient.Win' -as [type]) { 'HELPER OK' }\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(block, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const said = (r.stdout || '') + (r.stderr || '');
+    yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
+    if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+
+    // Exercise production packet construction, replacing only the native
+    // SendInput boundary. Counts, flags and scan bytes must match exactly;
+    // no Windows input is sent, on either Windows or Linux.
+    const boundary = /\[DllImport\("user32\.dll", SetLastError = true\)\] static extern uint SendInput\(uint n, INPUT\[\] inputs, int size\);/;
+    yes('the native input boundary is identified for packet checks', boundary.test(block));
+    // A changed declaration must fail this check without ever executing the
+    // unreplaced P/Invoke on a Windows test machine.
+    if (boundary.test(block)) {
+    const recording = block.replace(boundary, `public static string Packets = "";
+    public static bool PacketLayoutOkay = true;
+    static uint SendInput(uint n, INPUT[] inputs, int size) {
+      int nativeSize = IntPtr.Size == 8 ? 40 : 28;
+      int unionOffset = IntPtr.Size == 8 ? 8 : 4;
+      PacketLayoutOkay &= size == nativeSize && inputs[0].type == 1 &&
+        Marshal.OffsetOf(typeof(INPUT), "u").ToInt32() == unionOffset &&
+        Marshal.OffsetOf(typeof(INPUTUNION), "ki").ToInt32() == 0 &&
+        Marshal.OffsetOf(typeof(KEYBDINPUT), "wScan").ToInt32() == 2;
+      Packets += n + "," + inputs.Length + "," + inputs[0].u.ki.wScan + "," + inputs[0].u.ki.dwFlags + ";";
+      return n;
+    }`) + `
+foreach ($scan in @(1,23,36)) {
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $false)
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $true)
+}
+'PACKETS ' + [ThornswoodRealClient.Win]::Packets
+'LAYOUT ' + [ThornswoodRealClient.Win]::PacketLayoutOkay
+`;
+    const packets = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(recording, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    yes('production native code sends one requested scan per call with down/up flags', packets.status === 0 &&
+        (packets.stdout || '').includes('PACKETS 1,1,1,8;1,1,1,10;1,1,23,8;1,1,23,10;1,1,36,8;1,1,36,10;'));
+    yes('production packets use keyboard input and the Windows INPUT layout and size', packets.status === 0 && /LAYOUT True/.test(packets.stdout || ''));
+    if (packets.status !== 0) { console.log(packets.stderr || packets.stdout); }
+    }
+  }
+
+  // -Publish: a draft Release of the run's own, since a build's Release is
+  // immutable once published (GitHub's 422 on 16 Nov), linked from the
+  // Deployment, and older runs past the newest ten taken down.
+  yes('-Publish puts the run on a draft Release of its own, never on the build\'s Release',
+      /gh release create \$relTag @files --repo \$Repo --draft --target \$dep\.sha/.test(RUNNER) && !/gh release upload/.test(RUNNER));
+  yes('  and the Deployment\'s line links that draft', /log_url = \$relUrl;/.test(RUNNER));
+  yes('  and only the runs\' own drafts past the newest ten are taken down',
+      /Where-Object \{ \$_\.draft -and \(\[string\]\$_\.tag_name\)\.StartsWith\('real-client-'\) \}[\s\S]*Select-Object -Skip 10/.test(RUNNER));
+
+  // The results file: read sharing writing, so the plugin's append never
+  // fails under the read and loses its line (16 Nov), and only whole lines.
+  yes('the runner reads the results file sharing writing, never with ReadAllLines',
+      !/ReadAllLines\(\$resultsFile\)/.test(RUNNER) &&
+      /\[IO\.File\]::Open\(\$resultsFile, 'Open', 'Read', 'ReadWrite, Delete'\)/.test(RUNNER) &&
+      /\$lines = @\(Read-NewResultLines\)/.test(RUNNER));
+  const rf = RUNNER.indexOf('$script:resultsReadAt = 0\nfunction Read-NewResultLines');
+  const re = rf >= 0 ? RUNNER.indexOf('\n}\n', rf) : -1;
+  yes('the runner has Read-NewResultLines', rf >= 0 && re > rf);
+  if (ver.status === 0 && rf >= 0 && re > rf) {
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-'));
+    const file = path.join(dir, 'results.jsonl');
+    fs.writeFileSync(file, '{"t":"start"}\n{"t":"ask","n":1}\n{"t":"ask","n"');
+    const script = '$ErrorActionPreference = "Stop"\n$resultsFile = ' + JSON.stringify(file).replace(/"/g, "'") + '\n' +
+      RUNNER.slice(rf, re + 3) +
+      "'FIRST ' + (@(Read-NewResultLines) -join '|')\n" +
+      "'NONE ' + (@(Read-NewResultLines).Count)\n" +
+      "[IO.File]::AppendAllText($resultsFile, ':2}' + [char]10)\n" +
+      "'SECOND ' + (@(Read-NewResultLines) -join '|')\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    yes('it takes the whole lines and leaves a line still being written',
+        ((/FIRST (.*)/.exec(out) || [])[1] || '').trim() === '{"t":"start"}|{"t":"ask","n":1}' && ((/NONE (.*)/.exec(out) || [])[1] || '').trim() === '0');
+    yes('  and takes that line once its end is there, once', ((/SECOND (.*)/.exec(out) || [])[1] || '').trim() === '{"t":"ask","n":2}');
+    if (!/SECOND/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  // The runner's channel functions on a config.json as the launcher writes
+  // it, in a folder of the system's temp: main to dev, and back byte for byte.
+  const cf = RUNNER.indexOf('$cfgFile = Join-Path $Root');
+  const ce = RUNNER.indexOf('$leftOn = Read-ChannelFields');
+  yes('the runner has its channel functions', cf >= 0 && ce > cf);
+  if (ver.status === 0 && cf >= 0 && ce > cf) {
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-'));
+    const before = '{"ServerIp":"203.0.113.9","ServerPort":"7777","VoicePort":"7778","VoiceUrl":"https://example.invalid/voice/","UpdateBranch":"main","Theme":"Forge","Channel":"","Note":"a \\"quoted\\" word"}';
+    fs.writeFileSync(path.join(dir, 'config.json'), before);
+    const script = '$ErrorActionPreference = "Stop"\n$Root = ' + JSON.stringify(dir).replace(/"/g, "'") + '\n' +
+      RUNNER.slice(cf, ce) +
+      '$leftOn = Read-ChannelFields\n' +
+      "Set-RunChannel ([ordered]@{ Channel = 'dev'; UpdateBranch = 'dev'; ServerPort = '7787'; VoicePort = '7789'; VoiceUrl = (Get-DevVoiceUrl $leftOn.VoiceUrl) })\n" +
+      "'ON DEV ' + ([IO.File]::ReadAllText($cfgFile))\n" +
+      'Set-RunChannel $leftOn\n' +
+      "'BACK ' + ([IO.File]::ReadAllText($cfgFile))\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    const on = (/ON DEV (.*)/.exec(out) || [])[1] || '';
+    let onCfg = null;
+    try { onCfg = JSON.parse(on); } catch (e) { onCfg = null; }
+    yes('on dev, config.json has the five fields as DevBuild.Set gives them',
+        !!onCfg && onCfg.Channel === 'dev' && onCfg.UpdateBranch === 'dev' && onCfg.ServerPort === '7787' &&
+        onCfg.VoicePort === '7789' && onCfg.VoiceUrl === 'https://example.invalid/voice-dev');
+    yes('and every other field as the launcher wrote it', !!onCfg && onCfg.Theme === 'Forge' && onCfg.ServerIp === '203.0.113.9' && onCfg.Note === 'a "quoted" word');
+    yes('put back, config.json is byte for byte what it was', ((/BACK (.*)/.exec(out) || [])[1] || '').trim() === before);
+    if (!onCfg) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

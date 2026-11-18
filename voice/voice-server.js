@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+const { performance } = require('perf_hooks');
 const headlines = require('./headlines');
 
 const PORT = Number(process.env.THORNSWOOD_VOICE_PORT || 7778);
@@ -1001,15 +1002,20 @@ const PING_EVERY = Number(process.env.THORNSWOOD_VOICE_PING_MS) || 25000;
 */
 const SILENT_AFTER = Number(process.env.THORNSWOOD_VOICE_SILENT_MS) || PING_EVERY * 3;
 let closedSilent = 0;         // sockets closed for answering nothing, for /health
+let pingTickAt = performance.now();
+let pingLoopLag = 0;
 
-setInterval(() => {
+const pingTimer = setInterval(() => {
+  const tick = performance.now();
+  pingLoopLag = Math.max(0, Math.round(tick - pingTickAt - PING_EVERY));
+  pingTickAt = tick;
   const now = Date.now();
   for (const s of live) {
     if (now - s.heard > SILENT_AFTER) {
       closedSilent++;
       console.log('[voice] closed a connection that answered nothing for ' +
                   Math.round((now - s.heard) / 1000) + ' s. It can reconnect.');
-      s.close();
+      s.close('silent');
       continue;
     }
     s.ping();   // does not throw: a ping that cannot be written closes s
@@ -1125,10 +1131,24 @@ class Sock {
     // When anything last arrived from the other end: a pong, a message, a
     // ping of its own. See SILENT_AFTER.
     this.heard = Date.now();
+    // One bounded record at close answers whether heartbeats were written,
+    // received, or held behind a queue. Never store endpoints or payloads.
+    this.startedAt = performance.now();
+    this.rxAt = this.startedAt;
+    this.txAt = this.startedAt;
+    this.peer = 0;
+    this.rxBytes = 0; this.txBytes = 0;
+    this.pingTx = 0; this.pongRx = 0;
+    this.appPingRx = 0; this.appPongTx = 0;
+    this.errorCode = '';
+    this.closeCode = 0;
     live.add(this);
 
     socket.on('drain', () => { this.backed = false; this.flushLatest(); });
-    socket.on('data', (d) => { this.heard = Date.now(); this.feed(d); });
+    socket.on('data', (d) => {
+      this.heard = Date.now();
+      this.feed(d);
+    });
     /*
       The other end has shut its side without a close frame: a process
       killed, a tab gone, a raw socket ended. The HTTP server hands the
@@ -1136,12 +1156,16 @@ class Sock {
       until the next write to it failed. That write was the position tick
       five times a second; for a socket sent nothing, it is the next ping.
     */
-    socket.on('end', () => this.close());
-    socket.on('error', () => this.close());
+    socket.on('end', () => this.close('end'));
+    socket.on('error', (e) => {
+      this.errorCode = /^[A-Z0-9_]{1,40}$/.test(String(e.code || '')) ? e.code : '';
+      this.close('error');
+    });
     socket.on('close', () => {
       live.delete(this);
       if (this.closed) return;
       this.closed = true;
+      this.summary('transport');
       if (this.onclose) this.onclose();
     });
   }
@@ -1149,7 +1173,7 @@ class Sock {
   /* A ping frame: FIN, opcode 9, no body. See the note over `live`. */
   ping() {
     if (this.closed) return;
-    try { this.write(Buffer.from([0x89, 0])); } catch (e) { this.close(); }
+    try { this.pingTx++; this.write(Buffer.from([0x89, 0])); } catch (e) { this.close('write'); }
   }
 
   /* Where what socket.write says is heard. See the note over QUEUE_CEILING.
@@ -1161,12 +1185,13 @@ class Sock {
       if (!uncorkDue) { uncorkDue = true; setImmediate(uncorkAll); }
     }
     if (this.socket.write(buf) === false) { this.backed = true; this.uncork(); }
+    this.txAt = performance.now(); this.txBytes += buf.length;
     const queued = this.socket.writableLength;
     if (queued > QUEUE_CEILING) {
       closedBacklogged++;
       console.log('[voice] closed a connection whose queue passed ' + QUEUE_CEILING +
                   ' bytes (' + queued + ' waiting). It can reconnect.');
-      this.close();
+      this.close('backlog');
     }
   }
 
@@ -1179,7 +1204,10 @@ class Sock {
     if (this.latest) rostersAhead++;
     this.flushLatest();
     if (this.closed) return;
-    try { this.write(frame(JSON.stringify(obj))); } catch (e) { this.close(); }
+    try {
+      if (obj.t === 'pong') this.appPongTx++;
+      this.write(frame(JSON.stringify(obj)));
+    } catch (e) { this.close('write'); }
   }
 
   /* For the position tick only: skipped while backed, and counted. Says
@@ -1225,14 +1253,14 @@ class Sock {
     }
     this.flushLatest();
     if (this.closed) return;
-    try { this.write(framed); } catch (e) { this.close(); }
+    try { this.write(framed); } catch (e) { this.close('write'); }
   }
 
   flushLatest() {
     if (!this.latest || this.closed) return;
     const framed = this.latest;
     this.latest = null;
-    try { this.write(framed); } catch (e) { this.close(); }
+    try { this.write(framed); } catch (e) { this.close('write'); }
   }
 
   /* What this turn wrote goes to the kernel now. See the note over corked. */
@@ -1241,10 +1269,22 @@ class Sock {
     this.socket.uncork();
   }
 
-  close() {
+  summary(reason) {
+    const now = performance.now();
+    console.log(JSON.stringify({ event: 'voice_socket_closed', reason, peer: this.peer,
+      ageMs: Math.round(now - this.startedAt), rxAgeMs: Math.round(now - this.rxAt),
+      txAgeMs: Math.round(now - this.txAt), pingTx: this.pingTx, pongRx: this.pongRx,
+      appPingRx: this.appPingRx, appPongTx: this.appPongTx,
+      rxBytes: this.rxBytes, txBytes: this.txBytes, queuedBytes: this.socket.writableLength,
+      backed: this.backed, previousTickLagMs: pingLoopLag,
+      sincePingTickMs: Math.round(now - pingTickAt), errorCode: this.errorCode, closeCode: this.closeCode }));
+  }
+
+  close(reason = 'closed') {
     live.delete(this);
     if (this.closed) return;
     this.closed = true;
+    this.summary(reason);
     // What was written before the close (a close frame among it) still goes,
     // as it did when every write reached the kernel at once.
     this.uncork();
@@ -1253,6 +1293,7 @@ class Sock {
   }
 
   feed(chunk) {
+    this.rxAt = performance.now(); this.rxBytes += chunk.length;
     this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
     // A frame can arrive split across reads, and several can arrive in one, so
     // this loops until what is left is not a whole frame.
@@ -1283,7 +1324,7 @@ class Sock {
       */
       if (!masked) {
         this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea]));   // FIN+close, len 2, 1002
-        this.close();
+        this.close('protocol');
         return;
       }
       let len = b1 & 0x7f;
@@ -1295,7 +1336,7 @@ class Sock {
       } else if (len === 127) {
         if (this.buf.length < 10) return;
         const big = this.buf.readBigUInt64BE(2);
-        if (big > 1000000n) { this.close(); return; }
+        if (big > 1000000n) { this.close('frame_limit'); return; }
         len = Number(big); off = 10;
       }
 
@@ -1324,8 +1365,9 @@ class Sock {
         which closes this as well.
       */
       if (op === 0x8) {
+        this.closeCode = body.length >= 2 ? body.readUInt16BE(0) : 0;
         this.socket.write(Buffer.from([0x88, 2, 0x03, 0xe8]));   // FIN+close, len 2, 1000
-        this.close();
+        this.close('close_frame');
         return;
       }
       /*
@@ -1346,18 +1388,19 @@ class Sock {
       */
       if (op === 0x9) {
         if (!this.backed) {
-          try { this.write(Buffer.from([0x8a, 0])); } catch (e) { this.close(); }
+          try { this.write(Buffer.from([0x8a, 0])); } catch (e) { this.close('write'); }
         }
         continue;
       }
       // A pong is the answer to OUR ping. Nothing to do with it: it has
       // already done its job by crossing the proxy in both directions.
-      if (op === 0xa) { continue; }
+      if (op === 0xa) { this.pongRx++; continue; }
       if (op !== 0x1) continue;                         // only text is used
 
       let msg = null;
       try { msg = JSON.parse(body.toString('utf8')); } catch (e) { continue; }
       if (!msg || !this.onmessage) continue;
+      if (msg.t === 'ping') this.appPingRx++;
       /*
         A fault in handling one message costs that one socket (#4206). It
         used to leave the process, and every socket in the room went with
@@ -1371,7 +1414,7 @@ class Sock {
       } catch (e) {
         console.log('[voice] closed a connection whose ' + JSON.stringify(String(typeof msg.t === 'string' ? msg.t : '?').slice(0, 20)) +
                     ' message could not be handled: ' + (e && e.stack || e));
-        this.close();
+        this.close('handler');
         return;
       }
     }
@@ -1618,6 +1661,7 @@ function onJoin(ws, msg, profileId) {
   }
 
   const id = nextPeer++;
+  ws.peer = id;
   const name = cleanName(msg.name);
   // voice is false only when the join says so (#1925, over roster).
   peers.set(id, { ws, profileId, name, mode: cleanMode(msg.mode), proven: true,
@@ -1825,7 +1869,7 @@ function viewsOf(snap) {
   (thornswood-voice.js applyMoved, thornswood-chat.js keep, VoiceSession.cs
   ApplyRows), and voice/tests/test-moved.js counts the bytes.
 */
-setInterval(() => {
+const movedTimer = setInterval(() => {
   sweepSilenced(Date.now());
   if (peers.size === 0) return;
   const snap = snapshot();
@@ -2083,7 +2127,7 @@ function placeVoices() {
 }
 
 // Places whose minute is over are forgotten.
-setInterval(() => {
+const doorTimer = setInterval(() => {
   const cut = Date.now() - 60000;
   for (const door of [tokenDoor, socketDoor]) {
     for (const [key, list] of door.seen) {
@@ -3270,7 +3314,28 @@ server.on('upgrade', (req, socket, head) => {
 const BIND = String(process.env.THORNSWOOD_VOICE_BIND || '127.0.0.1').trim() || '127.0.0.1';
 
 server.listen(PORT, BIND, () => {
-  console.log('[voice] listening on ' + BIND + ':' + PORT +
+  // The port it is listening on, not the one it was handed: given 0, the
+  // system picks a free one as it binds, and whoever started it reads the
+  // port off this line (#6050), so no other socket can take it in between.
+  console.log('[voice] listening on ' + BIND + ':' + server.address().port +
               (BIND === '127.0.0.1' ? ' (loopback only, so something must be proxying to it)' : ''));
   console.log('[voice] positions accepted from loopback at POST /positions');
 });
+
+/* Stops the service: no more connections, every socket closed, its timers
+   cleared, so the process it runs in can end by itself. Run as a program it
+   is never called; a harness that runs the service in its own process
+   (voice/tests/test-roster-once.js) calls it when it is done, instead of
+   node's exit function, which can hang on Node 24 (#6036). */
+function stop() {
+  return new Promise((ok) => {
+    clearInterval(pingTimer);
+    clearInterval(movedTimer);
+    clearInterval(doorTimer);
+    clearTimeout(chatPruneTimer);
+    server.close(() => ok());
+    server.closeAllConnections();
+    for (const s of live) s.close();
+  });
+}
+module.exports = { stop };

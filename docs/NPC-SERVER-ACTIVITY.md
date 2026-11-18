@@ -6,6 +6,8 @@ including later saved-form loads. Main and dev both start this controller:
 `game/gamemode.js` starts it when `thornswoodServer` is main or dev (or unset,
 which reads as main), since 6e4488e4 on 3 October.
 
+## Who is kept
+
 A cut actor is never made on the server, and since #2468 it is meant never to
 be drawn in anybody's game either. Until then each person's game loaded every
 placed actor of a cell from the plugins, and the client's world cleaner
@@ -23,14 +25,19 @@ native acceptance run with the plugin and no list, 13 Oct: all 5,072 kept
 identities loaded and controlled before and after a gamemode reload, none of
 the 9,596 cut ones, peak 1,477 MiB.
 
-The 48-plugin catalogue contains 14,641 placements: 5,072 retained and 9,569
-excluded. Named pets and enemies are cut even without a Unique flag. Fourteen
+The 106-plugin catalogue in [NPC-POPULATION.md](NPC-POPULATION.md), which
+`scripts/dev/Build-NpcPopulation.py` writes, inspects
+14,668 placements: 4,883 retained and 9,785 excluded. Its counts by hold and
+location are there; this page does not repeat them. Named pets and enemies
+are cut even without a Unique flag. Fourteen
 old Justiciars and the embassy soldier are excluded too. Remnant patrols are
 not placed by this catalogue. Traders, outside transport services, ecological
 wildlife and generic hostile encounters remain under habitat caps.
 Authored corpses are excluded from live encounters.
 The native eligibility filter excludes mannequins and permits retained vampires
 and their traders. Humans, profiles and connected identities are protected.
+
+## Where the lists come from
 
 [Population counts and locations](NPC-POPULATION.md),
 [exact NPC spawn coordinates](NPC-SPAWNS.csv),
@@ -46,6 +53,8 @@ body. A population rebuild writes it, and so does
 `python scripts/dev/Build-ResourceLocations.py --hunting-only` after a hunt
 table rebuild. `game/tests/test-1874-hunting-spots.js` fails the build when it is not
 what those two tables say.
+
+## How often NPCs are stepped
 
 Loading advances one candidate every 10 ms. Native record and navigation indexes
 are prepared during startup. Navigation preparation shares raw geometry and a
@@ -83,6 +92,8 @@ and the other three every 10 or 100 ms. Dev's 6:35 AM profile put that waking,
 its timers and the minute line's count of each run at about 2.5 s of the
 15.5 s its JavaScript thread was busy in 120 s (#3181).
 
+## Walking
+
 Movement follows walkable triangles in the local region. It retains the saved
 height above the navigation surface and crosses only verified reciprocal edges.
 Missing or corrupt geometry, an unsuitable saved position, or a displacement
@@ -111,6 +122,8 @@ and shared density checks before their creation is reported as successful.
 Destroyed dynamic identities release their slots; bodies awaiting return retain
 theirs.
 
+## Creatures staff spawn
+
 A creature made by `/spawn` or `/spawnat` is outside the habitat caps and is
 temporary unless the command ends in `keep` (#2623, Djinn, 17 Oct: "A creature
 spawned by a staff member should never be made permanent unless we want to
@@ -132,6 +145,8 @@ that dies in the seconds after a gamemode reload is removed too. Who may add
 `keep` to `/spawn` is the one switch `SPAWN_KEEP_WHO`: `'playtester'` (testers
 and staff, Djinn's choice on 17 Oct) or `'staff'`.
 
+## Fights
+
 Native inherited aggression, confidence, and current faction membership inform
 target selection. Common membership and ally or friend reactions suppress
 spontaneous hostility. Accepted damage can provoke temporary retaliation.
@@ -141,6 +156,8 @@ Melee uses owned equipped weapons, or unarmed damage, with the existing native
 reach, cooldown, damage, block, health, and death pipeline. Health, death, attack,
 and terminal stop messages are reliable. Ordinary movement is unreliable, with
 one message per directly connected observer.
+
+## Saves and gamemode reloads
 
 Authority and private activity progress survive world saves. An NPC's
 activity record is written when it is taken on and when a fight or a flight
@@ -175,6 +192,8 @@ load says "Shared NPC runtime carried on from the previous gamemode load"
 with its counts. `game/tests/test-3296-npc-handover.js` holds all of it. A
 server restart still loads the cast from the saved world, as above.
 
+## Dungeon tiers and returns
+
 Fixed cave and dungeon tiers scale maximum health and outgoing weapon or spell
 damage. Tier 1 uses the source baseline, tier 2 uses 1.25 health and 1.10 damage,
 tier 3 uses 1.50 health and 1.20 damage, and tier 4 uses 2.00 health and 1.35 damage.
@@ -185,12 +204,16 @@ before publishing resurrection. Native life generations distinguish each actual
 return, so missed callbacks cannot award another dressing of the same corpse.
 Fishing and hanging racks use shared persisted waits.
 
+## What it does not do
+
 This is shared local activity and melee combat. It does not implement every
 vanilla package, doorway transition, flying behavior, ranged projectile, magic
 decision, or authored work and sleep schedule. NPCs without safe local navigation
 remain stationary rather than moving through unverified geometry. Merchant
 economy, custom quest offers and the new fishery content remain separate
 capabilities. Exact guild relocation is deferred.
+
+## How it is checked
 
 Verification uses the native suite, the shared runtime fixtures, and an offline
 run against the installed 48-plugin load order. The offline acceptance fixture

@@ -32,6 +32,16 @@ WHAT IT HOLDS, for each "Test task for #N" block in the body:
   - the body does not also say Closes, Fixes or Resolves #N, which closes
     the issue at the merge, before done-on-merge.yml can copy the task.
 
+A TEST TASK IN ANOTHER SHAPE is refused too, when the body has no block:
+a heading or a line that starts "Test task", "Test tasks", "Main test
+task" or "Dev test task" ("## Test task (Dev)", "Main test task, for two
+members of staff:"). done-on-merge.yml copies only the shape below, so one
+written any other way never reached its issue, the issue never went to Done,
+and no Ship closed it: 15 Nov, the Bots' pull requests #5853, #5856, #5956,
+#6067, #6070 and #6115 all passed this check that way and left their issues
+open. A line that says none ("Test tasks: none", or a heading whose next
+line says it) is a body with no test task, and passes.
+
 THE GRAMMAR is done-on-merge.yml's, line for line: a line "Test task for #N:
 <title>" starts a block; a heading, a "---" line, a line starting with an
 emoji (the "Generated with" footer) or the next such line ends it; the rest
@@ -39,15 +49,24 @@ of the block, trimmed, is the steps, and its first line is the Server line.
 The three patterns below are written in that workflow too, and
 bot/tests/test-5199-pr-tasks.py fails when the two stop matching.
 
-    python bot/pr_tasks.py              the pull request PR_NUMBER names, or the
-                                        open one whose head is HEAD_REF, read from
-                                        GitHub; with neither, the body in PR_BODY
+    python bot/pr_tasks.py              a pull_request run's first attempt: the
+                                        body its event carries, in PR_EVENT_BODY;
+                                        else the pull request PR_NUMBER names, or
+                                        the open one whose head is HEAD_REF, read
+                                        from GitHub; with neither, the body in
+                                        PR_BODY
     python bot/pr_tasks.py --file x.md  the body in a file
 
-The body is read from GitHub when it can be, not from the event, so a run
-started by hand on a branch (engine-pin.yml starts one on its pin branch,
-whose pull request its own token opened and which no event reached) reads
-the body the pull request has now. It prints a line per block, PASS or FAIL
+A pull_request run checks the body its own event carries (#5900): the
+workflow's concurrency group cancels it when a newer event on the pull
+request arrives, so that is the body as it is now, and reading it back from
+GitHub only added a read that could fail. When GitHub answered that read
+with a 503, the check failed the pull request, and as the newest run on the
+head it stood over an earlier run that had passed. A re-run, the merge queue
+and a run started by hand read the body from GitHub, since their event
+carries none or an old one (engine-pin.yml starts one on its pin branch,
+whose pull request its own token opened and which no event reached), and
+each fails closed when it cannot. It prints a line per block, PASS or FAIL
 with each rule broken, and exits 1 when any rule is broken. GITHUB_TOKEN and
 GITHUB_REPOSITORY, when both are set, let it read the pull request and each
 issue it names; without them the issues are said and skipped. It never
@@ -71,6 +90,11 @@ RULE = re.compile(r'^\s*---\s*$')
 EMOJI = re.compile(r'^\s*[\U00010000-\U0010FFFF]')
 DEV_LINE = re.compile(r'^\s*Server\s*:\s*Dev\s*(\n|$)')
 SERVER_LINE = re.compile(r'^\s*server\s*:\s*(dev|main)\s*$', re.I)
+# A line that reads as a test task but is not done-on-merge.yml's shape, and
+# the word that says there is none.
+LOOSE = re.compile(r'^\s*(?:#{1,6}\s*)?(?:\*\*|__)?(?:(?:main|dev)\s+)?test\s+tasks?\b', re.I)
+NONE = re.compile(r'\bnone\b', re.I)
+FENCE = re.compile(r'^\s*(```|~~~)')
 # What closes an issue at the merge (GitHub's closing keywords).
 CLOSES = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b', re.I)
 
@@ -95,6 +119,35 @@ def blocks(body):
     for b in out:
         b['steps'] = '\n'.join(b.pop('rest')).strip()
         b['kind'] = 'Dev' if DEV_LINE.match(b['steps']) else 'Main'
+    return out
+
+
+def loose(body):
+    """[(line number, line), ...]: the lines of a body with no "Test task for
+       #N:" block that read as a test task in another shape, which
+       done-on-merge.yml would never copy. Empty when the body has a block
+       (a heading over the blocks is only a heading), and for a line that
+       says none, or whose next line with text does, and inside a fenced
+       block or an HTML comment (the template's own notes, left in)."""
+    if blocks(body):
+        return []
+    # An HTML comment is blanked, its line breaks kept, so the line numbers
+    # said stay the body's own.
+    text = re.sub(r'<!--.*?(-->|$)', lambda m: '\n' * m.group(0).count('\n'),
+                  str(body or '').replace('\r\n', '\n'), flags=re.S)
+    lines = text.split('\n')
+    out, fenced = [], False
+    for i, line in enumerate(lines):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        m = None if fenced else LOOSE.match(line)
+        if not m:
+            continue
+        nxt = next((x for x in lines[i + 1:] if x.strip()), '')
+        if NONE.search(line[m.end():]) or NONE.search(nxt[:40]):
+            continue
+        out.append((i + 1, line.strip()))
     return out
 
 
@@ -205,6 +258,22 @@ def pr_body(repo, token, number=None, head_ref=None):
     return str(got[0].get('body') or ''), 'pull request %s' % got[0].get('number')
 
 
+def from_event():
+    """Whether this run checks the body its pull_request event carries
+       (PR_EVENT_BODY) rather than reading it from GitHub (#5900). Only a
+       pull_request run's first attempt: the workflow's concurrency group
+       cancels it when a newer event on the pull request arrives, so its
+       event's body is the body as it is now. A re-run keeps its first
+       attempt's event, which an edit since may have left behind, and the
+       merge queue and a run by hand carry no body; each of those reads it
+       from GitHub, and fails closed when it cannot."""
+    if os.environ.get('GITHUB_EVENT_NAME', '').strip() != 'pull_request':
+        return False
+    if 'PR_EVENT_BODY' not in os.environ:
+        return False
+    return (os.environ.get('GITHUB_RUN_ATTEMPT', '').strip() or '1') == '1'
+
+
 def main(argv):
     token = os.environ.get('GITHUB_TOKEN', '').strip()
     repo = os.environ.get('GITHUB_REPOSITORY', '').strip()
@@ -213,6 +282,12 @@ def main(argv):
     if '--file' in argv:
         with open(argv[argv.index('--file') + 1], encoding='utf-8-sig') as f:
             body = f.read()
+    elif from_event():
+        # The body this run was started for (#5900). Read back from GitHub,
+        # a GitHub error on that read was this required check failing the
+        # pull request, as the newest run on its head, over one that passed.
+        body = os.environ.get('PR_EVENT_BODY', '')
+        print('reading the body the pull_request event carries, of pull request %s' % (number or '?'))
     elif token and repo and (number or head_ref):
         try:
             body, what = pr_body(repo, token, number, head_ref)
@@ -232,6 +307,18 @@ def main(argv):
         print('FAIL  an issue the body names could not be read from GitHub, so the check did not finish: %s' % e)
         return 1
     if not results:
+        stray = loose(body)
+        for n, line in stray:
+            why = ('line %d, "%s", reads as a test task, but done-on-merge.yml copies only a '
+                   '"Test task for #N: <title>" line with its steps under it, so this one would '
+                   'never reach its issue and no Ship would close it. Write it in that shape (the '
+                   'pull request template has it), or write "No test task: nobody would notice '
+                   'this fix." when nobody would.' % (n, line[:80]))
+            print('FAIL  ' + why)
+            if os.environ.get('GITHUB_ACTIONS') == 'true':
+                print('::error title=Test task in another shape::' + why)
+        if stray:
+            return 1
         print('PASS  no "Test task for #N:" line in the body, so there is nothing to check')
         return 0
     bad = 0

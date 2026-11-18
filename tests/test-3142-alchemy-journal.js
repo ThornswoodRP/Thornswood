@@ -38,7 +38,7 @@ function yes(what, cond, why) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function lift(from, to, src) {
   src = src || gm;
@@ -55,7 +55,7 @@ const listsSrc = (function () {
   return (a >= 0 && b > a) ? gm.slice(a, b) : null;
 })();
 yes('J0 the alchemy block and the mixtures list are in the gamemode', !!ALCHEMY && !!listsSrc);
-if (fail) { done(); }
+if (fail) { done(); return; }
 
 // ------------------------------------------------------- a fake load order --
 function put32(v) { v = v >>> 0; return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
@@ -187,7 +187,7 @@ yes('J5 an ingredient whose record is gone stays on the page, with effects null,
       /if \(!creating\(\) && alchemyView\(\)\) sections\.push\('alchemy'\);/.test(SK) &&
       SK.indexOf("sections.push('alchemy')") > SK.indexOf("sections.push('body')"));
   yes('U4 nothing on it is sent: no Confirm and no rows',
-      /section !== 'body' && section !== 'alchemy'(?: && section !== 'college')?\);/.test(SK) && /if \(section === 'alchemy'\) return 0;/.test(SK) &&
+      /section !== 'body' && section !== 'alchemy'(?: && section !== 'college')?(?: && section !== 'contracts')?\);/.test(SK) && /if \(section === 'alchemy'\) return 0;/.test(SK) &&
       /else if \(section === 'alchemy'\) drawAlchemy\(\);/.test(SK));
 
   // The draw itself, over a stand-in page.

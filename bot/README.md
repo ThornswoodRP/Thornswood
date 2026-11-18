@@ -110,7 +110,10 @@ and a `<Hold> Court` voice room. A hold's Citizen role opens its category.
 under the holds on 12 Nov 2026), so every Member can press them. News Pings
 is pinged when the bot posts a change to the live server in `#news`, and
 Updates Pings when it warns of a live game server restart in `#updates`.
-Pressing one again takes the role off.
+Staff who took a role are pinged on the staff side as well: News Pings for a
+dev release in `#staff-news`, Updates Pings for a dev server restart in
+`#staff-updates` (Patrick, 15 Nov 2026). Pressing one again takes the role
+off.
 
 ### The factions
 
@@ -401,8 +404,10 @@ whole file at once.
 
 ### Staff
 
-`#staff-announcements` (the staff `#news` until #3317, where the dev updates
-webhook posts), `#council-decisions`, `#staff-updates`, `#staff-general`,
+`#staff-news` (the staff `#news` until #3317, then staff-announcements
+until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
+`#council-decisions`, `#staff-updates` (dev server restarts, the staff side of
+`#updates`, and the watchdog), `#staff-general`,
 `#council`, `#ticket-log` and a Staff Room. Invisible to everybody else, and
 `#council` and `#ticket-log` are the council's only. `#dev-test-tasks` (a
 forum the bot keeps, see Testing above) and `#dev-test-findings` are in the
@@ -558,7 +563,10 @@ Then the person picks a hold.
 1. **Turn on Community.** Server Settings, Enable Community. Without it there
    are no forum channels, no announcement channel and no rules screen. Run
    `Setup-Discord.ps1` again afterwards and the text channels standing in for
-   forums are replaced with real ones.
+   forums are replaced with real ones. That takes `-Prune`, and only an empty
+   one is replaced: the forum is made first and the text channel deleted
+   after, so a forum Discord refuses leaves the channel. One with a message
+   or an open thread in it stays, named with why (#4492).
 
 2. **Point the rules screen at the rules.** Community, then Safety Setup. That
    is what makes people accept the rules before they can type.
@@ -680,7 +688,9 @@ together): `bot.py`; the `bot_*.py` modules `bot.py` imports
 without; `card.py` and its artwork, `assets\join-card.png`; the channel ids,
 `staff-channel.txt`, `dev-channel.txt` and `news-channel.txt`;
 `requirements.txt`; `factions.json`, the named factions the Faction Leader
-form reads from beside itself; and `BotService.cs`, the service's program,
+form reads from beside itself; `NoteRules.cs`, the release note rules from
+`tools\ReleaseNotes`, which the bot asks for a pull request's note through
+pwsh's Add-Type (#6004); and `BotService.cs`, the service's program,
 which a full run puts in `service`. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.
 
@@ -734,7 +744,7 @@ folder.
 Since #5187 a release's news is posted when the release is deployed. The box's
 deploy agent leaves each deployed Release's notes in
 `C:\Thornswood-Deploys\for-bot`, and the bot posts each release once: a
-merge's release in the dev updates channel (`dev-channel.txt`), a main release
+merge's release in #staff-news (`dev-channel.txt`), a main release
 in #news (`news-channel.txt`, by id). Notes that say nothing people would
 notice are not posted. What follows is how a Ship posts, which still holds
 for a release the agent does not deploy.

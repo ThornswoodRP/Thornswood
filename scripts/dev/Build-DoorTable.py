@@ -29,15 +29,20 @@ interior it leads INTO by the same rule, and the pass records both ends so that
 whoever builds the claim can decide how deep a building goes rather than having
 that decided for them here.
 
-WHAT IT READS. Nothing but the plugins. The five masters and then plugins.txt,
-in load order, last one wins, which is the rule the game itself uses and the one
-Build-RecipeTable settles overrides with.
+WHAT IT READS. The plugins: the five masters and then plugins.txt, in load
+order, last one wins, which is the rule the game itself uses and the one
+Build-RecipeTable settles overrides with, leaving out Thornswood-Last.esp. This is
+built before that plugin (#5191) and never reads it, whether or not the order
+holds it. The town gates it opens (#2484) come from the list it is made from,
+gatesUnlocked in game\\data\\last-plugin-policy.json, so the table is the same
+with the plugin in the order or not.
 
 THE PART THAT HAS NOT BEEN DONE HERE BEFORE: placed references live inside
 compressed records, and every other scanner in this repo skips those. A
 compressed record is a four byte uncompressed length and then a zlib stream, and
 zlib is two header bytes and raw deflate after them. Nothing about a door can be
-learned without inflating them, so this does, and counts how many it could not.
+learned without inflating them, so this does, and stops on one that will not
+(#4553): a door table missing the doors in it is a table of no load order.
 
 WHAT IT WRITES. game\\data\\doors.json, and the three tables the server
 carries out of it, BUILDING_BY_DOOR, BUILDING_NAME and WAY_OUT, each in
@@ -57,7 +62,6 @@ import json
 import os
 import struct
 import sys
-import zlib
 
 import bsa
 import gamemode_tables
@@ -69,6 +73,10 @@ MASTERS = own_plugins.MASTERS
 # A cell is an interior when bit 0 of its DATA flags is set. Everything else is
 # a piece of a worldspace.
 CELL_INTERIOR = 0x01
+
+# The plugin that opens the town gates in the game (#2484), which this table
+# is built before (#5191).
+LAST_PLUGIN = 'Thornswood-Last.esp'
 
 # A localised plugin stores FULL as a four byte string id rather than as text,
 # and the text lives in a .STRINGS file inside a BSA. The bit is in the TES4
@@ -96,15 +104,14 @@ def masters_of(buf):
 
 
 class Plugin(object):
+    """One plugin, read whole. A file that is not a plugin, and a compressed
+    record that will not inflate, raise own_plugins.Unreadable (#4553)."""
+
     def __init__(self, path, name):
-        self.buf = open(path, 'rb').read()
+        self.buf = own_plugins.read_plugin(path, name)
         self.name = name
-        self.ok = len(self.buf) >= 24 and self.buf[:4] == b'TES4'
-        if not self.ok:
-            return
         self.masters = masters_of(self.buf)
         self.header = struct.unpack_from('<I', self.buf, 4)[0]
-        self.failed = 0
         self.localised = bool(struct.unpack_from('<I', self.buf, 8)[0] & LOCALISED)
         self.strings = {}
 
@@ -139,13 +146,8 @@ class Plugin(object):
         raw = self.buf[p + 24:p + 24 + size]
         if not (flags & COMPRESSED):
             return raw
-        if len(raw) <= 6:
-            return b''
-        try:
-            return zlib.decompress(raw[4:])
-        except zlib.error:
-            self.failed += 1
-            return b''
+        return own_plugins.inflate(raw, self.name, self.buf[p:p + 4],
+                                   struct.unpack_from('<I', self.buf, p + 12)[0])
 
 
 def walk(pl, doors, out, want_bases):
@@ -235,10 +237,15 @@ def main():
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\Default\plugins.txt')
     ap.add_argument('--out', default=os.path.join(here, '..', '..', 'game', 'data', 'doors.json'))
     ap.add_argument('--tables', default=None, help='the folder of gamemode tables (game/gamemode-tables)')
+    ap.add_argument('--policy', default=os.path.join(here, '..', '..', 'game', 'data', 'last-plugin-policy.json'),
+                    help='the Last plugin policy, whose gatesUnlocked this writes unlocked')
     ap.add_argument('--check', action='store_true', help='say what it found, write nothing')
     args = ap.parse_args()
 
-    order = own_plugins.load_order(args.plugins)
+    # Built before Thornswood-Last.esp (#5191), so that plugin is never read
+    # here, whether or not the order holds it: what it does to the doors is
+    # taken from the list it is made from, below.
+    order = [n for n in own_plugins.load_order(args.plugins) if n.lower() != LAST_PLUGIN.lower()]
     missing = [n for n in order if not os.path.isfile(own_plugins.plugin_path(args.data, n))]
     if missing:
         print('STOP. %d plugin(s) are not in %s: %s'
@@ -253,11 +260,8 @@ def main():
     # placements. Anything else would miss every door placed before its own base
     # is read.
     doors, out = {}, {'cells': {}, 'doors': {}}
-    failed = 0
     for name in order:
-        pl = Plugin(own_plugins.plugin_path(args.data, name), name)
-        if pl.ok:
-            walk(pl, doors, out, set())
+        walk(Plugin(own_plugins.plugin_path(args.data, name), name), doors, out, set())
     print('')
     print('Door bases')
     print('  %d door record(s) across the load order' % len(doors))
@@ -265,8 +269,6 @@ def main():
     localised = 0
     for name in order:
         pl = Plugin(own_plugins.plugin_path(args.data, name), name)
-        if not pl.ok:
-            continue
         # A localised plugin's cell names are string ids, and the text is in a
         # BSA. Only the plugins that say they are localised are looked up, so a
         # plugin that stores its names as words costs nothing here.
@@ -275,9 +277,35 @@ def main():
             if pl.strings:
                 localised += 1
         walk(pl, doors, out, set(doors))
-        failed += pl.failed
 
     cells, placed = out['cells'], out['doors']
+
+    # The town gates (#2484) load unlocked: Thornswood-Last.esp carries each
+    # without its lock. This step is built before that plugin (#5191), so it
+    # takes them from the list the plugin is made from, the policy's
+    # gatesUnlocked, and not from the plugin. A gate no plugin places, or one
+    # some other plugin already opens, means the list is out of date, and
+    # stops the build.
+    with open(args.policy, encoding='utf-8') as fh:
+        policy = json.load(fh)
+    gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
+    opened = []
+    for g in gates:
+        row = placed.get(g)
+        if row is None:
+            print('STOP. no plugin places the town gate %s that %s names. Nothing was written.' % (g, args.policy))
+            return 1
+        if row.pop('lock', None) is not None:
+            opened.append(g)
+        else:
+            print('STOP. the town gate %s already has no lock; take it off gatesUnlocked in %s. Nothing was written.'
+                  % (g, args.policy))
+            return 1
+    print('')
+    print('The town gates')
+    print('  %d of %d unlocked from gatesUnlocked (#2484), as Thornswood-Last.esp loads them'
+          % (len(opened), len(gates)))
+
     leads = {d: r for d, r in placed.items() if r.get('to')}
     locked = {d: r for d, r in leads.items() if r.get('lock')}
     keyed = {d: r for d, r in locked.items() if r['lock'].get('key')}
@@ -290,8 +318,6 @@ def main():
     print('  %s of those are locked, %s of the locks want a named key'
           % (format(len(locked), ','), format(len(keyed), ',')))
     print('  %s carry an owner Bethesda set' % format(len(owned), ','))
-    if failed:
-        print('  %d compressed record(s) would not inflate, so this is incomplete' % failed)
 
     # A building is the interior a door opens into. Group by that, so the count
     # below is buildings rather than doorways: a house with a back door is one.
@@ -356,8 +382,7 @@ def main():
                            'with a back door a single claim.',
         'counts': {'doorBases': len(doors), 'placed': len(placed), 'lead': len(leads),
                    'locked': len(locked), 'keyed': len(keyed), 'owned': len(owned),
-                   'buildings': len(buildings), 'unpaired': unpaired,
-                   'failedToInflate': failed},
+                   'buildings': len(buildings), 'unpaired': unpaired},
         'cells': cells,
         'doors': placed,
         'buildings': {k: sorted(v) for k, v in buildings.items()},
@@ -450,4 +475,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

@@ -7,7 +7,7 @@
 // minutes, and nothing else. Two halves have to agree:
 //   - site/server.js marks each public page (PUBLIC_PAGES) with
 //     Cloudflare-CDN-Cache-Control: max-age=PUBLIC_EDGE_SECONDS, a header only
-//     Cloudflare reads and strips (tests/test-3218-site-cache.js asks a
+//     Cloudflare reads and strips (site/tests/test-3218-site-cache.js asks a
 //     running copy for it);
 //   - records/cloudflare-cache-rules.json is the zone's cache rule: those
 //     paths and no others are eligible, and its Edge TTL keeps only what the
@@ -51,4 +51,4 @@ if (rec && rec.rule) {
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -16,7 +16,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -45,9 +44,6 @@ fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
 }));
 const BANS = path.join(DATA, 'bans.json');
 
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
 function request(port, method, where, headers, body) {
   return new Promise((ok) => {
     const data = body === undefined ? '' : JSON.stringify(body);
@@ -66,41 +62,18 @@ function cookieFor(id, name) {
   return 'twa=' + encodeURIComponent(id + '|' + name + '|' + at + '|' + sig);
 }
 
-/* Waits for this run's own "[thornswood-docs] listening on ...:port" line
-   (#1727), so nothing is asked of a port something else took in between. */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(null); } };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port + ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
-
 (async function main() {
-  const port = await freePort();
+  let port = 0;
   let log = '';
   const site = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   site.stdout.on('data', (d) => { log += d; });
   site.stderr.on('data', (d) => { log += d; });
   try {
     let up = false;
-    try { await listening(site, port); up = true; } catch (e) { log += '\n' + e.message; }
+    try { await siteFiles.listening(site).then((r) => (port = r.port, r)); up = true; } catch (e) { log += '\n' + e.message; }
     yes('the scratch site starts', up);
     const K = { 'X-Thornswood-Key': KEY };
     const staffC = { Cookie: cookieFor(STAFF_D, 'Aela') };
@@ -137,5 +110,5 @@ function listening(srv, port) {
   }
   if (fail) console.log('site log:\n' + log);
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

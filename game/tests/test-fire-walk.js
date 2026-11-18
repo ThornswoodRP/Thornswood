@@ -112,7 +112,7 @@ function harness(clock) {
     }
   };
   const fn = new Function('sp', 'log', 'FIRE_BASES', 'FIRE_FILES',
-    'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'PLACED_WATERS', 'WADE_DEEP', walk + fires +
+    'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'clientTable', 'WADE_DEEP', walk + fires +
     '\nreturn {' +
     '  spots: fireSpotsHere,' +
     '  distance: fireDistance,' +
@@ -126,7 +126,7 @@ function harness(clock) {
     '};');
   const api = fn(sp, log,
     [['Skyrim.esm', FXFIRE01], ['Skyrim.esm', EMBERS_HEAVY]], ['Skyrim.esm'],
-    Number(reach[1]), Number(inside[1]), time.performance, time.Date, [], 70);
+    Number(reach[1]), Number(inside[1]), time.performance, time.Date, function () { return []; }, 70);
   api.logs = logs;
   api.clock = time;
   api.sp = sp;
@@ -381,4 +381,4 @@ if (walk !== null && fires !== null && reach && inside) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
