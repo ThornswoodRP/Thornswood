@@ -217,10 +217,12 @@ class Plugin(object):
     """One plugin, read whole. faults are what is wrong with the file itself;
     records are every record but the header, in file order."""
 
-    def __init__(self, path, name):
+    def __init__(self, path, name, candidate=None):
         self.path, self.name = path, name
-        with open(path, 'rb') as fh:
-            self.buf = fh.read()
+        if candidate is None:
+            with open(path, 'rb') as fh:
+                candidate = fh.read()
+        self.buf = candidate
         self.faults = []
         self.records = []
         b = self.buf
@@ -737,14 +739,20 @@ def main(argv=None):
     return 0
 
 
-def check_one(name, args, strings, read):
+def check_build(name, candidate, data_dir, order):
+    """Check the bytes the writer is about to keep, not the previous plugin."""
+    args = argparse.Namespace(data=data_dir, no_masters=False)
+    return check_one(name, args, Strings(data_dir), {}, candidate, order) == 'clean'
+
+
+def check_one(name, args, strings, read, candidate=None, order=None):
     """Checks one plugin, says what it found, and answers clean, not clean or
     could not be checked whole."""
-    path = own_plugins.plugin_path(args.data, name)
+    path = own_plugins.plugin_path(args.data, name) if candidate is None else 'build candidate'
     print('')
     print(name)
     try:
-        p = Plugin(path, name)
+        p = Plugin(path, name, candidate)
     except (Fault, OSError, struct.error) as e:
         print('  COULD NOT CHECK. %s' % e)
         return 'could not be checked whole'
@@ -764,7 +772,8 @@ def check_one(name, args, strings, read):
             itm, kept, more, unresolved, untold = check_against_masters(p, masters, strings)
             faults += more
             if unresolved:
-                notes, more = injected_by(p, unresolved, args.data, read, release_order(args.catalogue))
+                names = release_order(args.catalogue) if order is None else order
+                notes, more = injected_by(p, unresolved, args.data, read, names)
                 faults += more
     report('Errors', faults)
     report('Deleted records', deleted)

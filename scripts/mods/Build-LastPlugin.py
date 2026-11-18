@@ -2687,6 +2687,15 @@ def main():
         return 1
     print('  ok    read back in the load order: every cut actor off, every cut quest unable to start, '
           'every place in the hold the policy gives it, no floor item able to show')
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('plugin_clean',
+                                                  os.path.join(os.path.dirname(__file__), 'Check-PluginClean.py'))
+    clean = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(clean)
+    if not clean.check_build(PLUGIN, plugin, args.data, manifest['loadOrder']):
+        print('STOP. The masters check did not pass. Nothing was written.')
+        return 1
+
     r = manifest['recipe']
     print('  ok    the recipe makes it back byte for byte from %d plugins and string tables: %s bytes, '
           '%s of them Thornswood\'s own (%s inside records)'
