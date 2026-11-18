@@ -28,8 +28,9 @@ Bot app there, as an account of their own that reaches nothing of the Bots'
 (Patrick, 12 Nov 2026, #5933). They never use the shipping
 machine. What is true now is `ops\status.md` in the private ops repo.
 
-Patrick's requested audit window is midnight to 7 AM Mountain (17 Nov
-2026). New Hermes worker issues run from 7 AM to midnight; an active worker
+Patrick's approved work hours (17 Nov 2026) permit audit work only from
+midnight to 7 AM Mountain, including the VM fallback. New Hermes worker
+issues may start only from 7 AM to midnight; an active worker
 may finish its issue after midnight, and Bramble works around the clock.
 Grok Bot's cloud jobs hold their own schedules. Their configured window
 must be verified in Grok Bot when these hours change; the VM app provides
