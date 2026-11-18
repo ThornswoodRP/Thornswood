@@ -168,10 +168,13 @@ try {
     $stall = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
     $stall.Start()
     $stallUrl = 'http://127.0.0.1:' + $stall.LocalEndpoint.Port
-    $stallJob = Start-ThreadJob -ArgumentList $stall, $body -ScriptBlock {
-        param($server, $body)
+    $ready = [Threading.ManualResetEventSlim]::new($false)
+    $bodySent = [Threading.ManualResetEventSlim]::new($false)
+    $stallJob = Start-ThreadJob -ArgumentList $stall, $body, $ready, $bodySent -ScriptBlock {
+        param($server, $body, $ready, $bodySent)
         $socket = $null
         try {
+            $ready.Set()
             $socket = $server.AcceptTcpClient()
             $stream = $socket.GetStream()
             $request = [IO.StreamReader]::new($stream, [Text.Encoding]::ASCII, $false, 1024, $true)
@@ -181,15 +184,20 @@ try {
             $stream.Write($header, 0, $header.Length)
             $stream.Write($body, 0, 1)
             $stream.Flush()
+            $bodySent.Set()
             Start-Sleep -Seconds 4
             $stream.Write($body, 1, $body.Length - 1)
         } catch {} finally { if ($socket) { $socket.Dispose() } }
     }
     $existing = Join-Path $tmp 'verified-existing'
     [IO.File]::WriteAllText($existing, 'already verified bytes')
-    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $clock = [Diagnostics.Stopwatch]::new()
     $said = ''
     try {
+        $started = $ready.Wait(5000)
+        Yes ("   the $route stall worker is ready before the transfer starts") $started
+        if (-not $started) { throw 'The stalled-body fixture did not start.' }
+        $clock.Start()
         $fetchUrl = "$stallUrl/feed-dev/assets/$ownSha"; $fetchSha = $ownSha; $fetchSite = $stallUrl
         if ($route -ne 'site') {
             if ($route -eq 'GitHub metadata') { $script:ReleaseAssetIds = @{}; $script:stallApiMetadata = $stallUrl }
@@ -199,6 +207,7 @@ try {
         try { [void](Get-FeedAssetFile $fetchUrl $fetchSha $existing '' $fetchSite ([TimeSpan]::FromSeconds(1))) }
         catch { $said = $_.Exception.Message }
         $clock.Stop()
+        Yes ("   the $route response sent headers and a partial body") $bodySent.IsSet
         Yes ("5. the $route deadline includes the body after headers have arrived") ($said -match 'timed out' -and $clock.Elapsed.TotalSeconds -lt 3)
         Yes ("   a stalled $route transfer leaves the verified destination unchanged") ([IO.File]::ReadAllText($existing) -ceq 'already verified bytes')
         Yes ("   a stalled $route transfer leaves no partial file to accept later") (-not (Test-Path -LiteralPath ($existing + '.part')))
@@ -208,6 +217,7 @@ try {
         $stall.Stop()
         Stop-Job $stallJob -ErrorAction SilentlyContinue
         Remove-Job $stallJob -Force -ErrorAction SilentlyContinue
+        $ready.Dispose(); $bodySent.Dispose()
     }
     }
 }
