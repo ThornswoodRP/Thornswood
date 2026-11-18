@@ -123,6 +123,7 @@ CLEANING
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -132,9 +133,17 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
-sys.path.insert(0, os.path.join(ROOT, 'scripts', 'dev'))
-import bsa  # noqa: E402  (the repository's archive reader)
-import own_plugins  # noqa: E402  (where each plugin is read from, #2923)
+
+
+def load_helper(name, relative_path):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, relative_path))
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+bsa = load_helper('bsa', 'scripts/dev/bsa.py')
+own_plugins = load_helper('own_plugins', 'scripts/dev/own_plugins.py')
 
 DATA_DIR = 'C:\\Thornswood\\Game\\Data'
 # The release's load order: the NPC catalogue's, which every builder of the
