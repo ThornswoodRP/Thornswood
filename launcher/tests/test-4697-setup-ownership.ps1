@@ -33,7 +33,13 @@ namespace Thornswood {
         public static string Source(Config cfg) => "";
         public static HashSet<string> DeployedIn(string root) => new(StringComparer.OrdinalIgnoreCase) { "Vortex.esp" };
     }
-    static class Swallow { public static void Note(string where, Exception e) => throw new Exception(where, e); }
+    static class Swallow {
+        internal static string MissingDestination;
+        public static void Note(string where, Exception e) {
+            if (e is FileNotFoundException || e is DirectoryNotFoundException) { MissingDestination = where; return; }
+            throw new Exception(where, e);
+        }
+    }
     static class Failure { public static string Why(string where, Exception e, string target) => e.Message; }
     public class OwnershipFixture {
         bool ownFirst, madeOwn;
@@ -68,6 +74,7 @@ $run
         }
         public static void Update(string name) => NoteInstalledIntoGame(new List<string> { name });
         public static int Remove() => RemoveOurGameFiles(new Config(), Say);
+        public static string MissingDestination => Swallow.MissingDestination;
     }
 }
 "@
@@ -158,6 +165,16 @@ try {
     [IO.File]::Move((Join-Path $root 'replacement'), $lateDest, $true)
     $gone = [Thornswood.OwnershipFixture]::Remove()
     Check 'uninstall does not use a prepared receipt for a replacement file' ($why -like '*fixture: second ownership write failed*' -and $gone -eq 2 -and [IO.File]::ReadAllText($lateDest) -ceq 'unrelated replacement')
+    $missingPayload = Join-Path $root 'MissingPayload'
+    $missingGame = Join-Path $root 'MissingSteam'
+    $missingProfile = Join-Path $root 'MissingProfile'
+    $missingPath = Join-Path $missingGame 'Missing.esp'
+    Put $missingPayload 'Missing.esp' 'setup bytes'
+    [Thornswood.OwnershipFixture]::BlockCompaction()
+    $why = [Thornswood.OwnershipFixture]::Setup($missingProfile, $missingGame, $false, $missingPayload)
+    [IO.File]::Delete($missingPath)
+    $gone = [Thornswood.OwnershipFixture]::Remove()
+    Check 'a missing prepared destination is logged and not claimed' ($why -like '*fixture: second ownership write failed*' -and $gone -eq 0 -and [Thornswood.OwnershipFixture]::MissingDestination -like '*Missing.esp')
 } finally { [IO.Directory]::Delete($root, $true) }
-Write-Host "$(13 - $failed) passed, $failed failed"
+Write-Host "$(14 - $failed) passed, $failed failed"
 if ($failed) { exit 1 }

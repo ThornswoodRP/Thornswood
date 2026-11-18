@@ -73,7 +73,10 @@ namespace Thornswood
                 // file at the destination never inherits the prepared receipt.
                 try { return Identity(dest) == identity; }
                 catch (IOException missing) when (missing is FileNotFoundException || missing is DirectoryNotFoundException)
-                { return false; }
+                {
+                    Swallow.Note("SetupOwnership, prepared copy has no destination at " + dest, missing);
+                    return false;
+                }
             }
         }
 
