@@ -1,5 +1,8 @@
+<#
+Stages the two fixed Main gameplay policies while preserving other settings.
+#>
 #Requires -Version 7
-# One-time migration for #6466. Internal filesystem operation, not a gate API.
+# Internal filesystem operation for #6466, not a gate API.
 # The gate entry supplies Main's fixed root; tests supply isolated fixtures.
 function Assert-ThornswoodMainPolicyDeployment($Record) {
     if ($Record -isnot [System.Collections.IDictionary] -or

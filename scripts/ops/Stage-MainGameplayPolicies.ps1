@@ -1,5 +1,7 @@
-#Requires -Version 7
 <#
+.SYNOPSIS
+Stages Main's audited Dev gameplay policies without restarting a process.
+.DESCRIPTION
   One-time migration for #6466, after the Owner requested all Dev gameplay
   policies on Main. Only Bramble runs this live gate verb on its normal,
   one-use Main card naming the exact merged commit and line:
@@ -13,6 +15,7 @@
   The server folders' shared turn excludes a simultaneous deployment or
   backup. A different release/source engine or unexpected policy refuses.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'

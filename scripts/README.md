@@ -160,7 +160,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Check-Roster.ps1](ops/Check-Roster.ps1) | What is in each server's private folder, by name and size only. |
 | [ops/Discord-Hook.ps1](ops/Discord-Hook.ps1) | The Discord webhooks releases post through, kept in one place on the VPS instead of a file on each machine that ships. |
 | [ops/List-Untouched.ps1](ops/List-Untouched.ps1) | Lists the open issues nobody has touched for a month, oldest first, for the weekly board review to re-rank (#5185). |
-| [ops/MainGameplayPolicies.ps1](ops/MainGameplayPolicies.ps1) | Requires -Version 7 One-time migration for #6466. |
+| [ops/MainGameplayPolicies.ps1](ops/MainGameplayPolicies.ps1) | Stages the two fixed Main gameplay policies while preserving other settings. |
 | [ops/Mark-Spot.ps1](ops/Mark-Spot.ps1) | Reads the spots you marked in game and prints them in the shape the content table wants. |
 | [ops/Move-World.ps1](ops/Move-World.ps1) | Moves one game server's world out of the file driver and into its own database in the box's MongoDB (#6237), with the engine's own move, and starts the server on it. |
 | [ops/New-Character.ps1](ops/New-Character.ps1) | Throws the test character away so the next connect builds a fresh one. |
@@ -178,7 +178,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Set-Door.ps1](ops/Set-Door.ps1) | Turns the game server's door on, off, or tells you what it has been seeing. |
 | [ops/Set-Ref.ps1](ops/Set-Ref.ps1) | Makes a release tag, or deletes a branch or a tag, on GitHub for a session whose git cannot write refs: a cloud Claude thread (#3107, #3314). |
 | [ops/Set-Server.ps1](ops/Set-Server.ps1) | Sets the server everyone connects to, in the two places that decide it, and sends the feed to the VPS (#907). |
-| [ops/Stage-MainGameplayPolicies.ps1](ops/Stage-MainGameplayPolicies.ps1) | Requires -Version 7 |
+| [ops/Stage-MainGameplayPolicies.ps1](ops/Stage-MainGameplayPolicies.ps1) | Stages Main's audited Dev gameplay policies without restarting a process. |
 | [ops/Wipe-Saves.ps1](ops/Wipe-Saves.ps1) | Starts the world over. Everybody begins again, nothing is claimed, nothing has been looted, and every container in the province is holding what Bethesda put in it. |
 | [ops/WorkflowRun.ps1](ops/WorkflowRun.ps1) | Starts a workflow on main and reads the answer its runner left, for a script whose session cannot make the change itself: Set-Ref.ps1 (a ref write, which a cloud session's proxy refuses) and Set-BuildRunners.ps1 (a runner label, which needs the box's GitHub App). |
 | [release/Add-VirusTotalComment.ps1](release/Add-VirusTotalComment.ps1) | Optional manual tool: leaves one community comment on a build's VirusTotal report, or says plainly that it is not commenting and carries on. |
