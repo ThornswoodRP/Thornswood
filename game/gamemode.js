@@ -330,14 +330,17 @@ let voicePortCached = 0;
 function voicePort() {
   if (voicePortCached) { return voicePortCached; }
   let n = 0;
+  let fallback = 7778;
   try {
-    n = Number(JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8')).thornswoodVoicePort) || 0;
+    const cfg = JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8'));
+    if (cfg.thornswoodServer === 'dev') { fallback = 7789; }
+    n = Number(cfg.thornswoodVoicePort) || 0;
   } catch (e) {
     n = 0;
   }
-  // Anything absent or nonsensical falls back to the live port, which is what
-  // every deployment did before this existed.
-  voicePortCached = (n > 0 && n < 65536) ? n : 7778;
+  // Keep Dev traffic on Dev even when its configured port is invalid. Without
+  // an explicit Dev identity, retain the existing live-port default.
+  voicePortCached = (Number.isInteger(n) && n > 0 && n < 65536) ? n : fallback;
   if (voicePortCached !== 7778) {
     log('voice service port is ' + voicePortCached + ', from server-settings.json');
   }
