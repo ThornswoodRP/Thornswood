@@ -280,8 +280,9 @@ async function launcherHalf() {
     await f.send({do:'close',n:connection});
     const report=f.host('debug').filter(s=>s.startsWith('{"event":"voice_socket_closed"'))
       .map(JSON.parse).find(s=>s.peer===42);
+    const expectedError=outcome==='cancel'?'TaskCanceledException':expected==='failed'?'ConnectionClosedPrematurely':'';
     yes('native close distinguishes a '+outcome+' send without claiming delivery',
-        !!report && report.sendState===expected && report.unwritten>0);
+        !!report && report.sendState===expected && report.unwritten>0 && report.writeError===expectedError);
   }
 
   for (const l of launchers) {
