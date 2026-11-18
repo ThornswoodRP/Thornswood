@@ -356,8 +356,10 @@ function game(opts) {
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
   yes('PowerShell 7 is available for the required keyboard delivery regressions', ver.status === 0);
   const keyFunction = /function Invoke-GameKey\b[\s\S]*?\n}\n/.exec(RUNNER);
+  const gameProcessFunction = /function Get-GameProcess\b[\s\S]*?\n}\n/.exec(RUNNER);
   yes('the runner has a testable keyboard delivery function', !!keyFunction);
-  if (ver.status === 0 && keyFunction) {
+  yes('the runner has a testable process lookup', !!gameProcessFunction);
+  if (ver.status === 0 && keyFunction && gameProcessFunction) {
     // Execute the production PowerShell control flow against fake user32
     // calls. This neither launches a window nor injects any real input.
     const script = `$ErrorActionPreference = 'Stop'
@@ -381,6 +383,16 @@ namespace ThornswoodRealClient {
 }
 '@
 ${keyFunction[0]}
+${gameProcessFunction[0]}
+function Get-Process { $script:fakeProcess }
+$script:fakeProcess = [pscustomobject]@{ MainWindowHandle = [IntPtr]::Zero }
+$p = Get-GameProcess
+if ($p) {
+  $r = Invoke-GameKey $p.MainWindowHandle 36
+  if (-not $r.ok) { 'WINDOWLESS ALIVE: ' + $r.note }
+}
+$script:fakeProcess = $null
+if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
 function Case($name, $handle, $foreground, $activate, $move, $sent, $lose) {
   [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
   [ThornswoodRealClient.Win]::Activate = $activate
@@ -402,6 +414,9 @@ Case 'activated' 42 99 $true $true 2 $false
 `;
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
+    yes('a living process without a window reaches the failed-key path instead of the crashed exit',
+        /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
+    yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
     yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 8);
     ['missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });

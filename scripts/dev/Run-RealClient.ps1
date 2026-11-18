@@ -280,7 +280,9 @@ namespace ThornswoodRealClient {
 }
 
 function Get-GameProcess {
-    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+    # A living process may temporarily have no window. Keep it so a queued
+    # key can fail with "no game window" instead of being called a crash.
+    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
 function Invoke-GameKey([IntPtr]$handle, [uint16]$code) {

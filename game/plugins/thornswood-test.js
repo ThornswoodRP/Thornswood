@@ -19,10 +19,10 @@
 // event in Data/Platform/thornswood-test-results.jsonl, which the runner reads
 // as it grows. What only the runner can do, a screenshot of the whole window
 // (the game and our page over it) or a real key press through Windows, is an
-// "ask" line with a number; the runner does it and writes that number to
-// Data/Platform/thornswood-test-ack.txt, and the step is over when the number
-// is there. So a screenshot is of the screen the step before it reached, and
-// a key press has landed before the next step looks for what it did.
+// "ask" line with a number; the runner writes {n,ok,note} to
+// Data/Platform/thornswood-test-ack.txt. A rejected key fails its step.
+// Successful input means Windows accepted both events and focus checks
+// passed; the following menu, message or page check must prove its effect.
 //
 // The steps (tests\real-client\README.md has the long form):
 //   {"do":"wait","for":"menu","menu":"Main Menu","open":true}
