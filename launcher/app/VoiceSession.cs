@@ -477,10 +477,12 @@ namespace Thornswood
             s.Reported = true;
             long now = Now();
             Task sending = s.Sending;
-            string sendState = sending == null ? "none" : sending.IsFaulted ? "failed"
-                : sending.IsCanceled ? "canceled" : sending.IsCompleted ? "complete" : "pending";
+            TaskStatus status = sending == null ? TaskStatus.Created : sending.Status;
             string writeError = s.WriteError;
-            if (sending != null && sending.IsFaulted)
+            string sendState = writeError.Length > 0 ? "failed" : sending == null ? "none"
+                : status == TaskStatus.Faulted ? "failed" : status == TaskStatus.Canceled ? "canceled"
+                : status == TaskStatus.RanToCompletion ? "complete" : "pending";
+            if (status == TaskStatus.Faulted)
             {
                 Exception e = sending.Exception.GetBaseException();
                 writeError = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
@@ -684,6 +686,7 @@ namespace Thornswood
                     string m;
                     while (s.Out.Reader.TryRead(out m))
                     {
+                        s.Sending = null;
                         s.Sending = s.Ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(m)),
                             WebSocketMessageType.Text, true, CancellationToken.None);
                         await s.Sending;
