@@ -239,6 +239,15 @@ for ($j = 0; $j -lt $steps.Count; $j++) {
 $readBackAt = @{}
 $againFrom = @{}
 
+$proofs = @{}
+if ($chain.PSObject.Properties['orderProof']) {
+    foreach ($entry in $chain.orderProof.PSObject.Properties) {
+        if ($entry.Value -cnotin @('phase', 'masters') -or $entry.Name -cnotin @($steps | ForEach-Object { $_.writes })) {
+            throw ('content-tables.json has no valid order proof for ' + $entry.Name)
+        }
+        $proofs[$entry.Name] = $entry.Value
+    }
+}
 $before = Get-TreePrint
 $stopped = $null
 $unregistered = @()
@@ -254,6 +263,16 @@ try {
         $from = -1
         foreach ($w in @($steps[$i].writes | Where-Object { $_ })) {
             $w = [string]$w
+            if ($proofs.ContainsKey($w)) {
+                $order = $(if ($proofs[$w] -eq 'masters') { $recorded[0..4] } elseif ($i -lt $lastAt) { $without } else { $recorded })
+                $expected = Get-LoadOrderName $order
+                $table = [IO.File]::ReadAllText((Join-Path $repo $w)) | ConvertFrom-Json
+                $marks = [regex]::Matches([string]$table.source, '\b[0-9]+ plugins in load order \(names sha256 [0-9a-f]{12}\)')
+                if ($marks.Count -ne 1 -or $marks[0].Value -cne $expected) {
+                    $stopped = "$w does not record the expected order: $expected. The table says: $($table.source)"
+                    break
+                }
+            }
             if (-not $readBackBy.ContainsKey($w) -or $readBackBy[$w] -ge $i) { continue }
             if ((Get-FileSha $w) -eq $readBackAt[$w]) { continue }
             $j = $readBackBy[$w]
