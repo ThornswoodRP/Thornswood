@@ -25,7 +25,8 @@ for (const failure of ['truncated response', 'stalled response', 'trickling resp
           response.end('ok');
           return;
         }
-        response.writeHead(200, { 'content-length': 20 });
+        // Chunked transfer keeps the trickling response incomplete indefinitely.
+        response.writeHead(200, failure === 'trickling response' ? {} : { 'content-length': 20 });
         response.write('partial');
         if (failure === 'truncated response') setTimeout(() => response.destroy(), 50);
         if (failure === 'trickling response') {
