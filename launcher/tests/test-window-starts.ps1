@@ -52,14 +52,21 @@ if (Test-Path -LiteralPath $LauncherDotnet) {
             if (-not $built) { Write-Host ('      ' + $said.Trim()) }
             Yes 'the headless start builds against that launcher' $built
             if ($built) {
-                $lines = @(& $LauncherDotnet $exe 2>&1 | ForEach-Object { [string]$_ })
-                $code = $LASTEXITCODE
-                foreach ($l in $lines) {
-                    if ($l -match '^PASS  (.*)$') { Yes $Matches[1] $true }
-                    elseif ($l -match '^FAIL  (.*)$') { Yes $Matches[1] $false }
-                    else { Write-Host $l }
+                # Keep the original window/theme checks on their headless
+                # drawing backend. Decode pictures on real Skia separately.
+                # Stream progress so a hung child names the check it reached.
+                foreach ($mode in @('window', 'news-pictures')) {
+                    $lines = [Collections.Generic.List[string]]::new()
+                    & $LauncherDotnet $exe $mode 2>&1 | ForEach-Object {
+                        $l = [string]$_
+                        $lines.Add($l)
+                        if ($l -match '^PASS  (.*)$') { Yes $Matches[1] $true }
+                        elseif ($l -match '^FAIL  (.*)$') { Yes $Matches[1] $false }
+                        else { Write-Host $l }
+                    }
+                    $code = $LASTEXITCODE
+                    Yes ("the $mode checks ran to the end") ($code -eq 0 -and $lines.Count -gt 0)
                 }
-                Yes 'the window started and every check in it ran' ($code -eq 0 -and $lines.Count -gt 0)
             }
         } finally {
             Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

@@ -45,14 +45,21 @@ namespace Thornswood.Tests
 
         static int Main()
         {
-            AppBuilder.Configure<App>()
-                .UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            string[] argv = Environment.GetCommandLineArgs();
+            bool pictures = argv.Length > 1 && argv[1] == "news-pictures";
+            var builder = AppBuilder.Configure<App>();
+            if (pictures) builder.UseSkia();
+            builder.UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = !pictures })
                 .SetupWithoutStarting();
+
+            if (pictures)
+            {
+                NewsPictureChecks.Run(Check);
+                return fails == 0 ? 0 : 1;
+            }
 
             // launcher\tests\test-4459-setup-keys.ps1: the install window
             // worked from the keyboard, and nothing else.
-            string[] argv = Environment.GetCommandLineArgs();
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
             // launcher\tests\test-4693-setup-reader.ps1: the install window as
             // a screen reader finds it, and nothing else.
@@ -103,7 +110,6 @@ namespace Thornswood.Tests
             win.Close();
 
             MusicSliderKeys();
-            NewsPictureChecks.Run(Check);
 
             Console.WriteLine(fails == 0 ? "the window starts" : fails + " check(s) failed");
             return fails == 0 ? 0 : 1;
