@@ -79,9 +79,9 @@
 //     "name": "KS Hairdos Lite SE - KS Hairdos Lite SE NoNPCs",
 //     "author": "...", "category": "Body, Face, and Hair",
 //     "plugins": [{ "name": "KS_Hairdo's_Lite_NoNPCs.esp", "after": ["Playable Rieklings.esp"] }] }
-// Each plugin goes on the end of the plugin list, switched on, and its
-// "after" becomes a plugin rule, lower case as Vortex keeps them, so Vortex
-// and LOOT put it where the list does. Every "after" has to be a plugin the
+// Each plugin goes at the end of its master or regular group, switched on.
+// Its rule must name that group's existing tail, when there is one. Masters
+// cannot load after regular plugins. Every "after" has to be a plugin the
 // list already has, one added before it, or one the revision installs off
 // its list ("unlisted" below). It refuses a file the revision
 // already carries and a plugin the list already names. The tag Vortex gives
@@ -313,9 +313,24 @@ function setMasters(collection, swaps) {
   }
   MASTERS.set(collection, map);
 }
-// An entry that only says something about the revision ("unlisted",
-// "masters") and changes nothing by itself.
-function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'page'); }
+// Header master facts from the collection record. A light flag on an ESP
+// alone does not make it a master. ESM and ESL extensions do.
+const MASTER_FLAGS = new WeakMap();
+function isMaster(name, flag) { return /\.(esm|esl)$/i.test(name) || flag === true; }
+function setMasterFlags(collection, swaps) {
+  const flags = new Map();
+  for (const sw of swaps) {
+    if (!sw || sw.masterFlags === undefined) continue;
+    if (!sw.masterFlags || typeof sw.masterFlags !== 'object' || Array.isArray(sw.masterFlags)) stop('"masterFlags" must map plugin names to booleans.');
+    for (const [name, flag] of Object.entries(sw.masterFlags)) {
+      if (!/^[^\\/]+\.es[mpl]$/i.test(name) || typeof flag !== 'boolean') stop('"masterFlags" has no boolean master fact for ' + name + '.');
+      flags.set(name.toLowerCase(), flag);
+    }
+  }
+  MASTER_FLAGS.set(collection, flags);
+}
+// An entry that only says something about the revision changes nothing by itself.
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -337,6 +352,7 @@ function applySwaps(collection, swaps) {
   if (!Array.isArray(collection.mods)) stop('collection.json has no mods list, so it is not a collection Vortex wrote.');
   setUnlisted(collection, swaps);
   setMasters(collection, swaps);
+  setMasterFlags(collection, swaps);
   for (const sw of swaps) {
     if (onlyContext(sw)) continue;
     if (sw.add === true) { applyAdd(collection, sw, lines); continue; }
@@ -569,15 +585,34 @@ function applyAdd(collection, add, lines) {
   // game read a plugin's name in any case, so two that differ only in case
   // are one file in Data (#4200).
   const own = new Set();
+  const ruleNames = new Set(collection.pluginRules.plugins.map(r => String(r.name).toLowerCase()));
+  const flags = new Map(MASTER_FLAGS.get(collection));
+  const tails = new Map();
+  for (const p of collection.plugins) {
+    const low = String(p.name).toLowerCase();
+    if (p.enabled !== false) tails.set(isMaster(low, flags.get(low)), p.name);
+  }
   for (const p of plugins) {
     if (!p || !p.name || !/\.es[mpl]$/i.test(p.name)) stop('A plugin of ' + add.name + ' has no plugin name (.esm, .esp or .esl).');
     const low = String(p.name).toLowerCase();
     if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data. ' + bringsNext(collection, low, p.name, add.name));
     if (own.has(low)) stop(add.name + ' names ' + low + ' twice, in names that differ only in case, and Data holds one file by that name.');
+    if (ruleNames.has(low)) stop('The plugin rule list already names ' + p.name + ', so adding it would write a second rule.');
     own.add(low);
+    const master = isMaster(low, p.master ?? flags.get(low));
     const after = Array.isArray(p.after) ? p.after : [];
     if (!after.length) stop(p.name + ' says nothing to load after, so Vortex and LOOT would place it where they liked.');
-    for (const a of after) if (!known.has(String(a).toLowerCase())) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
+    for (const a of after) {
+      const target = String(a).toLowerCase();
+      if (!known.has(target)) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
+      if (master && !isMaster(target, flags.get(target))) stop(p.name + ' loads as a master and ' + a + ' does not, so that load-after rule would make a cycle.');
+    }
+    const tail = tails.get(master);
+    if (tail && !after.some(a => String(a).toLowerCase() === String(tail).toLowerCase())) {
+      stop(p.name + ' must name the tail ' + tail + ' in its load-after rules; a rule to an earlier plugin does not hold the end of the list.');
+    }
+    flags.set(low, master);
+    tails.set(master, p.name);
     known.add(low);
   }
   if (add.choices !== undefined && add.choices !== null) checkChoices(add);
@@ -603,10 +638,14 @@ function applyAdd(collection, add, lines) {
   entry.author = String(add.author);
   entry.details = { category: String(add.category), type: '' };
   entry.phase = 0;
+  MASTER_FLAGS.set(collection, flags);
   collection.mods.push(entry);
   lines.push([String(add.name), 'added', '', 'file ' + add.fileId].join('\t'));
   for (const p of plugins) {
-    collection.plugins.push({ name: String(p.name), enabled: true });
+    const name = String(p.name);
+    const master = flags.get(name.toLowerCase());
+    const at = master ? collection.plugins.findLastIndex(q => isMaster(String(q.name), flags.get(String(q.name).toLowerCase()))) + 1 : collection.plugins.length;
+    collection.plugins.splice(at, 0, { name, enabled: true });
     collection.pluginRules.plugins.push({ name: String(p.name).toLowerCase(), after: p.after.map(a => String(a).toLowerCase()) });
     lines.push([String(p.name), 'plugin', '', 'after ' + p.after.join(', ')].join('\t'));
   }
