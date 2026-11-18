@@ -8,13 +8,13 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execFileSync } = require('node:child_process');
 const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const PAGES = ['terms', 'privacy', 'rules'];
 const EXPECT = {
   terms: '2026-10-26',
-  privacy: '2026-11-16',
   rules: '2026-10-26'
 };
 const MONTHS = [null, 'January', 'February', 'March', 'April', 'May', 'June',
@@ -43,6 +43,45 @@ function sha(s) {
   return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
 }
 
+const PRIVACY = 'site/data/site/privacy.md';
+const DATE_LINE = /^Last changed: [^\n]*\n?/gm;
+const lfText = text => text.replace(/\r\n/g, '\n');
+const wording = text => lfText(text).replace(DATE_LINE, '');
+const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+
+// The first parent is the receiving branch. In the gate this is also true
+// of GitHub's test merge. Ignore commits that only fix the date line.
+function lastWordingDay() {
+  const commits = git('log', '--first-parent', '--format=%H %ct', 'HEAD', '--', PRIVACY).trim().split('\n');
+  for (let i = 0; i + 1 < commits.length; i++) {
+    const [head, seconds] = commits[i].split(' ');
+    const [before] = commits[i + 1].split(' ');
+    if (wording(git('show', head + ':' + PRIVACY)) !== wording(git('show', before + ':' + PRIVACY))) {
+      return new Date(Number(seconds) * 1000).toISOString().slice(0, 10);
+    }
+  }
+  throw new Error('Cannot establish the privacy wording date from this checkout history');
+}
+
+function privacyErrors(raw, rows, day) {
+  const errors = [];
+  const line = 'Last changed: ' + longDate(day) + '.';
+  const lf = lfText(raw);
+  if ((lf.match(DATE_LINE) || []).map(x => x.trimEnd()).join('\n') !== line) {
+    errors.push('the page must say ' + line + ' exactly once');
+  }
+  const known = new Map(rows.map(row => [row.sha256.toLowerCase(), row.changed]));
+  if (known.size !== rows.length) errors.push('duplicate privacy hashes');
+  const hashes = new Set();
+  for (const text of [lf, lf.replace(/\n/g, '\r\n')]) {
+    for (const open of [false, true]) hashes.add(sha(forMode(text, open)));
+  }
+  for (const digest of hashes) {
+    if (known.get(digest) !== day) errors.push(JSON.stringify({ sha256: digest, changed: day }));
+  }
+  return errors;
+}
+
 const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'site', 'public', 'page-versions.json'), 'utf8'));
 const server = siteFiles.source();
 
@@ -53,15 +92,21 @@ yes('and /api/page sends the hash and the day',
 
 for (const name of PAGES) {
   const raw = fs.readFileSync(path.join(ROOT, 'site', 'data', 'site', name + '.md'), 'utf8');
+  if (name === 'privacy') {
+    const day = lastWordingDay();
+    yes('privacy wording matches the commit whose history is checked',
+      wording(raw) === wording(git('show', 'HEAD:' + PRIVACY)));
+    const errors = privacyErrors(raw, list.pages.privacy, day);
+    yes('privacy date and all served hashes agree with the wording day ' + day, !errors.length);
+    for (const error of errors) console.log('      ' + error);
+    yes('privacy keeps earlier wordings too', list.pages.privacy.some(row => row.changed < day));
+    continue;
+  }
   const day = EXPECT[name];
   const line = 'Last changed: ' + longDate(day) + '.';
   yes(name + ' shows its own day: ' + line, raw.indexOf(line) >= 0);
   yes(name + ' says that once', raw.split(line).length === 2);
   const rows = list.pages[name] || [];
-  if (name === 'privacy') {
-    yes('privacy has one lookup row per accepted hash',
-      new Set(rows.map(row => row.sha256.toLowerCase())).size === rows.length);
-  }
   const bySha = {};
   rows.forEach(function (row) { bySha[row.sha256] = row.changed; });
   [false, true].forEach(function (open) {
@@ -79,6 +124,19 @@ for (const name of PAGES) {
   yes(name + ' keeps earlier wordings too', Object.keys(days).length >= 2);
   yes(name + ' does not stamp today on the current text', bySha[sha(forMode(raw, false))] !== '2026-10-02');
 }
+
+// A wording edit on the next day fails with the previous metadata, even if
+// someone recomputes the hashes without moving the date.
+const nextDay = '2026-11-17';
+const stale = '# Privacy\n\nLast changed: 16 November 2026.\n\nNew wording.\n';
+const oldRows = [{ sha256: sha(stale.replace('New wording', 'Old wording')), changed: '2026-11-16' }];
+yes('a wording edit with stale date and rows is rejected', privacyErrors(stale, oldRows, nextDay).length === 3);
+const rowsFor = (text, day) => [text, text.replace(/\n/g, '\r\n')].map(x => ({ sha256: sha(x), changed: day }));
+yes('rehashing new wording under the old date still fails',
+    privacyErrors(stale, rowsFor(stale, '2026-11-16'), nextDay).length === 3);
+const fresh = stale.replace('16 November', '17 November');
+yes('the wording and both line endings pass once the date and rows agree',
+    privacyErrors(fresh, rowsFor(fresh, nextDay), nextDay).length === 0);
 
 const sample = (list.pages.terms || [])[0];
 yes('a listed hash is 64 hex characters', sample && /^[0-9a-f]{64}$/.test(sample.sha256));
