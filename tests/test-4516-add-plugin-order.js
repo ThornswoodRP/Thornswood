@@ -44,4 +44,10 @@ check('a header-master ESP can anchor the master tail, before the regular suffix
   applySwaps(c, [{ masterFlags: { 'First.esp': true, 'Tail.esp': false } }, add('New.esl', ['first.esp'])]);
   assert.deepEqual(c.plugins.map(p => p.name), ['Base.esm', 'First.esp', 'New.esl', 'Tail.esp']);
 });
+check('an add row cannot override a master flag recorded for the plugin', () => {
+  refuse(fixture(), add('New.esp', ['tail.esp'], { master: false }), /New\.esp.*master flag.*record/i,
+    [{ masterFlags: { 'NEW.ESP': true } }]);
+  refuse(fixture(), add('New.esp', ['base.esm'], { master: true }), /New\.esp.*master flag.*record/i,
+    [{ masterFlags: { 'NEW.ESP': false } }]);
+});
 process.exitCode = failed ? 1 : 0;

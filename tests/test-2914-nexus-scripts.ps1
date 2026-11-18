@@ -870,7 +870,12 @@ $eyesArc = Join-Path $T 'eyes.7z'
 Push-Location $fx; & $sz a -t7z -y $eyesArc '*' | Out-Null; Pop-Location
 $dgChoice = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add-ons","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
 function AddEyes([string[]]$plugins, [string]$choices) {
-    $p = '[' + ((@($plugins) | ForEach-Object { '{"name":"' + $_ + '","after":["Dragonborn.esm"]}' }) -join ',') + ']'
+    $after = 'Dragonborn.esm'
+    $rows = foreach ($name in $plugins) {
+        [ordered]@{ name = $name; after = @($after) }
+        $after = $name
+    }
+    $p = ConvertTo-Json -InputObject @($rows) -Depth 4 -Compress
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyesArc) + ',"plugins":' + $p + $(if ($choices) { ',"choices":' + $choices } else { '' }) + '}]')
     Control @{ serve = @{ '8662' = @{ path = $eyesArc; name = (Split-Path -Leaf $eyesArc) } } }
 }
@@ -957,7 +962,7 @@ $eyes2Arc = Join-Path $T 'eyes2.7z'
 Push-Location $fx2; & $sz a -t7z -y $eyes2Arc '*' | Out-Null; Pop-Location
 $given = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
 $vortexForm = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Human","groups":[{"name":"Choose Version","choices":[]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]},{"name":"Werewolf Eyes","choices":[]}]}]}'
-$eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Dragonborn.esm"]},{"name":"EyesFull.esp","after":["Dragonborn.esm"]}]'
+$eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Eyes.esp"]},{"name":"EyesFull.esp","after":["EyesDG.esp"]}]'
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":' + $eyes2Plugins + ',"choices":' + $given + '}]')
 Control @{ serve = @{ '8662' = @{ path = $eyes2Arc; name = (Split-Path -Leaf $eyes2Arc) } } }
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')

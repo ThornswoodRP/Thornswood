@@ -599,7 +599,11 @@ function applyAdd(collection, add, lines) {
     if (own.has(low)) stop(add.name + ' names ' + low + ' twice, in names that differ only in case, and Data holds one file by that name.');
     if (ruleNames.has(low)) stop('The plugin rule list already names ' + p.name + ', so adding it would write a second rule.');
     own.add(low);
-    const master = isMaster(low, p.master ?? flags.get(low));
+    const recordedMaster = flags.get(low);
+    if (recordedMaster !== undefined && p.master !== undefined && p.master !== recordedMaster) {
+      stop(p.name + ' has a master flag that conflicts with the collection record.');
+    }
+    const master = isMaster(low, recordedMaster ?? p.master);
     const after = Array.isArray(p.after) ? p.after : [];
     if (!after.length) stop(p.name + ' says nothing to load after, so Vortex and LOOT would place it where they liked.');
     for (const a of after) {
