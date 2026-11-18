@@ -370,8 +370,8 @@ function Save-SiteAsset([string]$Url, [string]$Part, [TimeSpan]$Timeout = [TimeS
     $r = $null; $cancelResponse = $null
     try {
         $r = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
-        # .NET Framework streams may not interrupt an outstanding read for
-        # CopyToAsync's token. A CLR delegate closes the response on expiry;
+        # Close even streams that do not cooperatively interrupt a pending
+        # read. A CLR delegate closes the response on deadline expiry;
         # no PowerShell script block runs on the cancellation worker thread.
         $cancelResponse = $deadline.Token.Register([Action][Delegate]::CreateDelegate([Action], $r, 'Dispose'))
         $code = [int]$r.StatusCode

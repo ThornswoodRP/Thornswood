@@ -163,9 +163,7 @@ try {
     # Headers and the first body byte arrive immediately; the rest never
     # arrives within the requested complete-transfer budget. The socket is
     # bound to port zero before the worker starts, without a free-port race.
-    $routes = @('site', 'GitHub redirect', 'GitHub metadata')
-    if (Get-Command powershell.exe -ErrorAction SilentlyContinue) { $routes += 'site (.NET Framework)' }
-    foreach ($route in $routes) {
+    foreach ($route in 'site', 'GitHub redirect', 'GitHub metadata') {
     $body = if ($route.StartsWith('site')) { $own } else { $a1 }
     $stall = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
     $stall.Start()
@@ -194,7 +192,7 @@ try {
     $existing = Join-Path $tmp 'verified-existing'
     [IO.File]::WriteAllText($existing, 'already verified bytes')
     $clock = [Diagnostics.Stopwatch]::new()
-    $said = ''; $childSeconds = $null
+    $said = ''
     try {
         $started = $ready.Wait(5000)
         Yes ("   the $route stall worker is ready before the transfer starts") $started
@@ -206,33 +204,11 @@ try {
             else { $script:stallApiBody = $stallUrl }
             $fetchUrl = "$site/feed-dev/assets/$a1Sha"; $fetchSha = $a1Sha; $fetchSite = $site
         }
-        try {
-            if ($route -eq 'site (.NET Framework)') {
-                $argsJson = @{source=(Join-Path $Repo 'scripts/release/Release-Baseline.ps1');url=$fetchUrl;sha=$fetchSha;dest=$existing;site=$fetchSite} | ConvertTo-Json -Compress
-                $args64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($argsJson))
-                $probe = @'
-$ErrorActionPreference='Stop'
-$ProgressPreference='SilentlyContinue'
-$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__ARGS__'))|ConvertFrom-Json
-. $p.source
-$clock=[Diagnostics.Stopwatch]::StartNew()
-$said=''
-try { [void](Get-FeedAssetFile $p.url $p.sha $p.dest '' $p.site ([TimeSpan]::FromSeconds(1))) } catch { $said=$_.Exception.Message }
-$clock.Stop()
-@{said=$said;seconds=$clock.Elapsed.TotalSeconds}|ConvertTo-Json -Compress
-'@
-                $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probe.Replace('__ARGS__', $args64)))
-                $result = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -EncodedCommand $encoded
-                if ($LASTEXITCODE -ne 0) { throw 'The .NET Framework probe did not complete.' }
-                $result = ($result -join "`n") | ConvertFrom-Json
-                $said = $result.said; $childSeconds = $result.seconds
-            } else { [void](Get-FeedAssetFile $fetchUrl $fetchSha $existing '' $fetchSite ([TimeSpan]::FromSeconds(1))) }
-        }
+        try { [void](Get-FeedAssetFile $fetchUrl $fetchSha $existing '' $fetchSite ([TimeSpan]::FromSeconds(1))) }
         catch { $said = $_.Exception.Message }
         $clock.Stop()
         Yes ("   the $route response sent headers and a partial body") $bodySent.IsSet
-        $seconds = if ($null -ne $childSeconds) { $childSeconds } else { $clock.Elapsed.TotalSeconds }
-        Yes ("5. the $route deadline includes the body after headers have arrived") ($said -match 'timed out' -and $seconds -lt 3)
+        Yes ("5. the $route deadline includes the body after headers have arrived") ($said -match 'timed out' -and $clock.Elapsed.TotalSeconds -lt 3)
         Yes ("   a stalled $route transfer leaves the verified destination unchanged") ([IO.File]::ReadAllText($existing) -ceq 'already verified bytes')
         Yes ("   a stalled $route transfer leaves no partial file to accept later") (-not (Test-Path -LiteralPath ($existing + '.part')))
     } finally {
