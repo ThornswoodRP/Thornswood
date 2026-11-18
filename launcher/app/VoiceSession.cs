@@ -982,7 +982,7 @@ namespace Thornswood
             if (rec.Restarts >= 1)
             {
                 // The launcher puts "Voice: " on the front of anything this sends.
-                Say("could not reach to " + Who(rec) + ".");
+                Say("could not reach " + Who(rec) + ".");
                 return;
             }
             rec.Restarts++;
@@ -996,7 +996,7 @@ namespace Thornswood
             // hear our consent checks while we hear nothing. Ask it to spend
             // its existing retry, naming precisely the offer we failed on.
             string ufrag = pc.RemoteUfrag;
-            if (!ValidUfrag(ufrag)) { Say("could not reach to " + Who(rec) + "."); return; }
+            if (!ValidUfrag(ufrag)) { Say("could not reach " + Who(rec) + "."); return; }
             ITimer waiting = null;
             waiting = world.Time.CreateTimer(delegate
             {
@@ -1008,7 +1008,7 @@ namespace Thornswood
                     waiting.Dispose();
                     // An older peer or service ignores this optional request.
                     // End that wait honestly; never reconnect the whole room.
-                    Say("could not reach to " + Who(rec) + ".");
+                    Say("could not reach " + Who(rec) + ".");
                 });
             }, null, TimeSpan.FromSeconds(30), Timeout.InfiniteTimeSpan);
             rec.RestartWait = waiting;
