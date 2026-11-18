@@ -34,4 +34,4 @@ if (!run || run.status !== 0) { console.log(run ? run.stdout + run.stderr : 'no 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
