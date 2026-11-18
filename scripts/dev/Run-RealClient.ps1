@@ -285,10 +285,15 @@ function Get-GameProcess {
     Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
-function Invoke-GameKey([IntPtr]$handle, [uint16]$code) {
+function Invoke-GameKey([IntPtr]$handle, $code) {
     # These plans use ordinary set-1 make codes. Extended/E1 keys require
     # another encoding; refuse them instead of silently sending another key.
-    if ($code -lt 1 -or $code -gt 0x7f) { return @{ ok = $false; note = "unsupported non-extended scan code $code" } }
+    $scan = 0.0
+    if (-not [double]::TryParse([string]$code, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
+        $scan -lt 1 -or $scan -gt 0x7f -or $scan -ne [Math]::Truncate($scan)) {
+        return @{ ok = $false; note = "unsupported non-extended scan code $code" }
+    }
+    $code = [uint16]$scan
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
@@ -432,7 +437,7 @@ try {
                         Say "shot $name ($how)"
                     } elseif ($o.do -eq 'key') {
                         $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
-                        $delivery = Invoke-GameKey $handle ([uint16]$o.arg)
+                        $delivery = Invoke-GameKey $handle $o.arg
                         $reply.ok = $delivery.ok
                         $reply.note = $delivery.note
                         Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"

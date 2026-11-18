@@ -368,7 +368,7 @@ using System;
 namespace ThornswoodRealClient {
   public static class Win {
     public static IntPtr Foreground;
-    public static bool Activate, MoveOnActivate, LoseOnHold, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
+    public static bool Activate, MoveOnActivate, LoseOnHold, LoseOnUp, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
     public static uint DownSent, UpSent;
     public static int Calls;
     public static string Events = "";
@@ -381,6 +381,7 @@ namespace ThornswoodRealClient {
       Calls++; Events += (up ? "U" : "D") + scan + ";";
       if (up) {
         Down = false;
+        if (LoseOnUp) Foreground = new IntPtr(99);
         if (ThrowUp) throw new Exception("release error");
         return UpSent;
       }
@@ -411,13 +412,14 @@ if ($p) {
 }
 $script:fakeProcess = $null
 if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
-function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false, [uint16]$code=36) {
+function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false, $loseOnUp=$false, $code=36) {
   [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
   [ThornswoodRealClient.Win]::Activate = $activate
   [ThornswoodRealClient.Win]::MoveOnActivate = $move
   [ThornswoodRealClient.Win]::DownSent = $down
   [ThornswoodRealClient.Win]::UpSent = $up
   [ThornswoodRealClient.Win]::LoseOnHold = $lose
+  [ThornswoodRealClient.Win]::LoseOnUp = $loseOnUp
   [ThornswoodRealClient.Win]::ThrowDown = $throwDown
   [ThornswoodRealClient.Win]::ThrowHold = $throwHold
   [ThornswoodRealClient.Win]::ThrowUp = $throwUp
@@ -430,6 +432,8 @@ function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, 
 }
 Case 'unsupported' 42 42 $true $true 1 1 $false -code 200
 Case 'zero-code' 42 42 $true $true 1 1 $false -code 0
+Case 'fraction' 42 42 $true $true 1 1 $false -code 36.4
+Case 'rounded-boundary' 42 42 $true $true 1 1 $false -code 127.4
 Case 'missing' 0 0 $true $true 1 1 $false
 Case 'denied' 42 99 $false $false 1 1 $false
 Case 'not-foreground' 42 99 $true $false 1 1 $false
@@ -439,6 +443,7 @@ Case 'lost' 42 42 $true $true 1 1 $true -code 1
 Case 'press-error' 42 42 $true $true 1 1 $false $true
 Case 'hold-error' 42 42 $true $true 1 1 $false $false $true
 Case 'release-error' 42 42 $true $true 1 1 $false $false $false $true
+Case 'release-focus' 42 42 $true $true 1 1 $false -loseOnUp $true
 Case 'already' 42 42 $false $false 1 1 $false
 Case 'activated' 42 99 $true $true 1 1 $false -code 23
 `;
@@ -447,12 +452,12 @@ Case 'activated' 42 99 $true $true 1 1 $false -code 23
     yes('a living process without a window reaches the failed-key path instead of the crashed exit',
         /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
     yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
-    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 13);
-    ['unsupported', 'zero-code', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 16);
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
     });
-    ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error'].forEach(function (name) {
+    ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error', 'release-focus'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': rejected delivery cannot pass, and releases the requested key',
           !!c && !c.ok && c.calls === 2 && c.events.endsWith('U' + c.code + ';') && c.events.startsWith('D' + c.code + ';') && !!c.note);
@@ -479,8 +484,18 @@ Case 'activated' 42 99 $true $true 1 1 $false -code 23
     // no Windows input is sent, on either Windows or Linux.
     const boundary = /\[DllImport\("user32\.dll", SetLastError = true\)\] static extern uint SendInput\(uint n, INPUT\[\] inputs, int size\);/;
     yes('the native input boundary is identified for packet checks', boundary.test(block));
+    // A changed declaration must fail this check without ever executing the
+    // unreplaced P/Invoke on a Windows test machine.
+    if (boundary.test(block)) {
     const recording = block.replace(boundary, `public static string Packets = "";
+    public static bool PacketLayoutOkay = true;
     static uint SendInput(uint n, INPUT[] inputs, int size) {
+      int nativeSize = IntPtr.Size == 8 ? 40 : 28;
+      int unionOffset = IntPtr.Size == 8 ? 8 : 4;
+      PacketLayoutOkay &= size == nativeSize && inputs[0].type == 1 &&
+        Marshal.OffsetOf(typeof(INPUT), "u").ToInt32() == unionOffset &&
+        Marshal.OffsetOf(typeof(INPUTUNION), "ki").ToInt32() == 0 &&
+        Marshal.OffsetOf(typeof(KEYBDINPUT), "wScan").ToInt32() == 2;
       Packets += n + "," + inputs.Length + "," + inputs[0].u.ki.wScan + "," + inputs[0].u.ki.dwFlags + ";";
       return n;
     }`) + `
@@ -489,11 +504,14 @@ foreach ($scan in @(1,23,36)) {
   [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $true)
 }
 'PACKETS ' + [ThornswoodRealClient.Win]::Packets
+'LAYOUT ' + [ThornswoodRealClient.Win]::PacketLayoutOkay
 `;
     const packets = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(recording, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     yes('production native code sends one requested scan per call with down/up flags', packets.status === 0 &&
         (packets.stdout || '').includes('PACKETS 1,1,1,8;1,1,1,10;1,1,23,8;1,1,23,10;1,1,36,8;1,1,36,10;'));
+    yes('production packets use keyboard input and the Windows INPUT layout and size', packets.status === 0 && /LAYOUT True/.test(packets.stdout || ''));
     if (packets.status !== 0) { console.log(packets.stderr || packets.stdout); }
+    }
   }
 
   // -Publish: a draft Release of the run's own, since a build's Release is
