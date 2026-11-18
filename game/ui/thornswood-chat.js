@@ -64,7 +64,9 @@
       pingTx:s.pingTx, pongRx:s.pongRx, rxMessages:s.rxMessages,
       txMessages:s.txMessages, txAgeMs:Date.now()-s.written,
       bufferedBytes:Number(socket.bufferedAmount)||0, closeCode:Number(ev && ev.code)||0,
-      clean:!!(ev && ev.wasClean) })); } catch (e) { }
+      clean:!!(ev && ev.wasClean) })); } catch (e) {
+      // A failed diagnostic sink must not stop socket cleanup or recovery.
+    }
   }
   function sendFrame(socket, obj) {
     socket.send(JSON.stringify(obj));

@@ -8,7 +8,7 @@ const chat = fs.readFileSync(path.join(root, 'game/ui/thornswood-chat.js'), 'utf
 const front = fs.readFileSync(path.join(root, 'game/plugins/thornswood-front.js'), 'utf8');
 let passed = 0, failed=0;
 function check(name, run) { try { run(); passed++; console.log('PASS ' + name); } catch(e) { failed++; console.log('FAIL '+name+': '+e.message); } }
-function page() {
+function page(brokenLog) {
   let now = 1000000, next = 1;
   const timers = new Map(), sockets = [], lines = [], asks = [], logs = [];
   function add(fn, ms, every) { const id = next++; timers.set(id, {fn, at: now + ms, every}); return id; }
@@ -36,11 +36,18 @@ function page() {
     thornswoodChat:{add(parts){lines.push(parts.map(p=>p.text).join(''));}},
     skyrimPlatform:{sendMessage(to,what){if(String(what).startsWith('token? '))asks.push(what);}}
   };
-  vm.runInNewContext(chat, {window,WebSocket:Socket,Date:{now:()=>now},console:{log:text=>logs.push(text)},Math,JSON,Object,Array,Number,String,isFinite,parseInt,
+  vm.runInNewContext(chat, {window,WebSocket:Socket,Date:{now:()=>now},console:{log:text=>{if(brokenLog)throw Error('no log sink');logs.push(text);}},Math,JSON,Object,Array,Number,String,isFinite,parseInt,
     setTimeout:(fn,ms)=>add(fn,ms,0),clearTimeout:id=>timers.delete(id),
     setInterval:(fn,ms)=>add(fn,ms,ms),clearInterval:id=>timers.delete(id)});
   return {window,sockets,lines,asks,logs,advance};
 }
+check('a failed diagnostic sink cannot prevent chat cleanup and recovery', () => {
+  const p=page(true); p.sockets[0].admit(); p.advance(100000);
+  assert(p.lines.some(l=>l.includes('Chat lost the server')));
+  assert(p.asks.includes('token? 7'));
+  p.window.thornswoodNet.setToken('after-log-failed');
+  assert.equal(p.sockets[1].token,'after-log-failed');
+});
 check('a silent chat reports its peer and heartbeat counters once without payloads', () => {
   const p=page(), socket=p.sockets[0]; socket.admit();
   p.advance(25000); socket.say({t:'pong'});
