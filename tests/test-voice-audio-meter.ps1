@@ -19,14 +19,19 @@ namespace Thornswood {
    string empty=m.AudioSummary(3000);
    for(int i=10;i<30;i++)m.Add(i,false);
    string bounded=m.AudioSummary(4000);
-   return new[]{first,muted,empty,bounded};
+   m.Meter.State(7,double.NaN,false,double.PositiveInfinity,double.NegativeInfinity,"nonfinite-test");
+   string finite=m.Meter.Summary(5000);
+   return new[]{first,muted,empty,bounded,finite};
   }
  }
 }
 '@
-Add-Type -TypeDefinition ((Get-Content $file -Raw) + "`n" +
-    (Get-Content (Join-Path $root 'launcher/app/VoiceMix.cs') -Raw) + "`n" +
-    (Get-Content (Join-Path $root 'launcher/app/VoiceHrtf.cs') -Raw) + "`n" + $probe)
+$probePath = Join-Path ([IO.Path]::GetTempPath()) ('voice-meter-' + [Guid]::NewGuid().ToString('N') + '.cs')
+try {
+    [IO.File]::WriteAllText($probePath, $probe)
+    Add-Type -Path @($file, (Join-Path $root 'launcher/app/VoiceMix.cs'),
+        (Join-Path $root 'launcher/app/VoiceHrtf.cs'), $probePath)
+} finally { Remove-Item -LiteralPath $probePath }
 $rows = [Thornswood.AudioMeterProbe]::Run() | ForEach-Object { $_ | ConvertFrom-Json }
 function Check($name, $ok) { if (-not $ok) { throw $name }; Write-Host "PASS $name" }
 Check 'capture is measured before the live gate and nonfinite input is counted' (
@@ -43,3 +48,5 @@ Check 'interval counters reset while mute and gain state remain' (
     $rows[2].sources[0].target -eq 0 -and -not $rows[2].sources[0].audible -and $rows[2].intervalMs -eq 3000)
 Check 'the summary bounds source rows and counts omitted peers' (
     $rows[3].sources.Count -eq 8 -and $rows[3].peers -eq 21 -and $rows[3].omitted -eq 13)
+Check 'nonfinite state is null rather than invalid JSON numbers' (
+    $null -eq $rows[4].sources[0].target -and $null -eq $rows[4].sources[0].gain -and $null -eq $rows[4].sources[0].metres)

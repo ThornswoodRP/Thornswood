@@ -86,6 +86,7 @@ namespace Thornswood
         readonly IOpusEncoder encoder;
         readonly byte[] packet = new byte[1275];
         VoiceAudio audio;
+        long audioSince;
         volatile bool disposed;
 
         public VoiceSession(Action<string, string> host, Config conf) : this(host, conf, new World()) { }
@@ -104,6 +105,7 @@ namespace Thornswood
             encoder.UseInbandFEC = true;
             encoder.PacketLossPercent = 5;
             loop = world.Loop();
+            audioSince = Now();
             pinger = world.Time.CreateTimer(delegate { Post(Ping); }, null,
                                             TimeSpan.FromMilliseconds(PING_EVERY), TimeSpan.FromMilliseconds(PING_EVERY));
             Post(delegate { Host("status", "waiting for config"); });
@@ -303,12 +305,14 @@ namespace Thornswood
         /// </summary>
         void Frame(float[] pcm)
         {
+            mix.Meter.Capture(pcm, micLive);
             long n = Interlocked.Increment(ref frames);
             if (!micLive) return;
             VoicePeer[] to = live;
             if (to.Length == 0) return;
             int len = encoder.Encode(pcm, VoiceMix.Frame, packet, packet.Length);
             if (len <= 0) return;
+            mix.Meter.Encoded(len);
             var opus = new ReadOnlySpan<byte>(packet, 0, len);
             foreach (VoicePeer p in to) p.Send(opus, n);
         }
@@ -427,6 +431,13 @@ namespace Thornswood
 
         void Ping()
         {
+            if (audio != null)
+            {
+                long now = Now();
+                string summary = mix.AudioSummary(now - audioSince);
+                audioSince = now;
+                Quiet("audio levels " + summary);
+            }
             if (ws == null || !ws.Open || myPeer == 0) return;
             long quiet = Now() - heard;
             if (quiet > SILENT_AFTER)
@@ -987,7 +998,10 @@ namespace Thornswood
                 // Nowhere to measure from, so distance is left as it was. A
                 // mute is not a distance and does not wait for one.
                 foreach (KeyValuePair<int, Rec> kv in conns)
-                    if (muted.Contains(kv.Value.ProfileId) || hushed.Contains(kv.Value.ProfileId)) { mix.SetLevel(kv.Key, 0); mix.SetAudible(kv.Key, false); }
+                {
+                    if (muted.Contains(kv.Value.ProfileId) || hushed.Contains(kv.Value.ProfileId)) { mix.SetLevel(kv.Key, 0, "muted-or-hushed"); mix.SetAudible(kv.Key, false); }
+                    else mix.Explain(kv.Key, "missing-local-position");
+                }
                 return;
             }
             double rad = me.AngleZ * Math.PI / 180;
@@ -1002,11 +1016,12 @@ namespace Thornswood
                 places.TryGetValue(rec.ProfileId.ToString(CultureInfo.InvariantCulture), out them);
                 if (muted.Contains(rec.ProfileId) || hushed.Contains(rec.ProfileId) || (them != null && them.Hush))
                 {
-                    mix.SetLevel(id, 0); mix.SetAudible(id, false); continue;
+                    mix.SetLevel(id, 0, "muted-or-hushed"); mix.SetAudible(id, false); continue;
                 }
                 mix.SetAudible(id, true);
                 // A wall is not a distance. Another cell is silence whatever the maths says.
-                if (them == null || !them.HasPos || them.Cell != me.Cell) { mix.SetLevel(id, 0); continue; }
+                if (them == null || !them.HasPos) { mix.SetLevel(id, 0, "missing-remote-position"); continue; }
+                if (them.Cell != me.Cell) { mix.SetLevel(id, 0, "other-cell"); continue; }
 
                 double dx = them.X - me.X;
                 double dy = them.Y - me.Y;
@@ -1022,7 +1037,8 @@ namespace Thornswood
                 // carries and everybody else hears the result at whatever
                 // range that choice reaches.
                 double metres = Math.Sqrt(right * right + forward * forward + up * up);
-                mix.SetLevel(id, LevelFor(rec.Mode, metres));
+                double level = LevelFor(rec.Mode, metres);
+                mix.SetLevel(id, level, level == 0 ? "out-of-range" : "in-range");
 
                 // Web Audio looked down -z, so what is in front is negative.
                 mix.SetPosition(id, right, up, -forward);
