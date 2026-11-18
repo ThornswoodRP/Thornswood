@@ -104,6 +104,8 @@ check('custom Main game and service routes keep their derived sockets', () => {
 check('Main legacy and mismatched-port inputs never use its dedicated route', () => {
   assert.strictEqual(main({ socket: undefined }).made[0].url, 'wss://thornswood.net/voice/');
   assert.strictEqual(main({ port: 7789 }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ port: 0 }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ port: undefined }).made[0].url, 'wss://thornswood.net/voice/');
   assert.strictEqual(page({ socket: MAIN_DIRECT }).made[0].url, 'wss://thornswood.net/voice-dev/');
   for (const socket of [MAIN_DIRECT.replace('wss:', 'ws:'), MAIN_DIRECT + 'extra'])
     assert.strictEqual(main({ socket }).made[0].url, 'wss://thornswood.net/voice/');

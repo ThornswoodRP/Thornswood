@@ -313,11 +313,16 @@
   */
   function url() {
     var b = String(CFG.base || '').replace(/\/+$/, '');
-    // Only the canonical Dev service can use this dedicated trusted ingress.
-    // Ignore a stale Dev key on Main, custom routes and legacy launchers.
+    // Each dedicated trusted ingress belongs only to its canonical channel.
+    // Ignore stale cross-channel keys, custom routes and legacy launchers.
     var direct = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
-    if (String(CFG.host || '').toLowerCase() === 'play.thornswood.net' && Number(CFG.port || 7778) === 7789 &&
+    var mainDirect = 'wss://main-signal.thornswood.net:44789/voice/';
+    var canonicalHost = String(CFG.host || '').toLowerCase() === 'play.thornswood.net';
+    var port = Number(CFG.port);
+    if (canonicalHost && port === 7789 &&
         b === 'https://thornswood.net/voice-dev' && CFG.socket === direct) return direct;
+    if (canonicalHost && port === 7778 &&
+        b === 'https://thornswood.net/voice' && CFG.socket === mainDirect) return mainDirect;
     if (b.indexOf('https://') === 0) { return 'wss://' + b.slice(8) + '/'; }
     return '';
   }
