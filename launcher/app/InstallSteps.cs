@@ -331,7 +331,6 @@ namespace Thornswood
             // ------------------------------------------------- the files
             Head("Installing the mods");
             List<string> files = PayloadFiles(payload);
-            RecordIntoGame(files, gameDir);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
             CopyPayload(payload, files, gameDir);
             Say("  Done");
@@ -379,13 +378,9 @@ namespace Thornswood
         // copy then, and a list an earlier install left stays as it is,
         // because it is what the launcher takes back out of the Steam copy
         // once the folder is made (OwnGame.CleanSteamCopy).
-        void RecordIntoGame(List<string> files, string gameDir)
+        static SortedSet<string> ReadOwnership(string manifest)
         {
-            if (ownFirst || madeOwn || files.Count == 0) return;
-            Directory.CreateDirectory(ProfileDir);
-            string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
-            // Only the previous ownership record and this package can name
-            // files here. Never take names from the contents of the Steam copy.
+            // Never take ownership names from the contents of the Steam copy.
             var owned = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             if (File.Exists(manifest))
                 foreach (string line in File.ReadLines(manifest))
@@ -393,11 +388,18 @@ namespace Thornswood
                     string rel = line.Trim().Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
                     if (rel.Length != 0) owned.Add(rel);
                 }
-            // Like a launcher update, a pre-existing name we do not already
-            // own is not ours to claim. Leave its contents alone too.
-            files.RemoveAll(rel => !owned.Contains(rel) && File.Exists(Path.Combine(gameDir, rel)));
-            foreach (string rel in files) owned.Add(rel);
-            File.WriteAllLines(manifest, owned, new UTF8Encoding(false));
+            return owned;
+        }
+
+        void SaveOwnership(string manifest, SortedSet<string> owned)
+        {
+            string staged = manifest + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllLines(staged, owned, new UTF8Encoding(false));
+                File.Move(staged, manifest, true);
+            }
+            finally { if (File.Exists(staged)) File.Delete(staged); }
             Say("  " + owned.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
         }
 
@@ -433,6 +435,17 @@ namespace Thornswood
         /// </summary>
         void CopyPayload(string payload, List<string> files, string to)
         {
+            string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
+            SortedSet<string> owned = ownFirst || madeOwn ? null : ReadOwnership(manifest);
+            if (owned != null)
+                foreach (string rel in files)
+                {
+                    string dest = Path.Combine(to, rel);
+                    if (!owned.Contains(rel) && (File.Exists(dest) || Directory.Exists(dest)))
+                        throw Die("Setup will not replace " + dest + " because Thornswood did not install it. " +
+                                  "Choose Thornswood's own folder in setup to leave this Skyrim file in place.");
+                }
+
             long total = 0;
             foreach (string rel in files) total += new FileInfo(Path.Combine(payload, rel)).Length;
             // What is about to be copied, counted in the package itself, so it
@@ -442,24 +455,36 @@ namespace Thornswood
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
-            foreach (string rel in files)
+            bool copied = false;
+            try
             {
-                string from = Path.Combine(payload, rel);
-                string dest = Path.Combine(to, rel);
-                try
+                foreach (string rel in files)
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                    File.Copy(from, dest, true);
+                    string from = Path.Combine(payload, rel);
+                    string dest = Path.Combine(to, rel);
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                        // Do not overwrite a new name even if it appeared after preflight.
+                        File.Copy(from, dest, owned == null || owned.Contains(rel));
+                    }
+                    catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                    {
+                        throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
+                                  "Check the disk has room and nothing has those files open, then run this again.");
+                    }
+                    if (owned != null) owned.Add(rel);
+                    copied = true;
+                    done += new FileInfo(from).Length;
+                    // The copy is nearly all of the time an install takes, so it
+                    // is nearly all of the bar: 5 to 90 percent, by bytes.
+                    progress(0.05 + 0.85 * (total > 0 ? (double)done / total : 1));
                 }
-                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-                {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
-                              "Check the disk has room and nothing has those files open, then run this again.");
-                }
-                done += new FileInfo(from).Length;
-                // The copy is nearly all of the time an install takes, so it
-                // is nearly all of the bar: 5 to 90 percent, by bytes.
-                progress(0.05 + 0.85 * (total > 0 ? (double)done / total : 1));
+            }
+            finally
+            {
+                // Keep completed copies even if a later copy stops setup.
+                if (owned != null && copied) SaveOwnership(manifest, owned);
             }
             Say(string.Format(CultureInfo.InvariantCulture, "  installing the mods, {0:mm\\:ss}", clock.Elapsed));
         }
