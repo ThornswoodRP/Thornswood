@@ -239,6 +239,7 @@ for ($j = 0; $j -lt $steps.Count; $j++) {
 $readBackAt = @{}
 $againFrom = @{}
 
+$proofs = Get-ThornswoodTableOrderProofs $chain $recorded
 $before = Get-TreePrint
 $stopped = $null
 $unregistered = @()
@@ -254,6 +255,10 @@ try {
         $from = -1
         foreach ($w in @($steps[$i].writes | Where-Object { $_ })) {
             $w = [string]$w
+            if ($proofs.ContainsKey($w)) {
+                try { Assert-ThornswoodTableOrder $repo $w $proofs[$w] }
+                catch { $stopped = $_.Exception.Message; break }
+            }
             if (-not $readBackBy.ContainsKey($w) -or $readBackBy[$w] -ge $i) { continue }
             if ((Get-FileSha $w) -eq $readBackAt[$w]) { continue }
             $j = $readBackBy[$w]

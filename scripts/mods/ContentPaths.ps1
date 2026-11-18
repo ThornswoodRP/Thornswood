@@ -141,6 +141,54 @@ function Get-ThornswoodServerOrder($Record, [string[]]$Order, [string[]]$Drop = 
   Revision. Throws when the records are not of one revision, since there is
   then no telling which order is meant.
 #>
+# One proof list for building tables and checking the tables already laid.
+# The Last plugin is not an input until its own step has run.
+function Get-ThornswoodTableOrderProofs($Chain, [string[]]$Order) {
+    $proofs = @{}
+    if (-not $Chain.PSObject.Properties['orderProof']) { return $proofs }
+    $withoutLast = @($Order | Where-Object { $_ -ine 'Thornswood-Last.esp' })
+    $phase = $withoutLast
+    $scopes = $Chain.orderProof.PSObject.Properties
+    foreach ($step in $Chain.steps) {
+        if ($step.tool -eq 'scripts/mods/Build-LastPlugin.py') { $phase = $Order }
+        foreach ($path in @($step.PSObject.Properties['writes'].Value)) {
+            if (-not $path -or -not $scopes[$path]) { continue }
+            switch -CaseSensitive ($scopes[$path].Value) {
+                'phase' { $proofs[$path] = Get-LoadOrderName $phase }
+                'masters' { $proofs[$path] = Get-LoadOrderName ($Order[0..4]) }
+                default { throw "content-tables.json has no valid order proof for $path" }
+            }
+        }
+    }
+    foreach ($entry in $scopes) {
+        if (-not $proofs.ContainsKey($entry.Name)) { throw ('content-tables.json has no writer for order proof ' + $entry.Name) }
+    }
+    return $proofs
+}
+
+function Assert-ThornswoodTableOrder([string]$Repo, [string]$Path, [string]$Expected) {
+    try { $table = [IO.File]::ReadAllText((Join-Path $Repo $Path)) | ConvertFrom-Json -AsHashtable }
+    catch { throw "${Path}: could not read table order proof: $($_.Exception.Message)" }
+    $source = [string]$table['source']
+    $marks = [regex]::Matches($source, '\b[0-9]+ plugins in load order \(names sha256 [0-9a-f]{12}\)')
+    if ($marks.Count -ne 1 -or $marks[0].Value -cne $Expected) {
+        throw "$Path does not record the expected order: $Expected. The table says: $source"
+    }
+}
+
+function Assert-ThornswoodLaidTableOrders([string]$Repo) {
+    $chain = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json
+    $order = (Get-ThornswoodContentOrder -Repo $Repo).Names
+    $path = 'game/data/npc-population.json'
+    $catalogue = [IO.File]::ReadAllText((Join-Path $Repo $path)) | ConvertFrom-Json
+    $catalogued = @($catalogue.loadOrder | ForEach-Object { [string]$_.name })
+    if (($catalogued -join '|') -ine ($order -join '|')) {
+        throw "$path does not record the checkout's load order: $(Get-LoadOrderName $order). The catalogue says: $(Get-LoadOrderName $catalogued)"
+    }
+    $proofs = Get-ThornswoodTableOrderProofs $chain $catalogued
+    foreach ($path in ($proofs.Keys | Sort-Object)) { Assert-ThornswoodTableOrder $Repo $path $proofs[$path] }
+}
+
 function Get-ThornswoodContentOrder {
     param([Parameter(Mandatory = $true)][string]$Repo)
     $read = { param($rel) [IO.File]::ReadAllText((Join-Path $Repo $rel)) | ConvertFrom-Json }
