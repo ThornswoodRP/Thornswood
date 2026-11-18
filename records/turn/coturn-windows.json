@@ -127,6 +127,13 @@
       "path": "bin/zlib1.dll",
       "bytes": 90112,
       "sha256": "e9a0da838a3adbbc7c3c3355c9a7ee2a7755d860940f49b9ed76a24e71727937"
+    },
+    {
+      "path": "doc/turnserver/LICENSE",
+      "bytes": 1653,
+      "sha256": "ffb8b73055a3b2da4550611559e8b5edf132abe8966a39ffe5a2574cb733a27f"
     }
-  ]
+  ],
+  "artifactBytes": 10277245,
+  "innerArchiveBytes": 5801375
 }
