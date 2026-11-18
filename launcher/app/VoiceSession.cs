@@ -479,7 +479,7 @@ namespace Thornswood
             Task sending = s.Sending;
             TaskStatus status = sending == null ? TaskStatus.Created : sending.Status;
             string writeError = s.WriteError;
-            string sendState = writeError.Length > 0 ? "failed" : sending == null ? "none"
+            string sendState = sending == null ? (writeError.Length > 0 ? "failed" : "none")
                 : status == TaskStatus.Faulted ? "failed" : status == TaskStatus.Canceled ? "canceled"
                 : status == TaskStatus.RanToCompletion ? "complete" : "pending";
             if (status == TaskStatus.Faulted)

@@ -272,6 +272,18 @@ async function launcherHalf() {
   yes('the native close separates completed writes from a pending send',
       !!summary && summary.queued === summary.written && summary.unwritten === 0 && summary.writeError === '' && summary.sendState === 'complete');
 
+  for (const [outcome, expected] of [['sync-fail','failed'],['fault','failed'],['cancel','canceled'],['pending','pending']]) {
+    const f=await launcher(); await f.configure('t'); const connection=f.last().n;
+    await f.admit(connection,42);
+    await f.send({do:'send-outcome',n:connection,answer:outcome});
+    await f.send({do:'mode',mode:'yell'});
+    await f.send({do:'close',n:connection});
+    const report=f.host('debug').filter(s=>s.startsWith('{"event":"voice_socket_closed"'))
+      .map(JSON.parse).find(s=>s.peer===42);
+    yes('native close distinguishes a '+outcome+' send without claiming delivery',
+        !!report && report.sendState===expected && report.unwritten>0);
+  }
+
   for (const l of launchers) {
     const sw = l.swallowed();
     yes('the session swallowed nothing' + (sw ? ':\n' + sw : ''), !sw);
