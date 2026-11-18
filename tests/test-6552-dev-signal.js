@@ -11,6 +11,7 @@ const FRONT = fs.readFileSync(path.join(ROOT, 'game/plugins/thornswood-front.js'
 const CONFIG = fs.readFileSync(path.join(ROOT, 'launcher/app/Config.cs'), 'utf8');
 const DEV = { host: CONFIG.match(/public string ServerAddress = "([^"]+)"/)[1], port: 7789 };
 const DIRECT = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
+const MAIN_DIRECT = 'wss://main-signal.thornswood.net:44789/voice/';
 let passed = 0, failed = 0;
 function check(name, action) {
   try { action(); passed++; console.log('PASS  ' + name); }
@@ -89,6 +90,32 @@ check('front reads the separate socket key and preserves missing legacy input', 
   assert(body, 'separate INI socket reader');
   assert.strictEqual(vm.runInNewContext(body[1], { ini: 'VoiceSocketUrl = ' + DIRECT }), DIRECT);
   assert.strictEqual(vm.runInNewContext(body[1], { ini: 'VoiceUrl = https://thornswood.net/voice-dev' }), '');
+});
+function main(change) { return page(Object.assign({ port: 7778, base: 'https://thornswood.net/voice', socket: MAIN_DIRECT }, change)); }
+check('canonical Main chat opens its own trusted socket with the original issuer', () => {
+  const p = main(); assert.strictEqual(p.made[0].url, MAIN_DIRECT);
+  assert.strictEqual(p.win.THORNSWOOD.base, 'https://thornswood.net/voice');
+  assert.deepStrictEqual(Array.from(p.made[0].protocols), ['thornswood', 'fixture-first']);
+});
+check('custom Main game and service routes keep their derived sockets', () => {
+  assert.strictEqual(main({ host: 'private.example.invalid' }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ base: 'https://custom.example.invalid/voice' }).made[0].url, 'wss://custom.example.invalid/voice/');
+});
+check('Main legacy and mismatched-port inputs never use its dedicated route', () => {
+  assert.strictEqual(main({ socket: undefined }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ port: 7789 }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ port: 0 }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(main({ port: undefined }).made[0].url, 'wss://thornswood.net/voice/');
+  assert.strictEqual(page({ socket: MAIN_DIRECT }).made[0].url, 'wss://thornswood.net/voice-dev/');
+  for (const socket of [MAIN_DIRECT.replace('wss:', 'ws:'), MAIN_DIRECT + 'extra'])
+    assert.strictEqual(main({ socket }).made[0].url, 'wss://thornswood.net/voice/');
+});
+check('established Main close reconnects on the same route with a fresh token', () => {
+  const p = main(), first = p.made[0]; first.admit(); first.close();
+  p.win.thornswoodNet.setToken('fixture-main-second');
+  const second = p.made[1]; second.admit();
+  assert.strictEqual(second.url, MAIN_DIRECT); assert.strictEqual(second.protocols[1], 'fixture-main-second');
+  first.onclose({}); assert.strictEqual(second.readyState, 1);
 });
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exitCode = failed ? 1 : 0;
