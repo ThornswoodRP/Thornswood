@@ -55,7 +55,7 @@
 // not where this thinks it is.
 const fs = require('fs');
 const path = require('path');
-const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const { pluginPath, loadedOrder, loadOrderName } = require('./OwnPlugins.js');
 const TABLES = require('./GamemodeTables.js');
 const CLIENT = require('./ClientTables.js');
 const zlib = require('zlib');
@@ -302,7 +302,7 @@ if (process.exitCode === 1) {
   installPlaced();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-WaterTable.js',
-    source: 'the WATR, CELL and WRLD records of ' + parsed + ' plugins in load order',
+    source: 'the WATR, CELL and WRLD records of ' + loadOrderName(order),
     readFrom: 'XCWT on a cell, NAM2 on a worldspace, and the editor id of the WATR they point at',
     note: 'what a class is WORTH is balance and lives in NEEDS.water in gamemode.js. ' +
           'There is no ice water record in Skyrim: a frozen swim is cold weather, ' +
