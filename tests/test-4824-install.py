@@ -395,7 +395,7 @@ else:
             write(pkg / 'SOURCE CODE.txt', 'where the source is')
             write(pkg / 'GPL-3.0.txt', 'gpl')
             write(pkg / 'licences' / 'lib-a.txt', 'a')
-            write(pkg / 'config.json', json.dumps({'Server': 'thornswood.net', 'Password': '', 'Channel': 'dev'}))
+            write(pkg / 'config.json', json.dumps({'ServerAddress': 'thornswood.net', 'Password': '', 'Channel': 'dev'}))
             root = base / 'Thornswood'
             write(root / 'config.json', '\ufeff' + json.dumps({'Password': 'kept', 'Theme': 'Forge'}))
             write(root / 'licences' / 'old-lib.txt', 'gone after')
@@ -431,7 +431,7 @@ else:
               run('config', tmp / 'nokey' / 'config.json')['makeOwnGame'] is True)
         check('config.json: a blank field never wipes a filled one', cfg.get('Password') == 'kept')
         check('config.json: what was on the disk stays and the package\'s new fields come in',
-              cfg.get('Theme') == 'Forge' and cfg.get('Server') == 'thornswood.net' and cfg.get('Channel') == 'dev')
+              cfg.get('Theme') == 'Forge' and cfg.get('ServerAddress') == 'thornswood.net' and cfg.get('Channel') == 'dev')
         check('config.json: UTF-8 with no byte order mark', not cfg_raw.startswith(b'\xef\xbb\xbf'))
         check('the profile folders are made', all((root / 'Profile' / d).is_dir() for d in ['MyGames', 'LocalAppData', 'Default', 'MyGames/Saves']))
         check('applied.txt is laid down and counted', (root / 'Profile' / 'applied.txt').exists() and '  2 updates marked as already in this build' in r['lines'])

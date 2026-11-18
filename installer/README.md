@@ -198,8 +198,9 @@ a folder the launcher already made), with an old `Game` folder parked as
 Skyrim's when the files go there); the files copied, stopping with both
 folders named when one will not copy; the profile folders, the load order when
 the package carries one, `applied.txt`, `SOURCE CODE.txt`, the licence texts;
-`config.json` merged, never wiping a filled field with a blank one, and kept to
-this Windows account; `Thornswood.lnk` in the install folder; and the checks at
+`config.json` merged, updating only the package's channel and feed fields and
+keeping the person's settings unless they change a choice on the setup card;
+the file is kept to this Windows account; `Thornswood.lnk` in the install folder; and the checks at
 the end, where the script extender and the address library are the
 collection's to install next, and a wrong Skyrim build is the launcher's
 Downgrade button's to fix.
