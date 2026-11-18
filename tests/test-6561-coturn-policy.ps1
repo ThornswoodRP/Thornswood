@@ -25,4 +25,10 @@ $bad=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json;$bad.roles.dev.minPo
 Refuses 'default dynamic UDP range cannot be used for relay media' {Get-CoturnPublicOptions $bad dev 8.8.8.8}
 $bad=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json;$bad.totalQuota=0
 Refuses 'unbounded allocation policy cannot be configured' {Get-CoturnPublicOptions $bad dev 8.8.8.8}
+$text=($d -join "`n")+"`nstatic-auth-secret="+('ab'*32)+"`n"
+$bytes=[Text.Encoding]::ASCII.GetBytes($text)
+$ok=$true;try{Assert-CoturnConfigShape $d $bytes}catch{$ok=$false};Yes 'exact generated ASCII secret configuration is accepted without printing it' $ok
+Refuses 'an extra native option cannot cross the reviewed config boundary' {Assert-CoturnConfigShape $d ([Text.Encoding]::ASCII.GetBytes($text+"dtls`n"))}
+Refuses 'UTF16 cannot pass the native ASCII configuration check' {Assert-CoturnConfigShape $d ([Text.Encoding]::Unicode.GetBytes($text))}
+Refuses 'a malformed secret cannot inject native options' {Assert-CoturnConfigShape $d ([Text.Encoding]::ASCII.GetBytes($text.Replace(('ab'*32),'invalid')))}
 Write-Host "$pass passed, $fail failed";if($fail){exit 1}

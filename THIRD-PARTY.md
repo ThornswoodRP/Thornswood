@@ -2186,3 +2186,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Coturn native Windows relay, operator-only
+
+The optional Windows relay package is official `coturn/coturn`4.19.1, BSD-3-Clause, source `222c0eb8288be29630d30b5f81085524a0b6fa28`. The authoritative MSVC tag-push artifact and every runtime byte are pinned in `records/turn/coturn-windows.json`. Its coturn licence is copied from the original archive into each staged package. It is not committed as a binary and never enters the launcher, mod or game payload. Operators retain the original supplier archive rather than redistributing a modified vendor installer. Its bundled MSVC runtimes and vcpkg dependencies keep their upstream licences; their sources and exact upstream baseline are identified in [the native relay preparation](docs/WINDOWS-TURN.md). The supported security mode and limitations are documented there; this is not a general TLS/database server bundle.
