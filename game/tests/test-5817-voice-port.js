@@ -6,16 +6,22 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'gamemode', 'small-helpers.ts'), 'utf8');
-const start = source.indexOf('let voicePortCached = 0;');
-const end = source.indexOf('\n/** Run fn,', start);
-if (start < 0 || end < 0) throw new Error('production voice port block not found');
-const code = source.slice(start, end);
+function block(file) {
+  const source = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  const start = source.indexOf('let voicePortCached = 0;');
+  const end = source.indexOf('\n/** Run fn,', start);
+  if (start < 0 || end < 0) throw new Error('production voice port block not found');
+  return source.slice(start, end);
+}
+// Execute what the server loads, and independently bind it to its source.
+const code = block(path.join(__dirname, '..', 'gamemode.js'));
 let pass = 0, fail = 0;
 function check(label, got, expected) {
   if (got === expected) { pass++; console.log('PASS  ' + label); }
   else { fail++; console.log('FAIL  ' + label + ': expected ' + expected + ', got ' + got); }
 }
+check('generated voice port block matches its source', code,
+  block(path.join(__dirname, '..', 'gamemode', 'small-helpers.ts')));
 function load(settings) {
   let reads = 0;
   const box = { log() {}, require(name) {
