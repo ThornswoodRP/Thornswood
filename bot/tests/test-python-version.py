@@ -38,7 +38,12 @@ def yes(what, cond):
 too_old = _pyguard.python_too_old
 yes('3.12 is fine', too_old((3, 12, 10)) is None)
 yes('3.11 is fine', too_old((3, 11, 0)) is None)
-yes('3.14 is fine', too_old((3, 14, 5)) is None)
+for version in ((3, 13, 0), (3, 14, 5), (4, 0, 0)):
+    said = too_old(version, r'C:\PythonNew\python.exe') or ''
+    number = '.'.join(str(part) for part in version)
+    yes('%s is refused, naming the supported range, path and py -3.12' % number,
+        number in said and 'PythonNew' in said and 'py -3.12' in said
+        and '3.11 or 3.12' in said)
 said = too_old((3, 9, 13), r'C:\Python39\python.exe') or ''
 yes('3.9 is refused, naming the version, the path and py -3.12',
     '3.9.13' in said and 'Python39' in said and 'py -3.12' in said
