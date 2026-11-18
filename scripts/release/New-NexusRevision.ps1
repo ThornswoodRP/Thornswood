@@ -574,6 +574,7 @@ if ($Publish) {
   if ($nowLatest -ne $Publish) { Die ('Nexus said the publish succeeded, but the latest published revision still reads as ' + $nowLatest + '.') }
   Write-Host ''
   Say ('Revision ' + $Publish + ' is published: https://www.nexusmods.com/games/' + $Game + '/collections/' + $Slug) 'Green'
+  Say '  Next: update the collection records for this revision, then rebuild the Last plugin, NPC catalogue and load order tables. Follow docs/COLLECTION-REVISIONS.md.'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
