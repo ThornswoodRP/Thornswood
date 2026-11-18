@@ -16,7 +16,7 @@ def describe(ks):
     text, unnamed = acr.description_of(ks)
     return {'text': text.decode('ascii'), 'unnamed': unnamed, 'bytes': len(text) + 1}
 print(json.dumps({'instruments': instruments, 'full': describe(full),
-    'single': [describe([k]) for k in instruments],
+    'single': [describe(['KYWD ThornswoodCraftingWoodworking', k]) for k in instruments],
     'without': describe([k for k in full if k not in instruments]),
     'unknown': describe(keys + ['COBJ ThornswoodRecipeInstrumentUnknown']),
     'limit': acr.DESCRIPTION_MOST}))
@@ -47,3 +47,4 @@ check('an unknown instrument recipe is still refused',
   out.unknown.unnamed.length === 1 && out.unknown.unnamed[0] === 'COBJ ThornswoodRecipeInstrumentUnknown');
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
+
