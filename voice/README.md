@@ -14,6 +14,21 @@ The audio goes straight between people and
 never passes through it. The `test-*.js` files in `voice\tests` are its harnesses
 (they sat beside it until 1 Nov 2026, and joined the build check's gate when they
 moved there).
+The optional `voice-restart` message repairs one native pair after asymmetric
+ICE loss (#6530). The answering peer sends exactly `{ t: 'voice-restart', to,
+ufrag }`, naming the offering peer's current ICE username fragment. The service
+accepts only a higher peer id addressing a lower one, both individual sockets
+carrying voice, both holding voice places and in each other's view. It forwards
+only those fields and its authenticated `from`. The native offerer accepts only
+its current pair's fragment and spends that record's existing single retry.
+The ordinary new offer and answer then replace only that pair. A new fragment
+or a local retry makes old requests harmless. Dropping the peer resets the
+record; a retry itself does not. The answerer waits at most thirty seconds for
+the new offer, then reports the failure once without replacing the whole voice
+socket. Older services and peers ignore the optional message, so they cannot
+perform this recovery; their existing signaling remains unchanged. SDP role
+renegotiation (#5375) and unexplained signaling resets (#6494) are separate.
+
 It serves no page of its own: its two clients are the launcher's voice page
 and the game's overlay, both loaded off disk. The plain browser page it used
 to serve at `/` went in #1822, because it had no way to get a join token and

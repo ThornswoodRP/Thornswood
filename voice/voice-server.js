@@ -1328,6 +1328,14 @@ class Sock {
         return;
       }
       let len = b1 & 0x7f;
+      // A control PING is one whole frame with at most125bytes (RFC6455§5.5).
+      // Reject invalid shapes before echoing them as a control PONG.
+      if (op === 0x9 && (!(b0 & 0x80) || len > 125)) {
+        this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea])); // protocol error1002
+        this.close('protocol');
+        return;
+      }
+
       let off = 2;
 
       if (len === 126) {
@@ -1388,7 +1396,13 @@ class Sock {
       */
       if (op === 0x9) {
         if (!this.backed) {
-          try { this.write(Buffer.from([0x8a, 0])); } catch (e) { this.close('write'); }
+          try {
+            // §5.5.3: the reply carries identical application bytes.
+            const pong = Buffer.allocUnsafe(2 + body.length);
+            pong[0] = 0x8a; pong[1] = body.length;
+            body.copy(pong, 2);
+            this.write(pong);
+          } catch (e) { this.close('write'); }
         }
         continue;
       }
@@ -2972,6 +2986,24 @@ server.on('upgrade', (req, socket, head) => {
       seventy. The answer is the whole of it.
     */
     if (msg.t === 'ping') { ws.send({ t: 'pong' }); return; }
+
+    // An answerer can lose incoming ICE while its offerer still receives
+    // consent checks. This optional control asks only that current offerer
+    // to retry the pair. Its client checks the fragment and existing retry
+    // budget; no roster, other pair, auth token or peer identity changes.
+    if (msg.t === 'voice-restart') {
+      const keys = Object.keys(msg);
+      if (keys.length !== 3 || keys.some((k) => k !== 't' && k !== 'to' && k !== 'ufrag')) return;
+      if (!Number.isSafeInteger(msg.to) || msg.to <= 0 || msg.to >= myId ||
+          typeof msg.ufrag !== 'string' || !/^[A-Za-z0-9+/]{4,256}$/.test(msg.ufrag)) return;
+      const me = peers.get(myId), to = peers.get(msg.to);
+      // hasVoice is a profile's place; a second chat-only socket sharing it
+      // must not gain this control over an actual voice connection.
+      if (!me || !to || me.voice !== true || to.voice !== true || !hasVoice(me) || !hasVoice(to)) return;
+      if (!hears(me, to) || !hears(to, me)) return;
+      to.ws.send({ t: 'voice-restart', to: msg.to, ufrag: msg.ufrag, from: myId });
+      return;
+    }
 
     // Signalling is passed on as signalling and nothing else (#1350). The
     // server never inspects what an offer or a candidate says, it only

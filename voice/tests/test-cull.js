@@ -174,10 +174,18 @@ for (const members of PARTIES) { for (const m of members) { partyOf[m] = members
 const timers = [];
 let posted = null;
 const fakeHttp = {
-  request: function () {
+  request: function (options, respond) {
     return {
-      on: function () { }, setTimeout: function () { },
-      end: function (body) { posted = body; }
+      on: function () { },
+      end: function (body) {
+        posted = body;
+        let end;
+        respond({
+          statusCode: 200,
+          on: function (event, callback) { if (event === 'end') end = callback; },
+          resume: function () { end(); }
+        });
+      }
     };
   }
 };

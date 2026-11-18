@@ -151,6 +151,7 @@ namespace Thornswood
             public string Mode = "local";
             public bool Initiator;
             public int Restarts;
+            public ITimer RestartWait;
         }
 
         /// <summary>A row of the service's position table: where somebody is, and whether staff silenced them.</summary>
@@ -795,6 +796,7 @@ namespace Thornswood
                 }
                 if (t == "hush") { NoteHush((long)Num(m, "profileId"), Truthy(m, "on")); Placed(); ApplyMicTrack(); return; }
                 if (t == "sdp") { OnSdp(m); return; }
+                if (t == "voice-restart") { OnRestart(m); return; }
                 if (t == "ice") { OnIce(m); return; }
                 if (t == "vmode")
                 {
@@ -915,6 +917,7 @@ namespace Thornswood
         /// </summary>
         void Build(int id, Rec rec)
         {
+            CancelRestartWait(rec);
             if (rec.Pc != null) rec.Pc.Dispose();
             var pc = new VoicePeer(id, rec.Initiator, mix);
             rec.Pc = pc;
@@ -972,14 +975,14 @@ namespace Thornswood
 
         void IceState(int id, Rec rec, VoicePeer pc, string st)
         {
-            if (rec.Pc != pc) return;
+            Rec current;
+            if (!conns.TryGetValue(id, out current) || current != rec || rec.Pc != pc) return;
             Quiet("peer " + id + " (" + (rec.Name.Length > 0 ? rec.Name : "no name yet") + ") is " + st);
             if (st != "failed") return;
             if (rec.Restarts >= 1)
             {
                 // The launcher puts "Voice: " on the front of anything this sends.
-                Say("could not reach " + Who(rec) + ". One of you is behind a router " +
-                    "that will not let the two of you talk directly.");
+                Say("could not reach " + Who(rec) + ".");
                 return;
             }
             rec.Restarts++;
@@ -987,7 +990,73 @@ namespace Thornswood
             // Again from the start, with a new ICE username and password: the
             // side that offers makes a new offer, and the side that answers
             // takes it as a new connection (OnSdp). DTLS starts again too.
-            if (rec.Initiator) Build(id, rec);
+            if (rec.Initiator) { Build(id, rec); return; }
+
+            // ICE loss is not necessarily symmetric. The offerer can still
+            // hear our consent checks while we hear nothing. Ask it to spend
+            // its existing retry, naming precisely the offer we failed on.
+            string ufrag = pc.RemoteUfrag;
+            if (!ValidUfrag(ufrag)) { Say("could not reach " + Who(rec) + "."); return; }
+            ITimer waiting = null;
+            waiting = world.Time.CreateTimer(delegate
+            {
+                Post(delegate
+                {
+                    Rec active;
+                    if (!conns.TryGetValue(id, out active) || active != rec || rec.Pc != pc || rec.RestartWait != waiting) return;
+                    rec.RestartWait = null;
+                    waiting.Dispose();
+                    // An older peer or service ignores this optional request.
+                    // End that wait honestly; never reconnect the whole room.
+                    Say("could not reach " + Who(rec) + ".");
+                });
+            }, null, TimeSpan.FromSeconds(30), Timeout.InfiniteTimeSpan);
+            rec.RestartWait = waiting;
+            Send(delegate (Utf8JsonWriter w)
+            {
+                w.WriteString("t", "voice-restart");
+                w.WriteNumber("to", id);
+                w.WriteString("ufrag", ufrag);
+            });
+        }
+
+        static void CancelRestartWait(Rec rec)
+        {
+            ITimer waiting = rec.RestartWait;
+            rec.RestartWait = null;
+            if (waiting != null) waiting.Dispose();
+        }
+
+        static bool ValidUfrag(string s)
+        {
+            if (s == null || s.Length < 4 || s.Length > 256) return false;
+            foreach (char c in s)
+                if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/')) return false;
+            return true;
+        }
+
+        void OnRestart(JsonElement m)
+        {
+            int count = 0;
+            foreach (JsonProperty p in m.EnumerateObject())
+            {
+                if (p.Name != "t" && p.Name != "to" && p.Name != "from" && p.Name != "ufrag") return;
+                count++;
+            }
+            JsonElement from, to, fragment;
+            int id, target;
+            if (count != 4 || myPeer <= 0 || !m.TryGetProperty("from", out from) || from.ValueKind != JsonValueKind.Number || !from.TryGetInt32(out id) || id <= myPeer ||
+                !m.TryGetProperty("to", out to) || to.ValueKind != JsonValueKind.Number || !to.TryGetInt32(out target) || target != myPeer ||
+                !m.TryGetProperty("ufrag", out fragment) || fragment.ValueKind != JsonValueKind.String) return;
+            string ufrag = fragment.GetString();
+            Rec rec;
+            if (!ValidUfrag(ufrag) || !conns.TryGetValue(id, out rec) || !rec.Initiator || rec.Pc == null || rec.Pc.LocalUfrag != ufrag || rec.Restarts >= 1) return;
+            // The voice loop serializes this with local failure callbacks.
+            // A simultaneous local retry changes Pc and ufrag, so neither a
+            // stale request nor a duplicate can create a second generation.
+            rec.Restarts++;
+            Quiet("peer " + id + " requested its pair retry");
+            Build(id, rec);
         }
 
         static string UfragOf(string sdp)
@@ -1053,6 +1122,7 @@ namespace Thornswood
             Rec rec;
             if (!conns.TryGetValue(id, out rec)) return;
             conns.Remove(id);
+            CancelRestartWait(rec);
             if (rec.Pc != null) rec.Pc.Dispose();
             mix.Remove(id);
             lastMode.Remove(id);

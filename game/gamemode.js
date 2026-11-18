@@ -330,14 +330,17 @@ let voicePortCached = 0;
 function voicePort() {
   if (voicePortCached) { return voicePortCached; }
   let n = 0;
+  let fallback = 7778;
   try {
-    n = Number(JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8')).thornswoodVoicePort) || 0;
+    const cfg = JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8'));
+    if (cfg.thornswoodServer === 'dev') { fallback = 7789; }
+    n = Number(cfg.thornswoodVoicePort) || 0;
   } catch (e) {
     n = 0;
   }
-  // Anything absent or nonsensical falls back to the live port, which is what
-  // every deployment did before this existed.
-  voicePortCached = (n > 0 && n < 65536) ? n : 7778;
+  // Keep Dev traffic on Dev even when its configured port is invalid. Without
+  // an explicit Dev identity, retain the existing live-port default.
+  voicePortCached = (Number.isInteger(n) && n > 0 && n < 65536) ? n : fallback;
   if (voicePortCached !== 7778) {
     log('voice service port is ' + voicePortCached + ', from server-settings.json');
   }
@@ -11672,19 +11675,20 @@ log('gamemode loaded:',
 
   function send(payload) {
     if (inFlight) return;           // never queue: a late position is worthless
-    inFlight = true;
-
     var body = JSON.stringify(payload);
-    var req = http.request({
-      host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
-    }, function (res) {
-      res.resume();
-      res.on('end', function () { inFlight = false; failures = 0; complained = false; });
-    });
+    inFlight = true;
+    var finished = false;
+    var deadline;
+    var req;
 
-    req.on('error', function () {
+    function finish(ok) {
+      // A truncated response can emit both error and close. Its late events
+      // must not release the slot held by a newer request.
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
       inFlight = false;
+      if (ok) { failures = 0; complained = false; return; }
       failures++;
       // Once, then quiet. Nobody needs this five times a second for an hour.
       if (failures === 25 && !complained) {
@@ -11692,9 +11696,31 @@ log('gamemode loaded:',
         console.log('[thornswood] voice service is not answering on ' + VOICE_PORT +
                     '. Proximity voice is off; everything else is unaffected.');
       }
-    });
-    req.setTimeout(1000, function () { try { req.destroy(); } catch (e) { } });
-    req.end(body);
+    }
+
+    try {
+      req = http.request({
+        host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+      }, function (res) {
+        res.on('end', function () { finish(res.statusCode >= 200 && res.statusCode < 300); });
+        res.on('error', function () { finish(false); });
+        res.on('close', function () { finish(false); });
+        res.resume();
+      });
+      req.on('error', function () { finish(false); });
+      req.on('close', function () { finish(false); });
+      // Bound the whole exchange, including a body that keeps trickling in.
+      deadline = setTimeout(function () {
+        finish(false);
+        req.destroy();
+      }, 1000);
+      req.end(body);
+    } catch (error) {
+      finish(false);
+      if (req) req.destroy();
+      throw error;
+    }
   }
 
   /*
