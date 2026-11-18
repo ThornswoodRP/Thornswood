@@ -59,9 +59,9 @@ namespace Thornswood
             }
         }
 
-        // Installed only after a real handshake. Park the actual DTLS reader
-        // immediately before its real DatagramTransport.Receive, then expose
-        // precisely Dispose's closed=true / dtls.Close-not-yet-called window.
+        // Installed only after a real handshake. Park the actual reader and
+        // transport close while real Dispose retires media. This exposes the
+        // interval before the DTLS close has completed, without forcing flags.
         sealed class ReadBarrier : DatagramTransport
         {
             readonly DatagramTransport inner;
