@@ -367,9 +367,13 @@ function Save-SiteAsset([string]$Url, [string]$Part, [TimeSpan]$Timeout = [TimeS
     $c = [Net.Http.HttpClient]::new($h)
     $c.Timeout = [Threading.Timeout]::InfiniteTimeSpan
     [void]$c.DefaultRequestHeaders.UserAgent.TryParseAdd('Thornswood-Publish')
-    $r = $null
+    $r = $null; $cancelResponse = $null
     try {
         $r = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
+        # .NET Framework streams may not interrupt an outstanding read for
+        # CopyToAsync's token. A CLR delegate closes the response on expiry;
+        # no PowerShell script block runs on the cancellation worker thread.
+        $cancelResponse = $deadline.Token.Register([Action][Delegate]::CreateDelegate([Action], $r, 'Dispose'))
         $code = [int]$r.StatusCode
         if ($code -eq 200) {
             $in = $r.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
@@ -390,7 +394,7 @@ function Save-SiteAsset([string]$Url, [string]$Part, [TimeSpan]$Timeout = [TimeS
         if ($deadline.IsCancellationRequested) { throw [TimeoutException]::new('The asset transfer timed out.') }
         throw
     }
-    finally { if ($r) { $r.Dispose() }; $c.Dispose(); $deadline.Dispose() }
+    finally { if ($null -ne $cancelResponse) { $cancelResponse.Dispose() }; if ($r) { $r.Dispose() }; $c.Dispose(); $deadline.Dispose() }
 }
 
 # The same cancellation token follows metadata, redirects and the entire body.
@@ -398,10 +402,11 @@ function Save-SiteAsset([string]$Url, [string]$Part, [TimeSpan]$Timeout = [TimeS
 function Invoke-ReleaseAssetTransfer([string]$Url, [hashtable]$Headers, [string]$Part, [Threading.CancellationToken]$CancellationToken) {
     $c = [Net.Http.HttpClient]::new()
     $c.Timeout = [Threading.Timeout]::InfiniteTimeSpan
-    $response = $null; $inputStream = $null; $outputStream = $null
+    $response = $null; $inputStream = $null; $outputStream = $null; $cancelResponse = $null
     try {
         foreach ($key in $Headers.Keys) { [void]$c.DefaultRequestHeaders.TryAddWithoutValidation($key, [string]$Headers[$key]) }
         $response = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $CancellationToken).GetAwaiter().GetResult()
+        $cancelResponse = $CancellationToken.Register([Action][Delegate]::CreateDelegate([Action], $response, 'Dispose'))
         [void]$response.EnsureSuccessStatusCode()
         $inputStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
         $outputStream = if ($Part) { [IO.File]::Create($Part) } else { [IO.MemoryStream]::new() }
@@ -409,6 +414,7 @@ function Invoke-ReleaseAssetTransfer([string]$Url, [hashtable]$Headers, [string]
         if (-not $Part) { return (ConvertFrom-ThornswoodJson ([Text.Encoding]::UTF8.GetString($outputStream.ToArray())) 'GitHub release asset metadata') }
     }
     finally {
+        if ($null -ne $cancelResponse) { $cancelResponse.Dispose() }
         if ($outputStream) { $outputStream.Dispose() }
         if ($inputStream) { $inputStream.Dispose() }
         if ($response) { $response.Dispose() }
