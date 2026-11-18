@@ -316,7 +316,7 @@
     // Only the canonical Dev service can use this dedicated trusted ingress.
     // Ignore a stale Dev key on Main, custom routes and legacy launchers.
     var direct = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
-    if (HOST.toLowerCase() === 'play.thornswood.net' && PORT === 7789 &&
+    if (String(CFG.host || '').toLowerCase() === 'play.thornswood.net' && Number(CFG.port || 7778) === 7789 &&
         b === 'https://thornswood.net/voice-dev' && CFG.socket === direct) return direct;
     if (b.indexOf('https://') === 0) { return 'wss://' + b.slice(8) + '/'; }
     return '';

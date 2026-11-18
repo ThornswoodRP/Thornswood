@@ -3,6 +3,7 @@
    The full application is compiled by the repository's required SDK helper. #>
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$canonical=[regex]::Match([IO.File]::ReadAllText((Join-Path $repo 'launcher/app/Config.cs')),'public string ServerAddress = "([^"]+)"').Groups[1].Value
 . (Join-Path $repo 'tests/Launcher-Csc.ps1')
 $pass=0;$fail=0
 function Yes([string]$name,[bool]$ok){if($ok){$script:pass++;Write-Host "PASS  $name"}else{$script:fail++;Write-Host "FAIL  $name"}}
@@ -29,7 +30,7 @@ try {
  Yes 'custom service keeps its existing socket' ($cfg.VoiceSocket() -eq 'wss://custom.example.invalid/voice-dev/')
  $cfg.VoiceUrl='';$cfg.ServerAddress='private.example.invalid'
  Yes 'custom game address never acquires the dedicated route' ($cfg.VoiceSocket() -ne $direct)
- $cfg.ServerAddress='play.thornswood.net';$cfg.Channel='';
+ $cfg.ServerAddress=$canonical;$cfg.Channel='';
  Yes 'Dev-looking ports without explicit Dev do not acquire direct signaling' ($cfg.VoiceSocket() -ne $direct)
  $null=$dt.GetMethod('Set').Invoke($null,@($cfg,'dev'))
  $pt.GetField('Game').SetValue($null,$work)

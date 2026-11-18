@@ -8,6 +8,8 @@ const assert = require('assert');
 const ROOT = path.join(__dirname, '..');
 const CHAT = fs.readFileSync(path.join(ROOT, 'game/ui/thornswood-chat.js'), 'utf8');
 const FRONT = fs.readFileSync(path.join(ROOT, 'game/plugins/thornswood-front.js'), 'utf8');
+const CONFIG = fs.readFileSync(path.join(ROOT, 'launcher/app/Config.cs'), 'utf8');
+const DEV = { host: CONFIG.match(/public string ServerAddress = "([^"]+)"/)[1], port: 7789 };
 const DIRECT = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
 let passed = 0, failed = 0;
 function check(name, action) {
@@ -26,8 +28,8 @@ function page(change) {
     this.readyState = 1; this.onopen({});
     this.onmessage({ data: JSON.stringify({ t: 'welcome', peer: made.length, profileId: 7 }) });
   };
-  const cfg = Object.assign({ host: 'play.thornswood.net', port: 7789, profileId: 7,
-    name: 'Fixture', token: 'fixture-first', base: 'https://thornswood.net/voice-dev', socket: DIRECT }, change);
+  const cfg = Object.assign({ profileId: 7,
+    name: 'Fixture', token: 'fixture-first', base: 'https://thornswood.net/voice-dev', socket: DIRECT }, DEV, change);
   const win = { THORNSWOOD: cfg, thornswoodChat: { add() {} },
     skyrimPlatform: { sendMessage(to, line) { asks.push({ to, line }); } } };
   let timer = 0;
@@ -76,7 +78,7 @@ check('both real front bootstrap objects pass the independent socket and origina
   const objects = Array.from(FRONT.matchAll(/JSON\.stringify\((\{[^}]*\bbase:\s*VOICE_URL[^}]*\})\)/g), m => m[1]);
   assert.strictEqual(objects.length, 2, 'early line and normal overlay bootstrap');
   for (const object of objects) {
-    const cfg = vm.runInNewContext('(' + object + ')', { HOST: 'play.thornswood.net', VOICE_PORT: 7789,
+    const cfg = vm.runInNewContext('(' + object + ')', { HOST: DEV.host, VOICE_PORT: DEV.port,
       PROFILE: 7, lineId: 7, sentName: 'Fixture', tok: '', VOICE_URL: 'https://thornswood.net/voice-dev',
       VOICE_SOCKET_URL: DIRECT, CHAT_FADE: 1, NEEDS_BARS: true });
     assert.strictEqual(cfg.socket, DIRECT); assert.strictEqual(cfg.base, 'https://thornswood.net/voice-dev');
