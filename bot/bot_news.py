@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.request
 
 import discord
 
@@ -251,7 +252,8 @@ def news_picture(line):
     m = re.fullmatch(r'!\[([^\]\r\n]{1,160})\]\((https://thornswood\.net/news-[a-z0-9][a-z0-9-]{0,119}\.(?:png|jpg|webp))\)', line)
     if not m:
         return None
-    alt = m[1].strip()
+    # ECMAScript's trim set, shared with the native and browser parsers.
+    alt = m[1].strip('\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff')
     if not alt or len(m[1].encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
         return None
     return {'url': m[2], 'alt': alt}
@@ -451,6 +453,14 @@ async def news_once(state, docs, send, save, now=None, about=None):
     return done
 
 
+def _news_picture_ready(image):
+    """Do not announce a screenshot before the site has deployed its file."""
+    req = urllib.request.Request(image['url'], method='HEAD', headers={'User-Agent': 'ThornswoodNews/1'})
+    with urllib.request.urlopen(req, timeout=8) as response:
+        kind = response.headers.get('Content-Type', '').split(';')[0].lower()
+        return response.status == 200 and response.geturl() == image['url'] and kind in ('image/png', 'image/jpeg', 'image/webp')
+
+
 async def _news_send(channel, parts, said_once):
     cid = DEV_NEWS_ID if channel == 'dev' else MAIN_NEWS_ID
     where = '#staff-news' if channel == 'dev' else '#news'
@@ -463,6 +473,19 @@ async def _news_send(channel, parts, said_once):
                    % ('dev-channel.txt' if channel == 'dev' else 'news-channel.txt')))
             said_once.add(channel)
         return None
+    if parts.get('image'):
+        try:
+            ready = await asyncio.to_thread(_news_picture_ready, parts['image'])
+        except Exception as ex:
+            if channel not in said_once:
+                log('news: screenshot unavailable (%s); the %s post waits for the site' % (type(ex).__name__, channel))
+            said_once.add(channel)
+            return None
+        if not ready:
+            if channel not in said_once:
+                log('news: screenshot is not served as an image yet; the %s post waits for the site' % channel)
+            said_once.add(channel)
+            return None
     logo = SITE + '/logo.png'
     e = discord.Embed(title=parts['title'], url=SITE + '/news',
                       description=parts['description'], color=parts['color'])

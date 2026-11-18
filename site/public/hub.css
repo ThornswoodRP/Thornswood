@@ -584,6 +584,9 @@ tr.adder .plus{color:var(--faint);font-size:16px;line-height:38px}
 .entry .det{color:var(--dim);font-size:13.5px}
 .entry .det span{display:inline-block;margin-right:14px}
 .entry details{margin-top:9px}
+.news-picture{margin:16px 0;max-width:960px;min-width:0}
+.news-picture-image{display:block;width:100%;height:auto}
+.news-picture figcaption{overflow-wrap:anywhere}
 .entry summary{cursor:pointer;color:var(--dim);font-size:13px}
 .entry details ul{margin:8px 0 0;padding-left:20px;color:var(--faint);font:12.5px var(--mono)}
 

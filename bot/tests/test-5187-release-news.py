@@ -332,8 +332,10 @@ class NewsPictureChannel:
         return object()
 ch = NewsPictureChannel()
 before_channel = bot.client.get_channel
+before_picture_ready = bot._news_picture_ready
 try:
     bot.client.get_channel = lambda cid: ch
+    bot._news_picture_ready = lambda image: True
     pic = {'url': picture_cases[0]['image']['url'], 'alt': '||The panel||'}
     parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text'})
     parts['image'] = pic
@@ -341,7 +343,11 @@ try:
     embed = ch.sent['embed'].to_dict()
     yes('real Discord embed carries the image and a full screenshot link', embed['image']['url'] == pic['url'] and '[Open full screenshot]' in embed['fields'][0]['value'])
     yes('Discord caption is literal rather than a spoiler', embed['fields'][0]['value'].startswith('`||The panel||`'))
+    ch.sent = None
+    bot._news_picture_ready = lambda image: False
+    yes('Discord waits rather than posting a missing screenshot', asyncio.run(bot._news_send('dev', parts, set())) is None and ch.sent is None)
 finally:
     bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
 print('%d failed' % len(FAIL) if FAIL else 'all passed')
 sys.exit(1 if FAIL else 0)

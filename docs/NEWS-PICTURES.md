@@ -17,6 +17,10 @@ in `site/public` before the note goes out. Use an unused name starting with
 note reaches Discord and the app. Never overwrite a picture used by an old
 note.
 
+The Discord publisher waits until the picture is served by the site before
+posting its note, so the site and bot deploying together cannot leave the
+announcement with a missing picture.
+
 Only HTTPS pictures at `thornswood.net` with that naming pattern are loaded;
 links with queries, another host or another path are plain text. The website
 and app preserve the whole picture's proportions and offer the full image.

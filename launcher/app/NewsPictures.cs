@@ -20,6 +20,8 @@ namespace Thornswood
     {
         static readonly Regex Line = new Regex(@"^!\[([^\]\r\n]{1,160})\]\((https://thornswood\.net/news-[a-z0-9][a-z0-9-]{0,119}\.(?:png|jpg|webp))\)$");
         static readonly Regex Controls = new Regex(@"[\x00-\x1f\x7f]");
+        // ECMAScript's trim set, shared with Python and the browser parser.
+        static readonly char[] CaptionSpace = "\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff".ToCharArray();
         const int MaxBytes = 4 * 1024 * 1024;
         static readonly HttpClient web = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
         { Timeout = TimeSpan.FromSeconds(8) };
@@ -28,7 +30,7 @@ namespace Thornswood
         {
             Match m = Line.Match(line ?? "");
             if (!m.Success) return null;
-            string alt = m.Groups[1].Value.Trim();
+            string alt = m.Groups[1].Value.Trim(CaptionSpace);
             return alt.Length == 0 || Controls.IsMatch(alt) ? null : new NewsPicture { Url = m.Groups[2].Value, Alt = alt };
         }
 

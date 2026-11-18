@@ -12,8 +12,10 @@ assert.equal(browser.window.ThornswoodNewsPictures.html(cases[0].image), picture
 const html = pictures.html(cases[1].image);
 assert(html.includes('&lt;tags&gt;') && html.includes('&quot;quotes&quot;'));
 assert(!html.includes('style=') && html.includes('loading="lazy"'));
-const css = fs.readFileSync(path.join(__dirname, '../site/public/news-pictures.css'), 'utf8');
-assert(css.includes('height:auto') && css.includes('width:100%') && css.includes('overflow-wrap:anywhere'));
+for (const name of ['home.css', 'hub.css']) {
+  const css = fs.readFileSync(path.join(__dirname, '../site/public', name), 'utf8');
+  assert(css.includes('.news-picture-image{display:block;width:100%;height:auto}') && css.includes('.news-picture figcaption{overflow-wrap:anywhere}'));
+}
 assert.equal(pictures.html({url:'javascript:alert(1)',alt:'bad'}), '');
 assert.equal(pictures.html(null), '');
 console.log('PASS News screenshot contract, shared browser/server rendering, escaping and safe URLs');
@@ -34,10 +36,12 @@ async function integration() {
     await new Promise(resolve => setImmediate(resolve));
     assert(output.includes('Keep this text') && !output.includes('Could not load'));
     assert.equal(output.includes('news-picture'), !!helper, 'public client renderer tolerates a missing helper');
+    assert(output.includes('&lt;tags&gt;'), 'public client preserves the caption even without its image helper');
     const page = {innerHTML:''}; Object.assign(context, {S: {news: fixture}, head: () => '', el: () => page});
     vm.runInContext(draw + ';drawNews();', context);
     assert(page.innerHTML.includes('Keep this text'));
     assert.equal(page.innerHTML.includes('news-picture'), !!helper, 'Hub renderer tolerates a missing helper');
+    assert(page.innerHTML.includes('&lt;tags&gt;'), 'Hub preserves the caption even without its image helper');
   }
   const siteFiles = require('./site-files'), os = require('os'), crypto = require('crypto');
   const {spawn} = require('child_process');
