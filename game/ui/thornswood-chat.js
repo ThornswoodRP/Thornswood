@@ -309,14 +309,17 @@
     var token = TOKEN;
     SPENT = token;
     TOKEN = '';
+    var socket;
     try {
-      ws = new WebSocket(url(), ['thornswood', token]);
+      socket = new WebSocket(url(), ['thornswood', token]);
+      ws = socket;
     } catch (e) {
       retry();
       return;
     }
 
-    ws.onopen = function () {
+    socket.onopen = function () {
+      if (ws !== socket) return;
       // Not tries = 0 here: a join the service refuses opens first and is
       // closed straight after, and resetting on the open made that a retry
       // every second for as long as the token was refused (issue #409). The
@@ -333,7 +336,8 @@
       } catch (e) { }
     };
 
-    ws.onmessage = function (ev) {
+    socket.onmessage = function (ev) {
+      if (ws !== socket) return;
       heard = Date.now();
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
@@ -419,10 +423,15 @@
       // logged: they arrive several times a second.
     };
 
-    ws.onclose = function () { lost(); };
+    socket.onclose = function () {
+      if (ws !== socket) return;
+      ws = null;
+      lost();
+    };
 
-    ws.onerror = function () {
-      try { ws.close(); } catch (e) { }
+    socket.onerror = function () {
+      if (ws !== socket) return;
+      try { socket.close(); } catch (e) { }
     };
   }
 
@@ -433,8 +442,10 @@
   function take(t) {
     t = String(t || '');
     if (!t || t === SPENT || t === TOKEN) return;
-    TOKEN = t;
+    // A join token lasts two minutes. An extra response to an earlier ask
+    // must not sit beside a live connection until the next outage.
     if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+    TOKEN = t;
     if (timer) { clearTimeout(timer); timer = null; }
     connect();
   }
@@ -731,7 +742,7 @@
      * pushed in from thornswood-front.js (#1322).
      *
      * A try waiting on it goes at once. One that arrives while the connection
-     * is up is kept for the next try. The one this page last spent is not
+     * is up is discarded; the next try asks for its own. The one last spent is not
      * taken again: the front reads the file the launcher writes and can hand
      * the same string over twice.
      */
