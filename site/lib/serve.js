@@ -27,6 +27,7 @@ const { gameStatus, mostOnlineFallback, seatsFull, worldFull } = require('./game
 const { docVersion, INBOX, jsonFile, noteRules, putJson, readDoc,
   readLists, RESULTS, RULES_OK, writeDoc } = require('./store');
 const { NEWS } = require('./news');
+const newsPictures = require('../public/news-pictures');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses } = require('./limits');
@@ -1108,7 +1109,8 @@ async function handle(req, res) {
       launcher: feed.launcher || '',
       news: (feed.news || []).slice(0, 60).map((n) => ({
         date: n.date, title: n.title, body: n.body || '',
-        details: asList(n.details), files: asList(n.files).length
+        details: asList(n.details), files: asList(n.files).length,
+        image: newsPictures.valid(n.image) ? n.image : null
       }))
     });
   }

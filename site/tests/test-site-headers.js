@@ -75,7 +75,7 @@ function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-headers-'));
   made.push(dir);
   siteFiles.copy(dir);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   ['home.html','home.js','home.css'].forEach(function (f) {
     fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));
   });
