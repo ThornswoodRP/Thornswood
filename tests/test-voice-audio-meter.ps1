@@ -26,12 +26,9 @@ namespace Thornswood {
  }
 }
 '@
-$probePath = Join-Path ([IO.Path]::GetTempPath()) ('voice-meter-' + [Guid]::NewGuid().ToString('N') + '.cs')
-try {
-    [IO.File]::WriteAllText($probePath, $probe)
-    Add-Type -Path @($file, (Join-Path $root 'launcher/app/VoiceMix.cs'),
-        (Join-Path $root 'launcher/app/VoiceHrtf.cs'), $probePath)
-} finally { Remove-Item -LiteralPath $probePath }
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')
+$null = Add-LauncherType -File @($file, (Join-Path $root 'launcher/app/VoiceMix.cs'),
+    (Join-Path $root 'launcher/app/VoiceHrtf.cs')) -Source $probe
 $rows = [Thornswood.AudioMeterProbe]::Run() | ForEach-Object { $_ | ConvertFrom-Json }
 function Check($name, $ok) { if (-not $ok) { throw $name }; Write-Host "PASS $name" }
 Check 'capture is measured before the live gate and nonfinite input is counted' (
