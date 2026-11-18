@@ -512,7 +512,7 @@ These are part of a normal week and do not each need a letter of their own. Pyth
 
 ### Python
 
-The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs 3.11) with `discord.py` and `Pillow`. [Setting up a machine](set-up-a-machine.md#setting-up-a-machine) names that install. The bot deploy is [I. Bot](#i-bot).
+The bot scripts support Python 3.11 and 3.12 (the bot runs on 3.12) with `discord.py` and `Pillow`. [Setting up a machine](set-up-a-machine.md#setting-up-a-machine) names that install. The bot deploy is [I. Bot](#i-bot).
 
 ### The .NET Framework
 

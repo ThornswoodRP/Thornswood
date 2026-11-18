@@ -155,7 +155,7 @@ Needs: Windows 10 or 11, Skyrim Special Edition on Steam (any Steam library,
 any drive; the scripts find it through Steam) with the Thornswood collection
 deployed through Vortex, the Thornswood launcher installed on any drive and
 signed in, git, the GitHub CLI (`gh`) signed in to an account that is a
-collaborator on the source repo, PowerShell 7, node, Python 3.11 or newer (the
+collaborator on the source repo, PowerShell 7, node, Python 3.11 or 3.12 (the
 bot runs on 3.12) with `discord.py` and `Pillow` for the bot scripts, and an
 SSH key the VPS knows. There is no releases clone any more: the feed and its
 baseline are on the VPS (#907). The clone is [Clone the repository](#clone-the-repository);
@@ -166,16 +166,12 @@ cd C:\Thornswood-Repo
 gh auth status
 ```
 
-The bot's libraries go into the Python that `py` starts by default, because
-that is the one the bot harnesses run on: `bot\tests\test-*.py`, and
-`tests\test-staff-commands.js`, which imports bot.py. On the shipping machine
-the default was 3.12 with no discord.py, so every bot harness stopped on its
-first import with nothing to do with the change being tested (#1008). From
-`Thornswood-Repo`:
+The bot harnesses use Python 3.12 when available, so install and check the
+libraries with that version explicitly. From `Thornswood-Repo`:
 
 ```
-py -m pip install -r bot\requirements.txt
-py -c "import discord, PIL; print('discord.py ' + discord.__version__)"
+py -3.12 -m pip install --require-hashes --only-binary :all: -r bot\requirements.txt
+py -3.12 -c "import discord, PIL; print('discord.py ' + discord.__version__)"
 ```
 
 The second line prints the discord.py version `bot\requirements.txt` pins when
