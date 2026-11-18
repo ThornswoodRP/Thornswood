@@ -54,8 +54,8 @@ namespace Thornswood
         /// /voice-dev on the dev build.
         /// </summary>
         /// <remarks>
-        /// Everything voice does goes through Caddy on 443: one door with a
-        /// certificate on it, and wss:// rather than ws://, so nobody's voice
+        /// HTTPS requests go through Caddy on 443; canonical Dev signaling
+        /// uses its dedicated trusted socket. Both use TLS, so nobody's voice
         /// signalling, join token or Discord ticket crosses the internet in
         /// the clear.
         ///
@@ -87,10 +87,17 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The same address as a WebSocket url, which is always wss (#1304).
+        /// The signaling socket, always wss. The canonical Dev route has its
+        /// own trusted ingress; HTTPS authentication keeps using VoiceBase.
         /// </summary>
         public string VoiceSocket()
         {
+            if (IsDev && string.Equals(ServerAddress, "play.thornswood.net", StringComparison.OrdinalIgnoreCase)
+                && ServerPort == "7787" && VoicePort == "7789"
+                && VoiceBase() == Voice + "-dev")
+            {
+                return "wss://dev-signal.thornswood.net:44789/voice-dev/";
+            }
             return "wss://" + VoiceBase().Substring(8) + "/";
         }
 

@@ -20,6 +20,11 @@ try {
  $direct='wss://dev-signal.thornswood.net:44789/voice-dev/'
  Yes 'explicit canonical Dev uses its dedicated socket' ($cfg.VoiceSocket() -eq $direct)
  Yes 'Dev HTTPS token base stays canonical' ($cfg.VoiceBase() -eq 'https://thornswood.net/voice-dev')
+ $cfg.ServerPort='7777'
+ Yes 'a mismatched game port never acquires the dedicated socket' ($cfg.VoiceSocket() -ne $direct)
+ $cfg.ServerPort='7787';$cfg.VoicePort='7778'
+ Yes 'a mismatched voice port never acquires the dedicated socket' ($cfg.VoiceSocket() -ne $direct)
+ $cfg.VoicePort='7789'
  $cfg.VoiceUrl='https://custom.example.invalid/voice-dev'
  Yes 'custom service keeps its existing socket' ($cfg.VoiceSocket() -eq 'wss://custom.example.invalid/voice-dev/')
  $cfg.VoiceUrl='';$cfg.ServerAddress='private.example.invalid'
@@ -35,6 +40,8 @@ try {
  $text=[IO.File]::ReadAllText($ini)
  Yes 'Play adds the direct socket to an older INI' ($text -match ('(?m)^VoiceSocketUrl = '+[regex]::Escape($direct)+'\r?$'))
  Yes 'the INI HTTPS base remains the original auth route' ($text -match '(?m)^VoiceUrl = https://thornswood.net/voice-dev\r?$')
+ $null=$mt.GetMethod('Apply').Invoke($null,@($cfg))
+ Yes 'repeated Play rewrites one socket key without duplicating it' (([regex]::Matches([IO.File]::ReadAllText($ini),'(?m)^VoiceSocketUrl\s*=')).Count -eq 1)
  $null=$dt.GetMethod('Set').Invoke($null,@($cfg,'main'))
  $null=$mt.GetMethod('Apply').Invoke($null,@($cfg))
  $text=[IO.File]::ReadAllText($ini)
