@@ -370,6 +370,7 @@ try {
     $pressed = $false
     $toldWaiting = $false
     $toldChannel = ''
+    $launcherGoneSince = $null
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
             $ch = Get-InstalledChannel
@@ -377,14 +378,19 @@ try {
             throw "Play was not there to press in $PlayMinutes minutes"
         }
         if ($launcher.HasExited) {
+            # A followed Get-Process object can have no exit metadata. Count
+            # from our own observation instead of treating a null ExitTime
+            # as an exit before the cutoff and restoring the channel mid-update.
+            if ($null -eq $launcherGoneSince) { $launcherGoneSince = Get-Date }
             $next = Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object {
                 $_.Id -ne $launcher.Id -and $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase)
             } | Select-Object -First 1
-            if ($next) { Say "The launcher closed (exit code $($launcher.ExitCode)) and Velopack started it again, process $($next.Id): following that one."; $launcher = $next; $toldWaiting = $false; continue }
-            if ($launcher.ExitTime -lt (Get-Date).AddMinutes(-2)) { throw "The launcher closed by itself, exit code $($launcher.ExitCode), and no launcher started after it in two minutes" }
+            if ($next) { Say "The launcher closed (exit code $($launcher.ExitCode)) and Velopack started it again, process $($next.Id): following that one."; $launcher = $next; $launcherGoneSince = $null; $toldWaiting = $false; continue }
+            if (((Get-Date) - $launcherGoneSince).TotalMinutes -ge 2) { throw "The launcher closed by itself, exit code $($launcher.ExitCode), and no launcher started after it in two minutes" }
             Start-Sleep -Milliseconds 500
             continue
         }
+        $launcherGoneSince = $null
         $launcher.Refresh()
         $h = $launcher.MainWindowHandle
         $ch = Get-InstalledChannel
