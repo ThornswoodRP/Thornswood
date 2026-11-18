@@ -541,7 +541,7 @@ namespace Thornswood
             }
             string tag = "build-1.3.65530", commit = new string('b', 40);
             byte[] game = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new VeloRecord.GameList { Schema = 1, Commit = commit, Files = rows.ToArray() });
-            byte[] setup = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new VeloRecord.GameList { Schema = 1, Commit = commit, Files = new VeloRecord.GameFile[0] });
+            byte[] setup = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new VeloRecord.GameList { Schema = 1, Channel = "main", Commit = commit, Files = new VeloRecord.GameFile[0] });
             Put(Path.Combine(Paths.ProfileDir, "GitHub", tag, "game-files.json"), Encoding.UTF8.GetString(game));
             Put(Path.Combine(Paths.ProfileDir, "GitHub", "main-" + tag, "setup-files.main.json"), Encoding.UTF8.GetString(setup));
             var manifest = new VeloRecord.Manifest { Tag = tag, Commit = commit, Parts = new Dictionary<string, VeloRecord.PartFile[]> {
