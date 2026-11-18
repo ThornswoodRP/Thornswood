@@ -500,7 +500,7 @@ CONTENTS = (
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
     (r'IMAD Thornswood(Drunk|High|Hangover|Withdrawal)Imod$', 'own', 'the screen looks'),
     (r'BOOK ThornswoodPassage\w+$', 'own', 'starting town passages'),
-    (r'BOOK ThornswoodWelcome$', 'own', 'the welcome letter'),
+    (r'BOOK ThornswoodWelcome$', 'own', 'welcome letter'),
     (r'COBJ (DLC[12])?Recipe(Weapon\w+Bow|Arrow\w+|TechBolt\w+)$', 'bethesda',
      'bows, arrows and bolts to the woodworking bench'),
     (r'COBJ BYOHRecipe(Nails|Hinge|Lock|Fittings)$', 'bethesda', 'house parts off the forge'),
