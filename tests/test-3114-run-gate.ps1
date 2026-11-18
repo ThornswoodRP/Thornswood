@@ -95,6 +95,7 @@ Write-Host 'the handed-on map, standing in'
 exit 0
 '@
     Set-Content -LiteralPath (Join-Path (Join-Path $sr 'records') 'build-runners.json') -Value '{"runners":[1,2]}'
+    Copy-Item -LiteralPath (Join-Path $repo 'scripts/dev/OwnPlugins.ps1') -Destination $dev
     foreach ($f in 'a.txt', 'b.txt', 'd.txt') { Set-Content -LiteralPath (Join-Path $sr $f) -Value $f }
     $null = GitOk init -q $sr
     $null = GitOk -C $sr config user.name 'Run gate test'
@@ -362,7 +363,7 @@ exit 0
     # both, test-c always runs and names b.txt in its text.
     $mods = Join-Path (Join-Path $sr 'scripts') 'mods'
     $null = New-Item -ItemType Directory -Force -Path $mods, (Join-Path $sr 'tests')
-    Set-Content -LiteralPath (Join-Path $mods 'ContentPaths.ps1') -Value "function Get-ThornswoodContentPaths { param([string]`$Repo, [string]`$Tool) [pscustomobject]@{ Paths = @('d.txt'); Writes = @('b.txt') } }"
+    Set-Content -LiteralPath (Join-Path $mods 'ContentPaths.ps1') -Value "function Get-ThornswoodContentPaths { param([string]`$Repo, [string]`$Tool) [pscustomobject]@{ Paths = @('d.txt'); Writes = @('b.txt') } }; function Assert-ThornswoodLaidTableOrders {}"
     Set-Content -LiteralPath (Join-Path (Join-Path $sr 'tests') 'test-c.js') -Value "// reads b.txt"
     $cm = Join-Path $scratch 'content-map'
     $null = New-Item -ItemType Directory -Path $cm
@@ -403,6 +404,33 @@ exit 0
     $env:CONTENT_SAME = ''; $env:CONTENT_COMMIT = ''
     $null = GitOk -C $sr reset -q --hard $base
     Remove-Item -LiteralPath (Join-Path $sr 'tests'), $mods -Recurse -Force
+
+    # #4452: read tables already in the checkout, through the real pick.
+    $null = New-Item -ItemType Directory -Force -Path $mods, (Join-Path $sr 'game/data')
+    Copy-Item -LiteralPath (Join-Path $repo 'scripts/mods/ContentPaths.ps1') -Destination $mods
+    . (Join-Path $dev 'OwnPlugins.ps1')
+    $masters = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm')
+    $order = $masters + @('A.esp', 'B.esp', 'Thornswood-Last.esp')
+    Set-Content -LiteralPath (Join-Path $sr 'records/load-order.json') -Value (@{loadOrder = $order} | ConvertTo-Json)
+    Set-Content -LiteralPath (Join-Path $sr 'records/collection.json') -Value '{"collection":"test","revision":1,"plugins":[]}'
+    Set-Content -LiteralPath (Join-Path $sr 'records/collection-plugins.json') -Value '{"collection":"test","revision":1}'
+    Set-Content -LiteralPath (Join-Path $mods 'content-tables.json') -Value '{"orderProof":{"game/data/hunts.json":"phase"},"steps":[{"tool":"scripts/dev/must-not-run.ps1","writes":["game/data/hunts.json"]},{"tool":"scripts/mods/Build-LastPlugin.py"}]}'
+    Set-Content -LiteralPath (Join-Path $sr 'game/data/npc-population.json') -Value (@{loadOrder = @($order | ForEach-Object { @{name = $_} })} | ConvertTo-Json)
+    $table = Join-Path $sr 'game/data/hunts.json'
+    $env:CONTENT_SAME = 'yes'
+    $env:STUB_MAP = ''
+    $wrong = Get-LoadOrderName ($masters + @('B.esp', 'A.esp'))
+    $right = Get-LoadOrderName ($masters + @('A.esp', 'B.esp'))
+    Set-Content -LiteralPath $table -Value (@{source = "fixture of $wrong"} | ConvertTo-Json)
+    $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
+    Yes ('#4452 the pick rejects a same-count reorder without a rebuild: ' + $r.Text) (
+        $r.Code -eq 1 -and -not $r.Plan -and $r.Text -match 'game/data/hunts\.json' -and $r.Text.Contains($right) -and $r.Text.Contains($wrong))
+    Set-Content -LiteralPath $table -Value (@{source = "fixture of $right"} | ConvertTo-Json)
+    $bytes = [IO.File]::ReadAllText($table)
+    $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
+    Yes '#4452 the pick accepts a matching table and leaves it untouched' ($r.Code -eq 0 -and $r.Plan -and [IO.File]::ReadAllText($table) -ceq $bytes)
+    $env:CONTENT_SAME = ''
+    Remove-Item -LiteralPath $mods, (Join-Path $sr 'game') -Recurse -Force
 
     # ---- this build's share of the cores (#3860): the machine's cores over
     # the builds it runs at once. One's five builds took the box's count
