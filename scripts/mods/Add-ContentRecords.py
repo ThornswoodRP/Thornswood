@@ -2621,6 +2621,19 @@ def refused(records, reg):
     return out
 
 
+def header_count(tree):
+    """The count a header carries (#4619): every record and every group in
+    the tree, nested groups too, the way the game and the editors count a
+    plugin and the way Build-LastPlugin.py counts Thornswood-Last.esp. The
+    records alone left the groups out, and editors reported a header error."""
+    n = 0
+    for k in tree:
+        n += 1
+        if isinstance(k, Grup):
+            n += header_count(k.kids)
+    return n
+
+
 def header(description, count):
     """The plugin's header: its record count, the author, the description and
     the five masters."""
@@ -2914,8 +2927,8 @@ def main():
               '(#2993). Shorten the words in CONTENTS. Nothing was written.'
               % (len(description) + 1, DESCRIPTION_MOST))
         return 1
-    count = len(holds) + len(copies)
-    head = header(description, count)
+    built = len(holds) + len(copies)
+    head = header(description, header_count(tree))
     out = head + b''.join(k.bytes() for k in tree)
 
     print('')
@@ -2941,8 +2954,8 @@ def main():
     problems = []
     if len({r.fid for r in after}) != len(after):
         problems.append('two records share a form id')
-    if len(after) != count:
-        problems.append('%d records read back, and %d were built' % (len(after), count))
+    if len(after) != built:
+        problems.append('%d records read back, and %d were built' % (len(after), built))
     if struct.unpack_from('<I', out, 4)[0] != len(head) - 24:
         problems.append('the header\'s size field does not match the header')
     if other_server_in_header(head):
@@ -2969,7 +2982,8 @@ def main():
             print('  STOP. %s.' % line)
         print('  Nothing was written.')
         return 1
-    print('  ok    %d records, every form id once, the header says %d' % (len(after), count))
+    print('  ok    %d records, every form id once, the header says %d with its %d groups'
+          % (len(after), header_count(tree), header_count(tree) - len(after)))
     print('  ok    every record reads back as it was built')
     print("  ok    the %d placements are the station table's, each in its cell" % len(want))
     print('  ok    no salvaged record, nothing retired, and no record or header carries the other server\'s name')
