@@ -288,9 +288,9 @@ function Get-GameProcess {
 function Invoke-GameKey([IntPtr]$handle, $code) {
     # These plans use ordinary set-1 make codes. Extended/E1 keys require
     # another encoding; refuse them instead of silently sending another key.
-    $scan = 0.0
-    if (-not [double]::TryParse([string]$code, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
-        $scan -lt 1 -or $scan -gt 0x7f -or $scan -ne [Math]::Truncate($scan)) {
+    $scan = 0
+    if (-not [int]::TryParse([string]$code, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
+        $scan -lt 1 -or $scan -gt 0x7f) {
         return @{ ok = $false; note = "unsupported non-extended scan code $code" }
     }
     $code = [uint16]$scan

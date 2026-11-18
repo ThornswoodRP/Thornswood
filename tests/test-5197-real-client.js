@@ -371,14 +371,16 @@ namespace ThornswoodRealClient {
     public static bool Activate, MoveOnActivate, LoseOnHold, LoseOnUp, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
     public static uint DownSent, UpSent;
     public static int Calls;
+    public static int NativeCalls;
     public static string Events = "";
     public static bool SetForegroundWindow(IntPtr h) {
+      NativeCalls++;
       if (Activate && MoveOnActivate) Foreground = h;
       return Activate;
     }
-    public static IntPtr GetForegroundWindow() { return Foreground; }
+    public static IntPtr GetForegroundWindow() { NativeCalls++; return Foreground; }
     public static uint SendScan(ushort scan, bool up) {
-      Calls++; Events += (up ? "U" : "D") + scan + ";";
+      Calls++; NativeCalls++; Events += (up ? "U" : "D") + scan + ";";
       if (up) {
         Down = false;
         if (LoseOnUp) Foreground = new IntPtr(99);
@@ -426,14 +428,16 @@ function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, 
   [ThornswoodRealClient.Win]::Down = $false
   [ThornswoodRealClient.Win]::SawDown = $false
   [ThornswoodRealClient.Win]::Calls = 0
+  [ThornswoodRealClient.Win]::NativeCalls = 0
   [ThornswoodRealClient.Win]::Events = ''
   $r = Invoke-GameKey ([IntPtr]$handle) $code
-  @{name=$name; code=$code; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
+  @{name=$name; code=$code; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; nativeCalls=[ThornswoodRealClient.Win]::NativeCalls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
 }
-Case 'unsupported' 42 42 $true $true 1 1 $false -code 200
-Case 'zero-code' 42 42 $true $true 1 1 $false -code 0
-Case 'fraction' 42 42 $true $true 1 1 $false -code 36.4
-Case 'rounded-boundary' 42 42 $true $true 1 1 $false -code 127.4
+Case 'unsupported' 42 99 $true $true 1 1 $false -code 200
+Case 'zero-code' 42 99 $true $true 1 1 $false -code 0
+Case 'fraction' 42 99 $true $true 1 1 $false -code 36.4
+Case 'rounded-boundary' 42 99 $true $true 1 1 $false -code 127.4
+Case 'preserved-fraction' 42 99 $true $true 1 1 $false -code '127.00000000000000001'
 Case 'missing' 0 0 $true $true 1 1 $false
 Case 'denied' 42 99 $false $false 1 1 $false
 Case 'not-foreground' 42 99 $true $false 1 1 $false
@@ -452,8 +456,12 @@ Case 'activated' 42 99 $true $true 1 1 $false -code 23
     yes('a living process without a window reaches the failed-key path instead of the crashed exit',
         /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
     yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
-    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 16);
-    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 17);
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': invalid code cannot query or change native focus', !!c && !c.ok && c.nativeCalls === 0);
+    });
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
     });
