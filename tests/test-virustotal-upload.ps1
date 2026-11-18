@@ -61,9 +61,12 @@ $Doc = Join-Path $RepoRoot 'docs\VIRUSTOTAL-FALSE-POSITIVE.md'
 
 $script:pass = 0
 $script:fail = 0
-function Yes([string]$what, [bool]$cond) {
+function Yes([string]$what, [bool]$cond, [string]$detail = '') {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
-    else { $script:fail++; Write-Host "FAIL  $what" }
+    else {
+        $script:fail++; Write-Host "FAIL  $what"
+        if ($detail) { Write-Host ($detail.Replace($FakeKey, '<fixture-key>')) }
+    }
 }
 
 # Made up, and never a real key's shape, so nothing here could be one by
@@ -127,7 +130,8 @@ function NoKey([string]$what, $r) {
 # /ping is how the case below knows it is up, and neither of those two is
 # counted or written down.
 $Listener = {
-    param([int]$port, [string]$mode, [string]$log, [string]$expectKey)
+    param([int]$port, [string]$mode, [string]$log, [string]$expectKey, [string]$ready)
+    $ErrorActionPreference = 'Stop'
 
     # Latin-1 maps every byte to one character, so a multipart body of file
     # bytes reads as text without anything failing to decode.
@@ -135,6 +139,10 @@ $Listener = {
     $l = New-Object Net.Sockets.TcpListener ([Net.IPAddress]::Loopback), $port
     $l.Start()
     try {
+        # Keep the OS-assigned endpoint bound while publishing it. Selecting
+        # a free port in the parent and releasing it races other fixtures.
+        $port = $l.LocalEndpoint.Port
+        [IO.File]::WriteAllText($ready, [string]$port)
         for ($served = 0; $served -lt 20; $served++) {
             $client = $l.AcceptTcpClient()
             $path = ''
@@ -276,26 +284,41 @@ function Test-Knock([string]$url) {
 
 # One case against the stand-in: start it, run the script, ask it to stop, and
 # hand back what was printed and what arrived.
-function Invoke-Against([string]$mode, [string]$file) {
-    $port = Get-FreePort
-    $root = 'http://127.0.0.1:' + $port + '/'
-    $log = Join-Path $work ('requests-' + $mode + '-' + $port + '.txt')
-    $job = Start-Job -ScriptBlock $Listener -ArgumentList $port, $mode, $log, $FakeKey
+function Invoke-Against([string]$mode, [string]$file, [string]$outcomePath = '') {
+    $case = Join-Path $work ([Guid]::NewGuid().ToString('N'))
+    $log = $case + '.requests'
+    $ready = $case + '.ready'
+    $root = ''
+    $job = Start-Job -ScriptBlock $Listener -ArgumentList 0, $mode, $log, $FakeKey, $ready
     try {
         # The listener is a child PowerShell and is not up the instant the job
         # is. The script's own first call would fail on a refused connection.
         $up = $false
         for ($i = 0; $i -lt 150 -and -not $up; $i++) {
-            $up = Test-Knock ($root + 'ping')
+            if ($job.State -in @('Failed', 'Completed', 'Stopped')) { break }
+            if (Test-Path -LiteralPath $ready) {
+                $port = 0
+                if ([int]::TryParse([IO.File]::ReadAllText($ready), [ref]$port) -and $port -gt 0) {
+                    $root = 'http://127.0.0.1:' + $port + '/'
+                    $up = Test-Knock ($root + 'ping')
+                }
+            }
             if (-not $up) { Start-Sleep -Milliseconds 100 }
         }
-        $r = Invoke-Vt $FakeKey @('-Path', $file, '-Api', ($root + 'api/v3'))
+        if (-not $up) {
+            $why = (Receive-Job $job -Keep -ErrorAction Continue 2>&1 | Out-String)
+            throw ('Upload stand-in failed to start: ' + $job.State + ' ' + $why.Replace($FakeKey, '<fixture-key>'))
+        }
+        $extra = @('-Path', $file, '-Api', ($root + 'api/v3'))
+        if ($outcomePath) { $extra += @('-OutcomePath', $outcomePath) }
+        $r = Invoke-Vt $FakeKey $extra
+        $diagnostic = (Receive-Job $job -Keep -ErrorAction Continue 2>&1 | Out-String)
         $seen = @()
         if (Test-Path -LiteralPath $log) { $seen = @([IO.File]::ReadAllLines($log)) }
-        return [pscustomobject]@{ Code = $r.Code; Out = $r.Out; Up = $up; Seen = $seen }
+        return [pscustomobject]@{ Code = $r.Code; Out = $r.Out; Up = $up; Seen = $seen; Diagnostic = $diagnostic }
     }
     finally {
-        $null = Test-Knock ($root + 'stop')
+        if ($root) { $null = Test-Knock ($root + 'stop') }
         $null = Wait-Job $job -Timeout 15 -ErrorAction SilentlyContinue
         Remove-Job $job -Force -ErrorAction SilentlyContinue
     }
@@ -451,7 +474,8 @@ try {
     $r = Invoke-Against 'missing' $huge
     Yes 'a file over 650 MB exits 0' ($r.Code -eq 0)
     Yes '  saying it was not sent, and naming the cap' (
-        $r.Out -match '(?m)VirusTotal: not sent \(' -and $r.Out -match '650 MB')
+        $r.Out -match '(?m)VirusTotal: not sent \(' -and $r.Out -match '650 MB') (
+        'Child output: ' + $r.Out + ' Stand-in: ' + $r.Diagnostic + ' Requests: ' + ($r.Seen -join '; '))
     Yes '  and nothing was sent' (@($r.Seen | Where-Object { $_ -match '^POST' }).Count -eq 0)
     NoKey '  ' $r
 
@@ -479,23 +503,7 @@ try {
 
     # --- outcome: already-has
     $outHave = Join-Path $work 'outcome-have.txt'
-    $port = Get-FreePort
-    $root = 'http://127.0.0.1:' + $port + '/'
-    $log = Join-Path $work ('requests-outcome-have-' + $port + '.txt')
-    $job = Start-Job -ScriptBlock $Listener -ArgumentList $port, 'present', $log, $FakeKey
-    try {
-        $up = $false
-        for ($i = 0; $i -lt 150 -and -not $up; $i++) {
-            $up = Test-Knock ($root + 'ping')
-            if (-not $up) { Start-Sleep -Milliseconds 100 }
-        }
-        $r = Invoke-Vt $FakeKey @('-Path', $small, '-Api', ($root + 'api/v3'), '-OutcomePath', $outHave)
-    }
-    finally {
-        $null = Test-Knock ($root + 'stop')
-        $null = Wait-Job $job -Timeout 15 -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-    }
+    $r = Invoke-Against 'present' $small $outHave
     $o = Read-Outcome $outHave
     Yes 'already-has outcome status is already-has' ($r.Code -eq 0 -and $o.status -eq 'already-has')
     Yes '  with sha256 and reportUrl' (
@@ -505,23 +513,7 @@ try {
 
     # --- outcome: sent
     $outSent = Join-Path $work 'outcome-sent.txt'
-    $port = Get-FreePort
-    $root = 'http://127.0.0.1:' + $port + '/'
-    $log = Join-Path $work ('requests-outcome-sent-' + $port + '.txt')
-    $job = Start-Job -ScriptBlock $Listener -ArgumentList $port, 'missing', $log, $FakeKey
-    try {
-        $up = $false
-        for ($i = 0; $i -lt 150 -and -not $up; $i++) {
-            $up = Test-Knock ($root + 'ping')
-            if (-not $up) { Start-Sleep -Milliseconds 100 }
-        }
-        $r = Invoke-Vt $FakeKey @('-Path', $small, '-Api', ($root + 'api/v3'), '-OutcomePath', $outSent)
-    }
-    finally {
-        $null = Test-Knock ($root + 'stop')
-        $null = Wait-Job $job -Timeout 15 -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-    }
+    $r = Invoke-Against 'missing' $small $outSent
     $o = Read-Outcome $outSent
     Yes 'sent outcome status is sent' ($r.Code -eq 0 -and $o.status -eq 'sent')
     Yes '  with sha256 and reportUrl' (
@@ -531,23 +523,7 @@ try {
 
     # --- outcome: over-650mb
     $outHuge = Join-Path $work 'outcome-huge.txt'
-    $port = Get-FreePort
-    $root = 'http://127.0.0.1:' + $port + '/'
-    $log = Join-Path $work ('requests-outcome-huge-' + $port + '.txt')
-    $job = Start-Job -ScriptBlock $Listener -ArgumentList $port, 'missing', $log, $FakeKey
-    try {
-        $up = $false
-        for ($i = 0; $i -lt 150 -and -not $up; $i++) {
-            $up = Test-Knock ($root + 'ping')
-            if (-not $up) { Start-Sleep -Milliseconds 100 }
-        }
-        $r = Invoke-Vt $FakeKey @('-Path', $huge, '-Api', ($root + 'api/v3'), '-OutcomePath', $outHuge)
-    }
-    finally {
-        $null = Test-Knock ($root + 'stop')
-        $null = Wait-Job $job -Timeout 15 -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-    }
+    $r = Invoke-Against 'missing' $huge $outHuge
     $o = Read-Outcome $outHuge
     Yes 'over-650 outcome status is skipped' ($r.Code -eq 0 -and $o.status -eq 'skipped')
     Yes '  skipReason is over-650mb' ($o.skipReason -eq 'over-650mb')
