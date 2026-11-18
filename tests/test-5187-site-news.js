@@ -78,6 +78,7 @@ async function main() {
     yes('screenshot note: ' + c.line, JSON.stringify(n.image || null) === JSON.stringify(c.image) &&
       n.details[0] === 'Keep this text' && (c.image ? n.details.length === 1 : n.details[1] === c.line));
   }
+  yes('bare image syntax does not become a screenshot', !t.api.noteOf('A clearer character panel\n![Panel](https://thornswood.net/news-panel.png)', null).image);
   const n = t.api.noteOf('Restarts are announced on Discord\n- Before the server restarts, #updates says when.\nAnd one plain line.\r\n- A second change.\n',
     '2026-11-11T21:20:11Z');
   yes('the first line is the title, "- " lines the details, any other line the text',

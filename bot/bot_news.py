@@ -252,7 +252,7 @@ def news_picture(line):
     if not m:
         return None
     alt = m[1].strip()
-    if not alt or re.search(r'[\x00-\x1f\x7f]', alt):
+    if not alt or len(alt.encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
         return None
     return {'url': m[2], 'alt': alt}
 
@@ -261,13 +261,16 @@ def _news_picture_lines(lines):
     image, rest = None, []
     for line in lines:
         said = line.strip()
-        if said.startswith('- '):
+        bullet = said.startswith('- ')
+        if bullet:
             said = said[2:].strip()
-        picture = news_picture(said) if image is None else None
+        picture = news_picture(said) if bullet and image is None else None
         if picture:
             image = picture
         else:
-            rest.append(line)
+            # Invalid image notation is literal, never a masked external
+            # link or a spoiler. A code span also stops URL auto-linking.
+            rest.append(('`' + line.replace('`', '\u02cb') + '`') if said.startswith('![') else line)
     return image, rest
 
 
@@ -462,7 +465,8 @@ async def _news_send(channel, parts, said_once):
     e.set_footer(text=parts['footer'], icon_url=logo)
     if parts.get('image'):
         e.set_image(url=parts['image']['url'])
-        e.add_field(name='Screenshot', value=parts['image']['alt'], inline=False)
+        caption = discord.utils.escape_markdown(discord.utils.escape_mentions(parts['image']['alt']), ignore_links=False)
+        e.add_field(name='Screenshot', value=caption + '\n[Open full screenshot](' + parts['image']['url'] + ')', inline=False)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)
     # A post pings News Pings, the role its button in #welcome promises

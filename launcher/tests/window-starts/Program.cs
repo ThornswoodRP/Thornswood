@@ -46,7 +46,8 @@ namespace Thornswood.Tests
         static int Main()
         {
             AppBuilder.Configure<App>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
+                .UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
             // launcher\tests\test-4459-setup-keys.ps1: the install window

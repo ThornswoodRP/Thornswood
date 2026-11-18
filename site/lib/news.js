@@ -98,13 +98,13 @@ function noteOf(body, published) {
   if (!text.trim() || NEWS_WAS_NOTHING.test(text)) text = NEWS_QUIET;
   let title = '', image = null;
   const details = [], lines = [];
-  for (const raw of text.replace(/\r/g, '').split('\n')) {
+  for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
     const line = raw.trim();
     if (!line) continue;
     const bullet = line.startsWith('- ');
     const said = bullet ? line.slice(2).trim() : line;
     if (!said) continue;
-    const picture = title && !image ? newsPictures.parse(said) : null;
+    const picture = bullet && title && !image ? newsPictures.parse(said) : null;
     if (picture) { image = picture; continue; }
     if (!title) title = said;
     else if (bullet) details.push(said);

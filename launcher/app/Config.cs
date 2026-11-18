@@ -389,6 +389,12 @@ namespace Thornswood
     /// One note on the News tab: one build Release's notes (ReleaseNews.cs,
     /// #5187). Filled by the launcher from GitHub.
     /// </summary>
+    public sealed class NewsPicture
+    {
+        public string Url { get; set; } = "";
+        public string Alt { get; set; } = "";
+    }
+
     public class NewsItem
     {
         // When the Release was published, M-d-yyyy h:mm tt in this machine's time.

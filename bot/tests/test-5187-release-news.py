@@ -314,12 +314,34 @@ yes('the folder is the one the agent writes', bot.NEWS_DIR == r'C:\Thornswood-De
 print()
 with open(os.path.join(HERE, '..', 'tests', 'fixtures', 'news-picture-cases.json'), encoding='utf-8') as f:
     picture_cases = json.load(f)
-for case in picture_cases:
-    yes('screenshot contract: ' + case['line'], bot.news_picture(case['line']) == case['image'])
+for index, case in enumerate(picture_cases):
+    yes('screenshot contract case ' + str(index), bot.news_picture(case['line']) == case['image'])
 line = picture_cases[0]['line']
 parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text\n- ' + line})
 yes('release post extracts the screenshot without losing text', parts['image'] == picture_cases[0]['image'] and parts['description'] == '- Keep the text')
 parts = bot.main_server_parts(('A clearer character panel', ['- Keep the text', '- ' + line]), ['Discord'])
 yes('live change post also extracts its screenshot', parts['image'] == picture_cases[0]['image'] and parts['description'] == '- Keep the text')
+parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n' + line})
+yes('a bare image line stays literal without becoming a screenshot', parts['image'] is None and parts['description'].startswith('`!['))
+parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- ![Panel](https://example.com/news-panel.png)'})
+yes('a rejected image cannot become a masked external link', parts['image'] is None and parts['description'].startswith('`- !['))
+class NewsPictureChannel:
+    guild = None
+    async def send(self, **kwargs):
+        self.sent = kwargs
+        return object()
+ch = NewsPictureChannel()
+before_channel = bot.client.get_channel
+try:
+    bot.client.get_channel = lambda cid: ch
+    pic = {'url': picture_cases[0]['image']['url'], 'alt': '||The panel||'}
+    parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text'})
+    parts['image'] = pic
+    asyncio.run(bot._news_send('dev', parts, set()))
+    embed = ch.sent['embed'].to_dict()
+    yes('real Discord embed carries the image and a full screenshot link', embed['image']['url'] == pic['url'] and '[Open full screenshot]' in embed['fields'][0]['value'])
+    yes('Discord caption is literal rather than a spoiler', '\\|\\|' in embed['fields'][0]['value'])
+finally:
+    bot.client.get_channel = before_channel
 print('%d failed' % len(FAIL) if FAIL else 'all passed')
 sys.exit(1 if FAIL else 0)

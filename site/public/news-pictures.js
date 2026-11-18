@@ -19,7 +19,7 @@
     var url = esc(image.url), caption = esc(image.alt);
     return '<figure class="news-picture" style="margin:16px 0;max-width:960px">' +
       '<a href="' + url + '"><img src="' + url + '" alt="' + caption + '" loading="lazy" decoding="async" ' +
-      'style="display:block;width:100%;height:auto"></a><figcaption>' + caption + '</figcaption></figure>';
+      'style="display:block;width:100%;height:auto"></a><figcaption style="overflow-wrap:anywhere">' + caption + '</figcaption></figure>';
   }
   var api = { parse: parse, valid: valid, html: html };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

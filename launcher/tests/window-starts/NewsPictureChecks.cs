@@ -20,7 +20,18 @@ namespace Thornswood.Tests
         sealed class Answer : HttpMessageHandler
         {
             internal HttpResponseMessage Response;
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(Response);
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (Response == null) await Task.Delay(Timeout.Infinite, cancellationToken);
+                return Response;
+            }
+        }
+        sealed class Uncounted : HttpContent
+        {
+            readonly byte[] bytes = new byte[4 * 1024 * 1024 + 1];
+            protected override bool TryComputeLength(out long length) { length = 0; return false; }
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext context) => stream.WriteAsync(bytes).AsTask();
+            protected override Task<Stream> CreateContentReadStreamAsync() => Task.FromResult<Stream>(new MemoryStream(bytes));
         }
 
         public static void Run(Action<string, Action> check)
@@ -32,7 +43,7 @@ namespace Thornswood.Tests
             Func<HttpResponseMessage, byte[]> readAnswer = response =>
             {
                 using (var client = new HttpClient(new Answer { Response = response }))
-                    return ((Task<byte[]>)read.Invoke(null, new object[] { picture, client })).GetAwaiter().GetResult();
+                    return ((Task<byte[]>)read.Invoke(null, new object[] { picture, client, CancellationToken.None })).GetAwaiter().GetResult();
             };
             check("News screenshot reads a successful response", () =>
             {
@@ -46,21 +57,53 @@ namespace Thornswood.Tests
             });
             check("News screenshot refuses an oversized response without a length", () =>
             {
-                var content = new StreamContent(new MemoryStream(new byte[4 * 1024 * 1024 + 1]));
-                content.Headers.ContentLength = null;
+                var content = new Uncounted();
                 if (readAnswer(new HttpResponseMessage(HttpStatusCode.OK) { Content = content }) != null) throw new Exception("stream limit was ignored");
             });
             check("News screenshot refuses a missing image", () =>
             {
                 if (readAnswer(new HttpResponseMessage(HttpStatusCode.NotFound)) != null) throw new Exception("a failed response became a picture");
             });
+            check("News screenshot cancels a delayed network response", () =>
+            {
+                using (var stop = new CancellationTokenSource(30))
+                using (var client = new HttpClient(new Answer()))
+                {
+                    bool cancelled = false;
+                    try { ((Task<byte[]>)read.Invoke(null, new object[] { picture, client, stop.Token })).GetAwaiter().GetResult(); }
+                    catch (OperationCanceledException) { cancelled = true; }
+                    if (!cancelled) throw new Exception("the delayed request ignored cancellation");
+                }
+            });
+            var decode = type.GetMethod("Fetch", BindingFlags.Static | BindingFlags.NonPublic);
+            foreach (string encoded in new[] {
+                "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=",
+                "iVBORw0KGgoAAAANSUhEUgAAIAEAAAABCAYAAACZiUteAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=", "AAAA" })
+            {
+                bool valid = encoded.StartsWith("iVBORw0KGgoAAAANSUhEUgAAAAIA");
+                check("News production decoder validates dimensions and encoded bytes, valid=" + valid, () =>
+                {
+                    using (var client = new HttpClient(new Answer { Response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Convert.FromBase64String(encoded)) } }))
+                    using (Bitmap decoded = Task.Run(() => (Task<Bitmap>)decode.Invoke(null, new object[] { picture, client, CancellationToken.None })).GetAwaiter().GetResult())
+                    {
+                        if (valid ? decoded == null || decoded.PixelSize.Width != 2 || decoded.PixelSize.Height != 1 : decoded != null)
+                            throw new Exception("the production decoder accepted a bad image or lost a good one");
+                    }
+                });
+            }
             foreach (bool available in new[] { false, true })
             {
                 check("News screenshot lays out at desktop and narrow widths, available=" + available, () =>
                 {
                     string opened = null;
-                    Func<NewsPicture, Bitmap> fetch = p => available
-                        ? new WriteableBitmap(new PixelSize(1200, 750), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul) : null;
+                    int loads = 0;
+                    int uiThread = Environment.CurrentManagedThreadId;
+                    Func<NewsPicture, CancellationToken, Task<Bitmap>> fetch = (p, token) =>
+                    {
+                        if (Environment.CurrentManagedThreadId == uiThread) throw new Exception("image work ran on the window thread");
+                        Interlocked.Increment(ref loads);
+                        return Task.FromResult<Bitmap>(available ? new WriteableBitmap(new PixelSize(1200, 750), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul) : null);
+                    };
                     var panel = (StackPanel)view.Invoke(null, new object[] { picture, Brushes.White, (Action<string>)(s => opened = s), fetch });
                     var image = (Image)panel.Children[0]; var state = (TextBlock)panel.Children[2]; var link = (Button)panel.Children[3];
                     var win = new Window { Content = panel, Width = 900, Height = 700 }; win.Show();
@@ -76,6 +119,12 @@ namespace Thornswood.Tests
                         }
                         link.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                         if (opened != picture.Url || ((TextBlock)panel.Children[1]).Text != picture.Alt) throw new Exception("the full image link or caption was lost");
+                        win.Content = null; Dispatcher.UIThread.RunJobs();
+                        if (image.Source != null) throw new Exception("the detached image was retained");
+                        win.Content = panel; win.UpdateLayout();
+                        until = DateTime.UtcNow.AddSeconds(5);
+                        while ((loads < 2 || state.Text == "Loading screenshot...") && DateTime.UtcNow < until) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
+                        if (loads != 2 || image.IsVisible != available || state.IsVisible == available || state.Text == "Loading screenshot...") throw new Exception("reattaching did not reload the picture");
                     }
                     finally { win.Close(); }
                 });

@@ -13,7 +13,7 @@ Capture the actual released interface, check the picture, and put the image
 in `site/public` before the note goes out. Use an unused name starting with
 `news-`, lowercase letters, digits and hyphens, ending in `.png`, `.jpg` or
 `.webp`. Keep it below four megabytes. The caption is required and at most
-160 characters. Publish the site first so the picture is available when the
+160 characters (emoji count twice). Publish the site first so the picture is available when the
 note reaches Discord and the app. Never overwrite a picture used by an old
 note.
 
