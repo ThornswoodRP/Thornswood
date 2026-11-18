@@ -7,6 +7,7 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 
 namespace Thornswood
@@ -163,10 +164,30 @@ namespace Thornswood
             using (var pair = new Pair())
             {
                 object layer = Layer(pair.A);
-                layer.GetType().GetMethod("Fail", Hidden).Invoke(layer, new object[] { AlertDescription.internal_error });
-                Check("an unexpected remote fatal still fails the live transport", Wait(() => IsFailed(Layer(pair.B))));
-                Check("unexpected fatal alert80 is still logged with its stack", Wait(() => File.Exists(Paths.LogFile) &&
-                    File.ReadAllText(Paths.LogFile).Contains("TlsFatalAlertReceived: internal_error(80)")));
+                var reported = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                pair.B.Debug = message =>
+                {
+                    if (message.StartsWith("dtls: peer 1 stopped (", StringComparison.Ordinal))
+                        reported.TrySetResult(true);
+                };
+                var remoteLayer = Layer(pair.B);
+                // Force the transport to fail before its receive thread can
+                // take the log gate. IsFailed is not a write-completion signal.
+                LauncherLog.Holding(() =>
+                {
+                    layer.GetType().GetMethod("Fail", Hidden).Invoke(layer, new object[] { AlertDescription.internal_error });
+                    Check("an unexpected remote fatal still fails the live transport", Wait(() => IsFailed(remoteLayer)));
+                    Check("the failed transport has not reported while the writer gate is held", !reported.Task.IsCompleted);
+                    return true;
+                });
+                // The stop diagnostic is sent after Failure.Why has returned
+                // and disposed its append stream. Snapshot under the writer's
+                // gate so even an unrelated append cannot overlap this read.
+                bool finished = reported.Task.Wait(4000);
+                string log = finished ? LauncherLog.Holding(() => File.Exists(Paths.LogFile) ?
+                    File.ReadAllText(Paths.LogFile) : "") : "";
+                Check("unexpected fatal alert80 is still logged with its stack",
+                    log.Contains("TlsFatalAlertReceived: internal_error(80)") && log.Contains("at Thornswood.VoicePeer."));
             }
 
             // Before publication there is no established transport to close.
