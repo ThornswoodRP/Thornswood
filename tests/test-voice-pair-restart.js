@@ -19,7 +19,9 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-pair-restart-'));
 try {
   const result = lc.run(dll, [], { cwd: dir, timeout: 100000 });
   process.stdout.write(result.stdout); process.stderr.write(result.stderr);
-  const swallowed = path.join(dir, 'swallowed.log');
-  if (fs.existsSync(swallowed) && fs.statSync(swallowed).size) process.stderr.write(fs.readFileSync(swallowed, 'utf8'));
+  let swallowed = '';
+  try { swallowed = fs.readFileSync(path.join(dir, 'swallowed.log'), 'utf8'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (swallowed) { process.stderr.write(swallowed); process.exitCode = 1; }
   if (result.status !== 0) process.exitCode = 1;
 } finally { fs.rmSync(dir, { recursive: true, force: true }); }
