@@ -211,7 +211,7 @@ async function plainComesBack(me, words) {
     const feed = (/\n  feed\(chunk\) \{[\s\S]*?\n  \}\n/.exec(src) || [''])[0];
     const hand = (/try \{\s*this\.onmessage\(msg\);?\s*\} catch \((\w+)\) \{([\s\S]*?)\n\s*\}/.exec(feed)) || null;
     yes('Sock.feed hands each message to onmessage inside a try', !!hand, feed.slice(-600));
-    yes('whose catch closes this socket', !!hand && /this\.close\(\)/.test(hand[2]), hand && hand[2]);
+    yes('whose catch closes this socket as a handler failure', !!hand && /this\.close\('handler'\)/.test(hand[2]), hand && hand[2]);
     yes('and says in the log what it was', !!hand && /console\.(log|error)\(/.test(hand[2]) && new RegExp('\\b' + hand[1] + '\\b').test(hand[2]),
         hand && hand[2]);
   } catch (e) {

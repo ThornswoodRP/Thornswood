@@ -51,9 +51,10 @@ yes('A2 a key line goes with press: true', JSON.stringify(box.chatFrame({ text: 
 // press, typed does not. test-2732-press-mark.js runs them.
 const say = CHAT.slice(CHAT.indexOf('function send(text, press, notice) {'), CHAT.indexOf('state: function ()'));
 yes('A3 send() wraps a pressed line as { text, press: true }', /var item = press \? \{ text: text, press: true \} : text;/.test(say));
-yes('A4 sends it through chatFrame, and queues the same item', /ws\.send\(JSON\.stringify\(chatFrame\(item\)\)\)/.test(say) && /queue\.push\(item\);/.test(say));
+yes('A4 sends it through chatFrame, and queues the same item', /sendFrame\(ws,\s*chatFrame\(item\)\)/.test(say) && /queue\.push\(item\);/.test(say)
+    && /socket\.send\(JSON\.stringify\(obj\)\)/.test(grab(CHAT, 'sendFrame')));
 yes('A5 the queue flush after a reconnect goes through chatFrame too, so the flag survives an outage',
-    /ws\.send\(JSON\.stringify\(chatFrame\(queue\.shift\(\)\)\)\)/.test(CHAT) && !/text: queue\.shift\(\)/.test(CHAT));
+    /sendFrame\(ws,\s*chatFrame\(queue\.shift\(\)\)\)/.test(CHAT) && !/text: queue\.shift\(\)/.test(CHAT));
 
 // B
 const CHAT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2251-'));
