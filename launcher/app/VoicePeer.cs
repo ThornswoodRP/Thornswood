@@ -447,7 +447,9 @@ namespace Thornswood
                 spurt = false;
                 if (ctx.ProtectRtp(pkt, len, out outLen) != 0) return;
             }
+            mix.Meter.Protected();
             ice.SendMedia(pkt, outLen);
+            mix.Meter.SendCall();
         }
 
         /// <summary>The next packet starts a talkspurt (RTP's marker bit).</summary>

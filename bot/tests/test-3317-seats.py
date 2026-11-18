@@ -286,6 +286,8 @@ for r in G.roles:
         r.members = []
 
 # ------------------------------------------------------------------ S5 --
+yes('Support applications are subject to the staff and leadership restriction',
+    'support' in bot.STAFF_JOB_KINDS)
 for kind in bot.STAFF_JOB_KINDS:
     i = pick(G, balgruuf, kind)
     yes('S5 the Jarl of Whiterun picking %s is told no' % kind,

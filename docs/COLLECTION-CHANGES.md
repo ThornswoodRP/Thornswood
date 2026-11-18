@@ -121,6 +121,22 @@ some of a file's plugins is refused, because Nexus installs the whole file.
 
 Change its `fileId`, and its plugins if the new file brings others. Name
 under `dropPatch` any patch of the old file that has to go with it.
+The publisher gives the moved archive a fresh Vortex reference tag and moves
+its tagged ordering references with it. Keeping the old tag would let Vortex
+accept the old download before it checks the changed file id or hash.
+
+### Repairing a published reference tag
+
+When the files already match the record but an earlier revision reused an
+old archive's tag, the collection-record workflow can publish an identity
+repair. Its `refresh_tag` input names the existing Nexus mod numbers, separated
+by commas. Leave `whatif` on to build the repair without writing to Nexus;
+run with it off to publish. This mode refuses any other pending record change.
+
+The downloaded draft must change only those reference tags and their ordering
+references, apart from the page text supplied by its record. A failed check
+discards the draft. Files, installer answers and plugin indices stay the same.
+The records and release then follow the new revision in the usual way.
 
 ## Changing the order or a rule
 

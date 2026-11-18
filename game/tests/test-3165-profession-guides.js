@@ -15,7 +15,7 @@
 //      MANEUVERS, and every class, bench and maneuver has its words
 //   C  the page itself, in a stand-in document: in the world it opens on
 //      your own profession with your rank, each tab reads another, and it
-//      sends nothing; while creating it sits before Home, Review stays last,
+//      sends nothing; while creating it sits before Starting Location, Review stays last,
 //      and it opens on the profession marked
 //   D  the words on every page: no em dash, no banned word, no number left
 //      unfilled
@@ -156,6 +156,7 @@ function node(tag) {
     set: function (v) { n._text = String(v); n.children = []; }
   });
   n.appendChild = function (c) { n.children.push(c); return c; };
+  n.focus = function () { if (tag === 'button' || n.tabIndex !== undefined) docu.activeElement = n; };
   n.querySelector = function (sel) { return (n._q && n._q[sel]) || node('div'); };
   return n;
 }
@@ -166,13 +167,15 @@ const docu = {
     Object.defineProperty(n, 'innerHTML', { set: function () {
       const close = node('div'); close._q = { span: node('span'), '.key': node('span') };
       n._q = { '.title': node('div'), '.who': node('div'), '.nav': node('div'), '.body': node('div'),
-               '.status': node('div'), '[data-act="confirm"]': node('div'), '[data-act="close"]': close, '.panel': node('div') };
+               '.status': node('div'), '[data-act="confirm"]': node('div'), '[data-act="close"]': close, '.panel': node('div'),
+               '[data-act="back"]': node('button'), '[data-act="next"]': node('button') };
     } });
     return n;
   },
   createTextNode: function (t) { const n = node('#text'); n._text = String(t); return n; }
 };
-const win = { innerWidth: 1920, innerHeight: 1080, addEventListener: function () { },
+const listeners = {};
+const win = { innerWidth: 1920, innerHeight: 1080, addEventListener: function (name, fn) { listeners[name] = fn; },
               skyrimPlatform: { sendMessage: function (to, msg) { sentPage.push(msg); } },
               thornswoodNet: { say: function (line) { saidLines.push(line); } } };
 const box = { window: win, document: docu, setTimeout: function () { }, Date: Date, JSON: JSON, console: console };
@@ -256,8 +259,8 @@ const fresh = { profession: null, half: null, 'class': null, ranks: {}, tree: {}
 api.open();
 api.setData(null, { panel: fresh });
 const crNav = navNames();
-yes('C6 while creating the guides sit before Home and Review stays last (' + crNav.join(', ') + ')',
-    crNav.indexOf('Profession guides') >= 0 && crNav.indexOf('Profession guides') === crNav.indexOf('Home') - 1 &&
+yes('C6 while creating the guides sit before Starting Location and Review stays last (' + crNav.join(', ') + ')',
+    crNav.indexOf('Profession guides') >= 0 && crNav.indexOf('Profession guides') === crNav.indexOf('Starting Location') - 1 &&
     crNav[crNav.length - 1] === 'Review');
 openNav('Profession');
 const cookCard = all(body).filter(function (n) { return /\bcard\b/.test(n.className) && /^Cook/.test(n.textContent); })[0];
@@ -267,6 +270,79 @@ text = seen();
 yes('C6 and they open on the profession marked, with no rank line and no Confirm',
     !!cookCard && /\bon\b/.test(tab('Cook').className) && !/You are /.test(text) && confirmBtn.style.display === 'none');
 api.close();
+
+// Footer navigation uses the real renderer, sidebar and choice handlers.
+const back = root._q['[data-act="back"]'], next = root._q['[data-act="next"]'];
+const activeName = function () { return navRows().filter(function (r) { return /\bon\b/.test(r.className); })[0].children[0].textContent; };
+function pressKey(key, target) {
+  const e = { key: key, target: target, preventDefault: function () { this.prevented = true; } };
+  listeners.keydown(e);
+  return e;
+}
+const pressNext = function () {
+  next.focus();
+  const e = pressKey('Enter', next);
+  yes('C7 native Next owns Enter without a row shortcut', !e.prevented);
+  if (!e.prevented && !next.disabled) next.onclick();
+};
+function checkCreationHeld(label) {
+  pressKey('k', body); pressKey('Escape', body); api.close();
+  yes(label + ' K, Escape and API close keep the panel and send no release', !/\bgone\b/.test(root.className) && sentPage.length === sendsBefore && saidLines.length === linesBefore);
+}
+const chooseLater = function () { all(body).filter(function (n) { return /\blater\b/.test(n.className) && /Choose later/.test(n.textContent); })[0].onclick(); };
+openNav('Profession');
+yes('C7 first tab hides Back and requires a profession or Choose later', back.style.display === 'none' && next.disabled);
+const sendsBefore = sentPage.length, linesBefore = saidLines.length;
+chooseLater();
+yes('C7 real profession deferral lights Next without sending or closing', !next.disabled && !/\bgone\b/.test(root.className) && sentPage.length === sendsBefore && saidLines.length === linesBefore);
+checkCreationHeld('C7 after profession deferral');
+pressNext();
+yes('C7 Next reaches Class, greys itself, and gives the new page keyboard focus', activeName() === 'Class' && next.disabled && docu.activeElement === body);
+chooseLater();
+yes('C7 real class deferral lights Next without sending or closing', !next.disabled && !/\bgone\b/.test(root.className) && sentPage.length === sendsBefore && saidLines.length === linesBefore);
+checkCreationHeld('C7 after class deferral');
+const forward = [activeName()];
+pressNext(); forward.push(activeName());
+yes('C7 Skill tree requires no pick', activeName() === 'Skill tree' && !next.disabled);
+pressNext(); forward.push(activeName());
+yes('C7 Profession guides requires no pick', activeName() === 'Profession guides' && !next.disabled);
+pressNext(); forward.push(activeName());
+yes('C7 Starting Location greys Next until a town is chosen', activeName() === 'Starting Location' && next.disabled);
+pressNext();
+yes('C7 disabled Next cannot skip Starting Location', activeName() === 'Starting Location');
+all(body).filter(function (n) { return /\bcard\b/.test(n.className) && /^Whiterun/.test(n.textContent); })[0].onclick();
+yes('C7 selecting a town updates Next immediately', !next.disabled);
+pressNext(); forward.push(activeName());
+yes('C7 traversal matches every rendered tab in order', ['Profession'].concat(forward).join('|') === navNames().join('|'));
+yes('C7 Review replaces Next with Confirm, and navigation sent nothing', activeName() === 'Review' && next.style.display === 'none' && confirmBtn.style.display !== 'none' && !/\boff\b/.test(confirmBtn.className) && sentPage.length === sendsBefore && saidLines.length === linesBefore);
+const backward = [activeName()];
+navNames().slice(0, -1).reverse().forEach(function (name) {
+  back.focus();
+  const e = pressKey('Enter', back);
+  yes('C7 native Back owns Enter without a row shortcut', !e.prevented);
+  if (!e.prevented) back.onclick();
+  backward.push(activeName());
+  yes('C7 Back reaches ' + name + ' and focuses its page', activeName() === name && docu.activeElement === body);
+});
+yes('C7 Back visits the same tabs in reverse and disappears on Profession', backward.join('|') === navNames().slice().reverse().join('|') && docu.activeElement === body);
+// A Mage's conditional book also belongs to the same sequence.
+all(body).filter(function (n) { return /\bcard\b/.test(n.className) && /^Mage/.test(n.textContent); })[0].onclick();
+yes('C8 replacing Choose later with an incomplete Mage choice greys Next', next.disabled && navNames()[1] === 'Spell book');
+let schools = all(body).filter(function (n) { return /\bhalf\b/.test(n.className); });
+schools[0].onclick({ stopPropagation: function () {} });
+yes('C8 one Mage school is incomplete', next.disabled);
+schools = all(body).filter(function (n) { return /\bhalf\b/.test(n.className) && !/\bon\b/.test(n.className); });
+schools[0].onclick({ stopPropagation: function () {} });
+yes('C8 two schools light Next', !next.disabled);
+pressNext();
+yes('C8 Next visits the conditional Spell book and requires no spell pick', activeName() === 'Spell book' && !next.disabled);
+back.onclick();
+chooseLater();
+yes('C8 deferring Mage removes its book and Next follows the updated sidebar', navNames().indexOf('Spell book') < 0 && !next.disabled);
+pressNext();
+yes('C8 updated Next reaches Class', activeName() === 'Class');
+api.close();
+yes('C8 API close still cannot release an unfinished character', !/\bgone\b/.test(root.className));
 
 // ---------------------------------------------------------- D. the words --
 const help = read('game', 'ui', 'thornswood-help.js');

@@ -122,7 +122,7 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   let child = null;
   try {
     siteFiles.copy(dir);
-    fs.mkdirSync(path.join(dir, 'public'));
+    fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
     fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
     const marked = fs.readdirSync(path.join(APP, 'public')).filter(function (n) { return /^marked-.*\.js$/.test(n); });
     for (const m of marked) fs.copyFileSync(path.join(APP, 'public', m), path.join(dir, 'public', m));

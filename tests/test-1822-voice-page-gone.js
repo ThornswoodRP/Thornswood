@@ -295,7 +295,7 @@ function get(port, route) {
   fs.copyFileSync(path.join(path.dirname(VOICE), 'headlines.js'), path.join(dir, 'headlines.js'));
   SITE = await siteThatSaysYes();
   // What a box installed before this still holds.
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>Thornswood Voice</title><p>the old page</p>');
   fs.writeFileSync(path.join(dir, 'public', 'voice.js'), "'use strict'; // the old page's script");
   const PORT = await freePort('127.0.0.1');

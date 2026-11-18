@@ -67,7 +67,7 @@ function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-3218-'));
   made.push(dir);
   siteFiles.copy(dir);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   for (const f of fs.readdirSync(PUBLIC)) {
     if (fs.statSync(path.join(PUBLIC, f)).isFile()) fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));
   }

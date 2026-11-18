@@ -22,8 +22,8 @@
   and deletes that, then writes one JSON line per event to
   thornswood-test-results.jsonl. A line {"t":"ask","n":N,"do":"shot"|"key"}
   is something only this script can do: a screenshot of the game window, or a
-  real key press through Windows. This does it and writes N to
-  thornswood-test-ack.txt, which is when the plugin's step is over. The run
+  real key press through Windows. This writes {n:N,ok:true|false,note:...} to
+  thornswood-test-ack.txt; the plugin fails a rejected key step. The run
   ends at the plugin's {"t":"done"} line, when the game closes by itself (a
   crash, said so), or after -Minutes.
 
@@ -233,13 +233,13 @@ namespace ThornswoodRealClient {
     [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public INPUTUNION u; }
     [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] inputs, int size);
 
-    // The game reads DirectInput scan codes, so the key goes as a scan code,
-    // down then up, the way a keyboard sends it.
-    public static uint TapScan(ushort scan) {
-      INPUT[] i = new INPUT[2];
+    // One transition per call. Invoke-GameKey holds the key between them so
+    // the browser's current-state input reader can observe a down state.
+    public static uint SendScan(ushort scan, bool up) {
+      INPUT[] i = new INPUT[1];
       i[0].type = 1; i[0].u.ki.wScan = scan; i[0].u.ki.dwFlags = 0x0008;
-      i[1].type = 1; i[1].u.ki.wScan = scan; i[1].u.ki.dwFlags = 0x0008 | 0x0002;
-      return SendInput(2, i, Marshal.SizeOf(typeof(INPUT)));
+      if (up) i[0].u.ki.dwFlags |= 0x0002;
+      return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
     }
 
     // The game window's picture, the game and our page over it. PrintWindow
@@ -280,7 +280,59 @@ namespace ThornswoodRealClient {
 }
 
 function Get-GameProcess {
-    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+    # A living process may temporarily have no window. Keep it so a queued
+    # key can fail with "no game window" instead of being called a crash.
+    Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Invoke-GameKey([IntPtr]$handle, $code) {
+    # These plans use ordinary set-1 make codes. Extended/E1 keys require
+    # another encoding; refuse them instead of silently sending another key.
+    $scan = 0
+    if (-not [int]::TryParse([string]$code, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
+        $scan -lt 1 -or $scan -gt 0x7f) {
+        return @{ ok = $false; note = "unsupported non-extended scan code $code" }
+    }
+    $code = [uint16]$scan
+    if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
+            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard' }
+        }
+    }
+    # Check before SendInput: acknowledging a key after noticing another
+    # foreground window counted undelivered keys as passed steps.
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent' }
+    }
+    $why = ''
+    try {
+        $down = [ThornswoodRealClient.Win]::SendScan($code, $false)
+        if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" }
+        else {
+            # A human-length tap, below key-repeat delay. The pinned engine's
+            # DInputHook samples GetDeviceState for its CEF listener: down+up
+            # in one SendInput can be gone before that snapshot, even though
+            # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
+            Start-Sleep -Milliseconds 120
+            if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+                $why = 'the game window lost the keyboard during input'
+            }
+        }
+    } catch { $why = 'the key press failed: ' + $_.Exception.Message }
+    finally {
+        # Release even if down, the hold, or the focus check failed. This is
+        # cleanup, including after focus loss; no second key-down is tried.
+        try {
+            $up = [ThornswoodRealClient.Win]::SendScan($code, $true)
+            if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" }
+        } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+    }
+    if ($why) { return @{ ok = $false; note = $why.TrimStart(';', ' ') } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window lost the keyboard during input' }
+    }
+    return @{ ok = $true; note = 'key-down, held 120 ms, key-up; game window focused' }
 }
 
 # ---------------------------------------------------------------- the run --
@@ -318,6 +370,7 @@ try {
     $pressed = $false
     $toldWaiting = $false
     $toldChannel = ''
+    $launcherGoneSince = $null
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
             $ch = Get-InstalledChannel
@@ -325,14 +378,19 @@ try {
             throw "Play was not there to press in $PlayMinutes minutes"
         }
         if ($launcher.HasExited) {
+            # A followed Get-Process object can have no exit metadata. Count
+            # from our own observation instead of treating a null ExitTime
+            # as an exit before the cutoff and restoring the channel mid-update.
+            if ($null -eq $launcherGoneSince) { $launcherGoneSince = Get-Date }
             $next = Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object {
                 $_.Id -ne $launcher.Id -and $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase)
             } | Select-Object -First 1
-            if ($next) { Say "The launcher closed (exit code $($launcher.ExitCode)) and Velopack started it again, process $($next.Id): following that one."; $launcher = $next; $toldWaiting = $false; continue }
-            if ($launcher.ExitTime -lt (Get-Date).AddMinutes(-2)) { throw "The launcher closed by itself, exit code $($launcher.ExitCode), and no launcher started after it in two minutes" }
+            if ($next) { Say "The launcher closed (exit code $($launcher.ExitCode)) and Velopack started it again, process $($next.Id): following that one."; $launcher = $next; $launcherGoneSince = $null; $toldWaiting = $false; continue }
+            if (((Get-Date) - $launcherGoneSince).TotalMinutes -ge 2) { throw "The launcher closed by itself, exit code $($launcher.ExitCode), and no launcher started after it in two minutes" }
             Start-Sleep -Milliseconds 500
             continue
         }
+        $launcherGoneSince = $null
         $launcher.Refresh()
         $h = $launcher.MainWindowHandle
         $ch = Get-InstalledChannel
@@ -377,20 +435,20 @@ try {
                 'done' { $result = $(if ($o.ok) { 'passed' } else { 'failed' }); $note = "$($o.passed) of $($o.steps) steps passed. $($o.note)" }
                 'ask' {
                     $proc = Get-GameProcess
+                    $reply = [ordered]@{ n = $o.n; ok = $true; note = '' }
                     if ($o.do -eq 'shot') {
                         $shots++
                         $name = ('{0:00}-{1}.png' -f $shots, ($o.arg -replace '[^\w\-]', '_'))
                         $how = if ($proc) { [ThornswoodRealClient.Win]::Shot($proc.MainWindowHandle, (Join-Path $Out $name)) } else { 'no game window' }
                         Say "shot $name ($how)"
                     } elseif ($o.do -eq 'key') {
-                        if ($proc) {
-                            [void][ThornswoodRealClient.Win]::SetForegroundWindow($proc.MainWindowHandle)
-                            $sent = [ThornswoodRealClient.Win]::TapScan([uint16]$o.arg)
-                            $fg = [ThornswoodRealClient.Win]::GetForegroundWindow()
-                            Say ("key $($o.arg) sent ($sent events" + $(if ($fg -ne $proc.MainWindowHandle) { ', but the game window does not have the keyboard' } else { '' }) + ')')
-                        } else { Say "key $($o.arg): no game window" }
+                        $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
+                        $delivery = Invoke-GameKey $handle $o.arg
+                        $reply.ok = $delivery.ok
+                        $reply.note = $delivery.note
+                        Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
                     } elseif ($o.do -eq 'end') { $ended = $true }
-                    [IO.File]::WriteAllText($ackFile, [string]$o.n)
+                    [IO.File]::WriteAllText($ackFile, ($reply | ConvertTo-Json -Compress))
                 }
             }
         }

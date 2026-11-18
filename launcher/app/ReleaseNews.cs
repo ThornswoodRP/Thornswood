@@ -210,13 +210,15 @@ namespace Thornswood
             var n = new NewsItem();
             var details = new List<string>();
             var lines = new List<string>();
-            foreach (string raw in text.Replace("\r", "").Split('\n'))
+            foreach (string raw in text.Replace("\r\n", "\n").Split('\n'))
             {
                 string line = raw.Trim();
                 if (line.Length == 0) continue;
                 bool bullet = line.StartsWith("- ", StringComparison.Ordinal);
                 string said = bullet ? line.Substring(2).Trim() : line;
                 if (said.Length == 0) continue;
+                NewsPicture picture = bullet && n.title.Length > 0 && n.image == null ? NewsPictures.Parse(said) : null;
+                if (picture != null) { n.image = picture; continue; }
                 if (n.title.Length == 0) n.title = said;
                 else if (bullet) details.Add(said);
                 else lines.Add(said);

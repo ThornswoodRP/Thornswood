@@ -278,7 +278,7 @@ Category mode: open. It was Thornswood.
 | #travelers-questions | text | openread | everybody | everybody on staff, Playtester, Member | topic: Questions before you apply, or about anything you have read so far. Ask here and staff will answer. |
 | #general-chat | text | openread | everybody | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
 | #media | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #media in Thornswood; topic: Screenshots and clips. Talk about one in a thread under it. |
-| #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |
+| #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | written by the build from content.py ECONOMY, with its Changelog thread; was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |
 | #suggestions | forum | open | everybody on staff, Playtester | everybody on staff, Playtester | was #suggestions in Help; topic: Mods and features you want. Nexus link if it's a mod, because whether it works here depends on how it's built. |
 | #jukebox | text | open | everybody on staff, Playtester | everybody on staff, Playtester | never made by the build; was #jukebox in Voice; topic: Music bot commands go here. Jockie Music plays in the voice room you are in. |
 | General | voice | open | everybody on staff, Playtester | everybody on staff, Playtester | was General in Voice |
@@ -617,7 +617,7 @@ Category mode: pathfind. It was Testing.
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #playtester-announcements | text | testersread | everybody on staff, Playtester | the council | posts: the council; topic: Announcements for playtesters. The council posts here. |
-| #playtester-rules | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py TESTERRULES, a draft waiting on approval; topic: How playtesting works here. |
+| #playtester-rules | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py TESTERRULES, with its Changelog thread; topic: How playtesting works here. |
 | #test-tasks | forum | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | was #Test-Tasks in Testing; was #test-tasks in Testing; topic: One thread per test task, tagged Main. |
 | #known-issues | text | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | was #known-issues in Testing; topic: Known issues the team is working on. Kept by the bot. |
 | #test-findings | forum | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | was #test-findings in Testing; topic: Pass, fail, and what went wrong. |
@@ -665,7 +665,7 @@ Category mode: space (Lore).
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #lore-announcements | text | spaceread | the council, Loremaster | the council | posts: the council; topic: Announcements for Lore. The council posts here. |
-| #lore-rules | text | spacerules | the council, Loremaster | Owner and Co-Owner, Lead Loremaster | posts: Owner and Co-Owner, Lead Loremaster; written by the build from content.py LORERULES, a draft waiting on approval; topic: How Lore works. Lead Loremaster, Owner and Co-Owner post here. |
+| #lore-rules | text | spacerules | the council, Loremaster | Owner and Co-Owner, Lead Loremaster | posts: Owner and Co-Owner, Lead Loremaster; written by the build from content.py LORERULES, with its Changelog thread; topic: How Lore works. Lead Loremaster, Owner and Co-Owner post here. |
 | #lore-chat | text | space | the council, Loremaster | the council, Loremaster | topic: Talk between Lore. |
 | Lore Voice | voice | space | the council, Loremaster | the council, Loremaster |  |
 
@@ -676,7 +676,7 @@ Category mode: space (Moderation).
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #mod-announcements | text | spaceread | the council, Moderator | the council | posts: the council; topic: Announcements for Moderation. The council posts here. |
-| #mod-rules | text | spacerules | the council, Moderator | Owner and Co-Owner, Lead Moderator | posts: Owner and Co-Owner, Lead Moderator; written by the build from content.py MODRULES, a draft waiting on approval; topic: How Moderation works. Lead Moderator, Owner and Co-Owner post here. |
+| #mod-rules | text | spacerules | the council, Moderator | Owner and Co-Owner, Lead Moderator | posts: Owner and Co-Owner, Lead Moderator; written by the build from content.py MODRULES, with its Changelog thread; topic: How Moderation works. Lead Moderator, Owner and Co-Owner post here. |
 | #mod-chat | text | space | the council, Moderator | the council, Moderator | topic: Talk between Moderation. |
 | Moderation Voice | voice | space | the council, Moderator | the council, Moderator |  |
 
@@ -688,7 +688,7 @@ Category mode: space (Support).
 |---|---|---|---|---|---|
 | Support | voice | open | everybody on staff, Playtester | everybody on staff, Playtester | was Help Voice in Voice; was Support in Help |
 | #support-announcements | text | spaceread | the council, Support | the council | posts: the council; topic: Announcements for Support. The council posts here. |
-| #support-rules | text | spacerules | the council, Support | Owner and Co-Owner, Lead Support | posts: Owner and Co-Owner, Lead Support; written by the build from content.py SUPPORTRULES, a draft waiting on approval; topic: How Support works. Lead Support, Owner and Co-Owner post here. |
+| #support-rules | text | spacerules | the council, Support | Owner and Co-Owner, Lead Support | posts: Owner and Co-Owner, Lead Support; written by the build from content.py SUPPORTRULES, with its Changelog thread; topic: How Support works. Lead Support, Owner and Co-Owner post here. |
 | #support-chat | text | space | the council, Support | the council, Support | topic: Talk between Support. |
 | Support Staff | voice | space | the council, Support | the council, Support | was Support Voice in Support |
 
@@ -699,7 +699,7 @@ Category mode: space (Content).
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #content-announcements | text | spaceread | the council, Content Creator | the council | posts: the council; topic: Announcements for Content. The council posts here. |
-| #content-rules | text | spacerules | the council, Content Creator | Owner and Co-Owner, Lead Content Creator | posts: Owner and Co-Owner, Lead Content Creator; written by the build from content.py CONTENTRULES, a draft waiting on approval; topic: How Content works. Lead Content Creator, Owner and Co-Owner post here. |
+| #content-rules | text | spacerules | the council, Content Creator | Owner and Co-Owner, Lead Content Creator | posts: Owner and Co-Owner, Lead Content Creator; written by the build from content.py CONTENTRULES, with its Changelog thread; topic: How Content works. Lead Content Creator, Owner and Co-Owner post here. |
 | #content-chat | text | space | the council, Content Creator | the council, Content Creator | topic: Talk between Content. |
 | Content Voice | voice | space | the council, Content Creator | the council, Content Creator |  |
 
@@ -710,7 +710,7 @@ Category mode: space (Dev).
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #dev-announcements | text | spaceread | the council, Dev | the council | posts: the council; topic: Announcements for Dev. The council posts here. |
-| #dev-rules | text | spacerules | the council, Dev | Owner and Co-Owner, Lead Dev | posts: Owner and Co-Owner, Lead Dev; written by the build from content.py DEVRULES, a draft waiting on approval; topic: How Dev works. Lead Dev, Owner and Co-Owner post here. |
+| #dev-rules | text | spacerules | the council, Dev | Owner and Co-Owner, Lead Dev | posts: Owner and Co-Owner, Lead Dev; written by the build from content.py DEVRULES, with its Changelog thread; topic: How Dev works. Lead Dev, Owner and Co-Owner post here. |
 | #dev-test-tasks | forum | space | the council, Dev | the council, Dev | never made by the build; was #dev-test-tasks in Staff; topic: Test tasks someone on dev has to measure, from the board. Kept by the bot: a post goes when its issue closes as fixed or its test task no longer says Server: Dev. |
 | #dev-test-findings | forum | space | the council, Dev | the council, Dev | was #dev-test-findings in Staff; was #dev-test-results in Staff; topic: Pass, fail, and what went wrong, for the test tasks in #dev-test-tasks. |
 | #dev-coordination | text | space | the council, Dev | the council, Dev | topic: Developers only: a shared file being edited, the dev feed taken. Say it here before you do it. |
