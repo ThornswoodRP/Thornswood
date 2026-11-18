@@ -1340,6 +1340,14 @@ class Sock {
         len = Number(big); off = 10;
       }
 
+      // A control PING is one whole frame with at most125bytes (RFC6455§5.5).
+      // Reject invalid shapes before echoing them as a control PONG.
+      if (op === 0x9 && (!(b0 & 0x80) || len > 125)) {
+        this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea])); // protocol error1002
+        this.close('protocol');
+        return;
+      }
+
       let mask = null;
       if (masked) {
         if (this.buf.length < off + 4) return;
@@ -1388,7 +1396,13 @@ class Sock {
       */
       if (op === 0x9) {
         if (!this.backed) {
-          try { this.write(Buffer.from([0x8a, 0])); } catch (e) { this.close('write'); }
+          try {
+            // §5.5.3: the reply carries identical application bytes.
+            const pong = Buffer.allocUnsafe(2 + body.length);
+            pong[0] = 0x8a; pong[1] = body.length;
+            body.copy(pong, 2);
+            this.write(pong);
+          } catch (e) { this.close('write'); }
         }
         continue;
       }
