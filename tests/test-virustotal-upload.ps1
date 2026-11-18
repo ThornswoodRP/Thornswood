@@ -318,6 +318,17 @@ function Sha([string]$path) {
 }
 
 try {
+    # A dead stand-in must fail the fixture, rather than run the product
+    # against a refused connection and misreport its fail-soft result.
+    $savedListener = $Listener
+    $Listener = { throw 'fixture-startup-regression' }
+    $startupFailure = ''
+    try { $null = Invoke-Against 'missing' $ScriptPath }
+    catch { $startupFailure = $_.Exception.Message }
+    finally { $Listener = $savedListener }
+    Yes 'a failed stand-in is reported before running the upload case' (
+        $startupFailure -match 'fixture-startup-regression')
+
     # ======================================================== it is there
 
     Yes 'Publish-VirusTotal.ps1 is there' (Test-Path -LiteralPath $ScriptPath)
