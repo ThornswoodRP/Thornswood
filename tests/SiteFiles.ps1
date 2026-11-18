@@ -29,6 +29,8 @@ function Get-SiteFiles([string]$App = $SiteFilesApp) {
       if (-not $out.Contains($rel)) { $out.Add($rel) }
     }
   }
+  # News uses the same image code on the server and in the browser.
+  if (Test-Path -LiteralPath (Join-Path $App 'public/news-pictures.js')) { $out.Add('public/news-pictures.js') }
   return , $out.ToArray()
 }
 

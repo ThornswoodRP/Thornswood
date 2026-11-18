@@ -208,7 +208,8 @@ function Run {
     $n = $mNote.Invoke($null, @($body, [Nullable[DateTimeOffset]]$at))
     $pictureCases = Get-Content -Raw -LiteralPath (Join-Path $Here 'tests/fixtures/news-picture-cases.json') | ConvertFrom-Json
     foreach ($case in $pictureCases) {
-        $note = $mNote.Invoke($null, @("A clearer character panel`n- Keep this text`n- " + $case.line, $null))
+        $pictureBody = "A clearer character panel`n- Keep this text`n- " + $case.line
+        $note = $mNote.Invoke($null, @($pictureBody, $null))
         if ($null -eq $case.image) {
             Yes ('screenshot refused: ' + $case.line) ($null -eq $note.image -and $note.details[1] -eq $case.line)
         } else {
@@ -217,7 +218,8 @@ function Run {
         Yes 'the screenshot never removes the text detail' ($note.details[0] -eq 'Keep this text')
     }
     $bareImage = '![Panel](https://thornswood.net/news-panel.png)'
-    $bareNote = $mNote.Invoke($null, @("A clearer character panel`n" + $bareImage, $null))
+    $bareBody = "A clearer character panel`n" + $bareImage
+    $bareNote = $mNote.Invoke($null, @($bareBody, $null))
     Yes 'a bare image line remains text' ($null -eq $bareNote.image -and $bareNote.body -eq $bareImage)
     Yes ('the first line is the title: ' + $n.title) ($n.title -eq 'Downloads page names the publisher')
     Yes '  each "- " line is a line of what changed, without its dash' (@($n.details).Count -eq 2 -and $n.details[0] -eq "The line under the installer's button now names who signed it." -and $n.details[1] -eq "The mods button opens Vortex at the server's revision")

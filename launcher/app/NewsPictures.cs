@@ -113,8 +113,12 @@ namespace Thornswood
                 {
                     Bitmap loaded = null;
                     try { loaded = await (fetch != null ? fetch(picture, token) : Fetch(picture, web, token)).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex) { Swallow.Note("News screenshot", ex); }
+                    catch (Exception ex)
+                    {
+                        // Leaving the page cancels its work normally. A
+                        // timeout while it is still attached is a failed load.
+                        if (!(ex is OperationCanceledException) || !token.IsCancellationRequested) Swallow.Note("News screenshot", ex);
+                    }
                     Dispatcher.UIThread.Post(delegate
                     {
                         if (mine != generation) { loaded?.Dispose(); return; }
