@@ -1,45 +1,23 @@
 # Platewright
 
-Armour. 2198 recipes. 864 reach the server. 1334 are the armour table,
-which is tempering, and the server is never asked.
-
-The full table: [lists/smith-platewright.md](../../lists/smith-platewright.md).
-
-| Rank | Recipes |
-| --- | --- |
-| Novice | 557 |
-| Advanced | 915 |
-| Expert | 320 |
-| Master | 406 |
-
-| Kind | Recipes |
-| --- | --- |
-| Shields | 580 |
-| Body armour | 524 |
-| Helmets | 470 |
-| Gauntlets | 318 |
-| Armoured boots | 290 |
-| Other armour and clothing | 16 |
-
-Benches: armour table 1334, forge 818, skyforge 27, tanning rack 18,
-aetherium forge 1.
+Armour. The [Platewright recipe list](../../lists/smith-platewright.md)
+gives the counts by rank and shows each recipe's bench, race and whether
+it reaches the server.
 
 A recipe has no gold price. What a piece sells for is the price a
 person posts.
 
 ## Race locks on this half
 
-295 of the rows name a people. Riekling 183, Wood Elf 53, Redguard 31,
-Nord 28. A material called Elven or Orcish or Nordic is not in that
-count. It is a tier, and every race may smith it. The locked rows are
+A material called Elven or Orcish or Nordic is not a race lock. It is a tier, and every race may smith it. The locked rows are
 in [lists/race-locks.md](../../lists/race-locks.md). See
 [Races](../../races.md).
 
 ## What your sister half may make
 
-An Edgewright may make your novice 557 and nothing past them, unless
+An Edgewright may make your novice work and nothing past it, unless
 you are a master and you have taken them on. You may make novice
-edgewright work the same way: 54 weapon rows. Steel plate is not
+Edgewright work the same way. Steel plate is not
 novice. An iron cuirass is the kind of thing the novice list is for.
 The list is the authority for which row is which rank, not a guess
 from the metal's name.
@@ -57,14 +35,14 @@ novice edgewright work or you were taught that half.
 
 ## Mastercraft
 
-The 1334 temper rows are this perk. They do not reach the server, so
-a master and a novice temper the same way today, which is the game's
-own grind, ungoverned.
+Mastercraft repairs armour with an Armor Kit rather than tempering it.
+See [Durability](../../durability.md).
 
 Every recipe, by rank and with its id: [smith-platewright](../../lists/smith-platewright.md).
 
 ## Where this is
 
-The 864 forge and tanning rows are gated. The 1334 tempers are not.
+The server gates the crafts in the list. The open recipe book does not
+include tempering.
 The race locks on those rows are in the server for any craft that
 reaches it.

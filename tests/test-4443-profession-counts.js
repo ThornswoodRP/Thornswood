@@ -40,14 +40,20 @@ check(/each school separately/i.test(mage) && /Advanced in a school \| \+1/.test
 // The PR gate lays the content build before this runs. A bare checkout can
 // still check the prose; it cannot report against a book it does not have.
 if (fs.existsSync(lists)) {
-  const byProfession = new Map();
+  const byProfession = new Map(pages.filter(file => !file.includes(path.sep)).map(file => [path.basename(file, '.md'), [0, 0, 0]]));
   for (const file of pages.filter(file => file.includes(path.sep))) {
     const [profession, half] = file.split(path.sep);
     const name = `${profession}-${half}`;
     const link = `../../lists/${name}`;
     const prose = read(path.join(professions, file));
-    if (!prose.includes(`(${link})`)) continue;
-    const book = read(path.join(lists, name));
+    const bookPath = path.join(lists, name);
+    if (!fs.existsSync(bookPath)) {
+      check(!prose.includes(`(${link})`) && profession !== 'mage', `${file}: generated book is missing`);
+      console.log(`${name}: no generated book`);
+      continue;
+    }
+    check(prose.includes(`(${link})`), `${file}: link to the generated book instead of copying its counts`);
+    const book = read(bookPath);
     const spells = profession === 'mage';
     const section = spells ? book : book.split('## Every recipe\n')[1] || '';
     const rows = section.split('\n').filter(line => /^\| /.test(line)).slice(2).map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
