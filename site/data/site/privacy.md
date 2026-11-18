@@ -2,7 +2,7 @@
 
 What Thornswood keeps about you, why, and how to have it deleted.
 
-Last changed: 16 November 2026.
+Last changed: 18 November 2026.
 
 Thornswood is a free fan project run by a small team in their own time. It is
 not a company. This page is written plainly rather than legally, and it is
@@ -288,9 +288,13 @@ until 24 September 2026, and both are served from here now.
   records, unless staff mark the session kept. So is the line copied from
   them onto the session's record.
   Of launcher.log, the copy on your PC keeps each line for 30 days (below).
-- **A gallery submission that is removed** has its file deleted then. One
-  taken down after somebody reported it is kept out of sight for 30 days, so
-  staff can look into the report, then deleted. The site checks every hour.
+- **A gallery submission that staff remove** is no longer available from the
+  site on a new request, at full size or smaller. The site tells browsers and
+  shared caches not to store gallery pictures. That does not clear copies
+  already stored or take a picture off a screen that already loaded it.
+  The site deletes the file on removal unless somebody reported it. A reported
+  picture is kept out of sight for 30 days so staff can look into the report,
+  then deleted. The site checks every hour.
 - **A gallery submission waiting for staff** waits for 90 days at most. One
   staff have neither accepted nor deleted by then is taken off the queue and
   its file deleted. An accepted one stays up until it is removed.
