@@ -143,6 +143,46 @@ try {
     $said = ''
     try { Save-SiteAsset "$site/feed-dev/assets/elsewhere" (Join-Path $tmp 'elsewhere.part') } catch { $said = $_.Exception.Message }
     Yes '   a redirect to anything but a Release''s file is refused, naming it' ($said -match 'example\.com/elsewhere' -and $said -match 'not a GitHub Release')
+
+    # Headers and the first body byte arrive immediately; the rest never
+    # arrives within the requested complete-transfer budget. The socket is
+    # bound to port zero before the worker starts, without a free-port race.
+    $stall = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $stall.Start()
+    $stallUrl = 'http://127.0.0.1:' + $stall.LocalEndpoint.Port
+    $stallJob = Start-ThreadJob -ArgumentList $stall, $own -ScriptBlock {
+        param($server, $body)
+        $socket = $null
+        try {
+            $socket = $server.AcceptTcpClient()
+            $stream = $socket.GetStream()
+            $request = [IO.StreamReader]::new($stream, [Text.Encoding]::ASCII, $false, 1024, $true)
+            while ($request.ReadLine()) {}
+            $request.Dispose()
+            $header = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
+            $stream.Write($header, 0, $header.Length)
+            $stream.Write($body, 0, 1)
+            $stream.Flush()
+            Start-Sleep -Seconds 4
+            $stream.Write($body, 1, $body.Length - 1)
+        } catch {} finally { if ($socket) { $socket.Dispose() } }
+    }
+    $existing = Join-Path $tmp 'verified-existing'
+    [IO.File]::WriteAllText($existing, 'already verified bytes')
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $said = ''
+    try {
+        try { [void](Get-FeedAssetFile "$stallUrl/feed-dev/assets/$ownSha" $ownSha $existing '' $stallUrl ([TimeSpan]::FromSeconds(1))) }
+        catch { $said = $_.Exception.Message }
+        $clock.Stop()
+        Yes '5. the deadline includes the body after headers have arrived' ($said -match 'timed out' -and $clock.Elapsed.TotalSeconds -lt 3)
+        Yes '   a stalled transfer leaves the verified destination unchanged' ([IO.File]::ReadAllText($existing) -ceq 'already verified bytes')
+        Yes '   a stalled transfer leaves no partial file to accept later' (-not (Test-Path -LiteralPath ($existing + '.part')))
+    } finally {
+        $stall.Stop()
+        Stop-Job $stallJob -ErrorAction SilentlyContinue
+        Remove-Job $stallJob -Force -ErrorAction SilentlyContinue
+    }
 }
 finally {
     $listener.Stop()
