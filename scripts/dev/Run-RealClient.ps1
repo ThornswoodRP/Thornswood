@@ -286,6 +286,9 @@ function Get-GameProcess {
 }
 
 function Invoke-GameKey([IntPtr]$handle, [uint16]$code) {
+    # These plans use ordinary set-1 make codes. Extended/E1 keys require
+    # another encoding; refuse them instead of silently sending another key.
+    if ($code -lt 1 -or $code -gt 0x7f) { return @{ ok = $false; note = "unsupported non-extended scan code $code" } }
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {

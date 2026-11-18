@@ -378,7 +378,7 @@ namespace ThornswoodRealClient {
     }
     public static IntPtr GetForegroundWindow() { return Foreground; }
     public static uint SendScan(ushort scan, bool up) {
-      Calls++; Events += up ? "U;" : "D;";
+      Calls++; Events += (up ? "U" : "D") + scan + ";";
       if (up) {
         Down = false;
         if (ThrowUp) throw new Exception("release error");
@@ -411,7 +411,7 @@ if ($p) {
 }
 $script:fakeProcess = $null
 if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
-function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false) {
+function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false, [uint16]$code=36) {
   [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
   [ThornswoodRealClient.Win]::Activate = $activate
   [ThornswoodRealClient.Win]::MoveOnActivate = $move
@@ -425,38 +425,42 @@ function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, 
   [ThornswoodRealClient.Win]::SawDown = $false
   [ThornswoodRealClient.Win]::Calls = 0
   [ThornswoodRealClient.Win]::Events = ''
-  $r = Invoke-GameKey ([IntPtr]$handle) 36
-  @{name=$name; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
+  $r = Invoke-GameKey ([IntPtr]$handle) $code
+  @{name=$name; code=$code; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
 }
+Case 'unsupported' 42 42 $true $true 1 1 $false -code 200
+Case 'zero-code' 42 42 $true $true 1 1 $false -code 0
 Case 'missing' 0 0 $true $true 1 1 $false
 Case 'denied' 42 99 $false $false 1 1 $false
 Case 'not-foreground' 42 99 $true $false 1 1 $false
 Case 'zero-down' 42 42 $true $true 0 1 $false
 Case 'zero-up' 42 42 $true $true 1 0 $false
-Case 'lost' 42 42 $true $true 1 1 $true
+Case 'lost' 42 42 $true $true 1 1 $true -code 1
 Case 'press-error' 42 42 $true $true 1 1 $false $true
 Case 'hold-error' 42 42 $true $true 1 1 $false $false $true
 Case 'release-error' 42 42 $true $true 1 1 $false $false $false $true
 Case 'already' 42 42 $false $false 1 1 $false
-Case 'activated' 42 99 $true $true 1 1 $false
+Case 'activated' 42 99 $true $true 1 1 $false -code 23
 `;
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
     yes('a living process without a window reaches the failed-key path instead of the crashed exit',
         /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
     yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
-    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 11);
-    ['missing', 'denied', 'not-foreground'].forEach(function (name) {
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 13);
+    ['unsupported', 'zero-code', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
     });
     ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': rejected delivery cannot pass, and always attempts release', !!c && !c.ok && c.calls === 2 && /U;$/.test(c.events) && !!c.note);
+      yes(name + ': rejected delivery cannot pass, and releases the requested key',
+          !!c && !c.ok && c.calls === 2 && c.events.endsWith('U' + c.code + ';') && c.events.startsWith('D' + c.code + ';') && !!c.note);
     });
     ['already', 'activated'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': snapshot input sees the held key before release', !!c && c.ok && c.calls === 2 && c.sawDown && c.events === 'D;H120;U;');
+      yes(name + ': snapshot input sees the requested held key before release',
+          !!c && c.ok && c.calls === 2 && c.sawDown && c.events === 'D' + c.code + ';H120;U' + c.code + ';');
     });
     if (r.status !== 0) { console.log(r.stderr || r.stdout); }
   }
@@ -469,6 +473,27 @@ Case 'activated' 42 99 $true $true 1 1 $false
     const said = (r.stdout || '') + (r.stderr || '');
     yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
     if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+
+    // Exercise production packet construction, replacing only the native
+    // SendInput boundary. Counts, flags and scan bytes must match exactly;
+    // no Windows input is sent, on either Windows or Linux.
+    const boundary = /\[DllImport\("user32\.dll", SetLastError = true\)\] static extern uint SendInput\(uint n, INPUT\[\] inputs, int size\);/;
+    yes('the native input boundary is identified for packet checks', boundary.test(block));
+    const recording = block.replace(boundary, `public static string Packets = "";
+    static uint SendInput(uint n, INPUT[] inputs, int size) {
+      Packets += n + "," + inputs.Length + "," + inputs[0].u.ki.wScan + "," + inputs[0].u.ki.dwFlags + ";";
+      return n;
+    }`) + `
+foreach ($scan in @(1,23,36)) {
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $false)
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $true)
+}
+'PACKETS ' + [ThornswoodRealClient.Win]::Packets
+`;
+    const packets = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(recording, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    yes('production native code sends one requested scan per call with down/up flags', packets.status === 0 &&
+        (packets.stdout || '').includes('PACKETS 1,1,1,8;1,1,1,10;1,1,23,8;1,1,23,10;1,1,36,8;1,1,36,10;'));
+    if (packets.status !== 0) { console.log(packets.stderr || packets.stdout); }
   }
 
   // -Publish: a draft Release of the run's own, since a build's Release is

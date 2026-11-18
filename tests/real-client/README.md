@@ -88,5 +88,8 @@ hold or focus check; a failed release fails the step too. It never retries
 key-down. Native browser key capture and the resulting panel state remain
 the acceptance checks for browser delivery.
 
+`code` is a non-extended set-1 make code from 1 through 127. Extended/E1 keys
+are unsupported and fail before any input is sent.
+
 PowerShell 7 must be available to run the harness regression test, including
 its fake Windows focus and input cases; missing PowerShell fails the test.
