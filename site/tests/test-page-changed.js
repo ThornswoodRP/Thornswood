@@ -58,10 +58,15 @@ for (const name of PAGES) {
   yes(name + ' shows its own day: ' + line, raw.indexOf(line) >= 0);
   yes(name + ' says that once', raw.split(line).length === 2);
   const rows = list.pages[name] || [];
+  if (name === 'privacy') {
+    yes('privacy has one lookup row per accepted hash',
+      new Set(rows.map(row => row.sha256.toLowerCase())).size === rows.length);
+  }
   const bySha = {};
   rows.forEach(function (row) { bySha[row.sha256] = row.changed; });
   [false, true].forEach(function (open) {
-    [raw, raw.replace(/\r\n/g, '\n')].forEach(function (text) {
+    const lf = raw.replace(/\r\n/g, '\n');
+    [lf, lf.replace(/\n/g, '\r\n')].forEach(function (text) {
       const digest = sha(forMode(text, open));
       const which = open ? 'open' : 'alpha';
       yes(name + ' as served (' + which + ') is listed as ' + day, bySha[digest] === day);
