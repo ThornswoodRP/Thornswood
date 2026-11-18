@@ -1075,8 +1075,9 @@ Yes 'a sync keeps the release''s file list before it says it is on that release,
     ($syncSrc -match 'return s\.Synced\.Length == 0 \|\| ReleaseFilesSha\(\) == s\.Synced;'))
 $steps = [IO.File]::ReadAllText((Join-Path $App 'InstallSteps.cs'))
 Yes 'the install writes the installed-into-game list only when the Steam copy is used' (
-    ($steps -match 'owned = ownFirst \|\| madeOwn \? null : ReadOwnership\(manifest\)') -and
-    ($steps -match 'if \(owned != null && copied\) SaveOwnership\(manifest, owned\)'))
+    ($steps -match 'owned = ownFirst \|\| madeOwn \? null : ReadOwnership\(manifest, to\)') -and
+    ($steps -match 'if \(owned == null \|\| owned\.Contains\(rel\)\) File\.Copy\(from, dest, true\)') -and
+    ($steps -match 'if \(prepared\.Count != 0\) PublishPrepared\(manifest, to, owned, prepared\)'))
 
 
 # ---- the launcher, run with its driver, on Windows only --------------------------

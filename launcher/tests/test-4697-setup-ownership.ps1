@@ -8,10 +8,11 @@ function Section($code, $first, $next) {
 $install = Get-Content -Raw (Join-Path $app 'InstallSteps.cs')
 $run = (Section $install '            List<string> files = PayloadFiles(payload);' '            // ------------------------------------------------- profile').Replace('            if (madeOwn) RemoveSharedNames(payload, files, gameDir);', '')
 $listFiles = Section $install '        static List<string> PayloadFiles(' '        // ---- a record'
-$ownership = Section $install '        // ---- a record' '        // A hard link'
+$ownership = (Section $install '        // ---- a record' '        // A hard link').Replace('string staged = manifest +', 'BeforeOwnershipWrite(); string staged = manifest +')
 $copy = Section $install '        void CopyPayload(' '        // ---------------------------------------------------------------- settings'
 $update = Section (Get-Content -Raw (Join-Path $app 'Updater.cs')) '        static void NoteInstalledIntoGame(' '        /// <summary>'
 $remove = Section (Get-Content -Raw (Join-Path $app 'Uninstall.cs')) '        public static string[] OurGameFiles(' '        static void Kill()'
+$fence = (Get-Content -Raw (Join-Path $app 'PathFence.cs')).Replace('using System;', '').Replace('using System.IO;', '')
 Add-Type -TypeDefinition @"
 using System;
 using System.Collections.Generic;
@@ -19,6 +20,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
+$fence
 namespace Thornswood {
     public sealed class Config {}
     static class Paths {
@@ -38,7 +40,17 @@ namespace Thornswood {
         string ProfileDir => Paths.ProfileDir;
         static void Say(string text) { Console.WriteLine(text); }
         static Exception Die(string text) => new InvalidOperationException(text);
-        static void progress(double value) { }
+        static int WritesUntilFailure;
+        static void BeforeOwnershipWrite() {
+            if (WritesUntilFailure > 0 && --WritesUntilFailure == 0) throw new IOException("fixture: second ownership write failed");
+        }
+        public static void BlockCompaction() => WritesUntilFailure = 2;
+        static Action AfterCopy;
+        static void progress(double value) => AfterCopy?.Invoke();
+        public static void PlantLateCollision(string dest) => AfterCopy = () => {
+            AfterCopy = null;
+            File.WriteAllText(dest, "late unmanaged bytes");
+        };
 $listFiles
 $ownership
 $copy
@@ -52,7 +64,7 @@ $run
             if (!own) Paths.SteamCopy = game;
             Directory.CreateDirectory(profile);
             try { new OwnershipFixture { ownFirst = own, madeOwn = false }.CopyStage(payload, game); return ""; }
-            catch (InvalidOperationException e) { return e.Message; }
+            catch (Exception e) when (e is InvalidOperationException || e is IOException || e is UnauthorizedAccessException) { return e.Message; }
         }
         public static void Update(string name) => NoteInstalledIntoGame(new List<string> { name });
         public static int Remove() => RemoveOurGameFiles(new Config(), Say);
@@ -108,6 +120,44 @@ try {
     $gone = [Thornswood.OwnershipFixture]::Remove()
     $left = @([IO.Directory]::GetFiles($game) | ForEach-Object { [IO.Path]::GetFileName($_) } | Sort-Object)
     Check 'uninstall removes only tracked files not deployed by Vortex' ($gone -eq 5 -and ($left -join '|') -ceq 'Skyrim.esm|Unmanaged.esp|Vortex.esp|Z-Blocked')
+    $blockedProfile = Join-Path $root 'BlockedProfile'
+    $blockedList = Join-Path $blockedProfile 'installed-into-game.txt'
+    $otherGame = Join-Path $root 'OtherSteam'
+    $otherPayload = Join-Path $root 'OtherPayload'
+    Put $blockedList 'keep.txt' 'blocks replacing the ownership list'
+    Put $otherPayload 'Fresh.esp' 'new setup bytes'
+    Put $otherGame 'Skyrim.esm' 'Bethesda'
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $otherPayload)
+    $fresh = Join-Path $otherGame 'Fresh.esp'
+    Write-Host "Blocked list: $why; new file left in Steam: $([IO.File]::Exists($fresh))"
+    Check 'ownership write failure names the list and leaves no new Steam file or staging file' ($why -like '*installed-into-game.txt*' -and @([IO.Directory]::GetFileSystemEntries($otherGame)).Count -eq 1 -and @([IO.Directory]::GetFiles($blockedProfile)).Count -eq 0 -and [IO.File]::ReadAllText((Join-Path $blockedList 'keep.txt')) -ceq 'blocks replacing the ownership list')
+    [IO.Directory]::Delete($blockedList, $true)
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $otherPayload)
+    Write-Host "Setup after removing the fixture obstruction: $why"
+    Check 'setup can run again and record the new copy without claiming Skyrim' (!$why -and [IO.File]::ReadAllText($fresh) -ceq 'new setup bytes' -and ([IO.File]::ReadAllLines($blockedList) -join '|') -ceq 'Fresh.esp' -and [IO.File]::ReadAllText((Join-Path $otherGame 'Skyrim.esm')) -ceq 'Bethesda')
+    $late = Join-Path $root 'LatePayload'
+    $lateDest = Join-Path $otherGame 'Late.esp'
+    Put $late 'Late.esp' 'package bytes'
+    [Thornswood.OwnershipFixture]::PlantLateCollision($lateDest)
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $late)
+    Check 'a file arriving after staging is not replaced or recorded' ($why -like '*Could not copy*Late.esp*' -and [IO.File]::ReadAllText($lateDest) -ceq 'late unmanaged bytes' -and ([IO.File]::ReadAllLines($blockedList) -join '|') -ceq 'Fresh.esp')
+    $pending = Join-Path $root 'PendingPayload'
+    Put $pending 'Pending.esp' 'pending bytes'
+    [Thornswood.OwnershipFixture]::BlockCompaction()
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $pending)
+    $published = Join-Path $otherGame 'Pending.esp'
+    $record = [IO.File]::ReadAllLines($blockedList)
+    Check 'a failed compaction leaves a published copy with durable ownership' ($why -like '*fixture: second ownership write failed*' -and [IO.File]::ReadAllText($published) -ceq 'pending bytes' -and @($record -like 'setup|*|Pending.esp').Count -eq 1)
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $pending)
+    Check 'setup recovers a completed move without treating it as a collision' (!$why -and ([IO.File]::ReadAllLines($blockedList) -join '|') -ceq 'Fresh.esp|Pending.esp' -and @([IO.Directory]::GetDirectories($otherGame, '.tw-setup-*')).Count -eq 0)
+    Put $root 'replacement' 'unrelated replacement'
+    Put $late 'Late.esp' 'package bytes'
+    [IO.File]::Delete($lateDest)
+    [Thornswood.OwnershipFixture]::BlockCompaction()
+    $why = [Thornswood.OwnershipFixture]::Setup($blockedProfile, $otherGame, $false, $late)
+    [IO.File]::Move((Join-Path $root 'replacement'), $lateDest, $true)
+    $gone = [Thornswood.OwnershipFixture]::Remove()
+    Check 'uninstall does not use a prepared receipt for a replacement file' ($why -like '*fixture: second ownership write failed*' -and $gone -eq 2 -and [IO.File]::ReadAllText($lateDest) -ceq 'unrelated replacement')
 } finally { [IO.Directory]::Delete($root, $true) }
-Write-Host "$(7 - $failed) passed, $failed failed"
+Write-Host "$(13 - $failed) passed, $failed failed"
 if ($failed) { exit 1 }

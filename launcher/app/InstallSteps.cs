@@ -378,30 +378,100 @@ namespace Thornswood
         // copy then, and a list an earlier install left stays as it is,
         // because it is what the launcher takes back out of the Steam copy
         // once the folder is made (OwnGame.CleanSteamCopy).
-        static SortedSet<string> ReadOwnership(string manifest)
+        static SortedSet<string> ReadOwnership(string manifest, string game)
         {
-            // Never take ownership names from the contents of the Steam copy.
             var owned = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             if (File.Exists(manifest))
-                foreach (string line in File.ReadLines(manifest))
-                {
-                    string rel = line.Trim().Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-                    if (rel.Length != 0) owned.Add(rel);
-                }
+                foreach (string rel in SetupOwnership.PathsIn(manifest, game))
+                    owned.Add(rel.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
             return owned;
         }
 
-        void SaveOwnership(string manifest, SortedSet<string> owned)
+        void SaveOwnership(string manifest, IEnumerable<string> owned)
         {
             string staged = manifest + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                File.WriteAllLines(staged, owned, new UTF8Encoding(false));
+                using (var stream = new FileStream(staged, FileMode.CreateNew, FileAccess.Write))
+                {
+                    using (var text = new StreamWriter(stream, new UTF8Encoding(false), 4096, true))
+                        foreach (string entry in owned) text.WriteLine(entry);
+                    stream.Flush(true);
+                }
                 File.Move(staged, manifest, true);
             }
             finally { if (File.Exists(staged)) File.Delete(staged); }
+        }
+
+        void SaveSetupList(string manifest, IEnumerable<string> lines)
+        {
+            try { SaveOwnership(manifest, lines); }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not write the setup ownership list " + manifest + " (" +
+                          Failure.Why("InstallSteps, writing the setup ownership list", e, manifest) + ").");
+            }
+        }
+
+        // Remove staging only after its records are no longer in the list.
+        // In particular, deleting an unpublished source is never evidence of a move.
+        static void RemovePrepared(string stage)
+        {
+            if (File.Exists(stage))
+            {
+                FileAttributes attributes = File.GetAttributes(stage);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(stage, attributes & ~FileAttributes.ReadOnly);
+                File.Delete(stage);
+            }
+            string dir = Path.GetDirectoryName(stage);
+            if (Directory.Exists(dir)) Directory.Delete(dir, false);
+        }
+
+        void PublishPrepared(string manifest, string game, SortedSet<string> owned, List<string> prepared)
+        {
+            var lines = new List<string>(owned);
+            lines.AddRange(prepared);
+            bool listed = false;
+            try
+            {
+                // A new destination cannot appear before the record of its
+                // completed staging copy is durable.
+                SaveSetupList(manifest, lines);
+                listed = true;
+                try
+                {
+                    foreach (string line in prepared)
+                    {
+                        if (!SetupOwnership.TryPrepared(game, line, out string rel, out string stage, out _))
+                            throw Die("Invalid setup ownership record: " + line);
+                        string dest = Path.Combine(game, rel);
+                        try { File.Move(stage, dest, false); }
+                        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                        { throw CopyFailed(stage, dest, e); }
+                        owned.Add(rel);
+                    }
+                }
+                finally
+                {
+                    // Compact the records to plain paths. If this write fails,
+                    // the prepared records still distinguish moves from failures.
+                    SaveSetupList(manifest, owned);
+                    listed = false;
+                }
+            }
+            finally
+            {
+                if (!listed)
+                    foreach (string line in prepared)
+                        if (SetupOwnership.TryPrepared(game, line, out _, out string stage, out _)) RemovePrepared(stage);
+            }
             Say("  " + owned.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
         }
+
+        Exception CopyFailed(string from, string dest, Exception e) =>
+            Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
+                "Check the disk has room and nothing has those files open, then run this again.");
 
         // A hard link is one file under two names. A copy writes into the file
         // it finds, so copying over a linked name in the made folder would
@@ -436,7 +506,18 @@ namespace Thornswood
         void CopyPayload(string payload, List<string> files, string to)
         {
             string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
-            SortedSet<string> owned = ownFirst || madeOwn ? null : ReadOwnership(manifest);
+            SortedSet<string> owned = ownFirst || madeOwn ? null : ReadOwnership(manifest, to);
+            if (owned != null && File.Exists(manifest))
+            {
+                var previous = new List<string>();
+                foreach (string line in File.ReadAllLines(manifest))
+                    if (SetupOwnership.TryPrepared(to, line, out _, out string stage, out _)) previous.Add(stage);
+                if (previous.Count != 0)
+                {
+                    SaveSetupList(manifest, owned);
+                    foreach (string stage in previous) RemovePrepared(stage);
+                }
+            }
             if (owned != null)
                 foreach (string rel in files)
                 {
@@ -455,7 +536,7 @@ namespace Thornswood
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
-            bool copied = false;
+            var prepared = new List<string>();
             try
             {
                 foreach (string rel in files)
@@ -465,16 +546,26 @@ namespace Thornswood
                     try
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                        // Do not overwrite a new name even if it appeared after preflight.
-                        File.Copy(from, dest, owned == null || owned.Contains(rel));
+                        if (owned == null || owned.Contains(rel)) File.Copy(from, dest, true);
+                        else
+                        {
+                            string id = Guid.NewGuid().ToString("N");
+                            string stage = Path.Combine(Path.GetDirectoryName(dest), ".tw-setup-" + id, "payload");
+                            Directory.CreateDirectory(Path.GetDirectoryName(stage));
+                            try
+                            {
+                                File.Copy(from, stage, false);
+                                string identity = SetupOwnership.Identity(stage) ?? throw new IOException("The staging copy is not a regular file.");
+                                prepared.Add("setup|" + id + "|" + identity + "|" + rel);
+                            }
+                            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                            { RemovePrepared(stage); throw; }
+                        }
                     }
                     catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                     {
-                        throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
-                                  "Check the disk has room and nothing has those files open, then run this again.");
+                        throw CopyFailed(from, dest, e);
                     }
-                    if (owned != null) owned.Add(rel);
-                    copied = true;
                     done += new FileInfo(from).Length;
                     // The copy is nearly all of the time an install takes, so it
                     // is nearly all of the bar: 5 to 90 percent, by bytes.
@@ -483,8 +574,8 @@ namespace Thornswood
             }
             finally
             {
-                // Keep completed copies even if a later copy stops setup.
-                if (owned != null && copied) SaveOwnership(manifest, owned);
+                // A later staging failure does not lose the earlier completed copies.
+                if (prepared.Count != 0) PublishPrepared(manifest, to, owned, prepared);
             }
             Say(string.Format(CultureInfo.InvariantCulture, "  installing the mods, {0:mm\\:ss}", clock.Elapsed));
         }

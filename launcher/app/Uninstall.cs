@@ -261,7 +261,7 @@ namespace Thornswood
             try { game = Path.GetFullPath(into).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar; }
             catch { return outp.ToArray(); }
 
-            foreach (string raw in File.ReadAllLines(list))
+            foreach (string raw in SetupOwnership.PathsIn(list, into))
             {
                 string rel = (raw ?? "").Trim();
                 if (rel.Length == 0) continue;
