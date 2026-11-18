@@ -47,8 +47,12 @@ check('Main ignores a stale Dev socket in a shared game folder', () => {
   assert.strictEqual(page({ port: 7778, base: 'https://thornswood.net/voice' }).made[0].url, 'wss://thornswood.net/voice/');
 });
 check('a custom game route does not acquire the dedicated socket', () => {
+  assert.strictEqual(page({ host: 'private.example.invalid' }).made[0].url, 'wss://thornswood.net/voice-dev/');
   assert.strictEqual(page({ host: 'private.example.invalid', base: 'https://private.example.invalid/voice-dev' }).made[0].url,
     'wss://private.example.invalid/voice-dev/');
+});
+check('a stale Dev HTTPS base and socket do not override the Main voice port', () => {
+  assert.strictEqual(page({ port: 7778 }).made[0].url, 'wss://thornswood.net/voice-dev/');
 });
 check('a custom HTTPS service on the canonical game keeps its route', () => {
   assert.strictEqual(page({ base: 'https://custom.example.invalid/voice-dev' }).made[0].url, 'wss://custom.example.invalid/voice-dev/');
