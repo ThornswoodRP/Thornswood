@@ -557,6 +557,7 @@ namespace Thornswood
             {
                 OwnGame.Make(s.Cfg, null);
                 Start(s);
+                Deploy(s, DateTime.UtcNow); // setup's first changed-deployment refresh
                 OwnGame.Refresh(s.Cfg, null);
                 string lastRecipe = Path.Combine(Paths.Game, "Data", "Thornswood-Last.recipe");
                 string shippedScript = Path.Combine(Paths.Game, script.Replace('/', Path.DirectorySeparatorChar));
