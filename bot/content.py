@@ -374,7 +374,7 @@ Everything in one place: the installer, help, what is broken, what is coming.
 **What is broken right now** https://thornswood.net/known
 **What is coming** https://thornswood.net/roadmap
 **Report something** https://thornswood.net/report
-**Send a screenshot or a log** https://thornswood.net/uploads
+**Submit a screenshot** https://thornswood.net/gallery
 
 ## Built on
 
