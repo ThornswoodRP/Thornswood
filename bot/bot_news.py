@@ -252,9 +252,15 @@ def news_picture(line):
     if not m:
         return None
     alt = m[1].strip()
-    if not alt or len(alt.encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
+    if not alt or len(m[1].encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
         return None
     return {'url': m[2], 'alt': alt}
+
+
+def _news_literal(text):
+    # Keep backticks themselves outside the code spans rather than replacing
+    # them. Everything else, including links and Discord tags, stays literal.
+    return '\\`'.join('`' + part + '`' if part else '' for part in text.split('`'))
 
 
 def _news_picture_lines(lines):
@@ -270,7 +276,7 @@ def _news_picture_lines(lines):
         else:
             # Invalid image notation is literal, never a masked external
             # link or a spoiler. A code span also stops URL auto-linking.
-            rest.append(('`' + line.replace('`', '\u02cb') + '`') if said.startswith('![') else line)
+            rest.append(_news_literal(line) if '![' in said else line)
     return image, rest
 
 
@@ -465,7 +471,7 @@ async def _news_send(channel, parts, said_once):
     e.set_footer(text=parts['footer'], icon_url=logo)
     if parts.get('image'):
         e.set_image(url=parts['image']['url'])
-        caption = discord.utils.escape_markdown(discord.utils.escape_mentions(parts['image']['alt']), ignore_links=False)
+        caption = _news_literal(parts['image']['alt'])
         e.add_field(name='Screenshot', value=caption + '\n[Open full screenshot](' + parts['image']['url'] + ')', inline=False)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)

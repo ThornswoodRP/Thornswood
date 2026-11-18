@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -60,11 +61,14 @@ namespace Thornswood
 
         internal static async Task<Bitmap> Fetch(NewsPicture picture, HttpClient client, CancellationToken cancelled)
         {
+            var elapsed = Stopwatch.StartNew();
             using (var stop = CancellationTokenSource.CreateLinkedTokenSource(cancelled))
             {
                 stop.CancelAfter(TimeSpan.FromSeconds(8));
                 byte[] bytes = await Read(picture, client, stop.Token).ConfigureAwait(false);
                 if (bytes == null || bytes.Length == 0) return null;
+                stop.Token.ThrowIfCancellationRequested();
+                if (elapsed.Elapsed >= TimeSpan.FromSeconds(8)) throw new TimeoutException("News screenshot deadline");
                 // Read dimensions before allocating pixels. Both source and
                 // displayed dimensions are bounded, including tall pictures.
                 using (var codec = SKCodec.Create(new MemoryStream(bytes)))
@@ -73,12 +77,17 @@ namespace Thornswood
                     int w = codec.Info.Width, h = codec.Info.Height;
                     if (w <= 0 || h <= 0 || w > 8192 || h > 8192 || (long)w * h > 16000000) return null;
                     stop.Token.ThrowIfCancellationRequested();
+                    if (elapsed.Elapsed >= TimeSpan.FromSeconds(8)) throw new TimeoutException("News screenshot deadline");
                     Bitmap decoded;
                     using (var stream = new MemoryStream(bytes))
                         decoded = (double)h / w > 600.0 / 960
                             ? Bitmap.DecodeToHeight(stream, Math.Min(h, 600))
                             : Bitmap.DecodeToWidth(stream, Math.Min(w, 960));
-                    if (stop.IsCancellationRequested) { decoded.Dispose(); stop.Token.ThrowIfCancellationRequested(); }
+                    if (stop.IsCancellationRequested || elapsed.Elapsed >= TimeSpan.FromSeconds(8))
+                    {
+                        decoded.Dispose(); stop.Token.ThrowIfCancellationRequested();
+                        throw new TimeoutException("News screenshot deadline");
+                    }
                     return decoded;
                 }
             }

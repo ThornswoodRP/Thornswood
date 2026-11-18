@@ -340,7 +340,7 @@ try:
     asyncio.run(bot._news_send('dev', parts, set()))
     embed = ch.sent['embed'].to_dict()
     yes('real Discord embed carries the image and a full screenshot link', embed['image']['url'] == pic['url'] and '[Open full screenshot]' in embed['fields'][0]['value'])
-    yes('Discord caption is literal rather than a spoiler', '\\|\\|' in embed['fields'][0]['value'])
+    yes('Discord caption is literal rather than a spoiler', embed['fields'][0]['value'].startswith('`||The panel||`'))
 finally:
     bot.client.get_channel = before_channel
 print('%d failed' % len(FAIL) if FAIL else 'all passed')

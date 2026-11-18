@@ -11,7 +11,9 @@ const browser = { window: {} }; vm.createContext(browser); vm.runInContext(fs.re
 assert.equal(browser.window.ThornswoodNewsPictures.html(cases[0].image), pictures.html(cases[0].image));
 const html = pictures.html(cases[1].image);
 assert(html.includes('&lt;tags&gt;') && html.includes('&quot;quotes&quot;'));
-assert(html.includes('height:auto') && html.includes('width:100%') && html.includes('loading="lazy"'));
+assert(!html.includes('style=') && html.includes('loading="lazy"'));
+const css = fs.readFileSync(path.join(__dirname, '../site/public/news-pictures.css'), 'utf8');
+assert(css.includes('height:auto') && css.includes('width:100%') && css.includes('overflow-wrap:anywhere'));
 assert.equal(pictures.html({url:'javascript:alert(1)',alt:'bad'}), '');
 assert.equal(pictures.html(null), '');
 console.log('PASS News screenshot contract, shared browser/server rendering, escaping and safe URLs');

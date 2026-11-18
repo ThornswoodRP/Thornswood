@@ -1,0 +1,4 @@
+/* Shared by the public News page and the staff hub; inline styles are refused. */
+.news-picture{margin:16px 0;max-width:960px;min-width:0}
+.news-picture-image{display:block;width:100%;height:auto}
+.news-picture figcaption{overflow-wrap:anywhere}
