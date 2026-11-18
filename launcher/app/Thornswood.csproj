@@ -70,8 +70,8 @@
          BSD-3-Clause), and DTLS-SRTP (SharpSRTP, MIT) on BouncyCastle (MIT).
          All three rooted whole in a Native AOT publish give no trim or AOT
          warning (measured 1 Nov 2026). THIRD-PARTY.md has their notices. -->
-    <PackageReference Include="Concentus" Version="2.2.2" />
-    <PackageReference Include="SharpSRTP" Version="0.5.8" />
+    <PackageReference Include="Concentus" Version="2.2.3" />
+    <PackageReference Include="SharpSRTP" Version="0.6.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <!-- Installs and updates the launcher, and carries the game files on the
          same channel (#4825). The same version as the vpk that packs it in
