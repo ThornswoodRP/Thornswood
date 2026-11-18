@@ -55,61 +55,104 @@ namespace Thornswood
             }
             public void Dispose()
             {
-                // A test forces the first half of Dispose's state transition.
-                // Restore that flag so normal disposal still owns its resources.
-                Set(A, "closed", false); Set(B, "closed", false);
                 A.Dispose(); B.Dispose();
             }
         }
 
-        // Installed only after a real handshake. Park the actual DTLS reader
-        // immediately before its real DatagramTransport.Receive, then expose
-        // precisely Dispose's closed=true / dtls.Close-not-yet-called window.
+        sealed class BeforeReceive
+        {
+            public int Used;
+            public volatile bool Called;
+            public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
+            public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
+        }
+        static volatile BeforeReceive beforeReceive;
+
+        // The JS compile adapter routes the unchanged native call here. Park
+        // before entering BouncyCastle, so no library deadline has started.
+        public static int ReceiveAfterGate(int id, DtlsTransport transport, byte[] buffer, int offset, int length, int wait)
+        {
+            var gate = beforeReceive;
+            if (id == 2 && gate != null && Interlocked.Exchange(ref gate.Used, 1) == 0)
+            {
+                gate.Entered.Set();
+                if (!gate.Release.Wait(10000)) throw new TimeoutException("fixture before-receive barrier");
+                gate.Called = true;
+            }
+            return transport.Receive(buffer, offset, length, wait);
+        }
+
+        // Count actual transport reads, and hold the actual local DTLS close.
+        // No peer flags or production timeout values are changed by the test.
         sealed class ReadBarrier : DatagramTransport
         {
             readonly DatagramTransport inner;
             int armed = 1;
-            public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
-            public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
+            int reads;
+            public int Reads { get { return Volatile.Read(ref reads); } }
             public readonly ManualResetEventSlim Returned = new ManualResetEventSlim();
+            public readonly ManualResetEventSlim Closing = new ManualResetEventSlim();
+            public readonly ManualResetEventSlim FinishClose = new ManualResetEventSlim();
             public ReadBarrier(DatagramTransport inner) { this.inner = inner; }
             public int GetReceiveLimit() { return inner.GetReceiveLimit(); }
             public int GetSendLimit() { return inner.GetSendLimit(); }
             public int Receive(byte[] b, int o, int n, int wait) { return Receive(b.AsSpan(o, n), wait); }
             public int Receive(Span<byte> b, int wait)
             {
+                Interlocked.Increment(ref reads);
                 bool held = Interlocked.Exchange(ref armed, 0) != 0;
-                if (held) { Entered.Set(); if (!Release.Wait(5000)) throw new TimeoutException("fixture read barrier"); }
                 try { return inner.Receive(b, wait); }
                 finally { if (held) Returned.Set(); }
             }
             public void Send(byte[] b, int o, int n) { inner.Send(b, o, n); }
             public void Send(ReadOnlySpan<byte> b) { inner.Send(b); }
-            public void Close() { inner.Close(); }
+            public void Close()
+            {
+                Closing.Set();
+                if (!FinishClose.Wait(10000)) throw new TimeoutException("fixture close barrier");
+                inner.Close();
+            }
         }
 
         public static int Main()
         {
             Paths.LogFile = Path.Combine(Environment.CurrentDirectory, "orderly.log");
+            var before = new BeforeReceive();
+            beforeReceive = before;
             using (var pair = new Pair())
             {
                 object layer = Layer(pair.A);
                 var barrier = new ReadBarrier((DatagramTransport)Get(layer, "m_transport"));
                 Set(layer, "m_transport", barrier);
+                Exception closeError = null;
+                var closing = new Thread(() => { try { pair.A.Dispose(); } catch (Exception e) { closeError = e; } });
                 try
                 {
-                    if (!barrier.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
+                    if (!before.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
                     Check("actual established reader is parked before local close", Get(pair.A, "dtls") != null);
-                    Set(pair.A, "closed", true);
-                    barrier.Release.Set();
+                    closing.Start();
+                    if (!barrier.Closing.Wait(4000)) throw new InvalidOperationException("actual Dispose never reached DTLS close");
+                    // Deliberately exceed the native read's 1000ms deadline
+                    // before calling it. An inner-transport barrier would let
+                    // the defective implementation pass after this delay.
+                    var preparation = Stopwatch.StartNew();
+                    Thread.Sleep(1100);
+                    Check("setup delay cannot consume the library receive deadline", preparation.ElapsedMilliseconds >= 1000 && !before.Called);
+                    before.Release.Set();
                     Check("the parked read returns within its original deadline", barrier.Returned.Wait(3000));
                     // Fail() runs after the transport returns. Observe it over
                     // longer than one receive period without changing timers.
                     Wait(() => IsFailed(layer), 1200);
+                    Check("retired established reader never polls empty reads", barrier.Reads == 1);
                     Check("local orderly retirement never marks DTLS failed", !IsFailed(layer));
                     Check("local retirement sends no fatal alert to the live peer", !IsFailed(Layer(pair.B)));
                 }
-                finally { barrier.Release.Set(); }
+                finally
+                {
+                    before.Release.Set(); barrier.FinishClose.Set(); beforeReceive = null;
+                    if (closing.ThreadState != System.Threading.ThreadState.Unstarted)
+                        Check("actual local Dispose completes without a new failure", closing.Join(3000) && closeError == null);
+                }
             }
             Thread.Sleep(100);
             Check("orderly pair shutdown records no swallowed exception", !File.Exists(Paths.LogFile) || new FileInfo(Paths.LogFile).Length == 0);

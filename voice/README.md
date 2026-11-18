@@ -1,7 +1,8 @@
 # Proximity voice and chat
 
-The launcher's established DTLS reader finishes an empty read when its own
-connection is being disposed. The transport's normal close sends
+The launcher retires media when a voice connection is disposed, then closes
+DTLS before interrupting its input. Its reader keeps the original timed wait
+until that close completes, without polling empty reads. The normal close sends
 `close_notify`; treating that local retirement as an I/O failure would send
 a fatal alert to the other end instead. Cancellation before a transport is
 established still interrupts the handshake, and unexpected remote alerts
