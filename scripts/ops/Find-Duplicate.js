@@ -195,9 +195,9 @@ async function openIssues(gh, repo) {
     for (const i of got) {
       if (!i.pull_request) out.push({ number: i.number, title: i.title, body: i.body || '', labels: (i.labels || []).map(l => (typeof l === 'string' ? l : l.name)) });
     }
-    if (got.length < 100) break;
+    if (got.length < 100) return out;
   }
-  return out;
+  throw new Error('Open issue listing incomplete: page 50 was full. No duplicate comparison was made.');
 }
 
 async function run(argv, env, fetchImpl, say) {
