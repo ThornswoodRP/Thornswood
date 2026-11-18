@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import time
+from email.policy import HTTP as HEADER_POLICY
 
 import aiohttp
 import discord
@@ -455,13 +456,14 @@ async def news_once(state, docs, send, save, now=None, about=None):
 
 async def _news_picture_ready(image):
     """Do not announce a screenshot before the site has deployed its file."""
-    timeout = aiohttp.ClientTimeout(total=8)
+    timeout = aiohttp.ClientTimeout(total=8, ceil_threshold=9)
     async with aiohttp.ClientSession(timeout=timeout, cookie_jar=aiohttp.DummyCookieJar()) as session:
         async with session.head(image['url'], allow_redirects=False, ssl=CONTEXT,
                                 headers={'User-Agent': 'ThornswoodNews/1'}) as response:
             types = response.headers.getall('Content-Type', [])
-            kind = types[0].split(';')[0].strip().lower() if len(types) == 1 and ',' not in types[0] else ''
-            return response.status == 200 and str(response.url) == image['url'] and kind in ('image/png', 'image/jpeg', 'image/webp')
+            kind = HEADER_POLICY.header_factory('Content-Type', types[0]) if len(types) == 1 else None
+            return (response.status == 200 and str(response.url) == image['url'] and kind is not None
+                    and not kind.defects and kind.content_type in ('image/png', 'image/jpeg', 'image/webp'))
 
 
 async def _news_send(channel, parts, said_once):

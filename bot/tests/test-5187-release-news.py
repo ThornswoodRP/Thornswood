@@ -365,7 +365,10 @@ class PictureServer(http.server.BaseHTTPRequestHandler):
         self.send_response(302 if self.path == '/redirect' else 200)
         if self.path == '/redirect':
             self.send_header('Location', '/picture')
-        self.send_header('Content-Type', 'image/png; charset=binary, text/html' if self.path == '/coalesced' else 'image/png ; charset=binary')
+        kinds = {'/coalesced': 'image/png; charset=binary, text/html',
+                 '/quoted': 'image/png; name="panel,wide.png"',
+                 '/unterminated': 'image/png; name="unterminated'}
+        self.send_header('Content-Type', kinds.get(self.path, 'image/png ; charset=binary'))
         if self.path == '/conflict':
             self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -386,6 +389,8 @@ try:
     yes('HEAD refuses redirects without following or changing method', refused and PictureServer.seen == [('HEAD', '/picture'), ('HEAD', '/redirect')])
     yes('HEAD refuses conflicting media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/conflict'})))
     yes('HEAD refuses coalesced media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/coalesced'})))
+    yes('HEAD accepts a comma inside a quoted MIME parameter', asyncio.run(bot._news_picture_ready({'url': url + '/quoted'})))
+    yes('HEAD refuses an unterminated quoted MIME parameter', not asyncio.run(bot._news_picture_ready({'url': url + '/unterminated'})))
 finally:
     server.shutdown()
     server.server_close()
@@ -398,6 +403,7 @@ try:
     bot.client.get_channel = lambda cid: ch
     ch.sent = None
     deadlines = []
+    cancellations = []
     async def short_deadline(awaitable, timeout):
         deadlines.append(timeout)
         return await before_wait_for(awaitable, timeout=0.02)
@@ -405,20 +411,22 @@ try:
     async def slow_request():
         release = asyncio.Event()
         async def blocked_picture(image):
-            await release.wait()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancellations.append(True)
+                raise
             return True
         bot._news_picture_ready = blocked_picture
-        started = time.monotonic()
-        result = await before_wait_for(bot._news_send('dev', parts, set()), timeout=0.5)
-        elapsed = time.monotonic() - started
+        result = await before_wait_for(bot._news_send('dev', parts, set()), timeout=2)
         before_release = ch.sent is None
         release.set()
         # Keep the loop alive after the late result could arrive. A detached
         # send must not disappear under asyncio.run's shutdown cancellation.
         await asyncio.sleep(0.05)
-        return result, elapsed, before_release
-    result, elapsed, before_release = asyncio.run(slow_request())
-    yes('publisher waits at most its total deadline and never posts a late image', deadlines == [8] and result is None and elapsed < 0.15 and before_release and ch.sent is None)
+        return result, before_release
+    result, before_release = asyncio.run(slow_request())
+    yes('publisher cancels at its total deadline and never posts a late image', deadlines == [8] and cancellations == [True] and result is None and before_release and ch.sent is None)
 finally:
     bot.client.get_channel = before_channel
     bot._news_picture_ready = before_picture_ready
