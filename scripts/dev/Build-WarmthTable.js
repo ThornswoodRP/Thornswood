@@ -306,6 +306,7 @@ function records(b, start, end, pass, mast, self, wantType) {
 }
 
 const order = loadedOrder(PLUGINS_TXT, DATA);
+if (!order) return;
 let parsed = 0;
 
 /*

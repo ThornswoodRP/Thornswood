@@ -44,7 +44,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const gm = process.env.GAMEMODE
@@ -117,13 +117,13 @@ const letters = function (s) { return String(s).toLowerCase().replace(/[^a-z]/g,
 
 const block = slice(gm, '// ==== thornswood progression ====', '// ==== end thornswood progression ====');
 yes('the gamemode has its progression block', block !== null);
-if (!block) { done(); }
+if (!block) { done(); return; }
 const box = { console: { log: function () {} } };
 box.globalThis = box;
 vm.runInNewContext(block, box, { filename: 'gamemode.js progression' });
 const P = box.__thornswoodProgression;
 yes('and it registers the rules', !!P && !!P.TABLE);
-if (!P || !P.TABLE) { done(); }
+if (!P || !P.TABLE) { done(); return; }
 const T = P.TABLE;
 
 // Recipes and benches, the two generated tables the craft gate reads.
@@ -132,7 +132,7 @@ let RECIPES = null;
 try { RECIPES = recSrc ? new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))() : null; }
 catch (e) { RECIPES = null; }
 yes('the recipe table reads', !!RECIPES && Object.keys(RECIPES).length > 100);
-if (!RECIPES) { done(); }
+if (!RECIPES) { done(); return; }
 const rows = Object.keys(RECIPES).map(function (k) { return RECIPES[k]; });
 function row(name, half) {
   return rows.filter(function (r) { return r.name === name && (!half || r.half === half); })[0] || null;
@@ -142,7 +142,7 @@ const benchLine = /^const BENCH_ACCESS = (\{.*\});$/m.exec(gm);
 let BENCH_ACCESS = null;
 try { BENCH_ACCESS = benchLine ? JSON.parse(benchLine[1]) : null; } catch (e) { BENCH_ACCESS = null; }
 yes('the bench table reads', !!BENCH_ACCESS && !!BENCH_ACCESS.alchemy && !!BENCH_ACCESS.enchanting);
-if (!BENCH_ACCESS) { done(); }
+if (!BENCH_ACCESS) { done(); return; }
 
 /** The name the rules give a key: a class, a half or a profession. */
 function nameOf(key) {
@@ -165,7 +165,7 @@ const craftSrc = cut('function craftAnswer(');
 const benchSrc = cut('function benchGate(');
 yes('craftAnswer, benchGate and their helpers are in the gamemode',
     craftSrc !== null && benchSrc !== null && helpers.every(function (h) { return h !== null; }));
-if (!craftSrc || !benchSrc) { done(); }
+if (!craftSrc || !benchSrc) { done(); return; }
 function gates(state) {
   const g = {
     __thornswoodProgression: P,
@@ -335,7 +335,7 @@ const ironCuirass = row('Iron Armor', 'Platewright');
 const steelCuirass = row('Steel Armor', 'Platewright');
 yes('the recipe table has the iron and the steel cuirass, both Platewright work',
     !!ironCuirass && !!steelCuirass);
-if (!ironCuirass || !steelCuirass) { done(); }
+if (!ironCuirass || !steelCuirass) { done(); return; }
 const edge = smith('edgewright');
 const edgeMaster = smith('edgewright', 'master');
 const plate = smith('platewright', 'advanced');

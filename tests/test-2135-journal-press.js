@@ -182,4 +182,4 @@ yes('3c: and newJournal has no time window left (#2135)',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -95,4 +95,4 @@ if (HURT_SRC) {
   yes('and the tick after it writes nothing twice', r.H.read(me).wounds.filter(function (w) { return w.k === 'burn'; }).length === 1);
 }
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

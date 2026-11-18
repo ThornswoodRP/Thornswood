@@ -127,4 +127,4 @@ stops('5. Press Play', fs5);
 yes('  and points at Help for what to do', /\]\(\/help\)/.test(fs5));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

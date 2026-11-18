@@ -117,8 +117,10 @@ function asGitHub(record) {
   return o;
 }
 
+// The stand-in GitHub listening now, so a throw part way still closes it.
+let s = null;
 (async () => {
-  let s = await standIn(asGitHub(real));
+  s = await standIn(asGitHub(real));
   let r = await run(s.url, real);
   yes('every App matching passes, exit 0', r.code === 0 && /every app holds exactly what/.test(r.out) && !/FAIL/.test(r.out));
   yes('  one line per App', real.apps.every(a => r.out.indexOf('PASS  ' + a.slug + ' ') >= 0));
@@ -155,5 +157,9 @@ function asGitHub(record) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch(e => { console.log('FAIL  ' + e.stack); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch(e => {
+  console.log('FAIL  ' + e.stack);
+  process.exitCode = 1;
+  if (s) s.server.close();
+});

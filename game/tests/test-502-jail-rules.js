@@ -41,7 +41,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -61,7 +61,7 @@ const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end tho
 const spoilsBlock = slice(gm, '// ==== thornswood spoils ====', '// ==== end thornswood spoils ====');
 const stuckBlock = slice(gm, '// ==== thornswood stuck ====', '// ==== end thornswood stuck ====');
 yes('the property, spoils and stuck blocks are in the gamemode', !!propBlock && !!spoilsBlock && !!stuckBlock);
-if (!propBlock || !spoilsBlock || !stuckBlock) { done(); }
+if (!propBlock || !spoilsBlock || !stuckBlock) { done(); } else {
 
 // ------------------------------------------------------------ the tables
 const BUILDING_BY_DOOR = table('const', 'BUILDING_BY_DOOR');
@@ -73,7 +73,7 @@ const JAIL_BUILDING = table('  var', 'JAIL_BUILDING');
 const JAIL_KEY = table('  var', 'JAIL_KEY');
 const DATA = table('const', 'DATA');
 yes('the jail building and jail key tables are in the generated block', !!JAIL_BUILDING && !!JAIL_KEY && !!DATA);
-if (!JAIL_BUILDING || !JAIL_KEY || !JAIL_DOOR || !BUILDING_BY_DOOR) { done(); }
+if (!JAIL_BUILDING || !JAIL_KEY || !JAIL_DOOR || !BUILDING_BY_DOOR) { done(); } else {
 const HOLDS10 = ['whiterun', 'solitude', 'riften', 'markarth', 'windhelm',
                  'falkreath', 'morthal', 'dawnstar', 'winterhold', 'ravenrock'];
 const byHold = {};
@@ -214,7 +214,7 @@ inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js 
 const W = box.__thornswoodProperty;
 yes('the property block runs and publishes the jail rules', !!W && typeof W.mayHold === 'function' &&
     typeof W.lockedJailHere === 'function' && typeof W.jailKeyHold === 'function' && !!W.JAIL_KEY);
-if (!W) { done(); }
+if (!W) { done(); } else {
 
 function open(p, door) { inDir(function () { W.touched(p.a, door); }); }
 function lineOf(p) { return refs[p.a].thornswoodDoorLine || null; }
@@ -482,3 +482,4 @@ yes('P7 the step is no timer: the function has no clock in it and is called once
     }()));
 
 done();
+}}}

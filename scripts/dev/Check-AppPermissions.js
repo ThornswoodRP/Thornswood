@@ -169,5 +169,5 @@ async function main(argv) {
 module.exports = { checkRecord, compare };
 
 if (require.main === module) {
-  main(process.argv.slice(2)).then(code => process.exit(code), e => { console.log('FAIL  ' + e.message); process.exit(1); });
+  main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, e => { console.log('FAIL  ' + e.message); process.exitCode = 1; });
 }

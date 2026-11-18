@@ -179,5 +179,5 @@ const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
     try { fs.rmSync(work, { recursive: true, force: true }); } catch (e) { console.log('      the scratch folder was not removed: ' + e.message); }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

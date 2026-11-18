@@ -81,4 +81,4 @@ yes('server.js has its /roadmap block', !!block);
 yes('server.js /roadmap does not skip a Done section', !!block && !/done/i.test(block.replace(/\/\/.*$/gm, '')));
 
 console.log(fails ? fails + ' failed' : 'all passed');
-process.exit(fails ? 1 : 0);
+process.exitCode = fails ? 1 : 0;

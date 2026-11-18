@@ -289,4 +289,4 @@ yes('no tracked file names the server the content plugin was salvaged from, or i
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

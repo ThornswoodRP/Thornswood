@@ -716,9 +716,13 @@
     chat (tokenWant, below; lineTick at the menu).
   */
   let tokenWant = 0;           // the profile an ask is out for, 0 for none
+  let tokenBeforeAsk = '';    // a file left by an earlier try is not this answer
   function askToken(id) {
     id = Number(id) || 0;
     if (id <= 0) { return; }
+    // Keep this baseline across retries of the same pending ask: a fetch
+    // may have completed just before the next retry writes its request.
+    if (tokenWant !== id) { tokenBeforeAsk = joinToken(); }
     tokenWant = id;
     let wrote = false;
     for (const d of ['Data/Platform/', '../Profile/']) {
@@ -9198,6 +9202,9 @@
       // Sitting at the character choice is not a stuck keyboard, it is the one
       // thing to do there. Only while it is up: see menuGone.
       if (who === 'select' && choiceUp()) { continue; }
+      // Creation owns input until the server confirms it is complete.
+      // Reading its choices is not a stuck keyboard (#6431).
+      if (who === 'skills' && skillsCreating) { continue; }
       if (!claims[who] || !claimedAt[who]) { continue; }
       if (now - claimedAt[who] > 120000) {
         log('the ' + who + ' claim has held the keyboard for two minutes, closing it and taking it back');
@@ -9300,7 +9307,7 @@
     if (tokenWant && now - tokenAt > 1000) {
       tokenAt = now;
       const tok = joinToken();
-      if (tok && tok !== lastToken && tokenProfile(tok) === tokenWant) {
+      if (tok && tok !== lastToken && tok !== tokenBeforeAsk && tokenProfile(tok) === tokenWant) {
         lastToken = tok;
         tokenWant = 0;
         T.js('try{window.thornswoodNet&&window.thornswoodNet.setToken(' +

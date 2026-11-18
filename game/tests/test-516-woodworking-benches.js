@@ -60,7 +60,7 @@ function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -247,7 +247,7 @@ yes('R2 the bench tables know the bench: its furniture is the woodworking keywor
 // ---------------------------------------------------------------- S
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('S0 the property block is in the gamemode', !!propBlock);
-if (!propBlock || !inBlock) { done(); }
+if (!propBlock || !inBlock) { done(); } else {
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-516-'));
 fs.writeFileSync(path.join(dir, 'server-settings.json'), JSON.stringify({ dataDir: 'data', privDir: 'private' }));
@@ -344,7 +344,7 @@ function makeBlock() {
 
 let W = makeBlock();
 yes('S1 the property block runs, with the benches in it', !!W && typeof W.standBenches === 'function' && typeof W.standBench === 'function');
-if (!W) { done(); }
+if (!W) { done(); } else {
 const refs = W.benchRefs();
 yes('S2 at start every bench stands, with nobody online, in its forge\'s worldspace at its point (' + placedRefs.length + ')',
     placedRefs.length === names.length && names.every((s) => {
@@ -419,3 +419,4 @@ if (fs.existsSync(path.join(data, 'Skyrim.esm'))) {
   console.log('SKIP  R3: no game at ' + data + ' (a machine with the game reads the plugins again)');
 }
 done();
+}}

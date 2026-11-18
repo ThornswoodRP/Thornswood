@@ -199,4 +199,4 @@ yes('the folder still decides: NirnLabUIPlatform.dll present means nirnlab',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

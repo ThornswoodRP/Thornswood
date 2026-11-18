@@ -37,7 +37,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -52,7 +52,7 @@ const STAFF = between('// ==== thornswood staff spells ====', '// ==== end thorn
 const SPELL_ON = between('function spellOn(actorId, spellDesc, on) {', '\n}\n');
 yes('the rules, the character store, the spell tomes, the staff spells and spellOn are in the gamemode',
     !!(RULES && CHARACTER && TOMES && STAFF && SPELL_ON));
-if (!(RULES && CHARACTER && TOMES && STAFF && SPELL_ON)) { done(); }
+if (!(RULES && CHARACTER && TOMES && STAFF && SPELL_ON)) { done(); } else {
 
 // ------------------------------------------------------------ the records --
 const IDS = {};
@@ -226,3 +226,4 @@ yes('B  and the Sparks tome teaches it', read(SMITH, 't-sparks:Skyrim.esm') === 
 }
 
 done();
+}

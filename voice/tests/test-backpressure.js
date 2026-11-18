@@ -347,11 +347,11 @@ async function open(pid) {
       // Anything that came in the same read as the handshake is kept for
       // whoever reads this socket next.
       s.rest = head.slice(at + 4);
-      resolve(s);
+      clearTimeout(late); resolve(s);
     };
     s.on('data', onData);
     s.on('error', () => { });
-    setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
   });
 }
 

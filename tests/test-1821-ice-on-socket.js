@@ -148,6 +148,9 @@ let SITE = '';
   so a runner with a relay, a token life or anything else of the service's
   set in its environment tests what each part says it tests.
 */
+// The services started and not yet stopped, so a harness that throws part
+// way still stops each one and node can end.
+const running = new Set();
 async function start(env) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-1821-'));
   fs.copyFileSync(VOICE, path.join(dir, 'voice-server.js'));
@@ -160,6 +163,7 @@ async function start(env) {
     env: Object.assign(own, { THORNSWOOD_VOICE_PORT: String(port), THORNSWOOD_VOICE_BIND: '127.0.0.1',
                               THORNSWOOD_SITE: SITE, THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') }, env) });
   const s = { port: port, srv: srv, log: '' };
+  running.add(s);
   srv.stdout.on('data', (d) => { s.log += d; });
   srv.stderr.on('data', (d) => { s.log += d; });
   await listening(srv, port);
@@ -176,7 +180,7 @@ async function start(env) {
 }
 /* Stopped, and resolved once its output has all been read ('close', not
    'exit'), so s.log is then every line it wrote. */
-const stop = (s) => new Promise((ok) => { clearInterval(s.feeding); s.srv.once('close', ok); s.srv.kill(); });
+const stop = (s) => new Promise((ok) => { running.delete(s); clearInterval(s.feeding); s.srv.once('close', ok); s.srv.kill(); });
 
 /*
   A join token as the launcher gets one: asked of the service, which mints
@@ -352,9 +356,10 @@ async function listeningRelay() {
 async function launcherVoice() {
   const VS = read('launcher/app/VoiceSession.cs');
   const relay = await listeningRelay();
-  const svc = await VL.service({ env: { THORNSWOOD_TURN_URL: relay.url, THORNSWOOD_TURN_SECRET: SECRET } });
+  let svc = null;
   const run = [];
   try {
+    svc = await VL.service({ env: { THORNSWOOD_TURN_URL: relay.url, THORNSWOOD_TURN_SECRET: SECRET } });
     const where = (pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'c', name: 'p' + pid });
     await svc.feed([where(61), where(62), where(63)]);
     const a = await VL.join(svc, { profileId: 61, name: 'Aela' });
@@ -371,17 +376,19 @@ async function launcherVoice() {
     yes('saying so in the launcher log once, not on every roster',
         a.host('log').filter((l) => /^ice: /.test(l)).length === 1);
   } finally {
+    // Each one let go even when a step threw, so node can end (#6036).
     for (const l of run) { await l.quit(); }
-    await svc.stop();
+    if (svc) await svc.stop();
+    relay.close();
   }
 
   // A roster that carries no list, which the service never sends but a
   // session must still read right: the list it had stays. Only the first
   // launcher is handed the relay, so every request the relay sees is its.
   const relay2 = await listeningRelay();
-  relay.close();
-  const r = await VL.room([{ profileId: 71, name: 'Aela' }, { profileId: 72, name: 'Brynjolf' }, { profileId: 73, name: 'Camilla' }]);
+  let r = null;
   try {
+    r = await VL.room([{ profileId: 71, name: 'Aela' }, { profileId: 72, name: 'Brynjolf' }, { profileId: 73, name: 'Camilla' }]);
     const rows = r.rows();
     const withRelay = [{ urls: relay2.url, username: '1', credential: 'x' }];
     await r.say(0, { t: 'peers', peers: rows.slice(0, 2), iceServers: withRelay });
@@ -395,7 +402,7 @@ async function launcherVoice() {
     yes('the launcher\'s voice keeps its list when a roster carries none: its next connection asks the same relay (' +
         first + ' then ' + relay2.asked() + ')', first >= 1 && relay2.asked() > first);
   } finally {
-    await r.quit();
+    if (r) await r.quit();
     relay2.close();
   }
 
@@ -532,11 +539,15 @@ function lift(src, name) {
     but node is still letting go of its process and pipe handles then:
     measured with process._getActiveHandles() at this line, its
     ChildProcess (killed, SIGTERM) and a destroyed pipe were still listed,
-    and gone 1 to 2 ms later. process.exit() in that moment tripped libuv's
+    and gone 1 to 2 ms later. calling node's exit in that moment tripped libuv's
     "!(handle->flags & UV_HANDLE_CLOSING)" (src\win\async.c:76, exit 127) on
     node 24 on Windows in 2 of 3 runs after all checks had passed. So the
     code is set and node leaves once everything is let go. The catch below
-    still exits, because after a throw a service may be left running.
+    stops any service a throw left running, so node ends then too (#6036).
   */
   process.exitCode = fail ? 1 : 0;
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exit(1); });
+})().catch((e) => {
+  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  process.exitCode = 1;
+  return Promise.all(Array.from(running, stop));
+});

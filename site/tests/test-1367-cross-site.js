@@ -340,5 +340,5 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     for (const d of [A.dir, B.dir]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { } }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

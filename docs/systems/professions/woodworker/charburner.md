@@ -1,8 +1,7 @@
 # Charburner
 
-The kiln. Five recipes, every one reaches the server, every one is
-the charcoal kiln, and the kiln is closed to anyone who is not this
-half from novice.
+The kiln is your bench from novice. The book shows its recipes and
+which ones reach the server.
 
 The full table: [lists/woodworker-charburner.md](../../lists/woodworker-charburner.md).
 
@@ -41,7 +40,7 @@ warms like any other fire: +34 at your feet.
 ## What you cannot do
 
 You cannot make a bow. That is Woodwright, and your sister half is
-their novice 20 only.
+their novice work only unless a master takes you on.
 
 You cannot chop without the axe. 50 uses, then a smith.
 
@@ -49,5 +48,5 @@ Every recipe, by rank and with its id: [woodworker-charburner](../../lists/woodw
 
 ## Where this is
 
-All five rows and the closed kiln are in the server. The forge's
+The kiln gate is in the server. The forge's
 charcoal take, by grade, is in the server. So is the hotter kiln.

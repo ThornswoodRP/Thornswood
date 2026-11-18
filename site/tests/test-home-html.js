@@ -36,7 +36,6 @@ function yes(what, cond) {
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-home-html-'));
 let srv = null;
-let started = false;
 let finished = false;
 function clean() { try { fs.rmSync(work, { recursive: true, force: true }); } catch (e) { } }
 function stop() {
@@ -51,7 +50,6 @@ function done() {
   finished = true;
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  if (!started) process.exit(fail ? 1 : 0);
   process.exitCode = fail ? 1 : 0;
   stop();
 }
@@ -124,7 +122,6 @@ function bothWordings(text) {
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1'
     })
   });
-  started = true;
   srv.stdout.on('data', function (d) { log += d; });
   srv.stderr.on('data', function (d) { log += d; });
   let up = false;

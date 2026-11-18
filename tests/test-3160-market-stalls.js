@@ -35,7 +35,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function throws(f, re) {
   try { f(); return false; } catch (e) { return re.test(String(e && e.message)); }
@@ -116,7 +116,7 @@ const DAY = 86400000;
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 let stallBlock = slice(gm, '// ==== thornswood market stalls ====', '// ==== end thornswood market stalls ====');
 yes('the property block and the market stalls block are in the gamemode', !!propBlock && !!stallBlock);
-if (!propBlock || !stallBlock) { done(); }
+if (!propBlock || !stallBlock) { done(); return; }
 const TABLE = [
   { id: 'whiterun-1', hold: 'whiterun', place: 'Whiterun market', world: '3c:Skyrim.esm', pos: [0, 0, 0], reach: 200 },
   { id: 'riften-1', hold: 'riften', place: 'Riften market', world: '3c:Skyrim.esm', pos: [100000, 0, 0], reach: 200 }
