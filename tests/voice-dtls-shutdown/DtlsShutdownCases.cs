@@ -59,17 +59,37 @@ namespace Thornswood
             }
         }
 
-        // Installed only after a real handshake. Park the actual reader and
-        // transport close while real Dispose retires media. This exposes the
-        // interval before the DTLS close has completed, without forcing flags.
+        sealed class BeforeReceive
+        {
+            public int Used;
+            public volatile bool Called;
+            public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
+            public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
+        }
+        static volatile BeforeReceive beforeReceive;
+
+        // The JS compile adapter routes the unchanged native call here. Park
+        // before entering BouncyCastle, so no library deadline has started.
+        public static int ReceiveAfterGate(int id, DtlsTransport transport, byte[] buffer, int offset, int length, int wait)
+        {
+            var gate = beforeReceive;
+            if (id == 2 && gate != null && Interlocked.Exchange(ref gate.Used, 1) == 0)
+            {
+                gate.Entered.Set();
+                if (!gate.Release.Wait(10000)) throw new TimeoutException("fixture before-receive barrier");
+                gate.Called = true;
+            }
+            return transport.Receive(buffer, offset, length, wait);
+        }
+
+        // Count actual transport reads, and hold the actual local DTLS close.
+        // No peer flags or production timeout values are changed by the test.
         sealed class ReadBarrier : DatagramTransport
         {
             readonly DatagramTransport inner;
             int armed = 1;
             int reads;
             public int Reads { get { return Volatile.Read(ref reads); } }
-            public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
-            public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
             public readonly ManualResetEventSlim Returned = new ManualResetEventSlim();
             public readonly ManualResetEventSlim Closing = new ManualResetEventSlim();
             public readonly ManualResetEventSlim FinishClose = new ManualResetEventSlim();
@@ -81,7 +101,6 @@ namespace Thornswood
             {
                 Interlocked.Increment(ref reads);
                 bool held = Interlocked.Exchange(ref armed, 0) != 0;
-                if (held) { Entered.Set(); if (!Release.Wait(5000)) throw new TimeoutException("fixture read barrier"); }
                 try { return inner.Receive(b, wait); }
                 finally { if (held) Returned.Set(); }
             }
@@ -90,7 +109,7 @@ namespace Thornswood
             public void Close()
             {
                 Closing.Set();
-                if (!FinishClose.Wait(5000)) throw new TimeoutException("fixture close barrier");
+                if (!FinishClose.Wait(10000)) throw new TimeoutException("fixture close barrier");
                 inner.Close();
             }
         }
@@ -98,6 +117,8 @@ namespace Thornswood
         public static int Main()
         {
             Paths.LogFile = Path.Combine(Environment.CurrentDirectory, "orderly.log");
+            var before = new BeforeReceive();
+            beforeReceive = before;
             using (var pair = new Pair())
             {
                 object layer = Layer(pair.A);
@@ -107,11 +128,17 @@ namespace Thornswood
                 var closing = new Thread(() => { try { pair.A.Dispose(); } catch (Exception e) { closeError = e; } });
                 try
                 {
-                    if (!barrier.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
+                    if (!before.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
                     Check("actual established reader is parked before local close", Get(pair.A, "dtls") != null);
                     closing.Start();
                     if (!barrier.Closing.Wait(4000)) throw new InvalidOperationException("actual Dispose never reached DTLS close");
-                    barrier.Release.Set();
+                    // Deliberately exceed the native read's 1000ms deadline
+                    // before calling it. An inner-transport barrier would let
+                    // the defective implementation pass after this delay.
+                    var preparation = Stopwatch.StartNew();
+                    Thread.Sleep(1100);
+                    Check("setup delay cannot consume the library receive deadline", preparation.ElapsedMilliseconds >= 1000 && !before.Called);
+                    before.Release.Set();
                     Check("the parked read returns within its original deadline", barrier.Returned.Wait(3000));
                     // Fail() runs after the transport returns. Observe it over
                     // longer than one receive period without changing timers.
@@ -122,7 +149,7 @@ namespace Thornswood
                 }
                 finally
                 {
-                    barrier.Release.Set(); barrier.FinishClose.Set();
+                    before.Release.Set(); barrier.FinishClose.Set(); beforeReceive = null;
                     if (closing.ThreadState != System.Threading.ThreadState.Unstarted)
                         Check("actual local Dispose completes without a new failure", closing.Join(3000) && closeError == null);
                 }

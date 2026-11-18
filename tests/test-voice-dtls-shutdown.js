@@ -4,13 +4,18 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const lc = require('./launcher-csc');
 const root = path.join(__dirname, '..');
-const names = ['VoiceSession', 'VoiceLoop', 'VoicePeer', 'VoiceStun', 'VoiceMix', 'VoiceMeter', 'VoiceHrtf', 'Failure', 'Swallow'];
+const names = ['VoiceSession', 'VoiceLoop', 'VoiceStun', 'VoiceMix', 'VoiceMeter', 'VoiceHrtf', 'Failure', 'Swallow'];
 const files = names.map(n => path.join(root, 'launcher', 'app', n + '.cs'));
 files.push(path.join(__dirname, 'voice-launcher', 'StandIns.cs'), path.join(__dirname, 'voice-dtls-shutdown', 'DtlsShutdownCases.cs'));
 let ice = fs.readFileSync(path.join(root, 'launcher', 'app', 'VoiceIce.cs'), 'utf8');
 const binding = 'bound = DefaultLocal();';
 if (ice.split(binding).length !== 2) throw new Error('Cannot guarantee loopback-only fixture binding');
-const dll = lc.build({ files, sources: [ice.replace(binding, 'bound = IPAddress.Loopback;')], exe: true,
+let peer = fs.readFileSync(path.join(root, 'launcher', 'app', 'VoicePeer.cs'), 'utf8');
+const receive = 'tr.Receive(buf, 0, buf.Length, 1000);';
+if (peer.split(receive).length !== 2) throw new Error('Cannot locate the unchanged native receive call');
+// Fixture-only synchronization BEFORE the real call starts its deadline.
+peer = peer.replace(receive, 'DtlsShutdownCases.ReceiveAfterGate(Id, tr, buf, 0, buf.Length, 1000);');
+const dll = lc.build({ files, sources: [ice.replace(binding, 'bound = IPAddress.Loopback;'), peer], exe: true,
   main: 'Thornswood.DtlsShutdownCases', resources: { 'hrtf-composite.wav': path.join(root, 'launcher', 'hrtf-composite.wav') } });
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-dtls-shutdown-'));
 try {
