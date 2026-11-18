@@ -23,10 +23,17 @@ they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
 file binds them the same as a person. They work on Grok Bot's own cloud
 computer and file through its GitHub connector. When its included usage runs
-out, they do read-only work, 11 PM to 6 AM, on the Hermes VM through the Grok
+out, they do read-only work on the Hermes VM through the Grok
 Bot app there, as an account of their own that reaches nothing of the Bots'
 (Patrick, 12 Nov 2026, #5933). They never use the shipping
 machine. What is true now is `ops\status.md` in the private ops repo.
+
+Patrick's requested audit window is midnight to 7 AM Mountain (17 Nov
+2026). New Hermes worker issues run from 7 AM to midnight; an active worker
+may finish its issue after midnight, and Bramble works around the clock.
+Grok Bot's cloud jobs hold their own schedules. Their configured window
+must be verified in Grok Bot when these hours change; the VM app provides
+the local computer for a job, rather than setting its schedule.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
