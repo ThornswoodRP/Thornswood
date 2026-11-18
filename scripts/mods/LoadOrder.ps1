@@ -508,7 +508,12 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
         # The current LevelDB metadata survives compaction; transition text does not.
         Import-VortexStateReader
         try { return [Thornswood.VortexProfileState]::Find($st, $profilesRoot, $Name) }
-        catch { throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.' }
+        catch {
+            # PowerShell wraps exceptions from the shared reader's method call.
+            $cause = $_.Exception.GetBaseException()
+            if ($cause -is [Thornswood.VortexProfileState+DuplicateProfileException]) { throw $cause }
+            throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.'
+        }
     }
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     if (Test-Path -LiteralPath $st) {
