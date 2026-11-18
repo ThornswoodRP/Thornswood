@@ -927,6 +927,7 @@ if ($Record) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
   }
+  Say '  Next: for a draft, compare the layout with the collection record before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
@@ -1023,6 +1024,7 @@ Remove-Tree $script:Work; $script:Work = ''
 Head 'Done'
 Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files (' + $linked + ' linked from the unpacked archives, ' + $copied + ' copied), ' + $order.Count + ' plugins') 'Green'
 Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt')
+Say '  Next: check a draft on Dev before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
 exit 0
