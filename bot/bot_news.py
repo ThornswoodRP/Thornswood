@@ -12,11 +12,11 @@ import re
 import shutil
 import subprocess
 import time
-import urllib.request
 
+import aiohttp
 import discord
 
-from bot_base import DATA_DIR, HERE
+from bot_base import CONTEXT, DATA_DIR, HERE
 from bot_core import SITE, _int_env, _state_read, _state_write, client, log
 from bot_task_text import strip_footer
 from bot_notices import _github_time
@@ -453,12 +453,15 @@ async def news_once(state, docs, send, save, now=None, about=None):
     return done
 
 
-def _news_picture_ready(image):
+async def _news_picture_ready(image):
     """Do not announce a screenshot before the site has deployed its file."""
-    req = urllib.request.Request(image['url'], method='HEAD', headers={'User-Agent': 'ThornswoodNews/1'})
-    with urllib.request.urlopen(req, timeout=8) as response:
-        kind = response.headers.get('Content-Type', '').split(';')[0].lower()
-        return response.status == 200 and response.geturl() == image['url'] and kind in ('image/png', 'image/jpeg', 'image/webp')
+    timeout = aiohttp.ClientTimeout(total=8)
+    async with aiohttp.ClientSession(timeout=timeout, cookie_jar=aiohttp.DummyCookieJar()) as session:
+        async with session.head(image['url'], allow_redirects=False, ssl=CONTEXT,
+                                headers={'User-Agent': 'ThornswoodNews/1'}) as response:
+            types = response.headers.getall('Content-Type', [])
+            kind = types[0].split(';')[0].strip().lower() if len(types) == 1 and ',' not in types[0] else ''
+            return response.status == 200 and str(response.url) == image['url'] and kind in ('image/png', 'image/jpeg', 'image/webp')
 
 
 async def _news_send(channel, parts, said_once):
@@ -474,14 +477,15 @@ async def _news_send(channel, parts, said_once):
             said_once.add(channel)
         return None
     if parts.get('image'):
+        deadline = time.monotonic() + 8
         try:
-            ready = await asyncio.to_thread(_news_picture_ready, parts['image'])
+            ready = await asyncio.wait_for(_news_picture_ready(parts['image']), timeout=8)
         except Exception as ex:
             if channel not in said_once:
                 log('news: screenshot unavailable (%s); the %s post waits for the site' % (type(ex).__name__, channel))
             said_once.add(channel)
             return None
-        if not ready:
+        if not ready or time.monotonic() >= deadline:
             if channel not in said_once:
                 log('news: screenshot is not served as an image yet; the %s post waits for the site' % channel)
             said_once.add(channel)

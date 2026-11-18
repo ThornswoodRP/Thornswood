@@ -22,7 +22,9 @@ namespace Thornswood.Tests
             internal HttpResponseMessage Response;
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                if (Response == null) await Task.Delay(Timeout.Infinite, cancellationToken);
+                // A real HTTP handler does not resume on Avalonia's UI thread.
+                // This fixture is synchronously awaited there by the check.
+                if (Response == null) await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
                 return Response;
             }
         }

@@ -335,7 +335,9 @@ before_channel = bot.client.get_channel
 before_picture_ready = bot._news_picture_ready
 try:
     bot.client.get_channel = lambda cid: ch
-    bot._news_picture_ready = lambda image: True
+    async def picture_ready(image):
+        return True
+    bot._news_picture_ready = picture_ready
     pic = {'url': picture_cases[0]['image']['url'], 'alt': '||The panel||'}
     parts = bot.news_post_parts('dev', {'tag': 'build-1.3.99', 'body': 'A clearer character panel\n- Keep the text'})
     parts['image'] = pic
@@ -344,10 +346,112 @@ try:
     yes('real Discord embed carries the image and a full screenshot link', embed['image']['url'] == pic['url'] and '[Open full screenshot]' in embed['fields'][0]['value'])
     yes('Discord caption is literal rather than a spoiler', embed['fields'][0]['value'].startswith('`||The panel||`'))
     ch.sent = None
-    bot._news_picture_ready = lambda image: False
+    async def picture_missing(image):
+        return False
+    bot._news_picture_ready = picture_missing
     yes('Discord waits rather than posting a missing screenshot', asyncio.run(bot._news_send('dev', parts, set())) is None and ch.sent is None)
 finally:
     bot.client.get_channel = before_channel
     bot._news_picture_ready = before_picture_ready
+
+# Exercise the actual HEAD request and redirect policy on a loopback fixture.
+import http.server
+import threading
+
+class PictureServer(http.server.BaseHTTPRequestHandler):
+    seen = []
+    def do_HEAD(self):
+        self.seen.append(('HEAD', self.path))
+        self.send_response(302 if self.path == '/redirect' else 200)
+        if self.path == '/redirect':
+            self.send_header('Location', '/picture')
+        self.send_header('Content-Type', 'image/png; charset=binary, text/html' if self.path == '/coalesced' else 'image/png ; charset=binary')
+        if self.path == '/conflict':
+            self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+    def do_GET(self):
+        self.seen.append(('GET', self.path))
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+
+server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), PictureServer)
+worker = threading.Thread(target=server.serve_forever, daemon=True)
+worker.start()
+try:
+    url = 'http://127.0.0.1:%d' % server.server_port
+    yes('HEAD accepts valid media-type whitespace', asyncio.run(bot._news_picture_ready({'url': url + '/picture'})))
+    refused = not asyncio.run(bot._news_picture_ready({'url': url + '/redirect'}))
+    yes('HEAD refuses redirects without following or changing method', refused and PictureServer.seen == [('HEAD', '/picture'), ('HEAD', '/redirect')])
+    yes('HEAD refuses conflicting media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/conflict'})))
+    yes('HEAD refuses coalesced media-type headers', not asyncio.run(bot._news_picture_ready({'url': url + '/coalesced'})))
+finally:
+    server.shutdown()
+    server.server_close()
+    worker.join()
+
+before_channel = bot.client.get_channel
+before_picture_ready = bot._news_picture_ready
+before_wait_for = bot.asyncio.wait_for
+try:
+    bot.client.get_channel = lambda cid: ch
+    ch.sent = None
+    deadlines = []
+    async def short_deadline(awaitable, timeout):
+        deadlines.append(timeout)
+        return await before_wait_for(awaitable, timeout=0.02)
+    bot.asyncio.wait_for = short_deadline
+    async def slow_request():
+        release = asyncio.Event()
+        async def blocked_picture(image):
+            await release.wait()
+            return True
+        bot._news_picture_ready = blocked_picture
+        started = time.monotonic()
+        result = await before_wait_for(bot._news_send('dev', parts, set()), timeout=0.5)
+        elapsed = time.monotonic() - started
+        before_release = ch.sent is None
+        release.set()
+        # Keep the loop alive after the late result could arrive. A detached
+        # send must not disappear under asyncio.run's shutdown cancellation.
+        await asyncio.sleep(0.05)
+        return result, elapsed, before_release
+    result, elapsed, before_release = asyncio.run(slow_request())
+    yes('publisher waits at most its total deadline and never posts a late image', deadlines == [8] and result is None and elapsed < 0.15 and before_release and ch.sent is None)
+finally:
+    bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
+    bot.asyncio.wait_for = before_wait_for
+
+# A result and its timeout can become ready in the same event-loop turn.
+# Return success during cancellation, with the monotonic deadline already
+# elapsed, without sleeping through the production eight-second budget.
+import types
+news_module = sys.modules['bot_news']
+before_clock = news_module.time
+try:
+    clock = [100.0]
+    news_module.time = types.SimpleNamespace(monotonic=lambda: clock[0])
+    bot.client.get_channel = lambda cid: ch
+    bot.asyncio.wait_for = short_deadline
+    ch.sent = None
+    async def late_picture(image):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            clock[0] = 109.0
+            return True
+    bot._news_picture_ready = late_picture
+    async def late_result():
+        result = await bot._news_send('dev', parts, set())
+        await asyncio.sleep(0.05)
+        return result
+    yes('publisher refuses a successful result delivered after its absolute deadline', asyncio.run(late_result()) is None and ch.sent is None)
+finally:
+    news_module.time = before_clock
+    bot.client.get_channel = before_channel
+    bot._news_picture_ready = before_picture_ready
+    bot.asyncio.wait_for = before_wait_for
 print('%d failed' % len(FAIL) if FAIL else 'all passed')
 sys.exit(1 if FAIL else 0)
