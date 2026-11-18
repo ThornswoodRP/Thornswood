@@ -368,22 +368,43 @@ using System;
 namespace ThornswoodRealClient {
   public static class Win {
     public static IntPtr Foreground;
-    public static bool Activate, MoveOnActivate, LoseOnSend;
-    public static uint Sent;
+    public static bool Activate, MoveOnActivate, LoseOnHold, LoseOnUp, ThrowDown, ThrowHold, ThrowUp, Down, SawDown;
+    public static uint DownSent, UpSent;
     public static int Calls;
+    public static int NativeCalls;
+    public static string Events = "";
     public static bool SetForegroundWindow(IntPtr h) {
+      NativeCalls++;
       if (Activate && MoveOnActivate) Foreground = h;
       return Activate;
     }
-    public static IntPtr GetForegroundWindow() { return Foreground; }
-    public static uint TapScan(ushort scan) {
-      Calls++; if (LoseOnSend) Foreground = new IntPtr(99); return Sent;
+    public static IntPtr GetForegroundWindow() { NativeCalls++; return Foreground; }
+    public static uint SendScan(ushort scan, bool up) {
+      Calls++; NativeCalls++; Events += (up ? "U" : "D") + scan + ";";
+      if (up) {
+        Down = false;
+        if (LoseOnUp) Foreground = new IntPtr(99);
+        if (ThrowUp) throw new Exception("release error");
+        return UpSent;
+      }
+      if (ThrowDown) throw new Exception("press error");
+      Down = DownSent == 1;
+      return DownSent;
+    }
+    public static void Hold(int ms) {
+      Events += "H" + ms + ";";
+      // A current-state reader samples between down and up, like the CEF
+      // listener. Buffered native events alone cannot establish this.
+      SawDown = Down;
+      if (LoseOnHold) Foreground = new IntPtr(99);
+      if (ThrowHold) throw new Exception("hold error");
     }
   }
 }
 '@
 ${keyFunction[0]}
 ${gameProcessFunction[0]}
+function Start-Sleep([int]$Milliseconds) { [ThornswoodRealClient.Win]::Hold($Milliseconds) }
 function Get-Process { $script:fakeProcess }
 $script:fakeProcess = [pscustomobject]@{ MainWindowHandle = [IntPtr]::Zero }
 $p = Get-GameProcess
@@ -393,42 +414,66 @@ if ($p) {
 }
 $script:fakeProcess = $null
 if (-not (Get-GameProcess)) { 'TERMINATED ABSENT' }
-function Case($name, $handle, $foreground, $activate, $move, $sent, $lose) {
+function Case($name, $handle, $foreground, $activate, $move, $down, $up, $lose, $throwDown=$false, $throwHold=$false, $throwUp=$false, $loseOnUp=$false, $code=36) {
   [ThornswoodRealClient.Win]::Foreground = [IntPtr]$foreground
   [ThornswoodRealClient.Win]::Activate = $activate
   [ThornswoodRealClient.Win]::MoveOnActivate = $move
-  [ThornswoodRealClient.Win]::Sent = $sent
-  [ThornswoodRealClient.Win]::LoseOnSend = $lose
+  [ThornswoodRealClient.Win]::DownSent = $down
+  [ThornswoodRealClient.Win]::UpSent = $up
+  [ThornswoodRealClient.Win]::LoseOnHold = $lose
+  [ThornswoodRealClient.Win]::LoseOnUp = $loseOnUp
+  [ThornswoodRealClient.Win]::ThrowDown = $throwDown
+  [ThornswoodRealClient.Win]::ThrowHold = $throwHold
+  [ThornswoodRealClient.Win]::ThrowUp = $throwUp
+  [ThornswoodRealClient.Win]::Down = $false
+  [ThornswoodRealClient.Win]::SawDown = $false
   [ThornswoodRealClient.Win]::Calls = 0
-  $r = Invoke-GameKey ([IntPtr]$handle) 36
-  @{name=$name; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls} | ConvertTo-Json -Compress
+  [ThornswoodRealClient.Win]::NativeCalls = 0
+  [ThornswoodRealClient.Win]::Events = ''
+  $r = Invoke-GameKey ([IntPtr]$handle) $code
+  @{name=$name; code=$code; ok=$r.ok; note=$r.note; calls=[ThornswoodRealClient.Win]::Calls; nativeCalls=[ThornswoodRealClient.Win]::NativeCalls; events=[ThornswoodRealClient.Win]::Events; sawDown=[ThornswoodRealClient.Win]::SawDown} | ConvertTo-Json -Compress
 }
-Case 'missing' 0 0 $true $true 2 $false
-Case 'denied' 42 99 $false $false 2 $false
-Case 'not-foreground' 42 99 $true $false 2 $false
-Case 'zero' 42 42 $true $true 0 $false
-Case 'partial' 42 42 $true $true 1 $false
-Case 'lost' 42 42 $true $true 2 $true
-Case 'already' 42 42 $false $false 2 $false
-Case 'activated' 42 99 $true $true 2 $false
+Case 'unsupported' 42 99 $true $true 1 1 $false -code 200
+Case 'zero-code' 42 99 $true $true 1 1 $false -code 0
+Case 'fraction' 42 99 $true $true 1 1 $false -code 36.4
+Case 'rounded-boundary' 42 99 $true $true 1 1 $false -code 127.4
+Case 'preserved-fraction' 42 99 $true $true 1 1 $false -code '127.00000000000000001'
+Case 'missing' 0 0 $true $true 1 1 $false
+Case 'denied' 42 99 $false $false 1 1 $false
+Case 'not-foreground' 42 99 $true $false 1 1 $false
+Case 'zero-down' 42 42 $true $true 0 1 $false
+Case 'zero-up' 42 42 $true $true 1 0 $false
+Case 'lost' 42 42 $true $true 1 1 $true -code 1
+Case 'press-error' 42 42 $true $true 1 1 $false $true
+Case 'hold-error' 42 42 $true $true 1 1 $false $false $true
+Case 'release-error' 42 42 $true $true 1 1 $false $false $false $true
+Case 'release-focus' 42 42 $true $true 1 1 $false -loseOnUp $true
+Case 'already' 42 42 $false $false 1 1 $false
+Case 'activated' 42 99 $true $true 1 1 $false -code 23
 `;
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const cases = (r.stdout || '').split('\n').filter(function (l) { return l.trim().startsWith('{'); }).map(JSON.parse);
     yes('a living process without a window reaches the failed-key path instead of the crashed exit',
         /WINDOWLESS ALIVE: no game window/.test(r.stdout || ''));
     yes('a terminated process is still detected as absent', /TERMINATED ABSENT/.test(r.stdout || ''));
-    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 8);
-    ['missing', 'denied', 'not-foreground'].forEach(function (name) {
+    yes('keyboard delivery cases execute without real Windows calls', r.status === 0 && cases.length === 17);
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': invalid code cannot query or change native focus', !!c && !c.ok && c.nativeCalls === 0);
+    });
+    ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
     });
-    ['zero', 'partial', 'lost'].forEach(function (name) {
+    ['zero-down', 'zero-up', 'lost', 'press-error', 'hold-error', 'release-error', 'release-focus'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': rejected delivery cannot pass', !!c && !c.ok && c.calls === 1 && !!c.note);
+      yes(name + ': rejected delivery cannot pass, and releases the requested key',
+          !!c && !c.ok && c.calls === 2 && c.events.endsWith('U' + c.code + ';') && c.events.startsWith('D' + c.code + ';') && !!c.note);
     });
     ['already', 'activated'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
-      yes(name + ': both events delivered while focused', !!c && c.ok && c.calls === 1);
+      yes(name + ': snapshot input sees the requested held key before release',
+          !!c && c.ok && c.calls === 2 && c.sawDown && c.events === 'D' + c.code + ';H120;U' + c.code + ';');
     });
     if (r.status !== 0) { console.log(r.stderr || r.stdout); }
   }
@@ -441,6 +486,40 @@ Case 'activated' 42 99 $true $true 2 $false
     const said = (r.stdout || '') + (r.stderr || '');
     yes('the runner\'s Windows helper compiles under PowerShell ' + ver.stdout.trim().replace(/^PowerShell /, ''), /HELPER OK/.test(said));
     if (!/HELPER OK/.test(said)) { console.log(said.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+
+    // Exercise production packet construction, replacing only the native
+    // SendInput boundary. Counts, flags and scan bytes must match exactly;
+    // no Windows input is sent, on either Windows or Linux.
+    const boundary = /\[DllImport\("user32\.dll", SetLastError = true\)\] static extern uint SendInput\(uint n, INPUT\[\] inputs, int size\);/;
+    yes('the native input boundary is identified for packet checks', boundary.test(block));
+    // A changed declaration must fail this check without ever executing the
+    // unreplaced P/Invoke on a Windows test machine.
+    if (boundary.test(block)) {
+    const recording = block.replace(boundary, `public static string Packets = "";
+    public static bool PacketLayoutOkay = true;
+    static uint SendInput(uint n, INPUT[] inputs, int size) {
+      int nativeSize = IntPtr.Size == 8 ? 40 : 28;
+      int unionOffset = IntPtr.Size == 8 ? 8 : 4;
+      PacketLayoutOkay &= size == nativeSize && inputs[0].type == 1 &&
+        Marshal.OffsetOf(typeof(INPUT), "u").ToInt32() == unionOffset &&
+        Marshal.OffsetOf(typeof(INPUTUNION), "ki").ToInt32() == 0 &&
+        Marshal.OffsetOf(typeof(KEYBDINPUT), "wScan").ToInt32() == 2;
+      Packets += n + "," + inputs.Length + "," + inputs[0].u.ki.wScan + "," + inputs[0].u.ki.dwFlags + ";";
+      return n;
+    }`) + `
+foreach ($scan in @(1,23,36)) {
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $false)
+  [void][ThornswoodRealClient.Win]::SendScan([uint16]$scan, $true)
+}
+'PACKETS ' + [ThornswoodRealClient.Win]::Packets
+'LAYOUT ' + [ThornswoodRealClient.Win]::PacketLayoutOkay
+`;
+    const packets = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(recording, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    yes('production native code sends one requested scan per call with down/up flags', packets.status === 0 &&
+        (packets.stdout || '').includes('PACKETS 1,1,1,8;1,1,1,10;1,1,23,8;1,1,23,10;1,1,36,8;1,1,36,10;'));
+    yes('production packets use keyboard input and the Windows INPUT layout and size', packets.status === 0 && /LAYOUT True/.test(packets.stdout || ''));
+    if (packets.status !== 0) { console.log(packets.stderr || packets.stdout); }
+    }
   }
 
   // -Publish: a draft Release of the run's own, since a build's Release is

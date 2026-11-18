@@ -64,7 +64,7 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the game says that menu opened (`"open":false`: closed). |
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
-| `{"do":"key","code":36}` | Windows accepted both scan-code events while the game window had keyboard focus before and after injection (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
+| `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
 | `{"do":"end"}` | always; the runner closes the game. |
 
@@ -78,6 +78,18 @@ does not prove the game or browser handled the key; follow it with a menu,
 message or page check for the expected result. The focus checks and
 Windows input are separate calls, so a focus change between those calls
 cannot be ruled out by a successful acknowledgement.
+
+Keys stay down for 120 ms, a short human press below the repeat delay.
+The pinned engine sends its browser listener changes in current keyboard
+state, while native menus read buffered events. Sending down and up together
+could open a native menu while the browser missed the entire pulse. The
+runner always attempts key-up in `finally`, including after a failed press,
+hold or focus check; a failed release fails the step too. It never retries
+key-down. Native browser key capture and the resulting panel state remain
+the acceptance checks for browser delivery.
+
+`code` is a non-extended set-1 make code from 1 through 127. Extended/E1 keys
+are unsupported and fail before any input is sent.
 
 PowerShell 7 must be available to run the harness regression test, including
 its fake Windows focus and input cases; missing PowerShell fails the test.
