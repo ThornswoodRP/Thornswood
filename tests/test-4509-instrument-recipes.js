@@ -75,6 +75,35 @@ INSTRUMENTS.forEach(function (x) {
       typeof v === 'number' && byValue[v].length === 1);
 });
 
+// Exercise the same description rule the build applies before writing.
+const ask = [
+  'import importlib.util, sys',
+  'spec = importlib.util.spec_from_file_location("content", sys.argv[1])',
+  'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+  'made = m.thornswood_records(m.clam01(), [])',
+  'keys = [r.tag.decode() + " " + r.editor_id() for r in made]',
+  'text, unnamed = m.description_of(keys)',
+  'for r, key in zip(made, keys):',
+  '    if key in unnamed: print("%08X %s" % (r.fid, key), file=sys.stderr)',
+  'assert not unnamed',
+  'assert b"instruments" in text',
+  'own = [words for _, whose, words in m.CONTENTS if whose == "own" and words]',
+  'theirs = [words for _, whose, words in m.CONTENTS if whose == "bethesda"]',
+  'full = m.DESCRIPTION_LEAD + ", ".join(own[:-1]) + ", and " + own[-1] + "."',
+  'full += m.DESCRIPTION_BETHESDA + "; ".join(theirs) + "."',
+  'print(len(full.encode("ascii")) + 1)',
+  'assert len(full.encode("ascii")) + 1 <= m.DESCRIPTION_MOST'
+].join('\n');
+const { spawnSync } = require('node:child_process');
+const builder = path.join(ROOT, 'scripts', 'mods', 'Add-ContentRecords.py');
+let run;
+for (const [exe, args] of [['python3', []], ['python', []], ['py', ['-3']]]) {
+  run = spawnSync(exe, [...args, '-I', '-c', ask, builder], { encoding: 'utf8' });
+  if (run.error?.code !== 'ENOENT') break;
+}
+if (run.error || run.status !== 0) console.log(run.error || run.stdout + run.stderr);
+yes('D the authored records are described and the full header fits (' + (run.stdout || '').trim() + ' bytes)', run.status === 0);
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
