@@ -99,4 +99,4 @@ yes('and a key is named for its building, so one key is not every key',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

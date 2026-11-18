@@ -409,8 +409,8 @@ const dayOf = (t) => { const d = new Date(t); const two = (n) => (n < 10 ? '0' :
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
   console.log('FAIL  the harness itself stopped: ' + (e && e.stack || e));
-  process.exit(1);
+  process.exitCode = 1;
 });

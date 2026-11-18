@@ -48,4 +48,4 @@ check('an unreadable list of who is on still says it, to whoever broadcast reach
   assert.match(r.logged.join('\n'), /asked 0 people/);
 });
 
-if (failed) { console.log(failed + ' failed'); process.exit(1); }
+if (failed) { console.log(failed + ' failed'); process.exitCode = 1; }

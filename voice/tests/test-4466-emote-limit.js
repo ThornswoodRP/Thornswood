@@ -102,11 +102,11 @@ function join(profileId, name) {
       got.push(m);
       if (m.t === 'welcome') {
         peer = m.peer;
-        done({ got: got, peer: () => peer, send: (o) => ws.send(JSON.stringify(o)) });
+        clearTimeout(late); done({ got: got, peer: () => peer, send: (o) => ws.send(JSON.stringify(o)) });
       }
     };
     ws.onerror = () => bad(new Error('could not join'));
-    setTimeout(() => bad(new Error('no welcome')), 4000);
+    const late = setTimeout(() => bad(new Error('no welcome')), 4000);
   });
 }
 function logged() {
@@ -204,5 +204,5 @@ function logged() {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.log('      the temp folder was not removed: ' + e.message); }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

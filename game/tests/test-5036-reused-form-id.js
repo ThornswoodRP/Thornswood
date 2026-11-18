@@ -50,7 +50,7 @@ const START = '// ==== thornswood release of deleted characters ====';
 const END = '// ==== end thornswood release of deleted characters ====';
 const a = gm.indexOf(START), b = gm.indexOf(END);
 yes('R0 the release block is in gamemode.js', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!(a >= 0 && b > a)) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; } else {
 const block = gm.slice(a, b + END.length);
 
 const A1 = 0xff000a01, A2 = 0xff000a02;
@@ -148,4 +148,5 @@ try {
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

@@ -52,6 +52,10 @@
   that stopped. The scripts' own output is not printed, as Nexus-Run.ps1
   keeps it out of the public log (#2841).
 
+  -RefreshTag repairs the selected mod identities when the published files
+  already match the record. The draft must change only those tags and their
+  ordering references, verified from its downloaded archive before publish.
+
   -WhatIf does 1 and 2, downloads the new files and runs New-NexusRevision.ps1
   -WhatIf, which builds the archive and says every write it would make, and
   writes nothing to Nexus.
@@ -64,6 +68,7 @@
 param(
     [string]$Out = '',
     [string]$Record = '',
+    [string[]]$RefreshTag = @(),
     [switch]$WhatIf
 )
 $ErrorActionPreference = 'Stop'
@@ -82,6 +87,13 @@ function Stop-Record([string]$m) {
     if ($script:OnNexus.Count) { Write-Host ('On Nexus from this run: ' + ($script:OnNexus -join '; ') + '.') -ForegroundColor Yellow }
     else { Write-Host 'Nothing was changed on Nexus.' -ForegroundColor Yellow }
     exit 1
+}
+
+# Preserve requested mode even for malformed/empty input; never fall back to a normal publish.
+$repairRequested = $PSBoundParameters.ContainsKey('RefreshTag')
+$RefreshTag = @($RefreshTag | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() })
+if ($repairRequested -and (-not $RefreshTag.Count -or @($RefreshTag | Where-Object { $_ -notmatch '^[1-9][0-9]{0,8}$' }).Count -or @($RefreshTag | Select-Object -Unique).Count -ne $RefreshTag.Count)) {
+    Stop-Record '-RefreshTag needs a nonempty list of distinct positive Nexus mod numbers.'
 }
 
 if (-not $Record) { $Record = Join-Path $Repo 'records/collection.json' }
@@ -142,7 +154,9 @@ Head "What the record changes on revision $published"
 try { $arc = Receive-NexusRevisionArchive $want.collection $want.game $published (Join-Path $Work 'published') } catch { Stop-Record $_.Exception.Message }
 $sz = Find-SevenZip
 if (-not $sz) { Stop-Record '7-Zip is not on this machine, and the published revision is a 7z archive.' }
-& $sz x -y ('-o' + (Join-Path $Work 'published/x')) $arc.Path 'collection.json' | Out-Null
+$extract = @('x', '-y', ('-o' + (Join-Path $Work 'published/x')), $arc.Path)
+if (-not $repairRequested) { $extract += 'collection.json' }
+& $sz @extract | Out-Null
 $pubJson = Join-Path $Work 'published/x/collection.json'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pubJson)) { Stop-Record "Revision $published's archive holds no collection.json 7-Zip could take out." }
 $collection = [IO.File]::ReadAllText($pubJson) | ConvertFrom-Json
@@ -151,7 +165,16 @@ if ($cs.Problems.Count) {
     foreach ($p in $cs.Problems) { Say "  NO  $p" 'Red' }
     Stop-Record 'The record asks for a change New-NexusRevision.ps1 does not make.'
 }
-if ($cs.Empty) {
+
+if ($RefreshTag.Count) {
+    if (-not $cs.Empty) { Stop-Record '-RefreshTag repairs identities only while the record already matches the published files.' }
+    foreach ($m in $RefreshTag) {
+        if ($m -notmatch '^[1-9][0-9]{0,8}$' -or @($RefreshTag | Where-Object { $_ -eq $m }).Count -ne 1) { Stop-Record '-RefreshTag needs distinct positive Nexus mod numbers.' }
+        if (@($want.mods | Where-Object { [string]$_.modId -eq $m }).Count -ne 1) { Stop-Record ('There is no one recorded entry for mod ' + $m + ' to refresh.') }
+    }
+    Say ('  repair the Vortex reference tags for: ' + ($RefreshTag -join ', '))
+}
+if ($cs.Empty -and -not $RefreshTag.Count) {
     Say "  none: the record is revision $published as published, so there is nothing to draft" 'Green'
     exit 0
 }
@@ -160,6 +183,7 @@ foreach ($l in (Format-CollectionChangeSet $cs)) { Say "  $l" }
 # ------------------------------------------------------------- 3. the draft --
 Head 'The new files'
 $params = [ordered]@{ NoPause = $true; Slug = [string]$want.collection; Game = [string]$want.game }
+if ($RefreshTag.Count) { $params.RefreshTag = [string[]]$RefreshTag }
 try {
     if ($cs.Move.Count) {
         $params.Mod = [string[]]@($cs.Move | ForEach-Object { [string]$_.modId })
@@ -233,6 +257,19 @@ else {
     try { $got = New-CollectionRecordFromLayout $lay } catch { $why = $_.Exception.Message }
     if ($got) { $diff = @(Compare-CollectionRecord $want $got) }
     if ($diff.Count) { $why = "draft revision $draft is not what the record says" }
+}
+# Check the downloaded draft too: a successful layout alone cannot prove tags.
+if ($RefreshTag.Count -and -not $why) {
+    try {
+        $tagDir = Join-Path $Work 'tag-check'
+        $tagArc = Receive-NexusRevisionArchive $want.collection $want.game $draft $tagDir
+        & $sz x -y ('-o' + (Join-Path $tagDir 'x')) $tagArc.Path | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'The draft archive could not be read.' }
+        $node = Get-Command node -ErrorAction Stop
+        $tagResult = @(& $node.Source (Join-Path $Here 'nexus-collection.js') '--check-tags' (Join-Path $Work 'published/x') (Join-Path $tagDir 'x') ($RefreshTag -join ',') 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw 'The draft does not change only the requested identities.' }
+        Say '  the downloaded draft refreshes only the requested Vortex identities' 'Green'
+    } catch { $why = 'draft identity verification failed: ' + $_.Exception.Message }
 }
 if ($why) {
     foreach ($d in $diff) { Say "  NO  $d" 'Red' }

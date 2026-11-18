@@ -102,6 +102,7 @@ const PRINT = args.indexOf('--print') !== -1;
 const PLUGINS_TXT = opt('plugins', 'C:\\Thornswood\\Profile\\Default\\plugins.txt');
 
 const PLUGINS = loadedOrder(PLUGINS_TXT, DATA);
+if (!PLUGINS) return;
 
 // The form types a fire can be. STAT is in the scan so the unlit versions are
 // seen and counted as dropped rather than silently missing.

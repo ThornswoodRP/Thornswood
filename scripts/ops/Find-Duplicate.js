@@ -243,5 +243,5 @@ async function run(argv, env, fetchImpl, say) {
 module.exports = { THRESHOLD, MOST, wordsOf, likelyRepeats, commentFor, sameTitle, stepsOf, exactRepeat, closeCommentFor, openIssues, run };
 
 if (require.main === module) {
-  run(process.argv.slice(2), process.env).then(code => process.exit(code));
+  run(process.argv.slice(2), process.env).then((code) => { process.exitCode = code; });
 }

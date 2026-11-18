@@ -60,7 +60,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(text, a, b) {
   const i = text.indexOf(a);
@@ -75,7 +75,7 @@ const SOCIAL_CMDS = between(src, "    if (word === '/friend' || word === '/party
                             "    if (word === '/rest') {");
 yes('the rules, the character store, the social block and the /yes branch are in the gamemode',
     !!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS));
-if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS)) { done(); }
+if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS)) { done(); return; }
 
 /* One server over a store, the way test-1388-apprentice.js builds it. */
 function server(store, online, gone) {
@@ -366,7 +366,7 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
   try { vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
   const api = win.thornswoodSkills;
   yes('D: the K panel runs in a stand-in document and has takeOn', ran && !!api && typeof api.takeOn === 'function');
-  if (!api) { done(); }
+  if (!api) { done(); return; }
   const root = docu.body.children[0];
   const nav = root._q['.nav'], body = root._q['.body'], status = root._q['.status'], confirmBtn = root._q['[data-act="confirm"]'];
   const navNames = function () {

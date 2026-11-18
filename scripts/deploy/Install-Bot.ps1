@@ -161,6 +161,10 @@ if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 . (Join-Path $Here '..\vps\Write-BotToken.ps1')
 # The bot's code as one list: bot.py and the modules it imports (#5357).
 . (Join-Path $Here 'Bot-Code.ps1')
+# Bot-Service.ps1 is sent to the box for the service install, and read here
+# too for Get-ThornswoodBotInstallVerdict, which says what the full run's
+# lines mean for this run (#4213). It defines functions only.
+. (Join-Path $Here '..\vps\Bot-Service.ps1')
 # The bot sources live at the repo root, in bot\. This script sits two levels
 # down, in scripts\deploy, since #440 sorted the scripts into scripts\<area> on
 # 25 September, so the repo root is two up from here. The copy loop below kept
@@ -1116,7 +1120,9 @@ if (Test-Path `$log) { `$before = (Get-Item `$log).Length }
 
 `$r = Install-ThornswoodBotService -Name '$Service' -Root '$rootWin' -Source '$rootWin\service\BotService.cs' -Task '$Task'
 `$r.Lines
-if (-not `$r.Ok) { 'BOT SERVICE NOT INSTALLED'; return }
+# Not Ok but Started is a service that runs with a step that did not go on
+# (#4213): what it says follows, and the run here stops on it afterwards.
+if (-not `$r.Ok -and -not `$r.Started) { 'BOT SERVICE NOT INSTALLED'; return }
 
 # Opened with FileShare ReadWrite, because the service has it open for
 # writing and anything less strict than that is denied while it does. Shorter
@@ -1158,8 +1164,12 @@ if (-not `$ready) {
 `$said = @(Fresh) | Where-Object { `$_ -match '^\s*\[(thornswood-bot|run)\]' }
 if (`$said) { `$said | Select-Object -Last 25 } elseif (`$freshWhy) { `$freshWhy } else { 'nothing yet' }
 "@))
-$running | ForEach-Object { Say "  $_" }
-if ("$running" -notmatch 'BOT SERVICE NOT INSTALLED' -and "$running" -match ('service ' + $Service + ': Running')) { Save-BotRecord }
+# Read with the verdict (#4213): a step that said COULD NOT, or a service
+# that was not installed, is shown in red, keeps the deploy record from being
+# saved, and ends the run with exit 1 below, after what still has to be said.
+$verdict = Get-ThornswoodBotInstallVerdict $running $Service
+$running | ForEach-Object { if (@($verdict.Red) -contains "$_".Trim()) { Say "  $_" 'Red' } else { Say "  $_" } }
+if (-not $verdict.Why -and "$running" -match ('service ' + $Service + ': Running')) { Save-BotRecord }
 if ("$running" -match 'BOT SERVICE NOT INSTALLED') {
   Write-Host ''
   if ("$running" -match 'Nothing was stopped or changed') {
@@ -1198,6 +1208,7 @@ if ("$settings" -match 'NEW key') {
 }
 Write-Host ''
 Say 'Then check the panel channel above, and try joining with another account.' 'DarkGray'
+if ($verdict.Why) { Die $verdict.Why }
 if ($siteFailed.Count) { Die 'The bot is installed, but the site did not restart onto its key and token: the FAILED line above says why.' }
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }

@@ -92,5 +92,5 @@ server.listen(0, '127.0.0.1', async () => {
     fs.rmSync(empty, { recursive: true, force: true });
   }
   console.log(pass + ' passed, ' + fail + ' failed');
-  if (fail) process.exit(1);
+  if (fail) process.exitCode = 1;
 });

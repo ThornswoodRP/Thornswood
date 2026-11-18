@@ -8,11 +8,10 @@ if(!process.argv[2]||!process.argv[3]){
   const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../game/gamemode.js'),'utf8');
   for(const m of ["NPC SERVER RUNTIME","NPC POPULATION POLICY","NPC POPULATION DATA"]){
     const b=src.indexOf('// '+m+' BEGIN'),e=src.indexOf('// '+m+' END');
-    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exit(1);}
+    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exitCode=1;}
   }
-  console.log('SKIP: shared native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-shared-native.js <addon> <installed.json>); gamemode sections present: NPC SERVER RUNTIME, NPC POPULATION POLICY, NPC POPULATION DATA');
-  process.exit(0);
-}
+  if(!process.exitCode)console.log('SKIP: shared native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-shared-native.js <addon> <installed.json>); gamemode sections present: NPC SERVER RUNTIME, NPC POPULATION POLICY, NPC POPULATION DATA');
+} else {
 const addon = require(path.resolve(process.argv[2]));
 const installed = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 // Acceptance fixture: the installed 102-plugin cast (48 full, 54 light since the
@@ -57,12 +56,13 @@ const threadClock = require('../../tests/thread-clock.js').load();
 // within 20 s on a callback using 47 to 63 ms of CPU; without it the same
 // start ran on past a minute.)
 const collections = [];
-new (require('node:perf_hooks').PerformanceObserver)(list => {
+const gcWatch = new (require('node:perf_hooks').PerformanceObserver)(list => {
   for(const entry of list.getEntries()) {
     collections.push([entry.startTime,entry.startTime+entry.duration]);
     worst.gcPause = Math.max(worst.gcPause,entry.duration);
   }
-}).observe({entryTypes:['gc']});
+});
+gcWatch.observe({entryTypes:['gc']});
 const turn = () => new Promise(resolve => setTimeout(resolve,0)).then(() => new Promise(resolve => setImmediate(resolve)));
 // 103 since #2468: the 102 the collection installs, then Thornswood-Last.esp,
 // which switches every cut placement off at the record (light, so the 48 full
@@ -97,8 +97,8 @@ if(enumerationMode || populationEnumerationMode) {
   if(enumerationMode) assert.equal(ids.size,originalExpectedLoaded,'Verify the unchanged native eligibility fixture');
   assert.deepEqual(server.getLoadedNpcIds(),[...ids].sort((a,b) => a-b));
   console.log(JSON.stringify({nativeEligibleIds:[...ids],peakRssMiB:peak/1048576,candidates:total}));
-  process.exit(0);
-}
+  gcWatch.disconnect();
+} else {
 // Optional isolated previous source supports RED verification without editing
 // the working runtime while its replacement is under review.
 const sourcePath = process.argv[4] || path.join(__dirname,'../../game/gamemode.js');
@@ -610,12 +610,15 @@ try {
   console.log(JSON.stringify({passed:true,population:baselineSummary,candidates,indexingMs,loadedForms:server.getLoadedFormCount(),
     loaded:loaded.size,controlled:controlled.size,unavailable:unavailable.size,peakRssMiB:peakRss/1048576,worst,
     reasons:lines.filter(line => line.includes('activity unavailable')).slice(0,30)}));
-  process.exit(0);
 } catch(error) {
   if(runtime) runtime.stop();
   console.error(JSON.stringify({passed:false,error:error.stack,loaded:loaded.size,controlled:controlled.size,
     unavailable:unavailable.size,peakRssMiB:peakRss/1048576,worst,
     status:runtime && typeof runtime.getStatus === 'function' ? runtime.getStatus() : null}));
-  process.exit(1);
+  process.exitCode = 1;
+} finally {
+  gcWatch.disconnect();
 }
 })();
+}
+}

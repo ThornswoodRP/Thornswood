@@ -214,9 +214,9 @@ function leaks(b) {
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
   console.error(e);
   fs.rmSync(dir, { recursive: true, force: true });
-  process.exit(1);
+  process.exitCode = 1;
 });

@@ -99,4 +99,4 @@ yes('C4 it reads to its end, and what it copies and writes is no more than the p
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

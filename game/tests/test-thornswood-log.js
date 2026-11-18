@@ -31,8 +31,8 @@ const idAt = text.indexOf('Which gamemode.js this is.');
 const b = idAt < 0 ? -1 : text.lastIndexOf('/*', idAt);
 if (a < 0 || b < 0 || b < a) {
   console.error('the log block is not in gamemode.js the way this expects');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 const block = text.slice(a, b);
 
 let pass = 0, fail = 0;
@@ -197,4 +197,5 @@ yes('and it lands in the fresh thornswood.log', (read(LOG) || '').indexOf('gamem
 yes('and thornswood-log.json says ok from the load on', !!state() && state().ok === true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

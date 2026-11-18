@@ -41,7 +41,7 @@ function done() {
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { console.log('      could not remove ' + scratch + ': ' + e.message); }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const IRON = 0x5ace4;

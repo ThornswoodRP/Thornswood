@@ -61,7 +61,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-955-'));
 
@@ -106,7 +106,7 @@ const missing = Object.keys(FNS).filter(function (k) { return !FNS[k]; })
   .concat(CHARGEN ? [] : ['CHARGEN']);
 yes('the chargen tick and everything it calls are in gamemode.js' +
     (missing.length ? ' (missing: ' + missing.join(', ') + ')' : ''), missing.length === 0);
-if (missing.length) { done(); }
+if (missing.length) { done(); return; }
 
 const HALL = new Function('return ' + HALL_SRC)();
 const TOWN_BY_KEY = {};

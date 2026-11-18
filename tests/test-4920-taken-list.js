@@ -138,7 +138,7 @@ function ask(box, root, part) {
       named(priv, P2));
 
   // The next start: server-log.js for real, then the block.
-  put(path.join(root, 'exit.js'), 'process.exit(0);');
+  put(path.join(root, 'exit.js'), 'process.exitCode = 0;');
   const r = cp.spawnSync(process.execPath, [SL_FILE, '--log', path.join(root, 'server.log'), 'exit.js'], { cwd: root, encoding: 'utf8' });
   yes('R the next start runs under server-log.js (' + r.status + ')', r.status === 0);
   const second = load(root);
@@ -160,7 +160,8 @@ if (typeof box.take !== 'function') {
   fs.rmSync(scratch, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 [['just before', true], ['just after', false]].forEach(function (when) {
@@ -205,4 +206,4 @@ if (typeof box.take !== 'function') {
 fs.rmSync(scratch, { recursive: true, force: true });
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

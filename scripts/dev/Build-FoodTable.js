@@ -255,6 +255,7 @@ function walk(b, start, end) {
 }
 
 const order = loadedOrder(pluginsTxt(), DATA);
+if (!order) return;
 here.order = order;
 for (const file of order) {
   const full = pluginPath(DATA, file);

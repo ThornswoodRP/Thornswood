@@ -78,13 +78,13 @@ try {
     Put (Join-Path $root 'tests\test-41-forge.js') ("console.log('PASS  the forge lights');`n" +
         "console.log('FAIL  the forge makes one dagger (made 2)');`n" +
         "console.log('FAIL  the dagger weighs 4 (weighs 0)');`n" +
-        "process.exit(1);`n")
+        "process.exitCode = 1;`n")
     Put (Join-Path $root 'tests\test-42-tannery.ps1') ("Write-Host 'PASS  the rack stands'`n" +
         "Write-Host 'FAIL  a hide becomes leather (it stayed a hide)'`n" +
         "exit 1`n")
     Put (Join-Path $root 'launcher\tests\test-43-smelter.js') ("console.log('reading the ore table');`n" +
         "throw new Error('the smelter has no fuel row');`n")
-    Put (Join-Path $root 'tests\test-44-well.js') "console.log('PASS  the well holds water');`nprocess.exit(0);`n"
+    Put (Join-Path $root 'tests\test-44-well.js') "console.log('PASS  the well holds water');`nprocess.exitCode = 0;`n"
 
     # The share's report for those four, as the runner writes it
     # (Nightly-Harnesses.ps1 Write-Report; tests\test-5295-harness-report.ps1

@@ -146,5 +146,5 @@ function cookieFor(secret, id, name) {
   yes('C2 and the three tiers', /Milk Drinker, \$3/.test(pat) && /Talos Worshiper, \$7/.test(pat) && /Thalmor Boot-Licker, \$15/.test(pat));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

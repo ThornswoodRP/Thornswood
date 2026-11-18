@@ -67,9 +67,10 @@ async function until(cond, ms) {
   return cond();
 }
 
+let siteServer = null;
 function siteThatSaysYes() {
   return new Promise((ok) => {
-    const site = http.createServer((req, res) => {
+    const site = siteServer = http.createServer((req, res) => {
       req.resume();
       req.on('end', () => {
         if (req.method === 'POST' && req.url === '/api/play/owns') {
@@ -131,7 +132,7 @@ async function service(site) {
   const slow = new Promise((ok, bad) => { late = setTimeout(() => bad(new Error('the voice service did not say it was listening on ' + port +
                                                                               ' within fifteen seconds. It printed:\n' + svc.log)), 15000); });
   try {
-    require(path.join(dir, 'voice-server.js'));
+    svc.stop = require(path.join(dir, 'voice-server.js')).stop;
     await Promise.race([heard, failed, slow]);
   } finally {
     clearTimeout(late);
@@ -314,10 +315,13 @@ function worst(list, from) {
 
 function finish() {
   for (const ws of opened) { try { ws.close(); } catch (e) { } }
-  if (svc) { try { fs.rmSync(svc.dir, { recursive: true, force: true }); } catch (e) { } }
+  // The service's asks to the stand-in site leave kept-alive connections open.
+  if (siteServer) { siteServer.closeAllConnections(); siteServer.close(); }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  // The service shares this process and its listener and timers never end,
-  // so the harness ends it.
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
+  // The service shares this process, so the harness stops it, and node ends
+  // once its listener, sockets and timers are closed (#6036).
+  const rm = () => { if (svc) { try { fs.rmSync(svc.dir, { recursive: true, force: true }); } catch (e) { } } };
+  if (svc && svc.stop) svc.stop().then(rm); else rm();
 }

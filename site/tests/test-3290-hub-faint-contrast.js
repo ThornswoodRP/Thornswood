@@ -115,4 +115,4 @@ yes('the measure finds the old #616B53 under 4.5 to 1 on --ink (' + old.length +
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

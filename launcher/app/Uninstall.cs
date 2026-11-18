@@ -790,8 +790,9 @@ namespace Thornswood
                 sb.AppendLine("if exist \"" + CmdPath(updateExe) + "\" call \"" + CmdPath(updateExe) + "\" --uninstall --silent");
             }
 
-            // Last, say what survived and why.
-            if (note != null)
+            // Last, say what survived and why. An empty note is no note: cmd
+            // reads del /f /q "" as every file in its working folder (#6382).
+            if (!string.IsNullOrEmpty(note))
             {
                 sb.AppendLine("powershell -NoProfile -ExecutionPolicy Bypass -File \"" + CmdPath(note) + "\" >nul 2>&1");
                 sb.AppendLine("del /f /q \"" + CmdPath(note) + "\" >nul 2>&1");

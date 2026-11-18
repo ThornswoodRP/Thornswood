@@ -89,4 +89,4 @@ yes('it lists the six the repository has (' + (got.join(', ') || 'none') + ')',
   got.length === BOTS.length && BOTS.every((b) => got.includes(b)));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

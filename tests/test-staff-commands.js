@@ -536,7 +536,7 @@ function join(pid, name, tok) {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (m.t === 'welcome') {
         welcomed = true;
-        done({ heard: heard, hush: hush, who: who, say: (text) => ws.send(JSON.stringify({ t: 'chat', text: text })) });
+        clearTimeout(late); done({ heard: heard, hush: hush, who: who, say: (text) => ws.send(JSON.stringify({ t: 'chat', text: text })) });
       }
       if (m.t === 'chat') { heard.push(m); }
       if (m.t === 'hush') { hush.push(m); }
@@ -550,9 +550,9 @@ function join(pid, name, tok) {
       }
     };
     // Refused at the handshake (#1303, #1337): no socket, so nothing to say on.
-    ws.onerror = () => { if (!welcomed) { done({ refused: true }); } };
-    ws.onclose = () => { if (!welcomed) { done({ refused: true }); } };
-    setTimeout(() => bad(new Error('no welcome')), 4000);
+    ws.onerror = () => { if (!welcomed) { clearTimeout(late); done({ refused: true }); } };
+    ws.onclose = () => { if (!welcomed) { clearTimeout(late); done({ refused: true }); } };
+    const late = setTimeout(() => bad(new Error('no welcome')), 4000);
   });
 }
 async function commands() {
@@ -668,5 +668,4 @@ function python(args) {
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');
     process.exitCode = fail ? 1 : 0;
-    setTimeout(() => process.exit(process.exitCode), 1500).unref();
   });

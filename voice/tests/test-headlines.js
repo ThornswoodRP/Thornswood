@@ -67,4 +67,4 @@ yes('hiding a name does not hide the mark', heads.markVisible({ talking: true, m
 yes('turning off their text does not hide the mark', heads.markVisible({ talking: true, metres: 1, textMuted: true }));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

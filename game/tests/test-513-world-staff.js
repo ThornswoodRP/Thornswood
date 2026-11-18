@@ -68,7 +68,7 @@ const worldBlock = slice(gm, '// ==== thornswood world stage ====', '// ==== end
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the world stage block is in the gamemode', !!worldBlock);
 yes('the property block is in the gamemode', !!propBlock);
-if (!worldBlock || !propBlock) { done(); process.exit(1); }
+if (!worldBlock || !propBlock) { done(); process.exitCode = 1; } else {
 const tableText = slice(worldBlock, '// ==== WAR_STAGES ====', '// ==== end WAR_STAGES ====') || '';
 const tableMatch = /var WAR_STAGES = (\{[^\n]*\});\n/.exec(tableText);
 
@@ -467,3 +467,4 @@ attempt('the K panel', function () {
 
 try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 done();
+}

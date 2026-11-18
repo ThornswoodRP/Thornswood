@@ -82,8 +82,8 @@ const OFFICE_VIEW = between('  function officeView(actorId, profileId) {', '\n  
   .forEach(function (x) { yes(x[0] + ' is in gamemode.js', !!x[1]); });
 if (!COMMANDS || !STAFF || !CRAFT || !RULES || !PLACE_ACTORS || !HIDDEN || !CHARACTER || !TABLE || !OFFICE_VIEW) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 /* ------------------------------------------------------------- the wiring */
 const arrayOf = function (name) {
@@ -518,4 +518,5 @@ yes('X1 nothing the card or the server says uses an em dash or the word for some
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

@@ -103,4 +103,4 @@ yes('the scan before the folder is made does not judge the made files against Pr
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;
