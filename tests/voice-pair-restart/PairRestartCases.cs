@@ -87,6 +87,11 @@ namespace Thornswood
                 A = pa; B = pb;
                 a = new IPEndPoint(IPAddress.Loopback, (int)Get(Get(pa, "ice"), "port"));
                 b = new IPEndPoint(IPAddress.Loopback, (int)Get(Get(pb, "ice"), "port"));
+                // Replacing a generation can deliver a late UDP packet to its
+                // already-closed port. Match VoiceIce's Windows behavior:
+                // that ICMP reply must not terminate the independent reader.
+                if (OperatingSystem.IsWindows())
+                    socket.IOControl(unchecked((int)0x9800000C), new byte[] { 0, 0, 0, 0 }, null);
                 socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
                 reader = new Thread(Read) { IsBackground = true };
                 reader.Start();
@@ -218,9 +223,28 @@ namespace Thornswood
             Check("stale, duplicate, exhausted-budget and retired-PC callbacks cannot rebuild", a.Pc(2) == renewed && Count(a, "sdp") == offers);
             b.Message(new { t = "voice-restart", from = 1, to = 2, ufrag = b.Pc(1).LocalUfrag });
             room.Pump();
-            Check("the offerer cannot request a reverse-role restart", Count(b, "voice-restart") == 1);
+            Check("the offerer cannot request a reverse-role restart", Count(b, "voice-restart") == 1 && (int)Get(b.Rec(1), "Restarts") == 1 && Secure(b.Pc(1)));
+            // Use an unspent healthy pair so these cannot pass merely because
+            // the failed pair has already exhausted its retry budget.
+            var invalid = new object[]
+            {
+                new { t = "voice-restart", from = 3, to = 1, ufrag = ac.LocalUfrag, extra = true },
+                new { t = "voice-restart", from = "3", to = 1, ufrag = ac.LocalUfrag },
+                new { t = "voice-restart", from = 3, to = "1", ufrag = ac.LocalUfrag },
+                new { t = "voice-restart", from = 3, to = 1, ufrag = "wrongGeneration" },
+                new { t = "voice-restart", from = 3, to = 1, ufrag = "bad fragment" },
+                new { t = "voice-restart", from = 3, to = 1, ufrag = new string('x', 257) },
+                new { t = "voice-restart", from = 3, to = 2, ufrag = ac.LocalUfrag },
+                new { t = "voice-restart", from = 3, to = 1 },
+                new { t = "voice-restart", from = 99, to = 1, ufrag = ac.LocalUfrag }
+            };
+            foreach (var value in invalid)
+            {
+                a.Message(value); room.Pump();
+                Check("malformed or stale control cannot consume the healthy pair budget", a.Pc(3) == ac && (int)Get(a.Rec(3), "Restarts") == 0);
+            }
             a.Clock.Advance(31000, () => room.Pump()); b.Clock.Advance(31000, () => room.Pump());
-            Check("completed restart cancels its old wait without failure notice", !b.Events.Exists(x => x.Contains("could not reconnect")));
+            Check("completed restart cancels its old wait without failure notice", !b.Events.Exists(x => x.Contains("could not reach")));
 
             // An older peer or older service safely ignores this optional kind.
             // Model that wire behavior; do not pretend it can recover the pair.
@@ -232,7 +256,7 @@ namespace Thornswood
             Call(modernPc, "State", "failed"); mixed.Pump();
             Check("legacy ignore causes no reverse offer or unrelated teardown", old.Pc(5) == oldPc && modern.Pc(4) == modernPc && Count(modern, "voice-restart") == 1);
             modern.Clock.Advance(30001, mixed.Pump);
-            Check("ignored request ends in one bounded, honest failure notice", modern.Events.FindAll(x => x.Contains("could not reconnect")).Count == 1);
+            Check("ignored request ends in one bounded, honest failure notice", modern.Events.FindAll(x => x.Contains("could not reach")).Count == 1);
             modern.Clock.Advance(60000, mixed.Pump);
             Check("no unbounded request/rejoin retry follows legacy ignore", Count(modern, "voice-restart") == 1 && old.Pc(5) == oldPc);
             return JsonSerializer.Serialize(new { checks });
