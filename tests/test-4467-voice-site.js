@@ -17,8 +17,8 @@
   and a stand-in site:
 
     A  scripts\deploy\VoiceSite.ps1's Get-VoiceSiteProblem refuses an empty
-       site, a blank one, one that is not https, and one carrying anything
-       a cmd.exe line would run, and takes https://thornswood.net;
+       site, a blank one, and one carrying anything a cmd.exe line would run.
+       It takes HTTPS sites and the co-hosted Site's loopback address;
     B  its join check (Get-VoiceJoinCheck, the text the install runs on the
        box, read by Read-VoiceJoin), run against a service with no site,
        says a join does not get through and why (503);
@@ -26,8 +26,8 @@
        says a join reaches the site (403 ticket), which is what a working
        box answers a ticket nobody holds;
     D  Install-Voice.ps1 asks the first before it reaches for ssh or builds
-       anything, runs the second on the box after the swap and after
-       -TaskOnly and stops when it fails, and its words say what the site is
+       anything, runs the second on the box after the swap and before
+       accepting a -TaskOnly change, and its words say what the site is
        for and that the port is opened only on an outside bind.
 
   Nothing leaves the machine. The temp folder is removed at the end.
@@ -99,7 +99,9 @@ async function startVoice(site) {
                                           THORNSWOOD_SITE: site, THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   await listening(srv, port);
-  return { srv: srv, port: port };
+  let log = '';
+  srv.stdout.on('data', (d) => { log += d; });
+  return { srv, port, log: () => log };
 }
 // The install's join check, run here as the box runs it, and read as the install reads it.
 // Not through ps(): spawnSync would hold this process's event loop, where the
@@ -135,6 +137,11 @@ function stop(srv) {
     // -------------------------------------------------------------- A --
     console.log('\nA. which site addresses the install takes:');
     for (const [s, take] of [['', false], ['   ', false], ['http://thornswood.net', false],
+                             ['http://127.0.0.1:3001', true], ['http://127.0.0.1:3001/', true],
+                             ['http://127.0.0.1:3002', false], ['http://localhost:3001', false],
+                             ['http://127.0.0.1:3001@thornswood.net', false],
+                             ['http://127.0.0.1:3001?other=yes', false],
+                             ['http://127.0.0.1:3001/other', false],
                              ['https://thornswood.net&& calc', false], ['https://thornswood.net', true],
                              ['https://thornswood.net/', true]]) {
       const r = ps('Get-VoiceSiteProblem ' + lit(s));
@@ -153,12 +160,20 @@ function stop(srv) {
 
     // -------------------------------------------------------------- C --
     console.log('\nC. a service whose site answers says a join reaches it:');
-    let asked = 0;
+    let asked = 0, ownsStatus = 200, interrupt = false;
     site = http.createServer((q, s) => {
       if (q.method === 'POST' && q.url === '/api/play/owns') {
         asked++;
         q.resume();
-        q.on('end', () => { s.writeHead(200, { 'content-type': 'application/json' }); s.end('{"ok":false,"why":"ticket"}'); });
+        q.on('end', () => {
+          s.writeHead(ownsStatus, { 'content-type': 'application/json' });
+          if (interrupt) {
+            s.write('{"ok":');
+            setTimeout(() => s.destroy(), 100);
+            return;
+          }
+          s.end('{"ok":false,"why":"ticket"}');
+        });
         return;
       }
       s.writeHead(404); s.end();
@@ -169,11 +184,32 @@ function stop(srv) {
     yes('the join check says a join reaches the site (' + (r.value && r.value.Said) + ')',
         r.ok && r.value && r.value.Ok === true, r.said);
     yes('  and the site was asked', asked >= 1);
+    ownsStatus = 503;
+    r = await joinCheck(voice.port);
+    yes('the site HTTP failure fails closed', r.ok && r.value && !r.value.Ok && /503/.test(r.value.Said));
+    yes('the log identifies a Site response separately from a broken transport',
+        /ownership endpoint returned HTTP 503/.test(voice.log()));
+    interrupt = true;
+    r = await joinCheck(voice.port);
+    yes('a partial Site failure fails closed without taking down voice',
+        r.ok && r.value && !r.value.Ok && /503/.test(r.value.Said) && voice.srv.exitCode === null);
+    ownsStatus = 200;
+    r = await joinCheck(voice.port);
+    yes('the log identifies an interrupted response',
+        r.ok && r.value && !r.value.Ok && /503/.test(r.value.Said) &&
+        /ownership response was interrupted/.test(voice.log()));
 
     // -------------------------------------------------------------- D --
     console.log('\nD. Install-Voice.ps1:');
     const iv = fs.readFileSync(INSTALL, 'utf8').replace(/\r\n/g, '\n');
     const at = (s) => iv.indexOf(s);
+    yes('the co-hosted installer uses the local Site for admission',
+        /\[string\]\$Site = 'http:\/\/127\.0\.0\.1:3001'/.test(iv));
+    yes('the local admission address leaves the public voice health probe on HTTPS',
+        iv.includes("$healthSite = if (") && iv.includes("'https://thornswood.net'") && iv.includes('$via = $healthSite + '));
+    const dev = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'vps', 'vps-dev-instance.ps1'), 'utf8');
+    yes('Dev provisioning uses the local Site for admission',
+        dev.includes('set THORNSWOOD_SITE=http://127.0.0.1:3001'));
     yes('it dot-sources VoiceSite.ps1', /\. \(Join-Path \$Here 'VoiceSite\.ps1'\)/.test(iv));
     const askSite = at('Get-VoiceSiteProblem $Site');
     yes('it asks Get-VoiceSiteProblem before it looks for ssh and before it builds anything',
@@ -188,8 +224,12 @@ function stop(srv) {
     yes('it is asked after the swap and its record, in the checks',
         checking > 0 && recorded > checking && iv.indexOf('\nAssert-VoiceJoin', recorded) > recorded);
     const taskOnly = at('if ($TaskOnly) {');
-    yes('  and after -TaskOnly, whose new task carries -Site too',
-        taskOnly > 0 && /\n\s+Assert-VoiceJoin\s*\n/.test(iv.slice(taskOnly, iv.indexOf('exit 0', taskOnly))));
+    const taskBlockStart = at("$taskOnlyBlock = @'");
+    const taskBlock = iv.slice(taskBlockStart, iv.indexOf("'@", taskBlockStart));
+    yes('TaskOnly sends the join check with the task switch',
+        taskOnly > 0 && iv.slice(taskOnly, iv.indexOf('exit 0', taskOnly)).includes('$taskOnlyJoin, $taskOnlyBlock'));
+    yes('TaskOnly checks the join before accepting the task, and rolls back on failure',
+        /\$joinReply = CheckTaskJoin[\s\S]*?\$ready = .* -ceq 'JOIN 403 ticket'[\s\S]*?if \(\$ready\) \{[\s\S]*?'TASK OK'[\s\S]*?\$Rolling = \$true[\s\S]*?'TASK ROLLED BACK'/.test(taskBlock));
     yes('its words no longer say the site is asked about character creation choices, or that empty turns a check off',
         !/character creation choices/.test(iv) && !/Empty\s+#?\s*turns that\s+#?\s*check off/.test(iv));
     yes('its header no longer says it opens the one port it needs',

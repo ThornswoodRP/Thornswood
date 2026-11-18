@@ -296,6 +296,36 @@
         "PutBack": "switch"
       }
     },
+    "Set-DevVoiceSite": {
+      "script": "scripts/deploy/Install-Voice.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/deploy/VoiceSite.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
+      "timeoutMinutes": 10,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Root", "C:\\Thornswood-Voice-Dev", "-TaskName", "Thornswood Dev Voice", "-Port", "7789", "-Site", "http://127.0.0.1:3001", "-TaskOnly", "-NoPause"],
+      "params": {}
+    },
     "Request-Restart": {
       "script": "scripts/vps/Request-Restart.ps1",
       "reads": [
