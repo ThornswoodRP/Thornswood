@@ -158,6 +158,21 @@ try {
     Yes '1   and the step after it the whole order' ($r.After -eq $whole)
     Yes '1   and the run says which steps read it without the Last plugin' ($r.Out -match 'steps 1 to 1, before scripts/mods/Build-LastPlugin\.py, read it without Thornswood-Last\.esp')
 
+    $proofChain = $chain.Replace('"writes": ["game/data/before.txt"]', '"writes": ["game/data/before.txt", "game/data/proof.json"], "orderProof": "game/data/proof.json"')
+    $p = New-Sandbox $proofChain
+    $roots += $p
+    . (Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')
+    $good = Get-LoadOrderName ($masters + @('A.esp', 'Thornswood-Content.esp', 'B.esp'))
+    $wrong = Get-LoadOrderName ($masters + @('B.esp', 'Thornswood-Content.esp', 'A.esp'))
+    Put $p 'game/data/proof.json' (@{ source = "fixture of $wrong" } | ConvertTo-Json)
+    $r = Invoke-Chain $p
+    Yes 'a table with the right count but a different order stops before the next builder' (
+        $r.Code -ne 0 -and $r.Ran -eq 'before' -and $r.Out -match 'game/data/proof\.json')
+    Remove-Item -LiteralPath (Join-Path $p 'run.log')
+    Put $p 'game/data/proof.json' (@{ source = "fixture of $good" } | ConvertTo-Json)
+    $r = Invoke-Chain $p
+    Yes 'the matching order lets the chain finish' ($r.Code -eq 0 -and $r.Ran -eq 'before,last,after')
+
     $c = New-Sandbox
     $roots += $c
     $r = Invoke-Chain $c @('-List')
