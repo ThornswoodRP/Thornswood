@@ -100,7 +100,6 @@ if (-not $Remove) {
     }
     # The service puts /api/play/owns straight after it.
     $Site = $Site.Trim().TrimEnd('/')
-    $healthSite = if ($Site -ceq 'http://127.0.0.1:3001') { 'https://thornswood.net' } else { $Site }
 }
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
@@ -686,7 +685,7 @@ function CheckTaskJoin {
 $(Get-VoiceJoinCheck $Port)
 }
 "@
-$taskOnlyBlock = @'
+$taskOnlyBlock = $taskOnlyJoin + "`r`n" + @'
 $Rolling = $false
 $wantBuild = Build
 # Held while it is stopped (#5155, ServerHold.ps1), so the watchdog leaves
@@ -824,7 +823,7 @@ if ($Remove) {
 
 if ($TaskOnly) {
     $vars = $ThornswoodHoldText + (ServiceSwapVars $Root 'none' 'none' $Wait ([ordered]@{}) @() $TaskName) + '$KeepTask = $false' + "`r`n"
-    $taskOut = @(Remote (@($vars, $ThornswoodStopAndMoveText, $voiceTools, $remote, $taskOnlyJoin, $taskOnlyBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
+    $taskOut = @(Remote (@($vars, $ThornswoodStopAndMoveText, $voiceTools, $remote, $taskOnlyBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
     if ($taskOut -notcontains 'TASK OK') { Die 'voice was not restarted under a new task. The lines above say what is running.' }
     Say 'registered again, and voice answers and checks joins under the new task' 'Green'
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
@@ -896,6 +895,7 @@ if ($Bind -eq '127.0.0.1') {
     # Through the site /health says only ok (#3806): the build, bind and auth
     # go to a caller on the box, and the build was read there above.
     if (-not $reachable) {
+        $healthSite = if ($Site -ceq 'http://127.0.0.1:3001') { 'https://thornswood.net' } else { $Site }
         $via = $healthSite + $(if ($Port -eq 7778) { '/voice' } else { '/voice-dev' })
         try {
             $h = Invoke-RestMethod ($via + '/health') -TimeoutSec 10

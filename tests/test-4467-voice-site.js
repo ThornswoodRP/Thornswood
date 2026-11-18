@@ -224,10 +224,11 @@ function stop(srv) {
     yes('it is asked after the swap and its record, in the checks',
         checking > 0 && recorded > checking && iv.indexOf('\nAssert-VoiceJoin', recorded) > recorded);
     const taskOnly = at('if ($TaskOnly) {');
-    const taskBlockStart = at("$taskOnlyBlock = @'");
+    const taskBlockStart = at('$taskOnlyBlock = $taskOnlyJoin');
     const taskBlock = iv.slice(taskBlockStart, iv.indexOf("'@", taskBlockStart));
     yes('TaskOnly sends the join check with the task switch',
-        taskOnly > 0 && iv.slice(taskOnly, iv.indexOf('exit 0', taskOnly)).includes('$taskOnlyJoin, $taskOnlyBlock'));
+        taskBlockStart > 0 && taskOnly > taskBlockStart &&
+        iv.slice(taskOnly, iv.indexOf('exit 0', taskOnly)).includes('$remote, $taskOnlyBlock'));
     yes('TaskOnly checks the join before accepting the task, and rolls back on failure',
         /\$joinReply = CheckTaskJoin[\s\S]*?\$ready = .* -ceq 'JOIN 403 ticket'[\s\S]*?if \(\$ready\) \{[\s\S]*?'TASK OK'[\s\S]*?\$Rolling = \$true[\s\S]*?'TASK ROLLED BACK'/.test(taskBlock));
     yes('its words no longer say the site is asked about character creation choices, or that empty turns a check off',
