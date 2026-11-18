@@ -2987,6 +2987,24 @@ server.on('upgrade', (req, socket, head) => {
     */
     if (msg.t === 'ping') { ws.send({ t: 'pong' }); return; }
 
+    // An answerer can lose incoming ICE while its offerer still receives
+    // consent checks. This optional control asks only that current offerer
+    // to retry the pair. Its client checks the fragment and existing retry
+    // budget; no roster, other pair, auth token or peer identity changes.
+    if (msg.t === 'voice-restart') {
+      const keys = Object.keys(msg);
+      if (keys.length !== 3 || keys.some((k) => k !== 't' && k !== 'to' && k !== 'ufrag')) return;
+      if (!Number.isSafeInteger(msg.to) || msg.to <= 0 || msg.to >= myId ||
+          typeof msg.ufrag !== 'string' || !/^[A-Za-z0-9+/]{4,256}$/.test(msg.ufrag)) return;
+      const me = peers.get(myId), to = peers.get(msg.to);
+      // hasVoice is a profile's place; a second chat-only socket sharing it
+      // must not gain this control over an actual voice connection.
+      if (!me || !to || me.voice !== true || to.voice !== true || !hasVoice(me) || !hasVoice(to)) return;
+      if (!hears(me, to) || !hears(to, me)) return;
+      to.ws.send({ t: 'voice-restart', to: msg.to, ufrag: msg.ufrag, from: myId });
+      return;
+    }
+
     // Signalling is passed on as signalling and nothing else (#1350). The
     // server never inspects what an offer or a candidate says, it only
     // decides who is allowed to hear it; see signal for the shape.
