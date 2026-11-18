@@ -519,6 +519,9 @@ namespace Thornswood
             StartWrites(s, "pack1");
             string package = Path.Combine(s.Dir, "package");
             string script = "Data/Scripts/PackageFixture.pex";
+            string legacy = "Data\\LegacyFixture.pex";
+            Put(Path.Combine(s.Payload, legacy), "an older release's file");
+            File.AppendAllText(Path.Combine(Paths.ProfileDir, "release-files.txt"), legacy + "\n");
             byte[] plugin = Encoding.ASCII.GetBytes("fixture last plugin");
             var recipe = new List<byte>(new byte[] { 84, 83, 76, 82, 1 });
             recipe.AddRange(BitConverter.GetBytes((uint)plugin.Length));
@@ -563,6 +566,8 @@ namespace Thornswood
                 string shippedScript = Path.Combine(Paths.Game, script.Replace('/', Path.DirectorySeparatorChar));
                 Yes("package: first refresh keeps the installed recipe", File.Exists(lastRecipe));
                 Yes("package: first refresh keeps another shipped script", File.Exists(shippedScript));
+                Yes("package: the installed version excludes an older sync's ownership",
+                    !Updater.ReleaseFiles().Contains(legacy) && !File.Exists(Path.Combine(Paths.Game, legacy)));
                 // An affected older install has lost the files AND their own-
                 // folder record. The package must diagnose that independently.
                 File.Delete(lastRecipe); File.Delete(shippedScript);
@@ -575,9 +580,21 @@ namespace Thornswood
                 typeof(Upkeep).GetMethod("LostFiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
                     .Invoke(null, new object[] { s.Cfg, true, false, issues });
                 Yes("package: Scan diagnoses files removed from the old folder record", issues.Exists(i => i.Kind == IssueKind.OursLost));
+                issues.Add(Issue.Of(IssueKind.Update, "fixture update waiting", "fixture", "fixture", false));
                 Upkeep.FixOnDisk(s.Cfg, issues, m => Say(s, m));
-                Yes("package: one Fix restores the recipe and script", File.Exists(lastRecipe) && File.Exists(shippedScript));
+                Yes("package: one Fix restores the installed recipe and script even with an update waiting", File.Exists(lastRecipe) && File.Exists(shippedScript));
                 Yes("package: that same Fix builds the missing last plugin", LastPlugin.IsCurrent(Paths.Game));
+                // A cached list is untrusted until its signed hash is checked.
+                // A valid old sync must not become a destructive fallback.
+                string cached = Path.Combine(Paths.ProfileDir, "GitHub", tag, "game-files.json");
+                File.WriteAllText(cached, "{}");
+                Deploy(s, DateTime.UtcNow.AddMinutes(1));
+                var ownBefore = Snap(Paths.Game);
+                bool refused = false;
+                try { OwnGame.Refresh(s.Cfg, null); }
+                catch (Exception ex) { refused = ex.Message.Contains("game-files.json"); }
+                Yes("package: an unauthenticated list stops refresh before any file changes", refused && Same(ownBefore, Snap(Paths.Game)));
+                File.WriteAllBytes(cached, game);
             }
             finally { current.SetValue(null, before); held.Remove(tag); }
         }
