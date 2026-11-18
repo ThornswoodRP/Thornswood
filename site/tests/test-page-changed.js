@@ -6,6 +6,7 @@
 // was added. No server and no VPS: this reads the files.
 
 const path = require('path');
+const os = require('node:os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFileSync } = require('node:child_process');
@@ -49,14 +50,14 @@ const lfText = text => text.replace(/\r\n/g, '\n');
 const wording = text => lfText(text).replace(DATE_LINE, '');
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 
-// The first parent is the receiving branch. In the gate this is also true
-// of GitHub's test merge. Ignore commits that only fix the date line.
-function lastWordingDay() {
-  const commits = git('log', '--first-parent', '--format=%H %ct', 'HEAD', '--', PRIVACY).trim().split('\n');
+// Ignore commits that only fix the date line. On a main checkout this walks
+// the history that actually landed, not the pull request or queue history.
+function lastWordingDay(readGit = git, revision = 'HEAD') {
+  const commits = readGit('log', '--first-parent', '--format=%H %ct', revision, '--', PRIVACY).trim().split('\n');
   for (let i = 0; i + 1 < commits.length; i++) {
     const [head, seconds] = commits[i].split(' ');
     const [before] = commits[i + 1].split(' ');
-    if (wording(git('show', head + ':' + PRIVACY)) !== wording(git('show', before + ':' + PRIVACY))) {
+    if (wording(readGit('show', head + ':' + PRIVACY)) !== wording(readGit('show', before + ':' + PRIVACY))) {
       return new Date(Number(seconds) * 1000).toISOString().slice(0, 10);
     }
   }
@@ -125,18 +126,59 @@ for (const name of PAGES) {
   yes(name + ' does not stamp today on the current text', bySha[sha(forMode(raw, false))] !== '2026-10-02');
 }
 
-// A wording edit on the next day fails with the previous metadata, even if
-// someone recomputes the hashes without moving the date.
-const nextDay = '2026-11-17';
-const stale = '# Privacy\n\nLast changed: 16 November 2026.\n\nNew wording.\n';
-const oldRows = [{ sha256: sha(stale.replace('New wording', 'Old wording')), changed: '2026-11-16' }];
-yes('a wording edit with stale date and rows is rejected', privacyErrors(stale, oldRows, nextDay).length === 3);
 const rowsFor = (text, day) => [text, text.replace(/\n/g, '\r\n')].map(x => ({ sha256: sha(x), changed: day }));
-yes('rehashing new wording under the old date still fails',
-    privacyErrors(stale, rowsFor(stale, '2026-11-16'), nextDay).length === 3);
-const fresh = stale.replace('16 November', '17 November');
-yes('the wording and both line endings pass once the date and rows agree',
-    privacyErrors(fresh, rowsFor(fresh, nextDay), nextDay).length === 0);
+
+// A test merge and a landed squash can have the same tree and different days.
+// Exercise the Git history lookup against both, not a date supplied by a fixture.
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'privacy-merge-day-'));
+try {
+  const fixtureGit = (day, ...args) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...args], {
+    cwd: scratch, encoding: 'utf8', env: { ...process.env,
+      GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
+      GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid',
+      GIT_AUTHOR_DATE: day, GIT_COMMITTER_DATE: day }
+  });
+  const before = '2026-11-16T23:59:30Z';
+  const after = '2026-11-17T00:00:30Z';
+  const run = (...args) => fixtureGit(before, ...args);
+  const page = path.join(scratch, PRIVACY);
+  const stale = '# Privacy\n\nLast changed: 16 November 2026.\n\nNew wording.\n';
+  run('init', '-q', '-b', 'main');
+  fs.mkdirSync(path.dirname(page), { recursive: true });
+  fs.writeFileSync(page, stale.replace('New wording', 'Old wording'));
+  run('add', PRIVACY);
+  fixtureGit('2026-11-15T12:00:00Z', 'commit', '-qm', 'Old wording');
+  run('checkout', '-qb', 'proposed');
+  fs.writeFileSync(page, stale);
+  run('add', PRIVACY);
+  run('commit', '-qm', 'New wording');
+  run('checkout', '-qb', 'candidate', 'main');
+  run('merge', '-q', '--no-ff', '-m', 'Test merge', 'proposed');
+  run('checkout', '-q', 'main');
+  run('merge', '-q', '--squash', 'proposed');
+  fixtureGit(after, 'commit', '-qm', 'Landed squash');
+  yes('the candidate and landed main have identical trees',
+    run('rev-parse', 'candidate^{tree}') === run('rev-parse', 'main^{tree}'));
+  const candidateDay = lastWordingDay(run, 'candidate');
+  const landedDay = lastWordingDay(run, 'main');
+  yes('Git history puts the candidate and landed wording on different UTC days',
+    candidateDay === '2026-11-16' && landedDay === '2026-11-17');
+  const proposedRows = rowsFor(stale, candidateDay);
+  yes('the candidate date and hashes pass on the test merge only',
+    privacyErrors(run('show', 'candidate:' + PRIVACY), proposedRows, candidateDay).length === 0);
+  yes('the landed commit rejects yesterday’s date and both rows even though the tree matches',
+    privacyErrors(run('show', 'main:' + PRIVACY), proposedRows, landedDay).length === 3);
+  const fresh = stale.replace('16 November', '17 November');
+  fs.writeFileSync(page, fresh);
+  run('add', PRIVACY);
+  fixtureGit('2026-11-18T12:00:00Z', 'commit', '-qm', 'Date correction only');
+  const correctedDay = lastWordingDay(run, 'main');
+  yes('a later date-only commit still checks against the landed wording day',
+    correctedDay === landedDay &&
+    privacyErrors(run('show', 'main:' + PRIVACY), rowsFor(fresh, correctedDay), correctedDay).length === 0);
+} finally {
+  fs.rmSync(scratch, { recursive: true, force: true });
+}
 
 const sample = (list.pages.terms || [])[0];
 yes('a listed hash is 64 hex characters', sample && /^[0-9a-f]{64}$/.test(sample.sha256));
