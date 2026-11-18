@@ -140,5 +140,5 @@ Not from the chat: `/restart` and `/shutdown` answer that restarts are not run f
 
 | Command | Who | What it does |
 | --- | --- | --- |
-| `/close [why]` | Staff, in a ticket: the bot's `STAFF_ROLES`, by id or name, never Manage Threads alone (#1342) | Closes the ticket |
+| `/close [why]` | Staff (`STAFF_ROLES`, by ID or name), or a role ID in `UPPER_STAFF_ROLES` for a Faction Leader ticket. Manage Threads alone does not qualify | Archives and locks the ticket from inside its own thread |
 | `/test-task title body [tag]` | Owner, Dev and Lead Gamemaster (`TEST_TASK_ROLES`) | Posts one thread: tagged Main (the default) in the #test-tasks forum, for testers on main, or tagged Dev in the staff-only #dev-test-tasks, for something someone on dev has to measure (Patrick, 12 Oct). The Live smoke checklist and `/live-smoke` were taken out on 11 October |
