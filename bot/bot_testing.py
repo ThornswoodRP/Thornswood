@@ -610,8 +610,8 @@ async def test_task_cmd(interaction: discord.Interaction, title: str,
         await _say(interaction, 'This one works in the server.')
         return
     if not is_task_poster(interaction.user):
-        await _say(interaction, 'Only %s post test tasks.'
-                   % ', '.join(TASK_ROLE_NAMES))
+        await _say(interaction, 'You need a role that can post test tasks. '
+                   'Ask staff if you need a task posted.')
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
     try:
