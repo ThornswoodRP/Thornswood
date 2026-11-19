@@ -296,6 +296,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | Requires -Version 7 The public policy contains no secret, performs no I/O and opens no listener. |
 | [turn/Run-Pion.ps1](turn/Run-Pion.ps1) | Foreground native UDP relay, under its canonical restricted task identity. |
 | [turn/Switch-DevTurnRelay.ps1](turn/Switch-DevTurnRelay.ps1) | Existing Dev issuer only. Never changes Main or a relay firewall/task. |
+| [turn/Switch-MainTurnRelay.ps1](turn/Switch-MainTurnRelay.ps1) | Requires -Version 7 |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
 | [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |
