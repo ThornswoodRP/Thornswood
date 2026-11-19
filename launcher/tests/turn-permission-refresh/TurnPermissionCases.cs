@@ -39,7 +39,7 @@ static class TurnPermissionCases {
         var server = new IceServer { Turn = true, Host = "127.0.0.1", Port = relay.Port, User = Relay.User, Pass = Relay.Password };
         ice.Gather(new List<IceServer> { server });
         if (!allocated.Wait(3000)) throw new Exception("The isolated relay did not allocate.");
-        ice.AddRemote("candidate:fixture 1 udp 1 127.0.0.2 45678 typ host");
+        ice.AddRemote("candidate:fixture 1 udp 1 127.0.0.2 45678 typ host", null);
         // Connectivity checks are independent of this permission deadline.
         // The peer is loopback-only; no media/DTLS or external traffic is sent.
         lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
