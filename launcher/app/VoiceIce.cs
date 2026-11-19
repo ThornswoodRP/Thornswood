@@ -482,14 +482,16 @@ namespace Thornswood
         /// for as soon as both the relay and the candidate are known, and
         /// again every four minutes, inside the five a permission lasts.
         /// </summary>
-        void Permit(IPEndPoint peer)
+        void Permit(IPEndPoint peer, bool renew = false)
         {
             string ip = peer.Address.ToString();
             lock (gate)
             {
                 if (relayed == null) return;
                 long at;
-                if (permissions.TryGetValue(ip, out at) && Now() - at < 240000) return;
+                // A scheduled renewal must not depend on the permission
+                // having been created at exactly the allocation's timestamp.
+                if (!renew && permissions.TryGetValue(ip, out at) && Now() - at < 240000) return;
                 permissions[ip] = Now();
             }
             ThreadPool.QueueUserWorkItem(delegate
@@ -717,12 +719,14 @@ namespace Thornswood
                     {
                         turnRefreshAt = now + 240000;
                         refresh = true;
-                        foreach (Remote r in remotes) permit.Add(r.Addr);
+                        var seen = new HashSet<IPAddress>();
+                        foreach (Remote r in remotes)
+                            if (seen.Add(r.Addr.Address)) permit.Add(r.Addr);
                     }
                 }
             }
             catch (Exception ex) { Swallow.Note("VoiceIce.Tick", ex); }
-            if (refresh) { RefreshRelay(600); foreach (IPEndPoint r in permit) Permit(r); }
+            if (refresh) { RefreshRelay(600); foreach (IPEndPoint r in permit) Permit(r, true); }
             if (to != null) SetState(to);
         }
 
