@@ -18,6 +18,10 @@ static class TurnPermissionCases {
         lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
             return ((IDictionary)typeof(VoiceIce).GetField("serverWaits", Private).GetValue(ice)).Count == 0;
     }
+    static long RefreshAt(VoiceIce ice) {
+        lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
+            return (long)typeof(VoiceIce).GetField("turnRefreshAt", Private).GetValue(ice);
+    }
 
     static void Run(uint lifetime, long firstDue) {
         long now = 1000000;
@@ -44,8 +48,11 @@ static class TurnPermissionCases {
         if (!Wait(() => relay.Permissions == 1 && Idle(ice))) throw new Exception("The initial authenticated permission transaction did not finish.");
         string label = "allocation " + lifetime + "s: ";
         Check(label + "permission initially permits traffic", relay.PermissionAlive);
+        long scheduled = RefreshAt(ice);
         Interlocked.Exchange(ref now, 1000000 + firstDue - 1); Tick(ice);
-        Check(label + "no early refresh", relay.Refreshes == 0 && relay.Permissions == 1);
+        // Tick updates its deadline synchronously before queueing wire work.
+        // Check that too: counters alone could miss an unstarted early worker.
+        Check(label + "no early refresh", RefreshAt(ice) == scheduled && Idle(ice) && relay.Refreshes == 0 && relay.Permissions == 1);
         Interlocked.Exchange(ref now, 1000000 + firstDue); Tick(ice);
         // Short allocation deadlines keep their earlier allocation refresh;
         // Permit retains its existing four-minute duplicate suppression.
@@ -58,8 +65,9 @@ static class TurnPermissionCases {
             Interlocked.Exchange(ref now, 1000000 + 300001);
             Check(label + "permission survives its original expiry without a later renewal", relay.PermissionAlive && relay.Permissions == firstPermissions);
         }
+        scheduled = RefreshAt(ice);
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000 - 1); Tick(ice);
-        Check(label + "subsequent cadence is not early", relay.Refreshes == 1 && relay.Permissions == firstPermissions);
+        Check(label + "subsequent cadence is not early", RefreshAt(ice) == scheduled && Idle(ice) && relay.Refreshes == 1 && relay.Permissions == firstPermissions);
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000); Tick(ice);
         Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == firstPermissions + 1 && Idle(ice)));
         Check(label + "all requests use fixture authentication", relay.BadAuthentication == 0 && relay.Failure == null);
