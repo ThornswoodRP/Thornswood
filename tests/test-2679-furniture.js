@@ -103,6 +103,18 @@ vm.runInContext(block, box);
 const create = box.__thornswoodFurnitureCreate;
 yes('the block hands its core out for tests', typeof create === 'function');
 
+/*
+  The block's own packFirst (#4901), run over each world's pretend engine:
+  a piece is set down once its item is saved out of the pack, and here the
+  save keeps up with every write (tests/fixtures/pack-first.js). A held
+  back save and a restart are tests/test-4901-pack-first.js.
+*/
+const PF_A = block.indexOf('  // -- pack first (#4901), begin --');
+const PF_B = block.indexOf('  // -- pack first (#4901), end --');
+const packFirst = (PF_A > 0 && PF_B > PF_A) ? new Function(block.slice(PF_A, PF_B) + '\nreturn packFirst;')() : null;
+yes('the block carries packFirst', typeof packFirst === 'function');
+const PACK_FIRST = require('./fixtures/pack-first');
+
 function world() {
   const W = {
     t: 1000000, logs: [], lines: {}, shows: {}, book: null, nextRef: 0xff000001,
@@ -154,8 +166,39 @@ function world() {
     },
     anchorIn: function (bd) { return W.doors[bd] && W.refs[W.doors[bd]] ? W.doors[bd] : 0; },
     line: function (id, v) { W.lines[id] = v; },
-    show: function (id, v) { W.shows[id] = v; }
+    show: function (id, v) { W.shows[id] = v; },
+    packFirst: function (book, keep, landers) { return packFirst(W.mp, book, keep, landers, function () { }); },
+    // A pack here is a count by item; its entries carry the item as baseId.
+    cutOne: function (entries, desc) {
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].baseId === desc && entries[i].count > 0) {
+          entries[i].count--;
+          if (!entries[i].count) { entries.splice(i, 1); }
+          return { entries: entries, taken: [{ baseId: desc, count: 1 }] };
+        }
+      }
+      return null;
+    },
+    actorOf: function (desc) { return W.mp.getIdFromDesc(desc); }
   };
+  W.mp = PACK_FIRST.receipts({
+    get: function (id, key) {
+      const o = W.actors[id];
+      if (!o) { return undefined; }
+      if (key === 'profileId') { return o.pid; }
+      if (key === 'inventory') {
+        return { entries: Object.keys(o.pack).filter(function (d) { return o.pack[d] > 0; })
+          .map(function (d) { return { baseId: d, count: o.pack[d] }; }) };
+      }
+      return undefined;
+    },
+    set: function (id, key, v) {
+      if (key !== 'inventory') { return; }
+      const o = W.actors[id];
+      Object.keys(o.pack).forEach(function (d) { o.pack[d] = 0; });
+      v.entries.forEach(function (e) { o.pack[e.baseId] = (o.pack[e.baseId] || 0) + e.count; });
+    }
+  });
   return W;
 }
 
@@ -221,10 +264,25 @@ const B1 = 'b1:Skyrim.esm';
   yes('a base the server refuses is not set down and the item stays', /cannot be set down/.test(F.command(0x14, ['place', 'chest'])) &&
       W.actors[0x14].pack[CHEST] === 1);
   W.refuse = '';
+  // The item is saved out of the pack before the piece stands (#4901), so a
+  // stand that fails never hands it back: the piece is kept in the register
+  // and stood at the next start, as one with nothing to stand next to is.
   W.throwPlace = true;
-  yes('a place that fails gives the item back', /back in your pack/.test(F.command(0x14, ['place', 'chest'])) &&
-      W.actors[0x14].pack[CHEST] === 1 && Object.keys(F.pieces()).length === 3);
+  const failed = F.command(0x14, ['place', 'chest']);
+  const waiting = Object.keys(F.pieces()).filter(function (k) { return F.pieces()[k].key === 'chest' && !F.pieces()[k].ref; });
+  yes('a piece that will not stand is kept to stand at the next start, and nothing comes back to the pack (' + failed + ')',
+      /next starts/.test(failed) && !W.actors[0x14].pack[CHEST] && waiting.length === 1 && !!W.book.pieces[waiting[0]] &&
+      Object.keys(F.pieces()).length === 4);
+  yes('and it is on nobody\'s line until it stands', W.lines[0x16].p.indexOf('0') < 0 && W.lines[0x16].p.length === 3);
   W.throwPlace = false;
+  const stoodNow = F.standAll();
+  const chestNow = Object.keys(F.pieces()).filter(function (k) { return F.pieces()[k].key === 'chest'; });
+  yes('the next start stands it, kept under its own reference', stoodNow.stood === 1 && chestNow.length === 1 &&
+      !!W.refs[F.pieces()[chestNow[0]].ref] && !W.book.pieces[waiting[0]] && !!W.book.pieces[chestNow[0]]);
+  W.actors[0x14].pos = W.refs[F.pieces()[chestNow[0]].ref].pos.slice();
+  yes('and it is picked up like any piece', F.command(0x14, ['pick', chestNow[0]]) === '' && W.actors[0x14].pack[CHEST] === 1 &&
+      Object.keys(F.pieces()).length === 3);
+  W.actors[0x14].pos = [100, 100, 0];
 
   // The cap, from staff data.
   W.catalog.limits.buildings[B1] = 3;

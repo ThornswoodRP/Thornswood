@@ -115,7 +115,8 @@ const mp = {
 };
 const box = {
   console: { log: function () { } },
-  require: require, mp: mp, Date: FakeDate,
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  require: require, mp: require('./fixtures/pack-first').receipts(mp), Date: FakeDate,
   BUILDING_BY_DOOR: {}, BUILDING_NAME: {}, WAY_OUT: {}, BENCH_BY_BASE: {},
   idOf: function (d) { const m = /^([0-9a-f]+):Skyrim\.esm$/i.exec(String(d || '')); return m ? parseInt(m[1], 16) : 0; },
   notify: function (a, m) { toasts.push([a, m]); }, say: function () { },

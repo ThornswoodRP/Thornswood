@@ -134,6 +134,10 @@ function engine(startGold) {
           return { entries: (packs[actor] || []).map(function (e) { return Object.assign({}, e); }) };
         }
         if (key === 'appearance') { return { name: names[actor] }; }
+        if (key === 'profileId') {
+          const who = [ALICE, BOB, CYRUS].filter(function (p) { return p.actor === actor; })[0];
+          return who ? who.pid : 0;
+        }
         return null;
       },
       set: function (actor, key, v) {
@@ -184,6 +188,8 @@ function boot(dir, eng) {
     'var g = { __thornswoodSocial: { push: function (actorId, now) { pushed.push(actorId); } } };'
   ];
   for (const k in lifted) { body.push(lifted[k]); }
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(require('./fixtures/pack-first').pieces(prop));
   body.push('return { post: post, board: board, take: take, dropJob: dropJob, wallOf: wallOf, ' +
             'unpin: unpin, takedown: takedown, save: save, ' +
             'notices: function () { return notices; }, ' +
@@ -192,7 +198,7 @@ function boot(dir, eng) {
   const fn = new Function('require', 'registerPath', 'mp', 'plog', 'boardHere', 'pushed',
                           body.join('\n'));
   const api = fn(require, function () { return path.join(dir, 'property.json'); },
-                 eng.mp, function () { }, eng.boardHere, pushed);
+                 require('./fixtures/pack-first').receipts(eng.mp), function () { }, eng.boardHere, pushed);
   api.pushed = pushed;
 
   /* Say something at the board as somebody, and hear what they are told. */

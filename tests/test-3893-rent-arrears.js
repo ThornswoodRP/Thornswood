@@ -138,7 +138,8 @@ const logged = [];
 function makeBlock() {
   const box = {
     console: { log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } },
-    require: require, mp: makeMp(), Date: FakeDate,
+    // Gold leaves the pack through packFirst, with receipts (#4901).
+    require: require, mp: require('./fixtures/pack-first').receipts(makeMp()), Date: FakeDate,
     BUILDING_BY_DOOR: { [DOOR]: HOUSE }, BUILDING_NAME: { [HOUSE]: 'Breezehome' }, WAY_OUT: {}, BENCH_BY_BASE: {},
     ITEM_NAMES: {}, idOf: idOf,
     notify: function () { }, say: function () { },
