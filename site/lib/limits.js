@@ -41,18 +41,9 @@ function galleryPage(offset, limit) {
 
 // In-memory, salted connection keys expire after a minute and are never logged.
 // This is a single-process service; multiple replicas would need a shared cap.
-const publicApiReads = new Map();
-const PUBLIC_API_WINDOW = 60000, PUBLIC_API_CAP = 120;
+const publicReadWait = require('./budgets').readBudget();
 function publicApiWait(req, now) {
-  for (const [key, row] of publicApiReads) if (now - row.start >= PUBLIC_API_WINDOW) publicApiReads.delete(key);
-  const key = reportFrom(req);
-  let row = publicApiReads.get(key);
-  if (!row) {
-    if (publicApiReads.size >= 4096) return 1;
-    row = {start:now, count:0}; publicApiReads.set(key, row);
-  }
-  if (row.count >= PUBLIC_API_CAP) return Math.max(1, Math.ceil((row.start + PUBLIC_API_WINDOW - now) / 1000));
-  row.count++; return 0;
+  return publicReadWait(reportFrom(req), now);
 }
 
 // ==== thornswood report limits ====

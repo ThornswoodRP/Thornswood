@@ -27,7 +27,6 @@ const path   = require('path');
    against the hour and not its file, so sending a picture and its two
    copies is one of the 40 files an hour, as the picture alone was. */
 // ==== thornswood upload guard ====
-const uploadBudgets = new Map();
 function mediaSignature(ext, bytes) {
   if (ext === '.png') return bytes.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'));
   if (ext === '.jpg' || ext === '.jpeg') return bytes.subarray(0,3).equals(Buffer.from('ffd8ff','hex'));
@@ -504,4 +503,4 @@ function stripFolder(folder) {
   return seen.failed ? 1 : 0;
 }
 
-Object.assign(module.exports, { uploadBudgets });
+

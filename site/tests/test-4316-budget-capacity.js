@@ -1,0 +1,40 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const { readBudget, uploadBudget } = require('../lib/budgets');
+
+const read = readBudget(1);
+const first = read('known', 0);
+assert.equal(first, 0);
+for (let n = 1; n < 120; n++) assert.equal(read('known', 0), 0);
+assert.equal(read('other', 1000), 0, 'a full table still has a metered reserve');
+for (let n = 1; n < 120; n++) assert.equal(read('other', 1000), 0);
+assert.equal(read('known', 1000), 59, 'the reserve does not reset the known count');
+assert.equal(read('other', 60000), 1, 'freeing a slot does not reset the reserve');
+assert.equal(read('other', 61000), 0, 'the reserve expires on its own window');
+
+const upload = uploadBudget(1);
+const known = upload('known', 0, false).row;
+assert.equal(known.count, 1);
+const spare = upload('other', 1, true).row;
+assert.ok(spare, 'a full table still has a metered reserve');
+assert.notEqual(spare, known);
+assert.equal(spare.count, 0, 'a copy does not add a file to the count');
+const other = upload('other', 2, false).row;
+assert.equal(other, spare);
+assert.equal(spare.count, 1);
+assert.equal(upload('third', 3600001, false).wait, 1, 'active rows share the reserve and are not replaced at expiry');
+const bytes = uploadBudget(1);
+const used = bytes('known', 0, false).row;
+used.active = 0;
+used.bytes = 500 * 1048576;
+assert.equal(bytes('known', 3599999, false).wait, 1, 'closed streams still count their bytes until expiry');
+known.active = 0;
+spare.active = 0;
+const fresh = upload('other', 3600001, false).row;
+assert.notEqual(fresh, spare);
+assert.equal(fresh.bytes, 0);
+fresh.active = 0;
+fresh.count = 40;
+assert.equal(upload('other', 3600001, true).wait, 3600, 'the file ceiling remains enforced');
+console.log('PASS bounded read and upload accounting, expiry, and enforcement');
