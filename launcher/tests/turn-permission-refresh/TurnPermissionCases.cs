@@ -39,12 +39,15 @@ static class TurnPermissionCases {
         Interlocked.Exchange(ref now, 1000000 + firstDue - 1); Tick(ice);
         Check(label + "no early refresh", relay.Refreshes == 0 && relay.Permissions == 1);
         Interlocked.Exchange(ref now, 1000000 + firstDue); Tick(ice);
-        bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == 2);
-        Check(label + "first due tick refreshes allocation and permission", refreshed);
+        // Short allocation deadlines keep their earlier allocation refresh;
+        // Permit retains its existing four-minute duplicate suppression.
+        int firstPermissions = firstDue >= 240000 ? 2 : 1;
+        bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == firstPermissions);
+        Check(label + "first due tick refreshes the allocation and due permissions", refreshed);
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000 - 1); Tick(ice);
-        Check(label + "subsequent cadence is not early", relay.Refreshes == 1 && relay.Permissions == 2);
+        Check(label + "subsequent cadence is not early", relay.Refreshes == 1 && relay.Permissions == firstPermissions);
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000); Tick(ice);
-        Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == 3));
+        Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == firstPermissions + 1));
         Check(label + "permission remains alive past its original five minutes", relay.PermissionAlive);
         Check(label + "all requests use fixture authentication", relay.BadAuthentication == 0 && relay.Failure == null);
     }
