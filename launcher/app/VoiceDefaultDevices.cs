@@ -26,8 +26,13 @@ namespace Thornswood
                 Interlocked.Increment(ref capture);
         }
 
-        public bool ShouldReopen(int flow, ref long observed, string openedId, Func<string> desiredId)
+        // A true result is only a proposal. After opening the replacement,
+        // the worker acknowledges it by setting observed to generation. A
+        // failed open leaves the original event pending without another
+        // Windows notification. A same-device result needs no replacement.
+        public bool ShouldReopen(int flow, ref long observed, string openedId, Func<string> desiredId, out long generation)
         {
+            generation = observed;
             if (Volatile.Read(ref stopped) != 0) return false;
             long next = Version(flow);
             if (next == observed) return false;
@@ -35,8 +40,10 @@ namespace Thornswood
             // Keep a usable old stream while Windows has no replacement. Do
             // not consume this event: retry selection on a later worker turn.
             if (desired == null) return false;
+            generation = next;
+            if (!string.Equals(openedId, desired, StringComparison.Ordinal)) return true;
             observed = next;
-            return !string.Equals(openedId, desired, StringComparison.Ordinal);
+            return false;
         }
 
         public void Stop() { Interlocked.Exchange(ref stopped, 1); }
