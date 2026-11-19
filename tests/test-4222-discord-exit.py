@@ -1,7 +1,7 @@
 """Run the real ready handler and CLI with an offline Discord client."""
 import ast
 import asyncio
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 from pathlib import Path
 import types
@@ -66,7 +66,7 @@ class ExitContract(unittest.TestCase):
             state[name] = AsyncMock()
         out = io.StringIO()
         code = 0
-        with redirect_stdout(out):
+        with redirect_stdout(out), redirect_stderr(out):
             try:
                 exec(CODE, state)
             except SystemExit as end:
