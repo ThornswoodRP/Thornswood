@@ -122,6 +122,7 @@ namespace Thornswood
 
         [JsonInclude] public string AudioOutputId = "";
         [JsonInclude] public string AudioOutputName = "";
+        [JsonInclude] public bool AudioOutputConfigured;
 
         [JsonInclude, JsonPropertyName("VoiceAuto")] public bool? VoiceAutoSetting = true;
 

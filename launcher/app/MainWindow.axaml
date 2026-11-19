@@ -1090,7 +1090,7 @@
                 <TextBlock x:Name="TxtThemeNote" Theme="{StaticResource Small}" Margin="0,0,0,18"/>
                 <StackPanel x:Name="ThemeEditor" Margin="0,0,0,30"/>
 
-                <TextBlock Text="Voice" Theme="{StaticResource Eyebrow}"/>
+                <TextBlock Text="Audio" Theme="{StaticResource Eyebrow}"/>
                 <StackPanel Margin="0,0,0,30">
                   <TextBlock Text="Microphone" Theme="{StaticResource Body}"/>
                   <ComboBox x:Name="BoxMicrophone" Theme="{StaticResource SelectField}"

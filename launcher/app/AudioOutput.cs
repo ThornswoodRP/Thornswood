@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Thornswood
@@ -106,6 +107,24 @@ namespace Thornswood
 
         [LibraryImport("winmm.dll")]
         private static partial uint waveOutGetNumDevs();
+
+        // The game reads this machine-local preference before it opens
+        // its audio engine. An empty file is an explicit Windows default.
+        public static void PrepareGame(string gameDirectory, string outputId)
+        {
+            string destination = Path.Combine(gameDirectory, "Data", "SKSE", "Plugins", "ThornswoodAudioOutput.txt");
+            string staged = destination + "." + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(staged, outputId ?? "");
+                File.Move(staged, destination, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(staged); }
+                catch (Exception ex) { Swallow.Note("AudioOutput.PrepareGame, remove staging file", ex); }
+            }
+        }
 
         [LibraryImport("winmm.dll")]
         private static partial uint waveOutMessage(nint device, uint message, nuint param1, nuint param2);

@@ -36,6 +36,7 @@ namespace Thornswood
                     {
                         cfg.AudioOutputId = choice.Value;
                         cfg.AudioOutputName = choice.Value.Length == 0 ? "" : choice.Label;
+                        cfg.AudioOutputConfigured = true;
                         cfg.Save(Paths.CfgFile);
                     });
             }
