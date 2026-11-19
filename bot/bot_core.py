@@ -391,9 +391,13 @@ def as_typed(v, n=1000):
 
 # ------------------------------------------------------------------ site --
 def push(kind, title, detail, by, discord_id, rules=None):
-    """Send a ticket to the site. Runs off the event loop, and a failure here
-       is never allowed to lose the ticket: the thread in Discord is the
-       record, this is the convenience.
+    """Send a ticket to the site. Runs off the event loop. True only when the
+       site answered that it kept it: its POST /api/ticket answers 200
+       {"ok": true} once the inbox file is written, and nothing else is a
+       yes (#4230). False on anything else, with the reason in the log.
+       Where Discord holds a copy, the thread is the record and nobody waits
+       on this; where it holds none, the site's answer is the only word that
+       the ticket is kept, and the reply waits for it.
 
        rules is the application's answer to the rules question, as
        {'said': their words, 'yes': whether it read as a yes}, or None on a
@@ -407,7 +411,7 @@ def push(kind, title, detail, by, discord_id, rules=None):
         log('THORNSWOOD_KEY is not set, so this ticket did NOT reach the site '
             'inbox. The thread in Discord is the only copy. Install-Bot.ps1 '
             'sets the key in bot.env.json on the VPS.')
-        return
+        return False
     sent = {
         'key': KEY, 'kind': kind, 'title': title,
         'detail': detail, 'by': by, 'discordId': str(discord_id)
@@ -420,16 +424,28 @@ def push(kind, title, detail, by, discord_id, rules=None):
         headers={'Content-Type': 'application/json'}, method='POST')
     try:
         with urllib.request.urlopen(req, timeout=12) as r:
-            r.read()
+            said = r.read()
     except Exception as e:
         log('site push failed:', e)
+        return False
+    try:
+        kept = json.loads(said.decode('utf-8')).get('ok') is True
+    except (ValueError, AttributeError) as e:
+        log('site push failed: the site answered something that is not its '
+            'yes (%s): %r' % (type(e).__name__, said[:200]))
+        return False
+    if not kept:
+        log('site push failed: the site did not say it kept the ticket: %r' % said[:200])
+    return kept
 
 
 async def push_async(*a):
+    """push, off the event loop. Its answer: whether the site kept it."""
     try:
-        await asyncio.get_running_loop().run_in_executor(None, push, *a)
+        return await asyncio.get_running_loop().run_in_executor(None, push, *a)
     except Exception as e:
         log('site push failed:', e)
+        return False
 
 
 # Site copies still on their way. The event loop holds a task only weakly, so a
