@@ -63,27 +63,91 @@ type allocator struct {
 	closed         bool
 	global         *rate.Limiter
 	stats          *counters
+	localIPs       func() ([]netip.Addr, error)
 }
 
 func newAllocator(own netip.Addr, min, max int, realm string, s *counters) *allocator {
-	return &allocator{own: own.Unmap(), min: min, max: max, realm: realm, users: map[string]int{}, active: map[int]*guardedConn{}, global: rate.NewLimiter(2097152, 2097152), stats: s}
+	return &allocator{own: own.Unmap(), min: min, max: max, realm: realm, users: map[string]int{}, active: map[int]*guardedConn{}, global: rate.NewLimiter(2097152, 2097152), stats: s, localIPs: immutableLocalIPv4()}
+}
+func immutableLocalIPv4() func() ([]netip.Addr, error) {
+	all, e := localIPv4()
+	return func() ([]netip.Addr, error) { return all, e }
+}
+func localIPv4() ([]netip.Addr, error) {
+	all, e := net.InterfaceAddrs()
+	if e != nil {
+		return nil, e
+	}
+	ips := make([]netip.Addr, 0, len(all))
+	for _, a := range all {
+		var ip net.IP
+		switch v := a.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		default:
+			return nil, errPolicy
+		}
+		parsed, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, errPolicy
+		}
+		parsed = parsed.Unmap()
+		if parsed.Is4() {
+			ips = append(ips, parsed)
+		}
+	}
+	return ips, nil
+}
+func (g *allocator) otherLocal(ip netip.Addr) bool {
+	// Production uses a watched immutable inventory; pending/unavailable
+	// snapshots deny forwarding instead of caching an unsafe result.
+	all, e := g.localIPs()
+	if e != nil {
+		return true
+	}
+	for _, a := range all {
+		if a == ip {
+			return true
+		}
+	}
+	return false
 }
 func (g *allocator) Validate() error {
 	if !g.own.Is4() || g.min < 1024 || g.max >= 49152 || g.max-g.min != 31 || g.realm == "" {
 		return errPolicy
 	}
-	return nil
+	all, e := g.localIPs()
+	if e != nil {
+		return errPolicy
+	}
+	for _, a := range all {
+		if a == g.own {
+			return nil
+		}
+	}
+	return errPolicy
 }
 func (g *allocator) quota(user, realm string, _ net.Addr) bool {
+	if _, e := g.localIPs(); e != nil {
+		return false
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return !g.closed && realm == g.realm && g.users[user] < 8 && len(g.active) < 32
 }
 func (g *allocator) permission(_ net.Addr, ip net.IP) bool {
+	if _, e := g.localIPs(); e != nil {
+		return false
+	}
 	a, ok := netip.AddrFromSlice(ip)
-	return ok && (a.Unmap() == g.own || public4(a))
+	return ok && (a.Unmap() == g.own || public4(a) && !g.otherLocal(a.Unmap()))
 }
 func (g *allocator) AllocatePacketConn(c turn.AllocateListenerConfig) (net.PacketConn, net.Addr, error) {
+	if _, e := g.localIPs(); e != nil {
+		return nil, nil, errPolicy
+	}
 	if c.Network != "udp4" || c.RequestedPort != 0 && (c.RequestedPort < g.min || c.RequestedPort > g.max) {
 		return nil, nil, errPolicy
 	}
@@ -110,7 +174,7 @@ func (g *allocator) AllocatePacketConn(c turn.AllocateListenerConfig) (net.Packe
 		if g.active[port] != nil {
 			continue
 		}
-		udp, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP(g.own.AsSlice()), Port: port})
+		udp, err := listenUDP4((&net.UDPAddr{IP: net.IP(g.own.AsSlice()), Port: port}).String())
 		if err != nil {
 			continue
 		}
@@ -154,6 +218,9 @@ type guardedConn struct {
 }
 
 func (c *guardedConn) permitted(a net.Addr) (bool, bool) {
+	if _, e := c.g.localIPs(); e != nil {
+		return false, true
+	}
 	ip, port, ok := address(a)
 	if !ok {
 		return false, false
@@ -164,7 +231,10 @@ func (c *guardedConn) permitted(a net.Addr) (bool, bool) {
 		dst := c.g.active[port]
 		return dst != nil && !dst.closed.Load(), true
 	}
-	return public4(ip), false
+	if !public4(ip) {
+		return false, false
+	}
+	return !c.g.otherLocal(ip), true
 }
 func (c *guardedConn) budget(n int) bool {
 	now := time.Now()
@@ -208,9 +278,17 @@ func (c *guardedConn) WriteTo(p []byte, a net.Addr) (int, error) {
 	if c.closed.Load() {
 		return 0, net.ErrClosed
 	}
+	if _, e := c.g.localIPs(); e != nil {
+		c.g.stats.self.Add(1)
+		return len(p), nil
+	}
 	ip, port, ok := address(a)
 	if !ok || ip != c.g.own && !public4(ip) {
 		c.g.stats.private.Add(1)
+		return len(p), nil
+	}
+	if ip != c.g.own && c.g.otherLocal(ip) {
+		c.g.stats.self.Add(1)
 		return len(p), nil
 	}
 	if !c.budget(len(p)) {

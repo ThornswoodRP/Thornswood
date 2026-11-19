@@ -185,9 +185,15 @@ func serve(c configuration) error {
 	}
 	defer clear(secret)
 	stats := &counters{}
+	watch, e := newAddressWatch(localIPv4, subscribeIPv4)
+	if e != nil {
+		return errPolicy
+	}
+	defer watch.Close()
 	allocator := newAllocator(netip.MustParseAddr(c.ListenAddress), c.MinPort, c.MaxPort, c.Realm, stats)
+	allocator.localIPs = watch.current
 	defer allocator.shutdown()
-	listener, e := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(c.ListenAddress), Port: c.ListenPort})
+	listener, e := listenUDP4((&net.UDPAddr{IP: net.ParseIP(c.ListenAddress), Port: c.ListenPort}).String())
 	if e != nil {
 		return errPolicy
 	}
@@ -215,6 +221,9 @@ func serve(c configuration) error {
 		case <-stop:
 			return nil
 		case <-ingress.failed:
+			return errPolicy
+		case <-watch.changed:
+			fmt.Println(`{"event":"relay-interface-inventory-changed","action":"stopped"}`)
 			return errPolicy
 		case <-tick.C:
 			allocator.mu.Lock()

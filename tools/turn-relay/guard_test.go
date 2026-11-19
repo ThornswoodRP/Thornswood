@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/pion/turn/v5"
 	"golang.org/x/time/rate"
@@ -255,4 +256,124 @@ func TestOversizedDatagramDoesNotEndAllocation(t *testing.T) {
 	if e != nil || string(buf[:n]) != "normal" || g.stats.oversized.Load() != 1 {
 		t.Fatal("oversize ended or truncated allocation", n, e)
 	}
+}
+
+type scriptedConn struct {
+	net.PacketConn
+	writes  int
+	sources []net.Addr
+}
+
+func (c *scriptedConn) WriteTo(p []byte, _ net.Addr) (int, error) { c.writes++; return len(p), nil }
+func (c *scriptedConn) ReadFrom(p []byte) (int, net.Addr, error) {
+	if len(c.sources) == 0 {
+		return 0, nil, net.ErrClosed
+	}
+	a := c.sources[0]
+	c.sources = c.sources[1:]
+	p[0] = 'x'
+	return 1, a, nil
+}
+func TestSecondaryAndNewLocalAliasCannotBypassBoundary(t *testing.T) {
+	g := testAllocator(t)
+	a := alloc(t, g, "fixture")
+	fake := &scriptedConn{PacketConn: a.PacketConn}
+	a.PacketConn = fake
+	alias := netip.MustParseAddr("1.1.1.1")
+	outside := netip.MustParseAddr("9.9.9.9")
+	current := []netip.Addr{g.own}
+	g.localIPs = func() ([]netip.Addr, error) { return current, nil }
+	target := &net.UDPAddr{IP: net.IP(alias.AsSlice()), Port: 40000}
+	if !g.permission(nil, target.IP) {
+		t.Fatal("external target denied before it became local")
+	}
+	current = append(current, alias)
+	if g.permission(nil, target.IP) {
+		t.Fatal("secondary alias permission admitted")
+	}
+	_, _ = a.WriteTo([]byte("blocked"), target)
+	if fake.writes != 0 {
+		t.Fatal("cached external permission bypassed new local alias")
+	}
+	fake.sources = []net.Addr{target, &net.UDPAddr{IP: net.IP(outside.AsSlice()), Port: 40000}}
+	n, from, e := a.ReadFrom(make([]byte, 16))
+	if e != nil || n != 1 || from.(*net.UDPAddr).IP.String() != outside.String() {
+		t.Fatal("secondary alias input admitted or valid external lost", e)
+	}
+	g.localIPs = func() ([]netip.Addr, error) { return nil, errors.New("inert unavailable interface fixture") }
+	_, _ = a.WriteTo([]byte("blocked"), &net.UDPAddr{IP: net.IP(outside.AsSlice()), Port: 40000})
+	if fake.writes != 0 || g.permission(nil, net.IP(outside.AsSlice())) {
+		t.Fatal("interface lookup failure did not fail closed")
+	}
+	if g.Validate() == nil {
+		t.Fatal("startup accepted failed interface query")
+	}
+}
+func BenchmarkCurrentLocalAddresses(b *testing.B) {
+	g := newAllocator(netip.MustParseAddr("127.0.0.1"), 42000, 42031, "fixture", &counters{})
+	target := netip.MustParseAddr("9.9.9.9")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if g.otherLocal(target) {
+			b.Fatal("unexpected local alias or interface query failure")
+		}
+	}
+}
+
+// Boundary-only load: 32 actual leases, synthetic external packet I/O, no
+// external network. Each iteration traverses one outgoing and incoming guard.
+// 1600 iterations represents 32 allocations x50 packets/s in both directions.
+func BenchmarkBusyAllocationBoundary(b *testing.B) {
+	first, last := freeBlockForBenchmark(b)
+	g := newAllocator(netip.MustParseAddr("127.0.0.1"), first, last, "fixture", &counters{})
+	defer g.shutdown()
+	var conns []*guardedConn
+	var packets []*scriptedConn
+	for i := 0; i < 32; i++ {
+		c, _, e := g.AllocatePacketConn(turn.AllocateListenerConfig{Network: "udp4", UserID: fmt.Sprint(i), Realm: g.realm})
+		if e != nil {
+			b.Fatal(e)
+		}
+		wrapped := c.(*guardedConn)
+		fake := &scriptedConn{PacketConn: wrapped.PacketConn}
+		wrapped.PacketConn = fake
+		conns = append(conns, wrapped)
+		packets = append(packets, fake)
+	}
+	target := &net.UDPAddr{IP: net.IPv4(9, 9, 9, 9), Port: 40000}
+	buf := make([]byte, 1600)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		idx := i % 32
+		c := conns[idx]
+		packets[idx].sources = []net.Addr{target}
+		if _, e := c.WriteTo([]byte("x"), target); e != nil {
+			b.Fatal(e)
+		}
+		if _, _, e := c.ReadFrom(buf); e != nil {
+			b.Fatal(e)
+		}
+	}
+}
+func freeBlockForBenchmark(b *testing.B) (int, int) {
+	b.Helper()
+	for first := 16000; first < 46000; first += 32 {
+		var all []net.PacketConn
+		for p := first; p < first+32; p++ {
+			c, e := listenUDP4((&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p}).String())
+			if e != nil {
+				break
+			}
+			all = append(all, c)
+		}
+		ok := len(all) == 32
+		for _, c := range all {
+			_ = c.Close()
+		}
+		if ok {
+			return first, first + 31
+		}
+	}
+	b.Fatal("no owned benchmark block")
+	return 0, 0
 }
