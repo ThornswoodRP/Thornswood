@@ -99,6 +99,7 @@ namespace Thornswood
         string remotePwd = "";
 
         readonly bool controlling;
+        readonly Func<long> clock;
         readonly ulong tiebreaker;
         readonly Socket sock;
         readonly int port;
@@ -174,8 +175,11 @@ namespace Thornswood
         int gathering;            // STUN and TURN requests still out
         readonly List<string> hostIps = new List<string>();
 
-        public VoiceIce(bool controlling)
+        public VoiceIce(bool controlling) : this(controlling, () => Environment.TickCount64) { }
+
+        internal VoiceIce(bool controlling, Func<long> clock)
         {
+            this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.controlling = controlling;
             Span<byte> t = stackalloc byte[8];
             RandomNumberGenerator.Fill(t);
@@ -210,7 +214,7 @@ namespace Thornswood
             return Convert.ToBase64String(b).TrimEnd('=');
         }
 
-        static long Now() { return Environment.TickCount64; }
+        long Now() { return clock(); }
 
         // ------------------------------------------------------- gathering
 

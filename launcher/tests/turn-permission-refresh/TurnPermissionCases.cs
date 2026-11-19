@@ -1,0 +1,119 @@
+using System;
+using System.Buffers.Binary;
+using System.Collections;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Threading;
+
+namespace Thornswood {
+static class TurnPermissionCases {
+    static int passed, failed;
+    const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+    static void Check(string name, bool ok) { Console.WriteLine((ok ? "PASS " : "FAIL ") + name); if (ok) passed++; else failed++; }
+    static void Tick(VoiceIce ice) { typeof(VoiceIce).GetMethod("Tick", Private).Invoke(ice, null); }
+    static bool Wait(Func<bool> condition) { return SpinWait.SpinUntil(condition, 3000); }
+
+    static void Run(uint lifetime, long firstDue) {
+        long now = 1000000;
+        Func<long> clock = () => Interlocked.Read(ref now);
+        using var relay = new Relay(lifetime, clock);
+        using var ice = new VoiceIce(true, clock);
+        // Retain the real reader, Allocate, Tick and authenticated TURN wire
+        // paths; only stop the periodic timer so this clock has one owner.
+        ((Timer)typeof(VoiceIce).GetField("timer", Private).GetValue(ice)).Change(Timeout.Infinite, Timeout.Infinite);
+        using var allocated = new ManualResetEventSlim();
+        ice.OnCandidate = line => { if (line.Contains(" typ relay ")) allocated.Set(); };
+        var server = new IceServer { Turn = true, Host = "127.0.0.1", Port = relay.Port, User = Relay.User, Pass = Relay.Password };
+        ice.Gather(new List<IceServer> { server });
+        if (!allocated.Wait(3000)) throw new Exception("The isolated relay did not allocate.");
+        ice.AddRemote("candidate:fixture 1 udp 1 127.0.0.2 45678 typ host");
+        // Connectivity checks are independent of this permission deadline.
+        // The peer is loopback-only; no media/DTLS or external traffic is sent.
+        ((IList)typeof(VoiceIce).GetField("pairs", Private).GetValue(ice)).Clear();
+        ice.SetRemote("fixture", "fixture-ice-password");
+        if (!Wait(() => relay.Permissions == 1)) throw new Exception("The initial authenticated permission was not created.");
+        string label = "allocation " + lifetime + "s: ";
+        Check(label + "permission initially permits traffic", relay.PermissionAlive);
+        Interlocked.Exchange(ref now, 1000000 + firstDue - 1); Tick(ice);
+        Check(label + "no early refresh", relay.Refreshes == 0 && relay.Permissions == 1);
+        Interlocked.Exchange(ref now, 1000000 + firstDue); Tick(ice);
+        bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == 2);
+        Check(label + "first due tick refreshes allocation and permission", refreshed);
+        Interlocked.Exchange(ref now, 1000000 + firstDue + 240000 - 1); Tick(ice);
+        Check(label + "subsequent cadence is not early", relay.Refreshes == 1 && relay.Permissions == 2);
+        Interlocked.Exchange(ref now, 1000000 + firstDue + 240000); Tick(ice);
+        Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == 3));
+        Check(label + "permission remains alive past its original five minutes", relay.PermissionAlive);
+        Check(label + "all requests use fixture authentication", relay.BadAuthentication == 0 && relay.Failure == null);
+    }
+
+    static int Main() {
+        try { Run(600, 240000); Run(3600, 240000); Run(120, 60000); }
+        catch (Exception ex) { Console.WriteLine("FAIL fixture: " + ex); failed++; }
+        Console.WriteLine(passed + " passed, " + failed + " failed");
+        return failed == 0 ? 0 : 1;
+    }
+
+    sealed class Relay : IDisposable {
+        public const string User = "fixture-user", Password = "fixture-password";
+        const string Realm = "fixture.invalid", Nonce = "fixture-nonce";
+        readonly Socket socket;
+        readonly Thread worker;
+        readonly Func<long> clock;
+        readonly uint lifetime;
+        readonly byte[] key = StunMessage.LongTermKey(User, Realm, Password);
+        volatile bool closed;
+        int permissions, refreshes, badAuthentication;
+        long expires;
+        public readonly int Port;
+        public string Failure;
+        public int Permissions => Volatile.Read(ref permissions);
+        public int Refreshes => Volatile.Read(ref refreshes);
+        public int BadAuthentication => Volatile.Read(ref badAuthentication);
+        public bool PermissionAlive => clock() < Interlocked.Read(ref expires);
+        public Relay(uint lifetime, Func<long> clock) {
+            this.lifetime = lifetime; this.clock = clock;
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); socket.ReceiveTimeout = 200;
+            Port = ((IPEndPoint)socket.LocalEndPoint).Port;
+            worker = new Thread(Read) { IsBackground = true }; worker.Start();
+        }
+        void Read() {
+            try {
+                var bytes = new byte[4096];
+                while (!closed) {
+                    EndPoint from = new IPEndPoint(IPAddress.Any, 0); int count;
+                    try { count = socket.ReceiveFrom(bytes, ref from); }
+                    catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut) { continue; }
+                    var request = StunMessage.Parse(bytes.AsSpan(0, count));
+                    if (request == null || request.Class != StunMessage.Request) continue;
+                    bool authenticated = request.GetString(StunMessage.AttrUsername) == User;
+                    var answer = new StunMessage { Method = request.Method, Class = authenticated ? StunMessage.Success : StunMessage.Error, Tid = request.Tid };
+                    if (!authenticated) {
+                        answer.Add(StunMessage.AttrErrorCode, new byte[] { 0, 0, 4, 1 });
+                        answer.AddString(StunMessage.AttrRealm, Realm); answer.AddString(StunMessage.AttrNonce, Nonce);
+                    } else {
+                        if (!request.IntegrityOk(key) || request.GetString(StunMessage.AttrNonce) != Nonce) { Interlocked.Increment(ref badAuthentication); continue; }
+                        if (request.Method == StunMessage.Allocate) {
+                            answer.AddXorAddress(StunMessage.AttrXorRelayed, new IPEndPoint(IPAddress.Loopback, 34999));
+                            answer.AddXorAddress(StunMessage.AttrXorMapped, (IPEndPoint)from);
+                            answer.AddUInt(StunMessage.AttrLifetime, lifetime);
+                        } else if (request.Method == StunMessage.CreatePermission) {
+                            if (request.GetXorAddress(StunMessage.AttrXorPeer) == null) throw new Exception("Missing permission peer.");
+                            Interlocked.Exchange(ref expires, clock() + 300000); Interlocked.Increment(ref permissions);
+                        } else if (request.Method == StunMessage.Refresh) {
+                            uint requested = BinaryPrimitives.ReadUInt32BigEndian(request.Get(StunMessage.AttrLifetime));
+                            if (requested > 0) Interlocked.Increment(ref refreshes);
+                            answer.AddUInt(StunMessage.AttrLifetime, requested);
+                        }
+                    }
+                    socket.SendTo(answer.Write(authenticated ? key : null, true), from);
+                }
+            } catch (Exception ex) { if (!closed) Failure = ex.GetType().Name; }
+        }
+        public void Dispose() { closed = true; socket.Dispose(); if (!worker.Join(1000)) throw new Exception("The fixture relay did not stop."); }
+    }
+}
+}
