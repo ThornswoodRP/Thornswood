@@ -43,6 +43,10 @@ bot/announced.json
 # the Discord ids of everybody waiting on staff, so it
 # stays out of the repo if the bot is ever run from a checkout.
 bot/open-tickets.json
+bot/report-posts.json
+bot/report-posts.json.tmp
+bot/moderation-posts.json
+bot/moderation-posts.json.tmp
 
 # Which arrival each person was, kept by the bot so
 # the number on a join card only ever goes up. A list of Discord ids like the

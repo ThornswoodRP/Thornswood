@@ -81,9 +81,7 @@ class Copies(unittest.TestCase):
                 patch.object(self.reports, 'REPORT_POSTS', str(self.folder / 'report-posts.json'), create=True):
             self.run_watch(self.reports, self.reports.watch_reports, lambda: put(records))
             self.assertEqual(set(self.room.posts), {1, 2, 3})
-            source.write_text('{', encoding='utf-8')
-            # Start with a good snapshot, then encounter a malformed one and recover.
-            put(records)
+            # Start with a good snapshot, then encounter a malformed one.
             def broken():
                 source.write_text('{', encoding='utf-8')
             self.run_watch(self.reports, self.reports.watch_reports, broken)
