@@ -292,7 +292,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [turn/New-PionPackage.ps1](turn/New-PionPackage.ps1) | Builds the Windows relay from an immutable source commit and the pinned portable Go archive. |
 | [turn/PionHost.ps1](turn/PionHost.ps1) | Windows host controls shared by the reviewed installer and runtime gate. |
 | [turn/PionPackage.ps1](turn/PionPackage.ps1) | Windows TURN package checks shared by the builder and installer. |
-| [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | The public policy contains no secret, performs no I/O and opens no listener. |
+| [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | Requires -Version 7 The public policy contains no secret, performs no I/O and opens no listener. |
 | [turn/Run-Pion.ps1](turn/Run-Pion.ps1) | Foreground native UDP relay, under its canonical restricted task identity. |
 | [turn/Switch-DevTurnRelay.ps1](turn/Switch-DevTurnRelay.ps1) | Existing Dev issuer only. Never changes Main or a relay firewall/task. |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |

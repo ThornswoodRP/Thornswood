@@ -60,7 +60,7 @@ function DevTask {
  $action=@($task.Actions)[0]
  $owner=Get-PionOwnerIdentity
  if($owner.path -ine $script:turnOwner.path -or $owner.sha256 -cne $script:turnOwner.sha256 -or $action.Execute -ine $owner.path -or -not $action.Arguments.StartsWith($voiceSid+' "',[StringComparison]::Ordinal) -or $action.Arguments -match 'THORNSWOOD_TURN_(SECRET|PASS|USER)='){throw 'Unexpected Dev voice owner wrapper or credential-bearing task action.'}
- if(-not $action.Arguments.Contains('THORNSWOOD_SITE=http://127.0.0.1:3001')){throw 'Dev voice does not use its canonical local ownership issuer.'}
+ Assert-PionVoiceAction $action $voiceRoot $voiceSid $owner.path (Join-Path $env:SystemRoot 'System32/cmd.exe') (Get-Command node.exe -ErrorAction Stop).Source
  return $task
 }
 function DevClear {

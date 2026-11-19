@@ -864,7 +864,7 @@ Unicode License V3 of a far later ICU in its place.
 Read on 20 October 2026 (#421). The file is Microsoft's and unmodified: its
 Authenticode signature is valid, signed by Microsoft Corporation, its version
 resource says "Direct3D HLSL Compiler for Redistribution", version
-10.0.20348.1, "Â© Microsoft Corporation. All rights reserved.", and its sha256
+10.0.20348.1, "© Microsoft Corporation. All rights reserved.", and its sha256
 is the one in the table above. It is the copy the Chromium Embedded
 Framework's own binary download carries beside `libEGL.dll` and
 `libGLESv2.dll`, for ANGLE. It is not the copy a newer Windows SDK carries:
@@ -1970,7 +1970,7 @@ The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `cf
 ```
 The MIT License (MIT)
 
-Copyright (c) AvaloniaUI OÃœ
+Copyright (c) AvaloniaUI OÜ
 All Rights Reserved
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2061,17 +2061,17 @@ HarfBuzz is licensed under the so-called "Old MIT" license.  Details follow.
 For parts of HarfBuzz that are licensed under different licenses see individual
 files names COPYING in subdirectories where applicable.
 
-Copyright Â© 2010,2011,2012  Google, Inc.
-Copyright Â© 2012  Mozilla Foundation
-Copyright Â© 2011  Codethink Limited
-Copyright Â© 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
-Copyright Â© 2009  Keith Stribley
-Copyright Â© 2009  Martin Hosken and SIL International
-Copyright Â© 2007  Chris Wilson
-Copyright Â© 2006  Behdad Esfahbod
-Copyright Â© 2005  David Turner
-Copyright Â© 2004,2007,2008,2009,2010  Red Hat, Inc.
-Copyright Â© 1998-2004  David Turner and Werner Lemberg
+Copyright © 2010,2011,2012  Google, Inc.
+Copyright © 2012  Mozilla Foundation
+Copyright © 2011  Codethink Limited
+Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright © 2009  Keith Stribley
+Copyright © 2009  Martin Hosken and SIL International
+Copyright © 2007  Chris Wilson
+Copyright © 2006  Behdad Esfahbod
+Copyright © 2005  David Turner
+Copyright © 2004,2007,2008,2009,2010  Red Hat, Inc.
+Copyright © 1998-2004  David Turner and Werner Lemberg
 
 For full copyright notices consult the individual files in the package.
 
@@ -2139,8 +2139,8 @@ The text of `LICENSE` in Avalonia.Angle.Windows.Natives 2.1.27548.20260419, as t
 The text of `LICENSE` in https://github.com/velopack/velopack at commit `92d6a1c9`, the commit Velopack 1.2.161's nuspec names.
 
 ```
-Copyright Â© 2021 Caelan Sayler
-Copyright Â© 2024 Velopack Ltd.
+Copyright © 2021 Caelan Sayler
+Copyright © 2024 Velopack Ltd.
 
 Permission is hereby granted,  free of charge,  to any person obtaining a
 copy of this software and associated documentation files (the "Software"),

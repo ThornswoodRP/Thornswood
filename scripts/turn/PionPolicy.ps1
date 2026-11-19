@@ -1,3 +1,4 @@
+#Requires -Version 7
 # The public policy contains no secret, performs no I/O and opens no listener.
 function Get-PionConfiguration {
     param([Parameter(Mandatory)]$Policy,[Parameter(Mandatory)][ValidateSet('dev','main')][string]$Role,[Parameter(Mandatory)][string]$RelayIPv4,[Parameter(Mandatory)][string]$KeyFile)

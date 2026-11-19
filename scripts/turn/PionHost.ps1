@@ -1,4 +1,8 @@
 # Windows host controls shared by the reviewed installer and runtime gate.
+function Test-PionTrustedOwner {
+ param([string]$Sid,[string]$OperatorSid,[bool]$OperatorIsAdmin)
+ return ($Sid -in @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464') -or ($OperatorIsAdmin -and $Sid -ceq $OperatorSid))
+}
 function Assert-PionTaskPrincipal {
  param($Task)
  $id=[string]$Task.Principal.UserId
@@ -11,16 +15,30 @@ function Get-PionOwnerIdentity {
  $directory=Join-Path $env:ProgramFiles 'Thornswood'
  $path=Join-Path $directory ('thornswood-owner-'+$hash.Substring(0,12)+'.exe')
  $may=@('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+ $operator=[Security.Principal.WindowsIdentity]::GetCurrent()
+ $admin=[Security.Principal.WindowsPrincipal]::new($operator).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
  foreach($name in $path,$directory){
   $item=Get-Item -LiteralPath $name -Force -ErrorAction Stop
   if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Canonical owner path is a reparse point.'}
-  foreach($rule in (Get-Acl -LiteralPath $name).GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])){
+  $acl=Get-Acl -LiteralPath $name
+  if(-not (Test-PionTrustedOwner $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value $operator.User.Value $admin)){throw 'Canonical task owner path has an unexpected filesystem owner.'}
+  foreach($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])){
    if([string]$rule.AccessControlType -ne 'Allow' -or $rule.IdentityReference.Value -in $may){continue}
    if(($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and $name -ceq $directory){continue}
    if(([long][int]$rule.FileSystemRights -band [long]0x500D0156) -ne 0){throw 'Canonical task owner can be modified by an unexpected principal.'}
   }
  }
  return @{path=$path;sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
+}
+function Assert-PionVoiceAction {
+ param($Action,[string]$Root,[string]$TaskSid,[string]$OwnerPath,[string]$Shell,[string]$Node)
+ if($Action.Execute -ine $OwnerPath -or $Action.WorkingDirectory -ine $Root -or -not $Action.Arguments.StartsWith($TaskSid+' "',[StringComparison]::Ordinal)){throw 'Voice action is outside the canonical role/owner root.'}
+ $plain=Get-ThornswoodPlainAction $Action
+ if($plain.Execute -ine $Shell){throw 'Voice action does not use the canonical command interpreter.'}
+ $prefix='/c "set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_VOICE_PORT=7789&& set THORNSWOOD_VOICE_BIND=127.0.0.1&& set THORNSWOOD_VOICE_AUTH=on&& set THORNSWOOD_CHAT_RANGE='
+ $suffix=' start "" /b /wait /high "'+$Node+'" "'+(Join-Path $Root 'server-log.js')+'" --log "'+(Join-Path $Root 'voice.log')+'" --days 90 --stamp voice-server.js & call exit %^errorlevel%"'
+ $pattern='^'+[regex]::Escape($prefix)+'[0-9]{1,6}(?:\.[0-9]{1,6})?&& (?:set THORNSWOOD_VOICE_MOST=[0-9]{1,4}&& )?set THORNSWOOD_TURN_URL=turn:[A-Za-z0-9.-]+:[0-9]{1,5}(?:\?transport=udp)?&& '+[regex]::Escape($suffix)+'$'
+ if($plain.Argument -cnotmatch $pattern){throw 'Voice action is not the exact canonical Dev chain with unique safe bindings.'}
 }
 function Assert-PionRelayTask {
  param($Task,[string]$Root,[string]$TaskSid)

@@ -2,6 +2,7 @@
 # No script top-level body, real service, file secret, network or task executes.
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot '../scripts/turn/PionHost.ps1')
+. (Join-Path $PSScriptRoot '../scripts/deploy/ServiceAccount.ps1')
 $source=Join-Path $PSScriptRoot '../scripts/turn/Switch-DevTurnRelay.ps1'
 $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Transaction source does not parse.'}
@@ -15,7 +16,13 @@ $ExpectedDevCommit='a'*40;$taskName='fixture';$voiceSid='S-1-5-87-1-2-3-4-5'
 $health=[pscustomobject]@{ok=$true;bind='127.0.0.1';auth='on';turn='ephemeral';peers=0;people=0;tracked=0;deploy=[pscustomobject]@{commit=$ExpectedDevCommit};startedAt='unchanged'}
 $script:turnOwner=@{path='C:/fixture/thornswood-owner-123456789abc.exe';sha256=('c'*64)}
 function Get-PionOwnerIdentity {return $script:turnOwner}
-$task=[pscustomobject]@{Principal=[pscustomobject]@{UserId='S-1-5-19';RunLevel='Limited';ProcessTokenSidType='Unrestricted';RequiredPrivilege=@('SeChangeNotifyPrivilege')};Actions=@([pscustomobject]@{Execute=$script:turnOwner.path;Arguments=$voiceSid+' "node.exe" set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_TURN_URL=turn:fixture.invalid:3478&&';WorkingDirectory='C:/fixture'})}
+$voiceRoot=Join-Path ([IO.Path]::GetTempPath()) 'fixture-dev-voice'
+$env:SystemRoot=Join-Path ([IO.Path]::GetTempPath()) 'fixture-windows'
+$fixtureShell=Join-Path $env:SystemRoot 'System32/cmd.exe'
+$fixtureNode=Join-Path ([IO.Path]::GetTempPath()) 'fixture-node.exe'
+function Get-Command {return [pscustomobject]@{Source=$script:fixtureNode}}
+$cmd='/c "set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_VOICE_PORT=7789&& set THORNSWOOD_VOICE_BIND=127.0.0.1&& set THORNSWOOD_VOICE_AUTH=on&& set THORNSWOOD_CHAT_RANGE=4000&& set THORNSWOOD_TURN_URL=turn:fixture.invalid:3478&&  start "" /b /wait /high "'+$fixtureNode+'" "'+(Join-Path $voiceRoot 'server-log.js')+'" --log "'+(Join-Path $voiceRoot 'voice.log')+'" --days 90 --stamp voice-server.js & call exit %^errorlevel%"'
+$task=[pscustomobject]@{Principal=[pscustomobject]@{UserId='S-1-5-19';RunLevel='Limited';ProcessTokenSidType='Unrestricted';RequiredPrivilege=@('SeChangeNotifyPrivilege')};Actions=@([pscustomobject]@{Execute=$script:turnOwner.path;Arguments=$voiceSid+' "'+$fixtureShell+'" '+$cmd;WorkingDirectory=$voiceRoot})}
 function Health($port){return $script:health}
 function Get-ScheduledTask {return $script:task}
 $script:disabled=0;$script:enabled=0;$script:stopped=0;$script:listenerCount=1
@@ -37,7 +44,9 @@ $health.deploy.commit='b'*40;Refuses 'stale source cannot cross the transaction 
 $health.auth='off';Refuses 'missing native authorization blocks rotation' {DevClear};$health.auth='on'
 Yes 'existing restricted task owner is preserved' ((DevTask).Principal.UserId -eq 'S-1-5-19')
 $task.Principal.UserId='SYSTEM';Refuses 'SYSTEM task is never accepted as a fallback' {DevTask};$task.Principal.UserId='S-1-5-19'
+$originalDirectory=$task.Actions[0].WorkingDirectory;$task.Actions[0].WorkingDirectory='another-role';Refuses 'another role working directory' {DevTask};$task.Actions[0].WorkingDirectory=$originalDirectory
 $original=$task.Actions[0].Arguments;$task.Actions[0].Arguments=$original+' THORNSWOOD_TURN_SECRET=fixture';Refuses 'credential-bearing task action is refused' {DevTask};$task.Actions[0].Arguments=$original
+$task.Actions[0].Arguments=$original.Replace('&&  start','&& set THORNSWOOD_SITE=http://127.0.0.1:3000&&  start');Refuses 'duplicate overridden environment binding' {DevTask};$task.Actions[0].Arguments=$original
 StopDev
 Yes 'one drained owned listener is stopped exactly once' ($script:disabled -eq 1 -and $script:stopped -eq 1 -and $script:enabled -eq 0)
 $script:disabled=0;$script:stopped=0;$script:enabled=0;$health.peers=1
