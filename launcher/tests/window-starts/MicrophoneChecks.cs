@@ -85,6 +85,8 @@ static class MicrophoneChecks {
             });
             check("the microphone picker works from the keyboard and explains restart", () => {
                 win.FindControl<Control>("PageSettings").IsVisible = true; win.Show(); Drain(); win.UpdateLayout();
+                win.Width = 1020; win.Height = 670; win.UpdateLayout(); Drain();
+                Require(box.Bounds.Width >= 340 && box.Bounds.Width <= Math.Min(640, win.FindControl<Control>("PageSettings").Bounds.Width - 72), "The picker overflows Settings at the minimum window width");
                 Require(box.Focus(NavigationMethod.Tab), "The picker did not take keyboard focus");
                 void Press(PhysicalKey key, RawInputModifiers modifiers = RawInputModifiers.None) { win.KeyPressQwerty(key, modifiers); win.KeyReleaseQwerty(key, modifiers); Drain(); }
                 Press(PhysicalKey.ArrowDown, RawInputModifiers.Alt); Press(PhysicalKey.Home); Press(PhysicalKey.ArrowDown); Press(PhysicalKey.Enter);
