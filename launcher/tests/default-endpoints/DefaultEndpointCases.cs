@@ -10,6 +10,8 @@ static unsafe class DefaultEndpointCases {
   changes.DefaultChanged(VoiceCom.eRender,VoiceCom.eConsole);
   desired="speaker B";
   Check("default speaker moves while the original remains valid",changes.ShouldReopen(VoiceCom.eRender,ref seen,"speaker A",()=>desired));
+  // Opening speaker B failed: no acknowledgment and no second Windows event.
+  Check("failed replacement open remains pending without another notification",changes.ShouldReopen(VoiceCom.eRender,ref seen,"speaker A",()=>desired));
   seen=changes.Version(VoiceCom.eRender);changes.DefaultChanged(VoiceCom.eRender,VoiceCom.eCommunications);
   Check("render communications role does not replace console output",!changes.ShouldReopen(VoiceCom.eRender,ref seen,"speaker B",()=>"other role"));
   long capture=changes.Version(VoiceCom.eCapture);changes.DefaultChanged(VoiceCom.eCapture,VoiceCom.eCommunications);
@@ -36,11 +38,18 @@ static unsafe class DefaultEndpointCases {
   watch.Dispose();watch.Dispose();Check("registration pointer is retained and unregistered once",registered==1&&unregistered==1);
   bool refused=false;try{using var rejected=new VoiceDefaultDevices(_=>unchecked((int)0x80004005),_=>0);}catch(System.Runtime.InteropServices.COMException){refused=true;}
   Check("failed native registration is surfaced",refused);
-  int attempts=0;var retry=new VoiceDefaultDevices(_=>0,_=>++attempts==1?unchecked((int)0x80004005):0);
+  int attempts=0;nint retained=0;bool samePointer=true;
+  var retry=new VoiceDefaultDevices(p=>{retained=p;return 0;},p=>{samePointer&=p==retained;return ++attempts==1?unchecked((int)0x80004005):0;});
+  uint beforeDetach=ReferenceCount(retained);
   refused=false;try{retry.Dispose();}catch(System.Runtime.InteropServices.COMException){refused=true;}
-  Check("failed unregistration is surfaced without freeing a registered callback",refused);
-  retry.Dispose();Check("a failed detach can be retried safely",attempts==2);
+  uint afterDetach=ReferenceCount(retained);
+  Check("failed unregistration retains the same COM reference",refused&&beforeDetach==afterDetach);
+  void** retainedVtable=*(void***)retained;long stoppedVersion=retry.Changes.Version(VoiceCom.eRender);
+  hr=((delegate* unmanaged[MemberFunction]<void*,int,int,char*,int>)retainedVtable[6])((void*)retained,VoiceCom.eRender,VoiceCom.eConsole,null);
+  Check("Windows can still call the stopped callback after failed detach",hr==0&&retry.Changes.Version(VoiceCom.eRender)==stoppedVersion);
+  retry.Dispose();Check("a failed detach retries with the original pointer",attempts==2&&samePointer);
   Console.WriteLine(pass+" passed, "+fail+" failed");return fail==0?0:1;
  }
+ static uint ReferenceCount(nint pointer){void** table=*(void***)pointer;uint count=((delegate* unmanaged[MemberFunction]<void*,uint>)table[1])((void*)pointer);((delegate* unmanaged[MemberFunction]<void*,uint>)table[2])((void*)pointer);return count;}
 }
 }
