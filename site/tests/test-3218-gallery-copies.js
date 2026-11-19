@@ -137,7 +137,7 @@ function ask(method, where, headers, body) {
         const raw = Buffer.concat(chunks), text = raw.toString('utf8');
         let json = null;
         try { json = JSON.parse(text); } catch (e) { json = null; }
-        done({ status: res.statusCode, type: String(res.headers['content-type'] || ''), body: text, raw: raw, json: json });
+        done({ status: res.statusCode, cache: res.headers['cache-control'], type: String(res.headers['content-type'] || ''), body: text, raw: raw, json: json });
       });
     });
     req.on('error', (e) => done({ status: 0, body: String(e), json: null }));
@@ -281,12 +281,28 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
     r = await copy(MEMBER_ID, D, 800, jpg(800, 1600), 'image/jpeg');
     yes('and 800 by 1600 goes in (' + r.status + ')', r.status === 200);
 
+    // Each variant must reach the origin again on a later request, not be
+    // reused by a browser or shared HTTP cache after staff take it down.
+    const variants = ['', '?w=800', '?w=1600'];
+    const other = '/shot/' + encodeURIComponent(B);
+    for (const url of variants.map((suffix) => enc + suffix).concat(other)) {
+      r = await ask('GET', url);
+      yes(url + ' serves without allowing HTTP storage (' + r.cache + ')', r.status === 200 && r.cache === 'no-store');
+    }
+
     // ---- deleting the picture deletes its copies ------------------------------
     r = await ask('DELETE', '/api/gallery/approved?' + T(ADMIN_ID), { 'content-type': 'application/json' }, JSON.stringify({ name: A }));
     yes('deleting the picture answers that its file went (' + r.status + ')', r.status === 200 && r.json && r.json.fileDeleted === true);
     yes('and its copies went with it',
         !fs.existsSync(small(A, 800, '.webp')) && !fs.existsSync(small(A, 1600, '.webp')) && !fs.existsSync(path.join(dir, 'uploads', A)));
     yes('the other pictures\' copies are still there', fs.existsSync(small(B, 800, '.webp')) && fs.existsSync(small(D, 800, '.jpg')));
+    for (const suffix of variants) {
+      r = await ask('GET', enc + suffix);
+      yes(enc + suffix + ' is no longer served and its 404 is not stored', r.status === 404 && r.cache === 'no-store');
+    }
+    r = await ask('GET', other);
+    yes('the other picture is still served unchanged without HTTP storage',
+        r.status === 200 && r.cache === 'no-store' && r.raw.equals(png(1700, 850)));
   } catch (e) {
     fail++;
     console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));

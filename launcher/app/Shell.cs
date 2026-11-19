@@ -1155,6 +1155,7 @@ namespace Thornswood
             else if (i == PageNews) BuildNews();
             else if (i == PageDiag) BuildDiag();
             else if (i == PageGallery) BuildGalleryPage();
+            else if (i == PageSettings) BuildMicrophoneSettings();
 
             // The Play spotlight turns only on the Play page, so a page
             // change starts or stops it, the way the title video follows

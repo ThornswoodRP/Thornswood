@@ -60,6 +60,8 @@ or the build check goes red.
 - [What is still missing](#what-is-still-missing)
 - Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
 
+- [Pion native Windows relay, operator-only](#pion-native-windows-relay-operator-only)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe
@@ -2186,3 +2188,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Pion native Windows relay, operator-only
+
+The operator-only Windows relay builds official Pion TURN v5.1.3 (MIT), source `f00fda475f1eb3eaa20daac3cd1c0f6a101b9db8`, with the SHA256-pinned official Go toolchain. Supplier source/module checksum pins are in `records/turn/pion-windows.json`; the transitive modules and their checksum-database hashes are locked in `tools/turn-relay/go.mod` and `go.sum`. Pion modules use MIT licences; Go and golang.org/x modules use BSD-3-Clause. Source/module licence files remain in the retained module cache and must accompany any separate redistribution. This package is not a launcher, mod or game dependency and contains no coturn/OpenSSL/DB/admin runtime. See [Windows TURN operations](docs/WINDOWS-TURN.md) for the narrowly permitted network mode and measured capacity/acceptance limits.

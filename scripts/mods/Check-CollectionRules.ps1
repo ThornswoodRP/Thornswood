@@ -98,7 +98,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Stop-Check([string]$m) {
   Write-Host ''
-  Say "  STOP. $m" 'Red'
+  Write-Output "  STOP. $m"
   Write-Host ''
   exit 1
 }
@@ -303,9 +303,9 @@ function AfterRuleLine([string]$before, [string]$after) {
   return ('Exact next after-rule: { "name": "' + $after.ToLowerInvariant() + '", "after": ["' + $before.ToLowerInvariant() + '"] }')
 }
 function Verdict([string]$what, [string[]]$lines) {
-  if ($null -eq $lines -or $lines.Count -eq 0) { Say ("  yes   " + $what) 'Green'; return }
+  if ($null -eq $lines -or $lines.Count -eq 0) { Write-Output ("  yes   " + $what); return }
   $script:problems += $lines.Count
-  Say ("  NO    " + $what) 'Red'
+  Write-Output ("  NO    " + $what)
   foreach ($l in $lines) { Say ("          " + $l) 'Yellow' }
 }
 
@@ -421,14 +421,14 @@ if ($edges.Count -eq 0) {
 
 Write-Host ''
 if ($script:problems -eq 0) {
-  Say "  HELD. A clean install that keeps these rules puts this list's full plugins in this list's order." 'Green'
+  Write-Output "  HELD. A clean install that keeps these rules puts this list's full plugins in this list's order."
   if ($full.Count) {
     Say ("  The chain ends at {0}. A plugin added to the collection later needs a rule loading it after that one, or it floats." -f $full[$full.Count - 1]) 'DarkGray'
   }
   Write-Host ''
   exit 0
 }
-Say ("  NOT HELD. {0} problem(s) above. A clean install that keeps these rules will not come out in this list's order." -f $script:problems) 'Red'
+Write-Output ("  NOT HELD. {0} problem(s) above. A clean install that keeps these rules will not come out in this list's order." -f $script:problems)
 Say '  Either the list is out of the server''s order, or the collection needs a rule in its next upload. The lines above name the plugins.' 'DarkGray'
 Write-Host ''
 exit 1

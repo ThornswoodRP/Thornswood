@@ -4,6 +4,8 @@ What a release, the build, the box and GitHub are checked against, kept apart
 from the scripts that write and read it (issue #440, phase 8). Every file and
 folder here is named below, under the heading it belongs to.
 
+- `turn/`: the reviewed native Windows TURN supplier pin and exact archive/runtime hashes; `scripts/turn/New-CoturnPackage.ps1` stages it without activation. No script writes this pin: it changes in a reviewed pull request.
+
 ## Builds, the game and the content tools
 
 - `client-build.json`: the six SkyMP client files built from the fork, by

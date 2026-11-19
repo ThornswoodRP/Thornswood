@@ -1168,7 +1168,9 @@ async function handle(req, res) {
     const st = fs.statSync(file);
     const shotKind = {
       'content-type': KIND[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'cache-control': 'public, max-age=86400',
+      // Staff can remove approval for the original and every width at once.
+      // A later request must reach this approval check, not a cached picture.
+      'cache-control': 'no-store',
       'x-content-type-options': 'nosniff'
     };
     // Byte range when asked: a recording will not play in Safari/iOS without it,
@@ -1875,7 +1877,7 @@ async function handle(req, res) {
       hub asked it as a second question and the launcher never sent it, so
       the same removal kept or deleted the file depending on the button.
       Either way the file is marked removed while it is on disk, which
-      /up/<name> refuses, so a removed submission is not served to anybody.
+      /up/<name> refuses, so the site does not serve it on a new request.
       A delete that fails is said, never answered ok: the entry is still off
       both lists, the file is marked removed so it is not served, the answer
       and the site's log say it is still there, and the retention timer
