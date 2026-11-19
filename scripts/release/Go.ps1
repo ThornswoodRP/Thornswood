@@ -539,41 +539,8 @@ $kept = Update-KeptCopies $Game $script:installed.ToArray() $script:removed.ToAr
 if ($kept -lt 0) { Note 'no Profile folder beside this game folder, so no launcher keeps copies here' }
 else { Note "$kept file(s) the launcher keeps a copy of now match what was just installed, so Play will not put an older copy back" }
 
-# -------------------------------------------------------------- load order --
-Head 'Load order'
-
-# MCMHelper.esp is a hundred byte stub whose only job is to exist so MCM Helper
-# has a plugin to hang its menus off. It is sitting in the list disabled, which
-# is what breaks QuickLoot's settings quest and every other MCM Helper menu in
-# the build. Turning it on cannot break anything: it has no masters and no
-# records worth the name.
-#
-# Nothing else here gets touched. The other disabled lines are patches for mods
-# that are genuinely not installed (Wyrmstooth, Mysticism, a couple of SunHelm
-# patches), and enabling a plugin whose masters are missing is how you get a
-# crash on load rather than a fixed menu.
-# Derived from the game folder's install root, not a fixed C:\Thornswood, so
-# the MCMHelper enable lands in the same Profile the launcher on this machine
-# reads when the install is on another drive.
-$installRoot = Split-Path -Parent $Game
-$orderFiles = @(
-  (Join-Path $installRoot 'Profile\LocalAppData\Plugins.txt'),
-  (Join-Path $installRoot 'Profile\Default\plugins.txt')
-)
-foreach ($f in $orderFiles) {
-  if (-not (Test-Path -LiteralPath $f)) { continue }
-  $lines = [IO.File]::ReadAllLines($f)
-  $hit = $false
-  for ($i = 0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i].Trim() -eq 'MCMHelper.esp') { $lines[$i] = '*MCMHelper.esp'; $hit = $true }
-  }
-  if ($hit) {
-    [IO.File]::WriteAllLines($f, $lines, (New-Object Text.UTF8Encoding($false)))
-    Note "enabled MCMHelper.esp in $(Split-Path -Leaf $f)"
-  } else {
-    Note "MCMHelper.esp already enabled in $(Split-Path -Leaf $f)"
-  }
-}
+# The collection owns the plugin lists. MCMHelper.esp loads after its
+# SkyUI_SE.esp master in the recorded order; do not switch it on here.
 
 # ------------------------------------------------------------------ server --
 if (-not $SkipServer) {
