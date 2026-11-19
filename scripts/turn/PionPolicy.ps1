@@ -1,6 +1,6 @@
 # The public policy contains no secret, performs no I/O and opens no listener.
-function Get-CoturnPublicOptions {
-    param([Parameter(Mandatory)]$Policy,[Parameter(Mandatory)][ValidateSet('dev','main')][string]$Role,[Parameter(Mandatory)][string]$RelayIPv4)
+function Get-PionConfiguration {
+    param([Parameter(Mandatory)]$Policy,[Parameter(Mandatory)][ValidateSet('dev','main')][string]$Role,[Parameter(Mandatory)][string]$RelayIPv4,[Parameter(Mandatory)][string]$KeyFile)
     $ip=$null
     if(-not [Net.IPAddress]::TryParse($RelayIPv4,[ref]$ip) -or $ip.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $ip.ToString() -cne $RelayIPv4){throw 'The relay address must be one canonical IPv4 address.'}
     function Number([Net.IPAddress]$address) {
@@ -19,13 +19,17 @@ function Get-CoturnPublicOptions {
     $other=$Policy.roles.$(if($Role -eq 'dev'){'main'}else{'dev'})
     if(($r.minPort -le $other.maxPort -and $other.minPort -le $r.maxPort) -or $r.udpPort -eq $other.udpPort -or ($r.udpPort -ge $other.minPort -and $r.udpPort -le $other.maxPort) -or ($other.udpPort -ge $r.minPort -and $other.udpPort -le $r.maxPort)){throw 'Relay roles overlap.'}
     if($r.realm -cne ('turn-'+$Role+'.thornswood.net') -or $r.taskName -cne ('Thornswood '+$(if($Role -eq 'dev'){'Dev'}else{'Main'})+' TURN')){throw 'The relay role identity differs from the reviewed policy.'}
-    @('listening-ip='+$RelayIPv4;'relay-ip='+$RelayIPv4;'listening-port='+$r.udpPort;'min-port='+$r.minPort;'max-port='+$r.maxPort;'realm='+$r.realm;'use-auth-secret';'fingerprint';'no-tcp';'no-tls';'no-tcp-relay';'no-multicast-peers';'no-auth-pings';'no-software-attribute';'relay-threads=0';'user-quota='+$Policy.userQuota;'total-quota='+$Policy.totalQuota;'max-bps='+$Policy.bytesPerSecondPerAllocation;'bps-capacity='+$Policy.bytesPerSecondTotal;'simple-log';'log-file=stdout';'pidfile=../logs/relay.pid';'denied-peer-ip=0.0.0.0-0.255.255.255';'denied-peer-ip=10.0.0.0-10.255.255.255';'denied-peer-ip=100.64.0.0-100.127.255.255';'denied-peer-ip=127.0.0.0-127.255.255.255';'denied-peer-ip=169.254.0.0-169.254.255.255';'denied-peer-ip=172.16.0.0-172.31.255.255';'denied-peer-ip=192.0.0.0-192.0.0.255';'denied-peer-ip=192.0.2.0-192.0.2.255';'denied-peer-ip=192.168.0.0-192.168.255.255';'denied-peer-ip=198.18.0.0-198.19.255.255';'denied-peer-ip=198.51.100.0-198.51.100.255';'denied-peer-ip=203.0.113.0-203.0.113.255';'denied-peer-ip=224.0.0.0-255.255.255.255')
+    $expected=if($Role -eq 'dev'){@(3478,42000,42031)}else{@(3479,42032,42063)}
+    if($r.udpPort -ne $expected[0] -or $r.minPort -ne $expected[1] -or $r.maxPort -ne $expected[2]){throw 'Role ports differ from the exact native configuration contract.'}
+    if(-not [IO.Path]::IsPathFullyQualified($KeyFile)){throw 'The protected key path must be absolute.'}
+    return [ordered]@{schema=1;role=$Role;listenAddress=$RelayIPv4;listenPort=[int]$r.udpPort;minPort=[int]$r.minPort;maxPort=[int]$r.maxPort;realm=$r.realm;keyFile=$KeyFile}
 }
-
-
-function Assert-CoturnConfigShape {
-    param([Parameter(Mandatory)][string[]]$Options,[Parameter(Mandatory)][byte[]]$Bytes)
-    $text=[Text.Encoding]::ASCII.GetString($Bytes)
-    $prefix=($Options -join "`n")+"`nstatic-auth-secret="
-    if(-not $text.StartsWith($prefix,[StringComparison]::Ordinal) -or $text.Substring($prefix.Length) -cnotmatch '^[a-f0-9]{64}\n$'){throw 'Relay config is not exactly the reviewed ASCII safe shape.'}
+function Assert-PionConfigShape {
+ param([Parameter(Mandatory)]$Expected,[Parameter(Mandatory)][byte[]]$Bytes)
+ $utf8=[Text.UTF8Encoding]::new($false,$true)
+ try{$text=$utf8.GetString($Bytes);$actual=$text | ConvertFrom-Json -AsHashtable}catch{throw 'Relay config is not valid strict UTF-8 JSON.'}
+ if($actual.Count -ne $Expected.Count){throw 'Relay config field set differs from the reviewed shape.'}
+ foreach($name in $Expected.Keys){if(-not $actual.ContainsKey($name) -or $actual[$name] -cne $Expected[$name]){throw 'Relay config value differs from the reviewed shape.'}}
+ # The exact serialization also rejects duplicate/case-alias JSON keys.
+ if($text -cne ($Expected | ConvertTo-Json -Compress)){throw 'Relay config is not the exact generated reviewed shape.'}
 }

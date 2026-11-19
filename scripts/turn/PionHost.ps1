@@ -1,12 +1,12 @@
 # Windows host controls shared by the reviewed installer and runtime gate.
-function Set-CoturnDirectoryAcl {
+function Set-PionDirectoryAcl {
  param([string]$Path,[string]$TaskSid,[switch]$Writable)
  $access=[Security.AccessControl.DirectorySecurity]::new()
  $rights=if($Writable){'0x1301bf'}else{'GRGX'}
  $access.SetSecurityDescriptorSddlForm("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;$rights;;;$TaskSid)")
  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]::new($Path),$access)
 }
-function Write-CoturnProtectedFile {
+function Write-PionProtectedFile {
  param([string]$Path,[byte[]]$Bytes,[string]$ReaderSid='')
  $access=[Security.AccessControl.FileSecurity]::new()
  $read=if($ReaderSid){"(A;;FR;;;$ReaderSid)"}else{''}
@@ -14,7 +14,7 @@ function Write-CoturnProtectedFile {
  $stream=[IO.FileSystemAclExtensions]::Create([IO.FileInfo]::new($Path),[IO.FileMode]::CreateNew,[Security.AccessControl.FileSystemRights]::FullControl,[IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough,$access)
  try{$stream.Write($Bytes)}finally{$stream.Dispose()}
 }
-function Assert-CoturnSecretAcl {
+function Assert-PionSecretAcl {
  param([string]$Path,[string]$ReaderSid='')
  $item=Get-Item -LiteralPath $Path -Force -ErrorAction Stop
  if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'A protected relay file is a reparse point.'}
@@ -28,7 +28,7 @@ function Assert-CoturnSecretAcl {
   if($rule.FileSystemRights -ne $want){throw 'Protected relay file rights differ from the required role.'}
  }
 }
-function Assert-CoturnCutover {
+function Assert-PionCutover {
  param([string]$RelayIPv4)
  $addresses=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object {$_.IPAddress -ceq $RelayIPv4 -and $_.AddressState -eq 'Preferred' -and -not $_.SkipAsSource})
  if($addresses.Count -ne 1){throw 'The intended public IPv4 is not exactly one active preferred source address; cutover is not verified.'}
@@ -41,13 +41,20 @@ function Assert-CoturnCutover {
   if($start.Count -ne 1 -or $start[0] -le 42063){throw 'The proposed relay blocks overlap or cannot be compared with the actual dynamic UDP range.'}
  }
 }
-function Assert-CoturnInstalledFiles {
+function Assert-PionInstalledFiles {
  param([string]$Root)
- $pin=Get-Content -LiteralPath (Join-Path $Root 'supplier-pin.json') -Raw | ConvertFrom-Json
- if($pin.schema -ne 1 -or $pin.supplier -cne 'coturn/coturn' -or @($pin.files).Count -lt 1 -or @($pin.files | Where-Object path -CEQ 'bin/turnserver.exe').Count -ne 1){throw 'Installed supplier pin is incomplete.'}
- foreach($file in $pin.files){
-  if($file.path -cnotmatch '^bin/[A-Za-z0-9_.-]+$' -and $file.path -cne 'doc/turnserver/LICENSE'){throw 'Unsafe installed relay file pin.'}
-  $item=Get-Item -LiteralPath (Join-Path (Join-Path $Root 'runtime') $file.path) -Force -ErrorAction Stop
-  if($item.Attributes -band [IO.FileAttributes]::ReparsePoint -or $item.Length -ne $file.bytes -or (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256){throw 'Installed native relay bytes differ from the reviewed supplier pin.'}
- }
+ $state=Get-Content -LiteralPath (Join-Path $Root 'relay.json') -Raw | ConvertFrom-Json
+ . (Join-Path $PSScriptRoot 'PionPackage.ps1')
+ $null=Assert-PionWindowsPackage -Directory (Join-Path $Root 'runtime') -ExpectedSourceCommit $state.operationsCommit -ExpectedPackageHash $state.packageHash -PinPath (Join-Path $Root 'pion-pin.json')
+}
+function Assert-PionIngress {
+ param([string]$Name,[string]$Executable,[string]$RelayIPv4,$Role)
+ $rules=@(Get-NetFirewallRule -PolicyStore ActiveStore -Name $Name -ErrorAction Stop)
+ if($rules.Count -ne 1 -or [string]$rules[0].Enabled -cne 'True' -or [string]$rules[0].Direction -cne 'Inbound' -or [string]$rules[0].Action -cne 'Allow'){throw 'Actual relay ingress rule is not the exact enabled inbound allow.'}
+ $address=@($rules[0] | Get-NetFirewallAddressFilter -ErrorAction Stop)
+ $program=@($rules[0] | Get-NetFirewallApplicationFilter -ErrorAction Stop)
+ $port=@($rules[0] | Get-NetFirewallPortFilter -ErrorAction Stop)
+ $want=@([string]$Role.udpPort,([string]$Role.minPort+'-'+[string]$Role.maxPort)) | Sort-Object
+ $actual=@($port.LocalPort) | Sort-Object
+ if($address.Count -ne 1 -or @($address.LocalAddress).Count -ne 1 -or $address.LocalAddress -cne $RelayIPv4 -or $program.Count -ne 1 -or $program.Program -ine $Executable -or $port.Count -ne 1 -or [string]$port.Protocol -notin '17','UDP' -or ($actual -join ',') -cne ($want -join ',')){throw 'Actual relay ingress address/program/UDP ports differ from the reviewed scope.'}
 }

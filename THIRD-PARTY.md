@@ -60,6 +60,8 @@ or the build check goes red.
 - [What is still missing](#what-is-still-missing)
 - Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
 
+- [Pion native Windows relay, operator-only](#pion-native-windows-relay-operator-only)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe
@@ -862,7 +864,7 @@ Unicode License V3 of a far later ICU in its place.
 Read on 20 October 2026 (#421). The file is Microsoft's and unmodified: its
 Authenticode signature is valid, signed by Microsoft Corporation, its version
 resource says "Direct3D HLSL Compiler for Redistribution", version
-10.0.20348.1, "© Microsoft Corporation. All rights reserved.", and its sha256
+10.0.20348.1, "Â© Microsoft Corporation. All rights reserved.", and its sha256
 is the one in the table above. It is the copy the Chromium Embedded
 Framework's own binary download carries beside `libEGL.dll` and
 `libGLESv2.dll`, for ANGLE. It is not the copy a newer Windows SDK carries:
@@ -1968,7 +1970,7 @@ The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `cf
 ```
 The MIT License (MIT)
 
-Copyright (c) AvaloniaUI OÜ
+Copyright (c) AvaloniaUI OÃœ
 All Rights Reserved
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2059,17 +2061,17 @@ HarfBuzz is licensed under the so-called "Old MIT" license.  Details follow.
 For parts of HarfBuzz that are licensed under different licenses see individual
 files names COPYING in subdirectories where applicable.
 
-Copyright © 2010,2011,2012  Google, Inc.
-Copyright © 2012  Mozilla Foundation
-Copyright © 2011  Codethink Limited
-Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
-Copyright © 2009  Keith Stribley
-Copyright © 2009  Martin Hosken and SIL International
-Copyright © 2007  Chris Wilson
-Copyright © 2006  Behdad Esfahbod
-Copyright © 2005  David Turner
-Copyright © 2004,2007,2008,2009,2010  Red Hat, Inc.
-Copyright © 1998-2004  David Turner and Werner Lemberg
+Copyright Â© 2010,2011,2012  Google, Inc.
+Copyright Â© 2012  Mozilla Foundation
+Copyright Â© 2011  Codethink Limited
+Copyright Â© 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright Â© 2009  Keith Stribley
+Copyright Â© 2009  Martin Hosken and SIL International
+Copyright Â© 2007  Chris Wilson
+Copyright Â© 2006  Behdad Esfahbod
+Copyright Â© 2005  David Turner
+Copyright Â© 2004,2007,2008,2009,2010  Red Hat, Inc.
+Copyright Â© 1998-2004  David Turner and Werner Lemberg
 
 For full copyright notices consult the individual files in the package.
 
@@ -2137,8 +2139,8 @@ The text of `LICENSE` in Avalonia.Angle.Windows.Natives 2.1.27548.20260419, as t
 The text of `LICENSE` in https://github.com/velopack/velopack at commit `92d6a1c9`, the commit Velopack 1.2.161's nuspec names.
 
 ```
-Copyright © 2021 Caelan Sayler
-Copyright © 2024 Velopack Ltd.
+Copyright Â© 2021 Caelan Sayler
+Copyright Â© 2024 Velopack Ltd.
 
 Permission is hereby granted,  free of charge,  to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -2187,6 +2189,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Coturn native Windows relay, operator-only
+## Pion native Windows relay, operator-only
 
-The optional Windows relay package is official `coturn/coturn`4.19.1, BSD-3-Clause, source `222c0eb8288be29630d30b5f81085524a0b6fa28`. The authoritative MSVC tag-push artifact and every runtime byte are pinned in `records/turn/coturn-windows.json`. Its coturn licence is copied from the original archive into each staged package. It is not committed as a binary and never enters the launcher, mod or game payload. Operators retain the original supplier archive rather than redistributing a modified vendor installer. Its bundled MSVC runtimes and vcpkg dependencies keep their upstream licences; their sources and exact upstream baseline are identified in [the native relay preparation](docs/WINDOWS-TURN.md). The supported security mode and limitations are documented there; this is not a general TLS/database server bundle.
+The operator-only Windows relay builds official Pion TURN v5.1.3 (MIT), source `f00fda475f1eb3eaa20daac3cd1c0f6a101b9db8`, with the SHA256-pinned official Go toolchain. Supplier source/module checksum pins are in `records/turn/pion-windows.json`; the transitive modules and their checksum-database hashes are locked in `tools/turn-relay/go.mod` and `go.sum`. Pion modules use MIT licences; Go and golang.org/x modules use BSD-3-Clause. Source/module licence files remain in the retained module cache and must accompany any separate redistribution. This package is not a launcher, mod or game dependency and contains no coturn/OpenSSL/DB/admin runtime. See [Windows TURN operations](docs/WINDOWS-TURN.md) for the narrowly permitted network mode and measured capacity/acceptance limits.

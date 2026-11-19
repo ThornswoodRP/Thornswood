@@ -4,7 +4,7 @@
 const cp = require('child_process');
 const path = require('path');
 const powershell = path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe');
-const child = cp.spawn(powershell, ['-NoLogo','-NoProfile','-NonInteractive','-File',path.join(__dirname,'Run-Coturn.ps1')], {
+const child = cp.spawn(powershell, ['-NoLogo','-NoProfile','-NonInteractive','-File',path.join(__dirname,'Run-Pion.ps1')], {
   cwd: path.dirname(__dirname), stdio: ['ignore','inherit','inherit'], windowsHide: true, shell: false
 });
 let started = false;
