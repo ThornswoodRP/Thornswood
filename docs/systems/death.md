@@ -112,6 +112,6 @@ replace that page.
 
 The wounds and the diseases you had come through the wake with you,
 on the record the injury page describes. The bleed stops at the death.
-There is no downed state yet: the injury page says why. A person
+Going down is in the server, on the injury page. A person
 killing a person already counts for nothing toward a rank. An animal
 in the hunt table already lies for 5 minutes.
