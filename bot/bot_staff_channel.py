@@ -12,7 +12,7 @@ import traceback
 import discord
 
 from bot_core import (TROUBLE_EVERY, TROUBLE_FILE, TROUBLE_ID, TROUBLE_POSTS,
-    WATCH_ID, _state_read, _state_write, client, log)
+    WATCH_ID, _state_read, _state_write, as_typed, client, log)
 
 
 # Where the watchdog's messages are said: #staff-updates, by WATCH_ID from
@@ -133,17 +133,24 @@ def _trouble_line(row):
             late = (' The logs did not arrive until %s, well after it ended, '
                     'so this is a late upload rather than a new failure.' % got)
 
+    # Bound the fields before escaping, so the closing fence and footer fit.
+    def literal(value, limit):
+        return as_typed(' '.join(str(value).splitlines()), limit)
+
+    version = literal(row.get('version') or '', 80)
+    # Keep backticks visible without letting consecutive ones form a fence.
+    excerpt = line[:400].replace('`', '`\u200b')
     return (
         TROUBLE_HEAD + ' %s, on %s%s.%s%s\n%s\n%s\n'
         'The logs are on the sessions page under that session, '
         'and it is the red one.'
-        % (who,
+        % (literal(who, 100) or 'somebody',
            where,
-           (', launcher %s' % row['version']) if row.get('version') else '',
+           (', launcher %s' % version) if version else '',
            when,
            late,
-           row.get('why') or 'something went wrong',
-           ('```\n%s\n```' % line[:400]) if line else ''))
+           literal(row.get('why') or '', 200) or 'something went wrong',
+           ('```\n%s\n```' % excerpt) if excerpt else ''))
 
 
 def _trouble_rows():
@@ -265,6 +272,7 @@ def _trouble_post_matches(content, row):
     """
     if content == _trouble_line(row)[:1900]:
         return True
+    # Historical posts contain the raw name and excerpt, not today's escapes.
     who = row.get('name') or row.get('who') or ''
     line = (row.get('line') or '').strip()
     mark = ('```\n%s\n```' % line[:400]) if line else (row.get('why') or '')
@@ -418,10 +426,8 @@ async def trouble_say(text):
     if ch is None:
         return None
     try:
-        # The line carries a name and a line from a log, both from somewhere
-        # else. Mentions stay off, as in watch_say and report_say, so an
-        # @everyone in it is text and not a ping.
-        return await ch.send(text[:1900],
+        # Outside text must not ping anyone or produce link previews.
+        return await ch.send(text[:1900], suppress_embeds=True,
                              allowed_mentions=discord.AllowedMentions.none())
     except Exception:
         log('trouble: could not post in #%s:\n' % getattr(ch, 'name', '?')
