@@ -61,12 +61,20 @@ func TestRealTURNAuthAndBidirectionalMediaKeepSameHostGuard(t *testing.T) {
 	if expired != nil {
 		t.Fatal("expired allocated")
 	}
-	_, a := connect(username, password)
-	_, b := connect(username, password)
+	ac, a := connect(username, password)
+	bc, b := connect(username, password)
 	if a == nil || b == nil {
 		t.Fatal("valid REST credentials failed")
 	}
-	// Prime each permission using the real TURN client's authenticated protocol.
+	// Establish permissions explicitly before data. Priming with data creates
+	// an arrival race: the first datagram may arrive or be dropped while the
+	// opposite permission is being established on a faster/slower host.
+	if e = ac.CreatePermission(b.LocalAddr()); e != nil {
+		t.Fatal(e)
+	}
+	if e = bc.CreatePermission(a.LocalAddr()); e != nil {
+		t.Fatal(e)
+	}
 	if _, e = a.WriteTo([]byte("a to b"), b.LocalAddr()); e != nil {
 		t.Fatal(e)
 	}
@@ -83,10 +91,7 @@ func TestRealTURNAuthAndBidirectionalMediaKeepSameHostGuard(t *testing.T) {
 		}
 	}
 	read(a, "b to a")
-	if _, e = a.WriteTo([]byte("reverse preserved"), b.LocalAddr()); e != nil {
-		t.Fatal(e)
-	}
-	read(b, "reverse preserved")
+	read(b, "a to b")
 	marker, e := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if e != nil {
 		t.Fatal(e)
