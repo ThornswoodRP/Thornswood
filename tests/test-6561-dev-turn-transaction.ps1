@@ -1,6 +1,7 @@
 # #6561: Run actual guard functions against an isolated fake scheduler/health API.
 # No script top-level body, real service, file secret, network or task executes.
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')
 . (Join-Path $PSScriptRoot '../scripts/turn/PionHost.ps1')
 . (Join-Path $PSScriptRoot '../scripts/deploy/ServiceAccount.ps1')
 $source=Join-Path $PSScriptRoot '../scripts/turn/Switch-DevTurnRelay.ps1'
@@ -17,8 +18,8 @@ $health=[pscustomobject]@{ok=$true;bind='127.0.0.1';auth='on';turn='ephemeral';p
 $script:turnOwner=@{path='C:/fixture/thornswood-owner-123456789abc.exe';sha256=('c'*64)}
 function Get-PionOwnerIdentity {return $script:turnOwner}
 $voiceRoot=Join-Path ([IO.Path]::GetTempPath()) 'fixture-dev-voice'
-$env:SystemRoot=Join-Path ([IO.Path]::GetTempPath()) 'fixture-windows'
-$fixtureShell=Join-Path $env:SystemRoot 'System32/cmd.exe'
+$fixtureShell=if($OnWindows){Get-WindowsPath 'System32/cmd.exe'}else{Join-Path ([IO.Path]::GetTempPath()) 'fixture-command-interpreter.exe'}
+function Get-PionCommandInterpreter {return $script:fixtureShell}
 $fixtureNode=Join-Path ([IO.Path]::GetTempPath()) 'fixture-node.exe'
 function Get-Command {return [pscustomobject]@{Source=$script:fixtureNode}}
 $cmd='/c "set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_VOICE_PORT=7789&& set THORNSWOOD_VOICE_BIND=127.0.0.1&& set THORNSWOOD_VOICE_AUTH=on&& set THORNSWOOD_CHAT_RANGE=4000&& set THORNSWOOD_TURN_URL=turn:fixture.invalid:3478&&  start "" /b /wait /high "'+$fixtureNode+'" "'+(Join-Path $voiceRoot 'server-log.js')+'" --log "'+(Join-Path $voiceRoot 'voice.log')+'" --days 90 --stamp voice-server.js & call exit %^errorlevel%"'

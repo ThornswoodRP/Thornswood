@@ -40,8 +40,21 @@ if($OnWindows){
   $ok=$true;try{Assert-PionSecretAcl $path $current}catch{$ok=$false};Yes 'protected generic Read ACE is validated with its native Synchronize bit' $ok
   $acl=Get-Acl -LiteralPath $path;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-19'),[Security.AccessControl.FileSystemRights]::Read,'Allow'));[IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]::new($path),$acl)
   Refuses 'shared LOCAL SERVICE access cannot reach a task-specific secret' {Assert-PionSecretAcl $path $current}
+  $source=Join-Path $PSScriptRoot '../scripts/turn/Switch-DevTurnRelay.ps1'
+  $tokens=$null;$parseErrors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$parseErrors)
+  $replace=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'ReplaceKey'},$true)
+  Invoke-Expression $replace.Extent.Text
+  $voiceRoot=$root;$keyPath=Join-Path $root 'key.txt';$voiceSid=$current
+  # The operator transaction runs elevated. This unprivileged fixture keeps
+  # real replacement I/O but substitutes only its ACL dependencies; exact
+  # Windows protected-file ACL behavior was exercised above independently.
+  function Write-PionProtectedFile {param($Path,$Bytes,$ReaderSid);[IO.File]::WriteAllBytes($Path,$Bytes)}
+  function Assert-PionSecretAcl {param($Path,$ReaderSid)}
+  [IO.File]::WriteAllBytes($keyPath,[Text.Encoding]::ASCII.GetBytes('inert old key'))
+  ReplaceKey ([Text.Encoding]::ASCII.GetBytes('inert replacement'))
+  Yes 'actual ReplaceKey I/O replaces destination and consumes pending file without a backup path' ([IO.File]::ReadAllText($keyPath) -ceq 'inert replacement' -and @(Get-ChildItem -LiteralPath $root -Filter '*.pending').Count -eq 0)
  }finally{
-  if(Test-Path -LiteralPath $path){$acl=Get-Acl -LiteralPath $path;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($current),[Security.AccessControl.FileSystemRights]::FullControl,'Allow'));[IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]::new($path),$acl);Remove-Item -LiteralPath $path -Force}
+  foreach($item in @(Get-ChildItem -LiteralPath $root -File)){$file=$item.FullName;$acl=Get-Acl -LiteralPath $file;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($current),[Security.AccessControl.FileSystemRights]::FullControl,'Allow'));[IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]::new($file),$acl);Remove-Item -LiteralPath $file -Force}
   if([IO.Path]::GetFileName($root) -cne ('tw-pion-acl-'+$n)){throw 'Unexpected ACL fixture cleanup path'}
   Remove-Item -LiteralPath $root
  }

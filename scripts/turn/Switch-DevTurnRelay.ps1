@@ -60,7 +60,7 @@ function DevTask {
  $action=@($task.Actions)[0]
  $owner=Get-PionOwnerIdentity
  if($owner.path -ine $script:turnOwner.path -or $owner.sha256 -cne $script:turnOwner.sha256 -or $action.Execute -ine $owner.path -or -not $action.Arguments.StartsWith($voiceSid+' "',[StringComparison]::Ordinal) -or $action.Arguments -match 'THORNSWOOD_TURN_(SECRET|PASS|USER)='){throw 'Unexpected Dev voice owner wrapper or credential-bearing task action.'}
- Assert-PionVoiceAction $action $voiceRoot $voiceSid $owner.path (Join-Path $env:SystemRoot 'System32/cmd.exe') (Get-Command node.exe -ErrorAction Stop).Source
+ Assert-PionVoiceAction $action $voiceRoot $voiceSid $owner.path (Get-PionCommandInterpreter) (Get-Command node.exe -ErrorAction Stop).Source
  return $task
 }
 function DevClear {
@@ -101,7 +101,7 @@ function ReplaceKey([byte[]]$Bytes){
  try{
   Write-PionProtectedFile $pending $Bytes $voiceSid
   Assert-PionSecretAcl $pending $voiceSid
-  [IO.File]::Replace($pending,$keyPath,$null)
+  [IO.File]::Replace($pending,$keyPath,[NullString]::Value)
   Assert-PionSecretAcl $keyPath $voiceSid
  }finally{if(Test-Path -LiteralPath $pending){Remove-Item -LiteralPath $pending -Force}}
 }

@@ -3,6 +3,11 @@ function Test-PionTrustedOwner {
  param([string]$Sid,[string]$OperatorSid,[bool]$OperatorIsAdmin)
  return ($Sid -in @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464') -or ($OperatorIsAdmin -and $Sid -ceq $OperatorSid))
 }
+function Get-PionCommandInterpreter {
+ $windows=[Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
+ if(-not $windows){throw 'The native relay/voice task requires the actual Windows command interpreter.'}
+ return Join-Path $windows 'System32/cmd.exe'
+}
 function Assert-PionTaskPrincipal {
  param($Task)
  $id=[string]$Task.Principal.UserId
