@@ -419,7 +419,9 @@ namespace Thornswood
                 {
                     relayed = addr;
                     relay = new Local { Type = "relay", Priority = Prio(0, 65535), Relay = true };
-                    turnRefreshAt = Now() + Math.Max(30, (long)life - 60) * 1000;
+                    // Permissions expire after 300s even when the allocation
+                    // lasts longer (RFC 8656 9). Refresh both within four minutes.
+                    turnRefreshAt = Now() + Math.Min(240, Math.Max(30, (long)life - 60)) * 1000;
                     foreach (Remote r in remotes) { AddPair(relay, r); askFor.Add(r.Addr); }
                     line = Line("3", relay.Priority, addr.Address.ToString(), addr.Port, "relay",
                                 mapped == null ? "0.0.0.0" : mapped.Address.ToString(), mapped == null ? 0 : mapped.Port);
