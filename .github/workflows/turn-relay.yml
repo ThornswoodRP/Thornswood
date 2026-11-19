@@ -14,13 +14,13 @@ permissions:
 
 jobs:
   relay-tests:
-    name: Relay tests (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
+    name: Relay tests (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, windows-latest]
+        platform: [linux, windows]
     defaults:
       run:
         working-directory: tools/turn-relay
