@@ -40,6 +40,8 @@ namespace Thornswood
     {
         readonly VoiceMix mix;
         readonly Config cfg;
+        readonly object lifecycle = new object();
+        readonly ManualResetEvent stopping = new ManualResetEvent(false);
         volatile bool stop;
         Thread mic, speakers;
 
@@ -56,17 +58,33 @@ namespace Thornswood
 
         public void Start()
         {
-            mic = new Thread(Capture) { IsBackground = true, Name = "Voice microphone" };
-            speakers = new Thread(Playback) { IsBackground = true, Name = "Voice speakers" };
-            mic.Start();
-            speakers.Start();
+            lock (lifecycle)
+            {
+                ObjectDisposedException.ThrowIf(stop, this);
+                if (mic != null) return;
+                mic = StartWorker(Capture, "Voice microphone");
+                speakers = StartWorker(Playback, "Voice speakers");
+            }
+        }
+
+        static Thread StartWorker(ThreadStart work, string name)
+        {
+            var worker = new Thread(work) { IsBackground = true, Name = name };
+            worker.Start();
+            return worker;
         }
 
         public void Dispose()
         {
-            stop = true;
-            if (mic != null) mic.Join(1000);
-            if (speakers != null) speakers.Join(1000);
+            lock (lifecycle)
+            {
+                if (stop) return;
+                stop = true;
+                stopping.Set();
+                mic?.Join();
+                speakers?.Join();
+                stopping.Dispose();
+            }
         }
 
         // -------------------------------------------------------- the clock
@@ -99,7 +117,7 @@ namespace Thornswood
             {
                 for (int round = 0; round < 2 && !stop; round++)
                 {
-                    int hr = CaptureOnce(round > 0);
+                    int hr = CaptureOnce();
                     if (hr != VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return;
                     OnEvent("log", "the microphone went away (unplugged or switched off), opening the one Windows has now");
                 }
@@ -123,7 +141,7 @@ namespace Thornswood
         /// HRESULT that ended it: 0 for a stop, AUDCLNT_E_DEVICE_INVALIDATED
         /// when the device went away.
         /// </summary>
-        unsafe int CaptureOnce(bool again)
+        unsafe int CaptureOnce()
         {
             int hr;
             VoiceCom.IMMDeviceEnumerator en = VoiceCom.Enumerator(out hr);
@@ -131,6 +149,7 @@ namespace Thornswood
             VoiceCom.IMMDevice dev = null;
             VoiceCom.IAudioClient2 client = null;
             VoiceCom.IAudioCaptureClient cap = null;
+            bool started = false;
             var wake = new AutoResetEvent(false);
             try
             {
@@ -163,9 +182,11 @@ namespace Thornswood
                 hr = client.GetService(VoiceCom.IID_IAudioCaptureClient, out p);
                 if (hr != 0) { Refused("no capture service on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
                 cap = VoiceCom.Wrap<VoiceCom.IAudioCaptureClient>(p);
-                client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
+                hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
+                if (hr != 0) return Stopped(hr);
                 hr = client.Start();
-                if (hr != 0) { Refused(name + " would not start (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0) return Stopped(hr);
+                started = true;
 
                 // The page's words: the launcher logs both.
                 OnEvent("log", "microphone open: " + (name.Length > 0 ? name : "unnamed"));
@@ -173,38 +194,42 @@ namespace Thornswood
 
                 float[] frame = new float[VoiceMix.Frame];
                 int have = 0;
-                while (!stop)
+                WaitHandle[] signals = { stopping, wake };
+                while (WaitHandle.WaitAny(signals) == 1 && !stop)
                 {
-                    wake.WaitOne(200);
-                    while (true)
+                    while (!stop)
                     {
                         uint next;
                         hr = cap.GetNextPacketSize(out next);
-                        if (hr != 0) return Stopped(client, hr);
+                        if (hr != 0) return Stopped(hr);
                         if (next == 0) break;
                         nint data; uint frames, flags; ulong pos, qpc;
                         hr = cap.GetBuffer(out data, out frames, out flags, out pos, out qpc);
-                        if (hr != 0) return Stopped(client, hr);
-                        float* src = (float*)data;
-                        bool silent = (flags & VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT) != 0;
-                        for (uint i = 0; i < frames; i++)
+                        if (hr != 0) return Stopped(hr);
+                        try
                         {
-                            frame[have++] = silent ? 0f : src[i];
-                            if (have == frame.Length)
+                            float* src = (float*)data;
+                            bool silent = (flags & VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT) != 0;
+                            for (uint i = 0; i < frames && !stop; i++)
                             {
-                                OnFrame(frame);
-                                frame = new float[VoiceMix.Frame];
-                                have = 0;
+                                frame[have++] = silent ? 0f : src[i];
+                                if (have == frame.Length)
+                                {
+                                    OnFrame(frame);
+                                    frame = new float[VoiceMix.Frame];
+                                    have = 0;
+                                }
                             }
                         }
-                        cap.ReleaseBuffer(frames);
+                        finally { hr = cap.ReleaseBuffer(frames); }
+                        if (hr != 0) return Stopped(hr);
                     }
                 }
-                client.Stop();
                 return 0;
             }
             finally
             {
+                if (started) client.Stop();
                 VoiceCom.Release(cap);
                 VoiceCom.Release(client);
                 VoiceCom.Release(dev);
@@ -213,9 +238,8 @@ namespace Thornswood
             }
         }
 
-        int Stopped(VoiceCom.IAudioClient2 client, int hr)
+        int Stopped(int hr)
         {
-            client.Stop();
             if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
             Refused("the microphone stopped (0x" + hr.ToString("X8") + ")");
             return 0;
@@ -301,35 +325,45 @@ namespace Thornswood
                 if (hr != 0) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
 
                 uint size;
-                client.GetBufferSize(out size);
+                hr = client.GetBufferSize(out size);
+                if (hr != 0) return PlaybackFailure(hr);
                 nint p;
                 hr = client.GetService(VoiceCom.IID_IAudioRenderClient, out p);
                 if (hr != 0) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
                 ren = VoiceCom.Wrap<VoiceCom.IAudioRenderClient>(p);
-                client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
+                hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
+                if (hr != 0) return PlaybackFailure(hr);
 
                 float[] buf = new float[size * 2];
                 hr = client.Start();
-                if (hr != 0) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
-                OnEvent("debug", "playing voice on " + name);
-
-                while (!stop)
+                if (hr != 0) return PlaybackFailure(hr);
+                try
                 {
-                    wake.WaitOne(200);
-                    uint padding;
-                    hr = client.GetCurrentPadding(out padding);
-                    if (hr != 0) { client.Stop(); return hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED ? hr : Quit(hr); }
-                    uint room = size - padding;
-                    if (room == 0) continue;
-                    nint data;
-                    hr = ren.GetBuffer(room, out data);
-                    if (hr != 0) { client.Stop(); return hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED ? hr : Quit(hr); }
-                    mix.Render(buf, (int)room);
-                    new Span<float>(buf, 0, (int)room * 2).CopyTo(new Span<float>((void*)data, (int)room * 2));
-                    ren.ReleaseBuffer(room, 0);
+                    OnEvent("debug", "playing voice on " + name);
+                    WaitHandle[] signals = { stopping, wake };
+                    while (WaitHandle.WaitAny(signals) == 1 && !stop)
+                    {
+                        uint padding;
+                        hr = client.GetCurrentPadding(out padding);
+                        if (hr != 0) return PlaybackFailure(hr);
+                        uint room = size - padding;
+                        if (room == 0) continue;
+                        nint data;
+                        hr = ren.GetBuffer(room, out data);
+                        if (hr != 0) return PlaybackFailure(hr);
+                        uint flags = VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT;
+                        try
+                        {
+                            mix.Render(buf, (int)room);
+                            new Span<float>(buf, 0, (int)room * 2).CopyTo(new Span<float>((void*)data, (int)room * 2));
+                            flags = 0;
+                        }
+                        finally { hr = ren.ReleaseBuffer(room, flags); }
+                        if (hr != 0) return PlaybackFailure(hr);
+                    }
+                    return 0;
                 }
-                client.Stop();
-                return 0;
+                finally { client.Stop(); }
             }
             finally
             {
@@ -341,8 +375,9 @@ namespace Thornswood
             }
         }
 
-        int Quit(int hr)
+        int PlaybackFailure(int hr)
         {
+            if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
             OnEvent("log", "voice playback stopped (0x" + hr.ToString("X8") + ")");
             return 0;
         }
