@@ -1,5 +1,6 @@
 <# Run locally on the Windows game VPS only, after reviewed cutover proof.
-   Stage creates a DISABLED isolated task/package; Activate is Dev-only.
+   Stage creates a disabled isolated task/package. Main activation requires
+   the exact protected Main deployment, after Dev media acceptance.
    It does not change the voice issuer. That is a separate drained transaction. #>
 [CmdletBinding()]
 param([Parameter(Mandatory)][ValidateSet('Stage','Verify','Activate','Stop')][string]$Step,
@@ -7,7 +8,8 @@ param([Parameter(Mandatory)][ValidateSet('Stage','Verify','Activate','Stop')][st
       [Parameter(Mandatory)][string]$RelayIPv4,
       [string]$PackageDirectory='',
       [ValidatePattern('^[a-f0-9]{64}$')][string]$PackageHash='',
-      [ValidatePattern('^[a-f0-9]{40}$')][string]$SourceCommit)
+      [ValidatePattern('^[a-f0-9]{40}$')][string]$SourceCommit,
+      [ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedMainCommit)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 if(-not $IsWindows){throw 'Native relay installation requires Windows.'}
@@ -96,7 +98,15 @@ if($Step -eq 'Verify'){
  @{role=$Role;verifiedDisabled=$true;keyPreserved=$true;packageVerified=$true;ownerSha256=$owner.sha256;issuerChanged=$false} | ConvertTo-Json -Compress
  exit
 }
-if($Role -ne 'dev'){throw 'Main relay activation remains held; this step only activates Dev.'}
+if($Role -eq 'main'){
+ $main=Invoke-RestMethod -TimeoutSec 5 'http://127.0.0.1:7778/health'
+ $dev=Invoke-RestMethod -TimeoutSec 5 'http://127.0.0.1:7789/health'
+ $devState=Get-Content -LiteralPath (Join-Path $env:SystemDrive 'Thornswood-Turn-Dev/relay.json') -Raw | ConvertFrom-Json
+ if(!$ExpectedMainCommit -or !$main.ok -or $main.deploy.commit -cne $ExpectedMainCommit -or $main.turn -cne 'none' -or
+    !$dev.ok -or $dev.turn -cne 'ephemeral' -or !$devState.lastActivationVerifiedUtc){throw 'Main activation requires the protected deployed commit and the verified Dev relay.'}
+ $devIce=Invoke-RestMethod -TimeoutSec 5 'http://127.0.0.1:7789/ice'
+ if(('turn:'+$RelayIPv4+':3478?transport=udp') -cnotin @($devIce.iceServers | ForEach-Object {$_.urls})){throw 'Dev is not issuing the VPS relay endpoint.'}
+}
 $busy=@(Get-NetUDPEndpoint -ErrorAction Stop | Where-Object {$_.LocalPort -eq $r.udpPort -or ($_.LocalPort -ge $r.minPort -and $_.LocalPort -le $r.maxPort)})
 if($busy.Count){throw 'The requested relay UDP ports are already held.'}
 if(Get-NetFirewallRule -PolicyStore localhost -Name $ruleName -ErrorAction SilentlyContinue){throw 'The relay ingress rule already exists; do not overwrite unknown state.'}
