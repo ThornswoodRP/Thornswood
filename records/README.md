@@ -331,9 +331,11 @@ named. Names only: no secret or token is in any of them.
   #2165).
 - `github-apps.json`: what each GitHub App that works on Thornswood's
   repositories may do, permission by permission and event by event, each
-  with its reason. Every night `scripts\dev\Check-AppPermissions.js` reads
-  each App from GitHub and names any difference. Only Patrick changes an
-  App's permissions; the change is a pull request to this file first.
+  with its reason. Every night `scripts\dev\Check-AppPermissions.js` checks
+  the full catalog and reads every public registration from GitHub.
+  Patrick can run it with `-Private` and his local GitHub sign-in to
+  check private registrations. He changes App permissions after a pull
+  request updates this file.
 - `github-repo-settings.json`: the rulesets, vulnerability reporting,
   immutable releases, secret scanning, auto-merge and merge methods of this
   repository, the engine fork and the ops repository (#3683, #3691). After a
