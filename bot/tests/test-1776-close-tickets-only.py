@@ -258,7 +258,7 @@ def literal_send(options):
     mentions = options.get('allowed_mentions')
     return (options.get('suppress_embeds') is True
             and isinstance(mentions, discord.AllowedMentions)
-            and mentions.to_dict() == {'parse': [], 'replied_user': False})
+            and not any((mentions.everyone, mentions.users, mentions.roles, mentions.replied_user)))
 
 
 ask = run(close_with_reason, thread, closer)
