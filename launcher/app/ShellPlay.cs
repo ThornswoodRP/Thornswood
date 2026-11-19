@@ -455,6 +455,11 @@ namespace Thornswood
                 // So the microphone travels in SkyrimPlatformImpl.dll, as a
                 // mod file, to everybody. Nothing here has to know about it.
                 psi.UseShellExecute = true;
+                if (cfg.AudioOutputConfigured)
+                {
+                    try { AudioOutput.PrepareGame(Paths.Game, cfg.AudioOutputId); }
+                    catch (Exception ex) { Log("Could not save Skyrim audio output: " + Failure.Why("AudioOutput.PrepareGame", ex)); }
+                }
                 Process.Start(psi);
                 // Which release's game files this game runs on, in the line
                 // everybody pastes: the release the install last synced to
