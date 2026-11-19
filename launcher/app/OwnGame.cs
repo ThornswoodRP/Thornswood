@@ -3839,7 +3839,7 @@ namespace Thornswood
             {
                 string list = Path.Combine(Paths.ProfileDir, "installed-into-game.txt");
                 if (File.Exists(list))
-                    foreach (string line in File.ReadAllLines(list))
+                    foreach (string line in SetupOwnership.PathsIn(list, Paths.SteamCopy))
                     {
                         string rel = line.Trim();
                         if (rel.Length > 0 && !deployed.Contains(rel)) set.Add(rel);
