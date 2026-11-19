@@ -65,6 +65,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `open-tickets.json` | bot | bot | Medium | none |
 | `commands-synced.json` | bot | bot | Low | none |
 | `heartbeat.json` (the bot's data folder) | bot | Watch-Services.ps1 (the watchdog) | Medium: a bot that stops beating is said and restarted | none |
+| `report-posts.json`, `moderation-posts.json` | bot | bot | Message and channel IDs keyed by source fingerprints, so only linked copies go when their source records go | none |
 | `trouble-posts.json`, `news-said.json`, `restarts-said.json`, `staff-notices.json`, `problems-filed.json` | bot | bot | Low: what it has posted already, so nothing posts twice | none |
 | `channel-setup.json`, `known-issues.json` | bot | bot | Low | none |
 | `bot.env.json` | Install-Bot | bot | Medium; holds a secret and is never in the repository | none |

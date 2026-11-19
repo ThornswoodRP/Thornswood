@@ -21,6 +21,8 @@ import urllib.request
 #   open-tickets.json       which thread is each person's open ticket
 #   commands-synced.json    the slash commands it last registered
 #   trouble-posts.json      which message is which row of the site's trouble
+#   report-posts.json       message IDs for copies of site inbox rows
+#   moderation-posts.json   message IDs for copies of moderation log lines
 #   deletion-requests.json  put there by Delete-Person.ps1; read and removed
 #                           at the next start
 #   news-said.json          which release notes it has posted
