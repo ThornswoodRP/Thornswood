@@ -1089,10 +1089,54 @@ function uncorkAll() {
   for (const s of corked) s.uncork();
 }
 
+// Hold incomplete input as chunks. Only a split, complete frame needs
+// joining; inspecting its header never copies more than ten bytes.
+class FrameInput {
+  constructor() {
+    this.length = 0;
+    this.first = this.last = null;
+    this.offset = 0;
+  }
+
+  push(bytes) {
+    if (!bytes.length) return;
+    const part = {bytes, next:null};
+    if (this.last) this.last.next = part;
+    else this.first = part;
+    this.last = part;
+    this.length += bytes.length;
+  }
+
+  peek(size) {
+    const first = this.first.bytes;
+    if (first.length - this.offset >= size) return first.subarray(this.offset, this.offset + size);
+    const joined = Buffer.allocUnsafe(size);
+    let offset = this.offset, at = 0;
+    for (let part = this.first; at < size; part = part.next) {
+      at += part.bytes.copy(joined, at, offset, Math.min(part.bytes.length, offset + size - at));
+      offset = 0;
+    }
+    return joined;
+  }
+
+  take(size) {
+    const data = this.peek(size);
+    this.length -= size;
+    while (size >= this.first.bytes.length - this.offset) {
+      size -= this.first.bytes.length - this.offset;
+      this.first = this.first.next;
+      this.offset = 0;
+      if (!this.first) { this.last = null; return data; }
+    }
+    this.offset += size;
+    return data;
+  }
+}
+
 class Sock {
   constructor(socket) {
     this.socket = socket;
-    this.buf = Buffer.alloc(0);
+    this.buf = new FrameInput();
     this.onmessage = null;
     this.onclose = null;
     this.closed = false;
@@ -1268,7 +1312,8 @@ class Sock {
 
   feed(chunk) {
     this.rxAt = performance.now(); this.rxBytes += chunk.length;
-    this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
+    if (this.closed || !chunk.length) return;
+    this.buf.push(chunk);
     // A frame can arrive split across reads, and several can arrive in one, so
     // this loops until what is left is not a whole frame.
     for (;;) {
@@ -1284,7 +1329,8 @@ class Sock {
       */
       if (this.closed) return;
       if (this.buf.length < 2) return;
-      const b0 = this.buf[0], b1 = this.buf[1];
+      const head = this.buf.peek(2);
+      const b0 = head[0], b1 = head[1];
       const op = b0 & 0x0f;
       const masked = (b1 & 0x80) !== 0;
       /*
@@ -1314,26 +1360,20 @@ class Sock {
 
       if (len === 126) {
         if (this.buf.length < 4) return;
-        len = this.buf.readUInt16BE(2); off = 4;
+        len = this.buf.peek(4).readUInt16BE(2); off = 4;
       } else if (len === 127) {
         if (this.buf.length < 10) return;
-        const big = this.buf.readBigUInt64BE(2);
+        const big = this.buf.peek(10).readBigUInt64BE(2);
         if (big > 1000000n) { this.close('frame_limit'); return; }
         len = Number(big); off = 10;
       }
 
-      let mask = null;
-      if (masked) {
-        if (this.buf.length < off + 4) return;
-        mask = this.buf.slice(off, off + 4); off += 4;
-      }
-      if (this.buf.length < off + len) return;
-
-      // Unmasked where it lies: this.buf is this socket's own (a chunk the
-      // socket handed over, or a concat of them), so it needs no copy (#2390).
-      const body = this.buf.subarray(off, off + len);
-      if (mask) for (let i = 0; i < body.length; i++) body[i] ^= mask[i & 3];
-      this.buf = this.buf.subarray(off + len);
+      if (this.buf.length < off + 4 + len) return;
+      const frame = this.buf.take(off + 4 + len);
+      const mask = frame.subarray(off, off + 4);
+      // The input belongs to this socket, so unmask without another copy.
+      const body = frame.subarray(off + 4);
+      for (let i = 0; i < body.length; i++) body[i] ^= mask[i & 3];
 
       /*
         A close is ANSWERED with a close, which RFC 6455 section 5.5.1 asks
