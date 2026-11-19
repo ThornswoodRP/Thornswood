@@ -55,7 +55,7 @@ if (Test-Path -LiteralPath $LauncherDotnet) {
                 # Keep the original window/theme checks on their headless
                 # drawing backend. Decode pictures on real Skia separately.
                 # Stream progress so a hung child names the check it reached.
-                foreach ($mode in @('window', 'news-pictures')) {
+                foreach ($mode in @('window', 'news-pictures', 'microphone-picker')) {
                     $lines = [Collections.Generic.List[string]]::new()
                     & $LauncherDotnet $exe $mode 2>&1 | ForEach-Object {
                         $l = [string]$_
