@@ -14,6 +14,10 @@ static class TurnPermissionCases {
     static void Check(string name, bool ok) { Console.WriteLine((ok ? "PASS " : "FAIL ") + name); if (ok) passed++; else failed++; }
     static void Tick(VoiceIce ice) { typeof(VoiceIce).GetMethod("Tick", Private).Invoke(ice, null); }
     static bool Wait(Func<bool> condition) { return SpinWait.SpinUntil(condition, 3000); }
+    static bool Idle(VoiceIce ice) {
+        lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
+            return ((IDictionary)typeof(VoiceIce).GetField("serverWaits", Private).GetValue(ice)).Count == 0;
+    }
 
     static void Run(uint lifetime, long firstDue) {
         long now = 1000000;
@@ -22,7 +26,10 @@ static class TurnPermissionCases {
         using var ice = new VoiceIce(true, clock);
         // Retain the real reader, Allocate, Tick and authenticated TURN wire
         // paths; only stop the periodic timer so this clock has one owner.
-        ((Timer)typeof(VoiceIce).GetField("timer", Private).GetValue(ice)).Change(Timeout.Infinite, Timeout.Infinite);
+        using (var drained = new ManualResetEvent(false)) {
+            ((Timer)typeof(VoiceIce).GetField("timer", Private).GetValue(ice)).Dispose(drained);
+            if (!drained.WaitOne(3000)) throw new Exception("The periodic ICE timer did not drain.");
+        }
         using var allocated = new ManualResetEventSlim();
         ice.OnCandidate = line => { if (line.Contains(" typ relay ")) allocated.Set(); };
         var server = new IceServer { Turn = true, Host = "127.0.0.1", Port = relay.Port, User = Relay.User, Pass = Relay.Password };
@@ -31,9 +38,10 @@ static class TurnPermissionCases {
         ice.AddRemote("candidate:fixture 1 udp 1 127.0.0.2 45678 typ host");
         // Connectivity checks are independent of this permission deadline.
         // The peer is loopback-only; no media/DTLS or external traffic is sent.
-        ((IList)typeof(VoiceIce).GetField("pairs", Private).GetValue(ice)).Clear();
+        lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
+            ((IList)typeof(VoiceIce).GetField("pairs", Private).GetValue(ice)).Clear();
         ice.SetRemote("fixture", "fixture-ice-password");
-        if (!Wait(() => relay.Permissions == 1)) throw new Exception("The initial authenticated permission was not created.");
+        if (!Wait(() => relay.Permissions == 1 && Idle(ice))) throw new Exception("The initial authenticated permission transaction did not finish.");
         string label = "allocation " + lifetime + "s: ";
         Check(label + "permission initially permits traffic", relay.PermissionAlive);
         Interlocked.Exchange(ref now, 1000000 + firstDue - 1); Tick(ice);
@@ -42,13 +50,18 @@ static class TurnPermissionCases {
         // Short allocation deadlines keep their earlier allocation refresh;
         // Permit retains its existing four-minute duplicate suppression.
         int firstPermissions = firstDue >= 240000 ? 2 : 1;
-        bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == firstPermissions);
+        bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == firstPermissions && Idle(ice));
         Check(label + "first due tick refreshes the allocation and due permissions", refreshed);
+        if (firstDue == 240000) {
+            // No Tick here: prove the permission survived its original expiry
+            // before a later renewal could conceal an interruption.
+            Interlocked.Exchange(ref now, 1000000 + 300001);
+            Check(label + "permission survives its original expiry without a later renewal", relay.PermissionAlive && relay.Permissions == firstPermissions);
+        }
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000 - 1); Tick(ice);
         Check(label + "subsequent cadence is not early", relay.Refreshes == 1 && relay.Permissions == firstPermissions);
         Interlocked.Exchange(ref now, 1000000 + firstDue + 240000); Tick(ice);
-        Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == firstPermissions + 1));
-        Check(label + "permission remains alive past its original five minutes", relay.PermissionAlive);
+        Check(label + "subsequent four-minute refresh remains intact", Wait(() => relay.Refreshes == 2 && relay.Permissions == firstPermissions + 1 && Idle(ice)));
         Check(label + "all requests use fixture authentication", relay.BadAuthentication == 0 && relay.Failure == null);
     }
 
