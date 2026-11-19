@@ -26,8 +26,13 @@ static class TurnPermissionCases {
     static void Run(uint lifetime, long firstDue) {
         long now = 1000000;
         Func<long> clock = () => Interlocked.Read(ref now);
-        using var relay = new Relay(lifetime, clock);
+        // Windows cannot route from VoiceIce's concrete default-source bind
+        // to loopback. Use the same local interface, as test-1821 does: no
+        // external endpoint or wildcard listener, and no production override.
+        var local = (IPAddress)typeof(VoiceIce).GetMethod("DefaultLocal", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+        using var relay = new Relay(lifetime, clock, local);
         using var ice = new VoiceIce(true, clock);
+        Check("fixture and native socket share the same concrete local address", ((IPAddress)typeof(VoiceIce).GetField("bound", Private).GetValue(ice)).Equals(local));
         // Retain the real reader, Allocate, Tick and authenticated TURN wire
         // paths; only stop the periodic timer so this clock has one owner.
         using (var drained = new ManualResetEvent(false)) {
@@ -36,7 +41,7 @@ static class TurnPermissionCases {
         }
         using var allocated = new ManualResetEventSlim();
         ice.OnCandidate = line => { if (line.Contains(" typ relay ")) allocated.Set(); };
-        var server = new IceServer { Turn = true, Host = "127.0.0.1", Port = relay.Port, User = Relay.User, Pass = Relay.Password };
+        var server = new IceServer { Turn = true, Host = local.ToString(), Port = relay.Port, User = Relay.User, Pass = Relay.Password };
         ice.Gather(new List<IceServer> { server });
         if (!allocated.Wait(3000)) throw new Exception("The isolated relay did not allocate.");
         // Candidates arrive after Allocate. Equal timestamps hid the missed
@@ -92,6 +97,7 @@ static class TurnPermissionCases {
         readonly Thread worker;
         readonly Func<long> clock;
         readonly uint lifetime;
+        readonly IPAddress local;
         readonly byte[] key = StunMessage.LongTermKey(User, Realm, Password);
         volatile bool closed;
         int permissions, refreshes, badAuthentication;
@@ -102,10 +108,10 @@ static class TurnPermissionCases {
         public int Refreshes => Volatile.Read(ref refreshes);
         public int BadAuthentication => Volatile.Read(ref badAuthentication);
         public bool PermissionAlive => clock() < Interlocked.Read(ref expires);
-        public Relay(uint lifetime, Func<long> clock) {
-            this.lifetime = lifetime; this.clock = clock;
+        public Relay(uint lifetime, Func<long> clock, IPAddress local) {
+            this.lifetime = lifetime; this.clock = clock; this.local = local;
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); socket.ReceiveTimeout = 200;
+            socket.Bind(new IPEndPoint(local, 0)); socket.ReceiveTimeout = 200;
             Port = ((IPEndPoint)socket.LocalEndPoint).Port;
             worker = new Thread(Read) { IsBackground = true }; worker.Start();
         }
@@ -126,7 +132,7 @@ static class TurnPermissionCases {
                     } else {
                         if (!request.IntegrityOk(key) || request.GetString(StunMessage.AttrNonce) != Nonce) { Interlocked.Increment(ref badAuthentication); continue; }
                         if (request.Method == StunMessage.Allocate) {
-                            answer.AddXorAddress(StunMessage.AttrXorRelayed, new IPEndPoint(IPAddress.Loopback, 34999));
+                            answer.AddXorAddress(StunMessage.AttrXorRelayed, new IPEndPoint(local, 34999));
                             answer.AddXorAddress(StunMessage.AttrXorMapped, (IPEndPoint)from);
                             answer.AddUInt(StunMessage.AttrLifetime, lifetime);
                         } else if (request.Method == StunMessage.CreatePermission) {
