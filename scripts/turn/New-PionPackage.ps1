@@ -42,7 +42,8 @@ try {
     $tree = Join-Path $scratch 'source'
     [IO.Compression.ZipFile]::ExtractToDirectory($sourceZip,$tree)
     $frozenPin = Join-Path $tree 'records/turn/pion-windows.json'
-    if ((Get-FileHash -LiteralPath $frozenPin).Hash -ne (Get-FileHash -LiteralPath (Join-Path $repo 'records/turn/pion-windows.json')).Hash) {
+    $workingPin = Join-Path $repo 'records/turn/pion-windows.json'
+    if ([IO.File]::ReadAllText($frozenPin).Replace("`r`n", "`n") -cne [IO.File]::ReadAllText($workingPin).Replace("`r`n", "`n")) {
         throw 'The build pin differs from the reviewed source commit.'
     }
     $project = Join-Path $tree 'tools/turn-relay'
@@ -78,11 +79,26 @@ try {
         throw 'The relay build identity differs from this package.'
     }
     $hash = (Get-FileHash -LiteralPath $exe).Hash.ToLowerInvariant()
+    $licenseFiles = [System.Collections.Generic.List[string]]::new()
+    $licenseFiles.Add("Go $($pin.toolchain.version)`n`n" + [IO.File]::ReadAllText((Join-Path $goEnvironment.GOROOT 'LICENSE')))
+    $dependencies = & $go -C $project list -mod=readonly -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}}|{{.Dir}}{{end}}{{end}}' .
+    if ($LASTEXITCODE) { throw 'Could not determine the relay licenses from the build dependencies.' }
+    foreach ($dependency in ($dependencies | Where-Object { $_ } | Sort-Object -Unique)) {
+        $label, $directory = $dependency -split '\|', 2
+        $notices = @(Get-ChildItem -LiteralPath $directory -File | Where-Object Name -Match '^(LICENSE|COPYING|NOTICE|PATENTS)(\..+)?$' | Sort-Object Name)
+        if (!$notices.Count) { throw "No license or notice was provided for $label." }
+        foreach ($notice in $notices) {
+            $licenseFiles.Add("$label ($($notice.Name))`n`n" + [IO.File]::ReadAllText($notice.FullName))
+        }
+    }
+    $licenses = Join-Path $package 'LICENSES.txt'
+    [IO.File]::WriteAllLines($licenses, $licenseFiles)
     Copy-Item -LiteralPath $sums -Destination (Join-Path $package 'go.sum')
     $receipt = [ordered]@{
         schema = 1; product = $identity.product; version = $identity.version; source = $SourceCommit
         toolchain = $pin.toolchain.version; target = $pin.toolchain.target; pionVersion = $pin.module.version
         exeSha256 = $hash; goSumSha256 = $sumHash.ToLowerInvariant()
+        licensesSha256 = (Get-FileHash -LiteralPath $licenses).Hash.ToLowerInvariant()
     }
     $receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $package 'package.json') -Encoding utf8
     $null = Assert-PionWindowsPackage -Directory $package -ExpectedSourceCommit $SourceCommit -ExpectedPackageHash $hash

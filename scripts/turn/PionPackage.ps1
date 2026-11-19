@@ -41,13 +41,16 @@ function Assert-PionWindowsPackage {
     $manifest = Join-Path $root.FullName 'package.json'
     $exe = Join-Path $root.FullName 'thornswood-turn.exe'
     $sums = Join-Path $root.FullName 'go.sum'
-    foreach ($file in $manifest, $exe, $sums) {
+    $licenses = Join-Path $root.FullName 'LICENSES.txt'
+    foreach ($file in $manifest, $exe, $sums, $licenses) {
         $item = Get-Item -LiteralPath $file -ErrorAction Stop
         if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw 'The TURN package has an unexpected file type.'
         }
     }
-    if ((Get-Item -LiteralPath $manifest).Length -gt 8192 -or (Get-Item -LiteralPath $sums).Length -gt 65536) {
+    $licenseLength = (Get-Item -LiteralPath $licenses).Length
+    if ((Get-Item -LiteralPath $manifest).Length -gt 8192 -or (Get-Item -LiteralPath $sums).Length -gt 65536 -or
+        $licenseLength -eq 0 -or $licenseLength -gt 262144) {
         throw 'The TURN package metadata is too large.'
     }
     $record = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
@@ -55,7 +58,8 @@ function Assert-PionWindowsPackage {
         $record.source -cne $ExpectedSourceCommit -or $record.toolchain -cne $pin.toolchain.version -or
         $record.target -cne $pin.toolchain.target -or $record.pionVersion -cne $pin.module.version -or
         $record.exeSha256 -ine $ExpectedPackageHash -or (Get-FileHash -LiteralPath $exe).Hash -ine $ExpectedPackageHash -or
-        (Get-FileHash -LiteralPath $sums).Hash -ine $record.goSumSha256) {
+        (Get-FileHash -LiteralPath $sums).Hash -ine $record.goSumSha256 -or
+        (Get-FileHash -LiteralPath $licenses).Hash -ine $record.licensesSha256) {
         throw 'The TURN package does not match the reviewed build and dependency hashes.'
     }
     Assert-PionModuleSums $sums $pin
