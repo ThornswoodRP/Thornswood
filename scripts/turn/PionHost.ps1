@@ -1,4 +1,37 @@
 # Windows host controls shared by the reviewed installer and runtime gate.
+function Assert-PionTaskPrincipal {
+ param($Task)
+ $id=[string]$Task.Principal.UserId
+ if($id -notmatch '^S-1-'){$id=([Security.Principal.NTAccount]::new($id)).Translate([Security.Principal.SecurityIdentifier]).Value}
+ if($id -cne 'S-1-5-19' -or [string]$Task.Principal.RunLevel -cne 'Limited' -or [string]$Task.Principal.ProcessTokenSidType -cne 'Unrestricted' -or @($Task.Principal.RequiredPrivilege).Count -ne 1 -or [string]$Task.Principal.RequiredPrivilege[0] -cne 'SeChangeNotifyPrivilege'){throw 'Relay/voice task is not the exact restricted LOCAL SERVICE principal.'}
+}
+function Get-PionOwnerIdentity {
+ $src=Get-ThornswoodOwnerLaunchSource
+ $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($src.Replace("`r`n","`n")))).ToLowerInvariant()
+ $directory=Join-Path $env:ProgramFiles 'Thornswood'
+ $path=Join-Path $directory ('thornswood-owner-'+$hash.Substring(0,12)+'.exe')
+ $may=@('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+ foreach($name in $path,$directory){
+  $item=Get-Item -LiteralPath $name -Force -ErrorAction Stop
+  if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Canonical owner path is a reparse point.'}
+  foreach($rule in (Get-Acl -LiteralPath $name).GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])){
+   if([string]$rule.AccessControlType -ne 'Allow' -or $rule.IdentityReference.Value -in $may){continue}
+   if(($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and $name -ceq $directory){continue}
+   if(([long][int]$rule.FileSystemRights -band [long]0x500D0156) -ne 0){throw 'Canonical task owner can be modified by an unexpected principal.'}
+  }
+ }
+ return @{path=$path;sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
+}
+function Assert-PionRelayTask {
+ param($Task,[string]$Root,[string]$TaskSid)
+ Assert-PionTaskPrincipal $Task
+ $owner=Get-PionOwnerIdentity
+ $node=(Get-Command node.exe -ErrorAction Stop).Source
+ $argument='"'+(Join-Path $Root 'ops/server-log.js')+'" --log "'+(Join-Path $Root 'logs/turn.log')+'" --days 90 --stamp "'+(Join-Path $Root 'ops/Run-Pion.js')+'"'
+ $expected=$TaskSid+' "'+$node+'" '+$argument
+ if(@($Task.Actions).Count -ne 1 -or $Task.Actions[0].Execute -ine $owner.path -or $Task.Actions[0].Arguments -cne $expected -or $Task.Actions[0].WorkingDirectory -ine $Root){throw 'Relay task action is not the exact canonical owner/role/runner.'}
+ return $owner
+}
 function Set-PionDirectoryAcl {
  param([string]$Path,[string]$TaskSid,[switch]$Writable)
  $access=[Security.AccessControl.DirectorySecurity]::new()

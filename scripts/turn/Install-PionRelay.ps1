@@ -2,7 +2,7 @@
    Stage creates a DISABLED isolated task/package; Activate is Dev-only.
    It does not change the voice issuer. That is a separate drained transaction. #>
 [CmdletBinding()]
-param([Parameter(Mandatory)][ValidateSet('Stage','Activate','Stop')][string]$Step,
+param([Parameter(Mandatory)][ValidateSet('Stage','Verify','Activate','Stop')][string]$Step,
       [ValidateSet('dev','main')][string]$Role='dev',
       [Parameter(Mandatory)][string]$RelayIPv4,
       [string]$PackageDirectory='',
@@ -74,17 +74,29 @@ if($Step -eq 'Stage'){
   if((Get-ThornswoodTaskSid $r.taskName) -cne $sid){throw 'The registered task SID differs from the reviewed role.'}
   Set-ThornswoodTaskOwner -TaskName $r.taskName -Sid $sid -Action $action -Roots $root | Out-Null
   $task=Get-ScheduledTask -TaskName $r.taskName
-  if($task.Settings.Enabled -or $task.Principal.RunLevel -ne 'Limited' -or $task.Principal.UserId -notin 'S-1-5-19','NT AUTHORITY\LOCAL SERVICE'){throw 'The prepared relay task is not disabled and restricted.'}
+  $null=Assert-PionRelayTask $task $root $sid
+  if($task.Settings.Enabled){throw 'The prepared relay task is not disabled.'}
  }catch{Disable-ScheduledTask -TaskName $r.taskName | Out-Null;throw}
  Write-Output ('Prepared disabled '+$Role+' relay with separate protected key; no listener/firewall/issuer activation.')
  exit
 }
-if($Role -ne 'dev'){throw 'Main relay activation remains held; this step only activates Dev.'}
 $state=Get-Content -LiteralPath (Join-Path $root 'relay.json') -Raw | ConvertFrom-Json
 if($state.role -cne $Role -or $state.relayIPv4 -cne $RelayIPv4 -or $state.taskSid -cne (Get-ThornswoodTaskSidFromName $r.taskName)){throw 'Prepared relay does not match the requested source/role.'}
 Assert-PionInstalledFiles $root
 Assert-PionSecretAcl (Join-Path $root 'private/shared-key.txt') $state.taskSid
 Assert-PionSecretAcl (Join-Path $root 'private/relay-config.json') $state.taskSid
+$task=Get-ScheduledTask -TaskName $r.taskName
+$owner=Assert-PionRelayTask $task $root $state.taskSid
+if($Step -eq 'Verify'){
+ if(-not $SourceCommit -or -not $PackageHash -or $state.operationsCommit -cne $SourceCommit -or $state.packageHash -cne $PackageHash){throw 'Explicit stage verification needs its exact retained source and package hash.'}
+ if($task.Settings.Enabled -or [string]$task.State -cne 'Disabled'){throw 'The retained stage is not disabled.'}
+ Assert-PionConfigShape $config ([IO.File]::ReadAllBytes((Join-Path $root 'private/relay-config.json')))
+ if(Get-NetFirewallRule -PolicyStore localhost -Name $ruleName -ErrorAction SilentlyContinue){throw 'A disabled stage unexpectedly has ingress.'}
+ if(Get-NetUDPEndpoint -LocalPort $r.udpPort -ErrorAction SilentlyContinue){throw 'A disabled stage unexpectedly has a listener.'}
+ @{role=$Role;verifiedDisabled=$true;keyPreserved=$true;packageVerified=$true;ownerSha256=$owner.sha256;issuerChanged=$false} | ConvertTo-Json -Compress
+ exit
+}
+if($Role -ne 'dev'){throw 'Main relay activation remains held; this step only activates Dev.'}
 $busy=@(Get-NetUDPEndpoint -ErrorAction Stop | Where-Object {$_.LocalPort -eq $r.udpPort -or ($_.LocalPort -ge $r.minPort -and $_.LocalPort -le $r.maxPort)})
 if($busy.Count){throw 'The requested relay UDP ports are already held.'}
 if(Get-NetFirewallRule -PolicyStore localhost -Name $ruleName -ErrorAction SilentlyContinue){throw 'The relay ingress rule already exists; do not overwrite unknown state.'}

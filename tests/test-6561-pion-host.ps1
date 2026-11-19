@@ -27,6 +27,9 @@ $script:program.Program='Any';Refuses 'widened program scope' {Assert-PionIngres
 $script:ports.LocalPort=@('3478','42000-65535');Refuses 'widened UDP range' {Assert-PionIngress fixture C:/fixture/thornswood-turn.exe 8.8.8.8 $role};$script:ports.LocalPort=@('3478','42000-42031')
 $script:ports.Protocol='TCP';Refuses 'wrong transport scope' {Assert-PionIngress fixture C:/fixture/thornswood-turn.exe 8.8.8.8 $role}
 if($OnWindows){
+ $principal=[pscustomobject]@{Principal=[pscustomobject]@{UserId='LOCAL SERVICE';RunLevel='Limited';ProcessTokenSidType='Unrestricted';RequiredPrivilege=@('SeChangeNotifyPrivilege')}}
+ $ok=$true;try{Assert-PionTaskPrincipal $principal}catch{$ok=$false};Yes 'Windows normalized LOCAL SERVICE resolves to the required SID' $ok
+ $principal.Principal.UserId='SYSTEM';Refuses 'a real SYSTEM identity cannot satisfy restricted SID check' {Assert-PionTaskPrincipal $principal}
  $n=[guid]::NewGuid().ToString('n');$root=Join-Path ([IO.Path]::GetTempPath()) ('tw-pion-acl-'+$n);[void][IO.Directory]::CreateDirectory($root)
  $path=Join-Path $root 'fixture.txt';$current=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
  try{

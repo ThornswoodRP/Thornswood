@@ -1,6 +1,7 @@
 # #6561: Run actual guard functions against an isolated fake scheduler/health API.
 # No script top-level body, real service, file secret, network or task executes.
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot '../scripts/turn/PionHost.ps1')
 $source=Join-Path $PSScriptRoot '../scripts/turn/Switch-DevTurnRelay.ps1'
 $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Transaction source does not parse.'}
@@ -12,7 +13,9 @@ function Yes($n,[bool]$ok){if($ok){$script:pass++;Write-Host "PASS  $n"}else{$sc
 function Refuses($n,[scriptblock]$a){$no=$false;try{& $a | Out-Null}catch{$no=$true};Yes $n $no}
 $ExpectedDevCommit='a'*40;$taskName='fixture';$voiceSid='S-1-5-87-1-2-3-4-5'
 $health=[pscustomobject]@{ok=$true;bind='127.0.0.1';auth='on';turn='ephemeral';peers=0;people=0;tracked=0;deploy=[pscustomobject]@{commit=$ExpectedDevCommit};startedAt='unchanged'}
-$task=[pscustomobject]@{Principal=[pscustomobject]@{UserId='S-1-5-19';RunLevel='Limited'};Actions=@([pscustomobject]@{Execute='C:/fixture/thornswood-owner.exe';Arguments=$voiceSid+' node set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_TURN_URL=turn:fixture.invalid:3478&&';WorkingDirectory='C:/fixture'})}
+$script:turnOwner=@{path='C:/fixture/thornswood-owner-123456789abc.exe';sha256=('c'*64)}
+function Get-PionOwnerIdentity {return $script:turnOwner}
+$task=[pscustomobject]@{Principal=[pscustomobject]@{UserId='S-1-5-19';RunLevel='Limited';ProcessTokenSidType='Unrestricted';RequiredPrivilege=@('SeChangeNotifyPrivilege')};Actions=@([pscustomobject]@{Execute=$script:turnOwner.path;Arguments=$voiceSid+' "node.exe" set THORNSWOOD_SITE=http://127.0.0.1:3001&& set THORNSWOOD_TURN_URL=turn:fixture.invalid:3478&&';WorkingDirectory='C:/fixture'})}
 function Health($port){return $script:health}
 function Get-ScheduledTask {return $script:task}
 $script:disabled=0;$script:enabled=0;$script:stopped=0;$script:listenerCount=1
@@ -26,6 +29,10 @@ Yes 'exact drained authenticated Dev source is admitted' ((DevClear).peers -eq 0
 $health.peers=1;Refuses 'any live peer blocks a Dev restart' {DevClear};$health.peers=0
 $health.people=1;Refuses 'an in-world profile blocks a Dev restart' {DevClear};$health.people=0
 $health.tracked=1;Refuses 'a tracked profile outside voice blocks a Dev restart' {DevClear};$health.tracked=0
+$AllowChatOnlyMaintenance=$true;$health.peers=1
+Yes 'explicit maintenance permits unplaced signaling sockets' ((DevClear).peers -eq 1)
+$health.people=1;Refuses 'maintenance never overrides occupied voice places' {DevClear};$health.people=0
+$health.tracked=1;Refuses 'maintenance never overrides tracked players' {DevClear};$health.tracked=0;$health.peers=0;$AllowChatOnlyMaintenance=$false
 $health.deploy.commit='b'*40;Refuses 'stale source cannot cross the transaction guard' {DevClear};$health.deploy.commit=$ExpectedDevCommit
 $health.auth='off';Refuses 'missing native authorization blocks rotation' {DevClear};$health.auth='on'
 Yes 'existing restricted task owner is preserved' ((DevTask).Principal.UserId -eq 'S-1-5-19')

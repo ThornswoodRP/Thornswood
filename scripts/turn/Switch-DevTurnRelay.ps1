@@ -5,7 +5,8 @@
 param([Parameter(Mandatory)][ValidateSet('Inspect','Switch','Rollback')][string]$Step,
       [Parameter(Mandatory)][string]$RelayIPv4,
       [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedDevCommit,
-      [string]$ReceiptDirectory='')
+      [string]$ReceiptDirectory='',
+      [switch]$AllowChatOnlyMaintenance)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 if(-not $IsWindows){throw 'Dev relay rotation requires Windows.'}
@@ -13,6 +14,8 @@ if(-not $IsWindows){throw 'Dev relay rotation requires Windows.'}
 . (Join-Path $PSScriptRoot 'PionPolicy.ps1')
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $repo 'scripts/vps/ServerHold.ps1')
+. (Join-Path $repo 'scripts/deploy/ServiceAccount.ps1')
+$script:turnOwner=Get-PionOwnerIdentity
 $script:turnHoldBy=(Get-ThornswoodHoldBy -Script 'Switch-DevTurnRelay.ps1')+' '+[guid]::NewGuid().ToString('n')
 $script:turnHoldOwned=$false;$script:turnIssuerHealthy=$false
 $policy=Get-Content -LiteralPath (Join-Path $repo 'records/turn/relay-policy.json') -Raw | ConvertFrom-Json
@@ -52,9 +55,11 @@ function AssertMain($Before){
 }
 function DevTask {
  $task=Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
- if($task.Principal.UserId -notin 'S-1-5-19','NT AUTHORITY\LOCAL SERVICE' -or $task.Principal.RunLevel -ne 'Limited' -or @($task.Actions).Count -ne 1){throw 'The existing Dev voice task is not the restricted canonical task.'}
+ Assert-PionTaskPrincipal $task
+ if(@($task.Actions).Count -ne 1){throw 'The existing Dev voice task has an unexpected action count.'}
  $action=@($task.Actions)[0]
- if([IO.Path]::GetFileName($action.Execute) -ine 'thornswood-owner.exe' -or -not $action.Arguments.Contains($voiceSid) -or $action.Arguments -match 'THORNSWOOD_TURN_(SECRET|PASS|USER)='){throw 'Unexpected Dev voice owner wrapper or credential-bearing task action.'}
+ $owner=Get-PionOwnerIdentity
+ if($owner.path -ine $script:turnOwner.path -or $owner.sha256 -cne $script:turnOwner.sha256 -or $action.Execute -ine $owner.path -or -not $action.Arguments.StartsWith($voiceSid+' "',[StringComparison]::Ordinal) -or $action.Arguments -match 'THORNSWOOD_TURN_(SECRET|PASS|USER)='){throw 'Unexpected Dev voice owner wrapper or credential-bearing task action.'}
  if(-not $action.Arguments.Contains('THORNSWOOD_SITE=http://127.0.0.1:3001')){throw 'Dev voice does not use its canonical local ownership issuer.'}
  return $task
 }
@@ -62,7 +67,8 @@ function DevClear {
  param([switch]$ForRollback)
  $h=Health 7789
  if(-not $h.ok -or $h.bind -cne '127.0.0.1' -or $h.auth -cne 'on' -or (-not $ForRollback -and $h.turn -cne 'ephemeral') -or $h.deploy.commit -cne $ExpectedDevCommit){throw 'Unexpected Dev health/source/auth state.'}
- if($h.peers -ne 0 -or $h.people -ne 0 -or $h.tracked -ne 0){throw 'Dev has active peers or in-world profiles; do not interrupt them.'}
+ if($h.people -ne 0 -or $h.tracked -ne 0 -or ($h.peers -ne 0 -and -not $AllowChatOnlyMaintenance)){throw 'Dev has active peers or in-world profiles; do not interrupt them.'}
+ if($AllowChatOnlyMaintenance -and $h.peers -gt 0){Write-Information ('Controlled Dev maintenance may reconnect '+[int]$h.peers+' unplaced signaling sockets; no voice places or tracked profiles.') -InformationAction Continue}
  return $h
 }
 function WaitDevStopped([int]$OwnedPid=0){
