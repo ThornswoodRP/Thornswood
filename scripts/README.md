@@ -289,6 +289,13 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Wait-Deployment.ps1](release/Wait-Deployment.ps1) | A release counts as shipped only when the box says it is running it. |
 | [release/Where.ps1](release/Where.ps1) | Says where the engine fork and the build output are, so every script asks one place instead of carrying its own copy of a path. |
 | [release/Write-EnginePinText.ps1](release/Write-EnginePinText.ps1) | Writes the engine pin's lines in THIRD-PARTY.md and site\data\site\credits.md from the records, or with -Check says which ones differ from them. |
+| [turn/Install-PionRelay.ps1](turn/Install-PionRelay.ps1) | Run locally on the Windows game VPS only, after reviewed cutover proof. |
+| [turn/New-PionPackage.ps1](turn/New-PionPackage.ps1) | Builds the Windows relay from an immutable source commit and the pinned portable Go archive. |
+| [turn/PionHost.ps1](turn/PionHost.ps1) | Windows host controls shared by the reviewed installer and runtime gate. |
+| [turn/PionPackage.ps1](turn/PionPackage.ps1) | Windows TURN package checks shared by the builder and installer. |
+| [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | Requires -Version 7 The public policy contains no secret, performs no I/O and opens no listener. |
+| [turn/Run-Pion.ps1](turn/Run-Pion.ps1) | Foreground native UDP relay, under its canonical restricted task identity. |
+| [turn/Switch-DevTurnRelay.ps1](turn/Switch-DevTurnRelay.ps1) | Existing Dev issuer only. Never changes Main or a relay firewall/task. |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
 | [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |
