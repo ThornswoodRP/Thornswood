@@ -654,6 +654,30 @@ function New-CollectionRecordFromLayout([string]$Dir) {
     }
 }
 
+# Prepare the canonical rebuild order from the verified layout, not the
+# Vortex export list. Only the old server order holds server-only positions.
+function Get-PublishedCollectionOrderText([string]$Repo, $Want, $Layout, [int]$Revision) {
+    if ($Revision -ne [int]$Want.revision + 1 -or [int]$Layout.revision -ne $Revision -or
+        $Layout.collection -cne $Want.collection -or $Layout.game -cne $Want.game -or -not @($Layout.plugins | Where-Object { $_ }).Count) {
+        throw "The verified layout does not identify the next collection revision $Revision with plugins."
+    }
+    $path = Join-Path $Repo 'records/load-order.json'
+    try { $old = [IO.File]::ReadAllText($path) | ConvertFrom-Json }
+    catch { throw "Cannot read records/load-order.json: $($_.Exception.Message)" }
+    if ($old.collection -cne $Want.collection -or [string]$old.revision -cne [string]$Want.revision) {
+        throw "records/load-order.json must match collection $($Want.collection) revision $($Want.revision) before preparing the rebuild order."
+    }
+    $names = @($old.loadOrder)
+    if ($names.Count -lt 6 -or ($names[0..4] -join '|') -ine ($script:CollectionBaseMasters -join '|') -or
+        $names[-1] -ine 'Thornswood-Last.esp' -or @($names | Where-Object { -not (Test-CollectionPluginName $_) }).Count -or
+        @($names | Sort-Object -Unique).Count -ne $names.Count) {
+        throw 'records/load-order.json does not contain a valid server order from the five base masters through Thornswood-Last.esp.'
+    }
+    $drop = @($Want.dropped | Where-Object { $_ } | ForEach-Object { [string]$_.name })
+    $next = Get-ThornswoodServerOrder $Layout $names $drop
+    return Format-ThornswoodLoadOrderRecord -Slug $Layout.collection -Revision $Revision -Order $next
+}
+
 # Where two records part, one line each, leaving out what only people read
 # (mod names), what moves only when the records follow a publish (revision)
 # and what goes with the change and not the revision (dropped, wipe,
