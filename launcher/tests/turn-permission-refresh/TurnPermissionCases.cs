@@ -39,7 +39,12 @@ static class TurnPermissionCases {
         var server = new IceServer { Turn = true, Host = "127.0.0.1", Port = relay.Port, User = Relay.User, Pass = Relay.Password };
         ice.Gather(new List<IceServer> { server });
         if (!allocated.Wait(3000)) throw new Exception("The isolated relay did not allocate.");
+        // Candidates arrive after Allocate. Equal timestamps hid the missed
+        // renewal when the candidate throttle was also four minutes.
+        const long permissionDelay = 1000;
+        Interlocked.Exchange(ref now, 1000000 + permissionDelay);
         ice.AddRemote("candidate:fixture 1 udp 1 127.0.0.2 45678 typ host", null);
+        ice.AddRemote("candidate:other-port 1 udp 1 127.0.0.2 45679 typ host", null);
         // Connectivity checks are independent of this permission deadline.
         // The peer is loopback-only; no media/DTLS or external traffic is sent.
         lock (typeof(VoiceIce).GetField("gate", Private).GetValue(ice))
@@ -47,22 +52,22 @@ static class TurnPermissionCases {
         ice.SetRemote("fixture", "fixture-ice-password");
         if (!Wait(() => relay.Permissions == 1 && Idle(ice))) throw new Exception("The initial authenticated permission transaction did not finish.");
         string label = "allocation " + lifetime + "s: ";
-        Check(label + "permission initially permits traffic", relay.PermissionAlive);
+        Check(label + "delayed permission coalesces candidates sharing an IP", relay.PermissionAlive && relay.Permissions == 1);
         long scheduled = RefreshAt(ice);
         Interlocked.Exchange(ref now, 1000000 + firstDue - 1); Tick(ice);
         // Tick updates its deadline synchronously before queueing wire work.
         // Check that too: counters alone could miss an unstarted early worker.
         Check(label + "no early refresh", RefreshAt(ice) == scheduled && Idle(ice) && relay.Refreshes == 0 && relay.Permissions == 1);
         Interlocked.Exchange(ref now, 1000000 + firstDue); Tick(ice);
-        // Short allocation deadlines keep their earlier allocation refresh;
-        // Permit retains its existing four-minute duplicate suppression.
-        int firstPermissions = firstDue >= 240000 ? 2 : 1;
+        // Scheduled renewal is distinct from normal candidate suppression,
+        // and still sends only one permission request per unique peer IP.
+        int firstPermissions = 2;
         bool refreshed = Wait(() => relay.Refreshes == 1 && relay.Permissions == firstPermissions && Idle(ice));
         Check(label + "first due tick refreshes the allocation and due permissions", refreshed);
         if (firstDue == 240000) {
             // No Tick here: prove the permission survived its original expiry
             // before a later renewal could conceal an interruption.
-            Interlocked.Exchange(ref now, 1000000 + 300001);
+            Interlocked.Exchange(ref now, 1000000 + permissionDelay + 300001);
             Check(label + "permission survives its original expiry without a later renewal", relay.PermissionAlive && relay.Permissions == firstPermissions);
         }
         scheduled = RefreshAt(ice);
