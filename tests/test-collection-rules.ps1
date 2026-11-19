@@ -153,7 +153,8 @@ function VortexAppData([string]$name, [string]$modId, [int]$rev, [switch]$InLog)
 function Write-VortexState {
     $path = Join-Path $root 'vortex-state.json'
     [IO.File]::WriteAllText($path, (ConvertTo-Json -InputObject $vortexState -Depth 6), (New-Object Text.UTF8Encoding($false)))
-    & python (Join-Path $Here 'tests\fixtures\vortex-state-rows.py') $appDatas $path
+    $python = if (Get-Command python -CommandType Application -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
+    & $python (Join-Path $Here 'tests\fixtures\vortex-state-rows.py') $appDatas $path
     if ($LASTEXITCODE) { throw 'tests\fixtures\vortex-state-rows.py could not write state.v2 for the Vortex cases' }
 }
 
@@ -200,6 +201,19 @@ function Run([string[]]$argList) {
     $all = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $CheckPath) + $argList
     $out = & $shell @all 2>&1 | Out-String
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = $out }
+}
+# Hide all documented 7-Zip locations from this child only. Run uses the
+# absolute shell path, so clearing the search path cannot prevent it starting.
+function RunWithoutSevenZip([string[]]$argList) {
+    $saved = @{}
+    $names = 'PATH', 'ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA', 'XDG_DATA_HOME'
+    foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name) }
+    try {
+        foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $root) }
+        Run $argList
+    } finally {
+        foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
+    }
 }
 function Has([string]$text, [string]$part) { return ($text.IndexOf($part, [StringComparison]::Ordinal) -ge 0) }
 
@@ -388,6 +402,26 @@ try {
     $patchList = Join-Path $root 'lists\patch.txt'
     PluginList $patchList @('*Water for ENB.esm', '*RaceCompatibility.esm', '*Immersive Weapons.esp', '*Hothtrooper44_ArmorCompilation.esp', '*ZIA_Complete Pack.esp', '*Patch.esp')
 
+    # Independent inputs for the seven guard branches (#4860). The .7z itself
+    # need not be valid: without a reader, not a byte should be unpacked.
+    $bom = Join-Path $root 'bom.json'
+    [IO.File]::WriteAllText($bom, (CollectionText @( @{ name = 'beta.esp'; after = @('alpha.esp') } )), [Text.UTF8Encoding]::new($true))
+    $badJson = Join-Path $root 'invalid.json'
+    [IO.File]::WriteAllText($badJson, '{"pluginRules":')
+    $noReader = Join-Path $root 'col-no-7zip'
+    $noReaderArchive = Join-Path $noReader 'export/collection_0.7z'
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $noReaderArchive)
+    [IO.File]::WriteAllBytes($noReaderArchive, [byte[]]@(0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c))
+    $blankRule = Join-Path $root 'blank-rule/collection.json'
+    Collection $blankRule @(@{ name = 'beta.esp'; after = @('alpha.esp') }, @{ name = '   '; after = @('alpha.esp') })
+    $duplicate = Join-Path $root 'lists/duplicate.txt'
+    PluginList $duplicate @('*Alpha.esp', '*Beta.esp', '*ALPHA.ESP')
+    $emptyEnabled = Join-Path $root 'lists/empty-enabled.txt'
+    PluginList $emptyEnabled @('Alpha.esp', 'Beta.esp')
+    $baseMaster = Join-Path $root 'lists/base-master.txt'
+    Plugin $data 'Skyrim.esm' 0x1
+    PluginList $baseMaster @('*Skyrim.esm', '*Alpha.esp', '*Beta.esp')
+
     # Everything the runs may read, so the last check can prove none was written.
     # Every path, and every file's size and write time. Not a folder's write
     # time: measured on the first run of this harness, NTFS moved the times of
@@ -401,6 +435,22 @@ try {
         }) -join "`n")
     }
     $before = Snapshot
+
+    # Each fixture checks the verdict and the branch-specific output.
+    $r = Run @('-Root', $root, '-Collection', $bom, '-List', $ab, '-Data', $data)
+    Yes 'a UTF-8 BOM before collection JSON still gives a held order' ($r.Code -eq 0 -and (Has $r.Out 'HELD. A clean install'))
+    $r = Run @('-Root', $root, '-Collection', $badJson, '-List', $ab, '-Data', $data)
+    Yes 'invalid collection JSON stops with its path and a parse reason' ($r.Code -eq 1 -and (Has $r.Out "STOP. $badJson is not JSON:"))
+    $r = RunWithoutSevenZip @('-Root', $root, '-Collection', $noReader, '-List', $ab, '-Data', $data)
+    Yes 'a .7z-only collection stops with the missing 7-Zip reason' ($r.Code -eq 1 -and (Has $r.Out 'collection_0.7z: reading a .7z needs 7-Zip and this machine has none'))
+    $r = Run @('-Root', $root, '-Collection', $blankRule, '-List', $ab, '-Data', $data)
+    Yes 'a blank rule name does not name a third plugin' ($r.Code -eq 0 -and (Has $r.Out '2 rules naming 2 plugins') -and (Has $r.Out 'HELD. A clean install'))
+    $r = Run @('-Root', $root, '-Collection', $beforeCol, '-List', $duplicate, '-Data', $data)
+    Yes 'a duplicate enabled name keeps the first line even when the case differs' ($r.Code -eq 0 -and (Has $r.Out '2 enabled, 2 full, 0 light') -and (Has $r.Out 'HELD. A clean install'))
+    $r = Run @('-Root', $root, '-Collection', $beforeCol, '-List', $emptyEnabled, '-Data', $data)
+    Yes 'a list that enables nothing stops before checking rules' ($r.Code -eq 1 -and (Has $r.Out "STOP. $emptyEnabled enables nothing."))
+    $r = Run @('-Root', $root, '-Collection', $beforeCol, '-List', $baseMaster, '-Data', $data)
+    Yes 'an explicitly enabled base master does not enter the full plugin chain' ($r.Code -eq 0 -and (Has $r.Out '3 enabled, 2 full, 0 light') -and (Has $r.Out 'HELD. A clean install'))
 
     # ---- the list that holds ---------------------------------------------------
     $r = Run @('-Collection', $col5, '-List', $good, '-Data', $data)
