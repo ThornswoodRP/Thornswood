@@ -110,7 +110,7 @@ $downStub = "using System;`r`nusing System.IO;`r`nnamespace Thornswood`r`n{`r`n 
 
 # Config.Load and Save need Secrets and Swallow, which come along, and its
 # serializer LooseString; Paths is a stand-in with the one field Swallow
-# reads, left null so nothing is written.
+# reads, left null: nothing here saves or loads a config.json.
 $looseSrc = Read-Text (Join-Path $app 'LooseString.cs')
 $secretsSrc = Read-Text (Join-Path $app 'Secrets.cs')
 $swallowSrc = Read-Text (Join-Path $app 'Swallow.cs')
