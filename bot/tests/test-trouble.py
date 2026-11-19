@@ -171,6 +171,34 @@ yes('C2 and with every mention off, so an @everyone in the line pings nobody',
 yes('C3 and inside Discord\'s length',
     bool(updates.sent) and len(updates.sent[0][0]) <= 1900)
 
+# Ordinary punctuation in a name, launcher label, reason and excerpt.
+fixture = {'name': 'Aela_One', 'channel': 'dev', 'version': '1.2_rc',
+           'why': 'Stopped near *camp*', 'line': 'Reading `weather` settings'}
+rendered = bot._trouble_line(fixture)
+updates, general, said = said_with(1549254991082946570, rendered)
+content, options = updates.sent[0] if updates.sent else ('', {})
+yes('L1 the sent name, version and reason use literal punctuation',
+    r'Aela\_One, on the dev build, launcher 1.2\_rc.' in content
+    and r'Stopped near \*camp\*' in content)
+yes('L2 the log keeps visible backticks separate from the code block markers',
+    '\n```\nReading `\u200bweather`\u200b settings\n```\n' in content)
+yes('L3 the failed-session send suppresses embeds', options.get('suppress_embeds') is True)
+yes('L4 the new post still matches its own row', bot._trouble_post_matches(content, fixture))
+legacy = (bot.TROUBLE_HEAD + ' Aela_One, on the dev build, launcher 1.2_rc.\n'
+          'Stopped near *camp*\n```\nReading `weather` settings\n```\nOld wording.')
+yes('L5 an old fenced post with unescaped punctuation still matches',
+    bot._trouble_post_matches(legacy, fixture)
+    and not bot._trouble_post_matches(legacy, dict(fixture, line='Reading map settings')))
+legacy_no_line = bot.TROUBLE_HEAD + ' Aela_One\nStopped near *camp*\nOld wording.'
+yes('L6 an old post without an excerpt still matches its original reason',
+    bot._trouble_post_matches(legacy_no_line, dict(fixture, line='')))
+long = bot._trouble_line(dict(fixture, name='é_' * 500, version='é_' * 500,
+                              why='é_' * 500, line='Reading settings ' * 50))
+updates, _, _ = said_with(1549254991082946570, long)
+yes('L7 the escaped post fits without clipping the closing fence or footer',
+    bool(updates.sent) and updates.sent[0][0] == long and len(long) <= 1900
+    and '\n```\nThe logs are on the sessions page' in long)
+
 updates, general, said = said_with(0)
 yes('C4 with no id nothing is said anywhere, staff-general included',
     not updates.sent and not general.sent)
