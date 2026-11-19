@@ -1109,13 +1109,17 @@ async def close_here(interaction, why=None):
             ephemeral=True)
         return
 
-    line = 'Closed by %s.' % interaction.user.mention
-    if why:
-        line += ' ' + why.strip()
+    # Bound the fields before escaping so the retention text and link fit.
+    closer = as_typed(interaction.user.display_name, 80)
+    reason = as_typed(why, 700)
+    ending = ' ' + reason if reason else ''
+    mentions = discord.AllowedMentions.none()
+    line = 'Closed by %s.%s' % (closer, ending)
     line += ('\nEverybody who was in here can still read it, and staff can open '
              'it again. It is deleted %d days after it was last closed.'
              % TICKET_KEEP_DAYS)
-    await interaction.response.send_message(line[:1900])
+    await interaction.response.send_message(
+        line, allowed_mentions=mentions, suppress_embeds=True)
 
     # Archiving drops a thread out of the sidebar and out of the channel's
     # active list, and a private one is then behind two clicks nobody finds. A
@@ -1125,12 +1129,9 @@ async def close_here(interaction, why=None):
     try:
         book = await log_channel(interaction.guild)
         if book is not None:
-            note = 'Closed: **%s**. By %s.' % (
-                ch.name, interaction.user.display_name)
-            if why:
-                note += ' ' + why.strip()
-            note += '\n' + ch.jump_url
-            await book.send(note[:1900])
+            note = 'Closed: **%s**. By %s.%s\n%s' % (
+                as_typed(ch.name, 100), closer, ending, ch.jump_url)
+            await book.send(note, allowed_mentions=mentions, suppress_embeds=True)
     except Exception:
         log('could not write the ticket down:\n' + traceback.format_exc())
 

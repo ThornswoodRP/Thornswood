@@ -115,9 +115,11 @@ class Answer(object):
     """interaction.response, counted."""
     def __init__(self):
         self.said = []
+        self.options = []
 
     async def send_message(self, text=None, ephemeral=False, **k):
         self.said.append((text, ephemeral))
+        self.options.append(k)
 
     def is_done(self):
         return bool(self.said)
@@ -139,7 +141,7 @@ BOOK = []
 class Book(object):
     """The staff channel a closed ticket is written down in."""
     async def send(self, *a, **k):
-        BOOK.append(a)
+        BOOK.append((a[0], k))
 
 
 async def staff_book(guild, make=True):
@@ -240,6 +242,37 @@ for label, way in WAYS:
         yes('  and written down once, with the link back to it',
             len(BOOK) == 1 and 'Closed: **Apply to be an alpha playtester, Dee**'
             in BOOK[0][0] and thread.jump_url in BOOK[0][0])
+
+# The real command sends both messages through stand-ins. Use ordinary
+# punctuation that should stay visible, not become part of the formatting.
+closer = Person(['Moderator'])
+closer.display_name = 'Aela_One'
+thread = Thread('Ferry *notes*', Channel(bot.TICKETS[0]))
+
+
+async def close_with_reason(ask):
+    await bot.tree.get_command('close').callback(ask, why='Checked `weather` settings.')
+
+
+def literal_send(options):
+    mentions = options.get('allowed_mentions')
+    return (options.get('suppress_embeds') is True
+            and isinstance(mentions, discord.AllowedMentions)
+            and not any((mentions.everyone, mentions.users, mentions.roles, mentions.replied_user)))
+
+
+ask = run(close_with_reason, thread, closer)
+reason = r'Checked \`weather\` settings.'
+yes('the thread reply shows the closer and reason as literal text',
+    len(ask.response.said) == 1
+    and ask.response.said[0][0].startswith(r'Closed by Aela\_One. ' + reason))
+yes('the staff note shows the escaped title, closer and reason with its link',
+    len(BOOK) == 1 and BOOK[0][0] == (
+        r'Closed: **Ferry \*notes\***. By Aela\_One. ' + reason + '\n' + thread.jump_url))
+yes('the thread reply disables mentions and previews',
+    len(ask.response.options) == 1 and literal_send(ask.response.options[0]))
+yes('the staff note disables mentions and previews',
+    len(BOOK) == 1 and literal_send(BOOK[0][1]))
 
 # Content Creator is pulled into creator applications and is not staff: in a
 # real ticket they get the staff line, which shows the ticket check let the
