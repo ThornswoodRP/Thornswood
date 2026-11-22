@@ -475,7 +475,7 @@ Trial Gamemaster and Loremaster.
 To the bot, staff is the `STAFF_ROLES` roles in `bot.env.json` (Owner,
 Co-Owner, Lead Dev, Lead Gamemaster, Lead Loremaster, Lead Moderator, Lead
 Content Creator, Lead Support, Gamemaster, Dev, Loremaster and Moderator by
-default), matched by id or name, and nothing else. Closing a ticket, with
+default), as set in `bot_core.py`, matched by id or name, and nothing else. Closing a ticket, with
 `/close` or the Close ticket button, and skipping the one open ticket rule
 and the cooldown take one of them. Trial Gamemaster, Support and Content
 Creator are not in it. Faction Leader tickets are pulled to the role IDs in
