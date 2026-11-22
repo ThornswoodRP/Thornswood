@@ -1,6 +1,8 @@
 <#
-  Install-NexusRevision.ps1
+.SYNOPSIS
+  Lays out one revision of the Thornswood collection on Nexus Mods (slug 7essxf) into a game folder, the way Vortex installs and deploys it, without Vortex (#2754).
 
+.DESCRIPTION
   Lays out one revision of the Thornswood collection on Nexus Mods (slug
   7essxf) into a game folder, the way Vortex installs and deploys it, without
   Vortex (#2754).

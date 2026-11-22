@@ -1,6 +1,8 @@
 <#
-  ContentPaths.ps1
+.SYNOPSIS
+  What a content build on the box reads and what it writes, worked out from scripts\mods\content-tables.json and the builders themselves (#5191).
 
+.DESCRIPTION
   What a content build on the box reads and what it writes, worked out from
   scripts\mods\content-tables.json and the builders themselves (#5191). One
   copy, for Run-OnBox.ps1 (what it sends and what it brings back) and
