@@ -578,9 +578,12 @@ Then the person picks a hold.
 
 ## Changing the words later
 
-`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1`
-again, and the posts are rewritten in place. It deletes what the bot wrote last
-time rather than adding a second copy, so the rules never end up posted twice.
+`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1 -Posts`
+again, and the posts are rewritten in place. A plain run leaves the posts alone
+unless `-Posts` is given, so a routine run does not touch existing messages. To
+rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
+lore,factions -Posts`, issue #3656). It deletes what the bot wrote last time
+rather than adding a second copy, so the rules never end up posted twice.
 
 `Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
 it asks for nothing: the build runs on the VPS with the token the running bot
