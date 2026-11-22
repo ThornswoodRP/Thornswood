@@ -87,12 +87,13 @@ workflows, in the scripts' comments and in the docs.
 
 They moved here from `tools\` on 25 September (issue #440, phase 5), and
 `tools\` itself went on 29 September (phase 10). Each one finds the repository
-folder from here, one folder up: a `.js` harness through `REPO_DIR`, declared at
-its top as `path.join(__dirname, '..')`, and a `.ps1` harness through the line
-after its `$Here = $PSScriptRoot` that points `$Here` at the repository folder.
-One beside its product is two folders below the top, so its `REPO_DIR` is
-`path.join(__dirname, '..', '..')` and its `$Here` goes up twice.
-A new harness does the same; copying the top of an existing one is the easy way.
+folder from here, one folder up: a `.js` harness usually through `REPO_DIR`,
+`ROOT` or `REPO`, declared at its top as `path.join(__dirname, '..')`, and a
+`.ps1` harness through the line after its `$Here = $PSScriptRoot` that points
+`$Here` at the repository folder. One beside its product is two folders below the
+top, so its path goes up twice (`path.join(__dirname, '..', '..')` and its `$Here`
+goes up twice). A new harness does the same; copying the top of an existing one
+is the easy way.
 
 ## Running them
 
@@ -106,16 +107,21 @@ pwsh -NoProfile -File tests\test-ship-rules.ps1
 and one beside its product by its path, `pwsh -NoProfile -File
 launcher\tests\test-498-msbuild.ps1`.
 
-Each prints a PASS or FAIL line per check and ends on `N passed, M failed`,
-and exits 1 when anything failed. A harness that reads something only one
+Many harnesses print a PASS or FAIL line per check and end on `N passed, M failed`,
+and exit 1 when anything failed. Others, including many JavaScript checks, use
+node's `assert`, stop at the first failure and print neither, exiting 0 on success
+or throwing on an assertion failure. A harness that reads something only one
 machine has, such as the game folder, says SKIP for that part and checks the
 rest.
 
 Those lines are what the gate's report is made of (#5295). Every line that
 starts PASS, FAIL, SKIP or NOT RUN, after any spaces, is one check, named
 by the rest of the line, in the report scripts\dev\Nightly-Harnesses.ps1
--Report writes and on the run's page. So give each check a line of its own
-that names it, and print nothing else that starts with one of those words.
+-Report writes and on the run's page. When a harness exits non-zero without
+printing a FAIL line (such as an uncaught assertion failure or crash), the
+runner records a failing check from its exit. Where a harness prints checks, give
+each check a line of its own that names it, and print nothing else that starts
+with one of those words.
 
 ## Run by hand
 
