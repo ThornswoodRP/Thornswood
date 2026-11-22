@@ -319,6 +319,13 @@ function press(hub, kind, id) {
                       'a save that names no copy');
     yes('a save that names no copy it was made from is refused (' + r.status + ')',
         r.status === 409 && readText(s.dir, 'data/tests.md') === 'what Aela wrote\n');
+
+    const staleWas = crypto.createHash('sha256').update('the first text\n', 'utf8').digest('hex');
+    r = await request(s.port, 'PUT', '/api/doc/tests',
+                      { cookie: cookieFor(s.secret, ADMIN_D, 'Aela'), origin: 'http://127.0.0.1:' + s.port, 'x-thornswood-doc-was': staleWas },
+                      'a save from a stale revision (#4929)');
+    yes('two saves from the same starting revision: second save is refused 409 with reload message (#4929)',
+        r.status === 409 && r.j && r.j.error === 'changed' && /Somebody saved this page after you opened it/.test(r.j.message));
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   } finally {
