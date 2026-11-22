@@ -312,6 +312,25 @@ SIX.forEach(function (d) {
       go.indexOf("local" + BS + "thornswood-front.zip'") >= 0 && t.indexOf('thornswood-front.zip') >= 0);
   const zip = tracked('local/thornswood-front.zip');
   yes('overlays: and that zip is not in git, as the README says', zip === false);
+
+  // Issue #4473: game/ui/README.md matches Go.ps1 and names every overlay and copied file type
+  const mOverlays = /const OVERLAYS = \[([\s\S]*?)\];/.exec(front);
+  const frontOverlays = mOverlays ? (mOverlays[1].match(/'thornswood-[\w-]+\.js'/g) || []).map(function (s) { return s.slice(1, -1); }) : [];
+  const existingOverlays = frontOverlays.filter(function (f) { return exists('game/ui/' + f); });
+  const missingOverlays = existingOverlays.filter(function (f) { return t.indexOf('`' + f + '`') < 0 && t.indexOf(f) < 0; });
+  yes('overlays: game/ui/README.md names every overlay (' + existingOverlays.length + ' overlays' +
+      (missingOverlays.length ? ', missing: ' + missingOverlays.join(', ') : '') + ')',
+      missingOverlays.length === 0);
+
+  const copiedTypes = ['.js', '.mp3', '.webp', 'index.html'];
+  const missingTypes = copiedTypes.filter(function (ext) { return t.indexOf(ext) < 0; });
+  yes('overlays: game/ui/README.md names every file type Go.ps1 copies from game/ui (' +
+      copiedTypes.join(', ') + (missingTypes.length ? ', missing: ' + missingTypes.join(', ') : '') + ')',
+      missingTypes.length === 0);
+
+  yes('overlays: game/ui/README.md describes Build-Front, banner names, and what fails the run (#4473)',
+      t.indexOf('Build-Front') >= 0 && t.indexOf('banner.webm') >= 0 && t.indexOf('thornswood-menu.webm') >= 0 &&
+      /fails the run|fails and stops Ship/i.test(t));
 }
 
 // --------------------------------------------------------- launcher --
