@@ -169,6 +169,11 @@ if (tracked) {
       yes(rel + ' does not list SETUP.md, which is gone' + where(t, /SETUP\.md/), !/SETUP\.md/.test(t));
     }
   });
+  const devGuide = read('Developer-Guide.md') || '';
+  yes('Developer-Guide.md contents link to "The version comes from the build" (#5285)',
+      /\[The version comes from the build\]\(docs\/guide\/release-to-main\.md#the-version-comes-from-the-build\)/.test(devGuide));
+  yes('Developer-Guide.md does not link to "Move the version first"',
+      !/Move the version first/i.test(devGuide));
   const TEXT = /\.(js|mjs|cjs|ps1|psm1|psd1|py|cs|xaml|md|json|html|htm|css|txt|yml|yaml|toml|cmd|bat|sh|ini|xml)$/i;
   const drive = [];
   tracked.filter(function (f) { return TEXT.test(f); }).forEach(function (rel) {
