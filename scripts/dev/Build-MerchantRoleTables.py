@@ -14,7 +14,7 @@ import struct
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'game/data/merchant-role-tables.json'
 INPUTS = ('game/data/recipes.json', 'game/data/harvests.json', 'game/data/hunts.json',
-          'game/data/items.json', 'docs/systems/cut-items.json')
+          'game/data/items.json', 'game/data/cut-items.json')
 ROLES = ('Smith', 'Woodworker', 'Tailor', 'Enchanter', 'Cook', 'Alchemist')
 ITEM_TYPES = ('ALCH', 'AMMO', 'ARMO', 'BOOK', 'INGR', 'KEYM', 'MISC', 'SCRL', 'SLGM', 'WEAP')
 SOUL_GEMS = {('SoulGem' + size + suffix).lower() for size in

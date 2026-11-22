@@ -75,7 +75,7 @@ yes('S4 no row is gold', ids.every(function (id) { return id.toLowerCase() !== '
 
 // ---------------------------------------------------------------- R
 const recipes = json('game/data/recipes.json');
-const cuts = json('docs/systems/cut-items.json');
+const cuts = json('game/data/cut-items.json');
 const cutRecipe = {};
 cuts.items.forEach(function (c) { if (c.disposition === 'cut') { cutRecipe[c.id] = true; } });
 const TEMPER = /^CraftingSmithing(SharpeningWheel|ArmorTable)$/;
@@ -205,14 +205,14 @@ function build(dir) {
     yes('P1 the copy builds clean, and writes the table that is checked in',
         plain.status === 0 && fs.readFileSync(path.join(dir, 'game/data/item-sources.json'), 'utf8') ===
         fs.readFileSync(path.join(REPO, 'game/data/item-sources.json'), 'utf8'));
-    const cutPath = path.join(dir, 'docs/systems/cut-items.json');
+    const cutPath = path.join(dir, 'game/data/cut-items.json');
     const copy = JSON.parse(fs.readFileSync(cutPath, 'utf8'));
     copy.items.push({ id: 'cc842:Skyrim.esm', name: 'Ancient Nord Amulet', plugin: '', half: '', owner: '', family: '', rank: '', fires: true, disposition: 'cut', why: 'a harness row' });
     fs.writeFileSync(cutPath, JSON.stringify(copy));
     const found = build(dir);
     yes('P2 an item the cut list says is not found, which a dungeon chest hands out, is refused by name',
         found.status !== 0 && /PROBLEM\s+cc842:Skyrim\.esm/.test(found.stderr));
-    fs.copyFileSync(path.join(REPO, 'docs/systems/cut-items.json'), cutPath);
+    fs.copyFileSync(path.join(REPO, 'game/data/cut-items.json'), cutPath);
     const recPath = path.join(dir, 'game/data/recipes.json');
     const rec = JSON.parse(fs.readFileSync(recPath, 'utf8'));
     const roll = Object.keys(rec.recipes).find(function (id) { return rec.recipes[id].roll; });
