@@ -223,7 +223,7 @@ namespace Thornswood
         /// skipped on the server's side: the server names _ResourcePack.esl
         /// as its first light plugin and no plugin list carries it. Null for
         /// the same reasons as Reorder. A name of its own rather than an
-        /// overload, because tests	est-load-order.ps1 calls these by name.
+        /// overload, because tests\test-load-order.ps1 calls these by name.
         /// </summary>
         public static List<string> ReorderWhole(IList<string> lines, IList<string> whole, IList<string> loadedFirst)
         {
