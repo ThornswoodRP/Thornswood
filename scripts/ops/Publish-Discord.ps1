@@ -52,17 +52,17 @@
   nothing: for a post that went out from a checkout whose record was lost.
 
   Called by Ship.ps1 at the end of every release, so it is usually not run on
-  its own. If bot\news-webhook.txt is not there it does nothing and
+  its own. If no webhook is configured on the VPS it does nothing and
   says so quietly, so a machine without the Discord set up still ships fine.
 
   -Dev is the dev build's release, and it is a different channel, a different
   feed and a different webhook. It reads this machine's working copy of the
   dev feed (%LOCALAPPDATA%\Thornswood\feed\dev, Feed-Store.ps1) rather than
-  the live one, and it posts through
-  bot\dev-webhook.txt, which Set-DevNews.ps1 writes and which points
-  at #staff-news. Nothing about a dev release reaches #news, the
-  website or the main launcher: the site's News page reads the build Releases
-  main has reached (#5801), and a dev publish only ever writes the dev feed.
+  the live one, and it posts through the dev webhook on the VPS (Discord-Hook.ps1),
+  which Set-DevNews.ps1 writes and which points at #staff-news. Nothing about
+  a dev release reaches #news, the website or the main launcher: the site's News
+  page reads the build Releases main has reached (#5801), and a dev publish
+  only ever writes the dev feed.
 
   Two things this used to get wrong, both visible in the channel:
 
@@ -226,7 +226,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # A dev release is announced somewhere else entirely, through a webhook of its
 # own, so there is no way for one to arrive in #news by accident.
 # Both live on the VPS since 25 September, read through Discord-Hook.ps1, which
-# falls back to bot\dev-webhook.txt or bot\news-webhook.txt on this machine. Until then this read
+# falls back to a copy on this machine only if the server could not be reached. Until then this read
 # only that file, and since the scripts moved into scripts\ops it looked for it
 # in scripts\bot, which does not exist, so no Ship posted anything at all.
 # There is no -Webhook any more (issue #1069): a webhook typed on the command
@@ -234,7 +234,27 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # read from.
 $hookName = if ($Dev) { 'dev' } else { 'news' }
 $Webhook = ''
-try { $Webhook = [string](& (Join-Path $Here 'Discord-Hook.ps1') -Name $hookName | Select-Object -First 1) } catch { $Webhook = '' }
+$hookErr = $null
+try {
+  $hookLines = @(& (Join-Path $Here 'Discord-Hook.ps1') -Name $hookName 2>&1)
+  if ($LASTEXITCODE -ne 0) {
+    $hookErr = ($hookLines | ForEach-Object { "$_" }) -join "`n"
+  } else {
+    $Webhook = [string]($hookLines | Where-Object { $_ -is [string] -or $_ -is [System.Management.Automation.PSObject] } | Select-Object -First 1)
+    if ($Webhook) { $Webhook = $Webhook.Trim() }
+  }
+} catch {
+  $hookErr = $_.Exception.Message
+}
+if ($hookErr) {
+  if ($Dev) {
+    Write-Host '  could not reach the server for the dev webhook, #staff-news was not told' -ForegroundColor Red
+  } else {
+    Write-Host '  could not reach the server for the Discord webhook, skipping' -ForegroundColor Red
+  }
+  $global:ThornswoodDiscordResult = 'failed'
+  return
+}
 if (-not $Webhook) {
   if (-not $Quiet) {
     if ($Dev) {

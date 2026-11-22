@@ -100,5 +100,7 @@ if ($Check) {
     else { Write-Host "  the VPS could not be asked and this machine has no copy" -ForegroundColor Yellow }
     exit 0
 }
-if ($hook) { Write-Output $hook }
-exit 0
+if ($hook) { Write-Output $hook; exit 0 }
+if ($r.Out -contains 'NOHOOK') { exit 0 }
+Write-Error "the VPS could not be asked and this machine has no copy"
+exit 1
