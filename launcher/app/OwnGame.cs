@@ -773,7 +773,7 @@ namespace Thornswood
                 return "The mods in " + src + " are not all installed yet: the install of the modlist was stopped part way, or is still going. " +
                        "Let it finish, then try again.";
             if (!HasRecord(src))
-                return "Vortex has nothing deployed in " + src + " right now. In Vortex, enable the Thornswood profile and let it deploy, then try again. " +
+                return "Vortex has nothing deployed in " + src + " right now. In Vortex, enable the Thornswood profile (turn on Profile Management in Vortex under Settings, Interface if Profiles is not shown) and let it deploy, then try again. " +
                        "If it is deployed, Vortex is deploying into another folder: in Vortex, Mods, Open, Open Game Folder shows which, " +
                        "and Choose Vortex's folder in Settings points Thornswood at it.";
 
