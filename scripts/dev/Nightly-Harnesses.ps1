@@ -169,8 +169,8 @@
   test points it at a copy.
 
 .PARAMETER OutDir
-  Where each harness's output is kept while it runs. harness-out under the
-  runner's temp folder, or under TEMP off a runner.
+  Where each harness's output is kept while it runs. harness-out-<share>
+  under the runner's temp folder, or under TEMP off a runner.
 
 .PARAMETER Report
   A JUnit file to write when the run ends: a test case for each check every
