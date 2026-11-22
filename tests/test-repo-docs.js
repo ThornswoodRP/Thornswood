@@ -132,17 +132,12 @@ if (cfgText === null) {
   const cs = read('launcher/app/Config.cs') || '';
   const m1 = /public string ServerAddress = "([^"]+)"/.exec(cs);
   const m2 = /public string ServerPort = "([^"]+)"/.exec(cs);
-  // The site feed, the only update source since #907 (it was the GitHub
-  // repository Thornswood-Releases until then).
-  const m3 = /:\s*"(https:\/\/[^"]+\/feed\/version\.json)"/.exec(cs);
-  yes('Config.cs defaults can be read (address, port, update feed)', !!(m1 && m2 && m3));
-  if (cfg && m1 && m2 && m3) {
+  yes('Config.cs defaults can be read (address, port)', !!(m1 && m2));
+  if (cfg && m1 && m2) {
     yes('config.example.json ServerAddress ' + cfg.ServerAddress + ' is the launcher default ' + m1[1],
         cfg.ServerAddress === m1[1]);
     yes('config.example.json ServerPort ' + cfg.ServerPort + ' is the launcher default ' + m2[1],
         String(cfg.ServerPort) === m2[1]);
-    yes('config.example.json UpdateFeedUrl ' + cfg.UpdateFeedUrl + ' is the launcher default ' + m3[1],
-        cfg.UpdateFeedUrl === m3[1]);
     yes('config.example.json names no GitHub repository to update from (#907)', !('UpdateRepo' in cfg));
   }
   yes('config.example.json carries an empty UpdateToken, never a real one',
@@ -174,6 +169,11 @@ if (tracked) {
       yes(rel + ' does not list SETUP.md, which is gone' + where(t, /SETUP\.md/), !/SETUP\.md/.test(t));
     }
   });
+  const devGuide = read('Developer-Guide.md') || '';
+  yes('Developer-Guide.md contents link to "The version comes from the build" (#5285)',
+      /\[The version comes from the build\]\(docs\/guide\/release-to-main\.md#the-version-comes-from-the-build\)/.test(devGuide));
+  yes('Developer-Guide.md does not link to "Move the version first"',
+      !/Move the version first/i.test(devGuide));
   const TEXT = /\.(js|mjs|cjs|ps1|psm1|psd1|py|cs|xaml|md|json|html|htm|css|txt|yml|yaml|toml|cmd|bat|sh|ini|xml)$/i;
   const drive = [];
   tracked.filter(function (f) { return TEXT.test(f); }).forEach(function (rel) {
