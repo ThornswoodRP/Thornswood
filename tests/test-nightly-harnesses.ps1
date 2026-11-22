@@ -12,9 +12,10 @@
     1. every harness is in exactly one share: two shares between them run
        each one once, and none twice;
     2. a harness that passes, one that fails, one past its clock (named in
-       its header) and one that leaves a process running are each printed
-       as they end, and the summary names the two that failed, the one that
-       timed out as timed out, the slowest, and exits 1;
+       its header), one that leaves a process running and one that writes to
+       the checkout's root are each printed as they end, and the summary names
+       the three that failed, the one that timed out as timed out, the
+       slowest, and exits 1;
     3. a harness whose clock would not fit in what is left of the budget is
        not started, is named "not run, out of time", turns the share red,
        and the summary is still printed;
@@ -119,13 +120,16 @@ try {
         Put (Join-Path $b 'tests\test-4-leaves.js') ("const { spawn } = require('child_process');`n" +
             "const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });`n" +
             "c.unref();`nconsole.log('left one running');`nprocess.exitCode = 0;`n")
+        Put (Join-Path $b 'tests\test-5-writes-root.js') ("const fs = require('fs');`n" +
+            "fs.writeFileSync('stray-root.txt', 'x');`nprocess.exitCode = 0;`n")
         $r = Run $b @()
         Yes "a share with a failure is red (exit $($r.Code))" ($r.Code -eq 1)
         Yes '  every harness is printed with its time and what it said' ($r.Said -match '(?m)^--- test-1-pass\.js  \([0-9.]+s[,)]' -and $r.Said -match 'PASS  one thing' -and $r.Said -match 'FAIL  one thing')
         Yes '  the failed one is named where it failed' ($r.Said -match '::error file=.*?test-2-fail\.ps1::harness failed \(exit 1\)')
         Yes '  the one past its clock is killed and named, on the clock its header gives' ($r.Said -match '::error file=.*?test-3-hang\.js::harness timed out after 3s and was killed' -and $r.Said -match '--- test-3-hang\.js  \([0-9.]+s, on a 3 s clock it names[,)]')
         Yes '  what one left running is killed and named' ($r.Said -match '::warning file=.*?test-4-leaves\.js::harness left 1 process\(es\) running when it ended, now killed: node')
-        Yes '  the summary names both that failed, the one that timed out as such' ($r.Said -match '(?m)^2 harness\(es\) failed: test-2-fail\.ps1, test-3-hang\.js \(timed out\)\s*$')
+        Yes '  what one wrote to the repository root is removed and named' ($r.Said -match '::error file=.*?test-5-writes-root\.js::harness wrote to the repository root: stray-root\.txt' -and -not (Test-Path -LiteralPath (Join-Path $b 'stray-root.txt')))
+        Yes '  the summary names both that failed, the one that timed out as such' ($r.Said -match '(?m)^3 harness\(es\) failed: test-2-fail\.ps1, test-3-hang\.js \(timed out\), test-5-writes-root\.js\s*$')
         # Which ran longest is the machine's to say: on a busy runner the
         # PowerShell one can take longer than the 3 s clock the hang is
         # killed on. So the line is held to the times printed above it: every
@@ -137,7 +141,7 @@ try {
         $inOrder = $true
         for ($i = 1; $i -lt $listed.Count; $i++) { if ($listed[$i].Secs -gt $listed[$i - 1].Secs) { $inOrder = $false } }
         $same = $listed.Count -eq $ran.Count -and -not @($listed | Where-Object { -not $ran.ContainsKey($_.Name) -or $ran[$_.Name] -ne $_.Secs }).Count
-        Yes ('  and the slowest, longest first, with the times above (' + $slow + ')') ($ran.Count -eq 4 -and $same -and $inOrder -and $r.Said -match '(?m)^all of them, added up: \d+s, in \d+s')
+        Yes ('  and the slowest, longest first, with the times above (' + $slow + ')') ($ran.Count -eq 5 -and $same -and $inOrder -and $r.Said -match '(?m)^all of them, added up: \d+s, in \d+s')
 
         # ---- 3. the budget ----------------------------------------------------------
         $c = Join-Path $work 'budget'

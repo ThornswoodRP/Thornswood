@@ -226,6 +226,16 @@ if ($Share -lt 1 -or $Share -gt $Throttle) { Write-Host "::error::-Share $Share 
 if ($StartLog) { $StartLog = [IO.Path]::GetFullPath($StartLog) }
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 $Root = [IO.Path]::GetFullPath($Root)
+function Get-RootEntries([string]$path) {
+    $entries = @{}
+    if (Test-Path -LiteralPath $path) {
+        foreach ($item in @(Get-ChildItem -LiteralPath $path -File -Force)) {
+            $entries[$item.Name] = "$($item.Length)|$($item.LastWriteTimeUtc.Ticks)"
+        }
+    }
+    return $entries
+}
+$script:rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
     $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
     $OutDir = Join-Path $base ('harness-out-' + $Shard)
@@ -611,6 +621,30 @@ function Finish-One($r, [bool]$timedOut) {
     }
     Write-StartLog ([ordered]@{ name = $t.Name; end = [DateTime]::UtcNow.ToString('o'); code = $code; secs = $secs; skipped = $skipped; skips = @($skips); passes = $passes })
     $path = $t.File.FullName
+    $rootDirty = @()
+    if (Test-Path -LiteralPath $Root) {
+        $now = Get-RootEntries $Root
+        foreach ($k in $now.Keys) {
+            if (-not $script:rootBefore.ContainsKey($k)) {
+                $rootDirty += $k
+                $full = Join-Path $Root $k
+                if (Test-Path -LiteralPath $full) {
+                    Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            } elseif ($now[$k] -ne $script:rootBefore[$k]) {
+                $rootDirty += "$k (modified)"
+            }
+        }
+        foreach ($k in $script:rootBefore.Keys) {
+            if (-not $now.ContainsKey($k)) {
+                $rootDirty += "$k (removed)"
+            }
+        }
+    }
+    if ($rootDirty.Count) {
+        $code = 1
+        Write-Host ("::error file={0}::harness wrote to the repository root: {1}" -f $path, ($rootDirty -join ', '))
+    }
     if ($timedOut) { Write-Host ("::error file={0}::harness timed out after {1}s and was killed" -f $path, $t.Clock) }
     elseif ($code -ne 0) { Write-Host ("::error file={0}::harness failed (exit {1}){2}" -f $path, $code, (Get-FailSaid $printed)) }
     if ($left.Count) { Write-Host ("::warning file={0}::harness left {1} process(es) running when it ended, now killed: {2}" -f $path, $left.Count, ($left -join ', ')) }
