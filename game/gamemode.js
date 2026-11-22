@@ -26924,7 +26924,7 @@ module.exports = {
     the gate: Solitude, Whiterun, Windhelm, Riften and Markarth are walled
     cities, each its own worldspace inside the walls, and their numbers were
     read inside them. Measured 15 Oct:
-      - the game's own NPCs placed near each point (docs/NPC-SPAWNS.csv)
+      - the game's own NPCs placed near each point (game/data/NPC-SPAWNS.csv)
         stand in WhiterunWorld 1a26f, RiftenWorld 16bb4, WindhelmWorld 1691d
         and MarkarthWorld 16d71;
       - Solitude has no NPC within 3,000, so the cell its point falls in was
