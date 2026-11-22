@@ -3,7 +3,7 @@
 A shovel in the pack, 50 uses. Skyrim has no hoe. The shovel is what
 a smith forges, and it is what this class asks for.
 
-10 crops, 14 placed records:
+10 crops, 20 placed records:
 [lists/farmer.md](../lists/farmer.md).
 
 | Rank | Crops |
