@@ -707,7 +707,8 @@ function Invoke-BotSwap([bool]$noServiceOk) {
   if (-not $PutBack) { $owns = '$Owns = @(Get-ThornswoodBotOwned)' + "`r`n" }
   $out = @(Remote ($vars + (Get-ThornswoodHoldScript -Script 'Install-Bot.ps1') + $ThornswoodStopAndMoveText + (Get-Content -LiteralPath $svcLib -Raw) + "`n" + $owns + $botHooks + $pick + $serviceSwapBlock) |
            ForEach-Object { Say "  $_"; "$_".Trim() })
-  if (-not (Show-SwapResult $out "$rootWin\.prev-<stamp>")) { Die 'the bot was not swapped in. The lines above say what is running.' }
+  $prevWhere = if ($PutBack) { "$rootWin\.undone-<stamp>" } else { "$rootWin\.prev-<stamp>" }
+  if (-not (Show-SwapResult $out $prevWhere)) { Die 'the bot was not swapped in. The lines above say what is running.' }
   return $out
 }
 
