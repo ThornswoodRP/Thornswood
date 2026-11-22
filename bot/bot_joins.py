@@ -361,6 +361,10 @@ async def on_member_join(member):
     # that never reached the bot apart from one that reached it and failed.
     log('join: %s arrived in "%s"' % (member, member.guild.name))
 
+    if getattr(member, 'bot', False):
+        log('join: %s is a bot, so no welcome card and no join number' % member)
+        return
+
     ch = by_name(member.guild, [WELCOME])
     if ch is None:
         log('no text channel called #%s to greet in' % WELCOME)
