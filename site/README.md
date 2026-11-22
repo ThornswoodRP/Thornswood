@@ -153,8 +153,9 @@ copy of the live `C:\Thornswood-Caddy\Caddyfile`), and `Setup-Domain.ps1` is
 what set `THORNSWOOD_DOCS_LOCAL=1` there. Its `config.json` on the VPS holds
 the member password, the Discord client secret and bot token, the bot's key
 and the cookie secret, and is never in the repo. `.\scripts\deploy\Deploy-Docs.ps1`
-sends `server.js`, `lib\` and everything in `public\` and restarts the task, and
-`-Site` also sends the public pages. A plain deploy never overwrites a
+sends only the changed `server.js`, `lib\` and `public\` files and stops the
+site only when one of them changed, and `-Site` also sends the public pages. A
+plain deploy never overwrites a
 document somebody has typed into on the site; `-Boards`, `-Docs` and
 `-SeedDocs` do, after a `.bak` of each. `-Board active` replaces that one board
 inside the live `board.json` and leaves every other board as typed. The
@@ -185,8 +186,9 @@ The pages, the downloads, the hub and every route in the table above are one
 node process. A route that throws is answered 500 and the rest carry on, and a
 throw in a timer is logged and carried on from, so a broken page does not take
 the door with it. What one process cannot keep apart: anything that holds its
-event loop holds the door for as long, and every `Deploy-Docs.ps1` restarts the
-door along with the pages. `tests\test-site-local.js` measures the first two
+event loop holds the door for as long, and a `Deploy-Docs.ps1` that changes the
+app restarts the door along with the pages (when nothing in the app changed,
+the site is left running). `tests\test-site-local.js` measures the first two
 against a copy: with a page made to throw, `/api/play/who` still answers its
 401, and with a page made to hold the loop for a second and a half, the same
 question waits until it lets go.
