@@ -47,11 +47,12 @@ put in that folder answers 404 and is not on the Downloads page (#3798).
 The installer is not in that folder since #4824. It is Velopack's setup
 program, which `merge-release.yml` makes and signs, and `/file/` answers
 302 to its GitHub Release copy (`newestSetup` in `lib/feed.js`):
-`/file/Thornswood-Setup.exe` to the one on the newest Release `main-<tag>`,
-which the approval step publishes once a build is approved (#5181), and
-`/file/Thornswood-Dev-Setup.exe` to the one on the newest build Release
-(`build-YYYYMMDD.N`). Until there is one, the name answers 404 and the
-Downloads page says the installer is not published yet. The old installer's
+`/file/Thornswood-Setup.exe` to the newest main setup Release (matching
+`main-build-YYYYMMDD.N` or `main-build-1.3.n`, issue #5581), which the approval
+step publishes once a build is approved (#5181), and
+`/file/Thornswood-Dev-Setup.exe` to the newest dev build Release
+(`build-YYYYMMDD.N` or `build-1.3.n`). Until there is one, the name answers 404
+and the Downloads page says the installer is not published yet. The old installer's
 exe and payload zip, which `Publish-Installer` left in the folder, are never
 served or listed, whatever `files.json` still says. `/api/payload`, which the
 old setup program asked for its zip, is gone with it.
