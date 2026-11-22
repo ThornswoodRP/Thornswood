@@ -29,6 +29,12 @@ are gone, and nothing falls back to them.
 This folder keeps `licences\`, the GPL and AGPL texts and the licence texts
 of every library built into the launcher or shipped with it, handed over with
 the files (#421, #4823; `licences\README.txt` says where each comes from).
+Packaging stages its three texts (`GPL-3.0.txt`, `AGPL-3.0.txt` and the launcher
+library licences) beside `SOURCE CODE.txt` and stops without them. That licences
+folder is different from the payload's own licences folder: the payload's
+licences folder carries the client libraries' texts (the vcpkg libraries and
+front packages recorded in `records\client-licences.json`), while this folder
+holds the licences for the installer and launcher libraries.
 It no longer keeps a read me: `READ ME FIRST.txt` told people which of
 `Setup.bat` and `Install.bat` to run, and Velopack's Setup.exe carries no
 loose page, it opens the launcher, whose install window says each step. What
