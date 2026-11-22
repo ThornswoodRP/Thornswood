@@ -232,7 +232,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | Route | Method | Who | Body | Answers |
 | --- | --- | --- | --- | --- |
 | `/api/gallery/who` | GET | anybody | none | `200 {signed,canSubmit,staff,admin,name}` for the public gallery page |
-| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp or gif; `413` over 25 MB |
+| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp, gif, mp4 or webm; `413` over 100 MB |
 | `/api/gallery/copy` | POST | whoever sent a waiting picture, once for each width, or staff at any time (#3218) | one smaller copy is the body, a WebP or a JPEG named by its Content-Type; `name` (the picture), `w` (800 or 1600) and, for the launcher, `ticket` in the query | `200 {ok,name,w}`, kept as `uploads/small/<name>.w<w>.webp` or `.jpg` and listed in the queue entry's `copies`; a staff copy of a picture already on the gallery goes into its `srcset` at once; `403` for anybody else, `409` for a width the sender already sent, `400` for another width or a picture no wider than it, `415` for another kind, `422` for a copy that is not exactly that width and the picture's shape |
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
@@ -255,10 +255,10 @@ cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
 (`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds
 `{ name, by, note, at, from: 'web'|'launcher', discordId? }` to the queue. The
-cap is 25 MB rather than the 200 MB `/api/upload` takes for logs, and only
-images are taken: `/shot` serves with a plain `Content-Length` and no range,
-which a browser needs before it will play an mp4, so video waits until `/shot`
-honours a range. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
+cap is 100 MB rather than the 200 MB `/api/upload` takes for logs, and video as
+well as images is taken (mp4 and webm alongside png, jpg, jpeg, webp and gif):
+`/shot` answers byte ranges through `rangeReply`, so browsers can stream and
+play video. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
 Moderator, Loremaster), not Owner/Dev-only `w.admin`. The public `/gallery`
 page has the member submit form; the hub Gallery page, `/uploads`, shows the
 queue and the live list. That page is `LEVEL.uploads: 'staff'` (#742), so the
