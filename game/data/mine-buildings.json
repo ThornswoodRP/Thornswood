@@ -19,6 +19,7 @@
    "veins": 3
   },
   "13901:Skyrim.esm": {
+   "disabled": 7,
    "name": "Steamscorch Mine",
    "onTheWayIn": [],
    "ores": {
@@ -51,6 +52,7 @@
    "veins": 4
   },
   "140a:Dawnguard.esm": {
+   "disabled": 1,
    "name": "Arkngthamz",
    "onTheWayIn": [],
    "ores": {
@@ -86,6 +88,7 @@
    "veins": 4
   },
   "142f1:Dragonborn.esm": {
+   "disabled": 4,
    "name": "Nchardak Great Chamber",
    "onTheWayIn": [
     "34fd2:Dragonborn.esm"
@@ -205,6 +208,7 @@
    "veins": 1
   },
   "1522c:Skyrim.esm": {
+   "disabled": 1,
    "name": "Purewater Run",
    "onTheWayIn": [],
    "ores": {
@@ -254,6 +258,7 @@
    "veins": 3
   },
   "15253:Skyrim.esm": {
+   "disabled": 1,
    "name": "Lost Echo Cave",
    "onTheWayIn": [],
    "ores": {
@@ -398,6 +403,7 @@
    "veins": 2
   },
   "152b7:Skyrim.esm": {
+   "disabled": 3,
    "name": "Blind Cliff Bastion",
    "onTheWayIn": [],
    "ores": {
@@ -561,6 +567,7 @@
    "veins": 1
   },
   "22f53:Skyrim.esm": {
+   "disabled": 1,
    "name": "Forelhost Crypt",
    "onTheWayIn": [],
    "ores": {
@@ -588,6 +595,7 @@
    "veins": 1
   },
   "26e93:Dragonborn.esm": {
+   "disabled": 1,
    "name": "Glacial Cave",
    "onTheWayIn": [],
    "ores": {
@@ -596,6 +604,7 @@
    "veins": 1
   },
   "275d8:Skyrim.esm": {
+   "disabled": 1,
    "name": "Tolvald's Crossing",
    "onTheWayIn": [
     "15201:Skyrim.esm"
@@ -607,6 +616,7 @@
    "veins": 2
   },
   "275d9:Skyrim.esm": {
+   "disabled": 1,
    "name": "Tolvald's Gap",
    "onTheWayIn": [
     "15201:Skyrim.esm"
@@ -661,6 +671,7 @@
    "veins": 4
   },
   "30442:Skyrim.esm": {
+   "disabled": 1,
    "name": "Bthardamz Arcanex",
    "onTheWayIn": [],
    "ores": {
@@ -703,6 +714,7 @@
    "veins": 2
   },
   "36798:Dragonborn.esm": {
+   "disabled": 2,
    "name": "Altar of Thrond Cave",
    "onTheWayIn": [],
    "ores": {
@@ -737,6 +749,7 @@
    "veins": 3
   },
   "3bf0:Dawnguard.esm": {
+   "disabled": 4,
    "name": "Ruunvald Excavation",
    "onTheWayIn": [],
    "ores": {
@@ -787,6 +800,7 @@
    "veins": 17
   },
   "4401b:Skyrim.esm": {
+   "disabled": 2,
    "name": "Druadach Redoubt Cave",
    "onTheWayIn": [],
    "ores": {
@@ -804,6 +818,7 @@
    "veins": 10
   },
   "471dc:Skyrim.esm": {
+   "disabled": 1,
    "name": "Frostflow Abyss",
    "onTheWayIn": [
     "15274:Skyrim.esm"
@@ -854,6 +869,7 @@
    "veins": 3
   },
   "54d0e:Skyrim.esm": {
+   "disabled": 1,
    "name": "Cold Rock Pass",
    "onTheWayIn": [],
    "ores": {
@@ -1042,13 +1058,12 @@
    "veins": 8
   }
  },
- "builtBy": "tools/Measure-MineBuildings.py",
+ "builtBy": "scripts/dev/Measure-MineBuildings.py",
  "calledAMineWithNoVein": {},
  "counts": {
   "behindABuilding": 53,
   "buildings": 121,
-  "disabled": 2,
-  "failedToInflate": 0,
+  "disabled": 90,
   "inBuildings": 448,
   "noDoor": 22,
   "openGround": 1202,
@@ -1220,11 +1235,12 @@
   "Sovngarde",
   "TestMeganWorld"
  ],
- "readFrom": "99 plugins, the five masters then C:\\Thornswood\\Profile\\Default\\plugins.txt",
+ "readFrom": "106 plugins in load order (names sha256 9418c4fa8f21)",
  "whatAMineIs": "a building holding at least one placed reference whose base is in ORES_BY_BASE, which is exactly what mineOre lets a person work. A building is what BUILDING_BY_DOOR says, the one /claim takes.",
  "whatOpenGroundIs": "the worldspaces in openWorlds, any other worldspace with a road in that no one building sits on, and every worldspace in reachedByNoDoor. A worldspace whose every road in goes through one building is in worlds, with the buildings on that road.",
  "worlds": {
   "29ab7:Skyrim.esm": {
+   "disabled": 1,
    "edid": "DeepwoodRedoubtWorld",
    "name": "Deepwood Vale",
    "onTheWayIn": [
@@ -1237,6 +1253,7 @@
    "veins": 2
   },
   "bb5:Dawnguard.esm": {
+   "disabled": 20,
    "edid": "DLC01FalmerValley",
    "name": "Forgotten Vale",
    "onTheWayIn": [
