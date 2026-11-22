@@ -828,7 +828,7 @@ yes('a second pass posts nothing twice', posted == [] and len(tf.threads) == 2)
 ASKED[:] = []
 run(bot.test_tasks_once(tf, tst, gh, me_id=me.id))
 yes('a fixed issue with no test task is read once, not on every pass: no '
-    'comments are read when nothing changed (#5184)',
+    'comments are read when nothing changed (#4331, #5184)',
     not [u for u in ASKED if u.split('?')[0].endswith('/comments')]
     and tst['tasks_read'].get('33', '').startswith(ISSUES[33]['updated_at']))
 COMMENTS[33] = [{'body': 'Test task: Build the release\nIt builds.'}]
