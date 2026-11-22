@@ -108,13 +108,7 @@ has been drawn, and `StateChanged`. So:
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
   ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
-  ShellVortexWatch.cs, ShellAudioSettings.cs, Waiting.cs and Stall.cs.
-
-  Opening Settings also refreshes the active recording-input list through
-  `Mics.All`. `AudioDevicePicker` keeps an unavailable saved input selected;
-  only an explicit selection saves `Config.MicrophoneName` through the usual
-  config save path. It does not replace a running audio worker. The choice
-  applies after restarting the launcher.
+  ShellVortexWatch.cs, Waiting.cs and Stall.cs.
 
 Message boxes are Windows' own, through Ask.cs (MessageBoxW): Avalonia has
 none, and every caller waits for the answer on its next line. They work
@@ -694,28 +688,6 @@ only a file whose bytes are Thornswood's. Nothing Vortex deployed, nothing of
 Skyrim's own, the person's own mods and the client's shared settings file
 stay. It notes what it did in `Profile\OwnGame\steam-copy-cleaned.txt` and
 never runs again; a file it could not delete keeps it running at each start.
-Once the collection's modlist installs into the portable Mod Organizer 2 in
-`<Root>\Mods` (ModlistSetup.cs, #6244), the mods come from there in place of
-Vortex: `DeploysInto` names `<Root>\Mods`, the game itself still comes from
-the Steam copy or the Downgrade, and the install's record
-`<Root>\Mods\thornswood-deployment.txt` (`ModlistSetup.Deployment`: each path
-in the game folder, its mod, its path in the mod's folder and its xxHash64,
-the mod higher in the profile's modlist.txt winning a shared path) stands
-where Vortex's deployment record stood (`OwnGame.ModsStaged`). The record is
-set aside (`thornswood-deployment-last.txt`) before a changed modlist is
-installed and written once every file is in, so a folder is never made from
-half an install; its V lines in `files.txt` are the modlist's mods. Pandora's
-build reads the same record (`ModsDeployed` in Generated.cs). The last whole
-install's record also says which of a mod's settings files (.ini, .toml) the
-person changed in Mod Organizer 2 since: those are kept as they left them,
-and the rest take the new modlist's copy (`ModlistInstall.Changed`). The
-install itself starts from Diagnostics (ShellModlist.cs): a card beside
-Vortex's offers it, and once the mods come from Mod Organizer 2 the
-collection card and the bar's button are that install's, with the
-revision its record names (`OwnGame.ModsRevision`, which
-`Checks.CollectionRevision` reads in place of Vortex's). It installs the
-modlist of the Release the channel is on (`Updater.ChannelOn`,
-`ModlistSetup.FromRelease`), off the window's thread, with a Stop.
 
 **ClientRuntime** (ClientRuntime.cs). The six files that are the SkyMP client,
 checked by SHA-256 against `records\client-build.json`, which is compiled into
@@ -791,8 +763,9 @@ install folder, rewritten at every start.
 
 **Uninstall** (Uninstall.cs). Removing the install. Swap.Restore always runs
 first, because deleting Profile with the junctions live would follow them
-into the person's real Skyrim folders. It only ever deletes under Root, and
-the last part runs from a script in the temp folder after the launcher exits.
+into the person's real Skyrim folders. What it removes, and what an install
+leaves on the PC that it does not, is one list: installer\README.md, What an install leaves on the PC (#4431).
+The last part runs from a script in the temp folder after the launcher exits.
 Uninstall under Windows' Installed apps runs the exe with `-uninstall`, and
 the launcher opens on Settings without starting up to play (startup step 10,
 ShellUninstall.cs).
