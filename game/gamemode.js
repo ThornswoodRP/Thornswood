@@ -30677,7 +30677,7 @@ module.exports = {
         /remnant add <person>         onto the remnant roll, after the application
         /remnant remove <person>      off it
   */
-  function command(word, parts, actorId, profileId, toProfile) {
+  function command(word, parts, actorId, profileId, toProfile, cmd) {
     var roll = word === '/remnant' ? 'remnant' : 'embassy';
     var verb = String((parts && parts[1]) || '').toLowerCase();
     var rest = (parts || []).slice(2);
@@ -30687,6 +30687,14 @@ module.exports = {
       return true;
     }
     if (!verb) { toProfile(profileId, listing(roll)); return true; }
+
+    if (verb === 'add' || verb === 'arm' || verb === 'disarm' || verb === 'remove') {
+      var staffLog = g.__thornswoodStaff;
+      if (staffLog && typeof staffLog.unproven === 'function') {
+        var unp = staffLog.unproven(cmd, profileId);
+        if (unp) { toProfile(profileId, unp); return true; }
+      }
+    }
 
     var armed = false;
     if (roll === 'embassy' && verb === 'add' && rest.length > 1 &&
@@ -34355,13 +34363,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);
@@ -45412,7 +45427,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -45466,7 +45481,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -46064,6 +46079,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -46158,6 +46178,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 

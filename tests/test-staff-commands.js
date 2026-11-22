@@ -421,6 +421,12 @@ if (COMMANDS && STAFF) {
   got = run(w, STAFFER, '/kick Bjorn', false);
   yes('an unproven connection is refused, with a sentence saying so',
       /proved who you are/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
+  const unpGive = run(w, STAFFER, '/give iron ore 2', false);
+  yes('/give from an unproven connection is refused', /proved who you are/.test(to(unpGive, STAFFER)[0] || ''));
+  const unpSpawn = run(w, STAFFER, '/spawn troll', false);
+  yes('/spawn from an unproven connection is refused', /proved who you are/.test(to(unpSpawn, STAFFER)[0] || ''));
+  const unpTp = run(w, STAFFER, '/tp whiterun', false);
+  yes('/tp from an unproven connection is refused', /proved who you are/.test(to(unpTp, STAFFER)[0] || ''));
   delete w.box.__thornswoodPassSeen.passes[STAFFER];
   got = run(w, STAFFER, '/freeze Bjorn');
   yes('no join pass on hand is refused', /launcher's pass/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
