@@ -1,9 +1,20 @@
 # scripts/oneoff
 
-Scripts that did one job once, kept rather than deleted. Nothing in the
-repository calls any of them, and none of them is part of a release, a deploy
-or a test. They were parked here on 25 September from `tools\`, after the
-audit of that day found nothing still using them. The nine retired installers
+Scripts that did one job once, kept rather than deleted. None of them is part
+of a release or a deploy. Four scripts are run by test harnesses against
+scratch repositories and fixtures:
+- `Reset-History.ps1` is run by `scripts\tests\test-reset-history.ps1`.
+- `Copy-ReleaseAssets-ToSite.ps1` is run by `site\tests\test-site-assets.ps1`.
+- `Move-FeedStore-ToVps.ps1` is run by `tests\test-feed-store.ps1`.
+- `Move-LightFormIds.ps1` is run by `tests\test-move-light-form-ids.ps1`.
+In addition, `make-join-card.py` is run by `bot\tests\test-join-card.py`.
+
+Other tests verify that this folder's retired scripts refuse to run and check
+its contents: `tests\test-hand-install-retired.ps1`, `tests\test-bodies-retired.ps1`,
+`tests\test-4811-dead-record-scripts.ps1`, and `tests\test-sunhelm-gone.js`.
+
+They were parked here on 25 September from `tools\`, after the audit of that day
+found nothing in live production still using them. The nine retired installers
 from `scripts\mods` joined them for #4740; tests\test-hand-install-retired.ps1
 and tests\test-bodies-retired.ps1 hold each one to its refusal.
 
