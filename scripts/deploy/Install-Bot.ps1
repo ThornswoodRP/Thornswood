@@ -98,9 +98,10 @@ param(
   # about somebody or another person's playtest application.
   [string]$CreatorRoles  = 'Content Creator',
   # Faction Leader tickets. IDs only. Install-Bot -UpperStaffRoles should
-  # carry the Owner role ID and the Lead Gamemaster role ID (and any later
-  # Lead department role ID). Names are ignored. Empty means those tickets
-  # are refused, not opened to general staff.
+  # carry the council: Owner, Co-Owner and each of the six leads, whose IDs
+  # Setup-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.
+  # Names are ignored. Empty means those tickets are refused, not opened
+  # to general staff.
   [string]$UpperStaffRoles = '',
   # Every run used to mint a new shared key, which meant every run also
   # silently stopped tickets reaching the site inbox until Deploy-Docs was run
@@ -1027,7 +1028,7 @@ catch { 'could not tighten bot.env.json: ' + `$_.Exception.Message }
 'creator only:  ' + `$env2['CREATOR_ROLES']
 'upper staff:   ' + `$env2['UPPER_STAFF_ROLES']
 if (-not [string]`$env2['UPPER_STAFF_ROLES']) {
-  'WARNING: UPPER_STAFF_ROLES is empty. Faction Leader applications will be refused until it is set to the Owner role ID and the Lead Gamemaster role ID.'
+  'WARNING: UPPER_STAFF_ROLES is empty. Faction Leader applications will be refused until it is set to the council: Owner, Co-Owner and each of the six leads, whose IDs Setup-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.'
 }
 
 # The same key into the site's config, so it accepts the bot and nobody else.
