@@ -100,7 +100,7 @@ if (readme !== null) {
 // Kept while it shipped: the old installer's Package-Thornswood.ps1 copied it
 // into every installer until #4824. Velopack's Setup.exe carries no loose
 // page and opens the launcher, whose install window says each step, so it
-// went with the batch files it named, and a copy of the join guide that
+// went with the batch files it named (#4752, #4824), and a copy of the join guide that
 // nothing ships cannot drift from it. installer\README.md says so and points
 // at the join guide, which is what a person reads now.
 const RMF = 'installer/READ ME FIRST.txt';
@@ -112,7 +112,7 @@ try {
 } catch (e) {
   console.log('SKIP  git ls-files did not answer, so the tracked-file checks are left out: ' + e.message);
 }
-if (tracked) yes(RMF + ' is not tracked (#4824)', tracked.indexOf(RMF) < 0);
+if (tracked) yes(RMF + ' is not tracked (#4752, #4824)', tracked.indexOf(RMF) < 0);
 yes(RMF + ' is gone', read(RMF) === null);
 const instReadme = read('installer/README.md') || '';
 yes('installer/README.md says what a person reads is the join guide on the site',

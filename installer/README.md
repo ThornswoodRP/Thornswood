@@ -36,9 +36,9 @@ licences folder carries the client libraries' texts (the vcpkg libraries and
 front packages recorded in `records\client-licences.json`), while this folder
 holds the licences for the installer and launcher libraries.
 It no longer keeps a read me: `READ ME FIRST.txt` told people which of
-`Setup.bat` and `Install.bat` to run, and Velopack's Setup.exe carries no
-loose page, it opens the launcher, whose install window says each step. What
-a person reads before installing is the join guide on the site
+`Setup.bat` and `Install.bat` to run (#4752, #4824), and Velopack's Setup.exe
+carries no loose page, it opens the launcher, whose install window says each
+step. What a person reads before installing is the join guide on the site
 (`https://thornswood.net/join`, `site\data\site\join.md`), which that file
 already called the one that is right.
 
