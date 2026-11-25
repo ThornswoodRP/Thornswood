@@ -481,7 +481,10 @@ namespace Thornswood
         {
             if (string.IsNullOrEmpty(path)) return;
             installRoot = path.TrimEnd('\\');
+            bool newRoot = !string.Equals(txtRoot.Text, installRoot, StringComparison.OrdinalIgnoreCase);
             txtRoot.Text = installRoot;
+            if (newRoot)
+                chkOwn.IsChecked = Config.Load(Path.Combine(installRoot, "config.json")).MakeOwnGame;
             string root = InstallPlace.DriveOf(installRoot);
             foreach (DriveButton b in driveButtons)
             {

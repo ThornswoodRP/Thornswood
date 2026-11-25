@@ -723,13 +723,9 @@ namespace Thornswood
         // ---------------------------------------------------------------- config.json
 
         /// <summary>
-        /// config.json is merged rather than copied over. The one in the
-        /// package is deliberately blank where the credentials go, so a
-        /// straight copy would wipe a working install's password on every
-        /// upgrade. Anything the package does not name is left exactly as it
-        /// was, and a blank field in the package never overwrites a filled one
-        /// on the disk. The own folder card's answer is this run's, so it goes
-        /// over whatever was there.
+        /// The package owns only the channel and its feed fields. Everything
+        /// else comes from the existing install or the launcher's own defaults,
+        /// except for choices made on this setup's folder card.
         /// </summary>
         void MergeConfig(Dictionary<string, JsonNode> ownCard)
         {
@@ -745,10 +741,9 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The merge on its own: what was on the disk, then each field of the
-        /// package's that is not blank or not there yet, then the card's.
-        /// Blank is what PowerShell's "$value" made an empty string of: no
-        /// value, an empty string, or an empty list.
+        /// Keep disk settings, update the fields emitted by Build-SetupFiles,
+        /// then apply the folder card. The empty Channel string means Main;
+        /// other blank feed fields do not replace a value already on disk.
         /// </summary>
         internal static JsonObject Merge(JsonObject old, JsonObject neu, Dictionary<string, JsonNode> ownCard)
         {
@@ -758,7 +753,11 @@ namespace Thornswood
             {
                 foreach (KeyValuePair<string, JsonNode> kv in neu)
                 {
-                    if (!Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
+                    if (kv.Key is not ("ServerAddress" or "ServerPort" or "UpdateFeedUrl" or "VoicePort" or
+                        "VoiceUrl" or "DiscordAppId" or "SiteUrl" or "PresenceImage" or "CollectionUrl" or "Channel")) continue;
+                    bool mainChannel = kv.Key == "Channel" && kv.Value is JsonValue channel &&
+                        channel.TryGetValue<string>(out string name) && name == "";
+                    if (mainChannel || !Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
                         outObj[kv.Key] = kv.Value == null ? null : kv.Value.DeepClone();
                 }
             }
@@ -919,16 +918,23 @@ namespace Thornswood
                 Say(Bad + " check" + (Bad == 1 ? "" : "s") + " failed. Send staff a screenshot of this window in the Discord.");
                 return;
             }
-            if (Later > 0) Say("Installed. " + Later + " thing" + (Later == 1 ? "" : "s") + " still to come from the collection, which is the next step.");
-            else Say("Installed.");
+            Say("Installed.");
             Say("");
-            Say("Make a character named after yourself, save once, then connect.");
-            Say("");
-            Say("The launcher opens on the collection if your mods are not in yet.");
-            Say("Install it in Vortex and switch to the profile it makes. Without");
-            Say("that you have a launcher and no mods.");
+            // The same steps in the same order as the launcher, the help page
+            // and the join page (#4496): the launcher holds the collection
+            // card until Downgrade is done, so a wrong build is its own first
+            // step, never "the collection is next".
+            bool downgrade = !checks[0].Value;   // "Game 1.6.1170", read above
+            int step = 1;
+            Say("Next, in the launcher:");
+            if (downgrade)
+                Say("  " + step++ + ". Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.");
+            Say("  " + step++ + ". Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.");
+            Say("  " + step++ + ". Press Connect Discord at the bottom of the left sidebar.");
+            Say("  " + step + ". Press Play.");
             if (choice.MakeOwnGame)
             {
+                Say("");
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
                 Say("Skyrim folder by itself, then makes the rest from your game:");
                 Say("Thornswood-Last.esp, the plugin order, and the animation and body");

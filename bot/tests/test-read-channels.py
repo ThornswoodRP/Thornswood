@@ -248,6 +248,9 @@ else:
         def history(self, limit=None):
             return History()
 
+        def pins(self, limit=None):
+            return History()
+
         async def send(self, text):
             self.sent.append(text)
             return Message()
@@ -265,7 +268,8 @@ else:
                 # (#3317). A draft is never written, and is measured as its
                 # words alone so it fits the day it is approved.
                 k = s['key']
-                posts.append((ch, B.C.DOCS[k] if k in B.C.DRAFTS else B.doc_with_footer(k)))
+                thread = Channel(B.CHANGELOG) if s.get('post_prefix') else None
+                posts.append((ch, B.C.DOCS[k] if k in B.C.DRAFTS else B.doc_with_footer(k, thread)))
                 keys.append(k)
     yes('the plan still posts #welcome, #start-here and #faq from content.py',
         all(k in keys for k in ('WELCOME', 'START', 'FAQ')) and
@@ -284,8 +288,28 @@ else:
         whole = text
         for key, c in found.items():
             whole = whole.replace('<#' + key + '>', c.mention)
+        prefix = next((s.get('post_prefix') for _, specs in B.PLAN for s in specs
+                       if s['name'] == ch.name), None)
+        if prefix:
+            recovered = []
+            footer = whole.strip().split('\n\n')[-1]
+            part_count = len(ch.sent)
+            valid_parts = part_count > 0
+            for i, m in enumerate(ch.sent, 1):
+                lines = m.split('\n\n')
+                valid_parts = valid_parts and lines[0] == prefix and lines[-1] == footer
+                body = lines[1:-1]
+                if part_count > 1:
+                    valid_parts = valid_parts and bool(body) and body[0] == '*Part %d of %d*' % (i, part_count)
+                    body = body[1:]
+                recovered.extend(body)
+            yes('#%s: each guide part has its heading, part label and Changelog footer' % ch.name,
+                valid_parts)
+            sent_whole = prefix + '\n\n' + '\n\n'.join(recovered) + '\n\n' + footer
+        else:
+            sent_whole = '\n\n'.join(ch.sent)
         yes('#%s: nothing was lost or added between content.py and Discord' % ch.name,
-            '\n\n'.join(ch.sent) == whole.strip())
+            sent_whole == whole.strip())
 
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))

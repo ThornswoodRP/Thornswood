@@ -1,6 +1,8 @@
 <#
-  Nexus-Run.ps1
+.SYNOPSIS
+  Runs one of the Nexus scripts with Patrick's Nexus API key from a session that does not hold the key, a cloud thread included (#2841).
 
+.DESCRIPTION
   Runs one of the Nexus scripts with Patrick's Nexus API key from a session
   that does not hold the key, a cloud thread included (#2841):
 

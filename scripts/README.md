@@ -49,7 +49,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Install-Gate.ps1](deploy/Install-Gate.ps1) | Puts the deploy gate on the box (#2841): the account thornswood-deploy, which has no administrator rights, its forced command, and the broker that runs the verbs. |
 | [deploy/Install-Mongo.ps1](deploy/Install-Mongo.ps1) | Puts MongoDB on the box (#6237): the game servers keep their worlds there instead of one JSON file per form. mongod runs as the task Thornswood Mongo, listening on 127.0.0.1 only, with authorization on, and every program that signs in has a user of its own. |
 | [deploy/Install-Runner.ps1](deploy/Install-Runner.ps1) | Puts a GitHub Actions runner on the VPS, so the build check runs on every pull request without paying for minutes. |
-| [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the game folder's Data and puts it into the install's plugin lists, in front of the plugin -Before names. |
+| [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the requested game Data folder. |
 | [deploy/Install-ThornswoodServer.ps1](deploy/Install-ThornswoodServer.ps1) | Run this ON THE VPS, after Bootstrap-VPS.ps1, as Administrator. |
 | [deploy/Install-Tunnel.ps1](deploy/Install-Tunnel.ps1) | Puts the site behind a Cloudflare Tunnel (#5334): cloudflared runs on the box as the task "Thornswood Tunnel" and keeps an outbound connection open to Cloudflare, and Cloudflare sends thornswood.net and www down it to Caddy on 127.0.0.1:443. |
 | [deploy/Install-Voice.ps1](deploy/Install-Voice.ps1) | Puts the proximity voice service on the VPS beside the game server. |
@@ -72,7 +72,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/ServerReadyWait.ps1](deploy/ServerReadyWait.ps1) | How long a started game server has to answer on its ports before a deploy puts the old files back. |
 | [deploy/ServerSettings.ps1](deploy/ServerSettings.ps1) | Which settings a game server install takes from the release, and which it keeps from the server it replaces. |
 | [deploy/ServiceAccount.ps1](deploy/ServiceAccount.ps1) | The account the services that run code we deploy run as (#2578): both game servers, both voice services and Caddy. |
-| [deploy/Set-BuildRunners.ps1](deploy/Set-BuildRunners.ps1) | Makes the labels on GitHub's VPS runners match the runner records on main (records\<name>-runners.json): records\build-runners.json caps how many builds run on the box at once. |
+| [deploy/Set-BuildRunners.ps1](deploy/Set-BuildRunners.ps1) | Makes the labels on GitHub's VPS runners match the runner records on main (every records\<name>-runners.json), and with -AppRepos lists the repositories where the box's App is installed. |
 | [deploy/Set-DiscordLogin.ps1](deploy/Set-DiscordLogin.ps1) | Points the site at your Discord, which is what decides who gets in anywhere. |
 | [deploy/Set-DiscordOnboarding.ps1](deploy/Set-DiscordOnboarding.ps1) | Sets Discord's onboarding (Server Settings, Onboarding) with the bot, from bot\Build-Onboarding.py: the default channels, the questions and what each answer gives, every role and channel looked up by name on the server when it runs. |
 | [deploy/Set-RepoAbout.ps1](deploy/Set-RepoAbout.ps1) | Makes the repository's About box on GitHub (the line under its name, the website and the topics) match records\repo-about.json on main. |
@@ -181,7 +181,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Set-Server.ps1](ops/Set-Server.ps1) | Sets the server everyone connects to, in the two places that decide it, and sends the feed to the VPS (#907). |
 | [ops/Stage-MainGameplayPolicies.ps1](ops/Stage-MainGameplayPolicies.ps1) | Stages Main's audited Dev gameplay policies without restarting a process. |
 | [ops/Wipe-Saves.ps1](ops/Wipe-Saves.ps1) | Starts the world over. Everybody begins again, nothing is claimed, nothing has been looted, and every container in the province is holding what Bethesda put in it. |
-| [ops/WorkflowRun.ps1](ops/WorkflowRun.ps1) | Starts a workflow on main and reads the answer its runner left, for a script whose session cannot make the change itself: Set-Ref.ps1 (a ref write, which a cloud session's proxy refuses) and Set-BuildRunners.ps1 (a runner label, which needs the box's GitHub App). |
+| [ops/WorkflowRun.ps1](ops/WorkflowRun.ps1) | Starts a workflow on main and reads the answer its runner left, for a script whose session cannot make the change itself: Set-Ref.ps1 (a ref write, which a cloud session's proxy refuses), Set-BuildRunners.ps1 (a runner label, which needs the box's GitHub App) and Set-RepoAbout.ps1 (the repository About box). |
 | [release/Add-VirusTotalComment.ps1](release/Add-VirusTotalComment.ps1) | Optional manual tool: leaves one community comment on a build's VirusTotal report, or says plainly that it is not commenting and carries on. |
 | [release/App-Part.ps1](release/App-Part.ps1) | Makes the zip of one app the box deploy agent puts in from a build Release (#5190, #5187): the site, the Discord bot or the voice service, each as the folder it lands in on the box holds it. |
 | [release/Assert-PublishSigned.ps1](release/Assert-PublishSigned.ps1) | Helpers for the publish sign gate. Dot-source this from Ship.ps1. |
