@@ -1,0 +1,666 @@
+{
+  "version": 1,
+  "places": [
+    {
+      "form": "12c7f:SkyrimSewers.esp",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Authored Solitude sewer network; generic Dungeon location shared by its nine recorded rooms."
+    },
+    {
+      "form": "460a7:SkyrimSewers.esp",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Authored Windhelm sewer network; generic Dungeon location shared by its eleven recorded rooms."
+    },
+    {
+      "form": "460a6:SkyrimSewers.esp",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Authored Whiterun sewer network; generic Dungeon location shared by its seven recorded rooms."
+    },
+    {
+      "form": "4f1ce:SkyrimSewers.esp",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Authored Markarth sewer network; generic Dungeon location shared by its four recorded rooms."
+    },
+    {
+      "form": "760b:AnotherOakwood.esp",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Authored Oakwood sewer; generic Dungeon and AnimalDen keywords lack the sewer subtype."
+    },
+    {
+      "form": "3b871:Skyrim.esm",
+      "recordType": "LCTN",
+      "habitat": "sewer",
+      "reason": "Untyped Ratway location used by the expansion cistern; separate vanilla room caps are annotated on their cells."
+    },
+    {
+      "form": "3b698:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Ratway encounter-zone room; retains its existing separate cell cap."
+    },
+    {
+      "form": "a1bfd:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Ratway vault encounter-zone room; retains its existing separate cell cap."
+    },
+    {
+      "form": "3b696:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Esbern vault in the Ratway complex; separate authored cell, currently no retained inhabitants."
+    },
+    {
+      "form": "5e1f9:SkyrimSewers.esp",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Sungard sewer room points to the surface military-fort location and encounter zone."
+    },
+    {
+      "form": "5f496:SkyrimSewers.esp",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Greenwall sewer room points to the surface military-fort location and encounter zone."
+    },
+    {
+      "form": "a013b:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Goldenglow underground sewer room shares the estate location and encounter zone."
+    },
+    {
+      "form": "7fcdd:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "sewer",
+      "reason": "Blackreach sewer room shares the larger cave location; preserve its existing Blackreach cap group.",
+      "location": "18ee8:Skyrim.esm"
+    },
+    {
+      "form": "597d4:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Cidhna escape ruins contain authored Dwarven Spheres and spiders beneath the city, not surface shops."
+    },
+    {
+      "form": "5a01a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Cidhna mine passage shares the jail location; retain the separate subterranean skeever encounter."
+    },
+    {
+      "form": "4346:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Darkfall underground encounter cell has its own minimum-level-10 zone and no typed location."
+    },
+    {
+      "form": "10a8b:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Forgotten Vale underground chamber has its own minimum-level-18 encounter zone and no typed location."
+    },
+    {
+      "form": "8995:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Forgotten Vale underground chamber has its own minimum-level-18 encounter zone and no typed location."
+    },
+    {
+      "form": "8e52:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored hunter-valley cave interior has no location or encounter-zone type; retains its existing cave inhabitants."
+    },
+    {
+      "form": "285a:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Volkihar underground room has the minimum-level-10 vampire-castle dungeon zone, without a location type."
+    },
+    {
+      "form": "285b:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Volkihar underground room has the minimum-level-10 vampire-castle dungeon zone, without a location type."
+    },
+    {
+      "form": "142f4:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Black Book encounter cell has a minimum-level-25 zone linked to untyped Apocrypha location 142ae."
+    },
+    {
+      "form": "3109d:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Black Book encounter cell has a minimum-level-25 zone linked to untyped Apocrypha location 142b0."
+    },
+    {
+      "form": "142f3:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Black Book encounter cell has a minimum-level-25 zone linked to untyped Apocrypha location 142af."
+    },
+    {
+      "form": "1ede2:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Black Book encounter cell has a minimum-level-25 zone linked to untyped Apocrypha location 1ee08."
+    },
+    {
+      "form": "3b065:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Black Book encounter cell shares zone/location 142b0 but retains its existing separate cell cap."
+    },
+    {
+      "form": "27f1a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Embassy escape cave contains the authored Frost Troll and shares the untyped embassy location/zone."
+    },
+    {
+      "form": "15281:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Japhet Folly underground encounter cell shares the untyped island location and minimum-level-6 zone."
+    },
+    {
+      "form": "6429:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Reaper chamber is a separate underground Boneman encounter with the minimum-level-13 Soul Cairn zone."
+    },
+    {
+      "form": "ae783:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Midden underground chamber has its own encounter zone; College Dwelling/Guild metadata describes its surface parent."
+    },
+    {
+      "form": "2bcd7:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Midden underground chamber has its own encounter zone; preserve its separate cell cap below the College."
+    },
+    {
+      "form": "94bab:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Whiterun skeleton catacomb is distinct from the surface Hall of the Dead sharing Temple/Cemetery metadata."
+    },
+    {
+      "form": "dd216:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Solitude skeleton catacomb is distinct from the surface Hall of the Dead sharing House metadata."
+    },
+    {
+      "form": "7614c:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Irkngthand Grand Cavern room is the existing cave part of the shared Dwarven-ruin encounter zone.",
+      "location": "1919d:Skyrim.esm"
+    },
+    {
+      "form": "eb7:Dawnguard.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Dimhollow cavern room is the existing cave part of the shared crypt encounter location.",
+      "location": "4ee8:Dawnguard.esm"
+    },
+    {
+      "form": "151f6:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Wolfskull cave entry shares the Nordic-ruin encounter location and its existing cap.",
+      "location": "192c8:Skyrim.esm"
+    },
+    {
+      "form": "ac5d2:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Wolfskull underground ruin chamber retains the existing cave encounter grouping.",
+      "location": "192c8:Skyrim.esm"
+    },
+    {
+      "form": "1528a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "2c778:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "2c779:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "2e760:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "13901:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "13a8a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "16200:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "161f6:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "13909:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "161e7:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "1523c:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "1382e:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored LocTypeMine interior; preserve its existing separate cell-scoped encounter bucket."
+    },
+    {
+      "form": "1f7b3:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "city",
+      "reason": "Pavo house has House/Dwelling metadata under Kolskeggr Settlement; its actors point to the broader Reach hold, so the exact house cell supplies the town annotation."
+    },
+    {
+      "form": "15251:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "19267:Skyrim.esm"
+    },
+    {
+      "form": "1c080:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "296da:Dragonborn.esm"
+    },
+    {
+      "form": "1e8cc:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "3a07f:Dragonborn.esm"
+    },
+    {
+      "form": "152a5:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "19159:Skyrim.esm"
+    },
+    {
+      "form": "41777:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "18ee2:Skyrim.esm"
+    },
+    {
+      "form": "446bf:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "1917f:Skyrim.esm"
+    },
+    {
+      "form": "4b8fb:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "80f28:Skyrim.esm"
+    },
+    {
+      "form": "15269:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "1918e:Skyrim.esm"
+    },
+    {
+      "form": "7bc27:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "192c0:Skyrim.esm"
+    },
+    {
+      "form": "79f9f:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "8e1b7:Skyrim.esm"
+    },
+    {
+      "form": "4401b:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "1916f:Skyrim.esm"
+    },
+    {
+      "form": "b6be6:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "b712c:Skyrim.esm"
+    },
+    {
+      "form": "1520a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "192ad:Skyrim.esm"
+    },
+    {
+      "form": "abd31:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "192b8:Skyrim.esm"
+    },
+    {
+      "form": "1b147:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "dungeon",
+      "reason": "Authored underground room within a camp location; preserve its existing shared underground encounter group, without changing surface camp rooms.",
+      "location": "19269:Skyrim.esm"
+    },
+    {
+      "form": "d842d:WindhelmSSE.esp",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "39fe09:WindhelmSSE.esp"
+    },
+    {
+      "form": "152a7:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1915b:Skyrim.esm"
+    },
+    {
+      "form": "15268:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1918f:Skyrim.esm"
+    },
+    {
+      "form": "2fd85:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1917b:Skyrim.esm"
+    },
+    {
+      "form": "15253:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19266:Skyrim.esm"
+    },
+    {
+      "form": "275d8:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192bc:Skyrim.esm"
+    },
+    {
+      "form": "17da81:WindhelmSSE.esp",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "39fe09:WindhelmSSE.esp"
+    },
+    {
+      "form": "15230:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19289:Skyrim.esm"
+    },
+    {
+      "form": "15227:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19292:Skyrim.esm"
+    },
+    {
+      "form": "40a8ec:WindhelmSSE.esp",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "39fe09:WindhelmSSE.esp"
+    },
+    {
+      "form": "152b7:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "18eed:Skyrim.esm"
+    },
+    {
+      "form": "152ae:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19150:Skyrim.esm"
+    },
+    {
+      "form": "142fb:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1429e:Dragonborn.esm"
+    },
+    {
+      "form": "152b1:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1914d:Skyrim.esm"
+    },
+    {
+      "form": "26e93:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "142c4:Dragonborn.esm"
+    },
+    {
+      "form": "1525f:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19198:Skyrim.esm"
+    },
+    {
+      "form": "15201:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192bc:Skyrim.esm"
+    },
+    {
+      "form": "1bbfb:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "32892:Dragonborn.esm"
+    },
+    {
+      "form": "152a0:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1915c:Skyrim.esm"
+    },
+    {
+      "form": "1527e:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1917b:Skyrim.esm"
+    },
+    {
+      "form": "152ba:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "18eea:Skyrim.esm"
+    },
+    {
+      "form": "1526d:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1918a:Skyrim.esm"
+    },
+    {
+      "form": "36798:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCaveIce, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "14294:Dragonborn.esm"
+    },
+    {
+      "form": "3929e:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "3a42f:Dragonborn.esm"
+    },
+    {
+      "form": "39eac:Dragonborn.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeSprigganGrove metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets."
+    },
+    {
+      "form": "15215:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocTypeDungeon, LocTypeSprigganGrove metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192a6:Skyrim.esm"
+    },
+    {
+      "form": "275d9:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192bc:Skyrim.esm"
+    },
+    {
+      "form": "1525d:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19199:Skyrim.esm"
+    },
+    {
+      "form": "1521c:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1929d:Skyrim.esm"
+    },
+    {
+      "form": "15231:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19288:Skyrim.esm"
+    },
+    {
+      "form": "15206:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocSetCaveIce, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192b6:Skyrim.esm"
+    },
+    {
+      "form": "1fc66:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon, LocTypeFalmerHive metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "1929d:Skyrim.esm"
+    },
+    {
+      "form": "54226:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "46bac:Skyrim.esm"
+    },
+    {
+      "form": "67f2a:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "192ae:Skyrim.esm"
+    },
+    {
+      "form": "681dd:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "f52da:Skyrim.esm"
+    },
+    {
+      "form": "152a2:Skyrim.esm",
+      "recordType": "CELL",
+      "habitat": "cave",
+      "reason": "Existing cave encounter room, with LocSetCave, LocTypeAnimalDen, LocTypeDungeon metadata; preserve its recorded habitat identity and shared encounter group for accepted kill targets.",
+      "location": "19157:Skyrim.esm"
+    }
+  ]
+}

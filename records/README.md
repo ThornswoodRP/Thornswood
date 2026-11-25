@@ -68,6 +68,13 @@ folder here is named below, under the heading it belongs to.
   on this list, so a mod put into the Steam copy by hand never gets in. Run
   the script again in the same pull request as a pin move;
   `launcher\tests\test-skyrim-pin.ps1` fails while the two disagree.
+- `npc-habitats.json`: versioned authored CELL and LCTN habitats for rooms
+  whose location records lack a usable underground type. Each entry names
+  an existing record and explains its habitat; a shared group must be that
+  room's actual location or a parent. `scripts/dev/Build-NpcPopulation.py`
+  validates and reads it before writing the catalogue. No script writes it:
+  annotations change in a reviewed pull request, with admission, cap and
+  existing kill-target compatibility checks.
 - `recipe-owners.json`: the recipes whose owner or rank is a decision rather
   than a reading, each with the measured reason it cannot be derived:
   `"owner"` is RECIPE_OWNER and `"rank"` is RECIPE_RANK in

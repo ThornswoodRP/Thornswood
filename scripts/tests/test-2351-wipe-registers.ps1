@@ -137,6 +137,8 @@ try {
     }
     Put (Join-Path $Root 'private\dungeon-rewards-ledger.initialized') '1'
     Put (Join-Path $Root 'private\merchant-ledger.initialized') '1'
+    $controlBytes = '{"version":1,"revision":7,"frozen":{"5001":{"desc":"3c:Skyrim.esm","pos":[1,2,3],"rot":[0,0,0],"by":1001}},"silenced":{"5001":{"until":1893456000000,"by":1001}},"clearedWipes":[]}'
+    Put (Join-Path $Root 'private\staff-restraints.json') $controlBytes
 
     # ---- the survey
     # The survey finds server folders under C:\ on the box; here, under the scratch folder.
@@ -184,10 +186,16 @@ try {
     # The waiting list goes aside as it was, and a new one names the wiped
     # character by form id (#2668; test-2668-reset-wipe-release.ps1 has the rest).
     $newList = Join-Path $P 'deleted-characters.json'
+    $release = $null
+    if (Test-Path -LiteralPath $newList) { $release = [IO.File]::ReadAllText($newList) | ConvertFrom-Json }
     Yes 'the waiting list goes aside as it was, and the new release list names the wiped character' (
         (Test-Path (Join-Path $P "deleted-characters-before-$stamp.json")) -and
         [IO.File]::ReadAllText((Join-Path $P "deleted-characters-before-$stamp.json")) -eq '{"file":"deleted-characters.json"}' -and
-        (Test-Path $newList) -and ([IO.File]::ReadAllText($newList) -like '{"profiles":`[`],"actors":`[4278192641`],"done":{*'))
+        $release -and @($release.profiles).Count -eq 0 -and @($release.actors).Count -eq 1 -and $release.actors[0] -eq 4278192641 -and
+        $release.clearFreezes -eq $true -and @($release.freezeWipeIds).Count -eq 1 -and $release.freezeWipeIds[0] -cmatch '^[0-9a-f]{32}$' -and
+        $release.done.property -gt 0 -and $null -eq $release.done.restraints)
+    Yes 'the control book is unchanged until startup processes the explicit freeze-only request' (
+        [IO.File]::ReadAllText((Join-Path $P 'staff-restraints.json')) -ceq $controlBytes)
     Yes 'the dungeon ledger''s mark goes with it under its own name, so the next start makes a fresh ledger' (
         (Test-Path (Join-Path $P "dungeon-rewards-ledger.initialized-before-$stamp")) -and -not (Test-Path (Join-Path $P 'dungeon-rewards-ledger.initialized')))
     $kept = $true

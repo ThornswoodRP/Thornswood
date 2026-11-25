@@ -31,7 +31,7 @@ namespace Thornswood
         /// <summary>How many days launcher.log's lines and the support zips are kept on this PC.</summary>
         public const int Days = 30;
 
-        /// <summary>The stamp every launcher.log writer starts its line with.</summary>
+        /// <summary>The older launcher.log stamp, in that PC's local time.</summary>
         const string StampFormat = "yyyy-MM-dd HH:mm:ss";
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace Thornswood
             var said = new List<string>();
             if (lines > 0) said.Add(lines + (lines == 1 ? " line" : " lines") + " of launcher.log");
             if (zips > 0) said.Add(zips + (zips == 1 ? " support report" : " support reports"));
-            LauncherLog.Text(now.ToString(StampFormat, CultureInfo.InvariantCulture) +
+            LauncherLog.Text(LauncherLog.Stamp(now) +
                 "  Kept to the last " + Days + " days on this PC: removed " + string.Join(" and ", said.ToArray()) +
                 " older than that." + Environment.NewLine);
         }
@@ -73,7 +73,7 @@ namespace Thornswood
         static int PruneLogHeld(string path, DateTime now)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return 0;
-            DateTime cutoff = now.AddDays(-Days);
+            DateTime cutoff = now.ToUniversalTime().AddDays(-Days);
             string text = File.ReadAllText(path, Encoding.UTF8);
 
             int cut = -1, dropped = 0;
@@ -97,7 +97,7 @@ namespace Thornswood
                 // Nothing in the window. Every stamped line is old, and so is
                 // every line that came after one; with no stamp anywhere, the
                 // file's own write time is the only age there is.
-                if (!anyStamp && File.GetLastWriteTime(path) >= cutoff) return 0;
+                if (!anyStamp && File.GetLastWriteTimeUtc(path) >= cutoff) return 0;
                 File.Delete(path);
                 return dropped;
             }
@@ -117,9 +117,17 @@ namespace Thornswood
         static bool Stamp(string text, int at, out DateTime when)
         {
             when = DateTime.MinValue;
+            const string utcFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+            // The new UTC record and the older local record can share a file.
+            // Compare both as instants; never reinterpret an old local stamp as UTC.
+            if (at + 20 <= text.Length && DateTime.TryParseExact(text.Substring(at, 20), utcFormat,
+                CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out when))
+                return true;
             if (at + StampFormat.Length > text.Length) return false;
-            return DateTime.TryParseExact(text.Substring(at, StampFormat.Length), StampFormat,
-                CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out when);
+            if (!DateTime.TryParseExact(text.Substring(at, StampFormat.Length), StampFormat,
+                CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out when)) return false;
+            when = when.ToUniversalTime();
+            return true;
         }
 
         /// <summary>
