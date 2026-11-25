@@ -89,3 +89,6 @@ tome. The native book event then grants the new spell and consumes the book.
 If that study also raises a rank, additional eligible spells stay in history
 until the next atomic character refresh or login activates them in the book
 and engine together.
+Reading a tome for that newly eligible retained knowledge performs one normal
+atomic refresh first. The spell is then already known, so its point and book
+are not spent a second time. A refused refresh keeps both.

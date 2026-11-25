@@ -41252,6 +41252,20 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     }
 
     var staffDesc = (S && S.isStaffSpell && spell.desc && S.isStaffSpell(spell.desc)) ? spell.desc : null;
+    if (s.spellHistory) {
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The retained knowledge writer is not running.'); }
+      var eligible = knowledge.prepare(s);
+      if (!eligible.ok) { throw new Error('Retained knowledge cannot be prepared: ' + eligible.why); }
+      var restoreBook = !P.knowsSpell(s, spell.name) && P.knowsSpell(eligible.state, spell.name);
+      var restoreStaff = staffDesc && !P.knowsStaff(s, staffDesc) && P.knowsStaff(eligible.state, staffDesc);
+      if (restoreBook || restoreStaff) {
+        // This is knowledge already earned, newly eligible after study. One
+        // normal atomic refresh restores it before the already-known path,
+        // so its tome and point cannot be spent for the same knowledge again.
+        s = C.writeState(actorId, eligible.state);
+      }
+    }
     var fresh = !!staffDesc && !!P.knowsStaff && !P.knowsStaff(s, staffDesc);
     var outsider = fresh && !!P.staffTaught && P.staffTaught(s);
     var enchNote = (fresh && P.isEnchanter && P.isEnchanter(s))

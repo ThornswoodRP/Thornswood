@@ -180,6 +180,38 @@ if (w.loaded()) {
   try { C.writeState(tenth, C.stateOf(tenth)); } catch (_) { missingListRefused = true; }
   finally { box.mp.getActorLearnedSpells = fullList; }
   yes('a missing full-list binding refuses without a Papyrus fallback', missingListRefused);
+  const eleventh = student(10), fireboltBook = 'a26fd:Skyrim.esm';
+  w.record(fireboltBook, 'BOOK', { fields: [{ type: 'DATA', data: {
+    bytes: [4, 0, 0, 0, 0, 0, 0, 0, 0xee, 2, 0, 0, 0, 0, 128, 63], refs: { 4: P.SPELL_IDS.Firebolt }
+  } }] });
+  let latent = P.clone(C.stateOf(eleventh));
+  latent.work.destruction = P.workNeeded(latent, 'destruction') - 1;
+  latent.spellHistory.spells.push('Firebolt');
+  C.writeState(eleventh, latent);
+  w.readBook(eleventh, w.idOf(book));
+  const pointsBeforeHistoryRead = C.stateOf(eleventh).spells.points;
+  w.give(eleventh, w.idOf(fireboltBook), 1);
+  w.readBook(eleventh, w.idOf(fireboltBook));
+  yes('reading a newly eligible historical spell does not spend its point or tome again',
+    C.stateOf(eleventh).spells.points === pointsBeforeHistoryRead &&
+    w.count(eleventh, w.idOf(fireboltBook)) === 1 &&
+    C.stateOf(eleventh).spells.known.includes('Firebolt') && w.spellsOf(eleventh).includes(w.idOf(P.SPELL_IDS.Firebolt)));
+  const twelfth = student(11);
+  let stillLatent = P.clone(C.stateOf(twelfth));
+  stillLatent.work.destruction = P.workNeeded(stillLatent, 'destruction') - 1;
+  stillLatent.spellHistory.spells.push('Firebolt'); C.writeState(twelfth, stillLatent);
+  w.readBook(twelfth, w.idOf(book)); w.give(twelfth, w.idOf(fireboltBook), 1);
+  const beforeFailedRefresh = JSON.stringify([C.stateOf(twelfth), w.spellsOf(twelfth)]);
+  const heardBeforeRefresh = w.heard(twelfth).length;
+  const atomic = box.mp.compareAndSetActorPropertyAndSpells;
+  box.mp.compareAndSetActorPropertyAndSpells = function () { return false; };
+  let failedRefresh;
+  try { failedRefresh = w.readBook(twelfth, w.idOf(fireboltBook)); }
+  finally { box.mp.compareAndSetActorPropertyAndSpells = atomic; }
+  yes('a failed retained-knowledge refresh refuses before spending the book or points',
+    failedRefresh.allowed === false && w.count(twelfth, w.idOf(fireboltBook)) === 1 &&
+    JSON.stringify([C.stateOf(twelfth), w.spellsOf(twelfth)]) === beforeFailedRefresh &&
+    w.heardSince(twelfth, heardBeforeRefresh).some(line => /could not be learned safely/.test(line)));
   yes('the off-book descriptor survives restart while its native membership stays absent',
     w.restart().loaded && w.prop(seventh, C.PROPERTY).spellHistory.otherSpells.includes(offbook) &&
     !w.spellsOf(seventh).includes(w.idOf(offbook)) && w.spellsOf(seventh).includes(w.idOf(ability)));
