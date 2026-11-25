@@ -16,7 +16,8 @@ This holds:
      and a second run does nothing at all. An apply that stopped half way
      finishes the rest and nothing twice.
   3. A test task is one thread, with its Dev or Main tag, never two for one
-     title.
+     title. /test-queue pages through active tests, showing their results
+     privately and only to people who can read the forum.
   4. Known issues: one post per open labelled issue, never a second, not
      after a restart and not after a crash between a post and its save;
      closed or unlabelled, its post is deleted; reopened, it is back. A
@@ -65,6 +66,8 @@ import asyncio
 import json
 import shutil
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 for _k in ('TEST_TASK_ROLES', 'LIVE_SMOKE_ADMIN_ROLES', 'GITHUB_TOKEN'):
@@ -630,6 +633,110 @@ yes('--post-task --tag takes Main or Dev, Main by default',
     and bot.TASK_POST_TAG == 'Main' and set(bot.HAND_TAGS) == {'Main', 'Dev'})
 
 
+# --------------------------------------------------- browsing test tasks --
+class QueueThread:
+    def __init__(self, tid, title, marks=(), *, pinned=False, replies=False,
+                 archived=False, locked=False):
+        self.id, self.name = tid, title
+        self.flags = SimpleNamespace(pinned=pinned)
+        self.message_count = 2 if replies else 1
+        self.archived, self.locked = archived, locked
+        self.fetch_message = AsyncMock(return_value=SimpleNamespace(
+            pinned=False, reactions=[SimpleNamespace(emoji=mark, count=1) for mark in marks]))
+
+
+def read_queue(guild, **choices):
+    interaction = SimpleNamespace(
+        guild=guild, user=Mock(spec=discord.Member),
+        response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()))
+    run(bot.test_queue_cmd.callback(interaction, **choices))
+    return interaction
+
+
+queue_threads = [
+    QueueThread(100, 'Trade a horse'),
+    QueueThread(101, 'Trade before travel', ['\u2705'], replies=True),
+    QueueThread(102, 'Trade a key', ['\u274c']),
+    QueueThread(103, 'Trade a sword', ['\U0001f4cc']),
+    QueueThread(104, 'Trade on foot', ['\u2705', '\u274c']),
+    QueueThread(105, 'Trade in town', pinned=True),
+    QueueThread(106, 'Trade clothing', replies=True),
+    QueueThread(107, 'Trade an apple'),
+    QueueThread(108, 'Look at the inventory'),
+    QueueThread(109, 'Trade a mule'),
+    QueueThread(110, 'Trade a helmet', archived=True),
+    QueueThread(111, 'Trade a shield', locked=True),
+]
+main_queue = SimpleNamespace(
+    id=1000, name=bot.TASKS_NAME, type=discord.ChannelType.forum,
+    threads=queue_threads, permissions_for=Mock(return_value=discord.Permissions(
+        view_channel=True, read_message_history=True)))
+dev_thread = QueueThread(200, 'Staff check')
+dev_queue = SimpleNamespace(
+    id=1001, name='renamed-dev-forum', type=discord.ChannelType.forum,
+    threads=[dev_thread], permissions_for=Mock(return_value=discord.Permissions.none()))
+queue_guild = SimpleNamespace(id=1, channels=[main_queue, dev_queue],
+                              get_channel=lambda cid: dev_queue if cid == dev_queue.id else None)
+old_setup = bot.SETUP_STATE
+bot.SETUP_STATE = os.path.join(TMP, 'queue-setup.json')
+bot._state_write(bot.SETUP_STATE, {'guilds': {'1': {'dev_tasks_id': dev_queue.id}}})
+try:
+    read = read_queue(queue_guild, search='TRADE', order='Oldest')
+    shown, = read.followup.send.await_args.args
+    yes('test queue takes eight matching active posts, with ready work above results',
+        'Page 1 of 2' in shown and '9 matching' in shown
+        and shown.index('<#100>') < shown.index('<#107>') < shown.index('<#101>')
+        and all('<#%d>' % tid not in shown for tid in (108, 109, 110, 111))
+        and sum(thread.fetch_message.await_count for thread in queue_threads) == 8)
+    yes('  the result labels preserve failed, partial, passed and conflicting marks',
+        all(row in shown for row in (
+            '<#101> · Passed · replies', '<#102> · Failed', '<#103> · Partial',
+            '<#104> · Conflicting results', '<#105> · Partial',
+            '<#106> · Unmarked with replies', '<#107> · Ready to test')))
+    yes('  the replies are private and cannot mention viewers',
+        read.response.defer.await_args.kwargs.get('ephemeral') is True
+        and read.followup.send.await_args.kwargs.get('ephemeral') is True
+        and read.followup.send.await_args.kwargs['allowed_mentions'].to_dict() == {'parse': []})
+
+    read = read_queue(queue_guild, search='trade', page=2)
+    second, = read.followup.send.await_args.args
+    yes('  the second page uses the default newest ordering and the same search',
+        'Page 2 of 2' in second and '<#100>' in second and '<#109>' not in second
+        and sum(thread.fetch_message.await_count for thread in queue_threads) == 9)
+    read = read_queue(queue_guild, search='trade mule')
+    yes('  a multi-word title search finds the post on a single page',
+        '1 matching' in read.followup.send.await_args.args[0]
+        and '<#109> · Ready to test' in read.followup.send.await_args.args[0])
+
+    read = read_queue(queue_guild, search='trade', page=3)
+    yes('  a page past the end tells the viewer how far they can go',
+        '2 pages' in read.response.send_message.await_args.args[0]
+        and not read.followup.send.await_count)
+
+    read = read_queue(queue_guild, server='Dev')
+    yes('  a viewer without Dev access gets no private task titles or lookups',
+        'do not have access' in read.response.send_message.await_args.args[0]
+        and not read.followup.send.await_count and not dev_thread.fetch_message.await_count)
+    dev_queue.permissions_for.return_value = discord.Permissions(view_channel=True)
+    read = read_queue(queue_guild, server='Dev')
+    yes('  without Read Message History a viewer gets no test results',
+        'do not have access' in read.response.send_message.await_args.args[0]
+        and not dev_thread.fetch_message.await_count)
+    dev_queue.permissions_for.return_value = discord.Permissions(
+        view_channel=True, read_message_history=True)
+    read = read_queue(queue_guild, server='Dev')
+    dev_shown, = read.followup.send.await_args.args
+    yes('  a permitted viewer sees Dev from its recorded forum ID after a rename',
+        'Dev test queue' in dev_shown and '<#200>' in dev_shown and '<#100>' not in dev_shown)
+    dev_thread.fetch_message.side_effect = Refused()
+    read = read_queue(queue_guild, server='Dev')
+    yes('  a result read refused by Discord never appears ready',
+        '<#200> · Status unavailable' in read.followup.send.await_args.args[0])
+finally:
+    bot.SETUP_STATE = old_setup
+
+
 # --------------------------------------------------- 4. known issues --
 ISSUES = {}
 COMMENTS = {}
@@ -828,7 +935,7 @@ yes('a second pass posts nothing twice', posted == [] and len(tf.threads) == 2)
 ASKED[:] = []
 run(bot.test_tasks_once(tf, tst, gh, me_id=me.id))
 yes('a fixed issue with no test task is read once, not on every pass: no '
-    'comments are read when nothing changed (#5184)',
+    'comments are read when nothing changed (#4331, #5184)',
     not [u for u in ASKED if u.split('?')[0].endswith('/comments')]
     and tst['tasks_read'].get('33', '').startswith(ISSUES[33]['updated_at']))
 COMMENTS[33] = [{'body': 'Test task: Build the release\nIt builds.'}]

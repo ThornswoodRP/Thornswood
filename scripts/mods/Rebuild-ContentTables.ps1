@@ -168,29 +168,22 @@ if ($PluginsTxt) {
 }
 if (-not $List) {
     $populationPath = Join-Path $repo 'game\data\npc-population.json'
-    $catalogued = $(if (Test-Path -LiteralPath $populationPath -PathType Leaf) {
-        $found = $null
-        $fs = [IO.File]::OpenRead($populationPath)
+    $catalogued = @(if (Test-Path -LiteralPath $populationPath -PathType Leaf) {
+        # Read the top-level array without creating PowerShell objects for every NPC.
+        # Parse the document so invalid catalogue JSON still stops the build.
+        $options = [Text.Json.JsonDocumentOptions]::new()
+        $options.MaxDepth = 1024
+        $options.AllowTrailingCommas = $true
+        $options.CommentHandling = [Text.Json.JsonCommentHandling]::Skip
+        $catalogue = [Text.Json.JsonDocument]::Parse([IO.File]::ReadAllText($populationPath), $options)
         try {
-            $sr = New-Object IO.StreamReader($fs, [Text.Encoding]::UTF8)
-            $buf = New-Object char[] 65536
-            $sb = New-Object Text.StringBuilder
-            while (($read = $sr.Read($buf, 0, $buf.Length)) -gt 0) {
-                [void]$sb.Append($buf, 0, $read)
-                $chunk = $sb.ToString()
-                if ($chunk -match '(?s)"loadOrder"\s*:\s*(\[[^\]]*\])') {
-                    $found = @(($matches[1] | ConvertFrom-Json) | ForEach-Object { [string]$_.name })
-                    break
-                }
-                if ($sb.Length -gt 1048576) { break }
+            foreach ($plugin in $catalogue.RootElement.GetProperty('loadOrder').EnumerateArray()) {
+                $plugin.GetProperty('name').GetString()
             }
         } finally {
-            $fs.Dispose()
+            $catalogue.Dispose()
         }
-        if ($null -ne $found) { $found } else {
-            @(([IO.File]::ReadAllText($populationPath) | ConvertFrom-Json).loadOrder | ForEach-Object { [string]$_.name })
-        }
-    } else { @() })
+    })
     $parting = Get-Parting $catalogued $recorded
     if ($parting) { throw ("game\data\npc-population.json is not built in the load order the commit records: $parting. Build-LastPlugin.py cuts the actors it lists, so build it in that order first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.") }
 }

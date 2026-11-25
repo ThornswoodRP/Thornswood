@@ -119,6 +119,7 @@ if (Test-Path -LiteralPath $ownShare) { $real += $ownShare }
 # And which kind of file each is, by the pinned build's list, since #1232.
 # Taken only where it exists, as above, with a list of the pretend game's own
 # files embedded the way Build-Launcher embeds records\skyrim-files.json.
+$real += (Join-Path $AppPath 'PathFence.cs')
 $ownKinds = Join-Path $AppPath 'OwnGameKinds.cs'
 if (Test-Path -LiteralPath $ownKinds) { $real += $ownKinds }
 foreach ($f in $real) {
