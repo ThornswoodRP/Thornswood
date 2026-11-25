@@ -27,12 +27,17 @@ yes('staff without Admin cannot use destructive cleanup',/not yours/.test(ask(ST
 yes('a playtester cannot redirect self tools to another person',
   /on or.*off/.test(ask(TESTER,'/godmode on Admin'))&&!w.mp().get(ADMIN,'isGodMode'));
 yes('flight can be enabled through the real queued route',/is on/.test(ask(TESTER,'/fly on'))&&w.row(TESTER).thornswoodStaffTools.fly===true);
+yes('a native god-mode grant is active before reload',/is on/.test(ask(TESTER,'/godmode on'))&&w.mp().get(TESTER,'isGodMode')===true);
 yes('hot reload remains loaded while withdrawing old runtime modes',w.reload());
-yes('the prior module withdrew flight during reload',w.row(TESTER).thornswoodStaffTools.fly===false);
+yes('the prior module withdrew flight and server protection during reload',w.row(TESTER).thornswoodStaffTools.fly===false&&w.mp().get(TESTER,'isGodMode')===false);
 yes('a new explicit mode request works after reload',/is on/.test(ask(TESTER,'/godmode on'))&&w.mp().get(TESTER,'isGodMode')===true);
 let bad=0;
 for(const value of ['true',1,null]){try{w.mp().set(TESTER,'isGodMode',value);}catch(e){bad++;}}
 yes('the stand-in native boundary refuses coercible nonboolean grants',bad===3);
+let badIds=0;
+try{w.mp().get(String(TESTER),'isGodMode');}catch(e){badIds++;}
+try{w.mp().set(String(TESTER),'isGodMode',true);}catch(e){badIds++;}
+yes('the stand-in rejects string actor ids instead of masking bad native calls',badIds===2);
 ask(TESTER,'/godmode off');w.row(TESTER).isDead=true;
 let deadRefused=false;try{w.mp().set(TESTER,'isGodMode',true);}catch(e){deadRefused=true;}
 yes('the stand-in rejects dead enable instead of masking a resurrection',deadRefused&&w.row(TESTER).isDead===true);

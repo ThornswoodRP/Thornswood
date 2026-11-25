@@ -566,8 +566,16 @@ function world(opts) {
     const row = store.get(id);
     return row ? copy(row[k]) : undefined;
   }
+  function godModeFormId(id, key) {
+    // ScampServer::Get/Set use NapiHelper::ExtractUInt32 before the binding.
+    // Do not let the general stand-in's coercion conceal a bad new API call.
+    if (key === 'isGodMode' && (!Number.isInteger(id) || id < 0 || id > 0xffffffff)) {
+      throw new Error('formId must be a uint32 integer');
+    }
+  }
   const impl = {
     get: function (id, k) {
+      godModeFormId(id, k);
       id = id >>> 0;
       if (k === 'onlinePlayers') { return online.slice(); }
       const row = store.get(id);
@@ -592,6 +600,7 @@ function world(opts) {
       }
     },
     set: function (id, k, v) {
+      godModeFormId(id, k);
       id = id >>> 0;
       const row = store.get(id);
       if (!row) { throw new Error('Form with id ' + id.toString(16) + ' doesn\'t exist'); }
