@@ -675,6 +675,58 @@ async function adminRoleOnly() {
     log = modlog();
     yes('moderation.log says unbanaccount', log[log.length - 1].did === 'unbanaccount');
 
+    // 4637: the first command message and sweep must agree with the most
+    // restrictive effective ban, across actual site rows and local receipts.
+    for (const test of [
+      { door: 'account', minutes: 60, local: 'character', length: '30m', winner: 'door' },
+      { door: 'account', minutes: 30, local: 'character', length: 'forever', winner: 'door' },
+      { door: 'character', minutes: 60, local: 'character', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 30, local: 'character', length: '60m', winner: 'local' },
+      { door: 'character', minutes: 0, local: 'character', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 30, local: 'character', length: 'forever', winner: 'local' },
+      { door: 'account', minutes: 60, local: 'account', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 0, local: 'account', length: '30m', winner: 'local' },
+      { door: 'character', minutes: 0, local: 'character', length: 'forever', winner: 'door' },
+      { door: 'account', minutes: 0, local: 'account', length: 'forever', winner: 'door' }
+    ]) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      const doorRule = await hub('ban', Object.assign({ id: BJORN_D, minutes: test.minutes,
+        why: '4637 existing ' + test.door }, test.door === 'character' ? { profileId: 2002 } : {}));
+      const snapshot = (await allowed()).j;
+      const onDoor = snapshot.bans.find((ban) => ban.scope === test.door && ban.profiles.includes(2002));
+      yes('4637 actual site provides the initial ' + test.door + ' ban', doorRule.status === 200 && !!onDoor);
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date().toISOString(), profiles: [], pk: [], bans: snapshot.bans
+      }));
+      w = loadStaff();
+      const reason = '4637 new ' + test.local;
+      staffLine(w, (test.local === 'account' ? '/banaccount' : '/ban') + ' Bjorn ' + test.length + ' ' + reason);
+      const confirmed = await until(() => w.to(1001).some((line) => line.startsWith('Banned ')));
+      const local = w.api.state.banned[2002];
+      const expected = test.winner === 'door' ? onDoor : local;
+      const untilText = expected.until ? 'until ' + new Date(expected.until).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'for good';
+      function matches(line) {
+        return line.includes(untilText) && line.includes(expected.why)
+          && (expected.scope === 'account'
+            ? line.startsWith('You are banned from Thornswood') && !line.includes('other characters')
+            : line.startsWith('Staff have banned this character') && line.includes('other characters'));
+      }
+      const label = test.door + ':' + test.minutes + ' over ' + test.local + ':' + test.length;
+      yes('4637 initial command message uses the effective ban: ' + label,
+          confirmed && w.to(2002).length === 1 && matches(w.to(2002)[0]));
+      const effective = w.api.bansNow(Date.now())[2002];
+      yes('4637 reduction keeps effective scope, duration and reason: ' + label,
+          effective.scope === expected.scope && effective.until === expected.until && effective.why === expected.why);
+      w.api.state.ending[2002] = 0;
+      w.said.length = 0;
+      w.api.banSweep();
+      yes('4637 the subsequent sweep reports that same effective ban: ' + label,
+          w.to(2002).length === 1 && matches(w.to(2002)[0]));
+    }
+    await hub('unban', { id: BJORN_D });
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
     w = loadStaff();
     staffLine(w, '/pk Sigrid fell to the dragon at Helgen');
     yes('/pk answers the moderator and says nobody else was told',

@@ -156,6 +156,8 @@ Staff, apart from `/unpk`. These are kept on the site, on the staff pages at htt
 | `/unpk <person or character> <why>` | Admins only. Undoes a PK made by mistake: a profile number, the start of the dead character's name, or its owner. It comes back into a free slot on the account; with none free, the site says so and nothing changes. The PK stays on the record with your reason |
 | `/note <person> <text>` | Keeps a note against them, for staff to read on the site |
 
+When several bans apply, the message uses an account ban first. Among bans of the same kind, it uses the longest one, with forever lasting longest.
+
 ## Wounds for a scene
 
 Staff. For a Gamemaster's scene, or an agreed loss the person said yes to out of character. [docs/systems/injury.md](../systems/injury.md) says what each one does.

@@ -576,6 +576,18 @@
     }
     return out;
   }
+  // Account bans govern the whole account. Within one kind, keep the
+  // longest active ban; a permanent ban outlasts every timed one.
+  function preferredBan(have, next) {
+    if (!have) { return next; }
+    var account = (have.scope || 'account') === 'account';
+    var nextAccount = (next.scope || 'account') === 'account';
+    if (account !== nextAccount) { return nextAccount ? next : have; }
+    var until = Number(have.until) || 0;
+    var nextUntil = Number(next.until) || 0;
+    if (until && (!nextUntil || nextUntil > until)) { return next; }
+    return have;
+  }
   function bansNow(now) {
     readDoor(now);
     var out = {};
@@ -590,16 +602,14 @@
         if (!(p > 0)) { continue; }
         var lift = state.lifted[p];
         if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
-        // A ban on the whole account says more than one on the character.
-        if (out[p] && out[p].scope === 'account') { continue; }
-        out[p] = { why: String(b.why || ''), until: until, scope: scope };
+        out[p] = preferredBan(out[p], { why: String(b.why || ''), until: until, scope: scope });
       }
     }
     for (var k in state.banned) {
       if (!Object.prototype.hasOwnProperty.call(state.banned, k)) { continue; }
       var s = state.banned[k];
       if (s.until && s.until <= now) { delete state.banned[k]; continue; }
-      out[Number(k)] = s;
+      out[Number(k)] = preferredBan(out[Number(k)], s);
     }
     return out;
   }
@@ -696,7 +706,7 @@
           state.banned[p] = ban;
           delete state.lifted[p];
           var a = (p === them.pid && them.actorId) || actorFor(p);
-          if (a) { endBanned(p, a, ban, now); }
+          if (a) { endBanned(p, a, bansNow(now)[p], now); }
         }
         tell(pid, whole
           ? ('Banned ' + them.name + '\'s whole account, every character on it and any new one, ' + untilText(until) + '.')
