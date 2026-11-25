@@ -61373,6 +61373,13 @@ module.exports = {
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    var c=charOf(actorId);
+    c.trail=[];c.last=null;
+    if(state.waiting[pid]&&state.waiting[pid].actorId===actorId){delete state.waiting[pid];}
+  }
 
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
@@ -61712,6 +61719,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -63081,8 +63089,15 @@ module.exports = {
         var noMove = movementRefusal(pid,actor);
         if (noMove) { tell(pid,noMove + ' Phasing is unavailable.'); return true; }
         var here = place(actor), heading = here.rot[2] * Math.PI / 180;
-        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]];
+        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]].map(Math.fround);
+        var stuck = g.__thornswoodStuck;
+        if (!stuck || !stuck.teleported) { throw new Error('teleport history is unavailable'); }
         mp.set(actor,'locationalData',{cellOrWorldDesc:here.desc,pos:pos,rot:here.rot.slice()});
+        var confirmed = place(actor);
+        if (confirmed.desc !== here.desc || confirmed.pos.some(function(n,i){return n !== pos[i];})) {
+          throw new Error('the native phase move was not applied');
+        }
+        stuck.teleported(pid,actor);
         report(word,pid,actor,'Forward in the same cell.',{from:here.pos,to:pos});
         tell(pid,'Moved a short distance forward.'); return true;
       }

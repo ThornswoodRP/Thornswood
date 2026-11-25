@@ -12,7 +12,7 @@ function test(name, run) { run(); checks++; console.log('PASS  ' + name); }
 function setup() {
   const rows = new Map([[10, {profileId: 123, pos: [0,0,0], angle: [0,0,0], worldOrCellDesc: '3c:Skyrim.esm', isDead: false,
     isGodMode: false,npc:{runtimeLifeIdentity:'actor-10-life-1'}}], [20, {profileId: 456}]]);
-  const writes = [], said = [], records = [], properties = {}, natives = [], timers = [];
+  const writes = [], said = [], records = [], properties = {}, natives = [], timers = [], teleports = [];
   let staff = true, tester = true, admin = true, cuffed = false, jailed = false, clearCount = 0;
   const context = {console, Date, Math, Number, Object, Array, JSON, String, WORDS:[],serverRunId:()=> 'test-run',
     log: (...args) => said.push(args.join(' ')), guard: (_, fn) => fn,
@@ -25,6 +25,7 @@ function setup() {
     __thornswoodProperty: {lockedJailHere: () => jailed},
     __thornswoodNeeds: {clearIntoxication: () => { clearCount++; },settle:()=>{},godmodeChanged:()=>{}},
     __thornswoodNpcPopulation: {staffKillable: () => true},
+    __thornswoodStuck: {teleported:(pid,actor)=>teleports.push([pid,actor])},
     __thornswoodStaff: {
       unproven: (cmd, pid) => !cmd || cmd.proven !== true ? 'unproven' :
         !(context.__thornswoodPassSeen.passes[pid]?.x > Date.now()) ? 'expired' : '',
@@ -35,7 +36,12 @@ function setup() {
       get: (id, name) => { if (id === 0 && name === 'onlinePlayers') return [10,20];
         if (!rows.has(id) || !(name in rows.get(id))) throw Error('unreadable ' + name);
         return rows.get(id)[name]; },
-      set: (id, name, value) => { writes.push({id, name, value}); rows.get(id)[name] = value; },
+      set: (id, name, value) => {
+        writes.push({id, name, value});
+        if(name==='locationalData') {
+          const row=rows.get(id);row.worldOrCellDesc=value.cellOrWorldDesc;row.pos=value.pos;row.angle=value.rot;
+        } else rows.get(id)[name] = value;
+      },
       makeProperty: (name, spec) => { properties[name] = spec; },
       getIdFromDesc: () => 60,
       getNeighborsByPosition: () => Array.from(rows.keys()),
@@ -48,7 +54,7 @@ function setup() {
   const tools = context.__thornswoodStaffTools;
   const run = (word, args = [], cmd = {proven:true}, pid = 123, actor = 10) =>
     context.__thornswoodCommandTools.command(cmd, word, [word].concat(args), pid, actor);
-  return {context, tools, rows, writes, said, records, properties, natives, timers, run,
+  return {context, tools, rows, writes, said, records, properties, natives, timers, teleports, run,
     staff: v => {staff = v;}, tester:v=>{tester=v;}, admin:v=>{admin=v;}, cuffs: v => {cuffed = v;}, jail: v => {jailed = v;}, cleared: () => clearCount};
 }
 test('only a proven, currently admitted playtest actor can use tools', () => {
@@ -98,6 +104,15 @@ test('phase is a fixed short server move in the same cell', () => {
   assert.equal(move.value.cellOrWorldDesc, '3c:Skyrim.esm');
   assert.deepEqual(Array.from(move.value.pos), [0,256,0]);
   assert.equal(w.records[0][0], 'phase');
+  assert.deepEqual(w.teleports,[[123,10]]);
+});
+
+test('a silent native phase refusal cannot reset history or audit success',()=>{
+  const w=setup(),set=w.context.mp.set;
+  w.context.mp.set=(id,key,value)=>key==='locationalData'?undefined:set(id,key,value);
+  w.run('/phase');
+  assert.equal(w.records.length,0);assert.equal(w.teleports.length,0);
+  assert.match(w.said.join(' '),/could not complete/);
 });
 
 test('unreadable movement or restraint state cannot enable collision-free movement', () => {

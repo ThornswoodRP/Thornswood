@@ -31,6 +31,12 @@ yes('a queued off command restores ordinary server damage behavior',
 yes('staff without Admin cannot use destructive cleanup',/not yours/.test(ask(STAFF,'/killall')));
 yes('a playtester cannot redirect self tools to another person',
   /on or.*off/.test(ask(TESTER,'/godmode on Admin'))&&!w.mp().get(ADMIN,'isGodMode'));
+const trail=w.box().__thornswoodStuck.state.chars[TESTER.toString(16)],oldPoint={desc:'3c:Skyrim.esm',pos:[9999,9999,0],rot:[0,0,0],at:w.now()};
+trail.trail=[oldPoint];trail.last=oldPoint;
+const from=w.row(TESTER).pos.slice();
+yes('a queued phase confirms the native move and drops the old stuck trail',
+  /Moved a short distance/.test(ask(TESTER,'/phase'))&&w.row(TESTER).pos[1]===from[1]+256&&
+  !trail.trail.some(p=>p.pos[0]===9999)&&trail.last!==oldPoint);
 yes('flight can be enabled through the real queued route',/is on/.test(ask(TESTER,'/fly on'))&&w.row(TESTER).thornswoodStaffTools.fly===true);
 yes('a native god-mode grant is active before reload',/is on/.test(ask(TESTER,'/godmode on'))&&w.mp().get(TESTER,'isGodMode')===true);
 yes('hot reload remains loaded while withdrawing old runtime modes',w.reload());

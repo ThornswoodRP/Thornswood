@@ -183,8 +183,15 @@
         var noMove = movementRefusal(pid,actor);
         if (noMove) { tell(pid,noMove + ' Phasing is unavailable.'); return true; }
         var here = place(actor), heading = here.rot[2] * Math.PI / 180;
-        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]];
+        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]].map(Math.fround);
+        var stuck = g.__thornswoodStuck;
+        if (!stuck || !stuck.teleported) { throw new Error('teleport history is unavailable'); }
         mp.set(actor,'locationalData',{cellOrWorldDesc:here.desc,pos:pos,rot:here.rot.slice()});
+        var confirmed = place(actor);
+        if (confirmed.desc !== here.desc || confirmed.pos.some(function(n,i){return n !== pos[i];})) {
+          throw new Error('the native phase move was not applied');
+        }
+        stuck.teleported(pid,actor);
         report(word,pid,actor,'Forward in the same cell.',{from:here.pos,to:pos});
         tell(pid,'Moved a short distance forward.'); return true;
       }

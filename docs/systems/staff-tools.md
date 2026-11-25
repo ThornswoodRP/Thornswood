@@ -21,7 +21,9 @@ and paired deployment remain the coordinator's review step.
 
 - `/fly on|off` controls collision-free flight with the usual movement keys.
 - `/phase` moves the current character a short distance forward in the same
-  cell. It does not open or unlock doors.
+  cell. The native location is confirmed before success is recorded. It starts
+  a fresh stuck trail without clearing combat history or cooldowns, and does
+  not open or unlock doors.
 - `/godmode on|off` enables flight, damage protection and lethal validated
   attacks for the current character. Hunger, thirst, Rest and temperature
   pause and impose no penalties or crafting refusal. Their saved values
