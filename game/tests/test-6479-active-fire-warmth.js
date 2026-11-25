@@ -161,5 +161,20 @@ if (w.loaded()) {
   N.clearBurning(a);
   yes('clearing a replaced life never writes its old fire into new needs',
     JSON.stringify(raw(a)) === JSON.stringify(beforeCleanup));
+
+  reset(d); N.setBurning(d, true);
+  now += 2000;
+  const readClock = box.Date.now;
+  const failedBank = new Error('injected fire clock failure');
+  let reported;
+  box.Date.now = () => { throw failedBank; };
+  try { N.clearBurning(d); }
+  catch (error) { reported = error; }
+  finally { box.Date.now = readClock; }
+  yes('an error while banking fire warmth reaches the caller', reported === failedBank);
+  yes('a failed bank still clears the stopped fire visual', w.prop(d, 'thornswoodBurnVisual').on === false);
+  now += 2000;
+  yes('a stopped fire cannot apply warmth during a later settle after a failed bank',
+    close(N.settle(d).temp, approach(20, 58, 4000)));
 }
 t.done(w);

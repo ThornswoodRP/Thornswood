@@ -3674,12 +3674,16 @@
     // Bank heat only for the original actor. An offline character keeps the
     // saved reading, and their next settle is an arrival.
     var bankHeat = hadFire && online && burningUntil(actorId) > 0;
-    if (bankHeat) { settle(actorId); }
-    if (hadFire && !online) { delete here[actorId]; }
-    delete burning[actorId];
-    delete burnIdentities[actorId];
-    delete burnStarts[actorId];
-    publishBurnVisual(actorId, false);
+    try {
+      if (bankHeat) { settle(actorId); }
+    } finally {
+      // Closing the fire is independent of saving this temperature sample.
+      if (hadFire && !online) { delete here[actorId]; }
+      delete burning[actorId];
+      delete burnIdentities[actorId];
+      delete burnStarts[actorId];
+      publishBurnVisual(actorId, false);
+    }
     if (bankHeat) { pushEffects(actorId); }
   }
 
