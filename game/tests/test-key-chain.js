@@ -23,7 +23,7 @@ const path = require('path');
 
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('../../tests/gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 
 let pass = 0, fail = 0;
@@ -72,17 +72,19 @@ if (recipes) {
 {
   const b = body('function mold(actorId, profileId, toProfile)', 2600);
   yes('mold() is in the file', b.length > 0);
-  yes('the blank comes out of the smith’s pack', /takeBlankMold\(actorId\)/.test(b));
-  yes('and it is spent before the stamped one is handed over, not after',
-      b.indexOf('takeBlankMold(actorId)') < b.indexOf('giveNamed(owner.actorId, MOLD'));
+  yes('the blank comes out of the smith’s pack', /handMold\(actorId, profileId, owner, building\)/.test(b));
+  const hand = body('function handMold(actorId, profileId, owner, building)', 9000);
+  yes('and it is spent before a mold is handed to another holder',
+      hand.indexOf('var taken = replace(source, debit, alive)') > 0 &&
+      hand.indexOf('var taken = replace(source, debit, alive)') < hand.indexOf('var handed = replace(target, named, alive)'));
   yes('and with no blank it says where to get one', /Forge one at a forge/.test(b));
   yes('the stamped mold still goes to the holder and not the smith',
       /giveNamed\(owner\.actorId, MOLD, moldLabel\(building\)\)/.test(b));
   yes('and the holder still has to be standing there', /holderNearby\(actorId, building, held\)/.test(b));
 }
 {
-  const b = body('function takeBlankMold(actorId)', 900);
-  yes('takeBlankMold is in the file', b.length > 0);
+  const b = body('function blankMoldAfter(inv)', 900);
+  yes('the shared blank-mold selection is in the file', b.length > 0 && /blankMoldAfter\(source.inventory\)/.test(code));
   /*
     A STAMPED MOLD IS SOMEBODY'S PROPERTY. It says which door it is for, and
     spending one to stamp another would quietly destroy a holder's mold.
@@ -106,12 +108,14 @@ if (recipes) {
       /var BLANK_MOLD_RECIPE = '15496:Thornswood-Content\.esp'/.test(code));
   const m = body('function mold(actorId, profileId, toProfile)', 2600);
   yes('a blank is only demanded once the plugin carries one',
-      /if \(blankMoldsExist\(\)\) \{\s*if \(!takeBlankMold\(actorId\)\)/.test(m));
+      /if \(blankMoldsExist\(\)\) \{\s*if \(!carriesBlankMold\(actorId\)\)/.test(m));
 }
 
 // ------------------------------------------- 3. the key comes out named for it
 {
-  const b = body('mp.onCraft = guard(', 6000);
+  const at = code.indexOf('mp.onCraft = guard(');
+  const end = code.indexOf('\n});', at);
+  const b = at >= 0 && end > at ? code.slice(at, end) : '';
   yes('the craft of a key is answered', /desc === KEY_RECIPE/.test(b));
   // #2487: the menu's key is refused outright; the lock key at a forge cuts it named.
   const k = b.slice(b.indexOf('desc === KEY_RECIPE'), b.indexOf('desc === KEY_RECIPE') + 900);

@@ -105,6 +105,13 @@ names the mold key, U unless you changed it. Press it and the blank goes
 into the lock: it is that building's mold now, in the holder's pack. The
 holder has to be the one pressing or be standing there.
 
+Stamping your own mold replaces the blank in one inventory change. When
+someone else supplies it, the holder's handover is checked before a failed
+handover returns the exact blank to its supplier. A confirmed delivery is
+kept even if its notification fails. If an outcome cannot be confirmed,
+the reply asks staff to check it rather than claiming a return or trying
+the handover again.
+
 A smith carrying the mold looks at a forge, and the lock key's line says
 Cut a key. It costs one iron ingot, the same as the Key in the forge's
 own list, and the key goes into the smith's pack, named for the

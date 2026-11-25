@@ -399,9 +399,14 @@ for (const at of Object.keys(WRITERS)) {
 
 {
   const calls=code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
-  yes('the merchant native inventory writer is the single audited profile-bound CAS',
-    calls.length===1 && calls[0]==='mp.compareAndSetInventory(' &&
-    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code));
+  yes('merchant and mold inventory writes are the two audited profile-bound CAS calls',
+    calls.length===2 && calls.every(call=>call==='mp.compareAndSetInventory(') &&
+    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
+    /mp\.compareAndSetInventory\(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile\)/.test(code));
+  yes('the mold writer adds only one named mold after selecting a blank, and refunds its original snapshot',
+    /debit = blankMoldAfter\(source.inventory\)/.test(code) &&
+    /named.entries.push\(\{baseId:idOf\(MOLD\),count:1,name:moldLabel\(building\)\}\)/.test(code) &&
+    /replace\(taken.snapshot, source.inventory, alive\)/.test(code));
   yes('merchant credit comes from durable finite stock or its debited purse, checked by the settlement and trading regressions',
     /nextPurse = npcBuys \? state\.purse - gold : state\.purse \+ gold/.test(code) &&
     /credit = gold > 0 \? \[\{baseId:GOLD_BASE,count:gold\}\] : \[\]/.test(code) &&
