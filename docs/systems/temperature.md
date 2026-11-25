@@ -164,6 +164,10 @@ It lasts 20 to 60 real minutes, a whole number of minutes, each
 length as likely as the others. Then it rolls again. The next sky is
 not announced.
 
+A sky whose weather is still loading is not considered applied. Once
+that weather is available, the same shared sky is applied without a new
+roll. A sky already applied is left alone on unchanged frames.
+
 The records are Cathedral Weathers, the mod already in the collection.
 Each record is already clear, cloudy, rain, or snow, which is what
 the meter reads. A season mod that follows the game's months, or that
