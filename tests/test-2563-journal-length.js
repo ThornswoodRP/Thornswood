@@ -53,25 +53,14 @@ const worst = '/journal page ' + jid + ' ' + pid + ' ' + 'T'.repeat(titleCut) + 
 yes('the longest page line (' + worst.length + ') fits a command on the chat socket (' + commandChars + ')',
     worst.length <= commandChars);
 
-// The real cut in the chat handler.
-const cutLines = /(const rawCommand = pageText\(msg\.text\);[\s\S]*?const text = [^\n]+)/.exec(voice);
-// The cut reads the line through pageText (#4206), so it runs with the real one.
-const pageTextFn = (/function pageText\(v\) \{[\s\S]*?\r?\n\}/.exec(voice) || [''])[0];
-yes('the chat handler\'s cut is found', !!cutLines && !!pageTextFn);
-if (cutLines && pageTextFn) {
-  const run = function (line) {
-    const box = { msg: { text: line }, COMMAND_CHARS: commandChars, JOURNAL_COMMAND_CHARS: journalChars, SAID_CHARS: 400,
-                  ws:{send:function () {}},
-                  headlines: { floatLine: function (l) { return /^\/(me|do|w|s|ooc)\b/.test(l); } }, out: null };
-    vm.runInNewContext(pageTextFn + '\n(function(){' + cutLines[1] + '\nout = text;})();', box);
-    return box.out;
-  };
-  yes('that longest page line goes through the socket whole', run(worst) === worst);
-  yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
-  const escaped = '/journal-write-v1 ' + JSON.stringify([jid,pid,'\0'.repeat(titleCut),'\0'.repeat(pageChars)]);
-  yes('the exact codec also carries the worst JSON escapes without cutting',run(escaped)===escaped&&escaped.length<=journalChars);
-  yes('the exact codec refuses an oversized request rather than cutting it',run('/journal-write-v1 '+'x'.repeat(journalChars))===null);
-}
+// Execute the actual handler, including the new private-command refusals.
+const run = require('./fixtures/chat-relay-cut')(voice);
+yes('the chat handler cut is found', typeof run === 'function');
+yes('that longest page line goes through the socket whole', run(worst) === worst);
+yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
+const escaped = '/journal-write-v1 ' + JSON.stringify([jid,pid,'\0'.repeat(titleCut),'\0'.repeat(pageChars)]);
+yes('the exact codec also carries the worst JSON escapes without cutting',run(escaped)===escaped&&escaped.length<=journalChars);
+yes('the exact codec refuses an oversized request rather than cutting it',run('/journal-write-v1 '+'x'.repeat(journalChars))===null);
 
 // The real writePage.
 const wp = /(function writePage\([\s\S]*?\n  \})\n/.exec(gm);
