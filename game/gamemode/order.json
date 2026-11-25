@@ -69,7 +69,6 @@
     "stuck.ts",
     "command-tools.ts",
     "staff.ts",
-    "staff-tools.ts",
     "staff-progression.ts",
     "take-back.ts",
     "staff-crafting.ts",
@@ -79,6 +78,7 @@
     "npc-population-data.ts",
     "npc-server-runtime.ts",
     "merchant-trading-bundle.ts",
+    "staff-tools.ts",
     "npc-server-startup.ts",
     "custom-quests.ts",
     "thalmor-patrols.ts"
