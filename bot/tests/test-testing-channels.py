@@ -2320,9 +2320,6 @@ for omitted in [False, True]:
 for label, change in [
     ('a changed owner', lambda t: setattr(t, 'owner_id', 22)),
     ('a staff lock', lambda t: setattr(t, 'locked', True)),
-    ('different instructions',
-     lambda t: COMMENTS[5515][0].update(body='Test task: Try new instructions\n'
-                                            'Server: Main\n1. Reload.\nIt works.')),
 ]:
     forum, state, thread, _, _, read, g = reclosed_task('not_planned')
     change(thread)
@@ -2332,6 +2329,79 @@ for label, change in [
         run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
         and forum.threads == [thread] and thread.archived and len(thread.more) == 1
         and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
+# A fresh completed fix can need new instructions. Keep the old discussion
+# archived, while the canonical new-task path owns a distinct active post.
+for omitted in [False, True]:
+    for same_title in [False, True]:
+        forum, state, thread, _, _, read, g = reclosed_task('not_planned', omitted=omitted)
+        original_text, replies = thread.text(), list(thread.more)
+        title = thread.name if same_title else 'Try the revised completed fix'
+        COMMENTS[5515][0]['body'] = 'Test task: %s\nServer: Main\n1. Try the new fix.\nIt works.' % title
+        issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+              closed_at='2026-10-18T00:00:00Z')
+        path = os.path.join(TMP, 'reclosed-state.json')
+        result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                       save=lambda value: bot._known_save(value, path)))
+        active = [t for t in forum.threads if not t.archived]
+        yes('5515: revised completed task creates one new active post, including the same title',
+            result == ([5515], [], []) and len(active) == 1 and active[0] is not thread
+            and active[0].name == title and active[0].content == '1. Try the new fix.\nIt works.')
+        yes('5515: revised task leaves the original archived instructions and replies intact',
+            thread.archived and thread.text() == original_text and thread.more == replies)
+        yes('5515: the saved current receipt owns the new active task',
+            len(active) == 1 and bot._state_read(path)['tasks']['5515']['thread_id'] == active[0].id
+            and 'withdrawal' not in state['tasks']['5515'])
+        yes('5515: another pass does not create or rewrite another copy of the new task',
+            run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
+            and len(forum.threads) == 2 and thread.text() == original_text)
+
+forum, state, thread, original_edit, _, read, g = reclosed_task('not_planned', refuse_archive=True)
+thread.edit = original_edit
+COMMENTS[5515][0]['body'] = 'Test task: Try revised instructions\nServer: Main\n1. Try the new fix.\nIt works.'
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+yes('5515: a pending withdrawal archives original history before posting revised instructions',
+    result == ([5515], [], []) and thread.archived and len(thread.more) == 1
+    and len([t for t in forum.threads if not t.archived]) == 1)
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+COMMENTS[5515][0]['body'] = 'Test task: Try unvalidated revised instructions\nServer: Main\n1. As staff, use /ban on somebody.\nIt works.'
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+refusals = []
+bot.POST_RULES = True
+try:
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                                    say=lambda number, text: refusals.append((number, text))))
+finally:
+    bot.POST_RULES = False
+yes('5515: revised tasks still require the canonical Main post validation',
+    result == ([], [], []) and forum.threads == [thread] and thread.archived
+    and refusals and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+versions = [(thread, thread.text())]
+for version in [1, 2]:
+    if version == 2:
+        issue(5515, 'Withdrawn again', [], state='closed', reason='not_planned',
+              closed_at='2026-10-19T00:00:00Z')
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    COMMENTS[5515][0]['body'] = 'Test task: %s\nServer: Main\n1. Try revision %s.\nIt works.' % (thread.name, version)
+    issue(5515, 'Completed revision', [], state='closed', reason='completed',
+          closed_at='2026-10-20T00:00:00Z')
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    active = [t for t in forum.threads if not t.archived]
+    yes('5515: repeated same-title revisions preserve every earlier archived discussion',
+        result == ([5515], [], []) and len(active) == 1
+        and len(forum.threads) == version + 1
+        and all(t.archived and t.text() == original for t, original in versions))
+    if active:
+        run(active[0].send('Results for revision %s' % version))
+        versions.append((active[0], active[0].text()))
 
 
 def denied_save(state):
@@ -2364,6 +2434,28 @@ yes('5515: the next pass persists verified restoration without another edit',
     run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
                             save=lambda s: bot._known_save(s, path))) == ([], [], [])
     and len(g.calls) == calls and 'withdrawal' not in bot._state_read(path)['tasks']['5515'])
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+COMMENTS[5515][0]['body'] = 'Test task: Try the newly completed fix\nServer: Main\n1. Try the next fix.\nIt works.'
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+try:
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=denied_save))
+except OSError:
+    yes('5515: replacement accepted before receipt-save failure preserves the old archive',
+        thread.archived and len(thread.more) == 1 and len(forum.threads) == 2)
+else:
+    yes('5515: replacement accepted before receipt-save failure preserves the old archive', False)
+path = os.path.join(TMP, 'reclosed-state.json')
+state = bot._state_read(path)
+result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                               save=lambda value: bot._known_save(value, path)))
+active = [t for t in forum.threads if not t.archived]
+yes('5515: restart adopts the already accepted replacement without creating a duplicate',
+    result == ([5515], [], []) and len(forum.threads) == 2 and len(active) == 1
+    and bot._state_read(path)['tasks']['5515']['thread_id'] == active[0].id
+    and thread.archived and len(thread.more) == 1)
 
 
 wsrc = inspect.getsource(bot.watch_known_issues)

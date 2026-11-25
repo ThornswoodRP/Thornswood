@@ -105,13 +105,17 @@ async def _bot_threads(forum, me_id=None):
     return [mine[k] for k in sorted(mine)]
 
 
-async def _forum_post(forum, title, body, tags, me_id=None):
+async def _forum_post(forum, title, body, tags, me_id=None, *, preserve_archives=False):
     """A post in the forum, tagged; a post of the bot's with that exact title,
        open or closed, is handed back rather than made twice. Returns the
        thread. Closed ones count since 22 Oct: Patrick found duplicates, and
        a post closed by staff or by Discord after quiet days was not looked
-       at, so one whose record was lost was made again."""
+       at, so one whose record was lost was made again. preserve_archives
+       leaves retired versions untouched when revised instructions need a
+       new active post."""
     for th in await _bot_threads(forum, me_id):
+        if preserve_archives and getattr(th, 'archived', False):
+            continue
         if str(getattr(th, 'name', '')) == title:
             return th
     applied = [t for t in (task_tag_of(forum, x) for x in tags) if t is not None]
@@ -492,6 +496,17 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
 
     posted, edited, removed = [], [], []
 
+    async def post_new(num, issue, post, *, preserve_archives=False):
+        title, body, tags = post
+        th = await _forum_post(forum, title, body, tags, me_id,
+                               preserve_archives=preserve_archives)
+        rec[str(num)] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': _sig(*post),
+                         'updated': issue.get('updated_at'), 'form': TASK_FORM}
+        state['_dirty'] = True
+        if save:
+            save(state)
+        posted.append(num)
+
     def save_transition(have, previous):
         state['_dirty'] = True
         if save:
@@ -535,9 +550,14 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         num = int(key)
         comments = await loop.run_in_executor(None, github_comments, num, get)
         post = task_post_of(issue, comments, dev_since)
-        # An exact unchanged task may return. Leave a staff-locked post or
-        # superseded instructions in the archive with their original replies.
-        if post is None or _sig(*post) != have['sig'] or await broken(num, issue, comments, post):
+        if post is None or await broken(num, issue, comments, post):
+            return
+        if _sig(*post) != have['sig']:
+            # Revised instructions need a new active post. Keep every earlier
+            # archived discussion intact, including versions with this title.
+            if not thread.archived and not await _main_task_archive_state(forum, thread, True):
+                return
+            await post_new(num, issue, post, preserve_archives=True)
             return
         was_archived = thread.archived
         if was_archived and not await _main_task_archive_state(forum, thread, False):
@@ -610,13 +630,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             have.update(sig=sig, updated=issue.get('updated_at'), form=TASK_FORM)
             state['_dirty'] = True
             continue
-        th = await _forum_post(forum, title, body, tags, me_id)
-        rec[key] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': sig,
-                    'updated': issue.get('updated_at'), 'form': TASK_FORM}
-        state['_dirty'] = True
-        if save:
-            save(state)
-        posted.append(num)
+        await post_new(num, issue, post)
     for key, have in list(rec.items()):
         if int(key) in closed:
             continue
