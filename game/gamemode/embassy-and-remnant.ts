@@ -354,7 +354,7 @@
         /remnant add <person>         onto the remnant roll, after the application
         /remnant remove <person>      off it
   */
-  function command(word, parts, actorId, profileId, toProfile) {
+  function command(word, parts, actorId, profileId, toProfile, cmd) {
     var roll = word === '/remnant' ? 'remnant' : 'embassy';
     var verb = String((parts && parts[1]) || '').toLowerCase();
     var rest = (parts || []).slice(2);
@@ -364,6 +364,14 @@
       return true;
     }
     if (!verb) { toProfile(profileId, listing(roll)); return true; }
+
+    if (verb === 'add' || verb === 'arm' || verb === 'disarm' || verb === 'remove') {
+      var staffLog = g.__thornswoodStaff;
+      if (staffLog && typeof staffLog.unproven === 'function') {
+        var unp = staffLog.unproven(cmd, profileId);
+        if (unp) { toProfile(profileId, unp); return true; }
+      }
+    }
 
     var armed = false;
     if (roll === 'embassy' && verb === 'add' && rest.length > 1 &&

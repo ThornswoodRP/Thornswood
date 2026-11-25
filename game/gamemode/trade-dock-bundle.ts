@@ -450,6 +450,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -856,13 +858,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);

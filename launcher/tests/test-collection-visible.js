@@ -117,4 +117,4 @@ yes('the bar\'s button opens the collection for the note but not over an update'
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -51,7 +51,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function between(a, b) {
@@ -80,7 +80,7 @@ const GATE_PARTS = [
 const NO_PROF = /const NO_PROFESSION_AT_A_BENCH = [^\n]*\n/.exec(src);
 yes('the rules, the character store, the tomes, the staff spells and the craft gate are in the gamemode',
     RULES && CHARACTER && STAFF && TOMES && NO_PROF && GATE_PARTS.every(function (p) { return p !== null; }));
-if (!(RULES && CHARACTER && STAFF && TOMES && NO_PROF && GATE_PARTS.every(function (p) { return p !== null; }))) { done(); }
+if (!(RULES && CHARACTER && STAFF && TOMES && NO_PROF && GATE_PARTS.every(function (p) { return p !== null; }))) { done(); } else {
 
 // The recipe table, as it is.
 // The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
@@ -520,3 +520,4 @@ const E1 = 0xff000111;
 }
 
 done();
+}

@@ -36,7 +36,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -66,7 +66,7 @@ const parts = [
 const noProfM = /^const NO_PROFESSION_AT_A_BENCH = '([^']*)';$/m.exec(gm);
 const ok = ALCHEMY && RULES && listsSrc && parts.every(function (p) { return !!p; }) && noProfM;
 yes('the alchemy block, the rules, the lists and the brew gate are in the gamemode', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 // ------------------------------------------------------- a fake load order --
 function put32(b, v) { v = v >>> 0; return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255].concat(b || []); }
@@ -369,3 +369,4 @@ function fakeGame() {
 }
 
 done();
+}

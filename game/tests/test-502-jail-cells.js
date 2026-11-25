@@ -41,7 +41,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -59,7 +59,7 @@ function table(kind, name) {
 
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 // ------------------------------------------------------------ the tables
 const BUILDING_BY_DOOR = table('const', 'BUILDING_BY_DOOR');
@@ -70,7 +70,7 @@ const JAIL_NAME = table('  var', 'JAIL_NAME');
 const JAIL_SHUT = table('  var', 'JAIL_SHUT');
 yes('the door, building and jail tables are in the gamemode',
     !!BUILDING_BY_DOOR && !!BUILDING_NAME && !!WAY_OUT && !!JAIL_DOOR && !!JAIL_NAME && !!JAIL_SHUT);
-if (!JAIL_DOOR || !BUILDING_BY_DOOR) { done(); }
+if (!JAIL_DOOR || !BUILDING_BY_DOOR) { done(); } else {
 const HOLDS10 = ['whiterun', 'solitude', 'riften', 'markarth', 'windhelm',
                  'falkreath', 'morthal', 'dawnstar', 'winterhold', 'ravenrock'];
 yes('T1 every one of the ten holds has a jail, by name', HOLDS10.every(function (h) { return !!JAIL_NAME[h]; }) &&
@@ -204,7 +204,7 @@ let S = boot();
 let W = S.W;
 yes('the property block runs and publishes the guards and cells', !!W && typeof W.isGuard === 'function' &&
     typeof W.mayPassCell === 'function' && typeof W.jailHoldOf === 'function');
-if (!W) { done(); }
+if (!W) { done(); } else {
 
 // ------------------------------------------------------------ the register
 yes('R1 the two guards are guards by their roles, each of their hold',
@@ -326,3 +326,4 @@ yes('S2 the register on disk is the one cell a guard turned and who holds the of
 yes('S3 property.json was not touched by any of it', !JSON.parse(fs.readFileSync(path.join(dir, 'private', 'property.json'), 'utf8')).guards);
 
 done();
+}}}

@@ -330,14 +330,17 @@ let voicePortCached = 0;
 function voicePort() {
   if (voicePortCached) { return voicePortCached; }
   let n = 0;
+  let fallback = 7778;
   try {
-    n = Number(JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8')).thornswoodVoicePort) || 0;
+    const cfg = JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8'));
+    if (cfg.thornswoodServer === 'dev') { fallback = 7789; }
+    n = Number(cfg.thornswoodVoicePort) || 0;
   } catch (e) {
     n = 0;
   }
-  // Anything absent or nonsensical falls back to the live port, which is what
-  // every deployment did before this existed.
-  voicePortCached = (n > 0 && n < 65536) ? n : 7778;
+  // Keep Dev traffic on Dev even when its configured port is invalid. Without
+  // an explicit Dev identity, retain the existing live-port default.
+  voicePortCached = (Number.isInteger(n) && n > 0 && n < 65536) ? n : fallback;
   if (voicePortCached !== 7778) {
     log('voice service port is ' + voicePortCached + ', from server-settings.json');
   }
@@ -11672,19 +11675,20 @@ log('gamemode loaded:',
 
   function send(payload) {
     if (inFlight) return;           // never queue: a late position is worthless
-    inFlight = true;
-
     var body = JSON.stringify(payload);
-    var req = http.request({
-      host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
-    }, function (res) {
-      res.resume();
-      res.on('end', function () { inFlight = false; failures = 0; complained = false; });
-    });
+    inFlight = true;
+    var finished = false;
+    var deadline;
+    var req;
 
-    req.on('error', function () {
+    function finish(ok) {
+      // A truncated response can emit both error and close. Its late events
+      // must not release the slot held by a newer request.
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
       inFlight = false;
+      if (ok) { failures = 0; complained = false; return; }
       failures++;
       // Once, then quiet. Nobody needs this five times a second for an hour.
       if (failures === 25 && !complained) {
@@ -11692,9 +11696,31 @@ log('gamemode loaded:',
         console.log('[thornswood] voice service is not answering on ' + VOICE_PORT +
                     '. Proximity voice is off; everything else is unaffected.');
       }
-    });
-    req.setTimeout(1000, function () { try { req.destroy(); } catch (e) { } });
-    req.end(body);
+    }
+
+    try {
+      req = http.request({
+        host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+      }, function (res) {
+        res.on('end', function () { finish(res.statusCode >= 200 && res.statusCode < 300); });
+        res.on('error', function () { finish(false); });
+        res.on('close', function () { finish(false); });
+        res.resume();
+      });
+      req.on('error', function () { finish(false); });
+      req.on('close', function () { finish(false); });
+      // Bound the whole exchange, including a body that keeps trickling in.
+      deadline = setTimeout(function () {
+        finish(false);
+        req.destroy();
+      }, 1000);
+      req.end(body);
+    } catch (error) {
+      finish(false);
+      if (req) req.destroy();
+      throw error;
+    }
   }
 
   /*
@@ -21504,8 +21530,10 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     mayCharter(who)  game/trading-company.js mayCharter(who, terms) over the
                      terms in force (#511, #2700 builds on it)
     freightFor()     { gold, to } for one load into a ship hold
-  The property block posts and pays hauls by these, and the trade block
-  splits a sale by them. Nothing loads a ship yet; that is #2700's.
+  The property block posts and pays hauls by these, the trade block splits a
+  sale by them, and the trade ship dock asks mayCharter before every load
+  and sail (#2700). Nothing calls freightFor yet, so no freight is charged
+  on a load.
 
   THE STAFF CARD ON THE OFFICE PAGE OF K, the same way as #2685's world
   card: the server proposes, staff confirm, and nothing is typed. Staff see
@@ -21543,8 +21571,13 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
   #1393, #1646). Its hauls, its tenth and its sales out of the world are in the
   property block of gamemode.js. This file is the company's terms as data staff
   can change, and the arithmetic that reads them. It never touches the world, a
-  pack, a ledger, a purse or a price, and it is not wired in yet: the design and
-  Patrick's questions are on #512 (issuecomment-6245906394).
+  pack, a ledger, a purse or a price. The gamemode reads it through
+  globalThis.__thornswoodCompany (game/gamemode/company-terms.ts): the property
+  block posts and pays hauls by it, the trade block splits sales out of the
+  world by it, and the trade ship dock asks mayCharter before every load and
+  sail (#2700). Nothing calls freightFor yet, so no freight is charged on a
+  load. The design and Patrick's questions are on #512
+  (issuecomment-6245906394).
 
   THE TERMS are one object, kept in game/data/trading-company.json:
 
@@ -30644,7 +30677,7 @@ module.exports = {
         /remnant add <person>         onto the remnant roll, after the application
         /remnant remove <person>      off it
   */
-  function command(word, parts, actorId, profileId, toProfile) {
+  function command(word, parts, actorId, profileId, toProfile, cmd) {
     var roll = word === '/remnant' ? 'remnant' : 'embassy';
     var verb = String((parts && parts[1]) || '').toLowerCase();
     var rest = (parts || []).slice(2);
@@ -30654,6 +30687,14 @@ module.exports = {
       return true;
     }
     if (!verb) { toProfile(profileId, listing(roll)); return true; }
+
+    if (verb === 'add' || verb === 'arm' || verb === 'disarm' || verb === 'remove') {
+      var staffLog = g.__thornswoodStaff;
+      if (staffLog && typeof staffLog.unproven === 'function') {
+        var unp = staffLog.unproven(cmd, profileId);
+        if (unp) { toProfile(profileId, unp); return true; }
+      }
+    }
 
     var armed = false;
     if (roll === 'embassy' && verb === 'add' && rest.length > 1 &&
@@ -32756,6 +32797,8 @@ var GOLD_BASE = 15;
 var MAX_COUNT = 2147483647;
 var MAX_LINES_DEFAULT = 24;
 var MAX_STATE_BYTES = 512 * 1024;
+/* Patrick, 22 Oct 2026 (#4576): the cargo register keeps a closed line for 30 days. */
+var KEEP_CLOSED_MS = 30 * 24 * 60 * 60 * 1000;
 var ID_RE = /^[a-z0-9][a-z0-9:_.-]{0,63}$/;
 var HOWS = { delivered: 1, left: 1, returned: 1, taken: 1 };
 
@@ -33183,6 +33226,53 @@ function createTradeCargo(opts) {
     });
   }
 
+  /*
+    WHAT IS KEPT, AND FOR HOW LONG (#4576; Patrick, 22 Oct 2026: a closed
+    line is kept for 30 days). A line is closed when nothing of it is aboard
+    and nothing of it is being handed out, and it closed at its last out.
+    Once that is keepMs (30 days unless given) before now, the line goes,
+    with its outs and the receipts only it used. A line with anything aboard
+    or pending is never dropped, however old, so the audit still adds up for
+    every line kept. The blocks call this where they write the register.
+    Answers how many lines went; when none is due nothing is changed.
+  */
+  function forget(state, now, keepMs) {
+    if (!time(now)) { throw new Error('The time cannot be verified.'); }
+    var keep = keepMs === undefined ? KEEP_CLOSED_MS : keepMs;
+    if (!time(keep)) { throw new Error('How long a closed line is kept cannot be verified.'); }
+    function due(h) {
+      var closedAt = {}, pending = {};
+      Object.keys(h.lines).forEach(function (k) { if (h.lines[k].aboard === 0) { closedAt[k] = 0; } });
+      h.outs.forEach(function (o) {
+        var k = String(o.line);
+        if (o.receipt === null) { pending[k] = true; }
+        if (has(closedAt, k) && o.at > closedAt[k]) { closedAt[k] = o.at; }
+      });
+      return Object.keys(closedAt).filter(function (k) { return !pending[k] && closedAt[k] + keep <= now; });
+    }
+    var any = Object.keys(state.holds).some(function (id) { return due(state.holds[id]).length > 0; });
+    if (!any) { return 0; }
+    return change(state, function (s) {
+      var gone = 0;
+      Object.keys(s.holds).forEach(function (id) {
+        var h = s.holds[id];
+        var drop = {};
+        due(h).forEach(function (k) { drop[k] = true; });
+        Object.keys(drop).forEach(function (k) {
+          delete s.receipts[h.lines[k].receipt];
+          delete h.lines[k];
+          gone++;
+        });
+        h.outs = h.outs.filter(function (o) {
+          if (!drop[String(o.line)]) { return true; }
+          delete s.receipts[o.receipt];
+          return false;
+        });
+      });
+      return gone;
+    });
+  }
+
   /* What is aboard a hold now, line by line, for a panel. */
   function aboard(state, id) {
     var h = holdOf(state, id);
@@ -33215,6 +33305,7 @@ function createTradeCargo(opts) {
   return {
     empty: empty, audit: audit, open: open, load: load, depart: depart, amend: amend, arrive: arrive, pullIn: pullIn,
     begin: begin, finish: finish, undo: undo, release: release, aboard: aboard, save: save, parse: load_,
+    forget: forget,
     uncollected: uncollected, nextUncollected: nextUncollected,
     used: function (state, id) { return inUse(holdOf(state, id)); },
     PORTS: Object.keys(ports), MAX_LINES: maxLines, DRIVEN: driven
@@ -33864,6 +33955,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -34270,13 +34363,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);
@@ -35683,6 +35783,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -45325,7 +45427,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -45379,7 +45481,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -45977,6 +46079,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -46071,6 +46178,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 
@@ -46627,6 +46739,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and
@@ -60982,7 +61095,7 @@ module.exports = {
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -61389,9 +61502,15 @@ module.exports = {
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -61412,22 +61531,22 @@ module.exports = {
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
@@ -61533,7 +61652,7 @@ module.exports = {
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -61749,6 +61868,24 @@ module.exports = {
              'you right now. Leave the Thornswood launcher open while you play; if it ' +
              'still says this in a minute, restart the game from the launcher.';
     }
+    return '';
+  }
+
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
     return '';
   }
 
@@ -62463,9 +62600,15 @@ module.exports = {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
       state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
       pushSilenced();
@@ -62568,6 +62711,7 @@ module.exports = {
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF

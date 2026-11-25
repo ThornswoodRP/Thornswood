@@ -98,4 +98,4 @@ yes('T1 the tool writes the key the committed plugin carries, byte for byte', /5
 yes('T2 the tool writes the mold the committed plugin carries, byte for byte', /5015495 same/.test(said));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -21,4 +21,4 @@ Waterbreathing does not change the temperature of the water. See
 
 ## Where this is
 
-These 14 names are the server's book.
+The book above shows every name and whether the server has an id for it.

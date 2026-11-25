@@ -46,7 +46,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -101,7 +101,7 @@ const pieces = {
 yes('TOOLS, the recipe table, the bench tables and every craft piece are in the gamemode',
     !!TOOLS && !!RECIPES && !!KEPT && !!pieces.grades && !!pieces.fuel && !!pieces.hafted && !!pieces.handle &&
     !!pieces.key && !!pieces.noProf && pieces.fns.every(function (f) { return !!f; }) && !!pieces.onCraft);
-if (!TOOLS || !RECIPES || !pieces.onCraft || !pieces.fns.every(function (f) { return !!f; })) { done(); }
+if (!TOOLS || !RECIPES || !pieces.onCraft || !pieces.fns.every(function (f) { return !!f; })) { done(); } else {
 
 const progression = slice(gm, '// ==== thornswood progression ====', '// ==== end thornswood progression ====');
 const pbox = { console: { log: function () {} } };
@@ -393,3 +393,4 @@ attempt('the pick', function () {
 });
 
 done();
+}

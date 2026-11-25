@@ -268,11 +268,11 @@ function openRaw(pid) {
       s.removeListener('data', onData);
       s.pause();
       s.rest = head.slice(at + 4);
-      resolve(s);
+      clearTimeout(late); resolve(s);
     };
     s.on('data', onData);
     s.on('error', () => { });
-    setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
   });
 }
 /* A masked text frame, the way a browser sends one. */
@@ -1192,7 +1192,7 @@ function seatPages() {
   for (const s of raw) { try { s.destroy(); } catch (e) { } }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } };
-  if (srv && srv.exitCode === null) { srv.once('exit', () => { rm(); process.exit(fail ? 1 : 0); }); srv.kill(); }
-  else { rm(); process.exit(fail ? 1 : 0); }
-  setTimeout(() => { rm(); process.exit(fail ? 1 : 0); }, 2000).unref();
+  process.exitCode = fail ? 1 : 0;
+  if (srv && srv.exitCode === null) { srv.once('exit', rm); srv.kill(); }
+  else { rm(); }
 });

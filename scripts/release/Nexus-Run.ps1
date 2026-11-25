@@ -35,8 +35,8 @@
       from Nexus, which is the archive that was uploaded as that file. Its
       -Add names a JSON file of main under records\, and each mod's archive
       is downloaded by its fileId the same way.
-      Its -Rule names a JSON file of main under docs\ (plugin rules, such
-      as docs\COLLECTION-REVISION-6-RULE.json), read as main holds it.
+      Its -Rule names a JSON file of main under records\ (plugin rules, such
+      as records\collection-revision-6-rule.json), read as main holds it.
     - Install-NexusRevision always runs with -Record, into a folder of the
       run's own, which comes back with the output.
   Anything else that reads a file of the machine it runs on (-From, -Layout,
@@ -161,7 +161,7 @@ function Get-NexusRunTracked([string]$RepoRoot, [string]$Rel) {
 # each was laid at (Get-ThornswoodLaidBuild). It is the dev server's build,
 # the one every Release carries. Nothing for a path the build does not write.
 function Get-NexusRunLaid([string]$RepoRoot, [string]$Rel) {
-    . (Join-Path $Here '..\mods\ContentPaths.ps1')
+    . (Join-Path $RepoRoot 'scripts/mods/ContentPaths.ps1')
     $built = @(Get-ThornswoodBuiltPaths -Repo $RepoRoot -NotCommitted | Where-Object { $_ -ceq $Rel -or $_.StartsWith($Rel + '/') -or $Rel.StartsWith($_ + '/') })
     if (-not $built.Count) { return @() }
     try { $laid = Get-ThornswoodLaidBuild -Repo $RepoRoot -Server dev }

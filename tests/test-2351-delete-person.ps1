@@ -439,7 +439,7 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
         (Said 'waiting\s+the dev game server has a request') -and -not (Said 'waiting\s+the site has a request') -and -not (Said 'nothing of theirs on this box'))
     $writer = Join-Path $Repo 'scripts\vps\Server-Log.js'
     foreach ($R in $Live, $Dev, $Vl, $Vd) {
-        Put (Join-Path $R 'exit.js') 'process.exit(0);'
+        Put (Join-Path $R 'exit.js') 'process.exitCode = 0;'
         Push-Location -LiteralPath $R
         try { & $node $writer --log (Join-Path $R 'server.log') exit.js | Out-Null } finally { Pop-Location }
         Remove-Item -LiteralPath (Join-Path $R 'exit.js') -Force

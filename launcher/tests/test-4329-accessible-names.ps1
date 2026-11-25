@@ -25,7 +25,9 @@
        SetName built from the item, not a fixed string; a text box, slider
        or list needs SetName.
 
-  The setup window (InstallWindow.cs) is #4693's and is not read here.
+  The setup window (InstallWindow.cs) builds its controls with initialisers
+  this does not parse; test-4693-setup-reader.ps1 reads its names through
+  the real window's automation peers instead.
 
   Read only. -App <folder> reads another copy of launcher\app.
 #>
@@ -78,7 +80,7 @@ Yes ('every control in the window has words of its own or a name' + $(if ($bad.C
 
 # ------------------------------------------------------------------ B. built in code
 $made = 'Button|CheckBox|HyperlinkButton|RepeatButton|ToggleButton|RadioButton|TextBox|Slider|ComboBox'
-$files = @(Get-ChildItem -LiteralPath $App -Filter '*.cs' | Where-Object { $_.Name -ne 'InstallWindow.cs' } | Sort-Object Name)
+$files = @(Get-ChildItem -LiteralPath $App -Filter '*.cs' | Sort-Object Name)
 $builtSeen = 0
 $builtBad = New-Object System.Collections.Generic.List[string]
 $items = 0

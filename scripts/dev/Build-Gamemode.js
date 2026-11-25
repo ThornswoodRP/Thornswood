@@ -24,16 +24,19 @@ const path = require('path');
 const source = require('./gamemode-source.js');
 
 const args = process.argv.slice(2);
+// A stop says what went wrong (when there is anything to say) and the code
+// to end with. main returns or throws one instead of calling node's exit
+// function, which can hang on Node 24 (#6036).
+class Stop extends Error {
+  constructor(message, code) { super(message); this.code = code; }
+}
 function arg(name) {
   const i = args.indexOf(name);
   if (i < 0) return null;
-  if (i + 1 >= args.length) { console.error('FAIL  ' + name + ' needs a value'); process.exit(2); }
+  if (i + 1 >= args.length) throw new Stop(name + ' needs a value', 2);
   return args[i + 1];
 }
-const dir = arg('--source') ? path.resolve(arg('--source')) : source.SOURCE;
 const rel = (p) => path.relative(source.ROOT, p).split(path.sep).join('/');
-
-function stop(e) { console.error('FAIL  ' + e.message); process.exit(1); }
 
 function firstDifference(a, b) {
   const x = a.split('\n'), y = b.split('\n');
@@ -51,56 +54,64 @@ function bundles(words) {
     const r = spawnSync(process.execPath, [path.join(__dirname, bundle)].concat(words), { cwd: source.ROOT, encoding: 'utf8' });
     if (r.stdout) process.stdout.write(r.stdout);
     if (r.stderr) process.stderr.write(r.stderr);
-    if (r.status !== 0) process.exit(r.status || 1);
+    if (r.status !== 0) throw new Stop('', r.status || 1);
   }
 }
 
-if (args.includes('--check')) {
-  if (dir === source.SOURCE) bundles(['--check']);
-  let built;
-  try { built = source.build(dir); } catch (e) { stop(e); }
-  const out = source.builtPath(dir);
-  const committed = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
-  if (built !== committed) {
-    const n = firstDifference(built, committed);
+function main() {
+  const dir = arg('--source') ? path.resolve(arg('--source')) : source.SOURCE;
+
+  if (args.includes('--check')) {
+    if (dir === source.SOURCE) bundles(['--check']);
+    const built = source.build(dir);
+    const out = source.builtPath(dir);
+    const committed = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
+    if (built !== committed) {
+      const n = firstDifference(built, committed);
+      const w = source.where(dir, n);
+      console.error('FAIL  ' + rel(out) + ' is not what ' + rel(dir) + ' builds; the first line that differs is ' + n
+        + (w ? ' (' + w.part + ' line ' + w.line + ')' : '') + '.');
+      console.error('      The parts are the source: make the change there, then run node scripts/dev/Build-Gamemode.js.');
+      return 1;
+    }
+    console.log('PASS  ' + rel(out) + ' is what the ' + source.order(dir).length + ' parts in ' + rel(dir) + ' build');
+    return 0;
+  }
+
+  const at = arg('--where');
+  if (at !== null) {
+    const n = Number(at);
+    if (!Number.isInteger(n) || n < 1) throw new Stop('--where takes a line number', 2);
     const w = source.where(dir, n);
-    console.error('FAIL  ' + rel(out) + ' is not what ' + rel(dir) + ' builds; the first line that differs is ' + n
-      + (w ? ' (' + w.part + ' line ' + w.line + ')' : '') + '.');
-    console.error('      The parts are the source: make the change there, then run node scripts/dev/Build-Gamemode.js.');
-    process.exit(1);
+    if (!w) throw new Stop(rel(source.builtPath(dir)) + ' has no line ' + n, 1);
+    console.log(rel(path.join(dir, w.part)) + ':' + w.line);
+    return 0;
   }
-  console.log('PASS  ' + rel(out) + ' is what the ' + source.order(dir).length + ' parts in ' + rel(dir) + ' build');
-  process.exit(0);
+
+  const readTo = arg('--read');
+  if (readTo !== null) {
+    fs.writeFileSync(readTo, source.joined(dir));
+    return 0;
+  }
+
+  const writeFrom = arg('--write');
+  if (writeFrom !== null) {
+    source.write(dir, fs.readFileSync(writeFrom, 'utf8'));
+    return 0;
+  }
+
+  if (args.length && !(args.length === 2 && arg('--source'))) throw new Stop('unknown arguments: ' + args.join(' '), 2);
+  if (dir === source.SOURCE) bundles([]);
+  const changed = source.writeBuilt(dir);
+  console.log((changed ? 'wrote ' : 'unchanged ') + rel(source.builtPath(dir)) + ' from ' + source.order(dir).length + ' parts');
+  return 0;
 }
 
-const at = arg('--where');
-if (at !== null) {
-  const n = Number(at);
-  if (!Number.isInteger(n) || n < 1) { console.error('FAIL  --where takes a line number'); process.exit(2); }
-  let w;
-  try { w = source.where(dir, n); } catch (e) { stop(e); }
-  if (!w) { console.error('FAIL  ' + rel(source.builtPath(dir)) + ' has no line ' + n); process.exit(1); }
-  console.log(rel(path.join(dir, w.part)) + ':' + w.line);
-  process.exit(0);
+// What the source module throws (a part that will not join, a line out of
+// range) is said on one FAIL line, as before.
+try {
+  process.exitCode = main();
+} catch (e) {
+  if (e.message) console.error('FAIL  ' + e.message);
+  process.exitCode = e instanceof Stop ? e.code : 1;
 }
-
-const readTo = arg('--read');
-if (readTo !== null) {
-  try { fs.writeFileSync(readTo, source.joined(dir)); } catch (e) { stop(e); }
-  process.exit(0);
-}
-
-const writeFrom = arg('--write');
-if (writeFrom !== null) {
-  try { source.write(dir, fs.readFileSync(writeFrom, 'utf8')); } catch (e) { stop(e); }
-  process.exit(0);
-}
-
-if (args.length && !(args.length === 2 && arg('--source'))) {
-  console.error('FAIL  unknown arguments: ' + args.join(' '));
-  process.exit(2);
-}
-if (dir === source.SOURCE) bundles([]);
-let changed;
-try { changed = source.writeBuilt(dir); } catch (e) { stop(e); }
-console.log((changed ? 'wrote ' : 'unchanged ') + rel(source.builtPath(dir)) + ' from ' + source.order(dir).length + ' parts');

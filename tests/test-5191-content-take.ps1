@@ -26,6 +26,10 @@
     3c. -Newest says SAME KEY or OTHER KEY against this checkout's inputs,
        with same=, key= and commit= for the gate's pick, and -BuildKey
        holds it to a key;
+    3d. -Newest -Find names the newest build for actions/download-artifact,
+       and in a workflow the script never downloads a build itself (#6359);
+    7. every workflow lays the build with .github/actions/lay-content, which
+       has GitHub's download step take it, and none downloads it itself;
     6. the merge release runs the content checks over the build it took, in
        shares, and releases (and keeps it as content-dev) only when they
        pass; the gate's pick lays the newest build and hands it to its
@@ -188,6 +192,27 @@ try {
     $r = Run @('-Repo', $repo, '-Newest', '-Take', '-Output', '')
     Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
 
+    # 3d. In a workflow GitHub's download step takes the build (#6359):
+    # -Find names it, and the script's own download refuses.
+    @{ artifacts = @(
+            @{ id = 7; expired = $false; created_at = '2026-11-16T07:21:06Z'; workflow_run = @{ id = 70; head_branch = 'main' } },
+            @{ id = 8; expired = $false; created_at = '2026-11-16T09:00:00Z'; workflow_run = @{ id = 80; head_branch = 'claude/x' } },
+            @{ id = 6; expired = $false; created_at = '2026-11-15T07:21:06Z'; workflow_run = @{ id = 60; head_branch = 'main' } }) } |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $arts
+    $out = Join-Path $tmp 'find-output.txt'
+    $r = Run @('-Repo', $repo, '-Newest', '-Find', '-ArtifactsFile', $arts, '-Output', $out)
+    $said = if (Test-Path -LiteralPath $out) { @(Get-Content -LiteralPath $out) } else { @() }
+    Check '3d -Newest -Find names the newest build main kept, for actions/download-artifact, and lays nothing' (
+        $r.Code -eq 0 -and $r.Text -match 'NEWEST artifact 7 of run 70' -and $said -ccontains 'artifact=7' -and $said -ccontains 'run=70' -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
+    $r = Run @('-Repo', $repo, '-Find', '-ArtifactsFile', $arts, '-Output', '')
+    Check '3d -Find goes with -Newest alone' ($r.Code -eq 1 -and $r.Text -match '-Find goes with -Newest alone')
+    $was = $env:GITHUB_ACTIONS
+    try {
+        $env:GITHUB_ACTIONS = 'true'
+        $r = Run @('-Repo', $repo, '-Newest', '-ArtifactsFile', $arts, '-Output', '')
+    } finally { $env:GITHUB_ACTIONS = $was }
+    Check '3d in a workflow the script does not download a build itself, and names the action that does' ($r.Code -eq 1 -and $r.Text -match 'comes down through actions/download-artifact, not this script: lay it with the action \.github/actions/lay-content')
+
     # ------------------------------------------------------- 4. refusals
     # The plugin is built, never committed (#5191): a checkout has none until
     # a build is laid, and a refusal leaves it so.
@@ -213,7 +238,9 @@ try {
     Refused 'a record for the other server' 'is for the main server, not dev' (Plant $built $null $key 'main')
 
     # ---------------------------------------------- 5. the merge release
-    $wf = [IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml'))
+    # A Windows checkout holds the workflows CRLF; each job is cut out at its
+    # next \n  name:\n line, so they are read LF (#6351).
+    $wf = ([IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml')) -replace "`r`n", "`n")
     $job = $wf.Substring($wf.IndexOf("`n  release:"))
     Check '5 it starts again on deployment_status' ($wf -match '(?m)^  deployment_status:')
     Check '5 a content job asks for the build, on main only, on a push or a Content Deployment''s success' (
@@ -231,7 +258,11 @@ try {
     Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (
         $pre -match "(?s)- name: Take the build for the content checks\s+if: \$\{\{ steps\.find\.outputs\.found == 'yes' \}\}.*?Get-ContentBuild\.ps1 -Server dev -Take -Keep" -and
         $pre -match '(?s)- name: Hand the build to the content checks.*?name: content-taken\s.*?retention-days: 1')
-    Check '6 a pick picks the content checks from main''s map, as the gate''s pick does' ($pre -match '(?s)  checks-pick:.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
+    $pickAt = $pre.IndexOf("`n  checks-pick:")
+    $checksAt = $pre.IndexOf("`n  checks:")
+    $pick = $pre.Substring($pickAt, $checksAt - $pickAt)
+    Check '6 the content pick lays the artifact held to this run''s key before reading the built tables' (
+        $pick -match '(?s)uses: actions/download-artifact@[0-9a-f]{40}.*?name: content-taken.*?CONTENT_KEY: \$\{\{ needs\.content\.outputs\.key \}\}.*?Get-ContentBuild\.ps1 -Server dev -Newest -ArtifactDir .*?-BuildKey \$env:CONTENT_KEY.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
     foreach ($j in 'checks', 'checks-linux') {
         $at = $pre.IndexOf("`n  ${j}:")
         $body = if ($at -ge 0) { $pre.Substring($at + 1) } else { '' }
@@ -244,19 +275,34 @@ try {
         $job -match "\(needs\.checks\.result == 'success' \|\| needs\.checks\.result == 'skipped'\)" -and $job -match "\(needs\.checks-linux\.result == 'success' \|\| needs\.checks-linux\.result == 'skipped'\)")
     # Every other run of the harnesses lays the newest build first.
     foreach ($f in 'build.yml', 'build-pr.yml') {
-        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$f"))
+        $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$f")) -replace "`r`n", "`n")
         Check "6 $f`: the pick lays the newest build, hands its same and commit to the pick, and the build to the shares" (
-            $b -match '(?s)  pick:.*?id: content.*?Get-ContentBuild\.ps1 -Newest -Keep .*?- name: Hand the build to the shares.*?name: content-laid\s.*?retention-days: 1.*?CONTENT_SAME: \$\{\{ steps\.content\.outputs\.same \}\}\s+CONTENT_COMMIT: \$\{\{ steps\.content\.outputs\.commit \}\}.*?Run-Gate\.ps1 -Pick')
+            $b -match '(?s)  pick:.*?id: content\s+uses: \./\.github/actions/lay-content\s+with:\s+keep: \$\{\{ runner\.temp \}\}/content-laid\s.*?- name: Hand the build to the shares.*?name: content-laid\s.*?retention-days: 1.*?CONTENT_SAME: \$\{\{ steps\.content\.outputs\.same \}\}\s+CONTENT_COMMIT: \$\{\{ steps\.content\.outputs\.commit \}\}.*?Run-Gate\.ps1 -Pick')
         foreach ($j in 'gate', 'gate-linux') {
             $at = $b.IndexOf("`n  ${j}:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
     }
-    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
-        $b = [IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])"))
+    foreach ($w in @(@('build.yml', 'checks'), @('build-pr.yml', 'checks'), @('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
+        $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])")) -replace "`r`n", "`n")
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
-        Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build.*?Get-ContentBuild\.ps1 -Newest')
+        Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build\s+uses: \./\.github/actions/lay-content\s*\n')
     }
+    # 7. No job downloads the build itself (#6359): every lay in a workflow
+    # is the action's, which names the build, has GitHub's download step take
+    # it, and lays that folder.
+    $direct = @()
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $root '.github/workflows') -Filter '*.yml' -File)) {
+        foreach ($l in @([IO.File]::ReadAllLines($f.FullName))) {
+            if ($l -match 'Get-ContentBuild\.ps1 .*-Newest' -and $l -notmatch '-ArtifactDir' -and $l -notmatch '^\s*#') { $direct += "$($f.Name): $($l.Trim())" }
+        }
+    }
+    Check ('7 no workflow runs Get-ContentBuild.ps1 -Newest to download a build itself' + $(if ($direct.Count) { ': ' + ($direct -join '; ') } else { '' })) ($direct.Count -eq 0)
+    $act = ([IO.File]::ReadAllText((Join-Path $root '.github/actions/lay-content/action.yml')) -replace "`r`n", "`n")
+    Check '7 the action names the newest build, downloads it with actions/download-artifact by its id and run, and lays that folder' (
+        $act -match '(?s)using: composite.*?id: find.*?Get-ContentBuild\.ps1 -Newest -Find .*?uses: actions/download-artifact@[0-9a-f]{40} # v\S+\s+with:\s+artifact-ids: \$\{\{ steps\.find\.outputs\.artifact \}\}\s+run-id: \$\{\{ steps\.find\.outputs\.run \}\}\s+github-token: \$\{\{ inputs\.github-token \}\}.*?id: lay.*?Get-ContentBuild\.ps1 -Newest -Server \$env:LAY_SERVER -ArtifactDir \$from -Keep .*?Get-ContentBuild\.ps1 -Newest -Server \$env:LAY_SERVER -ArtifactDir \$from\s')
+    $pin = [regex]::Match(([IO.File]::ReadAllText((Join-Path $root '.github/workflows/build.yml'))), 'actions/download-artifact@([0-9a-f]{40})').Groups[1].Value
+    Check '7 the action pins download-artifact where the workflows do' ($pin -and $act -match "actions/download-artifact@$pin ")
     Check '5 one release at a time on the release job, not the whole workflow, so a run a Deployment''s status starts holds no merge back (#6008)' (
         $wf -notmatch '(?m)^concurrency:' -and $job -match '(?s)concurrency:\s+group: merge-release\s+cancel-in-progress: false')
 }

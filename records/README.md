@@ -4,6 +4,8 @@ What a release, the build, the box and GitHub are checked against, kept apart
 from the scripts that write and read it (issue #440, phase 8). Every file and
 folder here is named below, under the heading it belongs to.
 
+- `turn/`: the reviewed native Windows TURN supplier pin and exact archive/runtime hashes; `scripts/turn/New-CoturnPackage.ps1` stages it without activation. No script writes this pin: it changes in a reviewed pull request.
+
 ## Builds, the game and the content tools
 
 - `client-build.json`: the six SkyMP client files built from the fork, by
@@ -280,6 +282,9 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `collection-revision-6-rule.json`: the plugin rule passed to
+  `New-NexusRevision -Rule` for collection revision 6, putting cheddars_mashups.esl
+  after RaceCompatibility.esm (#3649, #4070, #6299).
 - `load-order.json`: the load order the servers run and every content
   build reads, at the revision `collection-plugins.json` names, the five
   masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
@@ -329,9 +334,11 @@ named. Names only: no secret or token is in any of them.
   #2165).
 - `github-apps.json`: what each GitHub App that works on Thornswood's
   repositories may do, permission by permission and event by event, each
-  with its reason. Every night `scripts\dev\Check-AppPermissions.js` reads
-  each App from GitHub and names any difference. Only Patrick changes an
-  App's permissions; the change is a pull request to this file first.
+  with its reason. Every night `scripts\dev\Check-AppPermissions.js` checks
+  the full catalog and reads every public registration from GitHub.
+  Patrick can run it with `-Private` and his local GitHub sign-in to
+  check private registrations. He changes App permissions after a pull
+  request updates this file.
 - `github-repo-settings.json`: the rulesets, vulnerability reporting,
   immutable releases, secret scanning, auto-merge and merge methods of this
   repository, the engine fork and the ops repository (#3683, #3691). After a

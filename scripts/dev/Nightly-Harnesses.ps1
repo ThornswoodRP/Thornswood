@@ -129,7 +129,8 @@
   Which share to run, from 1.
 
 .PARAMETER Of
-  How many shares there are. nightly.yml passes the length of its matrix.
+  How many shares there are. nightly.yml types the number into its -Of and
+  job name to match its shard list (#4298).
 
 .PARAMETER BudgetSeconds
   How long this may take in all. A harness starts only when the time used so
@@ -170,8 +171,8 @@
   test points it at a copy.
 
 .PARAMETER OutDir
-  Where each harness's output is kept while it runs. harness-out under the
-  runner's temp folder, or under TEMP off a runner.
+  Where each harness's output is kept while it runs. harness-out-<share>
+  under the runner's temp folder, or under TEMP off a runner.
 
 .PARAMETER Report
   A JUnit file to write when the run ends: a test case for each check every

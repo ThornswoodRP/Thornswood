@@ -5531,7 +5531,7 @@ if ($after.Hash -ne $before.Hash -or $after.Count -ne $before.Count) {
 $doc = New-Object 'System.Collections.Generic.List[string]'
 $doc.Add('{')
 $doc.Add('  "builtBy": ' + (JsonStr 'scripts\dev\Build-RecipeTable.ps1') + ',')
-$doc.Add('  "source": ' + (JsonStr ('every COBJ record across ' + $order.Count + ' plugins in load order, and the records their CNAM and BNAM point at')) + ',')
+$doc.Add('  "source": ' + (JsonStr ('every COBJ record across ' + (Get-LoadOrderName $order) + ', and the records their CNAM and BNAM point at')) + ',')
 $doc.Add('  "language": ' + (JsonStr $LANGUAGE) + ',')
 $doc.Add('  "readFrom": ' + (JsonStr 'BNAM is the workbench keyword, CNAM is the output item, NAM1 is how many it makes, COCT and CNTO are the inputs, CTDA is the conditions, which are in every row''s needs list') + ',')
 $doc.Add('  "event": ' + (JsonStr 'mp.onCraft(actorFormId, craftedItemBaseId, count, recipeId). All four arguments are numbers. The keys of this table are desc strings, so look a row up with RECIPES_BY_ID[mp.getDescFromId(recipeId)] and never with recipeId itself, which matches nothing. Returning false refuses the craft outright: CraftEvent::OnFireSuccess is what removes the inputs and adds the output, and GameModeEvent::Fire only calls it when nobody blocked.') + ',')

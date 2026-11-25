@@ -313,8 +313,8 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
   console.log('FAIL  the harness itself stopped: ' + (e && e.stack || e));
-  process.exit(1);
+  process.exitCode = 1;
 });

@@ -42,7 +42,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(src, start, end) {
   const a = src.indexOf(start);
@@ -56,7 +56,7 @@ const MAIN_START = "  sp.on('browserMessage', guard('browserMessage', (event) =>
 const MAIN_BODY = between(front, MAIN_START, '\n  }));\n');
 yes('the overhead block is in the plugin', !!OVERHEAD && OVERHEAD.indexOf('function overheadMessage(what)') >= 0);
 yes('the main browserMessage handler is in the plugin', !!MAIN_BODY);
-if (!OVERHEAD || !MAIN_BODY) { done(); }
+if (!OVERHEAD || !MAIN_BODY) { done(); } else {
 const MAIN = MAIN_BODY + '\n  }));\n';
 
 // No other browserMessage listener in the plugin takes the overhead messages:
@@ -152,3 +152,4 @@ const HEAD = 'head:' + JSON.stringify({ who: 'ff000816', text: SAID, profile: 43
 }
 
 done();
+}

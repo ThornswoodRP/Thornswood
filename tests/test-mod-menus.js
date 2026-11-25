@@ -35,14 +35,14 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const SCRIPT = path.join(REPO_DIR, 'scripts', 'mods', 'Audit-ModMenus.js');
 let A = null;
 try { A = require(SCRIPT); } catch (e) { console.log('      ' + e.message); }
 yes('scripts\\mods\\Audit-ModMenus.js is there and loads', !!A);
-if (!A) { done(); }
+if (!A) { done(); return; }
 
 // ------------------------------------------------------------ plugin bytes
 

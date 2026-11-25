@@ -1,8 +1,19 @@
 {
   "issue": 2841,
-  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180). 'reads' names the files and folders (a folder ends in /) of main that decide what the verb does on the box beyond its script, such as the keys Grant-BoxKey puts there: auto-merge holds a change to any of them for Patrick as it holds the script (scripts/ops/Auto-Merge.js, #5726). 'reads' names every file of code the verb's script runs as well, as scripts/ops/Verb-Files.js finds them: node scripts/ops/Verb-Files.js --write puts them in, and tests/test-6184-verb-files.js fails when a verb runs a file its reads does not name (#6184).",
+  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180). 'reads' names the files and folders (a folder ends in /) of main that decide what the verb does on the box beyond its script, such as the keys Grant-BoxKey puts there: auto-merge holds a change to any of them for Patrick as it holds the script (scripts/ops/Auto-Merge.js, #5726). 'reads' names every file of code the verb's script runs as well, as scripts/ops/Verb-Files.js finds them: node scripts/ops/Verb-Files.js --write puts them in, and tests/test-6184-verb-files.js fails when a verb runs a file its reads does not name (#6184). 'onlyReads': true marks a verb that changes nothing on the box and only reads it: the broker's read lane runs it beside whatever else runs, from a checkout of its own, so a deploy or a content build never holds up a ping or a read (#6231); every other verb runs one at a time.",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+-]{0,159}$",
   "verbs": {
+    "Stage-MainGameplayPolicies": {
+      "script": "scripts/ops/Stage-MainGameplayPolicies.ps1",
+      "reads": [
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/ops/MainGameplayPolicies.ps1"
+      ],
+      "timeoutMinutes": 2,
+      "build": true,
+      "fixed": [],
+      "params": {}
+    },
     "Update-Gate": {
       "script": "scripts/vps/gate/Update-Gate.ps1",
       "reads": [
@@ -21,6 +32,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 15,
+      "onlyReads": true,
       "fixed": ["-NoPause"],
       "out": "-Out",
       "params": {
@@ -54,8 +66,10 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
@@ -73,7 +87,6 @@
         "scripts/release/Feed-Store.ps1",
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
         "scripts/release/MergeRelease.ps1",
@@ -85,6 +98,7 @@
         "scripts/release/Release-Baseline.ps1",
         "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
         "scripts/release/Where.ps1",
@@ -282,6 +296,36 @@
         "PutBack": "switch"
       }
     },
+    "Set-DevVoiceSite": {
+      "script": "scripts/deploy/Install-Voice.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/deploy/VoiceSite.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
+      "timeoutMinutes": 10,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Root", "C:\\Thornswood-Voice-Dev", "-TaskName", "Thornswood Dev Voice", "-Port", "7789", "-Site", "http://127.0.0.1:3001", "-TaskOnly", "-NoPause"],
+      "params": {}
+    },
     "Request-Restart": {
       "script": "scripts/vps/Request-Restart.ps1",
       "reads": [
@@ -380,6 +424,7 @@
     "Read-LauncherStarts": {
       "script": "scripts/vps/Read-LauncherStarts.ps1",
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [],
       "params": {
         "Days": "^[0-9]{1,3}$"
@@ -419,6 +464,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
@@ -429,6 +475,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [
         "-NoPause"
       ],
@@ -444,6 +491,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 15,
+      "onlyReads": true,
       "fixed": [
         "-Collect"
       ],
@@ -457,6 +505,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 20,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
@@ -477,6 +526,7 @@
     "Read-Availability": {
       "script": "scripts/vps/Read-Availability.ps1",
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [
         "-NoPause"
       ],
@@ -565,8 +615,10 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
@@ -586,7 +638,6 @@
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-EngineArtifact.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
         "scripts/release/MergeRelease.ps1",
@@ -598,6 +649,7 @@
         "scripts/release/Release-Baseline.ps1",
         "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
         "scripts/release/Where.ps1",
@@ -647,8 +699,10 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
@@ -659,7 +713,6 @@
         "scripts/release/BuildStamp.ps1",
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
         "scripts/release/MergeRelease.ps1",
@@ -668,6 +721,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
         "scripts/release/Where.ps1",
@@ -727,8 +781,10 @@
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Make-LastPlugin.py",
         "scripts/mods/OnBox.ps1",
@@ -748,7 +804,6 @@
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-EngineArtifact.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
         "scripts/release/MergeRelease.ps1",
@@ -760,6 +815,7 @@
         "scripts/release/Release-Baseline.ps1",
         "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Update-Checkout.ps1",
         "scripts/release/Where.ps1",
@@ -899,6 +955,7 @@
         "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/OnBox.ps1",
         "scripts/mods/Rebuild-ContentTables.ps1",
@@ -909,7 +966,6 @@
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
         "scripts/release/MergeRelease.ps1",
@@ -918,6 +974,7 @@
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
         "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
         "scripts/release/Where.ps1",
         "scripts/vps/Lock-Folder.ps1",
@@ -959,10 +1016,13 @@
         "scripts/dev/Check-Words.ps1",
         "scripts/dev/Close-Launcher.ps1",
         "scripts/dev/OwnPlugins.js",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Audit-ModMenus.js",
         "scripts/mods/Build-Generated.ps1",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/Check-SkyUIMenus.js",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Generated.ps1",
@@ -991,7 +1051,6 @@
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-EngineArtifact.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/Go.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
@@ -1011,6 +1070,7 @@
         "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
         "scripts/release/Setup-ShipMachine.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Ship-Rules.ps1",
         "scripts/release/Ship.ps1",
         "scripts/release/ShippedBytes.ps1",
@@ -1069,10 +1129,13 @@
         "scripts/dev/Check-Words.ps1",
         "scripts/dev/Close-Launcher.ps1",
         "scripts/dev/OwnPlugins.js",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Audit-ModMenus.js",
         "scripts/mods/Build-Generated.ps1",
         "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
         "scripts/mods/Check-SkyUIMenus.js",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/Generated.ps1",
@@ -1101,7 +1164,6 @@
         "scripts/release/Get-ContentBuild.ps1",
         "scripts/release/Get-EngineArtifact.ps1",
         "scripts/release/Get-ScratchDir.ps1",
-        "scripts/release/Get-SevenZip.ps1",
         "scripts/release/Go.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/LogHandBack.ps1",
@@ -1121,6 +1183,7 @@
         "scripts/release/Release-Name.ps1",
         "scripts/release/RepoPlugins.ps1",
         "scripts/release/Setup-ShipMachine.ps1",
+        "scripts/release/SevenZip.ps1",
         "scripts/release/Ship-Rules.ps1",
         "scripts/release/Ship.ps1",
         "scripts/release/ShippedBytes.ps1",
@@ -1333,6 +1396,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
@@ -1342,6 +1406,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {
         "Lines": "^[0-9]{1,4}$"
@@ -1354,6 +1419,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": ["-NoPause"],
       "params": {}
     },
@@ -1364,6 +1430,7 @@
         "scripts/vps/Vps.ps1"
       ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },

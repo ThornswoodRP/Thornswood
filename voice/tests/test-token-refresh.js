@@ -69,39 +69,42 @@ first.open();
 check('and the join message carries no token', 'token' in first.sent[0], false);
 first.welcome();
 
-// A token handed over while the connection is up waits for the next try.
+// An extra token while connected may be expired when the next try comes.
+// It must not be kept for that try (#6477).
 net.setToken('v2.4242.2.second');
 check('a token handed over while connected opens nothing', made.length, 1);
 
-// The connection drops: the next try spends the waiting token.
+// The connection drops: the next try asks for its own fresh token.
 first.close();
 fire();
-check('the next try offers the token handed over meanwhile', made[1] && made[1].protocols, ['thornswood', 'v2.4242.2.second']);
-check('and asked for nothing, since it had one', asked.length, 0);
+check('the next try does not spend the unsolicited old token', made.length, 1);
+check('and asks for a fresh token for this character', asked, ['token? 4242']);
+net.setToken('v2.4242.3.third');
+check('the requested fresh response goes immediately', made[1] && made[1].protocols, ['thornswood', 'v2.4242.3.third']);
 
 // That one fails too, before it opened. No token left: ask, and do not try.
 made[1].close();
 fire();
-check('with no token left, a try asks the front for one, for this character', asked, ['token? 4242']);
+check('with no token left, a try asks the front for one, for this character', asked, ['token? 4242', 'token? 4242']);
 check('and opens nothing without one', made.length, 2);
 
 // The front hands back the one already spent: still nothing.
-net.setToken('v2.4242.2.second');
+net.setToken('v2.4242.3.third');
 check('the token it already spent is not taken again', made.length, 2);
 
 // The launcher's fresh one arrives: the waiting try goes at once.
-net.setToken('v2.4242.3.third');
+net.setToken('v2.4242.4.fourth');
 check('a fresh token goes at once, without waiting for the backoff', made.length, 3);
-check('with that token', made[2].protocols, ['thornswood', 'v2.4242.3.third']);
+check('with that token', made[2].protocols, ['thornswood', 'v2.4242.4.fourth']);
 
 // rejoinAs as another character: the old character's token is no use.
 made[2].open();
 made[2].welcome();
-net.setToken('v2.4242.4.fourth');
+net.setToken('v2.4242.5.surplus');
 check('rejoinAs another character returns true', net.rejoinAs(5151, 'v2.5151.5.theirs'), true);
 fire();
 const last = made[made.length - 1];
-check('and the next try is that character\'s own token, not the one kept for the last character',
+check('and the next try is that character\'s own token, never the surplus from the last character',
       last.protocols, ['thornswood', 'v2.5151.5.theirs']);
 last.open();
 check('joining as that character', last.sent[0].profileId, 5151);

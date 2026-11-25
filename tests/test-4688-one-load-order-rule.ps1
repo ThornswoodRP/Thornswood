@@ -15,8 +15,8 @@
 
   WHAT THIS HOLDS:
     1. The copies are gone, and no tracked file names them, outside
-       docs\archive, scripts\oneoff and the two scripts #1179 retired, which
-       refuse to run before they reach the name.
+       docs\archive and scripts\oneoff, where the two scripts #1179 retired
+       sit and refuse to run before they reach the name.
     2. Every script that writes a loadOrder into a server-settings file
        (under scripts\ and tools\) either builds it (Deploy-Gamemode.ps1)
        or carries an order that was built, its paths pointed at another
@@ -128,8 +128,8 @@ try {
     # The names, built so that this file's own text does not match.
     $nameRx = [regex]('(?i)\b(' + ((@('Sync', 'Align') | ForEach-Object { $_ + '-Load' + 'Order' }) + @('Show-Esl' + 'Cascade') -join '|') + ')\b')
     # Retired by #1179: each stops on its first line, before the name, and is
-    # kept for the history of how it was installed.
-    $retired = @('scripts/mods/Enable-MCM.ps1', 'scripts/mods/Fix-QuickLoot.ps1')
+    # kept for the history of how it was installed, in scripts\oneoff (#4740).
+    $retired = @('scripts/oneoff/Enable-MCM.ps1', 'scripts/oneoff/Fix-QuickLoot.ps1')
     foreach ($f in $retired) {
         $full = Join-Path $Repo $f
         if (-not (Test-Path -LiteralPath $full)) { continue }
@@ -165,7 +165,6 @@ try {
         'scripts/release/Export-ServerPayload.ps1' = 'the built order, its paths pointed at the box'
         'scripts/vps/Restore-Server.ps1'           = 'a restored order, its paths pointed at its own folder'
         'scripts/vps/vps-dev-instance.ps1'         = 'the live order, its paths pointed at the dev folder'
-        'scripts/mods/Fix-QuickLoot.ps1'           = 'retired by #1179, refuses to run'
         'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
         'tools/DeployAgent/ServerOrder.cs'         = 'the order a Release was built for, from its catalogue, pointed at the server''s plugins (#6209)'
         'scripts/bot/Check-Character.js'           = 'the restore rehearsal''s own folder only: -Reorder moves one plugin on purpose to check ids by plugin across a load order change (#6237)'
@@ -246,7 +245,7 @@ try {
         $t = Join-Path $T $name
         foreach ($rel in 'scripts\deploy\Deploy-Gamemode.ps1', 'scripts\deploy\MaxOnline.ps1', 'scripts\deploy\ServerOrder.ps1', 'scripts\deploy\LastPluginRecipe.ps1',
                          'scripts\release\BuildStamp.ps1', 'scripts\release\Read-JsonFile.ps1', 'scripts\release\RecordShape.ps1',
-                         'scripts\mods\LoadOrder.ps1', 'records\most-online.json') {
+                         'scripts\mods\LoadOrder.ps1', 'scripts\release\SevenZip.ps1', 'records\most-online.json') {
             $from = Join-Path $Repo $rel
             if (-not (Test-Path -LiteralPath $from)) { continue }
             $to = Join-Path $t $rel

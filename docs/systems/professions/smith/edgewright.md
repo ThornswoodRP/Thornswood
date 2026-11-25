@@ -1,30 +1,8 @@
 # Edgewright
 
-Weapons. 700 recipes. 299 reach the server. 401 are the sharpening
-wheel and do not.
-
-The full table: [lists/smith-edgewright.md](../../lists/smith-edgewright.md).
-
-| Rank | Recipes |
-| --- | --- |
-| Novice | 54 |
-| Advanced | 322 |
-| Expert | 131 |
-| Master | 193 |
-
-| Kind | Recipes |
-| --- | --- |
-| Swords | 245 |
-| Greatswords | 120 |
-| Battleaxes | 77 |
-| Warhammers | 76 |
-| Daggers | 71 |
-| War axes | 52 |
-| Maces | 50 |
-| Other weapons | 6 |
-| Other goods | 3 |
-
-Benches: sharpening wheel 401, forge 295, skyforge 4.
+Weapons. The [Edgewright recipe list](../../lists/smith-edgewright.md)
+gives the counts by rank and shows each recipe's bench, race and whether
+it reaches the server.
 
 The wheel is closed. Edgewright or Woodwright, from novice. A
 platewright does not temper a blade unless this half is theirs or a
@@ -37,8 +15,8 @@ person posts.
 
 ## Race locks
 
-Redguard 5, Riekling 3. Nothing else on this half. Elven and Orcish
-weapons are not locked.
+Read the Race column for a recipe's restriction. Elven and Orcish
+weapons are not locked by the name of their metal.
 
 ## Handles and charcoal
 
@@ -64,13 +42,12 @@ The half places 1 in Precision (+2 critical chance). The game may
 ignore that number. The smith profession's Might and Burden still
 land. See [Skill tree](../../skill-tree.md).
 
-A Platewright's sister-half right is your novice 54, not your
-advanced 322.
+A Platewright can make novice Edgewright work as their sister half.
 
 Every recipe, by rank and with its id: [smith-edgewright](../../lists/smith-edgewright.md).
 
 ## Where this is
 
-The 299 forge rows are gated, including charcoal and the handle.
-The 401 wheel rows are not scored. Mastercraft does not change them
-yet.
+The forge gates the craft, including charcoal and the handle.
+The sharpening wheel does not count as work. Mastercraft uses a
+Weapon Kit instead; see [Durability](../../durability.md).

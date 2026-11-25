@@ -85,7 +85,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { Die 'This needs PowerShell 7 (pwsh)
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 $sz = Find-SevenZip
-if (-not $sz) { Die '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and mod archives are unpacked with it.' }
+if (-not $sz) { Die ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and mod archives are unpacked with it.') }
 
 # The mod and the file, as New-NexusRevision.ps1 -Add reads them.
 $lq = '{ legacyModsByDomain(ids: [{gameDomain: "' + $Game + '", modId: ' + $Mod + '}]) { nodes { modId name author modCategory { name } } } }'

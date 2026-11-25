@@ -170,4 +170,4 @@ yes('the next prune is an hour away, with nothing overdue (#2166)',
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 try { fs.rmSync(CHAT_DIR, { recursive: true, force: true }); } catch (e) { }
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

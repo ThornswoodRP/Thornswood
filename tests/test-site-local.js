@@ -353,7 +353,7 @@ function copy(tag, withConfig, patch) {
   // server.js and its modules (#5357), with patch run over each file's text:
   // the anchor it changes is in one of them.
   siteFiles.copy(dir, null, patch ? function (src) { return patch(src); } : null);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
   // The written pages the copy serves. Since #1585 a written page with no
   // file behind it answers 404 rather than a 200 saying it does not exist
@@ -389,7 +389,7 @@ function stop(run) {
     if (!run || run.exited) { ok(); return; }
     run.child.once('exit', function () { ok(); });
     try { run.child.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 function ask(port, method, route, body, extra) {
@@ -640,5 +640,5 @@ function breakPages(src) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

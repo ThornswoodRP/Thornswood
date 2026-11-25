@@ -3,9 +3,8 @@
 Patrick's 12 October requirement is one Smith, Woodworker, Tailor, Enchanter,
 Cook and Alchemist in each of the ten book holds, 60 guild NPCs total, each
 with its own trade table and hold-specific quest work. See
-[Six trades in each hold](merchant-expansion.md). The 249-trader count below
-describes the current controller, not the requested final roster. Retirement
-must preserve its existing purse, stock and unfinished transfer records.
+[Six trades in each hold](merchant-expansion.md). That is the roster the
+server runs: 60 guild traders, one of each trade in every hold.
 
 The Merchant's Guild is the merchant NPCs of each hold. People cannot
 join it. There is no membership roll, join fee, dues, factor appointment,
@@ -104,13 +103,15 @@ reference to that service. It does not start an empty ledger. Renaming a
 book or editing its prices keeps its earlier submitted copy valid.
 
 Posting is 20 and 30 for everybody. Rent is the only debt the box pays
-down. The 249 retained, authored traders receive their one-time 250 balance
-and empty stock when admitted by the Dev server controller. The authoritative
+down. The 60 guild traders receive their one-time 250 balance and empty
+stock the first time the server stands each of them up. The authoritative
 ledger is in the private folder, with atomic replacement, integrity checking
 and a record of references not yet initialized. The per-NPC property mirrors
 it. A lost NPC save restores the ledger balance, including zero, rather than
 handing out 250 again. Missing or damaged ledger state refuses service.
-The initial merchant total is 62,250 gold across those 249 references. The
+The ledger keeps all 249 identities the guild once had; the 189 retired
+ones hold nothing, are never stood up and never receive a purse. The
+opening merchant total is 15,000 gold across the 60 guild traders. The
 server's minute report lists the verified count and first-time grants.
 Failed startup revokes the new service; paths into served resources, including
 Windows junctions, are refused before any ledger is written.

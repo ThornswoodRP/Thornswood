@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const { PUBLIC } = require('./base');
 const { BLURB, escAttr, pageHtml, roadmapBoard } = require('./pages');
 const { DEPLOYED_BUILD, feedFile, readJsonQuiet } = require('./feed');
+const newsPictures = require('../public/news-pictures');
 function creditsFacts() {
   const feeds = {};
   for (const pair of [['public', 'feed'], ['dev', 'feed-dev']]) {
@@ -58,7 +59,8 @@ function publicPageBody(route) {
       const details = Array.isArray(n.details) ? n.details : (n.details ? [n.details] : []);
       body += '<article class="rel"><div class="when">' + escAttr(n.date || '') + '</div><h2>' +
         escAttr(n.title || '') + '</h2>' + (n.body ? '<p>' + escAttr(n.body) + '</p>' : '') +
-        (details.length ? '<ul>' + details.map(d => '<li>' + escAttr(d) + '</li>').join('') + '</ul>' : '') + '</article>';
+        (details.length ? '<ul>' + details.map(d => '<li>' + escAttr(d) + '</li>').join('') + '</ul>' : '') +
+        newsPictures.html(n.image) + '</article>';
     }
     if (!news.length) body += '<p>No release notes are available yet.</p>';
   } else if (route === '/roadmap') {

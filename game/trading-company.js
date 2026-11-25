@@ -6,8 +6,13 @@
   #1393, #1646). Its hauls, its tenth and its sales out of the world are in the
   property block of gamemode.js. This file is the company's terms as data staff
   can change, and the arithmetic that reads them. It never touches the world, a
-  pack, a ledger, a purse or a price, and it is not wired in yet: the design and
-  Patrick's questions are on #512 (issuecomment-6245906394).
+  pack, a ledger, a purse or a price. The gamemode reads it through
+  globalThis.__thornswoodCompany (game/gamemode/company-terms.ts): the property
+  block posts and pays hauls by it, the trade block splits sales out of the
+  world by it, and the trade ship dock asks mayCharter before every load and
+  sail (#2700). Nothing calls freightFor yet, so no freight is charged on a
+  load. The design and Patrick's questions are on #512
+  (issuecomment-6245906394).
 
   THE TERMS are one object, kept in game/data/trading-company.json:
 

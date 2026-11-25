@@ -48,4 +48,4 @@ yes('the EXPOSE row says LOCAL=1 keeps it on loopback', /THORNSWOOD_DOCS_LOCAL=1
 yes('the TRUSTED_PROXIES row says only the last forwarded hop is believed', /last/i.test(row('THORNSWOOD_TRUSTED_PROXIES')));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

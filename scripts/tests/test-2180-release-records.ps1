@@ -62,8 +62,8 @@ foreach ($k in 'skyrim-pin', 'skyrim-files', 'ui-gone', 'generated') {
 $sr = Src 'scripts\release\Ship-Rules.ps1'
 Yes 'Ship-Rules holds ui-gone.json to its shape right after it parses, before the lists are built' ($sr.IndexOf('Get-ThornswoodRecordProblems -Doc $script:ShipUiGoneDoc -Kind ui-gone') -gt $sr.IndexOf('$script:ShipUiGoneDoc = $ShipUiGoneText') -and $sr.IndexOf('Get-ThornswoodRecordProblems -Doc $script:ShipUiGoneDoc -Kind ui-gone') -lt $sr.IndexOf('$ShipDaedricMenu = [ordered]@{}'))
 $bl = Src 'scripts\release\Build-Launcher.ps1'
-$i = $bl.IndexOf('Read-ThornswoodRecord -Path $embedded.Path -Kind $embedded.Kind')
-Yes 'Build-Launcher reads both embedded records through Read-ThornswoodRecord before MSBuild compiles them in' ($i -gt 0 -and $i -lt $bl.IndexOf('& $found.MSBuild (Resolve-Path -LiteralPath $proj).Path') -and $bl.Contains("Kind = 'skyrim-files'") -and $bl.Contains("Kind = 'ui-gone'") -and $bl.Contains("Die (`$_.Exception.Message + ' Nothing was built.')"))
+$i = $bl.IndexOf('Read-ThornswoodRecord -Path $path -Kind $kinds[0]')
+Yes 'Build-Launcher reads every record the project embeds through Read-ThornswoodRecord before dotnet publish compiles them in (#4684)' ($i -gt 0 -and $i -lt $bl.IndexOf('& $dotnet.Source publish') -and $bl.Contains("SelectNodes(`"//*[local-name()='EmbeddedResource']`")") -and $bl.Contains("Die (`$_.Exception.Message + ' Nothing was built.')"))
 $pu = Src 'scripts\release\Publish-Update.ps1'
 $i = $pu.IndexOf('Get-ThornswoodRecordProblems -Doc $pin -Kind skyrim-pin')
 Yes 'Publish-Update holds skyrim-pin.json to its shape before anything goes into the feed (and keeps the feed''s pin on a problem)' ($i -gt 0 -and $i -lt $pu.IndexOf("Set-Prop `$doc 'expectedExeBytes'") -and $i -gt $pu.IndexOf('$pin = (Get-Content -LiteralPath $pinPath'))

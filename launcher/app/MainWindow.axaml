@@ -361,6 +361,18 @@
       </Style>
     </ControlTheme>
 
+    <ControlTheme x:Key="SelectField" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+      <Setter Property="Background" Value="{DynamicResource Deep}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="2"/>
+      <Setter Property="Padding" Value="11,8"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="MinHeight" Value="38"/>
+      <Style Selector="^:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+    </ControlTheme>
+
     <!-- A slider in the launcher's own colours: a thin line, the filled part
          in the accent, a round thumb. The stock slider is a grey control of
          another look and would be the one thing on the page that is not ours.
@@ -1077,6 +1089,26 @@
                 <StackPanel x:Name="ThemeRow" Margin="0,0,0,6"/>
                 <TextBlock x:Name="TxtThemeNote" Theme="{StaticResource Small}" Margin="0,0,0,18"/>
                 <StackPanel x:Name="ThemeEditor" Margin="0,0,0,30"/>
+
+                <TextBlock Text="Audio" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <TextBlock Text="Microphone" Theme="{StaticResource Body}"/>
+                  <ComboBox x:Name="BoxMicrophone" Theme="{StaticResource SelectField}"
+                            AutomationProperties.Name="Voice microphone"
+                            AutomationProperties.HelpText="Choose the input for voice. Changes take effect after you restart the launcher."
+                            MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                  <TextBlock x:Name="TxtMicrophoneNote" Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                             Text="Windows default uses your communications microphone, or the default recording input if none is set. Changes take effect after you restart the launcher."/>
+                  <TextBlock Text="Audio output" Theme="{StaticResource Body}" Margin="0,18,0,0"/>
+                  <ComboBox x:Name="BoxAudioOutput" Theme="{StaticResource SelectField}"
+                            AutomationProperties.Name="Audio output"
+                            AutomationProperties.HelpText="Choose the speakers or headphones. Changes take effect after restarting Thornswood and Skyrim."
+                            MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                             Text="Changes take effect after restarting Thornswood and Skyrim."/>
+                  <Button x:Name="BtnRefreshMicrophones" Theme="{StaticResource Ghost}" Content="Refresh audio devices"
+                          HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                </StackPanel>
 
                 <TextBlock Text="Music" Theme="{StaticResource Eyebrow}"/>
                 <StackPanel Margin="0,0,0,30">

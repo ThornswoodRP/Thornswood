@@ -130,4 +130,4 @@ yes('F4: a folder this run never saw start is still refused as leftover',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

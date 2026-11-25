@@ -31,6 +31,7 @@ const path = require('path');
 const TABLES = require('./GamemodeTables.js');
 
 const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--tables']);
+if (!opts) return;
 const ROOT = path.join(__dirname, '..', '..');
 const RECIPES = opts['--recipes'] || path.join(ROOT, 'game', 'data', 'recipes.json');
 const DIR = opts['--tables'] || TABLES.DIR;

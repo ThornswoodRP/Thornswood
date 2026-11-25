@@ -265,6 +265,25 @@ async function launcherHalf() {
   yes('seventy seconds with nothing from the service and the session looks for it again',
       lost && h.dials().length === 2);
   yes('and says so in the log', h.says(/^nothing from the voice server for \d+ s, so looking for it again$/));
+  const summary = h.host('debug').filter((s) => s.startsWith('{"event":"voice_socket_closed"'))
+    .map(JSON.parse).find((s) => s.peer === 5 && s.reason === 'silent');
+  yes('the native close correlates the peer and counts queued heartbeats and received answers',
+      !!summary && summary.pingQueued > 0 && summary.pongRx === 20 && summary.rxMessages === 21 && summary.rxReceives === 21);
+  yes('the native close separates completed writes from a pending send',
+      !!summary && summary.queued === summary.written && summary.unwritten === 0 && summary.writeError === '' && summary.sendState === 'complete');
+
+  for (const [outcome, expected] of [['sync-fail','failed'],['fault','failed'],['cancel','canceled'],['pending','pending']]) {
+    const f=await launcher(); await f.configure('t'); const connection=f.last().n;
+    await f.admit(connection,42);
+    await f.send({do:'send-outcome',n:connection,answer:outcome});
+    await f.send({do:'mode',mode:'yell'});
+    await f.send({do:'close',n:connection});
+    const report=f.host('debug').filter(s=>s.startsWith('{"event":"voice_socket_closed"'))
+      .map(JSON.parse).find(s=>s.peer===42);
+    const expectedError=outcome==='cancel'?'TaskCanceledException':expected==='failed'?'ConnectionClosedPrematurely':'';
+    yes('native close distinguishes a '+outcome+' send without claiming delivery',
+        !!report && report.sendState===expected && report.unwritten>0 && report.writeError===expectedError);
+  }
 
   for (const l of launchers) {
     const sw = l.swallowed();

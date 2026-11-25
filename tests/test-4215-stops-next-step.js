@@ -122,10 +122,10 @@ fs.rmSync(T, { recursive: true, force: true });
 // their last step is read, not driven: it named .\Publish-Server.ps1, which
 // is in scripts\release, not beside them, so it ran from nowhere.
 for (const f of ['Enable-MCM.ps1', 'Fix-QuickLoot.ps1']) {
-  const text = fs.readFileSync(path.join(ROOT, 'scripts', 'mods', f), 'utf8');
+  const text = fs.readFileSync(path.join(ROOT, 'scripts', 'oneoff', f), 'utf8');
   yes('P ' + f + ' no longer names .\\Publish-Server.ps1 as if it were beside it', !/Note '\s*\.\\Publish-Server\.ps1'/.test(text));
   yes('P ' + f + ' names .\\scripts\\release\\Publish-Server.ps1, which runs from the repository', /Note '\s*\.\\scripts\\release\\Publish-Server\.ps1'/.test(text));
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

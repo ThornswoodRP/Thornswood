@@ -111,7 +111,8 @@ if (tracked) {
 if (page === null) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 // ------------------------------------------------------------ reading C#
@@ -495,4 +496,4 @@ yes('the steps the page lists inside each method are in the order the code runs 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

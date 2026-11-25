@@ -252,4 +252,4 @@ yes('a card search only appears once there is enough to search', src.indexOf('n 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
