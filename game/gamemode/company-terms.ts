@@ -36,8 +36,10 @@
     mayCharter(who)  game/trading-company.js mayCharter(who, terms) over the
                      terms in force (#511, #2700 builds on it)
     freightFor()     { gold, to } for one load into a ship hold
-  The property block posts and pays hauls by these, and the trade block
-  splits a sale by them. Nothing loads a ship yet; that is #2700's.
+  The property block posts and pays hauls by these, the trade block splits a
+  sale by them, and the trade ship dock asks mayCharter before every load
+  and sail (#2700). Nothing calls freightFor yet, so no freight is charged
+  on a load.
 
   THE STAFF CARD ON THE OFFICE PAGE OF K, the same way as #2685's world
   card: the server proposes, staff confirm, and nothing is typed. Staff see
@@ -75,8 +77,13 @@
   #1393, #1646). Its hauls, its tenth and its sales out of the world are in the
   property block of gamemode.js. This file is the company's terms as data staff
   can change, and the arithmetic that reads them. It never touches the world, a
-  pack, a ledger, a purse or a price, and it is not wired in yet: the design and
-  Patrick's questions are on #512 (issuecomment-6245906394).
+  pack, a ledger, a purse or a price. The gamemode reads it through
+  globalThis.__thornswoodCompany (game/gamemode/company-terms.ts): the property
+  block posts and pays hauls by it, the trade block splits sales out of the
+  world by it, and the trade ship dock asks mayCharter before every load and
+  sail (#2700). Nothing calls freightFor yet, so no freight is charged on a
+  load. The design and Patrick's questions are on #512
+  (issuecomment-6245906394).
 
   THE TERMS are one object, kept in game/data/trading-company.json:
 

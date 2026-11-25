@@ -22,6 +22,8 @@ vm.runInContext(mode.slice(mode.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),mode
  '\nglobalThis.rows=MERCHANT_TRADING.expandedScenes();',bundleContext);
 assert.deepEqual(JSON.parse(JSON.stringify(bundleContext.rows)),rows,'the actual hot-reload bundle carries only the reviewed published rows');
 const buildFile=path.join(__dirname,'../../scripts/dev/Build-MerchantTables.js');
+// The builder runs wrapped as node wraps a CommonJS file, so its top-level
+// return (#6036) reads here as it does under node.
 for(const defect of ['hash','missing','commission','duplicate','too-many']) {
  const pins=JSON.parse(JSON.stringify(activation));
  if(defect==='hash')pins.killScenes[0].sha256='0'.repeat(64);
@@ -34,7 +36,7 @@ for(const defect of ['hash','missing','commission','duplicate','too-many']) {
  if(defect==='too-many')pins.killScenes.push({id:'q-extra',sha256:'0'.repeat(64)});
  const fakeFs={readFileSync(file,...args){return file.endsWith('merchant-quest-activation.json')?JSON.stringify(pins):fs.readFileSync(file,...args);},
    writeFileSync(){throw Error('activation validation must never write source');}};
- assert.throws(()=>vm.runInNewContext(fs.readFileSync(buildFile,'utf8'),{__dirname:path.dirname(buildFile),
+ assert.throws(()=>vm.runInNewContext('(function(){'+fs.readFileSync(buildFile,'utf8')+'\n})()',{__dirname:path.dirname(buildFile),
    require:name=>name==='node:fs'?fakeFs:require(name.startsWith('.')?path.join(path.dirname(buildFile),name):name),process:{argv:['node',buildFile,'--check']},console:{log(){}}}),
    /activation|activated|changed/i,defect);
 }

@@ -1,0 +1,45 @@
+name: TURN relay
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/turn-relay.yml'
+      - 'tools/turn-relay/**'
+      - 'scripts/turn/**'
+      - 'records/turn/**'
+      - 'tests/test-6561-*.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  relay-tests:
+    name: Relay tests (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, windows]
+    defaults:
+      run:
+        working-directory: tools/turn-relay
+    env:
+      CGO_ENABLED: '0'
+      GOENV: 'off'
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+    steps:
+      - name: Check out relay source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: tools/turn-relay/go.mod
+          cache-dependency-path: tools/turn-relay/go.sum
+      - run: go mod download
+      - run: go mod verify
+      - run: go test -mod=readonly ./...
+      - run: go vet -mod=readonly ./...

@@ -34,6 +34,10 @@ const http = require('http');
 const vm = require('vm');
 const { spawn } = require('child_process');
 const siteFiles = require('../../tests/site-files');
+// The page's own timers (a request's give-up timer, a line's fade) are
+// unref'd, as a page's timers never hold a process open: node ends when
+// the harness is done, not when a page timer it never waits on fires (#6036).
+const pageTimeout = (fn, ms, ...args) => setTimeout(fn, ms, ...args).unref();
 
 const APP = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
@@ -195,7 +199,7 @@ function runPage(sent, statement, apiHtml) {
       if (u === '/api/downloads') return Promise.resolve({ ok: true, json: () => Promise.resolve({ html: apiHtml }) });
       return new Promise(noop);
     },
-    setTimeout, clearTimeout,
+    setTimeout: pageTimeout, clearTimeout,
     requestAnimationFrame: function (f) { f(); },
     matchMedia: function () { return { matches: false }; },
     addEventListener: noop
@@ -245,5 +249,5 @@ async function pageChecks(apiHtml) {
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -31,6 +31,6 @@ tool wear once. No source, item, NPC, spawn, recipe, yield table, asset or
 engine change is added. Alpha quest/trade state is disposable; this section
 introduces no historical-state migration or preservation work.
 
-Five other scarce-resource interactions and seven retrievals remain required.
-Source implementation and tests do not establish a Dev release; it is live
-only once deployed.
+The other nine scarce works and all seven retrievals have their own
+appointed specialists ([Appointed specialists for original work](merchant-legacy-offers.md)).
+`node game/tests/test-merchant-pearl-bed.js` holds this work.

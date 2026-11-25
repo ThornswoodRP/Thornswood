@@ -39,6 +39,10 @@ on:
         description: 'Only say what would be drafted (New-NexusRevision -WhatIf); write nothing to Nexus'
         type: boolean
         default: true
+      refresh_tag:
+        description: 'Repair only these existing mod identities (comma-separated Nexus mod numbers); files must already match the record'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -52,6 +56,7 @@ jobs:
     runs-on: windows-latest
     environment: desk
     permissions:
+      actions: read
       contents: read
       issues: write
     # Install-NexusRevision downloads every mod of the collection (its
@@ -61,11 +66,20 @@ jobs:
       # The history without the files' old contents, so Nexus.ps1 can work out
       # the launcher's number it sends as Application-Version
       # (LauncherVersion.ps1, #5179).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
+
+      # The Last plugin's record and recipe, which the draft is held to, are
+      # the box's content build and never committed (#5191, stage 4e): the
+      # newest a merge release kept, laid as the gate's shares lay it
+      # (build.yml, "Lay the newest content build"). Reading the list of
+      # kept builds is what actions: read is for.
+      - name: Lay the newest content build
+        uses: ./.github/actions/lay-content
 
       - name: Draft, hold to the record, publish
         id: publish
@@ -74,10 +88,12 @@ jobs:
           THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
           RECORD_OUT: ${{ runner.temp }}/collection-record
           WHATIF: ${{ github.event_name == 'workflow_dispatch' && inputs.whatif }}
+          REFRESH_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_tag || '' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $a = @{ Out = $env:RECORD_OUT }
           if ($env:WHATIF -eq 'true') { $a.WhatIf = $true }
+          if ($env:REFRESH_TAG) { $a.RefreshTag = @($env:REFRESH_TAG.Split(',') | ForEach-Object { $_.Trim() }) }
           & (Join-Path $env:GITHUB_WORKSPACE 'scripts/release/Publish-CollectionRecord.ps1') @a
           exit $LASTEXITCODE
 

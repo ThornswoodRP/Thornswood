@@ -37,24 +37,16 @@ The first push sets the upstream. It puts this branch on GitHub under the same n
 
 ### After a change to the content plugin
 
-A change to a plugin in `game\content` (`Thornswood-Content.esp` and the two beside it) changes the tables the server reads out of the load order. Rebuild all of them before you commit, on the VPS box from any machine with box access (below), or on a PC with the game at `C:\Thornswood`:
+The content plugin `Thornswood-Content.esp`, `Thornswood-Last.esp` and the tables the server reads out of the load order are built on the box from their sources and are not committed (#5191). A change to the plugin is a change to its sources: the numbers in `scripts\mods\Add-ContentRecords.py`, `game\data\station-sites.json`, `records\recipe-owners.json` and the other files `scripts\mods\ContentPaths.ps1` names. Commit those, and write in the plugin's entry in `records\asset-provenance.json` what your change put in it. The register holds no hash for the plugin: the box builds it at each merge, and its build's `content-build.json` holds its sha256. The merge's build makes the plugin and every table (`scripts\mods\Rebuild-ContentTables.ps1` runs every builder in `scripts\mods\content-tables.json`, in order, on the box), the merge release runs the content checks over it, and every deploy and checkout lays that build (`docs\DEPLOY-AGENT.md`, "The content build").
 
-```powershell
-.\scripts\mods\Rebuild-ContentTables.ps1
-```
-
-It runs every builder in `scripts\mods\content-tables.json`, in order, and writes each plugin's new sha256 into `records\asset-provenance.json`. It ends with `All <n> builders ran.` and a list of every file that changed: commit those with the plugin, and write in the plugin's entry in `records\asset-provenance.json` what your change put in it. When a builder fails it prints `STOP.`, names the builder, and runs nothing after it.
-
-One builder needs no game: commit first, then run it on the VPS box against the dev server's plugins, its load order and Skyrim's archives there, from any machine with box access (a cloud thread runs `pwsh scripts/vps/Setup-CloudSsh.ps1` first). What it writes under `game`, `records` and `docs\systems` comes back into your checkout:
+Your pull request's gate leaves out the content checks that read a file you changed, since they would hold your change to the old tables. To see what one builder makes of it before the merge, commit first, then run that builder on the VPS box against the dev server's plugins, its load order and Skyrim's archives there, from any machine with box access (a cloud thread runs `pwsh scripts/vps/Setup-CloudSsh.ps1` first). What it writes comes back into your checkout to read; it is ignored by git and is not committed:
 
 ```powershell
 pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Build-LastPlugin.py --data '{data}'
 pwsh scripts/mods/Run-OnBox.ps1 scripts/dev/Build-NpcPopulation.py --settings '{settings}' --strings-dir '{data}'
 ```
 
-`{data}` is the run's copy of the plugins with this commit's own in their place, `{plugins}` the server's load order as a plugins.txt and `{settings}` as a server-settings.json. The whole rebuild runs the same way (`Run-OnBox.ps1 scripts/mods/Rebuild-ContentTables.ps1 -Data '{data}' -PluginsTxt '{plugins}'`), and writes the tables a game PC writes: every builder reads the load order `game\data\npc-population.json` records, and the crime table reads the script pack in `records\papyrus-scripts.json` (#3105).
-
-From a cloud thread the deploy gate runs that whole rebuild with main's builders, and one command puts the tables on the pull request's branch: from a checkout at the pull request's head with nothing uncommitted, `pwsh scripts/mods/Rebuild-PullTables.ps1 -Pull <number>` starts `Rebuild-ContentTables -Pull <number> -Head <its head commit>` through `scripts/vps/Box-Run.ps1`, then commits what came back and pushes it to the branch. It ends with the new commit, or a line starting `STOP.` that says why nothing was committed. The run reads only the pull request's data files (the content plugin, `records\recipe-owners.json`, `game\data\last-plugin-policy.json` and `scripts\mods\content-salvaged.json`), never its code, so a change to a builder is merged on its own first. Add `-Stations` when the stations moved: it runs `Build-StationSites.py` and `Add-ContentRecords.py --masters` before the chain.
+`{data}` is the run's copy of the plugins with this commit's own in their place and `{settings}` the server's load order as a server-settings.json. The tables of main's newest build come back over your checkout with `pwsh scripts/release/Get-ContentBuild.ps1 -Newest`.
 
 ### Switch between branches
 

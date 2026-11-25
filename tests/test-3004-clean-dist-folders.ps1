@@ -40,7 +40,7 @@ function Yes([string]$what, [bool]$cond) {
 }
 
 # ---- 1. it asks Where.ps1 for the place -------------------------------------
-$text = [IO.File]::ReadAllText([IO.Path]::Combine($realRepo, 'scripts', 'mods', 'Clean-Everything.ps1'))
+$text = [IO.File]::ReadAllText([IO.Path]::Combine($realRepo, 'scripts', 'dev', 'Clean-Everything.ps1'))
 Yes 'Clean-Everything asks Where.ps1 Dist' ($text -match "Where\.ps1'\)\s+Dist\b")
 Yes '  and no longer reads one $dist under $Root' (-not ($text -match '\$dist\s*=\s*\$\(if \(Test-Path -LiteralPath \$Root\)'))
 
@@ -72,7 +72,7 @@ try {
 
     $repo = Join-Path $T 'Thornswood-Repo'
     foreach ($rel in 'layout.json', 'scripts\release\Where.ps1', 'scripts\vps\Vps.ps1', 'scripts\vps\Send-Script.ps1',
-                     'scripts\vps\vps.json', 'scripts\mods\Clean-Everything.ps1') {
+                     'scripts\vps\vps.json', 'scripts\dev\Clean-Everything.ps1') {
         $parts = $rel -split '\\'
         $from = $realRepo; $to = $repo
         foreach ($p in $parts) { $from = Join-Path $from $p; $to = Join-Path $to $p }
@@ -80,7 +80,7 @@ try {
         Copy-Item -LiteralPath $from -Destination $to
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $repo '.git') | Out-Null
-    $clean = Join-Path (Join-Path (Join-Path $repo 'scripts') 'mods') 'Clean-Everything.ps1'
+    $clean = Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Clean-Everything.ps1'
 
     function Put([string]$path, [int]$bytes, [datetime]$when) {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null

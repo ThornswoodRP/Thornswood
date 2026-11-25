@@ -420,4 +420,4 @@ yes('and the page hands the front a way in that the front uses by that name',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -47,7 +47,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // The text between two markers, or '' when either is not there.
@@ -117,6 +117,7 @@ const b = a < 0 ? -1 : src.indexOf(END, a);
 const block = (a >= 0 && b >= 0) ? src.slice(a, b + END.length) : null;
 yes('gamemode.js still has its online writer', block !== null);
 if (!block) done();
+else {
 
 const box = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2740-'));
 const dataDir = path.join(box, 'data');
@@ -178,6 +179,7 @@ try {
 }
 yes('the block starts its writer', typeof tick === 'function');
 if (typeof tick !== 'function') done();
+else {
 const read = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } };
 
 room = { 1: { name: 'Camilla' } };
@@ -211,3 +213,4 @@ yes('no file but the two is left in either folder',
 
 try { fs.rmSync(box, { recursive: true, force: true }); } catch (e) { }
 done();
+}}

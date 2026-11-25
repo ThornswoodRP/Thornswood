@@ -158,15 +158,15 @@ const opened = [];
 
 /* One page's socket, resolved once welcomed. Keeps its last roster and the
    sdp and ice it was sent. */
-async function page(s, pid) {
+async function page(s, pid, voice = true) {
   const token = await joinToken(s, pid);
   return new Promise((ok) => {
     const ws = new WebSocket('ws://127.0.0.1:' + s.port + '/', ['thornswood', token]);
     opened.push(ws);
     const me = { pid: pid, ws: ws, open: false, welcomed: false, closed: false, peer: 0,
-                 roster: null, rosters: 0, sdp: [], ice: [] };
+                 roster: null, rosters: 0, sdp: [], ice: [], restarts: [], pongs: 0 };
     const late = setTimeout(() => ok(me), BOUND_MS);
-    ws.onopen = () => { me.open = true; ws.send(JSON.stringify({ t: 'join', profileId: pid, name: 'Person ' + pid })); };
+    ws.onopen = () => { me.open = true; ws.send(JSON.stringify({ t: 'join', profileId: pid, name: 'Person ' + pid, voice })); };
     ws.onmessage = (ev) => {
       let m = null;
       try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
@@ -174,6 +174,8 @@ async function page(s, pid) {
       if (m.t === 'peers') { me.roster = m.peers; me.rosters++; }
       if (m.t === 'sdp') me.sdp.push(m);
       if (m.t === 'ice') me.ice.push(m);
+      if (m.t === 'voice-restart') me.restarts.push(m);
+      if (m.t === 'pong') me.pongs++;
     };
     ws.onclose = () => { me.closed = true; clearTimeout(late); ok(me); };
     ws.onerror = () => { if (!me.open) { me.closed = true; clearTimeout(late); ok(me); } };
@@ -228,6 +230,7 @@ function onRoster(me, other) { return !!me.roster && me.roster.some((r) => r.pee
   }
   await world('the inn', [50, 0, 0], '');
   const a = await page(s, 101);
+  const textOnly = await page(s, 101, false); // same in-world profile, but not a voice peer
   const b = await page(s, 102);
   const c = await page(s, 103);
   const d = await page(s, 104);
@@ -238,6 +241,39 @@ function onRoster(me, other) { return !!me.roster && me.roster.some((r) => r.pee
       await until(() => onRoster(a, b) && onRoster(b, a)));
   send(b, { t: 'sdp', to: a.peer, sdp: { type: 'offer', sdp: 'an offer from b' } });
   yes('  and their signalling is relayed', await until(() => heard(a, b.peer) === 1), 'heard ' + heard(a, b.peer));
+
+  // #6530: a separate closed-shape request, not SDP/ICE payload overloading.
+  // Every request must pass the same authenticated voice-place and mutual
+  // visibility boundaries, plus individual voice flags and fixed direction.
+  const restart = { t: 'voice-restart', to: a.peer, ufrag: 'currentOffererUfrag' };
+  send(b, restart);
+  yes('a visible answerer can ask its offerer to restart just that pair', await until(() => a.restarts.length === 1));
+  yes('the service rebuilds the request and stamps its authenticated sender',
+      JSON.stringify(a.restarts[0]) === JSON.stringify({ t: 'voice-restart', to: a.peer, ufrag: restart.ufrag, from: b.peer }));
+  const invalid = [
+    { ...restart, from: a.peer }, { ...restart, extra: true },
+    { ...restart, to: String(a.peer) }, { ...restart, to: 0 }, { ...restart, to: -1 },
+    { ...restart, to: a.peer + 0.5 }, { ...restart, to: b.peer },
+    { ...restart, ufrag: '' }, { ...restart, ufrag: 'abc' },
+    { ...restart, ufrag: 'x'.repeat(257) }, { ...restart, ufrag: 'not an ice fragment' },
+    { ...restart, ufrag: null }, { ...restart, ufrag: 42 }, { t: restart.t, to: a.peer }
+  ];
+  invalid.forEach((m) => send(b, m));
+  send(a, { ...restart, to: b.peer }); // offerer cannot ask its answerer
+  send(textOnly, restart);           // hasVoice(profile) alone would allow this
+  send(b, { ...restart, to: textOnly.peer });
+  send(c, restart); send(d, restart); // other cell / too far
+  const unplaced = await page(s, 105);
+  send(unplaced, restart);           // authenticated, but no voice place
+  async function barrier(p) {
+    const before = p.pongs; send(p, { t: 'ping' });
+    if (!await until(() => p.pongs > before)) throw new Error('heartbeat barrier did not finish');
+  }
+  await Promise.all([a, b, c, d, textOnly, unplaced].map(barrier));
+  send(b, { ...restart, ufrag: 'anotherCurrentUfrag' });
+  yes('all invalid, out-of-view, unplaced, reverse and chat-only requests were refused',
+      await until(() => a.restarts.length >= 2) && a.restarts.length === 2 &&
+      a.restarts[1].ufrag === 'anotherCurrentUfrag' && b.restarts.length === 0 && textOnly.restarts.length === 0);
 
   // ---------------------------------- out of reach: off the roster, refused
   yes('a page in another cell is on nobody\'s roster there, nor they on its',

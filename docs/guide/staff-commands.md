@@ -64,6 +64,14 @@ A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff 
 | `/stall end` | Ends somebody's keeping of a market stall, logged. End this claim on the stall's panel sends it (#3160) |
 | `/cart staff`, `/cart draft`, `/cart confirm <base>`, `/cart add <stop>`, `/cart bring <cart>` | The cart stops and roads: opens them, drafts and confirms a change, puts a new cart at a stop, and brings in a cart on the road. Cart stops and roads on the Office page of K opens them (#3158) |
 
+## Guild work
+
+Staff. Typed in chat.
+
+| Command | What it does |
+| --- | --- |
+| `/book reward <good>`, `/book reward <good> <gold>`, `/book reward <good> start` | Reads, sets or puts back on its starting price what a good pays each in guild commissions (#6180). Name the good as the panel does, or by its record: `/book reward fur boots 12`, `/book reward 86983:Skyrim.esm 9`. Work already taken keeps the pay it was taken at. A hold's submitted price list still sets only what its traders buy and sell |
+
 ## Crafting
 
 Staff.
@@ -81,7 +89,7 @@ Staff.
 | `/warn <person> <why>` | Tells them that staff have warned them, why, and that the next step is being removed from the world |
 | `/freeze <person> [why]` | Holds them where they stand, across a reconnect |
 | `/unfreeze <person>` | Lets them go |
-| `/silence <person> [minutes] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. 30 minutes unless you say, a day at most. Their name stays |
+| `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
 
@@ -132,5 +140,5 @@ Not from the chat: `/restart` and `/shutdown` answer that restarts are not run f
 
 | Command | Who | What it does |
 | --- | --- | --- |
-| `/close [why]` | Staff, in a ticket: the bot's `STAFF_ROLES`, by id or name, never Manage Threads alone (#1342) | Closes the ticket |
+| `/close [why]` | Staff (`STAFF_ROLES`, by ID or name), or a role ID in `UPPER_STAFF_ROLES` for a Faction Leader ticket. Manage Threads alone does not qualify | Archives and locks the ticket from inside its own thread |
 | `/test-task title body [tag]` | Owner, Dev and Lead Gamemaster (`TEST_TASK_ROLES`) | Posts one thread: tagged Main (the default) in the #test-tasks forum, for testers on main, or tagged Dev in the staff-only #dev-test-tasks, for something someone on dev has to measure (Patrick, 12 Oct). The Live smoke checklist and `/live-smoke` were taken out on 11 October |

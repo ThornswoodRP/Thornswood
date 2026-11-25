@@ -135,7 +135,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Say("Voice: did not start: " + ex.Message);
+                Say("Voice: did not start: " + Failure.Say("Voice, starting", ex));
             }
         }
 
@@ -269,7 +269,7 @@ namespace Thornswood
             }
             catch (Exception e)
             {
-                if (log != null) log("Voice: could not get a join token (" + e.Message + ").");
+                if (log != null) log("Voice: could not get a join token (" + Failure.Why("Voice, the join token", e, "thornswood.net") + ").");
                 return "";
             }
         }

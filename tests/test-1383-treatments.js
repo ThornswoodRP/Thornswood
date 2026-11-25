@@ -759,4 +759,4 @@ yes('the injury page no longer lists the treatments or the blows as not in',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

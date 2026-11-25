@@ -110,4 +110,4 @@ state = { prof: 'smith', half: 'edgewright', ranks: { edgewright: 'master' } };
 yes('somebody with no enchanter half is left to recipelessCraft', ask(DAGGER, 0x2e4f4) === '');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

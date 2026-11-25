@@ -33,12 +33,20 @@
   Get-ThornswoodContentOrder). The first build on the box, 12 Nov, read the
   dev server's folder and order, which are revision 7's, so it stopped at
   Build-BuildingHolds.py naming revision 8's Improved Eyes Skyrim.esp: no
-  machine but One's Vortex game could move the recorded order (#5648). When
-  the order moves, the catalogue is built from it first, as content-tables.json's
-  notInChain says it is when the collection's order moves:
-  scripts\dev\Build-NpcPopulation.py, then scripts\dev\Build-ResourceLocations.py
-  (game\data\resource-locations.json; the docs' CSV lists it also writes are
-  not brought back). The chain then reads that order.
+  machine but One's Vortex game could move the recorded order (#5648).
+
+  ORDER. The order is records\load-order.json's, which the pull request that
+  moves the records to a new revision moves too (Set-LoadOrder.ps1). Until
+  16 Nov 2026 it was game\data\npc-population.json's, a table this build
+  writes, so a build read its order back from the build before it. So the
+  catalogue, scripts\dev\Build-NpcPopulation.py, is built from the order
+  first in every build, and the chain then reads that order. It reads none of
+  Thornswood-Last.esp's records (#5191), which its folder has from the
+  server; the chain's own catalogue step, after Build-LastPlugin.py, holds
+  the bytes of the plugin that step made. Until 16 Nov 2026
+  scripts\dev\Build-ResourceLocations.py was built here too, out of the
+  server's Last plugin and the tables of the build before; it is a step of
+  the chain now, after the catalogue.
 
   WHAT A BUILD IS KEPT BY. Its inputs: the server it was built against and
   every file Run-OnBox.ps1 sends for the chain (ContentPaths.ps1), by the
@@ -79,6 +87,17 @@
   Nothing is kept: every file comes back in -Out, station-sites.json among
   them, for that pull request, and the line MEASURED <key> says which build
   it measured over.
+
+  WITHOUT THE LAST PLUGIN BEFORE IT IS MADE (#5191). Patrick's B on
+  q-5191-last-plugin-loop (15 Nov 2026): the steps of the chain before
+  Build-LastPlugin.py never read Thornswood-Last.esp, which is made from
+  their own tables, and each takes what the Last plugin changes from the data
+  that decides it. Rebuild-ContentTables.ps1 gives them the order without it
+  on every build. Until 16 Nov 2026 that was a measurement,
+  'Build-Content -WithoutLast', which built the commit so and held every file
+  to the build kept for its key; its run that day found the four tables that
+  read the plugin of the build before (doors, cast, crime and recipes), and
+  each was changed on its own before the measurement became the build.
 #>
 [CmdletBinding()]
 param(
@@ -122,7 +141,16 @@ function Invoke-BuildGit([string[]]$Words) {
     try { $o = @(& git -C $repo @Words 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
     return [pscustomobject]@{ Out = $o; Code = $LASTEXITCODE }
 }
-function Stop-Build([string]$Why) { Write-Host ('STOP. ' + $Why) -ForegroundColor Red; exit 1 }
+function Stop-Build([string]$Why) { Write-Output ('STOP. ' + $Why); exit 1 }
+# Every way this ends 1 says why on a STOP line, which the deploy agent puts
+# in the Deployment's status (ContentBuild.cs). An error nothing here caught,
+# such as a throw from Run-OnBox.ps1 before it reaches the box, ended the
+# script with exit 1 and no line at all, so #6351's status said only "ended
+# with exit 1:" and the reason had to be read off the box.
+trap {
+    $at = [IO.Path]::GetFileName([string]$_.InvocationInfo.ScriptName)
+    Stop-Build ($_.Exception.Message + $(if ($at) { " ($at line $($_.InvocationInfo.ScriptLineNumber))" } else { '' }) + ' Nothing was kept.')
+}
 function Get-Sha256([string]$Path) {
     $s = [IO.File]::OpenRead($Path)
     try { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($s)).ToLowerInvariant() } finally { $s.Dispose() }
@@ -171,11 +199,36 @@ if ($built) {
     }
     # What each tool wrote came back into this checkout. Run-OnBox.ps1 sends
     # a commit, never the tree, so it is committed here, in a commit the
-    # gate's next run throws away.
+    # gate's next run throws away. What a build writes is ignored by git
+    # (#5191, stage 4e), so it is added by name, past the ignore.
+    $builtHere = Get-ThornswoodBuiltPaths -Repo $repo
     function Save-Step([string]$Tool) {
         $c = Invoke-BuildGit @('add', '--all')
+        $made = @($builtHere | Where-Object { Test-Path -LiteralPath (Join-Path $repo $_) })
+        if ($c.Code -eq 0 -and $made.Count) { $c = Invoke-BuildGit (@('add', '--force', '--') + $made) }
         if ($c.Code -eq 0) { $c = Invoke-BuildGit @('-c', 'user.name=Thornswood Gate', '-c', 'user.email=gate@thornswood.invalid', 'commit', '--quiet', '--allow-empty', '-m', "what $Tool wrote") }
         if ($c.Code -ne 0) { Stop-Build ("what $Tool wrote could not be committed in the checkout: " + ($c.Out -join ' ') + ' Nothing was kept.') }
+    }
+    # The files -Names as the checkout's HEAD holds them, written under -Into
+    # at their repository paths: the bytes of each blob, as Run-OnBox.ps1
+    # sends a commit's (Artifact.ps1). Returns each name with its sha256.
+    function Save-CommittedFiles([string[]]$Names, [string]$Into) {
+        . (Join-Path $Here '..\deploy\Artifact.ps1')
+        Initialize-ThornswoodArtifactType
+        $ids = @{}
+        $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $lines = @(& git -C $repo ls-tree -r --full-tree HEAD -- @Names 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
+        foreach ($l in $lines) { if ($l -match '^\d{6} blob ([0-9a-f]{40})\t(.+)$') { $ids[$Matches[2]] = $Matches[1] } }
+        $lost = @($Names | Where-Object { -not $ids.ContainsKey($_) })
+        if ($lost.Count) { throw ("the build's commit does not hold " + (@($lost | Select-Object -First 5) -join ', ') + ', which the chain wrote.') }
+        $git = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+        $datas = [ThornswoodArtifactZip]::ReadBlobs($git, $repo, [string[]]@($Names | ForEach-Object { $ids[$_] }))
+        for ($i = 0; $i -lt $Names.Count; $i++) {
+            $to = Join-Path $Into $Names[$i]
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+            [IO.File]::WriteAllBytes($to, $datas[$i])
+            [pscustomobject]@{ Name = $Names[$i]; Sha = Get-Sha256 $to }
+        }
     }
     # The record's plugins (the header says why) and the order it moves to.
     try {
@@ -186,13 +239,20 @@ if ($built) {
         }
     } catch { Stop-Build ('the record''s plugins are not on the box: ' + $_.Exception.Message + ' Nothing was built.') }
     Write-Host ("the load order: collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +
-        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' the catalogue records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as the catalogue records it' }) +
+        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' records\load-order.json records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as records\load-order.json records it' }) +
         "; the collection's plugins from $Store")
     # Quoted, so each goes to the runner as one of the tool's words and never
     # as a parameter of its own.
+    # A step that ends other than 0 stops the build with the step's own
+    # reason: the runner's last STOP line (Run-OnBox.ps1 says the tool's
+    # last, #6351). What the runner says is passed on as it is said.
     function Invoke-Step([string]$Tool, [string[]]$Words, [string]$Then) {
-        & $Runner $Tool @Words -Server $Server -Collection $Store
-        if ($LASTEXITCODE -ne 0) { Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $LASTEXITCODE. $Then") }
+        $said = @(& $Runner $Tool @Words -Server $Server -Collection $Store 6>&1 | ForEach-Object { $t = [string]$_; Write-Host $t; $t })
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            $why = @($said | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+            Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $code" + $(if ($why) { ': ' + $why.Substring(6).TrimEnd('.') } else { '' }) + ". $Then")
+        }
         Save-Step (Split-Path -Leaf $Tool)
     }
     if ($Stations) {
@@ -211,22 +271,30 @@ if ($built) {
         Write-Host ("the stations are measured over the build $($from[0].Build.key) of $($from[0].Build.commit), $(@($from[0].Build.files.PSObject.Properties).Count) files")
         Invoke-Step 'scripts/dev/Build-StationSites.py' @('--data', '{data}') 'The plugin was not built and nothing was measured.'
     }
-    Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
-    $moves = @()
-    if ($order.Moved) {
-        # The catalogue first, in the order it moves to; the chain holds its
-        # plugin list to the catalogue's order (Rebuild-ContentTables.ps1).
-        Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The order did not move, the chain did not run and nothing was kept.'
-        Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
-        $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
-    }
+    # The plugin names its fine dishes from the load order (#6351), so it is
+    # given the order's plugin list as well as its data folder.
+    Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}', '--plugins', '{plugins}') 'The chain did not run and nothing was kept.'
+    # The catalogue first, in the build's order; the chain holds its plugin
+    # list to the catalogue's order (Rebuild-ContentTables.ps1). Every build,
+    # since the order is records\load-order.json's and not the last build's
+    # catalogue (ORDER, above).
+    Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The chain did not run and nothing was kept.'
+    $moves = @('game/data/npc-population.json')
     Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' @('-Data', '{data}', '-PluginsTxt', '{plugins}') 'Nothing was kept.'
 
     # The build: the plugin and every file the chain writes, a folder it
     # writes taken whole.
     $part = $done + '.part'
     if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Recurse -Force }
-    $files = [ordered]@{}
+    # Each file is taken from the commit the last step made, as git holds it,
+    # never from this checkout's working tree. A file no step changed is
+    # one the gate's checkout wrote, with whatever line endings that checkout
+    # gave it when its blob last changed: a .gitattributes rule added later
+    # does not rewrite it, so on the box (core.autocrlf true) the build of
+    # 29e6a4c carried docs/FISHING-SPOTS.csv and HANGING-GAME-SPOTS.csv CRLF,
+    # which git and their builder hold LF, and every merge release after it
+    # stopped on test-3029-builder-eol.js (16 Nov 2026).
+    $names = New-Object 'Collections.Generic.List[string]'
     foreach ($w in @($Plugin) + @($moves) + @($content.Writes)) {
         $full = Join-Path $repo $w
         $each = @()
@@ -235,22 +303,16 @@ if ($built) {
             $each = @(Get-ChildItem -LiteralPath $full -Recurse -File | ForEach-Object {
                     $w + '/' + [IO.Path]::GetRelativePath($full, $_.FullName).Replace('\', '/') })
         } else { Stop-Build "the chain says it writes $w, and there is no such file after it ran. Nothing was kept." }
-        foreach ($f in $each) {
-            if ($files.Contains($f)) { continue }
-            $to = Join-Path (Join-Path $part 'files') $f
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
-            Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to
-            $files[$f] = Get-Sha256 $to
-        }
+        foreach ($f in $each) { if (-not $names.Contains($f)) { $names.Add($f) } }
     }
+    $files = [ordered]@{}
+    try { Save-CommittedFiles $names.ToArray() (Join-Path $part 'files') | ForEach-Object { $files[$_.Name] = $_.Sha } }
+    catch { Stop-Build ($_.Exception.Message + ' Nothing was kept.') }
     if ($Stations) {
         # Kept nowhere: the measurement goes back for a pull request.
         if ($Out) {
-            foreach ($f in @($files.Keys) + @('game/data/station-sites.json')) {
-                $to = Join-Path $Out $f
-                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
-                Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $to -Force
-            }
+            try { $null = Save-CommittedFiles ([string[]]@(@($files.Keys) + @('game/data/station-sites.json'))) $Out }
+            catch { Stop-Build ($_.Exception.Message + ' Nothing was handed back.') }
         }
         Remove-Item -LiteralPath $part -Recurse -Force
         Write-Host ("MEASURED $($from[0].Build.key)")

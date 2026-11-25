@@ -157,6 +157,34 @@
     ],
     "privacy": [
       {
+        "sha256": "3dd44818bb33610a3b91a8af612ebc666b11e2e76fe416e8e6a8527de94abf06",
+        "changed": "2026-11-18"
+      },
+      {
+        "sha256": "f8b0a1555479d2ec9bbbf27917bdac5950d41d363078e1913f8aa8facb835604",
+        "changed": "2026-11-18"
+      },
+      {
+        "sha256": "2bf68659cdb93d11451c3f678a82b8e4ba05639ddb0d121f66e666fdcf36fd92",
+        "changed": "2026-11-16"
+      },
+      {
+        "sha256": "7e5f8bba514cd1c6bfd85521e841f1385ff2bbb828e33de705f23bf06e4bada4",
+        "changed": "2026-11-16"
+      },
+      {
+        "sha256": "2bf68659cdb93d11451c3f678a82b8e4ba05639ddb0d121f66e666fdcf36fd92",
+        "changed": "2026-11-16"
+      },
+      {
+        "sha256": "6c088074d8c1ff03d1ca654afc2f31b53a495789602f1ae7c89462b6f3f517b0",
+        "changed": "2026-11-16"
+      },
+      {
+        "sha256": "2bf68659cdb93d11451c3f678a82b8e4ba05639ddb0d121f66e666fdcf36fd92",
+        "changed": "2026-11-16"
+      },
+      {
         "sha256": "281afc2684d11ca5e077d953a984cc729fe72f33953122f7557b23eed95e4ac9",
         "changed": "2026-10-30"
       },

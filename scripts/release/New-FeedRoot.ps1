@@ -133,13 +133,16 @@ if ($dropped) { Say "  $dropped file(s) in the folder that this release does not
 
 # ---- each file by its sha256
 $fetched = 0; $kept = 0; $bytes = [int64]0
+$ordinal = 0
 foreach ($k in $files) {
+    $ordinal++
     if ($client.ContainsKey($k)) { continue }
     $m = [regex]::Match([string]$map[$k], '^(\d+):([0-9a-fA-F]{64})$')
     if (-not $m.Success) { throw "The record names $k as '$([string]$map[$k])', not a size and a sha256, so it cannot be fetched." }
     $sha = $m.Groups[2].Value.ToLowerInvariant()
     $dest = Join-Path $game $k
     if ((Test-Path -LiteralPath $dest -PathType Leaf) -and (Get-BaselineEntry $dest) -eq ($m.Groups[1].Value + ':' + $sha)) { $kept++; continue }
+    Say ("  fetching {0} of {1}: {2} ({3} bytes)" -f $ordinal, $files.Count, ($k -replace '[\x00-\x1f\x7f]', '?'), $m.Groups[1].Value) 'DarkGray'
     try { [void](Get-FeedAssetFile (Get-RecordFileUrl ([string]$ptr.url) $sha) $sha $dest $sd $SiteUrl) }
     catch { throw ("$k could not be staged: " + $_.Exception.Message) }
     $fetched++

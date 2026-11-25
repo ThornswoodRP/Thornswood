@@ -275,11 +275,11 @@ async function person(profileId, name) {
     ws.onmessage = (ev) => {
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'welcome') { resolve(me); }
+      if (m.t === 'welcome') { clearTimeout(late); resolve(me); }
       if (m.t === 'pong') { const p = me.pongs.shift(); if (p) { p(); } }
     };
     ws.onerror = () => reject(new Error('socket error joining as ' + name));
-    setTimeout(() => reject(new Error('no welcome for ' + name + ' in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no welcome for ' + name + ' in four seconds')), 4000);
   });
 }
 /* As the front plugin says it: through say, so press: true (#2251, #2732). */

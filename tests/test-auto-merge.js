@@ -185,5 +185,5 @@ function fake(pages, refuse) {
     /verbScripts\(require\('path'\)\.join\(__dirname, '\.\.', '\.\.'\)\)/.test(read('scripts/ops/Auto-Merge.js')));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  ' + e.stack); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  ' + e.stack); process.exitCode = 1; });

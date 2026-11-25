@@ -55,6 +55,7 @@
 #>
 
 . (Join-Path $PSScriptRoot 'Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named
+. (Join-Path $PSScriptRoot 'Release-Name.ps1')    # Get-ReleaseIdUtc: the instant a release id names
 function Get-BaselineHex([byte[]]$bytes) {
     return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
 }
@@ -266,14 +267,14 @@ function New-FeedReleaseEntry($Pointer, [string]$LastPack, [string]$To) {
     return [pscustomobject]$o
 }
 
-# When a release id says it was made, as yyyyMMddHHmmss, for putting two lists
-# in one order: ids are yyyyMMdd-HHmmss since #1057 and yyyyMMdd-HHmm before,
-# -dev on dev. '' for an id of any other shape.
+# When a release id says it was made, as yyyyMMddHHmmss in UTC, for putting
+# two lists in one order: ids are yyyyMMdd-HHmmssZ since #4950, and
+# yyyyMMdd-HHmmss and yyyyMMdd-HHmm in Mountain time before it
+# (Get-ReleaseIdUtc), -dev on dev. '' for an id of any other shape.
 function Get-FeedReleaseTimeKey([string]$Id) {
-    $m = [regex]::Match([string]$Id, '^(\d{8})-(\d{4})(\d{2})?(?:$|-)')
-    if (-not $m.Success) { return '' }
-    $s = if ($m.Groups[3].Success) { $m.Groups[3].Value } else { '00' }
-    return ($m.Groups[1].Value + $m.Groups[2].Value + $s)
+    $at = Get-ReleaseIdUtc $Id
+    if ($null -eq $at) { return '' }
+    return $at.ToString('yyyyMMddHHmmss', [Globalization.CultureInfo]::InvariantCulture)
 }
 
 # The list as the store keeps it, in the channel's working folder $Dir
@@ -356,32 +357,63 @@ function Add-FeedRelease($doc, $Pointer, [string]$LastPack, [string]$LastPackBef
 # releases stopped on it while staging dev's last release. So the site is only
 # asked where the file is, and a Release's copy comes through the REST API's
 # asset route (Save-ReleaseAsset), which does not go through that web route.
-function Save-SiteAsset([string]$Url, [string]$Part) {
+function Save-SiteAsset([string]$Url, [string]$Part, [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(10)) {
     Add-Type -AssemblyName System.Net.Http
+    if ($Timeout -le [TimeSpan]::Zero) { throw 'The asset transfer budget must be positive.' }
+    $deadline = [Threading.CancellationTokenSource]::new()
+    $deadline.CancelAfter($Timeout)
     $h = [Net.Http.HttpClientHandler]::new()
     $h.AllowAutoRedirect = $false
     $c = [Net.Http.HttpClient]::new($h)
-    $c.Timeout = [TimeSpan]::FromMinutes(10)
+    $c.Timeout = [Threading.Timeout]::InfiniteTimeSpan
     [void]$c.DefaultRequestHeaders.UserAgent.TryParseAdd('Thornswood-Publish')
+    $r = $null
     try {
-        $r = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        $r = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
         $code = [int]$r.StatusCode
         if ($code -eq 200) {
             $in = $r.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
             $out = [IO.File]::Create($Part)
-            try { $in.CopyTo($out) } finally { $out.Dispose(); $in.Dispose() }
+            try { [void]$in.CopyToAsync($out, 81920, $deadline.Token).GetAwaiter().GetResult() } finally { $out.Dispose(); $in.Dispose() }
             return
         }
         $loc = if ($null -ne $r.Headers.Location) { [string]$r.Headers.Location.AbsoluteUri } else { '' }
         if ($code -ge 300 -and $code -lt 400 -and $loc) {
             $m = [regex]::Match($loc, '^https://github\.com/([^/]+)/([^/]+)/releases/download/(.+)/([^/?#]+)$')
-            if (-not $m.Success) { throw "the site sent it to $loc, which is not a GitHub Release's file" }
-            Save-ReleaseAsset $m.Groups[1].Value $m.Groups[2].Value ([uri]::UnescapeDataString($m.Groups[3].Value)) ([uri]::UnescapeDataString($m.Groups[4].Value)) $Part
+            if (-not $m.Success) { throw "the site's redirect is not a GitHub Release's file" }
+            Save-ReleaseAsset $m.Groups[1].Value $m.Groups[2].Value ([uri]::UnescapeDataString($m.Groups[3].Value)) ([uri]::UnescapeDataString($m.Groups[4].Value)) $Part $deadline.Token
             return
         }
         throw "the site answered $code"
     }
-    finally { $c.Dispose() }
+    catch {
+        if ($deadline.IsCancellationRequested) { throw [TimeoutException]::new('The asset transfer timed out.') }
+        throw
+    }
+    finally { if ($r) { $r.Dispose() }; $c.Dispose(); $deadline.Dispose() }
+}
+
+# The same cancellation token follows metadata, redirects and the entire body.
+# HttpClientHandler clears Authorization when following the storage redirect.
+function Invoke-ReleaseAssetTransfer([string]$Url, [hashtable]$Headers, [string]$Part, [Threading.CancellationToken]$CancellationToken) {
+    $c = [Net.Http.HttpClient]::new()
+    $c.Timeout = [Threading.Timeout]::InfiniteTimeSpan
+    $response = $null; $inputStream = $null; $outputStream = $null
+    try {
+        foreach ($key in $Headers.Keys) { [void]$c.DefaultRequestHeaders.TryAddWithoutValidation($key, [string]$Headers[$key]) }
+        $response = $c.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $CancellationToken).GetAwaiter().GetResult()
+        [void]$response.EnsureSuccessStatusCode()
+        $inputStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $outputStream = if ($Part) { [IO.File]::Create($Part) } else { [IO.MemoryStream]::new() }
+        [void]$inputStream.CopyToAsync($outputStream, 81920, $CancellationToken).GetAwaiter().GetResult()
+        if (-not $Part) { return (ConvertFrom-ThornswoodJson ([Text.Encoding]::UTF8.GetString($outputStream.ToArray())) 'GitHub release asset metadata') }
+    }
+    finally {
+        if ($outputStream) { $outputStream.Dispose() }
+        if ($inputStream) { $inputStream.Dispose() }
+        if ($response) { $response.Dispose() }
+        $c.Dispose()
+    }
 }
 
 # The REST API's answers about one Release's files: "<owner>/<repo>/<tag>" ->
@@ -392,38 +424,48 @@ $script:ReleaseAssetIds = @{}
 # its name, then /releases/assets/<id> as application/octet-stream, which
 # answers with GitHub's storage. Signed in with GH_TOKEN (or GITHUB_TOKEN, or
 # gh's own sign in) when there is one: a release has hundreds of files, and
-# GitHub allows sixty unsigned calls an hour. Invoke-WebRequest drops the
+# GitHub allows sixty unsigned calls an hour. HttpClientHandler drops the
 # Authorization header on the redirect to storage, which is another host.
-function Save-ReleaseAsset([string]$Owner, [string]$Repo, [string]$Tag, [string]$Name, [string]$Part) {
-    $api = 'https://api.github.com/repos/' + $Owner + '/' + $Repo
-    $headers = @{ 'User-Agent' = 'Thornswood-Publish'; 'X-GitHub-Api-Version' = '2022-11-28' }
-    $token = [string]$env:GH_TOKEN
-    if (-not $token) { $token = [string]$env:GITHUB_TOKEN }
-    if (-not $token -and (Get-Command gh -ErrorAction SilentlyContinue)) { $token = [string](& gh auth token 2>$null) }
-    if ($token) { $headers['Authorization'] = 'Bearer ' + $token.Trim() }
-    $key = "$Owner/$Repo/$Tag"
-    if (-not $script:ReleaseAssetIds.ContainsKey($key)) {
-        $rel = Invoke-RestMethod -Uri ($api + '/releases/tags/' + $Tag) -Headers ($headers + @{ Accept = 'application/vnd.github+json' })
-        $ids = @{}
-        for ($page = 1; $page -le 20; $page++) {
-            # Through the pipeline, which hands the array's items over one by
-            # one: PowerShell 7's Invoke-RestMethod returns a JSON array whole.
-            $got = @(Invoke-RestMethod -Uri ($api + '/releases/' + $rel.id + '/assets?per_page=100&page=' + $page) -Headers ($headers + @{ Accept = 'application/vnd.github+json' }) | ForEach-Object { $_ })
-            foreach ($a in $got) { if ([string]$a.state -eq 'uploaded') { $ids[[string]$a.name] = [long]$a.id } }
-            if ($got.Count -lt 100) { break }
-        }
-        $script:ReleaseAssetIds[$key] = $ids
+function Save-ReleaseAsset([string]$Owner, [string]$Repo, [string]$Tag, [string]$Name, [string]$Part, [Threading.CancellationToken]$CancellationToken = [Threading.CancellationToken]::None) {
+    $ownDeadline = $null
+    if (-not $CancellationToken.CanBeCanceled) {
+        $ownDeadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromMinutes(10))
+        $CancellationToken = $ownDeadline.Token
     }
-    $ids = $script:ReleaseAssetIds[$key]
-    if (-not $ids.ContainsKey($Name)) { throw "the GitHub Release $Tag holds no file named $Name" }
-    Invoke-WebRequest -Uri ($api + '/releases/assets/' + $ids[$Name]) -Headers ($headers + @{ Accept = 'application/octet-stream' }) -OutFile $Part -UseBasicParsing | Out-Null
+    try {
+        $api = 'https://api.github.com/repos/' + $Owner + '/' + $Repo
+        $headers = @{ 'User-Agent' = 'Thornswood-Publish'; 'X-GitHub-Api-Version' = '2022-11-28' }
+        $token = [string]$env:GH_TOKEN
+        if (-not $token) { $token = [string]$env:GITHUB_TOKEN }
+        if (-not $token -and (Get-Command gh -ErrorAction SilentlyContinue)) { $token = [string](& gh auth token 2>$null) }
+        if ($token) { $headers['Authorization'] = 'Bearer ' + $token.Trim() }
+        $key = "$Owner/$Repo/$Tag"
+        if (-not $script:ReleaseAssetIds.ContainsKey($key)) {
+            $rel = Invoke-ReleaseAssetTransfer ($api + '/releases/tags/' + $Tag) ($headers + @{ Accept = 'application/vnd.github+json' }) '' $CancellationToken
+            $ids = @{}
+            for ($page = 1; $page -le 20; $page++) {
+                # Through the pipeline, which hands a JSON array's items over
+                # one by one, as the metadata reader can return an array whole.
+                $got = @(Invoke-ReleaseAssetTransfer ($api + '/releases/' + $rel.id + '/assets?per_page=100&page=' + $page) ($headers + @{ Accept = 'application/vnd.github+json' }) '' $CancellationToken | ForEach-Object { $_ })
+                foreach ($a in $got) { if ([string]$a.state -eq 'uploaded') { $ids[[string]$a.name] = [long]$a.id } }
+                if ($got.Count -lt 100) { break }
+            }
+            $script:ReleaseAssetIds[$key] = $ids
+        }
+        $ids = $script:ReleaseAssetIds[$key]
+        if (-not $ids.ContainsKey($Name)) { throw "the GitHub Release $Tag holds no file named $Name" }
+        Invoke-ReleaseAssetTransfer ($api + '/releases/assets/' + $ids[$Name]) ($headers + @{ Accept = 'application/octet-stream' }) $Part $CancellationToken
+    } catch {
+        if ($CancellationToken.IsCancellationRequested) { throw [TimeoutException]::new('The asset transfer timed out.') }
+        throw
+    } finally { if ($ownDeadline) { $ownDeadline.Dispose() } }
 }
 
 # Fetches one asset by the url the feed gives it, from the site or from
 # -SiteDir, into $Dest, and refuses bytes that are not the sha256 they are
 # named by. Only /feed[-dev]/assets/<sha256> urls: that is where every asset
 # the feed names has lived since #897.
-function Get-FeedAssetFile([string]$Url, [string]$Sha, [string]$Dest, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net') {
+function Get-FeedAssetFile([string]$Url, [string]$Sha, [string]$Dest, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net', [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(10)) {
     $m = [regex]::Match([string]$Url, '/(feed|feed-dev)/assets/([0-9a-fA-F]{64})(?:[?#].*)?$')
     if (-not $m.Success) { throw "$Url is not an asset on the site, so it cannot be read back." }
     $prefix = $m.Groups[1].Value
@@ -438,7 +480,7 @@ function Get-FeedAssetFile([string]$Url, [string]$Sha, [string]$Dest, [string]$S
         if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "The site has no /$prefix/assets/$name." }
         Copy-Item -LiteralPath $src -Destination $part -Force
     } else {
-        try { Save-SiteAsset ($SiteUrl.TrimEnd('/') + '/' + $prefix + '/assets/' + $name) $part }
+        try { Save-SiteAsset ($SiteUrl.TrimEnd('/') + '/' + $prefix + '/assets/' + $name) $part $Timeout }
         catch { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue; throw ("/$prefix/assets/$name could not be fetched from $SiteUrl" + ': ' + $_.Exception.Message) }
     }
     $got = Get-BaselineFileSha $part

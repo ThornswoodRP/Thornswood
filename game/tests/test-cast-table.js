@@ -83,13 +83,13 @@ function yes(what, cond) {
 const TOOL = process.env.CAST_TOOL || path.join(REPO_DIR, 'scripts', 'dev', 'Build-CastTable.py');
 yes('scripts/dev/Build-CastTable.py is in the repo', fs.existsSync(TOOL));
 // #3543: Thornswood-Last.esp switches off every actor the catalogue cuts. The
-// cast is the list written before that deletion, so none of its records are
-// read but its places: its locations over the ones before it, and of its cells
-// only the location, as Build-NpcPopulation.py reads them (#5089).
+// cast is the list written before that deletion, and since #5191 it is built
+// before that plugin and never reads it: the places it gives a hold come from
+// the policy it is made from (tests/test-5191-cast-holds.py holds that).
 const toolText = fs.existsSync(TOOL) ? fs.readFileSync(TOOL, 'utf8') : '';
-yes('Thornswood-Last.esp keeps its place in the load order, and of it only the locations and its cells\' locations are read',
+yes('Thornswood-Last.esp is left out of the load order and none of it is read',
   /LAST_PLUGIN = 'Thornswood-Last\.esp'/.test(toolText) &&
-  /if name == LAST_PLUGIN:\r?\n[\s\S]*?read\(pl, places\)\r?\n[\s\S]*?\r?\n {12}continue\r?\n {8}read\(pl, t\)\r?\n/.test(toolText));
+  /if n\.lower\(\) != LAST_PLUGIN\.lower\(\)/.test(toolText) && !/name == LAST_PLUGIN/.test(toolText));
 
 // ------------------------------------------------------------ plugin bytes
 function u32(n) { const b = Buffer.alloc(4); b.writeUInt32LE(n >>> 0, 0); return b; }
@@ -422,7 +422,8 @@ const patch = Buffer.concat([
 // built from the catalogue and switches off the actors the catalogue cuts:
 // here Belethor's standing placement and Nazeem at home. Read as an input it
 // would list them as off at the start; the cast is written before anything
-// is deleted, so its actors are not read and every count stays as it was.
+// is deleted, and before that plugin (#5191), so it is not read and every
+// count stays as it was.
 const last = Buffer.concat([
   tes4(['Skyrim.esm']),
   top('CELL', [grup(u32(0), 2, [grup(u32(0), 3, [
@@ -460,14 +461,18 @@ try {
     // would stand twice.
     fs.writeFileSync(path.join(dir, 'plugins.txt'),
       '# a load order of one patch\r\n*skyrim.esm\r\n*Patch.esp\r\n*Thornswood-Last.esp\r\n');
+    // The places Thornswood-Last.esp gives a hold come from its policy
+    // (#5191); this load order has none of the repository's.
+    const policy = path.join(dir, 'policy.json');
+    fs.writeFileSync(policy, JSON.stringify({ placeHolds: { locations: [], cells: [] } }));
     const out = path.join(dir, 'cast.json');
     const run = spawnSync(py[0], py[1].concat([TOOL, '--data', dir, '--plugins',
-      path.join(dir, 'plugins.txt'), '--out', out]), { encoding: 'utf8' });
+      path.join(dir, 'plugins.txt'), '--out', out, '--policy', policy]), { encoding: 'utf8' });
     yes('the script runs to the end on a load order it has never seen', run.status === 0);
     if (run.status !== 0) { console.log(run.stdout + run.stderr); }
 
     const check = spawnSync(py[0], py[1].concat([TOOL, '--data', dir, '--plugins',
-      path.join(dir, 'plugins.txt'), '--out', path.join(dir, 'not-written.json'), '--check']),
+      path.join(dir, 'plugins.txt'), '--out', path.join(dir, 'not-written.json'), '--check', '--policy', policy]),
       { encoding: 'utf8' });
     yes('--check says what it found and writes nothing',
       check.status === 0 && !fs.existsSync(path.join(dir, 'not-written.json')));
@@ -486,8 +491,8 @@ try {
       return named(rows, 'Market Trader').map(function (r) { return r.ref; }).sort().join(' ');
     };
 
-    yes('seven plugins in the load order, though plugins.txt lists Skyrim.esm again as skyrim.esm, Thornswood-Last.esp among them',
-      /^7 plugins in load order \(names sha256 [0-9a-f]{12}\)$/.test(j.readFrom || ''));
+    yes('six plugins in the load order, though plugins.txt lists Skyrim.esm again as skyrim.esm, and Thornswood-Last.esp left out',
+      /^6 plugins in load order \(names sha256 [0-9a-f]{12}\)$/.test(j.readFrom || ''));
     yes('32 placements read, 2 of them deleted, one by a patch that kept only the flag',
       j.counts.placed === 32 && j.counts.deleted === 2);
     yes('a wolf and a mannequin are counted, not listed as people', j.counts.notPeople === 2);
@@ -655,4 +660,4 @@ try {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

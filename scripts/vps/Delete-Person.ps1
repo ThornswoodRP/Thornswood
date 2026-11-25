@@ -39,8 +39,9 @@
   record says and never an address.
 
   WHO. Their Discord id, and their characters: the profile ids linked.json
-  holds for them, which the site checked were theirs when they played, and on
-  a reapply also the ids the record wrote down. A profile id that another
+  holds for them, which the site checked were theirs when they played, and
+  the ids the record wrote down for them, which stay theirs after the site
+  has let go of their link (#4470). A profile id that another
   account also holds is not theirs to delete and is left, and said.
 
   WHAT A REAL RUN REMOVES, the person's own records, in every copy on the box
@@ -57,8 +58,10 @@
                     roster.json, the tickets, applications and calls for help
                     they sent (for-bot\inbox.json), and their gallery
                     pictures, waiting or approved, with the file
-    game servers    each character's change form (world\changeForms, and the
-                    world-before-* and _discarded-* copies), its card
+    game servers    each character's change form (world\changeForms, or the
+                    server's database for a world kept in MongoDB, #6237;
+                    and the world-before-*, world-mongo-* and _discarded-*
+                    copies), its card
                     (private\characters.json and the characters-before-*
                     copies), its mod menu choices (private\mod-settings.json),
                     its take counts (private\take-limit.json) and when it last
@@ -190,6 +193,8 @@
       in a store it reads whole or among the launcher logs, change forms and
       other data files it reads one by one, each such file named (#4203)
     - no node on the PATH (the JSON is edited by node, as the site writes it)
+    - a game server whose world is in MongoDB (#6237) whose database cannot
+      be asked who is in it, through server-log.js beside the server
 
   tests\test-2351-delete-person.ps1 runs it against stand-ins of every store.
 
@@ -376,7 +381,13 @@ if ($Reapply) {
     Say ('record    ' + @($have).Count + ' completed request(s) in ' + $record + $(if ($adds.Count) { ', and ' + $adds.Count + ' more in ' + ($Merge -join ', ') } else { '' }))
     if (-not $people.Count) { Say 'NOTHING TO REAPPLY: no record names a request.'; exit 0 }
 } else {
-    $people = @(@{ discordId = $DiscordId; profiles = @() })
+    # Their characters as the record wrote them down when the request was
+    # made, beside the ones linked.json holds. The site lets go of their link
+    # as it next starts, and a game server that has not started since still
+    # holds those characters and its request for them, so a dry run after the
+    # site started still finds them, and shows that server waiting (#4470).
+    $mine = @(@(Read-Record $record) | Where-Object { $_.discordId -eq $DiscordId } | ForEach-Object { @($_.profiles) } | Sort-Object -Unique)
+    $people = @(@{ discordId = $DiscordId; profiles = @($mine) })
 }
 
 # ------------------------------------------------------------------ node ---
@@ -389,9 +400,15 @@ $core = @'
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const cp = require('child_process');
 const a = JSON.parse(fs.readFileSync(process.argv[2], 'utf8').replace(/^\uFEFF/, ''));
 const say = (s) => process.stdout.write(s + '\n');
-function stop(m) { say('STOP|' + m); process.exit(2); }
+// A stop is thrown, and the catch at the end of this script says it and
+// ends the run with code 2, rather than calling node's exit function, which
+// can hang on Node 24 (#6036). The try runs to the end of the script.
+class Stop extends Error { }
+function stop(m) { throw new Stop(m); }
+try {
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // One shape for a character's form id (#2870); game\form-id.js is the
@@ -800,7 +817,10 @@ for (const person of people) {
       if (!isDir(R)) continue;
       // The form ids of their characters found here, for the release list.
       const A = new Set();
-      const worlds = names(R).filter((n) => /^world(-before-.+)?$/i.test(n)).sort();
+      // world-mongo-<stamp> is a tool's read-out of a world kept in MongoDB
+      // (World.ps1, #6237): nothing runs from it, and once saved it holds only
+      // the forms the tool set aside, in changeForms\_discarded-*.
+      const worlds = names(R).filter((n) => /^world(-before-.+|-mongo-\d{8}-\d{6})?$/i.test(n)).sort();
       for (const w of worlds) {
         const forms = path.join(R, w, 'changeForms');
         const dirs = [forms].concat(names(forms).filter((n) => /^_discarded-/.test(n)).map((n) => path.join(forms, n)));
@@ -841,6 +861,35 @@ for (const person of people) {
               // (FormDesc::ToString); the list keeps its runtime form id (#2870).
               if (formIdOf(o.formDesc)) A.add(formIdOf(o.formDesc));
             }
+          }
+        }
+      }
+      /*
+        A live server whose world is in MongoDB (#6237) keeps its characters
+        in its database, not in world\changeForms. They are found by asking
+        it, through server-log.js beside the server (--people, which reads
+        the database the way the server's own start does), and they go the
+        way a live server's files go: the server takes them out at its next
+        start, before the engine loads, from the list written below. One the
+        database cannot be asked about stops the run, since it may hold them.
+      */
+      if (g.writer && P.size) {
+        const st = json(path.join(R, 'server-settings.json'), null);
+        if (!st.missing && isObj(st.value) && st.value.databaseDriver === 'mongodb') {
+          const writer = path.join(R, 'server-log.js');
+          if (!fs.existsSync(writer)) stop(writer + ' is not there, so the characters in ' + st.value.databaseName + ' could not be looked for. Nothing was changed');
+          const q = cp.spawnSync(process.execPath, [writer, '--people', Array.from(P).join(',')], { cwd: R, encoding: 'utf8', windowsHide: true, timeout: 5 * 60 * 1000 });
+          const out = String(q.stdout || '').split(/\r?\n/).filter((l) => l);
+          const done = out.filter((l) => /^PEOPLE\|\d+$/.test(l));
+          if (q.status !== 0 || !done.length) {
+            const why = out.filter((l) => l.indexOf('WORLD FAILED: ') === 0)[0] || ('server-log.js exited with ' + q.status + (out.length ? ': ' + out[out.length - 1] : ''));
+            stop('the characters in ' + st.value.databaseName + ' could not be looked for (' + why + '). Nothing was changed');
+          }
+          const descs = out.filter((l) => /^FORM\|/.test(l)).map((l) => l.slice(5));
+          if (descs.length) {
+            touched.add(g.writer);
+            removed(T + ': characters in ' + st.value.databaseName, descs.length);
+            for (const d of descs) if (formIdOf(d)) A.add(formIdOf(d));
           }
         }
       }
@@ -1060,7 +1109,7 @@ for (const [w, q] of asks) {
 for (const w of asks.keys()) say('WRITER|' + w);
 for (const r of results) say('PERSON|' + JSON.stringify(r));
 
-if (a.mode !== 'apply') { say('DONE|plan'); process.exit(0); }
+if (a.mode !== 'apply') { say('DONE|plan'); return; }
 
 // Each file to a file beside it, then swapped in, so a write that fails half
 // way leaves the old file whole. A change that does not take is named.
@@ -1092,6 +1141,11 @@ for (const [p, w] of unlinks) {
 }
 for (const f of failed) say('FAILED|' + f);
 say(failed.length ? 'DONE|failed' : 'DONE|apply');
+} catch (e) {
+  if (!(e instanceof Stop)) throw e;
+  say('STOP|' + e.message);
+  process.exitCode = 2;
+}
 '@
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-delete-person-' + [Guid]::NewGuid().ToString('N'))

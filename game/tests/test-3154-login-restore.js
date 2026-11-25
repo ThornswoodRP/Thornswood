@@ -81,7 +81,7 @@ function done() {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function copy(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
@@ -92,7 +92,7 @@ const upM = /\n\s+up: +\{ drain: ([0-9.]+), floor: ([0-9.]+), rest: 0, food: 0, 
 const profM = /const line = 'Your profession: ' \+ prof\.name[\s\S]{0,160}notify\(actorId, line\);\s+say\(actorId, line\);/.test(gm);
 yes('P0 the needs block\'s clock and its time away on your feet, and the login\'s profession line, are where ' +
     'this reads them', !!drainM && !!upM && profM);
-if (!drainM || !upM || !profM) { done(); }
+if (!drainM || !upM || !profM) { done(); } else {
 const DRAIN = { food: Number(drainM[1]) * 100 / Number(drainM[2]), drink: Number(drainM[3]) * 100 / Number(drainM[4]) };
 const UP = { share: Number(upM[1]), floor: Number(upM[2]) };
 
@@ -264,7 +264,7 @@ function saved() { return new Map(JSON.parse(JSON.stringify(Array.from(store.ent
 // ------------------------------------------------------- in the world --
 let proc = boot();
 yes('P1 the whole gamemode loads over the stand-in' + (proc.err ? ' (it threw: ' + proc.err.message + ')' : ''), !proc.err);
-if (proc.err) { done(); }
+if (proc.err) { done(); } else {
 proc.run(30000);
 const P = proc.box.__thornswoodProperty;
 yes('P1 the property block read the claim off disk', !!P && same(P.claims()[HOUSE], CLAIM));
@@ -452,3 +452,4 @@ yes('W a reload is not a reconnect for somebody in the hall: the wait is not sta
 yes('Z no timer threw in the last process' + (proc.threw.length ? ': ' + proc.threw.slice(0, 3).join('; ') : ''),
     !proc.threw.length);
 done();
+}}

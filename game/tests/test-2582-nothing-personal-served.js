@@ -152,7 +152,9 @@ try {
       profileOf: id => id, nameOfPerson: id => online[id] || 'somebody',
       findPerson: () => ({ actorId: 2, why: '' }), push: () => { }
     },
-    __thornswoodBookRoles: pid => ({ business: true, faction: true, account: 'a' + pid })
+    __thornswoodBookRoles: pid => ({ business: true, faction: true, account: 'a' + pid }),
+    // The gamemode's table(), which the books' start reads the guild's reward prices with (#6180).
+    table: require('../../tests/gamemode-tables.js').table
   };
   box.globalThis = box;
   vm.createContext(box);
@@ -183,4 +185,4 @@ try {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

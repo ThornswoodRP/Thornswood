@@ -234,7 +234,8 @@ if (inOrder) {
 }
 const pop = fs.readFileSync(POP_TOOL, 'utf8');
 yes('S2 the catalogue does not read this plugin\'s records, which are made from it',
-    /LAST_PLUGIN = 'Thornswood-Last\.esp'/.test(pop) && /if name == LAST_PLUGIN:/.test(pop));
+    /LAST_PLUGIN = 'Thornswood-Last\.esp'/.test(pop) && /if name\.lower\(\) == LAST_PLUGIN\.lower\(\):\r?\n(?:.*\r?\n)?\s+continue/.test(pop) &&
+    /C\.place_holds\(tables, place_rules\(policy\)\)/.test(pop));
 
 // ---------------------------------------------------------------- B
 const built = manifest.builtAgainst || [];
@@ -279,4 +280,4 @@ if (fs.existsSync(path.join(data, 'Skyrim.esm'))) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

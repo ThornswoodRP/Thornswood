@@ -272,7 +272,7 @@ function copyTree(from, to) {
     if (!why.test(out)) console.log('      in ten seconds the site logged:\n' + out.split('\n').slice(-12).join('\n'));
   } finally {
     if (child && !exited) {
-      await new Promise(function (ok) { child.once('exit', ok); try { child.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
+      await new Promise(function (ok) { child.once('exit', ok); try { child.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
     }
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.log('left ' + dir + ': ' + e.message); }
     console.log('');

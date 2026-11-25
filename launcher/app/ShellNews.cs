@@ -48,7 +48,7 @@ namespace Thornswood
             {
                 string got = null, why = null;
                 try { got = Updater.MainLauncherVersion(cfg); }
-                catch (Exception ex) { why = ex.Message; }
+                catch (Exception ex) { why = Failure.Why("ShellNews", ex, "thornswood.net"); }
                 Dispatcher.UIThread.Post(delegate { MainVersionRead(got, why); });
             });
         }
@@ -238,6 +238,8 @@ namespace Thornswood
                     }
                     if (box.Children.Count > 0) sp.Children.Add(box);
                 }
+
+                if (n.image != null) sp.Children.Add(NewsPictures.View(n.image, Res("Muted"), Open));
 
                 var b = new Border();
                 b.BorderBrush = Res("Line");

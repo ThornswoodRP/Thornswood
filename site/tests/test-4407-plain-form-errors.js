@@ -333,5 +333,5 @@ const answered = (ok, json) => Promise.resolve({ ok: ok, status: ok ? 200 : 404,
   });
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

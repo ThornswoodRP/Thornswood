@@ -105,7 +105,7 @@ namespace Thornswood
             if (LauncherCheckDue(loud))
             {
                 try { launcher = Updater.CheckLauncher(cfg); asked = true; }
-                catch (Exception ex) { launcherWhy = ex.Message; }
+                catch (Exception ex) { launcherWhy = Failure.Why("ShellUpdate, the launcher's update", ex); }
                 // The notes of the Releases this channel's Deployment reached,
                 // here on the check's own thread, so the News tab has them
                 // (#5187, ReleaseNews.cs). Never throws.
@@ -456,7 +456,7 @@ namespace Thornswood
                     Updater.Drop(got);
                     Dispatcher.UIThread.Post(delegate
                     {
-                        Log("Update failed: " + ex.Message);
+                        Log("Update failed: " + Failure.Say("ShellUpdate, the update", ex));
                         txtUpdateTitle.Text = "Update failed";
                         updating = false;
                         btnUpdate.IsEnabled = true;

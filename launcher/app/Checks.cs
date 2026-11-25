@@ -147,13 +147,36 @@ namespace Thornswood
         {
             try
             {
+                // Once the modlist installs into Mod Organizer 2 the revision
+                // is the one its last whole install put in (#6244), and
+                // Vortex's state is not read again.
+                if (OwnGame.FromMods) return OwnGame.ModsRevision();
                 string slug = CollectionSlug(cfg);
                 if (slug.Length == 0) return 0;
                 int fromState = CollectionRevisionFromState(slug);
                 if (fromState > 0) return fromState;
                 return CollectionRevisionFromFolder(slug);
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevision", ex); return 0; }
+        }
+
+        // The last reason a collection read gave 0 for, so the status that
+        // redraws every two seconds (Shell.cs) writes it once and not each
+        // time: "not confirmed" on the card with no line saying why was #4690.
+        static string lastCollectionWhy;
+        static readonly object collectionWhyGate = new object();
+
+        static void CollectionReadFailed(string where, Exception ex)
+        {
+            // Failure.Plain: the reason as Why says it, without noting it, so
+            // the same failure on every redraw is compared, not written (#4350).
+            string why = where + ": " + Failure.Plain(ex, null);
+            lock (collectionWhyGate)
+            {
+                if (why == lastCollectionWhy) return;
+                lastCollectionWhy = why;
+            }
+            Swallow.Note(where + ", so the installed collection revision reads as 0", ex);
         }
 
         /// <summary>
@@ -171,7 +194,7 @@ namespace Thornswood
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vortex\\state.v2");
                 return VortexProfileState.CollectionRevision(dir, slug);
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevisionFromState, Vortex's state.v2", ex); return 0; }
         }
         /// <summary>
         /// The legacy fallback: the revision out of the old folder name, or 0.
@@ -203,7 +226,7 @@ namespace Thornswood
                 }
                 return best;
             }
-            catch { return 0; }
+            catch (Exception ex) { CollectionReadFailed("Checks.CollectionRevisionFromFolder, Vortex's mods folder", ex); return 0; }
         }
 
         /// <summary>
@@ -609,7 +632,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not move " + name + " aside: " + ex.Message +
+                        say("Could not move " + name + " aside: " + Failure.Why("Checks.IsolateForeign, " + name, ex, name) + "." +
                             "  Close Skyrim and try again.");
                 }
             }
@@ -770,7 +793,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     if (say != null)
-                        say("Could not move " + name + " aside: " + ex.Message +
+                        say("Could not move " + name + " aside: " + Failure.Why("Checks.IsolateCreations, " + name, ex, name) + "." +
                             "  Close Skyrim and try again.");
                 }
             }
@@ -1326,8 +1349,8 @@ namespace Thornswood
                 {
                     // What Windows answered, kept for StuckReport: only a
                     // refusal here is Windows not letting the launcher end it.
-                    if (id >= 0) lock (refused) { refused[id] = ex.Message; }
-                    Swallow.Note("Checks.CloseGame, kill", ex);
+                    if (id >= 0) lock (refused) { refused[id] = Failure.Why("Checks.CloseGame, kill", ex, "the game"); }
+                    else Swallow.Note("Checks.CloseGame, kill", ex);
                 }
             }
 

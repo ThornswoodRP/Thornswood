@@ -67,7 +67,8 @@ function make(dir, extra) {
       offer: function () { return ''; },
       refresh: function () { extra.pushes = (extra.pushes || 0) + 1; },
       online: function () { return extra.online ? extra.online() : {}; },
-      atBox: extra.atBox || function () { return ''; }
+      atBox: extra.atBox || function () { return ''; },
+      rewardPrices: extra.rewardPrices
     }
   };
   box.globalThis = box;
@@ -357,7 +358,11 @@ if (block) {
   });
   ledger.command({
     actorId: 2, profileId: 2,
-    parts: parts('/book price ' + otherId + ' | Iron dagger | 11 | 5')
+    parts: parts('/book price ' + otherId + ' | Iron dagger | 11 | 14')
+  });
+  ledger.command({
+    actorId: 2, profileId: 2,
+    parts: parts('/book price ' + otherId + ' | Water | 1 | 1')
   });
   const notThere = ledger.command({
     actorId: 1, profileId: 1, parts: parts('/book submit ' + beeId)
@@ -382,10 +387,14 @@ if (block) {
   ledger.command({
     actorId: 2, profileId: 2, parts: parts('/book submit ' + otherId)
   });
+  /* WHAT A GUILD TRADER IS QUOTED (#4530, Patrick, 12 Nov 2026, docs/DECIDED.md):
+     only a line with both a buy and a sell prices a trader, and a hold's
+     buy and sell are averaged over those same lines. The Bee's dagger line
+     has no sell, so it stays in the book and prices nothing. */
   const whiterun = ledger.guildPrice('whiterun', 'Iron dagger');
   const waterPrice = ledger.guildPrice('whiterun', 'Water');
-  yes('a blank is not averaged, zero is, and a half rounds up',
-      whiterun.buy === 11 && whiterun.sell === 5 && waterPrice.buy === 0 && waterPrice.sell === 0);
+  yes('a line with a blank is not averaged, zero is, and a half rounds up',
+      whiterun.buy === 11 && whiterun.sell === 14 && waterPrice.buy === 1 && waterPrice.sell === 1);
   ledger.command({ actorId: 1, profileId: 1, parts: parts('/book new faction The Gate') });
   const gateId = ledger.books().filter(function (b) { return b.name === 'The Gate'; })[0].id;
   ledger.command({
@@ -397,20 +406,23 @@ if (block) {
   const own = ledger.guildPrice('whiterun', 'Iron dagger');
   const otherHold = ledger.guildPrice('riften', 'Iron dagger');
   const none = ledger.guildPrice('whiterun', 'Mead');
-  yes('a hold keeps its own price, and a hold with none uses the others',
-      own.buy === 11 && otherHold.buy === 16 && none.buy === null && none.sell === null);
+  yes('a hold keeps its own price, and a hold with none uses the others\' pairs whole',
+      own.buy === 11 && own.sell === 14 && otherHold.buy === 16 && otherHold.sell === 17 &&
+      none.buy === null && none.sell === null);
   const listed = ledger.catalog('riften');
   const listedDagger = listed.filter(function (row) { return row.name === 'Iron dagger'; })[0];
-  yes('the hold catalogue is the same submitted average',
-      listedDagger && listedDagger.buy === 16 && listed.every(function (row) { return row.buy !== null || row.sell !== null; }));
+  yes('the hold catalogue is the same submitted average, with both sides on every row',
+      listedDagger && listedDagger.buy === 16 && listedDagger.sell === 17 &&
+      listed.every(function (row) { return row.buy !== null && row.sell !== null; }));
   ledger.command({
     actorId: 1, profileId: 1,
-    parts: parts('/book price ' + beeId + ' | Iron dagger | 12 | -')
+    parts: parts('/book price ' + beeId + ' | Iron dagger | 12 | 16')
   });
   hold = 'whiterun';
   ledger.command({ actorId: 1, profileId: 1, parts: parts('/book submit ' + beeId) });
+  const replaced = ledger.guildPrice('whiterun', 'Iron dagger');
   yes('a later submission from the same book replaces the earlier copy',
-      ledger.guildPrice('whiterun', 'Iron dagger').buy === 12);
+      ledger.ledgers().whiterun[beeId].prices[0].sell === 16 && replaced.buy === 12 && replaced.sell === 15);
   ledger.command({ actorId: 1, profileId: 1, parts: parts('/book invite ' + beeId + ' 4') });
   ledger.accept(4, 'Bjorn');
   const memberSubmit = ledger.command({
@@ -418,13 +430,14 @@ if (block) {
   });
   yes('a member without prices cannot submit', /cannot set prices/.test(memberSubmit));
   ledger.command({ actorId: 2, profileId: 2, parts: parts('/book disband ' + otherId) });
-  yes('disbanding drops that book\'s copy, and a missing sell uses another hold',
+  yes('disbanding drops that book\'s copy, and the hold prices from the lines left',
       !ledger.ledgers().whiterun[otherId] &&
       ledger.ledgers().whiterun[beeId].prices[0].buy === 12 &&
-      ledger.guildPrice('whiterun', 'Iron dagger').sell === 20);
+      ledger.guildPrice('whiterun', 'Iron dagger').sell === 16);
   const reloaded = make(ledgerDir, { atBox: function () { return 'whiterun'; } });
+  const reloadedPrice = reloaded.guildPrice('whiterun', 'Iron dagger');
   yes('the copy survives a new load',
-      reloaded.guildPrice('whiterun', 'Iron dagger').buy === 12);
+      reloadedPrice.buy === 12 && reloadedPrice.sell === 16);
   try { fs.rmSync(ledgerDir, { recursive: true, force: true }); } catch (e2) { }
 
   /* A FACTION'S BOOK FOLLOWS ITS LEADER ROLE (#3317, Patrick, 22 Oct, page
@@ -493,6 +506,43 @@ if (block) {
   try { fs.rmSync(moveDir, { recursive: true, force: true }); } catch (e3) { }
 }
 
+// The guild's reward prices (#6180, Patrick, 15 Nov 2026): every good guild
+// work asks for has a starting price, and staff change it with /book reward.
+if (block) {
+  const rdir = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-books-'));
+  const START = { version: 1, items: [
+    { item: 'a6d7f:Skyrim.esm', name: 'Fur Boots', gold: 8 },
+    { item: '86983:Skyrim.esm', name: 'Stormcloak Officer Bracers', gold: 9 }] };
+  const rw = make(rdir, { rewardPrices: START });
+  const say = function (pid, line) { return rw.command({ actorId: 1, profileId: pid, parts: parts(line) }); };
+  yes('R1 a good pays its starting reward price until staff change it',
+      rw.rewardPrice('A6D7F:Skyrim.esm').gold === 8 && rw.rewardPrice('86983:Skyrim.esm').gold === 9 &&
+      rw.rewardPrice('12:Skyrim.esm') === null);
+  yes('R2 only staff set what guild work pays', say(1, '/book reward Fur Boots 20') === 'Only staff set what guild work pays.' &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 8);
+  yes('R3 staff read a good\'s price by its name', say(9, '/book reward fur boots') === 'Fur Boots pays 8 gold each in guild work (it started at 8).');
+  yes('R4 staff set a price, and it is saved in the private folder',
+      /^Fur Boots now pays 12 gold each in guild work\. Work already taken keeps the pay it was taken at\.$/.test(say(9, '/book reward Fur Boots 12')) &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 12 &&
+      JSON.parse(fs.readFileSync(path.join(rdir, 'commission-rewards.json'), 'utf8')).items['a6d7f:skyrim.esm'] === 12);
+  yes('R5 a good is named by its record too', /now pays 0 gold/.test(say(9, '/book reward 86983:Skyrim.esm 0')) &&
+      rw.rewardPrice('86983:Skyrim.esm').gold === 0);
+  yes('R6 the price staff set is still there after a restart',
+      make(rdir, { rewardPrices: START }).rewardPrice('a6d7f:Skyrim.esm').gold === 12);
+  yes('R7 start puts a good back on its starting price, and the saved file forgets it',
+      /now pays 8 gold/.test(say(9, '/book reward Fur Boots start')) &&
+      !('a6d7f:skyrim.esm' in JSON.parse(fs.readFileSync(path.join(rdir, 'commission-rewards.json'), 'utf8')).items));
+  yes('R8 a good no guild work asks for, or a price that is not gold, changes nothing',
+      /^Name a good guild work asks for/.test(say(9, '/book reward Iron Ingot 5')) &&
+      /^Name a good guild work asks for/.test(say(9, '/book reward Fur Boots -3')) &&
+      rw.rewardPrice('a6d7f:Skyrim.esm').gold === 8);
+  fs.writeFileSync(path.join(rdir, 'commission-rewards.json'), JSON.stringify({ version: 1, items: { 'a6d7f:skyrim.esm': -1 } }));
+  let refused = '';
+  try { make(rdir, { rewardPrices: START }); } catch (e) { refused = e.message; }
+  yes('R9 a damaged saved price is never read as a price', /Saved guild reward prices cannot be verified/.test(refused));
+  try { fs.rmSync(rdir, { recursive: true, force: true }); } catch (e) { }
+}
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

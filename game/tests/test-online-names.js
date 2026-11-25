@@ -31,7 +31,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // From the online banner through the try that closes after its log line.
@@ -42,6 +42,7 @@ const b = a < 0 ? -1 : src.indexOf(END, a);
 const block = (a >= 0 && b >= 0) ? src.slice(a, b + END.length) : null;
 yes('gamemode.js still has its online writer', block !== null);
 if (!block) done();
+else {
 
 const box = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-online-names-'));
 const dataDir = path.join(box, 'data');
@@ -89,6 +90,7 @@ try {
 }
 yes('the block starts its writer', typeof tick === 'function');
 if (typeof tick !== 'function') done();
+else {
 
 const namesFile = path.join(privDir, 'online-names.json');
 function names() {
@@ -132,3 +134,4 @@ yes('and everybody gone is an empty list again', Array.isArray(names()) && names
 
 try { fs.rmSync(box, { recursive: true, force: true }); } catch (e) { }
 done();
+}}

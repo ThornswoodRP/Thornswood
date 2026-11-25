@@ -13,8 +13,9 @@
        vps.json.
     3. The address, from vps.json, is in no tracked file outside the one
        place, except what cannot read vps.json at run time: the launcher's
-       default (Config.cs, config.example.json) and the game plugin that
-       checks whose server it is on. Prose (the .md files and the site's
+       default (Config.cs, config.example.json), the game plugin that
+       checks whose server it is on, and chat's canonical Dev route guard.
+       Prose (the .md files and the site's
        board) may name it. Those baked copies must say the same address as
        vps.json. Since #3690 that address is the game's own name, never the
        box's address, and the box's address (what the name resolves to now)
@@ -138,6 +139,9 @@ $baked = @(
     'config.example.json',
     # The whose-game gate's one copy (#485); the other plugins read it from front.
     'game/plugins/thornswood-front.js'
+    # The page cannot read vps.json; the dedicated Dev socket is allowed
+    # only for this same canonical game, never a custom server (#6552).
+    'game/ui/thornswood-chat.js'
 )
 
 Push-Location $Repo

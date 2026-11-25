@@ -44,8 +44,8 @@ const P = box.__thornswoodProgression;
 yes("the rules registered", !!P && !!P.TABLE && typeof P.study === "function");
 if (!P || !P.TABLE) {
   console.log("\n" + pass + " passed, " + fail + " failed");
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 const L = P.TABLE.limits;
 const HOUR = 3600000;
 const t0 = 1800000000000;
@@ -122,4 +122,5 @@ yes("no page or comment still says the question is open",
 yes("the semester's own harness is on the build's gate (not in tests/gate-excluded.txt, #3009)", !/^game\/tests\/test-1387-college\.js\s/m.test(read("tests/gate-excluded.txt")));
 
 console.log("\n" + pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

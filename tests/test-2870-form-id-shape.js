@@ -197,7 +197,7 @@ try {
   put(path.join(sl, 'server-settings.json'), { privDir: 'private' });
   put(path.join(sl, 'world', 'changeForms', 'a01.json'), { formDesc: 'a01', profileId: P1 });
   put(path.join(sl, 'private', 'deleted-characters.json'), oldList);
-  put(path.join(sl, 'exit.js'), 'process.exit(0);');
+  put(path.join(sl, 'exit.js'), 'process.exitCode = 0;');
   const slRun = cp.spawnSync(process.execPath, [path.join(REPO, 'scripts', 'vps', 'Server-Log.js'), '--log', path.join(sl, 'server.log'), 'exit.js'], { cwd: sl, encoding: 'utf8' });
   const slLog = fs.existsSync(path.join(sl, 'server.log')) ? fs.readFileSync(path.join(sl, 'server.log'), 'utf8') : '';
   yes('O4 Server-Log.js removes nothing for a list of local ids and leaves it as it is, said',
@@ -273,5 +273,5 @@ try {
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
 

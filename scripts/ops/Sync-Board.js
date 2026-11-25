@@ -469,6 +469,6 @@ async function run(argv, env, fetchImpl, say) {
 }
 
 if (require.main === module) {
-  run(process.argv.slice(2), process.env).then(code => process.exit(code), e => { console.log('stopped: ' + (e && e.message || e)); process.exit(1); });
+  run(process.argv.slice(2), process.env).then((code) => { process.exitCode = code; }, e => { console.log('stopped: ' + (e && e.message || e)); process.exitCode = 1; });
 }
 module.exports = { namedIn, tasksIn, statusFor, orderFor, numberOf, typeFor, pullsOnTimeline, readBoard, syncIssue, copyOrder, run, client, STATUSES, FILED_ORDER };

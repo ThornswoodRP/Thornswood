@@ -202,4 +202,4 @@ yes('new gallery copy has no em dash', !/[\u2014\u2013]/.test(
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
