@@ -319,6 +319,25 @@ function press(hub, kind, id) {
                       'a save that names no copy');
     yes('a save that names no copy it was made from is refused (' + r.status + ')',
         r.status === 409 && readText(s.dir, 'data/tests.md') === 'what Aela wrote\n');
+
+    r = await request(s.port, 'PUT', '/api/doc/notadoc', { cookie: cookieFor(s.secret, ADMIN_D, 'Aela'), origin: 'http://127.0.0.1:' + s.port },
+                      'a save for a name not in DOCS');
+    yes('a save to a document name not in DOCS is answered 400 no such doc (' + r.status + ')',
+        r.status === 400 && r.j && r.j.error === 'no such doc');
+
+    // A doc write that fails (issue #4930):
+    const currentWas = crypto.createHash('sha256').update(readText(s.dir, 'data/tests.md'), 'utf8').digest('hex');
+    const docFile = path.join(s.dir, 'data', 'tests.md');
+    fs.chmodSync(docFile, 0o444);
+    try {
+      r = await request(s.port, 'PUT', '/api/doc/tests',
+                        { cookie: cookieFor(s.secret, ADMIN_D, 'Aela'), origin: 'http://127.0.0.1:' + s.port, 'x-thornswood-doc-was': currentWas },
+                        'a save that fails to write');
+      yes('a doc write that fails is answered 500 could not save (' + r.status + ')',
+          r.status === 500 && r.j && r.j.error === 'could not save');
+    } finally {
+      fs.chmodSync(docFile, 0o666);
+    }
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   } finally {

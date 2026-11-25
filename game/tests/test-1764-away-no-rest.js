@@ -104,10 +104,16 @@ function away(kind, ms, first) {
   return { r: r, was: was, n: n, drain: r.N.NEEDS.drain.rest };
 }
 
-// ---- the source, read ----------------------------------------------------
+// ---- arrival does not even ask for the online rest gain ------------------
 {
-  const code = needsBlock.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-  yes('settle counts no rest gain on an arrival', /var gain = arriving \? 0 : restingGain\(actorId, n\);/.test(code));
+  const r = rig();
+  r.seed(ME);
+  const before = r.N.read(ME);
+  let gainReads = 0;
+  const projected = r.N.project(before, r.clock.now + HOUR, true, {
+    restingGain: function () { gainReads++; return 100; }
+  });
+  yes('settle counts no rest gain on an arrival', gainReads === 0 && projected.needs.rest <= before.rest);
 }
 
 // ---- the issue's measurement: Rest 30, back 9 hours later -------------------

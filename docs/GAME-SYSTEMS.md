@@ -26,6 +26,9 @@ tables by the makers check.
 
 ## Buttons, not commands
 
+[Playtest and admin commands](systems/playtest-and-admin-commands.md) records
+the testing tools, role permissions and delivery checks.
+
 Decided by Patrick on 4 Oct: "can we stop with the commands, I want
 things to be buttons, it's nicer and more immersive", and "no more
 commands for things [people] do, only for dev and staff commands;
