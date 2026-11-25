@@ -180,7 +180,8 @@ def table(recs, rank, pick_items, creation=frozenset(), preferences=None):
             if r['type'] in (b'ARMO', b'WEAP') and r['flags'] & NON_PLAYABLE:
                 continue
             name = r.get('name', '')
-            preferred = 0 if preferences.get(name.lower()) == d else 1
+            # Descriptor case and optional zero padding do not change a form.
+            preferred = 0 if preferences.get(name.lower(), '').lower().lstrip('0') == d.lower().lstrip('0') else 1
         else:
             name = actor_name(recs, d)
             preferred = 1 if (r.get('uses', 0) & USE_TRAITS and r.get('template')) else 0

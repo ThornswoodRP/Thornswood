@@ -117,6 +117,13 @@ class Builder(unittest.TestCase):
         self.assertEqual(second, first)
         self.assertEqual(second[0]['orichalcum ingot'][1], '5ad99:Skyrim.esm')
 
+    def test_descriptor_case_and_leading_zeroes_do_not_change_preference(self):
+        first = self.built()
+        self.canonical['petty soul gem'][1] = '0002E4E2:skyrim.esm'
+        self.canonical['orichalcum ingot'][1] = '5AD99:SKYRIM.ESM'
+        self.write_canonical()
+        self.assertEqual(self.built(), first)
+
     def test_earliest_plugin_and_noncanonical_fallback_and_actor_traits_stay(self):
         items, actors = self.built()
         self.assertEqual(items['shared item'][1], '900:Skyrim.esm')
