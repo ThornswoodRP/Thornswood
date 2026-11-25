@@ -38,10 +38,19 @@ The command restores every carried weapon, armour piece and garment below 100% t
 
 The command requires the server's equipment repair support. If the equipment changed while the repair was being prepared, it refuses rather than guessing which piece was meant. If the server cannot confirm a repair, staff should check that problem before repeating the command.
 
+## Set needs for testing
+
+Playtesters, staff and admins can use `/setneeds <hunger|thirst|rest|temperature> <value>` on themselves on both Dev and Main. Admins can add `for <person>` to change another character. An unambiguous explicit self target also works for a playtester.
+
+Use a decimal number from 0 to 100, including both bounds. Hunger, thirst and rest are full at 100; temperature is comfortable at 50, colder below and hotter above. For example, `/setneeds thirst 25` sets your drink meter to 25, while `/setneeds temperature 50 for Aldis` sets Aldis to comfortable warmth.
+
+The other needs first account for their elapsed time. The selected value is then saved exactly, its penalties and displays refresh, and the change is recorded. Injuries, carried items and ongoing effects retain their ordinary rules. Existing invalid needs are refused; a character with no needs record starts with the ordinary full meters and comfortable temperature before the requested change.
+
 ## For yourself
 
 | Command | What it does |
 | --- | --- |
+| `/setneeds` | Set your own hunger, thirst, rest or temperature. Admins may name another character. |
 | `/repairgear` | Repair your carried gear. Admins may name another character. |
 | `/tp` | Lists the towns you can name |
 | `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |

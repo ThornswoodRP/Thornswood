@@ -26952,7 +26952,7 @@ module.exports = {
     the gate: Solitude, Whiterun, Windhelm, Riften and Markarth are walled
     cities, each its own worldspace inside the walls, and their numbers were
     read inside them. Measured 15 Oct:
-      - the game's own NPCs placed near each point (docs/NPC-SPAWNS.csv)
+      - the game's own NPCs placed near each point (game/data/NPC-SPAWNS.csv)
         stand in WhiterunWorld 1a26f, RiftenWorld 16bb4, WindhelmWorld 1691d
         and MarkarthWorld 16d71;
       - Solitude has no NPC within 3,000, so the cell its point falls in was
@@ -52359,6 +52359,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function read(actorId) {
     var v = null;
     try { v = mp.get(actorId, NEEDS_PROPERTY); } catch (e) { v = null; }
+    return normalizedNeeds(v);
+  }
+
+  function normalizedNeeds(v) {
     if (!v || typeof v !== 'object') { return null; }
     return {
       food: clamp(v.food), drink: clamp(v.drink), rest: clamp(v.rest),
@@ -52442,6 +52446,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /*
+    An explicit testing change brings every meter to the same clock, overrides
+    one value, and commits once. Existing malformed meters are refused rather
+    than silently replaced by read()'s compatibility defaults. Only a genuinely
+    absent record is initialized, because the caller explicitly asked to set it.
+  */
+  function setForTesting(actorId, key, value) {
+    if (['food', 'drink', 'rest', 'temp'].indexOf(key) === -1 ||
+        typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      return { ok: false, why: 'Choose a needs value from 0 to 100.' };
+    }
+    if (inCreation(actorId)) { return { ok: false, why: 'Finish creating your character before changing needs.' }; }
+    var raw;
+    try { raw = mp.get(actorId, NEEDS_PROPERTY); }
+    catch (e) { return { ok: false, why: 'The server could not read those needs. Nothing changed.' }; }
+    var now = Date.now();
+    if (raw === undefined || raw === null) { raw = fresh(); raw.at = now; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        ['food', 'drink', 'rest', 'temp'].some(function (meter) {
+          return typeof raw[meter] !== 'number' || !Number.isFinite(raw[meter]) || raw[meter] < 0 || raw[meter] > 100;
+        }) || typeof raw.at !== 'number' || !Number.isFinite(raw.at) || raw.at <= 0 || raw.at > now) {
+      return { ok: false, why: 'The saved needs are invalid or unavailable. Nothing changed.' };
+    }
+    var normalized = normalizedNeeds(raw), arriving = !here[actorId] && onlineNow(actorId);
+    var projected;
+    try {
+      var api = g.__thornswoodNeeds;
+      projected = api && api.ignoresNeeds && api.ignoresNeeds(actorId)
+        ? { needs: normalized, changed: false }
+        : projectNeeds(normalized, now, arriving, projectionEnvironment(actorId, true));
+    }
+    catch (e) { return { ok: false, why: 'The server could not read the needs context. Nothing changed.' }; }
+    // Preserve metadata this operation did not change, including fields added
+    // by another module. Apply exactly the canonical elapsed-time changes.
+    var next = Object.assign({}, raw);
+    Object.keys(projected.needs).forEach(function (field) {
+      if (JSON.stringify(projected.needs[field]) !== JSON.stringify(normalized[field])) {
+        next[field] = projected.needs[field];
+      }
+    });
+    next[key] = value;
+    next.at = now;
+    if (!write(actorId, next)) { return { ok: false, why: 'The server could not save those needs. Nothing changed.' }; }
+    if (arriving) { here[actorId] = true; }
+    /* Character refresh asks settle/view again. During this synchronous
+       delivery it must see the committed snapshot, not charge a few more
+       milliseconds and produce a second authoritative needs write. */
+    testingSnapshot[actorId] = next;
+    try {
+      projectionEffects(actorId, projected, true);
+      pushEffects(actorId, true);
+    } finally { delete testingSnapshot[actorId]; }
+    return { ok: true, from: raw[key], to: value };
+  }
+
+  /*
     Whether somebody is still making their character. The chargen block's own
     answer, through the global the way the character block reaches it, and no
     answer counts as not in creation, so a missing block never freezes anybody.
@@ -52490,7 +52549,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     land on the same number. The tick below only exists to make the change
     visible and to notice a band crossing; the arithmetic does not need it.
   */
+  var testingSnapshot = {};
   function settle(actorId, now) {
+    if (testingSnapshot[actorId]) { return Object.assign({}, testingSnapshot[actorId]); }
     now = now || Date.now();
     var n = read(actorId);
     var arriving = !here[actorId] && onlineNow(actorId);
@@ -52696,27 +52757,27 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
              hung: hung, pulled: pulled, slept: slept };
   }
 
-  function projectionEnvironment(actorId) {
+  function projectionEnvironment(actorId, savedOnly) {
     return {
-      workMultiplier: function () { return workMultiplier(actorId); },
-      restingGain: function (n) { return restingGain(actorId, n); },
-      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
+      restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
+      warmthTarget: function (n) { return warmthTarget(actorId, n, savedOnly); },
       outdoorCooling: outdoorCooling
     };
   }
 
-  function projectionEffects(actorId, projected) {
+  function projectionEffects(actorId, projected, savedOnly) {
     var hungBefore = projected.hungBefore, hung = projected.hung;
     var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       hangoverCare(actorId);
       if (hung) { notify(actorId, NEEDS.ale.hungLine); say(actorId, NEEDS.ale.hungLine); }
     }
     if (pulled) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, NEEDS.drug.withdrawal.line);
       say(actorId, NEEDS.drug.withdrawal.line);
     }
@@ -52728,7 +52789,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       */
       var beds = g.__thornswoodBeds;
       if (beds && beds.off) { beds.off(actorId); }
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, slept);
       say(actorId, slept);
     }
@@ -52795,11 +52856,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n) {
+  function warmthTarget(actorId, n, savedOnly) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52863,13 +52924,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId) {
+  function fireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
     var reach = NEEDS.fire.reach || 1;
     if (d >= reach) { return 0; }
-    var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
+    var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
   }
 
@@ -52890,15 +52951,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     The perk is the progression block's own answer, held at master in the
     half somebody picked. Nothing loaded answers no, which is an ordinary fire.
   */
-  function perkHeld(actorId, key) {
+  function projectionCharacter(actorId, savedOnly) {
+    var c = g.__thornswoodCharacter;
+    if (!savedOnly) { return c && c.stateOf ? c.stateOf(actorId) : null; }
+    var state = mp.get(actorId, (c && c.PROPERTY) || 'thornswoodCharacter');
+    return state && typeof state === 'object' && state.v === 1 ? state : null;
+  }
+
+  function perkHeld(actorId, key, savedOnly) {
     var P = g.__thornswoodProgression;
     var C = g.__thornswoodCharacter;
     if (!P || !P.perks || !C || !C.stateOf) { return false; }
-    try { return P.perks(C.stateOf(actorId)).indexOf(key) !== -1; } catch (e) { return false; }
+    try { return P.perks(projectionCharacter(actorId, savedOnly)).indexOf(key) !== -1; }
+    catch (e) { if (savedOnly) { throw e; } return false; }
   }
 
-  function carverFire(actorId) {
-    if (perkHeld(actorId, 'mastercarver')) { return true; }
+  function carverFire(actorId, savedOnly) {
+    if (perkHeld(actorId, 'mastercarver', savedOnly)) { return true; }
     var reach = NEEDS.fire.reach || 1;
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return false; }
@@ -52921,7 +52990,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       } catch (e) { continue; }
       var theirs = read(them);
       if (!theirs || !(theirs.fire >= 0) || theirs.fire >= reach) { continue; }
-      if (perkHeld(them, 'mastercarver')) { return true; }
+      if (perkHeld(them, 'mastercarver', savedOnly)) { return true; }
     }
     return false;
   }
@@ -53686,13 +53755,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** How much faster working drains rest, by the best rank this person holds. */
-  function workMultiplier(actorId) {
+  function workMultiplier(actorId, savedOnly) {
     var best = 'novice';
     try {
       var P = g.__thornswoodProgression;
       var C = g.__thornswoodCharacter;
       if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
+        var s = projectionCharacter(actorId, savedOnly);
         var ranks = (s && s.ranks) || {};
         var order = ['novice', 'advanced', 'expert', 'master'];
         for (var k in ranks) {
@@ -53700,16 +53769,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           if (order.indexOf(ranks[k]) > order.indexOf(best)) { best = ranks[k]; }
         }
       }
-    } catch (e) { }
+    } catch (e) { if (savedOnly) { throw e; } }
     return NEEDS.workRest[best] || NEEDS.workRest.novice;
   }
 
   /** What this person is recovering per hour, by where they are resting. */
-  function restingGain(actorId, n) {
+  function restingGain(actorId, n, savedOnly) {
     if (!n.resting) { return 0; }
     var base = NEEDS.recover[n.resting] || 0;
     if (!base) { return 0; }
-    if (bardNear(actorId)) { base += NEEDS.bard; }
+    if (bardNear(actorId, savedOnly)) { base += NEEDS.bard; }
     return base;
   }
 
@@ -53780,14 +53849,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
-  function bardNear(actorId) {
+  function bardNear(actorId, savedOnly) {
     var myCell = null;
     try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
     if (!myCell) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
-      if (now - BARDS[id] > BARD_FOR) { delete BARDS[id]; continue; }
+      if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
       var theirs = null;
@@ -54628,11 +54697,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     not change anything, and a band change is at most a handful of times an
     evening per person.
   */
-  function pushEffects(actorId) {
+  function pushEffects(actorId, savedOnly) {
     try {
       var c = g.__thornswoodCharacter;
       if (!c || !c.stateOf || !c.writeState) { return; }
-      var s = c.stateOf(actorId);
+      var s = projectionCharacter(actorId, savedOnly);
       if (!s) { return; }
       // redraw, because the rules state has not changed and the panel
       // signature would hold the write back. What changed is underneath it.
@@ -55356,7 +55425,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
     // The meters as last settled, without settling them again (#1383).
-    read: read,
+    read: read, setForTesting: setForTesting,
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
@@ -64066,6 +64135,56 @@ module.exports = {
 })();
 // ==== end thornswood staff crafting ====
 
+// ==== thornswood needs testing tools ====
+(function () {
+  'use strict';
+  var g = globalThis;
+  var METERS = { hunger: 'food', thirst: 'drink', rest: 'rest', temperature: 'temp' };
+  var USAGE = 'Usage: /setneeds <hunger|thirst|rest|temperature> <0..100> [for <person>].';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/setneeds') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var meter = String(parts[1] || '').toLowerCase(), number = String(parts[2] || '');
+    if (!Object.prototype.hasOwnProperty.call(METERS, meter) || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(number) ||
+        !Number.isFinite(Number(number)) || Number(number) < 0 || Number(number) > 100 ||
+        (parts.length !== 3 && (parts.length < 5 || String(parts[3]).toLowerCase() !== 'for'))) {
+      staff.tell(pid, USAGE); return true;
+    }
+    var target = actor, targetPid = pid;
+    if (parts.length > 3) {
+      var person = staff.takePerson(parts.slice(4));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var needs = g.__thornswoodNeeds;
+    if (!needs || !needs.setForTesting) { staff.tell(pid, 'Needs testing is unavailable. Try again later.'); return true; }
+    var me = staff.nameOf(actor), name = staff.nameOf(target);
+    var result = needs.setForTesting(target, METERS[meter], Number(number));
+    if (!result.ok) { staff.tell(pid, result.why); return true; }
+    staff.record('setneeds', pid, me, targetPid, name, '', 0,
+      { meter: meter, from: result.from, to: result.to });
+    var label = meter.charAt(0).toUpperCase() + meter.slice(1);
+    staff.tell(pid, label + ' set to ' + result.to + '/100 for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'Staff set your ' + meter + ' to ' + result.to + '/100 for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffNeeds = { command: command };
+  g.__thornswoodCommandTools.register('setneeds', {
+    command: command,
+    help: [{ word: '/setneeds', role: 'playtester', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100>',
+      text: 'Set one of your needs for testing. Food, drink and rest are full at 100; temperature is comfortable at 50.' },
+      { word: '/setneeds', role: 'admin', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100> for <person>',
+        text: 'Set one need on another character for testing.' }]
+  });
+})();
+// ==== end thornswood needs testing tools ====
 // SHARED RESOURCE STOCK BEGIN
 function createSharedResourceStock(api, now) {
   const property='thornswoodResourceStock';
