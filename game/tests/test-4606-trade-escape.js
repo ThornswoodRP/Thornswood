@@ -58,6 +58,6 @@ for(const name of ['gold','find']){
   const p=rig();p.doc.getElementById('ts-trade-cancel').click();
   yes('the explicit Walk away button still cancels the trade',p.sent.length===1&&p.sent[0]==='/trade cancel');
   const q=rig();q.doc.getElementById('ts-trade-ok').click();
-  yes('the explicit Agree button retains its existing request',q.sent.length===1&&q.sent[0]==='/trade ok '+q.view.offerVersion);
+  yes('the explicit Agree button sends the displayed offer version',q.sent.length===1&&q.sent[0]==='/trade agree '+q.view.offerVersion);
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

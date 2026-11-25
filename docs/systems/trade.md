@@ -99,5 +99,7 @@ minutes, the gold check, and the piece put up crossing as it is are
 in the server. H and Trade under Near you on P offer it. Accept and
 Refuse on that prompt are what a person presses. So are Agree, Walk
 away and Buy for the company. The key and the buttons send the server
-the lines `/trade` and its verbs once were, and nobody is told to type
-them.
+the `/trade` commands. Agree sends `/trade agree <offer-version>` for
+the displayed offer. Legacy `/trade ok` requests refresh the window
+and ask for a fresh click. The separate verb also keeps a versioned
+click from becoming an approval if the server returns to older code.

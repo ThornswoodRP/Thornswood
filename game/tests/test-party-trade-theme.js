@@ -502,7 +502,7 @@ const T = rules(trade.css);
   const ok = tr.querySelector('#ts-trade-ok');
   yes('Agree is the gold primary until you agree', ok.className === 'go' && ok.textContent === 'Agree');
   ok.onclick.call(ok);
-  yes('Agree sends its observed offer version', lastSent() === '/trade ok ' + offer.offerVersion);
+  yes('Agree sends its observed offer version', lastSent() === '/trade agree ' + offer.offerVersion);
   const cancel = tr.querySelector('#ts-trade-cancel');
   cancel.onclick.call(cancel);
   yes('Walk away sends /trade cancel', lastSent() === '/trade cancel');

@@ -25,7 +25,7 @@ if(w.loaded()){
   yes('both owner views receive the same bounded opaque offer version',typeof initial==='string'&&/^[0-9a-f]{48}$/.test(initial)&&initial===view(b).offerVersion);
   say(a,'/trade add '+w.idOf(SWORD).toString(16)+' 1');
   const p=ui(view(a)),old=view(a).offerVersion,oldClick=click(p);
-  yes('the actual Agree button sends its drawn offer version',typeof old==='string'&&oldClick==='/trade ok '+old);
+  yes('the actual Agree button sends its drawn offer version',typeof old==='string'&&oldClick==='/trade agree '+old);
   const before=packs(),beforeWrites=writes();
   w.say(b,'/trade gold 10');w.say(a,oldClick);w.run(3000);
   yes('an edit crossing a queued Agree is refused before either agreement flag',!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB);
@@ -33,31 +33,38 @@ if(w.loaded()){
   yes('stale refusal refreshes the caller to the current offer with a clear retry message',view(a).offerVersion!==old&&/offer|trade/i.test(w.heard(a).at(-1)||'')&&/again|read/i.test(w.heard(a).at(-1)||''));
   const changed=view(a).offerVersion;
   for(const suffix of ['', ' ', 'bad', 'a'.repeat(200), changed+' extra', changed+' '+changed]){
-    const snapshot=packs(),count=writes();say(a,'/trade ok'+(suffix?' '+suffix:''));
+    const snapshot=packs(),count=writes();say(a,'/trade agree'+(suffix?' '+suffix:''));
     yes('missing/malformed/extra version is refused '+JSON.stringify(suffix).slice(0,45),!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&packs()===snapshot&&writes()===count);
   }
-  say(c,'/trade ok '+changed);yes('a version never substitutes for membership in the trade',!trade().tradeOf(c)&&!trade().tradeOf(a).okA);
+  for(const suffix of ['', ' '+changed, ' '+changed+' extra']){
+    const snapshot=packs(), count=writes(), drawnAt=view(a).at;
+    const answer=say(a,'/trade ok'+suffix);
+    yes('a legacy click always refreshes without recording an agreement',
+      /out of date/i.test(answer)&&/press Agree again/i.test(answer)&&view(a).at>drawnAt&&view(a).offerVersion===changed&&
+      !trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&packs()===snapshot&&writes()===count);
+  }
+  say(c,'/trade agree '+changed);yes('a version never substitutes for membership in the trade',!trade().tradeOf(c)&&!trade().tradeOf(a).okA);
   const refreshed=view(a).offerVersion;say(a,'/trade refresh');say(b,'/trade refresh');
   yes('mere owner refreshes preserve the offer version',view(a).offerVersion===refreshed&&view(b).offerVersion===refreshed);
   const p2=ui(view(a)),cached=p2.doc.getElementById('ts-trade-ok').onclick;
   say(a,'/trade gold 5');p2.win.thornswoodTrade.setData(view(a));cached();
-  yes('a previously drawn click handler cannot borrow a newer view version',p2.sent.at(-1)==='/trade ok '+refreshed);
+  yes('a previously drawn click handler cannot borrow a newer view version',p2.sent.at(-1)==='/trade agree '+refreshed);
   const own=view(a).offerVersion;say(a,'/trade remove '+w.idOf(SWORD).toString(16));
   yes('removing an offered piece advances the shared version',view(a).offerVersion!==own&&view(a).offerVersion===view(b).offerVersion);
   const own2=view(a).offerVersion;say(a,'/trade add '+w.idOf(SWORD).toString(16)+' 1');
   yes('adding an offered piece advances the shared version',view(a).offerVersion!==own2);
-  const validApproval=view(a).offerVersion;say(a,'/trade ok '+validApproval);say(b,'/trade ok '+own2);
+  const validApproval=view(a).offerVersion;say(a,'/trade agree '+validApproval);say(b,'/trade agree '+own2);
   yes('a stale request cannot clear or replace another valid approval',trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&view(a).offerVersion===validApproval);
   const property=w.box().__thornswoodProperty,company=property.inCompany;
   property.inCompany=pid=>pid===1001;
   const ordinary=view(a).offerVersion;say(b,'/trade sale');
   yes('company-sale mode advances the same shared offer version',!!view(a).sale&&view(a).offerVersion!==ordinary);
   const companyApi=w.box().__thornswoodCompany,terms=companyApi.terms(),soldVersion=view(a).offerVersion;
-  say(a,'/trade ok '+soldVersion);
+  say(a,'/trade agree '+soldVersion);
   yes('a first company-sale approval records the payout actually shown',trade().tradeOf(a).okA&&!trade().tradeOf(a).okB);
   const changedTerms=companyApi.propose({...terms,saleWorkerPercent:20},'Fixture staff');
   yes('the actual company terms can change during a live sale',changedTerms.ok&&companyApi.confirm(changedTerms.pending.at,'Fixture reviewer').ok);
-  const beforeTermsPacks=packs(),beforeTermsWrites=writes();say(b,'/trade ok '+soldVersion);
+  const beforeTermsPacks=packs(),beforeTermsWrites=writes();say(b,'/trade agree '+soldVersion);
   yes('a changed canonical payout invalidates the old offer before recording agreement',!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&view(a).offerVersion!==soldVersion&&packs()===beforeTermsPacks&&writes()===beforeTermsWrites);
   yes('the refreshed sale preview uses the canonical changed payout',view(a).sale.cut===companyApi.saleCuts(10).worker&&view(a).sale.seller===companyApi.saleCuts(10).seller);
   const zeroWorker=ui({...view(a),sale:{...view(a).sale,available:true,price:10,cut:0,gone:2,seller:8}});
@@ -67,18 +74,18 @@ if(w.loaded()){
   const samePayout=view(a).offerVersion;
   const unrelatedTerms=companyApi.propose({...companyApi.terms(),haulFee:terms.haulFee+1},'Fixture staff');
   yes('an unrelated canonical term can change without altering the payout',unrelatedTerms.ok&&companyApi.confirm(unrelatedTerms.pending.at,'Fixture reviewer').ok);
-  say(a,'/trade ok '+samePayout);
+  say(a,'/trade agree '+samePayout);
   yes('an unchanged effective payout keeps its observed version valid',trade().tradeOf(a).okA&&view(a).offerVersion===samePayout);
-  say(a,'/trade gold 0');const beforeFinalPayout=view(a).offerVersion;say(a,'/trade ok '+beforeFinalPayout);
+  say(a,'/trade gold 0');const beforeFinalPayout=view(a).offerVersion;say(a,'/trade agree '+beforeFinalPayout);
   const cutsAtBoundary=property.saleCuts;let cutReads=0;
   property.saleCuts=price=>{const cuts=cutsAtBoundary(price);return ++cutReads===1?cuts:{...cuts,worker:cuts.worker+1,seller:cuts.seller-1};};
   const finalPacks=packs(),finalWrites=writes();
-  try{say(b,'/trade ok '+beforeFinalPayout);}finally{property.saleCuts=cutsAtBoundary;}
+  try{say(b,'/trade agree '+beforeFinalPayout);}finally{property.saleCuts=cutsAtBoundary;}
   yes('the final sale boundary rechecks the same payout before touching either pack',cutReads>=2&&!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&view(a).offerVersion!==beforeFinalPayout&&packs()===finalPacks&&writes()===finalWrites);
-  say(b,'/trade gold 0');const zero=view(a).offerVersion;say(a,'/trade ok '+zero);
+  say(b,'/trade gold 0');const zero=view(a).offerVersion;say(a,'/trade agree '+zero);
   yes('a zero-price sale refuses before either approval',!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB);
   say(b,'/trade gold 10');const canonicalCuts=property.saleCuts;
-  property.saleCuts=()=>null;say(b,'/trade gold 10');const unavailable=view(a).offerVersion;say(a,'/trade ok '+unavailable);
+  property.saleCuts=()=>null;say(b,'/trade gold 10');const unavailable=view(a).offerVersion;say(a,'/trade agree '+unavailable);
   yes('unknown company terms refuse before either approval and expose unavailable values',!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&view(a).sale.available===false&&view(a).sale.seller===null);
   const unavailableUi=ui(view(b));click(unavailableUi);
   yes('the real page cannot approve a sale with an unavailable payout',unavailableUi.sent.length===0&&unavailableUi.doc.getElementById('ts-trade-ok').disabled===true);
@@ -93,17 +100,17 @@ if(w.loaded()){
   const exchanged=packs();say(a,lineA);say(b,lineB);
   yes('replaying completed agreements cannot swap again',packs()===exchanged&&writes()===exchangeWrites+2);
   begin();const session=view(a).offerVersion;trade().cancel(a);begin();
-  const reopened=view(a).offerVersion;say(a,'/trade ok '+session);
+  const reopened=view(a).offerVersion;say(a,'/trade agree '+session);
   yes('an agreement from a cancelled session is refused after reopening',reopened!==session&&!trade().tradeOf(a).okA);
   trade().cancel(a);const beforeReload=reopened;yes('a hot reload succeeds',w.reload());begin();
-  const reloaded=view(a).offerVersion;say(a,'/trade ok '+beforeReload);
+  const reloaded=view(a).offerVersion;say(a,'/trade agree '+beforeReload);
   yes('hot reload cannot reuse an old session version',reloaded!==beforeReload&&!trade().tradeOf(a).okA);
   trade().cancel(a);yes('a fresh server process starts',w.restart().loaded);[a,b,c].forEach(w.arrive);w.run(30000);begin();
-  const restarted=view(a).offerVersion;say(a,'/trade ok '+reloaded);
+  const restarted=view(a).offerVersion;say(a,'/trade agree '+reloaded);
   yes('restart cannot reuse the previous process version',restarted!==reloaded&&!trade().tradeOf(a).okA);
-  say(a,'/trade gold 10');const failedVersion=view(a).offerVersion;say(a,'/trade ok '+failedVersion);
+  say(a,'/trade gold 10');const failedVersion=view(a).offerVersion;say(a,'/trade agree '+failedVersion);
   w.row(a).inventory.entries=w.row(a).inventory.entries.filter(row=>row.baseId!==15);
-  const beforeRefusal=writes();say(b,'/trade ok '+failedVersion);
+  const beforeRefusal=writes();say(b,'/trade agree '+failedVersion);
   yes('a rejected swap invalidates both approvals and the observed revision',!!trade().tradeOf(a)&&!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&view(a).offerVersion!==failedVersion&&writes()===beforeRefusal);
   const unknown=ui({...view(a),offerVersion:undefined});click(unknown);
   yes('a view with no server-issued version cannot send Agree',unknown.sent.length===0&&unknown.doc.getElementById('ts-trade-ok').disabled===true);
@@ -117,7 +124,7 @@ if(w.loaded()){
   crypto.randomBytes=()=>{throw Error('fixture entropy unavailable');};
   try{trade().gold(b,20);}catch(error){failed=/entropy/.test(error.message);}finally{crypto.randomBytes=randomBytes;}
   yes('entropy failure during an offer edit clears approvals and its old version',failed&&!trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&trade().tradeOf(a).offerVersion==='');
-  const failedPacks=packs(),failedWrites=writes();say(b,'/trade ok '+tokenBeforeFailure);
+  const failedPacks=packs(),failedWrites=writes();say(b,'/trade agree '+tokenBeforeFailure);
   yes('an old valid token cannot approve an edit whose version mint failed',!trade().tradeOf(a).okB&&packs()===failedPacks&&writes()===failedWrites);
   trade().cancel(a);failed=false;
   crypto.randomBytes=()=>{throw Error('fixture entropy unavailable');};

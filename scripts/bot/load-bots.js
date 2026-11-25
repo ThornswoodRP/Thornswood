@@ -391,8 +391,8 @@ class LoadBot extends Bot {
       end('payNoCurrentOffer');
       return;
     }
-    mine('/trade ok ' + version);
-    theirs('/trade ok ' + p.tradeOfferVersion);
+    mine('/trade agree ' + version);
+    theirs('/trade agree ' + p.tradeOfferVersion);
     end('payAgrees');
   }
 

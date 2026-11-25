@@ -367,7 +367,7 @@ function playChecks() {
   q.pump();
   yes('both bots consume their actual owner offer views', b.tradeOfferVersion === observedVersion && q.tradeOfferVersion === observedVersion);
   at += PAY_STEP_MS; b.advance(at);
-  yes('both agree to the received version, then both walk on', lines(b).indexOf('/trade ok ' + observedVersion) >= 0 && lines(q).indexOf('/trade ok ' + observedVersion) >= 0 &&
+  yes('both agree to the received version, then both walk on', lines(b).indexOf('/trade agree ' + observedVersion) >= 0 && lines(q).indexOf('/trade agree ' + observedVersion) >= 0 &&
     !b.payAt && !q.payAt && b.played.payAgrees === 1 && b.nextPay > at + 30000);
   c.queue.push({ type: 'message', message: { t: 7, idx: 99, propName: 'thornswoodTrade',
     dataDump: JSON.stringify({ open: true, offerVersion: 'b'.repeat(48) }) } });b.pump();

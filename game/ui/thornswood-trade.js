@@ -338,7 +338,7 @@
     // Capture this draw, rather than reading whichever data arrives after a
     // click. The server checks it again before recording any agreement.
     var canAgree = versioned && payoutAvailable && !data.iAgreed;
-    okBtn.onclick = function () { if (canAgree) { net('/trade ok ' + offerVersion); } };
+    okBtn.onclick = function () { if (canAgree) { net('/trade agree ' + offerVersion); } };
 
     var find = root.querySelector('#' + ID + '-find');
     if (find) {
