@@ -12,9 +12,10 @@ function check(name, ok) {
   console.log((ok ? 'PASS ' : 'FAIL ') + name);
   if (!ok) failed++;
 }
-check('shutdown wakes both workers and joins them before returning', /stopping\.Set\(\);[\s\S]*?mic\?\.Join\(\);\s*speakers\?\.Join\(\);/.test(audio) &&
-  (audio.match(/WaitHandle\.WaitAny\(/g) || []).length === 2 && !audio.includes('wake.WaitOne(200)'));
+check('audio teardown wakes both workers and joins them before releasing their stop handle', /stopping\.Set\(\);[\s\S]*?mic\?\.Join\(\);\s*speakers\?\.Join\(\);/.test(audio) &&
+  (audio.match(/WaitHandle\.WaitAny\(signals, AudioProbeMs\)/g) || []).length === 2);
 check('capture will not start without its WASAPI wake handle', /hr = client\.SetEventHandle\([^\n]+\);\n\s*if \(hr != 0\) return Stopped\(hr\);/.test(capture));
+check('an empty capture status keeps the stream open without releasing a packet', /GetBuffer\([\s\S]*?if \(hr < 0\) return Stopped\(hr\);\s*\/\/[^\n]+\n\s*if \(hr == VoiceCom\.AUDCLNT_S_BUFFER_EMPTY \|\| frames == 0\) break;/.test(capture));
 check('playback will not start without a buffer size and wake handle', ['GetBufferSize', 'SetEventHandle'].every(call =>
   new RegExp('hr = client\\.' + call + '\\([^\\n]+\\);\\n\\s*if \\(hr != 0\\) return PlaybackFailure\\(hr\\);').test(playback)));
 check('native packet ownership survives a callback exception', /try\s*\{[\s\S]*?OnFrame\(frame\);[\s\S]*?finally\s*\{[^}]*cap\.ReleaseBuffer\(frames\)/.test(capture) &&

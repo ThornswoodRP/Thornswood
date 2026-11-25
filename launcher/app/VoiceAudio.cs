@@ -42,6 +42,8 @@ namespace Thornswood
         readonly Config cfg;
         readonly object lifecycle = new object();
         readonly ManualResetEvent stopping = new ManualResetEvent(false);
+        // Keep checking the device if an invalidated stream stops signaling.
+        const int AudioProbeMs = 200;
         volatile bool stop;
         Thread mic, speakers;
 
@@ -159,7 +161,7 @@ namespace Thornswood
                 if (why.Length > 0) OnEvent("log", why.Trim());
 
                 client = Activate(dev, out hr);
-                if (client == null) { Refused("Windows would not open " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (client == null) return Stopped(hr, "Windows would not open " + name);
 
                 var props = new VoiceCom.AudioClientProperties
                 {
@@ -174,13 +176,13 @@ namespace Thornswood
                     VoiceCom.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | VoiceCom.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                     VoiceCom.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY | VoiceCom.AUDCLNT_STREAMFLAGS_NOPERSIST,
                     200000, 0, &fmt, 0);   // 20 ms of buffer, in 100 ns units
-                if (hr != 0) { Refused("Windows would not start " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0) return Stopped(hr, "Windows would not start " + name);
 
                 NoDucking(client);
 
                 nint p;
                 hr = client.GetService(VoiceCom.IID_IAudioCaptureClient, out p);
-                if (hr != 0) { Refused("no capture service on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0) return Stopped(hr, "no capture service on " + name);
                 cap = VoiceCom.Wrap<VoiceCom.IAudioCaptureClient>(p);
                 hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
                 if (hr != 0) return Stopped(hr);
@@ -195,7 +197,7 @@ namespace Thornswood
                 float[] frame = new float[VoiceMix.Frame];
                 int have = 0;
                 WaitHandle[] signals = { stopping, wake };
-                while (WaitHandle.WaitAny(signals) == 1 && !stop)
+                while (WaitHandle.WaitAny(signals, AudioProbeMs) != 0 && !stop)
                 {
                     while (!stop)
                     {
@@ -205,7 +207,9 @@ namespace Thornswood
                         if (next == 0) break;
                         nint data; uint frames, flags; ulong pos, qpc;
                         hr = cap.GetBuffer(out data, out frames, out flags, out pos, out qpc);
-                        if (hr != 0) return Stopped(hr);
+                        if (hr < 0) return Stopped(hr);
+                        // An empty buffer is a normal status and owns no packet.
+                        if (hr == VoiceCom.AUDCLNT_S_BUFFER_EMPTY || frames == 0) break;
                         try
                         {
                             float* src = (float*)data;
@@ -238,10 +242,10 @@ namespace Thornswood
             }
         }
 
-        int Stopped(int hr)
+        int Stopped(int hr, string message = "the microphone stopped")
         {
             if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
-            Refused("the microphone stopped (0x" + hr.ToString("X8") + ")");
+            Refused(message + " (0x" + hr.ToString("X8") + ")");
             return 0;
         }
 
@@ -312,24 +316,24 @@ namespace Thornswood
             try
             {
                 hr = AudioOutput.OpenForVoice(en, cfg.AudioOutputId, out dev);
-                if (hr != 0 || dev == null) { OnEvent("log", "could not play voice: Windows has no speakers (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0 || dev == null) return PlaybackFailure(hr, "could not play voice: Windows has no speakers");
                 string name = VoiceCom.NameOf(dev);
                 client = Activate(dev, out hr);
-                if (client == null) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (client == null) return PlaybackFailure(hr, "could not play voice on " + name);
 
                 var fmt = VoiceCom.FloatFormat(VoiceMix.Rate, 2);
                 hr = client.Initialize(VoiceCom.AUDCLNT_SHAREMODE_SHARED,
                     VoiceCom.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | VoiceCom.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                     VoiceCom.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY | VoiceCom.AUDCLNT_STREAMFLAGS_NOPERSIST,
                     400000, 0, &fmt, 0);   // 40 ms
-                if (hr != 0) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0) return PlaybackFailure(hr, "could not play voice on " + name);
 
                 uint size;
                 hr = client.GetBufferSize(out size);
                 if (hr != 0) return PlaybackFailure(hr);
                 nint p;
                 hr = client.GetService(VoiceCom.IID_IAudioRenderClient, out p);
-                if (hr != 0) { OnEvent("log", "could not play voice on " + name + " (0x" + hr.ToString("X8") + ")"); return 0; }
+                if (hr != 0) return PlaybackFailure(hr, "could not play voice on " + name);
                 ren = VoiceCom.Wrap<VoiceCom.IAudioRenderClient>(p);
                 hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
                 if (hr != 0) return PlaybackFailure(hr);
@@ -341,7 +345,7 @@ namespace Thornswood
                 {
                     OnEvent("debug", "playing voice on " + name);
                     WaitHandle[] signals = { stopping, wake };
-                    while (WaitHandle.WaitAny(signals) == 1 && !stop)
+                    while (WaitHandle.WaitAny(signals, AudioProbeMs) != 0 && !stop)
                     {
                         uint padding;
                         hr = client.GetCurrentPadding(out padding);
@@ -375,10 +379,10 @@ namespace Thornswood
             }
         }
 
-        int PlaybackFailure(int hr)
+        int PlaybackFailure(int hr, string message = "voice playback stopped")
         {
             if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
-            OnEvent("log", "voice playback stopped (0x" + hr.ToString("X8") + ")");
+            OnEvent("log", message + " (0x" + hr.ToString("X8") + ")");
             return 0;
         }
     }

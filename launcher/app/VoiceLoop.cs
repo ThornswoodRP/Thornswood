@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Thornswood
 {
@@ -77,21 +78,20 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The last job, waited for up to two seconds: it closes the socket and
-        /// the connections, which ask nothing of the network, so a loop that
-        /// has not run it by then is stuck in a job and is left to the process.
+        /// Wait up to two seconds for the last job. If a native call is
+        /// still busy, the loop keeps ownership through eventual cleanup.
         /// </summary>
         public override void Finish(Action last)
         {
-            var done = new ManualResetEventSlim(false);
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             lock (gate)
             {
                 if (finished) return;
-                jobs.Add(delegate { try { last(); } finally { ended = true; done.Set(); } });
+                jobs.Add(delegate { try { last(); } finally { ended = true; done.SetResult(); } });
                 finished = true;
                 jobs.CompleteAdding();
             }
-            done.Wait(2000);
+            done.Task.Wait(2000);
         }
     }
 }
