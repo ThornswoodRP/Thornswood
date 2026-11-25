@@ -130,7 +130,7 @@ namespace Thornswood
                         catch { break; }
                     }
                 }
-                ForgetInstalled(stuck);
+                ForgetInstalled(steam, stuck);
             }
 
             if (failed == 0)
@@ -175,7 +175,7 @@ namespace Thornswood
             try
             {
                 if (File.Exists(InstalledList))
-                    foreach (string raw in File.ReadAllLines(InstalledList))
+                    foreach (string raw in SetupOwnership.PathsIn(InstalledList, steam))
                     {
                         string rel = (raw ?? "").Trim().Replace('/', '\\').TrimStart('\\');
                         if (rel.Length > 0 && Tidy(rel)) candidates[rel] = "on the installer's record";
@@ -270,14 +270,14 @@ namespace Thornswood
         /// server's bytes at a path Thornswood also writes), so Uninstall must
         /// not take it either. Removed when nothing is left on it.
         /// </summary>
-        static void ForgetInstalled(List<string> stuck)
+        static void ForgetInstalled(string steam, List<string> stuck)
         {
             try
             {
                 if (!File.Exists(InstalledList)) return;
                 var still = new HashSet<string>(stuck, StringComparer.OrdinalIgnoreCase);
                 var keep = new List<string>();
-                foreach (string raw in File.ReadAllLines(InstalledList))
+                foreach (string raw in SetupOwnership.PathsIn(InstalledList, steam))
                 {
                     string rel = (raw ?? "").Trim();
                     if (rel.Length > 0 && still.Contains(rel.Replace('/', '\\').TrimStart('\\'))) keep.Add(rel);
