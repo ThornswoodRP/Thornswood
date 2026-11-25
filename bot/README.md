@@ -213,10 +213,11 @@ once in the log.
   nothing after the colon, a known issue with nothing under its title, and
   a `#test-tasks` or `#known-issues` post over 2000 characters are refused
   like any other rule, and the issue is told why. A reopened issue loses its test task and comes
-  back to `#known-issues` if it is still a finding. A task also comes down
-  when the issue is closed as not planned, a duplicate or any other explicit
-  non-completed reason, even if the bot missed its brief reopening. Staff
-  close a test task in Discord once it is confirmed.
+  back to `#known-issues` if it is still a finding. The bot archives its
+  tracked post, preserving replies, when the issue closes as not planned,
+  a duplicate or another explicit non-completed reason. If the issue is
+  later marked completed, the bot can restore the same unchanged test task
+  it archived. Staff close a test task in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one
   post per issue from its last `Test task:` comment that has `Server: Dev`
   straight under its first line, tagged Dev. That is a check only a dev can do: it

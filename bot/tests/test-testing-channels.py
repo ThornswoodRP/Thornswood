@@ -128,8 +128,10 @@ class Thread(object):
         self.applied_tags = tags
         self.content = content
         self.archived = False
+        self.locked = False
         self.mention = '<#%s>' % name
         self.forum = forum
+        self.parent_id = getattr(forum, 'id', None)
         self.owner_id = owner
         Thread.next = getattr(Thread, 'next', 50000) + 1
         self.id = Thread.next
@@ -168,6 +170,9 @@ class Thread(object):
             self.name = name
         if applied_tags is not None:
             self.applied_tags = applied_tags
+        if 'archived' in k:
+            self.archived = k['archived']
+        return self
 
     @property
     def starter_message(self):
@@ -2147,7 +2152,8 @@ yes('  with --apply the extra one is deleted, the owned ones and a lone hand '
 
 # ---------------- 5515: a completed task later closed without a fix --
 # There is no pass seeing the issue open: both reads see it closed.
-def reclosed_task(reason, *, omitted=False, refuse_delete=False, unreadable=False):
+def reclosed_task(reason, *, omitted=False, refuse_archive=False,
+                  apply_before_refusal=False, unreadable=False, prepare=None):
     ISSUES.clear()
     COMMENTS.clear()
     TIMELINE.clear()
@@ -2166,6 +2172,9 @@ def reclosed_task(reason, *, omitted=False, refuse_delete=False, unreadable=Fals
     bot._known_save(state, path)
     state = bot._state_read(path)
     thread = forum.threads[0]
+    run(thread.send('Test result from a player'))
+    if prepare:
+        prepare(forum, state, thread)
     issue(5515, 'No longer a completed fix', [], state='closed', reason=reason,
           closed_at='2026-10-16T00:00:00Z')
     state.pop('_dirty', None)
@@ -2176,37 +2185,76 @@ def reclosed_task(reason, *, omitted=False, refuse_delete=False, unreadable=Fals
         if unreadable and '/issues/5515' in url and '/comments' not in url:
             raise bot.urllib.error.HTTPError(url, 503, 'Unavailable', {}, None)
         return gh(url)
-    original_delete = thread.delete
-    if refuse_delete:
-        async def denied():
-            raise Refused('Missing permission to remove the post')
-        thread.delete = denied
-    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
-    return forum, state, thread, original_delete, result, read, g
+    original_edit = thread.edit
+    if refuse_archive:
+        async def denied(**kwargs):
+            assert bot._state_read(path)['tasks']['5515']['withdrawal'] == 'pending'
+            if apply_before_refusal:
+                thread.archived = True
+            raise discord.Forbidden(type('R', (), {'status': 403, 'reason': 'denied'})(),
+                                    'Missing permission to archive the post')
+        thread.edit = denied
+    result = run(bot.test_tasks_once(
+        forum, state, read, me_id=g.me.id, save=lambda s: bot._known_save(s, path)))
+    return forum, state, thread, original_edit, result, read, g
 
 
 for reason, omitted in [('not_planned', False), ('duplicate', False),
                         ('not_planned', True), ('duplicate', True)]:
     forum, state, thread, _, result, read, g = reclosed_task(reason, omitted=omitted)
-    yes('5515: %s closed issue is removed through %s with its receipt forgotten'
+    yes('5515: %s closed issue is archived through %s with replies and receipt intact'
         % (reason, 'direct read' if omitted else 'closed list'),
-        result == ([], [], [5515]) and not forum.threads
-        and '5515' not in state['tasks'] and state.get('_dirty'))
+        result == ([], [], [5515]) and forum.threads == [thread] and thread.archived
+        and thread.more[0].content == 'Test result from a player'
+        and state['tasks']['5515']['withdrawal'] == 'archived')
     yes('5515: removal needs no task comment read or repost',
         not any('/comments' in url for url in ASKED))
-    yes('5515: another normal pass does not remove or post twice',
-        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], []))
+    calls = len(g.calls)
+    yes('5515: another normal pass does not archive or post twice',
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
+        and len(g.calls) == calls)
 
 for omitted in [False, True]:
     forum, state, thread, original, result, read, g = reclosed_task(
-        'not_planned', omitted=omitted, refuse_delete=True)
+        'not_planned', omitted=omitted, refuse_archive=True)
     yes('5515: Discord refusal retains the thread and receipt for a later pass',
         result == ([], [], []) and forum.threads == [thread]
-        and state['tasks']['5515']['thread_id'] == thread.id)
-    thread.delete = original
-    yes('5515: the next normal pass retries the refused deletion',
+        and not thread.archived and state['tasks']['5515']['thread_id'] == thread.id
+        and state['tasks']['5515']['withdrawal'] == 'pending')
+    thread.edit = original
+    yes('5515: the next normal pass retries the refused archive',
         run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [5515])
-        and not forum.threads and '5515' not in state['tasks'])
+        and forum.threads == [thread] and thread.archived
+        and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
+forum, state, thread, _, result, read, g = reclosed_task(
+    'duplicate', refuse_archive=True, apply_before_refusal=True)
+path = os.path.join(TMP, 'reclosed-state.json')
+state = bot._state_read(path)
+yes('5515: a final permission refusal after an applied edit keeps durable intent',
+    result == ([], [], []) and thread.archived
+    and state['tasks']['5515']['withdrawal'] == 'pending')
+yes('5515: a fresh read after restart confirms the archive despite final refusal',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [5515])
+    and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
+def uncertain_archive(forum, state, thread):
+    async def uncertain(**kwargs):
+        thread.archived = True
+        return None
+    thread.edit = uncertain
+
+
+forum, state, thread, _, result, read, g = reclosed_task(
+    'duplicate', prepare=uncertain_archive)
+yes('5515: an uncertain archive result leaves the receipt pending',
+    result == ([], [], []) and state['tasks']['5515']['withdrawal'] == 'pending')
+yes('5515: a later verified archive settles the pending receipt',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [5515])
+    and state['tasks']['5515']['withdrawal'] == 'archived')
+
 
 for reason in ['completed', None]:
     forum, state, thread, _, result, _, _ = reclosed_task(reason)
@@ -2219,6 +2267,103 @@ forum, state, thread, _, result, _, _ = reclosed_task(
 yes('5515: a failed direct GitHub read cannot prove the task should be removed',
     result == ([], [], []) and forum.threads == [thread]
     and '5515' in state['tasks'])
+
+def duplicate_receipt(forum, state, thread):
+    issue(5516, 'Different issue', [], state='closed', reason='completed')
+    state['tasks']['5516'] = dict(state['tasks']['5515'], updated=ISSUES[5516]['updated_at'])
+
+
+for label, prepare in [
+    ('another forum', lambda f, s, t: setattr(t, 'parent_id', f.id + 1)),
+    ('another owner', lambda f, s, t: setattr(t, 'owner_id', 22)),
+    ('old forum receipt', lambda f, s, t: s['tasks']['5515'].update(channel_id=None)),
+    ('different title', lambda f, s, t: setattr(t, 'name', 'Another test')),
+    ('another issue receipt', duplicate_receipt),
+]:
+    forum, state, thread, _, result, _, _ = reclosed_task('not_planned', prepare=prepare)
+    yes('5515: %s cannot authorize archiving a Main post' % label,
+        result == ([], [], []) and forum.threads == [thread] and not thread.archived
+        and 'withdrawal' not in state['tasks']['5515'])
+
+forum, state, thread, _, result, read, g = reclosed_task(
+    'not_planned', prepare=lambda f, s, t: setattr(t, 'archived', True))
+yes('5515: an already archived post gains no automatic restoration marker',
+    result == ([], [], []) and thread.archived and 'withdrawal' not in state['tasks']['5515'])
+issue(5515, 'Completed again', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+yes('5515: completing the issue does not unarchive a post the bot did not retire',
+    thread.archived)
+
+for omitted in [False, True]:
+    forum, state, thread, _, _, read, g = reclosed_task('not_planned', omitted=omitted)
+    path = os.path.join(TMP, 'reclosed-state.json')
+    bot._known_save(state, path)
+    state = bot._state_read(path)
+    issue(5515, 'Reopened', [], state='open')
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: observing the issue reopen keeps the archived thread and replies',
+        forum.threads == [thread] and thread.archived and len(thread.more) == 1)
+    issue(5515, 'Closed without reason', [], state='closed',
+          closed_at='2026-10-18T00:00:00Z')
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: a closure without an explicit completed reason keeps the archive',
+        forum.threads == [thread] and thread.archived)
+    issue(5515, 'Completed again', [], state='closed', reason='completed',
+          closed_at='2026-10-18T00:00:00Z')
+    yes('5515: completing the same proven task restores original thread and replies',
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [5515], [])
+        and forum.threads == [thread] and not thread.archived
+        and thread.more[0].content == 'Test result from a player'
+        and 'withdrawal' not in state['tasks']['5515'])
+
+for label, change in [
+    ('a changed owner', lambda t: setattr(t, 'owner_id', 22)),
+    ('a staff lock', lambda t: setattr(t, 'locked', True)),
+    ('different instructions',
+     lambda t: COMMENTS[5515][0].update(body='Test task: Try new instructions\n'
+                                            'Server: Main\n1. Reload.\nIt works.')),
+]:
+    forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+    change(thread)
+    issue(5515, 'Completed again', [], state='closed', reason='completed',
+          closed_at='2026-10-18T00:00:00Z')
+    yes('5515: %s keeps the retired post in the archive' % label,
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
+        and forum.threads == [thread] and thread.archived and len(thread.more) == 1
+        and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
+def denied_save(state):
+    raise OSError('Unable to replace the forum index')
+
+
+forum, state, thread, _, _, read, g = reclosed_task('completed')
+issue(5515, 'Withdrawn', [], state='closed', reason='duplicate',
+      closed_at='2026-10-18T00:00:00Z')
+try:
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=denied_save))
+except OSError:
+    yes('5515: failure to persist new archive intent prevents mutation',
+        not thread.archived and 'withdrawal' not in state['tasks']['5515'])
+else:
+    yes('5515: failure to persist new archive intent prevents mutation', False)
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+issue(5515, 'Completed again', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+try:
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=denied_save))
+except OSError:
+    yes('5515: failed restoration save retains the ownership marker for retry',
+        not thread.archived and state['tasks']['5515']['withdrawal'] == 'archived')
+else:
+    yes('5515: failed restoration save retains the ownership marker for retry', False)
+calls = len(g.calls)
+yes('5515: the next pass persists verified restoration without another edit',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                            save=lambda s: bot._known_save(s, path))) == ([], [], [])
+    and len(g.calls) == calls and 'withdrawal' not in bot._state_read(path)['tasks']['5515'])
 
 
 wsrc = inspect.getsource(bot.watch_known_issues)

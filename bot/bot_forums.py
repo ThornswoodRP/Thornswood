@@ -143,6 +143,38 @@ async def _forum_drop(forum, tid):
             raise
 
 
+async def _main_task_thread(forum, records, key, me_id):
+    """Resolve receipts for automatic withdrawal against current Discord data."""
+    receipt = records[key]
+    tid = receipt.get('thread_id')
+    title = receipt.get('sig', '').partition('\n')[0]
+    if (not me_id or type(tid) is not int or tid <= 0 or not title
+            or receipt.get('channel_id') != forum.id
+            or any(row.get('thread_id') == tid for k, row in records.items() if k != key)):
+        return None
+    try:
+        thread = await forum.guild.fetch_channel(tid)
+    except (discord.HTTPException, discord.InvalidData):
+        return None
+    if (thread.id == tid and getattr(thread, 'parent_id', None) == forum.id
+            and getattr(thread, 'owner_id', None) == me_id and thread.name == title
+            and isinstance(getattr(thread, 'archived', None), bool)):
+        return thread
+    return None
+
+
+async def _main_task_archive_state(forum, thread, archived):
+    try:
+        changed = await thread.edit(archived=archived)
+    except discord.HTTPException as exc:
+        log(_refusal('archive' if archived else 'unarchive', forum, thread, exc))
+        # Even a refusal may be the final attempt after a successful edit
+        # whose response was lost. The next pass reads Discord again.
+        return False
+    return (getattr(changed, 'id', None) == thread.id
+            and getattr(changed, 'archived', None) is archived)
+
+
 async def _forum_edit(forum, tid, title, body, tags, then=None):
     """Brings an existing post to this title, body and tags. False when the
        post is gone (deleted by hand), so the caller can make it again.
@@ -410,8 +442,10 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     from before this began floods in), or when its latest "Test task:"
     comment was written after since. Every post is tagged Main (TASK_TAG).
     A rewritten comment edits the post, and so does a record made with an
-    older form of the post (TASK_FORM), once; an issue that is reopened
-    or closed without a completed fix loses it. An issue whose last test task
+    older form of the post (TASK_FORM), once. An issue that is reopened
+    loses its active post. An explicit non-completed closure archives a
+    verified post and keeps its history for a subsequent completed fix.
+    An issue whose last test task
     says Server: Dev, from the day
     #dev-test-tasks began (state['dev_since']), gets no post here: it is
     in #dev-test-tasks. Returns the issue numbers posted, edited and removed.
@@ -457,19 +491,74 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             state['_dirty'] = True
 
     posted, edited, removed = [], [], []
+
+    def save_transition(have, previous):
+        state['_dirty'] = True
+        if save:
+            try:
+                save(state)
+            except OSError:
+                # A later pass must reconcile the old durable receipt.
+                have.clear()
+                have.update(previous)
+                raise
+
+    async def withdraw(key):
+        have = rec[key]
+        if have.get('withdrawal') == 'archived':
+            return
+        thread = await _main_task_thread(forum, rec, key, me_id)
+        if thread is None:
+            return
+        if thread.archived:
+            if have.get('withdrawal') != 'pending':
+                return  # staff or Discord had already archived the post
+        else:
+            # Persist the intent before Discord changes, so a restart can
+            # distinguish a bot withdrawal from an unrelated archive.
+            previous = have.copy()
+            have['withdrawal'] = 'pending'
+            save_transition(have, previous)
+            if not await _main_task_archive_state(forum, thread, True):
+                return
+        have['withdrawal'] = 'archived'
+        state['_dirty'] = True
+        removed.append(int(key))
+
+    async def restore(key, issue):
+        if issue.get('state') != 'closed' or issue.get('state_reason') != 'completed':
+            return
+        have = rec[key]
+        thread = await _main_task_thread(forum, rec, key, me_id)
+        if thread is None or getattr(thread, 'locked', None) is not False:
+            return
+        num = int(key)
+        comments = await loop.run_in_executor(None, github_comments, num, get)
+        post = task_post_of(issue, comments, dev_since)
+        # An exact unchanged task may return. Leave a staff-locked post or
+        # superseded instructions in the archive with their original replies.
+        if post is None or _sig(*post) != have['sig'] or await broken(num, issue, comments, post):
+            return
+        was_archived = thread.archived
+        if was_archived and not await _main_task_archive_state(forum, thread, False):
+            return
+        previous = have.copy()
+        have.pop('withdrawal')
+        have.update(updated=issue.get('updated_at'), form=TASK_FORM)
+        save_transition(have, previous)
+        if was_archived:
+            edited.append(num)
+
     for num in sorted(closed):
         key = str(num)
         issue = closed[num]
         have = rec.get(key)
         if (issue.get('state_reason') or 'completed') != 'completed':
             if have:
-                try:
-                    await _forum_drop(forum, have['thread_id'])
-                except discord.HTTPException:
-                    continue
-                rec.pop(key, None)
-                state['_dirty'] = True
-                removed.append(num)
+                await withdraw(key)
+            continue
+        if have and have.get('withdrawal'):
+            await restore(key, issue)
             continue
         if (have and have.get('updated') == issue.get('updated_at')
                 and have.get('form') == TASK_FORM):
@@ -534,8 +623,8 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         try:
             issue = await loop.run_in_executor(None, github_issue, int(key), get)
         except urllib.error.HTTPError as e:
-            if e.code not in (404, 410):
-                continue        # not read this pass: the post stays as it is
+            if e.code not in (404, 410) or have.get('withdrawal'):
+                continue    # preserve the post when its issue is unknown
             # Deleted: it is in no list any more, so only this read finds it.
             try:
                 await _forum_drop(forum, have['thread_id'])
@@ -547,9 +636,12 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         except Exception:
             continue            # not read this pass: the post stays as it is
-        if (str(issue.get('state')) == 'open'
-                or (str(issue.get('state')) == 'closed'
-                    and (issue.get('state_reason') or 'completed') != 'completed')):
+        if (issue.get('state') == 'closed'
+                and (issue.get('state_reason') or 'completed') != 'completed'):
+            await withdraw(key)
+        elif have.get('withdrawal'):
+            await restore(key, issue)
+        elif issue.get('state') == 'open':
             try:
                 await _forum_drop(forum, have['thread_id'])
             except discord.HTTPException:
