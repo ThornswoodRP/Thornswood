@@ -128,8 +128,9 @@ try {
     $wrong = $ordered.Replace('A.esp', 'B.esp')
     Put $invalid 'game/data/npc-population.json' ('{"other":' + $population + ',' + $wrong + '}')
     $r = Invoke-Chain $invalid
+    # PowerShell can colour and wrap exception text differently on each host.
     Yes 'preflight rejects a wrong top-level order even with a matching nested order' (
-        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'not built in the load order the commit records')
+        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'B\.esp' -and $r.Out -match 'A\.esp')
 
     Put $invalid 'game/data/npc-population.json' ('{' + $ordered + ',"npcs":[')
     $r = Invoke-Chain $invalid
