@@ -234,6 +234,7 @@
     '#ts-select .intro .go::before,#ts-select .intro .go::after{content:"";width:2.6vw;height:.12vw;',
     'background:linear-gradient(90deg,transparent,rgba(44,30,16,.8))}',
     '#ts-select .intro .go::after{background:linear-gradient(270deg,transparent,rgba(44,30,16,.8))}',
+    '#ts-select .intro .closed:focus,#ts-select .intro .go:focus,#ts-select .intro .skipnext:focus{outline:2px solid #c6aa6d;outline-offset:5px}',
     '#ts-select .intro.opening .flash{animation:tsFlash .7s ease-out forwards}',
     '#ts-select .intro.opening .closed{animation:tsFade .5s ease .35s forwards}',
     '#ts-select .intro.opening .open{pointer-events:auto;animation:tsRise 1.1s cubic-bezier(.22,.9,.25,1) .35s forwards}',
@@ -254,12 +255,12 @@
   root.innerHTML =
     '<div class="bg"></div><div class="shade"></div>' +
     '<div class="intro" style="display:none"><div class="stage">' +
-      '<div class="halo"></div><img class="closed" src="thornswood-scroll.webp" alt="To Start">' +
+      '<div class="halo"></div><img class="closed" src="thornswood-scroll.webp" alt="To Start" role="button" tabindex="0" aria-label="Open the scroll">' +
       '<div class="flash"></div>' +
       '<div class="open"><img src="thornswood-scroll-open.webp" alt="">' +
         '<div class="words"><div class="said">The seal is broken.<br>Your journey through Thornswood begins.</div>' +
         '<label class="skip"><input type="checkbox" class="skipnext"> Start without the scroll next time</label>' +
-        '<div class="btn2 go">Continue</div></div></div>' +
+        '<div class="btn2 go" role="button" tabindex="0">Continue</div></div></div>' +
     '</div></div>' +
     '<div class="panel">' +
       '<div class="head"><div><div class="eyebrow">Thornswood</div><div class="title">Who are you today?</div></div>' +
@@ -270,7 +271,7 @@
         '<div class="turnrow"><button class="btn2 turn" type="button">Join now</button></div>' +
         '<div class="otherrow" style="display:none"><button class="btn2 other" type="button">Choose another character</button></div></div>' +
       '<div class="foot"><div class="status"></div>' +
-      '<div class="hint">Click a character to play. Click an empty slot for a new character. Delete forgets the one that is lit.</div>' +
+      '<div class="hint">Use the arrow keys or 1-9 to choose a slot, then Enter to play. Click an empty slot for a new character. Delete forgets the one that is lit.</div>' +
       /*
         A way out of this page that is not Task Manager.
 
@@ -377,27 +378,44 @@
     if (introPhase !== 1) return;
     introPhase = 2;
     elIntro.className = 'intro opening';
+    elIntro.querySelector('.skipnext').focus();
     tell('intro: the scroll was opened');
   }
-  // Keys while the scroll is up. Every one of them, the tick box's Space
-  // included: the mouse is the only thing that moves this screen.
   /*
-    The scroll moves only for a click, Djinn, 25 September. Enter, Space and
-    Escape used to open it, continue or skip it, and on 25 September at
-    16:23:50 it opened with nobody at the game: four key presses typed into
-    another window reached the game (thornswood-input.log, fg another
-    window, keys 4). So while the scroll is up every key is swallowed and
-    only the mouse opens it, ticks the box and presses Continue.
-
-    Swallowed and written down. Nothing said so the first time, so the only
-    evidence that stray keys were reaching the page at all was a count in
-    another log that happened to be running that evening. strayKey puts one
-    line in the front log the first time a key is ignored here.
+    The scroll used to require clicks because keys typed in another window
+    reached it. The native foreground guard now protects these keys too.
+    Held keys retain their phase and focused control, so an answer arriving
+    after mouse navigation cannot turn an opening key into a character pick.
   */
   function introKey(ev) {
     if (!introPhase) return false;
     ev.preventDefault();
-    strayKey('the sealed scroll only opens for a click');
+    if (ev.repeat || ev.ctrlKey || ev.altKey || ev.metaKey) return true;
+    if (!keysSaidAt || !keysCount()) {
+      strayKey('the keys are going to another window, not the game');
+      return true;
+    }
+    if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Tab') return true;
+    var key = { key: ev.key === 'Tab' && ev.shiftKey ? 'Shift+Tab' : ev.key,
+                introPhase: introPhase, target: document.activeElement };
+    if (heldKeys.length || !keysFresh()) { holdKey(key); return true; }
+    keyAct(key);
+    return true;
+  }
+  function introAct(key) {
+    var seal = elIntro.querySelector('.closed');
+    var box = elIntro.querySelector('.skipnext');
+    var go = elIntro.querySelector('.go');
+    if (introPhase === 1) {
+      if (key === 'Enter' || key === ' ') introOpen();
+      else if (key === 'Tab' || key === 'Shift+Tab') seal.focus();
+    } else if (key === 'Tab' || key === 'Shift+Tab') {
+      (document.activeElement === box ? go : box).focus();
+    } else if (document.activeElement === box && key === ' ') {
+      box.checked = !box.checked;
+    } else if (document.activeElement === go && (key === 'Enter' || key === ' ')) {
+      go.onclick();
+    }
     return true;
   }
 
@@ -1087,6 +1105,11 @@
   /* What a key does once it counts. True when it was used. */
   function keyAct(key) {
     if (root.className === 'gone') return false;
+    if (typeof key !== 'string') {
+      if (!key || key.introPhase !== introPhase || key.target !== document.activeElement) return false;
+      key = key.key;
+    }
+    if (introPhase) return introAct(key);
     var list = slots();
     var n = list.length;
     if (asking) {
