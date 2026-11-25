@@ -13640,6 +13640,7 @@ log('gamemode loaded:',
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -13727,6 +13728,24 @@ log('gamemode loaded:',
                  (doc.lookupFailedWhy ? ': ' + doc.lookupFailedWhy : ''));
           }
 
+          // A failed or late request can still refresh unrelated role fields,
+          // but it cannot replace the last readable ban list or advance its clock.
+          var previousBansRequestedAt = (Array.isArray(had.bans) &&
+            had.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }))
+            ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var previousBansWritten = new Date(String(had.at || '')).getTime() || 0;
+          // A role-only rewrite must not turn an invalid ban stamp into
+          // valid proof or make it look like a door file from before stamps.
+          if (!(previousBansRequested > 0 && previousBansRequested <= previousBansWritten &&
+                previousBansWritten <= Date.now())) {
+            previousBansRequested = 0;
+            if (previousBansRequestedAt) { previousBansRequestedAt = 'invalid'; }
+          }
+          var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
+            doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
+            requestedAt > previousBansRequested && requestedAt <= Date.now();
+
           // Whole, never in place (#2740): Set-Door reads it on the box while
           // the server runs, and an in-place write read half way is no list.
           try {
@@ -13755,7 +13774,10 @@ log('gamemode loaded:',
               // Staff bans with why and until (#412), from the site's own
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
-              bans: Array.isArray(doc.bans) ? doc.bans : [],
+              bans: takeBans ? doc.bans : (Array.isArray(had.bans) ? had.bans : []),
+              // The request's start, never its response time, is the proof
+              // used when handing local game bans back to the site.
+              bansRequestedAt: takeBans ? new Date(requestedAt).toISOString() : previousBansRequestedAt,
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],
@@ -63620,6 +63642,7 @@ module.exports = {
   // Bans made here, until the door's next list carries them; and who is
   // already on their way out, so the sweep tells them once.
   if (!state.banned) { state.banned = {}; }
+  var bansLoadedAt = Date.now();  // old hot-reload overlays have no acknowledgement time
   if (!state.ending) { state.ending = {}; }
   // Characters killed for good here (#1010), until the door's list carries them.
   if (!state.pk) { state.pk = {}; }
@@ -64037,24 +64060,47 @@ module.exports = {
   }
 
   /* Every active ban the door's last list carried, and the ones made here since. */
-  var bansRead = { at: 0, list: [], pk: [] };
+  // Once the site has taken over, a transient missing file during hot reload
+  // cannot erase its last confirmed bans either.
+  var confirmedBans = state.confirmedBans || (state.confirmedBans = { list: [], requestedAt: 0 });
+  var bansRead = { at: 0, list: confirmedBans.list, pk: [], banAt: confirmedBans.requestedAt };
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0;
+    var list = null, pk = [], written = 0, bansRequested = 0, hasBanStamp = false;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
-      if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
+      if (doc && Array.isArray(doc.bans) && doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); })) {
+        list = doc.bans;
+      }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
-    } catch (e) { list = []; pk = []; }
-    bansRead.list = list;
+      if (list) {
+        hasBanStamp = !!doc.bansRequestedAt;
+        bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
+      }
+    } catch (e) { list = null; pk = []; }
     bansRead.pk = pk;
     bansRead.written = written;
-    // A lift the door's list has caught up with needs remembering no longer.
+    // The site's confirmed newer request now owns these bans, including a
+    // lift made on the site. A late older request or unreadable list does not.
+    if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
+      bansRead.list = confirmedBans.list = list;
+      bansRead.banAt = confirmedBans.requestedAt = bansRequested;
+      for (var b in state.banned) {
+        if (Object.prototype.hasOwnProperty.call(state.banned, b) &&
+            bansRequested > (Number(state.banned[b].at) || bansLoadedAt)) { delete state.banned[b]; }
+      }
+    } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
+      // Read old door files until the first confirmed snapshot arrives. A
+      // broken file cannot erase the last known list or its ban-specific time.
+      bansRead.list = list;
+      bansRead.banAt = written;
+    }
+    // A lift the door's ban list has caught up with needs remembering no longer.
     for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
+      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && bansRead.banAt > state.lifted[k].at) { delete state.lifted[k]; }
     }
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
@@ -64091,7 +64137,7 @@ module.exports = {
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
         var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
+        if (lift && lift.scope === scope && lift.at >= bansRead.banAt) { continue; }
         // A ban on the whole account says more than one on the character.
         if (out[p] && out[p].scope === 'account') { continue; }
         out[p] = { why: String(b.why || ''), until: until, scope: scope };
@@ -64190,8 +64236,8 @@ module.exports = {
         if (!ok) { tell(pid, 'The site did not take the ban, so nothing changed: ' + v + '.'); return; }
         var until = Number(v.until) || 0;
         var covers = whole && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
-        var ban = { why: why, until: until, scope: whole ? 'account' : 'character' };
         var now = Date.now();
+        var ban = { why: why, until: until, scope: whole ? 'account' : 'character', at: now };
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }
