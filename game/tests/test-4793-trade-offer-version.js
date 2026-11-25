@@ -123,5 +123,17 @@ if(w.loaded()){
   crypto.randomBytes=()=>{throw Error('fixture entropy unavailable');};
   try{trade().begin(a,b);}catch(error){failed=/entropy/.test(error.message);}finally{crypto.randomBytes=randomBytes;}
   yes('entropy unavailable at session creation fails closed without opening a trade',failed&&!trade().tradeOf(a)&&!trade().tradeOf(b));
+  const finalCompany=w.box().__thornswoodCompany,finalProperty=w.box().__thornswoodProperty,normalMembership=finalProperty.inCompany;
+  finalProperty.inCompany=pid=>pid===1001;
+  const allCuts=finalCompany.propose({...finalCompany.terms(),saleWorkerPercent:20,saleGonePercent:80},'Fixture staff');
+  yes('canonical company terms explicitly accept a hundred-percent total cut',allCuts.ok&&finalCompany.confirm(allCuts.pending.at,'Fixture reviewer').ok&&finalCompany.saleCuts(50).seller===0);
+  w.row(a).inventory.entries.push({baseId:15,count:7,name:'Kept coin stack'});
+  begin();say(a,'/trade add '+w.idOf(SWORD).toString(16)+' 1');say(b,'/trade gold 50');say(b,'/trade sale');
+  const zeroSellerView=view(a),zeroSellerA=ui(zeroSellerView),zeroSellerB=ui(view(b));
+  yes('the actual page displays and permits an explicitly offered zero seller share',zeroSellerView.sale.available===true&&zeroSellerView.sale.seller===0&&/you receive 0/.test(zeroSellerA.doc.getElementById('ts-trade-mine').innerHTML)&&!zeroSellerA.doc.getElementById('ts-trade-ok').disabled);
+  const sellerGold=w.count(a,15),workerGold=w.count(b,15),sellerItems=w.count(a,w.idOf(SWORD)),workerItems=w.count(b,w.idOf(SWORD)),zeroWrites=writes();
+  const zeroAgreeA=click(zeroSellerA),zeroAgreeB=click(zeroSellerB);say(a,zeroAgreeA);say(b,zeroAgreeB);
+  yes('two explicit approvals commit canonical zero proceeds without minting a zero-count gold row',!trade().tradeOf(a)&&writes()===zeroWrites+2&&w.count(a,15)===sellerGold&&w.row(a).inventory.entries.some(row=>row.baseId===15&&row.name==='Kept coin stack'&&row.count===7)&&w.count(b,15)===workerGold-40&&w.count(a,w.idOf(SWORD))===sellerItems-1&&w.count(b,w.idOf(SWORD))===workerItems&&[a,b].every(id=>w.row(id).inventory.entries.every(row=>row.count>0)));
+  finalProperty.inCompany=normalMembership;
 }
 t.done(w);

@@ -490,7 +490,7 @@
     var cuts = pr.saleCuts(price);
     if (!cuts || !['price', 'worker', 'gone', 'seller'].every(function (key) {
       return Number.isSafeInteger(cuts[key]) && cuts[key] >= 0;
-    }) || cuts.price !== price || !(cuts.seller > 0) || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
+    }) || cuts.price !== price || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
     return { price: cuts.price, worker: cuts.worker, gone: cuts.gone, seller: cuts.seller };
   }
 
@@ -746,9 +746,11 @@
     for (var i = 0; i < things.length; i++) { pairs.push([things[i].id, things[i].c, things[i].x]); }
     var gone = withoutPairs((sellerInv.entries || []).slice(), pairs);
     var paid = withoutPairs((workerInv.entries || []).slice(), [[GOLD, cost]]);
-    if (!gone || !paid || !(share > 0) || !(cost >= share)) { return false; }
-    var landed = false;
-    for (var k = 0; k < gone.length; k++) {
+    if (!gone || !paid || !(share >= 0) || !(cost >= share)) { return false; }
+    // Canonical terms may leave the seller zero. Credit no coins in that
+    // case, preserving existing coin metadata and never creating count 0.
+    var landed = share === 0;
+    for (var k = 0; share > 0 && k < gone.length; k++) {
       if (gone[k] && gone[k].baseId === GOLD && !gone[k].worn) {
         gone[k] = { baseId: GOLD, count: (gone[k].count || 1) + share };
         landed = true;
