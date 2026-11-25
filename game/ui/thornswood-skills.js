@@ -4323,6 +4323,27 @@
   }
 
   // ---------------------------------------------------------------- keys --
+  function moveRow(direction) {
+    var n = countRows();
+    if (!n) return;
+    rowAt = (rowAt + n + direction) % n;
+    // Profession opens the selected card's half/school choices. Keep that
+    // canonical renderer; the other lists change only their live highlight.
+    var selector = section === 'tree' ? '.skill'
+      : (section === 'spells' || section === 'staff') ? '.spell' : '.card';
+    if (section === 'profession') {
+      var top = elBody.scrollTop;
+      draw();
+      elBody.scrollTop = top;
+    }
+    var nodes = elBody.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('at', i === rowAt);
+    // A repeated owner view must not rebuild the rows merely because the
+    // keyboard already moved their highlight since the last server update.
+    drawnKey = viewKey();
+    if (nodes[rowAt]) nodes[rowAt].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
   /*
     Arrow keys and Enter, because the mouse is not always where somebody left
     it and the panel is a list. Escape closes. Everything else is left alone:
@@ -4338,7 +4359,6 @@
     // Enter and the arrows included. Escape still closes. And the terms of a
     // contract (#4561), K among them: a contract may say "keep".
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
-    var n = countRows();
     if (e.key === 'Escape') { closeByHand(); e.preventDefault(); return; }
     /*
       K closes it too, as the K on the Close button says (#1919). The
@@ -4391,8 +4411,8 @@
       }
       e.preventDefault(); return;
     }
-    if (e.key === 'ArrowDown') { rowAt = n ? (rowAt + 1) % n : 0; draw(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { rowAt = n ? (rowAt + n - 1) % n : 0; draw(); e.preventDefault(); }
+    if (e.key === 'ArrowDown') { moveRow(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { moveRow(-1); e.preventDefault(); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       var i = sections.indexOf(section);
       goTo(sections[(i + (e.key === 'ArrowRight' ? 1 : sections.length - 1)) % sections.length]);
