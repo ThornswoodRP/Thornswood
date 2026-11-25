@@ -243,12 +243,24 @@ yes('I5 the pay is new gold, the trader\'s purse the same, and the panel says th
 // J. The actual native actor snapshot must be usable now, not when the panel opened.
 const currentTrade = w.box().__thornswoodMerchantTrade;
 const nativeAI = w.mp().getNpcAIState;
+const nativeGet = w.mp().get;
+const nativeIdentity = w.mp().getActorRuntimeIdentity;
 function traderState(kind) {
   w.row(SMITH).isDead = kind === 'dead';
   w.row(SMITH).isDisabled = kind === 'disabled';
+  w.mp().get = function (id, key) {
+    if (id === SMITH && kind === 'disappeared' && (key === 'pos' || key === 'worldOrCellDesc')) {
+      throw new Error('form is not loaded');
+    }
+    return nativeGet(id, key);
+  };
+  w.mp().getActorRuntimeIdentity = function (id) {
+    if (id === SMITH && kind === 'disappeared') throw new Error('form is not an actor');
+    return nativeIdentity(id);
+  };
   w.mp().getNpcAIState = function (id) {
     if (id !== SMITH) return nativeAI(id);
-    if (kind === 'throws') throw new Error('actor state unavailable');
+    if (kind === 'throws' || kind === 'disappeared') throw new Error('actor state unavailable');
     const ai = nativeAI(id);
     if (kind === 'missing-dead') delete ai.isDead;
     if (kind === 'missing-disabled') delete ai.isDisabled;
@@ -259,7 +271,7 @@ function unchangedTradeState() {
   return JSON.stringify({ inventory: w.prop(BRENNA, 'inventory'),
     ledger: w.readPrivate('merchant-ledger.json'), character: w.prop(BRENNA, 'thornswoodCharacter') });
 }
-for (const kind of ['dead', 'disabled', 'missing-dead', 'missing-disabled', 'throws']) {
+for (const kind of ['dead', 'disabled', 'missing-dead', 'missing-disabled', 'throws', 'disappeared']) {
   traderState('alive');
   say('/merchant close');
   const beforeOpen = unchangedTradeState();
@@ -295,6 +307,8 @@ for (const kind of ['dead', 'disabled', 'missing-dead', 'missing-disabled', 'thr
 }
 traderState('alive');
 w.mp().getNpcAIState = nativeAI;
+w.mp().get = nativeGet;
+w.mp().getActorRuntimeIdentity = nativeIdentity;
 w.activate(SMITH, BRENNA); w.run(500);
 yes('J the same trader can be used again after valid live state returns', view().open === true);
 
