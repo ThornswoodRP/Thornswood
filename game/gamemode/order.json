@@ -72,6 +72,7 @@
     "staff-progression.ts",
     "take-back.ts",
     "staff-crafting.ts",
+    "staff-needs.ts",
     "shared-resource-stock.ts",
     "npc-merchant-purses.ts",
     "npc-population-policy.ts",
