@@ -81,7 +81,7 @@ const PIECES = {
   payHeld: 'function payHeld(hold, n, actorId) {',
   // The line a post arrives on: a title and a body (#2554).
   postWords: 'function postWords(line) {',
-  post: 'function post(parts, actorId, profileId, toProfile, isJob) {',
+  post: 'function post(parts, actorId, profileId, toProfile, isJob, exactWords) {',
   board: 'function board(parts, actorId, profileId, toProfile) {',
   // What the wall shows, on the board's panel and on J (#1627).
   wallOf: 'function wallOf(hold, profileId) {',

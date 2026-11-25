@@ -46,7 +46,7 @@ function lift(from, to) {
   return b < 0 ? null : prop.slice(a, b + to.length);
 }
 
-const postBlock = lift('  function post(parts, actorId, profileId, toProfile, isJob) {', '\n  }\n');
+const postBlock = lift('  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {', '\n  }\n');
 // The line a post arrives on, a title and a body (#2554).
 const wordsBlock = lift('  function postWords(line) {', '\n  }\n');
 

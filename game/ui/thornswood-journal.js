@@ -23,7 +23,8 @@
     plugin -> page  setFacing({ id, name }) or setFacing(null) as it opens:
                     who the look prompt was drawn for when J opened
 
-  Everything it does goes out as a /journal line. See the journalCommand note
+  Most actions use /journal; exact page saves use /journal-write-v1 with a
+  JSON [journalId,pageId,title,text] payload. See the journalCommand note
   in gamemode.js. Those lines are the panel's: J is the only way in, nobody is
   told to type them, and no help names them (Patrick, 4 Oct: buttons, not
   commands; #1630).
@@ -45,6 +46,7 @@
   var openBook = '';     // which journal is being read
   var openPage = '';     // which page inside it
   var editing = false;
+  var pageDraft = null; // only the currently selected owned page
   var readingShared = -1;
   var openGroup = '';
   var onBoards = false;  // the Boards tab is what the right side shows (issue 1627)
@@ -800,18 +802,19 @@
     html += '<button class="go" data-do="newpage">New page</button></div>';
 
     var page = pageOf(book, openPage);
+    if (pageDraft && (pageDraft.journalId !== book.id || pageDraft.pageId !== openPage)) pageDraft = null;
     if (!page) {
       html += '<div class="none">' + (book.pages.length ? 'Pick a page.' : 'No pages yet.') + '</div>';
     } else {
       html +=
         '<div class="bar">' +
-        '<input id="' + ID + '-ptitle" aria-label="Page title" maxlength="' + TITLE_CHARS + '" value="' + esc(page.title) + '" style="max-width:320px">' +
+        '<input id="' + ID + '-ptitle" aria-label="Page title" maxlength="' + TITLE_CHARS + '" value="' + esc(pageDraft ? pageDraft.title : page.title) + '" style="max-width:320px">' +
         '<span class="grow"></span>' +
         '<button data-do="sharepage">Share this page</button>' +
         '<button data-do="unsharepage">Stop sharing it</button>' +
         '<button class="go" data-do="save">Save</button>' +
         '</div>' +
-        '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(page.text || '') + '</textarea>';
+        '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(pageDraft ? pageDraft.text : (page.text || '')) + '</textarea>';
     }
 
     main.innerHTML = html;
@@ -827,6 +830,32 @@
     for (var r = 0; r < acts.length; r++) {
       acts[r].onclick = function () { act(this.getAttribute('data-do'), book); };
     }
+    if (page) {
+      var titleField = root.querySelector('#' + ID + '-ptitle');
+      var textField = root.querySelector('#' + ID + '-text');
+      if (titleField) { titleField.value = pageDraft ? pageDraft.title : page.title; titleField.oninput = function () { captureDraft(book); }; }
+      if (textField) { textField.value = pageDraft ? pageDraft.text : (page.text || ''); textField.oninput = function () { captureDraft(book); }; }
+    }
+  }
+
+  function captureDraft(book) {
+    pageDraft = {journalId:book.id,pageId:openPage,title:val('ptitle'),text:val('text')};
+    drawJournalFoot();
+  }
+
+  function reconcileDraft() {
+    if (!pageDraft || !data) return;
+    var answer = data.journalSave;
+    var book = bookOf(pageDraft.journalId), page = book && pageOf(book, pageDraft.pageId);
+    if (answer && answer.status === 'saved' && answer.journalId === pageDraft.journalId &&
+        answer.pageId === pageDraft.pageId && answer.title === pageDraft.title && answer.text === pageDraft.text &&
+        page && page.title === pageDraft.title && page.text === pageDraft.text) pageDraft = null;
+  }
+
+  function drawJournalFoot() {
+    var foot = root && root.querySelector('#' + ID + '-foot');
+    if (foot) foot.textContent = (pageDraft ? 'Unsaved changes. ' : '') +
+      'Escape' + (keyName ? ' or ' + keyName : '') + ' closes this. Sharing needs them to be a friend.';
   }
 
   function sayNeedFriend() {
@@ -846,24 +875,25 @@
       return;
     }
     if (verb === 'newpage') {
-      net('/journal page ' + book.id + ' - New page :: ');
+      net('/journal-write-v1 ' + JSON.stringify([book.id, '', 'New page', '']));
       return;
     }
     if (verb === 'save') {
-      /*
-        NEWLINES ARE FLATTENED BECAUSE THE CHANNEL IS LINE BASED. The chat
-        socket carries one line at a time, so a page with paragraphs in it
-        would arrive as several commands and the second would be nonsense.
-        They go over as \\n and the server never sees a raw newline.
-      */
+      captureDraft(book);
       var raw = val('text');
       if (raw.length > PAGE_CHARS) {
         var foot = root.querySelector('#' + ID + '-foot');
         if (foot) { foot.textContent = 'That page is ' + raw.length + ' characters long and a page holds ' + PAGE_CHARS + '. Shorten it to save.'; }
         return;
       }
-      var text = raw.split('\n').join('\\n');
-      net('/journal page ' + book.id + ' ' + (openPage || '-') + ' ' + val('ptitle') + ' :: ' + text);
+      var title = val('ptitle');
+      var line = '/journal-write-v1 ' + JSON.stringify([book.id, openPage || '', title, raw]);
+      if (title.length > TITLE_CHARS || line.length > 25000) {
+        var titleFoot = root.querySelector('#' + ID + '-foot');
+        if (titleFoot) titleFoot.textContent = 'That page request is too long. Nothing was sent; your draft is unsaved.';
+        return;
+      }
+      net(line);
       return;
     }
     if (verb === 'dropbook') { net('/journal drop ' + book.id); openBook = ''; return; }
@@ -889,8 +919,7 @@
     if (!root || !shown) { return; }
     drawSide();
     drawMain();
-    var foot = root.querySelector('#' + ID + '-foot');
-    foot.textContent = 'Escape' + (keyName ? ' or ' + keyName : '') + ' closes this. Sharing needs them to be a friend.';
+    drawJournalFoot();
   }
 
   function open() {
@@ -944,6 +973,7 @@
     },
     setData: function (d) {
       data = d || null;
+      reconcileDraft();
       // The new journal has arrived, so New answers the next press again.
       if ((newAt || newQueued) && books().length !== newFrom) { newAt = 0; newFrom = -1; newQueued = false; }
       /*
