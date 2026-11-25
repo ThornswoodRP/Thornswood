@@ -353,4 +353,4 @@ if (process.argv.includes('--show')) for (const w of writes) console.log('      
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
