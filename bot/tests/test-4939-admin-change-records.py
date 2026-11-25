@@ -26,11 +26,12 @@ for did, words in [('docsave', 'saved page'),
                    ('inboxreopen', 'reopened inbox report'),
                    ('inboxdelete', 'deleted inbox report'),
                    ('uploaddelete', 'deleted upload')]:
-    row = {'did': did, 'byName': 'Current Aela', 'whoName': picture}
+    subject = picture if did == 'uploaddelete' else 'help' if did == 'docsave' else '4d33a687b49f4e6b80a67865c7cfb5ff'
+    row = {'did': did, 'byName': 'Current Aela', 'whoName': subject}
     text = bot.moderation_text('site', row)
-    yes(did + ' says action, verified actor and complete generated filename',
+    yes(did + ' says action, verified actor and actual page/report/file subject',
         text is not None and '**Staff on the site:** Current Aela ' + words in text
-        and (picture if did == 'uploaddelete' else picture[:40]) in text and 'profile ' not in text)
+        and subject in text and 'profile ' not in text)
     hostile = bot.moderation_text('site', {'did': did,
         'byName': '@everyone <@111111111111111111>',
         'whoName': '**[x](http://e.invalid).png @everyone'})
