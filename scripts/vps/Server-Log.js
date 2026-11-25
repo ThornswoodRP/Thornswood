@@ -57,9 +57,11 @@
 
   THE CLOCK (#4948). Every child line starts with this writer's UTC receipt
   time, "[2026-11-01T08:25:00.000Z]". The engine's original event text stays
-  after it, including any local timestamp. Receipt time is when output reaches
-  this process, not a reconstruction of the embedded event clock. Split pipe
-  chunks get one prefix per line, and a final fragment is kept at shutdown.
+  after it, including any local timestamp. Receipt time is when this process
+  receives the complete line or reaches the end of its pipe. Split pipe
+  chunks get one prefix per line. Each pipe is framed independently and lines
+  are written in the order they finish. A line over the log's size limit is
+  split into separately stamped chunks.
   This distinguishes the two occurrences of an hour when clocks go back.
 
   THE 30 DAYS. The site and retention read that UTC prefix first. Older local
@@ -103,6 +105,8 @@ const KEEP_DAYS = 30;
 const ALSO_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BYTES = 4 * 1024 * 1024;
+// Leave room for a bracketed UTC prefix, its space and a terminating newline.
+const CHILD_LINE_BYTES = MAX_BYTES - 28;
 const SWEEP_MS = 60 * 60 * 1000;
 const HEAD_BYTES = 64 * 1024;
 const STAMP = /^\[?(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
@@ -791,20 +795,28 @@ function ageAside(dir, now, days) {
 
 function run(o) {
   const log = o.log;
-  const state = { fd: null, bytes: 0, day: 0, atLineStart: true, rollAfter: 0, lost: 0, lostSince: 0, lostWhy: '' };
+  const state = { fd: null, bytes: 0, day: 0, rollAfter: 0, lost: 0, lostSince: 0, lostWhy: '' };
   const pending = [];
   const sayLine = (msg) => Buffer.from('[' + stampOf(new Date()) + '] [server-log] ' + msg + '\n');
 
   // The day a file belongs to is the day of its first line, so one that
   // could not be rolled stays due until it is, whoever opens it again.
   function open(now) {
-    state.fd = fs.openSync(log, 'a');
+    state.fd = fs.openSync(log, 'a+');
     const st = fs.fstatSync(state.fd);
     state.bytes = st.size;
     let first = null;
     if (st.size) { try { first = firstStamp(readHead(log)); } catch (e) { first = null; } }
     state.day = dayKey(first !== null ? first : (st.size ? st.mtimeMs : now));
-    state.atLineStart = true;
+    if (st.size) {
+      // A power loss can leave a partial write. Start the next UTC record on
+      // its own line even when the previous run's file is kept at restart.
+      const last = Buffer.alloc(1);
+      if (fs.readSync(state.fd, last, 0, 1, st.size - 1) === 1 && last[0] !== 10) {
+        fs.writeSync(state.fd, '\n');
+        state.bytes++;
+      }
+    }
   }
   function raw(buf) {
     if (state.fd === null) {
@@ -813,7 +825,6 @@ function run(o) {
     try {
       fs.writeSync(state.fd, buf);
       state.bytes += buf.length;
-      state.atLineStart = buf.length ? buf[buf.length - 1] === 10 : state.atLineStart;
     } catch (e) { lose(buf, e); return; }
     if (state.lost) {
       const lost = state.lost, since = state.lostSince, why = state.lostWhy;
@@ -862,33 +873,38 @@ function run(o) {
     if (!rolled) state.day = wasDay;
     for (const l of lines.concat(sweep(log, now, o.days), ageAlsos(o, now))) say(l);
   }
-  // Every child line gets this process's UTC receipt time (#4948). Keep the
-  // embedded event text intact. --stamp remains accepted for existing tasks.
-  function stamped(buf) {
-    if (!buf.length) return buf;
-    const parts = [];
-    let at = 0, lineStart = state.atLineStart;
-    while (at < buf.length) {
-      if (lineStart) parts.push(Buffer.from('[' + stampOf(new Date()) + '] '));
-      const nl = buf.indexOf(10, at);
-      const end = nl < 0 ? buf.length : nl + 1;
-      parts.push(buf.subarray(at, end));
-      lineStart = nl >= 0;
-      at = end;
-    }
-    return Buffer.concat(parts);
-  }
-  function write(buf) {
-    buf = stamped(buf);
+  function writeChildLine(parts, complete) {
     const now = Date.now();
-    if (due(now)) {
-      if (state.atLineStart) { roll(now); }
-      else {
-        const nl = buf.indexOf(10);
-        if (nl >= 0) { raw(buf.subarray(0, nl + 1)); roll(now); buf = buf.subarray(nl + 1); }
+    if (due(now)) roll(now);
+    const line = [Buffer.from('[' + stampOf(new Date(now)) + '] '), ...parts];
+    if (!complete) line.push(Buffer.from('\n'));
+    raw(Buffer.concat(line));
+  }
+
+  // Use one bounded buffer per pipe, so an stderr line cannot be appended to
+  // a stdout fragment before that line finishes. --stamp remains accepted.
+  function childPipe(stream) {
+    let parts = [], bytes = 0;
+    function flush(complete) {
+      if (bytes) writeChildLine(parts, complete);
+      parts = [];
+      bytes = 0;
+    }
+    function receive(buf) {
+      for (let at = 0; at < buf.length;) {
+        const nl = buf.indexOf(10, at);
+        const limit = Math.min(buf.length, at + CHILD_LINE_BYTES - bytes);
+        const complete = nl >= 0 && nl < limit;
+        const end = complete ? nl + 1 : limit;
+        parts.push(buf.subarray(at, end));
+        bytes += end - at;
+        if (complete || bytes === CHILD_LINE_BYTES) flush(complete);
+        at = end;
       }
     }
-    if (buf.length) raw(buf);
+    stream.on('data', receive);
+    stream.on('end', () => flush(false));
+    return () => flush(false);
   }
 
   // The start: the files Roll-Log.ps1 or an earlier run left cut to the
@@ -918,11 +934,11 @@ function run(o) {
     try { os.setPriority(child.pid, os.getPriority()); }
     catch (e) { say('could not give the server this process\'s priority: ' + (e.code || e.message)); }
   }
-  child.stdout.on('data', write);
-  child.stderr.on('data', write);
+  const finishStdout = childPipe(child.stdout);
+  const finishStderr = childPipe(child.stderr);
   const tick = setInterval(() => {
     const t = Date.now();
-    if (due(t) && state.atLineStart) roll(t);
+    if (due(t)) roll(t);
     else for (const l of sweep(log, t, o.days).concat(ageAlsos(o, t))) say(l);
     for (const l of ageAside(process.cwd(), t)) say(l);
   }, SWEEP_MS);
@@ -940,7 +956,8 @@ function run(o) {
   child.on('close', (code, signal) => {
     clearInterval(tick);
     if (!started) return;
-    if (!state.atLineStart) raw(Buffer.from('\n'));
+    finishStdout();
+    finishStderr();
     say('the server ended, ' + (signal ? 'stopped by ' + signal : 'exit code ' + code));
     process.exitCode = code === null ? 1 : code;
   });
