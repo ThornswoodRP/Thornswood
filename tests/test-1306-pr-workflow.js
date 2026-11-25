@@ -42,6 +42,22 @@ yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.
 yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
     !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
 yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
+// #5958: an independent job, outside the JS/PS gate's path selection. The
+// runner's real process behavior is exercised by test-5958-bot-runner.ps1.
+for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly', read(path.join(WF, 'nightly.yml'))]]) {
+  const match = /\n  bot:\n([\s\S]*?)(?=\n  [a-z][\w-]*:\n|$)/.exec(workflow);
+  const bot = match ? match[1] : '';
+  yes(what + ' runs the same complete bot suite on hosted Windows with Python 3.12',
+    /name: Bot harnesses/.test(bot) && /runs-on: windows-latest/.test(bot) &&
+    /python-version: '3.12'/.test(bot) && /& \.\/scripts\/dev\/Run-BotHarnesses\.ps1 -Python \$py/.test(bot));
+  yes(what + ' installs the bot lock with hashes and refuses installation failures',
+    /--require-hashes --only-binary :all: -r bot\\requirements\.txt/.test(bot) &&
+    /if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}/.test(bot));
+  if (what === 'pull request') {
+    yes('the bot job has no path-selection or conditional skip on a pull request',
+      !/^    (needs|if):/m.test(bot));
+  }
+}
 // No workflow runs a pull request on the VPS, and none runs on
 // pull_request_target.
 const others = fs.readdirSync(WF).filter(f => /\.ya?ml$/.test(f)).filter(f => {
@@ -57,12 +73,12 @@ yes('no workflow runs a pull request on the VPS (' + (others.join(', ') || 'none
 // repository is public since 30 Oct, so it no longer waits for that.
 const result = /\n  result:\n([\s\S]*)$/.exec(code(pr));
 const rj = result ? result[1] : '';
-yes('a "Build check result" job needs the pick, the tree checks, the build and the gate\'s shares on both platforms (#3683, #5292, #5293)', /^    name: Build check result\n    needs: \[pick, checks, launcher, gate, gate-linux\]\n/.test(rj));
+yes('a "Build check result" job needs the pick, the tree checks, the build and the gate\'s shares on both platforms (#3683, #5292, #5293)', /^    name: Build check result\n    needs: \[pick, checks, launcher, gate, gate-linux, bot\]\n/.test(rj));
 yes('  runs unless cancelled', /\n    if: \$\{\{ !cancelled\(\) \}\}\n/.test(rj));
 yes('  on GitHub\'s ubuntu-latest, never the box', /\n    runs-on: ubuntu-latest\n/.test(rj) && !/self-hosted|thornswood/.test(rj));
 yes('  with no checkout, action or secret: it reads only their results', !/uses:|secrets\.|checkout/.test(rj) &&
     /BUILD: \$\{\{ needs\.launcher\.result \}\}/.test(rj) && /GATE: \$\{\{ needs\.gate\.result \}\}/.test(rj) &&
-    /CHECKS: \$\{\{ needs\.checks\.result \}\}/.test(rj) && /PICK: \$\{\{ needs\.pick\.result \}\}/.test(rj) &&
+    /BOT: \$\{\{ needs\.bot\.result \}\}/.test(rj) && /CHECKS: \$\{\{ needs\.checks\.result \}\}/.test(rj) && /PICK: \$\{\{ needs\.pick\.result \}\}/.test(rj) &&
     /GATE_LINUX: \$\{\{ needs\['gate-linux'\]\.result \}\}/.test(rj) && /LINUX_SHARES: \$\{\{ needs\.pick\.outputs\.linux_shares \}\}/.test(rj));
 // Which results pass is run, not read: tests\test-5292-path-rule.ps1 runs
 // this step's script for every result and output it can be given.

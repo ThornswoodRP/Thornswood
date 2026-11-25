@@ -73,11 +73,11 @@ function build(src) {
   const tested = /\n  # ALREADY TESTED \(#3182[\s\S]*?\n  tested:\n[\s\S]*?\n\n(?=  # )/.exec(body);
   if (!tested) { fail('build.yml no longer has its "tested" job before the gate and launcher jobs'); }
   body = body.replace(tested[0], '\n');
-  // The gate's pick and the tree checks wait for it in build.yml (#5292),
+  // The pick, tree checks and bot harnesses wait for it in build.yml (#5292, #5958),
   // the gate's shares wait for it and the pick (#5183), and the launcher job
   // waits for it and the pick's path rule (#5292).
   const waits = "    needs: tested\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}\n";
-  if (body.split(waits).length !== 3) { fail('build.yml no longer has the tested condition on exactly the pick and tree checks jobs'); }
+  if (body.split(waits).length !== 4) { fail('build.yml no longer has the tested condition on exactly the pick, tree checks and bot jobs'); }
   body = body.split(waits).join('');
   const shareWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.result == 'success' && needs.pick.outputs.shares != '[]' }}\n";
   if (body.split(shareWaits).length !== 2) { fail('build.yml no longer has the gate\'s shares waiting for the tested and pick jobs, and skipped when the pick gave none'); }
@@ -113,7 +113,7 @@ function build(src) {
     are skipped when the change reaches no harness (shares=[]), and that skip
     counts as passed only when the pick said exactly that and the pick itself
     passed; any other skip, a failure or a cancel cannot merge. The tree
-    checks always run and always have to pass. The gate's Linux shares (#5293) the same
+    checks and the complete bot suite (#5958) always run and must pass. The gate's Linux shares (#5293) the same
     way: skipped counts only when the pick gave none (linux_shares=[]).
   */
   if (/\n  result:\n/.test(body)) { fail('build.yml already has a job named result'); }
@@ -124,15 +124,16 @@ function build(src) {
     '  # Build-PrWorkflow.js, which says why.',
     '  result:',
     '    name: Build check result',
-    '    needs: [pick, checks, launcher, gate, gate-linux]',
+    '    needs: [pick, checks, launcher, gate, gate-linux, bot]',
     '    if: ${{ !cancelled() }}',
     '    runs-on: ubuntu-latest',
     '    timeout-minutes: 5',
     '    steps:',
-    '      - name: The tree checks, the launcher build and the gate passed',
+    '      - name: The tree checks, bot harnesses, launcher build and gate passed',
     '        env:',
     '          PICK: ${{ needs.pick.result }}',
     '          CHECKS: ${{ needs.checks.result }}',
+    '          BOT: ${{ needs.bot.result }}',
     '          BUILD: ${{ needs.launcher.result }}',
     '          GATE: ${{ needs.gate.result }}',
     "          GATE_LINUX: ${{ needs['gate-linux'].result }}",
@@ -142,12 +143,14 @@ function build(src) {
     '        run: |',
     '          echo "Pick the gate harnesses: $PICK"',
     '          echo "Tree checks: $CHECKS"',
+    '          echo "Bot harnesses: $BOT"',
     '          echo "Launcher builds: $BUILD (the change reaches it: $REACHES_LAUNCHER)"',
     '          echo "Gate harnesses, every share: $GATE (shares: $SHARES)"',
     '          echo "Gate harnesses on Linux, every share: $GATE_LINUX (shares: $LINUX_SHARES)"',
     '          ok=1',
     '          [ "$PICK" = success ] || ok=0',
     '          [ "$CHECKS" = success ] || ok=0',
+    '          [ "$BOT" = success ] || ok=0',
     '          [ "$BUILD" = success ] || ok=0',
     '          if [ "$GATE" != success ]; then',
     '            if [ "$GATE" = skipped ] && [ "$PICK" = success ] && [ "$SHARES" = "[]" ]; then echo "The gate was skipped: the change reaches no gate harness (#5292)"; else ok=0; fi',
@@ -156,7 +159,7 @@ function build(src) {
     '            if [ "$GATE_LINUX" = skipped ] && [ "$PICK" = success ] && [ "$LINUX_SHARES" = "[]" ]; then echo "The gate on Linux was skipped: the change reaches no harness that runs there (#5293)"; else ok=0; fi',
     '          fi',
     '          if [ "$ok" = 1 ]; then exit 0; fi',
-    '          echo "::error::the pick, the tree checks, the launcher build or a share of the gate did not pass, so this pull request may not merge"',
+    '          echo "::error::the pick, the tree checks, the bot harnesses, the launcher build or a share of the gate did not pass, so this pull request may not merge"',
     '          exit 1',
     '',
   ].join('\n');

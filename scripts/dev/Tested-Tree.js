@@ -24,8 +24,10 @@
 // #5293 the gate harnesses that need nothing from Windows run in shares on
 // Linux ("Gate harnesses on Linux (n of N)"), counted the same way, and the
 // run's "Build check result" job has to have passed as well, because it is
-// what says no share was skipped for a reason the pick did not give. Until then
-// it was
+// what says no share was skipped for a reason the pick did not give.
+// The complete "Bot harnesses" job must also pass in that run (#5958);
+// a green aggregate from before that job existed is not sufficient proof.
+// Earlier it was
 // written only when the gate step ran every gate harness (#3114: a pull
 // request built on the VPS could run only those its change could reach, and
 // then main built in full and was traced), and only on GitHub's hosted
@@ -205,6 +207,8 @@ async function passedOn(o, r) {
   if (!job) { return { why: 'no Launcher builds job passed through to its last step' }; }
   if (!all.some(x => x && x.name === CHECKS && x.conclusion === 'success')) { return { why: 'its ' + CHECKS + ' job did not pass' }; }
   if (!all.some(x => x && x.name === RESULT && x.conclusion === 'success')) { return { why: 'its ' + RESULT + ' job did not pass' }; }
+  // #5958: older green aggregates did not require the bot suite.
+  if (!all.some(x => x && x.name === 'Bot harnesses' && x.conclusion === 'success')) { return { why: 'its Bot harnesses job did not pass' }; }
   const gate = gateShares(all);
   if (gate) { return { why: gate }; }
   const trees = treesInLog(await o.getText('repos/' + o.repo + '/actions/jobs/' + job.id + '/logs'));
