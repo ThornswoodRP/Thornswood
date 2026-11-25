@@ -14,7 +14,10 @@ not a friendship.
 
 P lists them by the name they are online under, and says who is
 away. While a friend is away, the list shows the name they had when
-you became friends. Remove beside a name takes one off.
+you became friends. Remove beside a name asks for a second press within
+five seconds, naming that friend. Changed information, another action, or
+closing P cancels it. A held key does not confirm. Removing a friend also
+stops sharing your journal and pages with them.
 
 Near you on P is everybody close enough to look at, the same people
 the look prompt names. Two people with the same name are not mixed
