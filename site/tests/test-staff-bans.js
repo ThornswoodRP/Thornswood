@@ -403,8 +403,37 @@ const modlog = () => { try { return fs.readFileSync(path.join(gameDir, 'for-bot'
     }
 
     // ------------------------------------------------ 4. the door keeps them --
-    const doorWrite = src.slice(src.indexOf('mp.writeFileWhole(FILE, JSON.stringify({'), src.indexOf("note: 'Written by the gamemode from the site."));
-    yes('the door writes the site\'s bans into allowed.json', /bans: Array\.isArray\(doc\.bans\) \? doc\.bans : \[\]/.test(doorWrite));
+    const doorStart = src.indexOf('// ==== thornswood door ====');
+    const doorEnd = src.indexOf('// ==== end thornswood door ====');
+    const runDoor = new Function('require', 'mp', 'setInterval', 'clearInterval', 'console', 'globalThis',
+      src.slice(doorStart, doorEnd));
+    const doorFs = Object.assign({}, fs, {
+      readFileSync(file, ...args) {
+        if (file === 'server-settings.json') return JSON.stringify({ dataDir: gameDir, privDir: PRIV });
+        return fs.readFileSync(file, ...args);
+      }
+    });
+    const expectedBans = (await allowed()).j.bans;
+    let written = null;
+    runDoor((name) => {
+      if (name === 'fs') return doorFs;
+      if (name === 'path') return path;
+      if (name === 'https') return {
+        get(url, options, callback) {
+          if (url !== 'http://127.0.0.1:' + port + '/api/allowed') throw new Error('unexpected door URL');
+          return http.get(url, options, callback);
+        }
+      };
+      throw new Error('unexpected door module: ' + name);
+    }, {
+      writeFileWhole(file, content) {
+        fs.writeFileSync(file, content, 'utf8');
+        if (file === path.join(PRIV, 'allowed.json')) written = JSON.parse(content);
+      }
+    }, () => 0, () => {}, { log() {} }, {});
+    yes('the door writes the site\'s bans into allowed.json',
+        await until(() => written) && expectedBans.some((ban) => ban.profiles.includes(7007)) &&
+        JSON.stringify(written.bans) === JSON.stringify(expectedBans));
     const W = (() => { const m = src.match(/const WORDS = (\[[\s\S]*?\]);/); return m ? new Function('return ' + m[1])() : []; })();
     const PW = (() => { const m = src.match(/const PLAYER_WORDS = (\[[\s\S]*?\]);/); return m ? new Function('return ' + m[1])() : []; })();
     yes('the server answers /ban, /unban and /note, and does not offer them to everybody',
