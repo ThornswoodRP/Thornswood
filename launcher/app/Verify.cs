@@ -1208,10 +1208,11 @@ namespace Thornswood
             // this, pressing Fix here reached into another SkyMP server's
             // collection and changed a plugin it was relying on. FileMode.Create
             // truncates the file it is given rather than replacing it, so the
-            // link has to come off first.
-            OwnGame.Detach(dest);
+            // link has to come off first, and when it does not, this plugin is
+            // not written and is said as a failed write (#4694).
             try
             {
+                OwnGame.Detach(dest);
                 using (var fs = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None))
                     fs.Write(bytes, 0, bytes.Length);
             }
