@@ -92,4 +92,9 @@ for(const [verb,prefix]of [['newpage','/journal-write-v1 '],['dropbook','/journa
  p.choose('[data-book="j1"]');p.button('discard').click();p.choose('[data-page="p2"]');
  yes('the remaining book can be revisited after explicit discard of its removed page',p.field('text').value==='SAVED-TWO');
 }
+{
+ const p=rig(),title=p.field('ptitle');title.focus();p.fire(title,'focusin','');
+ p.choose('[data-page="p2"]');p.button('keep').click();
+ yes('Keep editing restores a title focused without another text change',p.doc.activeElement===p.field('ptitle')&&p.field('text').value.startsWith('DRAFT'));
+}
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

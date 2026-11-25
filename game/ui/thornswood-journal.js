@@ -245,6 +245,8 @@
       '</div>';
     document.body.appendChild(root);
     leaveChoice = root.querySelector('#' + ID + '-leave-choice'); leaveChoice.hidden = true;
+    root.addEventListener('focusin', rememberEditor);
+    root.addEventListener('focusout', rememberEditor);
     root.querySelector('#' + ID + '-close').onclick = close;
     // Help, beside Close (#1633): the help panel on its People topic, which
     // has journals and group books, and this one put down; the help opens
@@ -327,6 +329,17 @@
     return;
   }
 
+  function rememberEditor(ev) {
+    var field = ev.target;
+    if (!field || !root.contains(field) || (field.id !== ID + '-ptitle' && field.id !== ID + '-text')) return;
+    lastEdit = field.id === ID + '-ptitle' ? 'ptitle' : 'text';
+    if (pendingLeave && pageDraft === pendingLeave.draft) {
+      pendingLeave.editor = lastEdit;
+      pendingLeave.selection = typeof field.selectionStart === 'number' ?
+        {start:field.selectionStart,end:field.selectionEnd,direction:field.selectionDirection} : null;
+    }
+  }
+
   function cancelLeave(focus) {
     var intent = pendingLeave;
     pendingLeave = null;
@@ -336,7 +349,7 @@
       root.querySelector('#' + ID + '-discard').onclick = null;
     }
     if (focus) {
-      var field = root.querySelector('#' + ID + '-' + lastEdit);
+      var field = root.querySelector('#' + ID + '-' + (intent && intent.editor || lastEdit));
       if (field) {
         field.focus();
         if (intent && pageDraft === intent.draft && intent.selection && typeof field.setSelectionRange === 'function') {
@@ -352,7 +365,7 @@
     var field = root.querySelector('#' + ID + '-' + lastEdit);
     var selection = field && typeof field.selectionStart === 'number' ?
       {start:field.selectionStart,end:field.selectionEnd,direction:field.selectionDirection} : null;
-    var intent = {draft:pageDraft,run:run,valid:valid,selection:selection};
+    var intent = {draft:pageDraft,run:run,valid:valid,editor:lastEdit,selection:selection};
     pendingLeave = intent; leaveChoice.hidden = false;
     var keep = root.querySelector('#' + ID + '-keep'), discard = root.querySelector('#' + ID + '-discard');
     keep.onclick = function () { if (pendingLeave === intent) cancelLeave(true); };
