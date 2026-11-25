@@ -292,13 +292,19 @@ else:
                        if s['name'] == ch.name), None)
         if prefix:
             recovered = []
-            for m in ch.sent:
+            footer = whole.strip().split('\n\n')[-1]
+            part_count = len(ch.sent)
+            valid_parts = part_count > 0
+            for i, m in enumerate(ch.sent, 1):
                 lines = m.split('\n\n')
+                valid_parts = valid_parts and lines[0] == prefix and lines[-1] == footer
                 body = lines[1:-1]
-                if body and re.match(r'^\*Part \d+ of \d+\*$', body[0]):
+                if part_count > 1:
+                    valid_parts = valid_parts and bool(body) and body[0] == '*Part %d of %d*' % (i, part_count)
                     body = body[1:]
                 recovered.extend(body)
-            footer = whole.strip().split('\n\n')[-1]
+            yes('#%s: each guide part has its heading, part label and Changelog footer' % ch.name,
+                valid_parts)
             sent_whole = prefix + '\n\n' + '\n\n'.join(recovered) + '\n\n' + footer
         else:
             sent_whole = '\n\n'.join(ch.sent)
