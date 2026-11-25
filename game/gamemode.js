@@ -61094,7 +61094,7 @@ module.exports = {
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -61501,9 +61501,15 @@ module.exports = {
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -61524,22 +61530,22 @@ module.exports = {
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
