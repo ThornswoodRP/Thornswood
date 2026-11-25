@@ -1781,6 +1781,8 @@ async function handle(req, res) {
 
     const gallery = jsonFile(GALLERY, []);
     const already = gallery.find((g) => String(g.name) === name);
+    const changed = !already || already.url !== '/shot/' + name ||
+      (by && already.by !== by) || (srcset && already.srcset !== srcset);
     if (already) {
       already.url = '/shot/' + name;
       if (by) already.by = by;
@@ -1802,6 +1804,8 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: name, approved: false,
         error: 'The site could not put that on the gallery, so it is still waiting. Try again in a minute.' });
     }
+    // The public entry is committed even if queue cleanup below is refused.
+    if (changed) modLog({ did: 'galleryapprove', byName: gs.name || gs.discordId, whoName: name });
 
     const left = pending.filter((x) => String(x.name) !== name);
     if (left.length !== pending.length && !putJson(GPENDING, left)) {
@@ -1853,6 +1857,12 @@ async function handle(req, res) {
        that no longer has the name is left alone. The file is not touched
        until all three are saved, so a gallery that would not save is never
        left showing a picture whose file is gone. */
+    let recorded = false;
+    const recordRemoval = () => {
+      if (recorded) return;
+      recorded = true;
+      modLog({ did: 'galleryremove', byName: gs.name || gs.discordId, whoName: name });
+    };
     const notSaved = (file) => {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'remove-write-failed', file: file }));
       return sendJson(res, 500, { ok: false, name: name,
@@ -1862,11 +1872,13 @@ async function handle(req, res) {
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
+    if (removedGal) recordRemoval();
 
     const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
     if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
+    if (removedPend) recordRemoval();
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
@@ -1874,6 +1886,7 @@ async function handle(req, res) {
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
     if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
+    if (kept.length !== reports.length) recordRemoval();
 
     /*
       The file (#2352, option C). Deleted, unless the submission had an open
@@ -1904,9 +1917,11 @@ async function handle(req, res) {
       const hold = itsReports.length > 0;
       const gone = hold ? { ok: false, code: '' } : deleteUpload(name);
       const meta = jsonFile(UPMETA, {});
+      const wasRemoved = !!(meta[name] && Number(meta[name].removed) > 0);
       if (gone.ok) {
         delete meta[name];
         answer.fileDeleted = true;
+        recordRemoval();
       } else {
         meta[name] = Object.assign({}, meta[name] || {}, { removed: now });
         if (hold) {
@@ -1925,6 +1940,7 @@ async function handle(req, res) {
                        (gone.ok ? 'its note is still listed.' : 'its file can still be opened by staff. Try again.');
         return sendJson(res, 500, answer);
       }
+      if (!wasRemoved) recordRemoval();
       if (!hold && !gone.ok) {
         answer.ok = false;
         answer.fileKept = true;
@@ -2011,6 +2027,7 @@ async function handle(req, res) {
     const id = String(o.id || '');
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
+    const dismissed = reports.find((r) => String(r.id) === id);
     const left = reports.filter((r) => String(r.id) !== id);
     // Said, not answered ok (#4379): the report would come back on the next
     // load of the list.
@@ -2018,6 +2035,7 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, id: id, error: 'The site could not save that, so the report is still listed. Try again in a minute.' });
     }
+    if (dismissed) modLog({ did: 'gallerydismiss', byName: gs.name || gs.discordId, whoName: String(dismissed.name || '') });
     return sendJson(res, 200, { ok: true, id: id, removed: reports.length - left.length });
   }
 

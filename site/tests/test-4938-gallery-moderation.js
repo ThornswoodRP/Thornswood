@@ -1,0 +1,148 @@
+'use strict';
+// Real local gallery HTTP, canonical staff authentication and persisted audit.
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
+const crypto = require('node:crypto'), { spawn } = require('node:child_process');
+const { once } = require('node:events'), siteFiles = require('../../tests/site-files');
+const parent = fs.realpathSync(os.tmpdir()), dir = fs.mkdtempSync(path.join(parent, 'tw4938-'));
+const secret = crypto.randomBytes(32).toString('hex');
+const first = '111111111111111111', second = '222222222222222222', plain = '333333333333333333';
+let child, port, pass = 0, fail = 0;
+function yes(name, ok) { console.log((ok ? 'PASS ' : 'FAIL ') + name); ok ? pass++ : fail++; }
+function write(name, value) { fs.writeFileSync(path.join(dir, name), JSON.stringify(value)); }
+function read(name) { return JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); }
+function signed(value) { return crypto.createHmac('sha256', secret).update(value).digest('hex').slice(0, 32); }
+function cookie(id) { const value = id + '|Forged cookie display|' + Date.now(); return 'twa=' + encodeURIComponent(value + '|' + signed(value)); }
+function ticket(id) {
+  const value = Buffer.from(JSON.stringify({ d: id, n: 'Old ticket name', x: Date.now() + 3600000 })).toString('base64url');
+  return 'tk1.' + value + '.' + signed('ticket:' + value);
+}
+function preload() {
+  const https = require('node:https'), fs = require('node:fs'), path = require('node:path');
+  const { EventEmitter } = require('node:events');
+  const rename = fs.renameSync.bind(fs), copy = fs.copyFileSync.bind(fs);
+  function refuse(file) {
+    const name = String(fs.readFileSync(path.join(__dirname, 'refuse.txt'), 'utf8'));
+    if (name && path.basename(String(file)) === name) throw Object.assign(Error('fixture refused save'), { code: 'EACCES' });
+  }
+  fs.renameSync = (from, to) => { refuse(to); return rename(from, to); };
+  fs.copyFileSync = (from, to) => { refuse(to); return copy(from, to); };
+  function request(options, callback) {
+    const host = String(options.hostname || options.host || ''), route = String(options.path || '');
+    const members = [
+      { user: { id: '111111111111111111', username: 'Current Aela' }, roles: ['staff'] },
+      { user: { id: '222222222222222222', username: 'Current Brynjolf' }, roles: ['staff'] },
+      { user: { id: '333333333333333333', username: 'Plain' }, roles: ['play'] }
+    ];
+    let body;
+    if (host === 'discord.com' && route === '/api/v10/guilds/fixture') body = { id: 'fixture', name: 'Fixture' };
+    if (host === 'discord.com' && route === '/api/v10/guilds/fixture/roles') body = [{ id: 'staff', name: 'Gamemaster' }, { id: 'play', name: 'Playtester' }];
+    if (host === 'discord.com' && route === '/api/v10/guilds/fixture/members?limit=1000') body = members;
+    if (host === 'discord.com' && route.startsWith('/api/v10/guilds/fixture/members/')) body = members.find(row => route.endsWith('/' + row.user.id));
+    const req = new EventEmitter(); req.setTimeout = () => req; req.destroy = () => {}; req.write = () => true;
+    req.end = () => setImmediate(() => {
+      if (!body) return req.emit('error', Error('fixture blocks external request ' + host + route));
+      const res = new EventEmitter(); res.statusCode = 200; res.headers = {}; res.complete = true; res.setEncoding = () => {}; res.resume = () => {};
+      callback(res); res.emit('data', Buffer.from(JSON.stringify(body))); res.emit('end');
+    });
+    return req;
+  }
+  https.request = request;
+  https.get = (options, callback) => { const req = request(options, callback); req.end(); return req; };
+}
+function audit() {
+  const file = path.join(dir, 'data/for-bot/moderation.log');
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+}
+function seed(name, reports = []) {
+  write('data/gallery.json', []); write('data/gallery-pending.json', [{ name, by: 'Photographer', at: Date.now() }]);
+  write('data/gallery-reports.json', reports); fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
+}
+async function act(method, route, body, id = first, launcher = false) {
+  const response = await fetch('http://127.0.0.1:' + port + route + (launcher ? '?ticket=' + encodeURIComponent(ticket(id)) : ''), {
+    method, redirect: 'manual', headers: { 'content-type': 'application/json', origin: 'http://127.0.0.1:' + port,
+      ...(launcher ? {} : { cookie: cookie(id) }) }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
+  });
+  return { status: response.status, body: await response.json() };
+}
+function recorded(before, did, name, actor) {
+  const added = audit().slice(before);
+  return added.length === 1 && added[0].did === did && added[0].whoName === name && added[0].byName === actor
+    && added[0].server === 'site' && Number.isFinite(Date.parse(added[0].at));
+}
+(async () => {
+  try {
+    siteFiles.copy(dir, process.argv[2]); fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
+    write('config.json', { secret, password: crypto.randomBytes(16).toString('hex'), admins: [],
+      discord: { clientId: 'fixture', clientSecret: 'fixture', botToken: 'fixture', guildId: 'fixture' },
+      access: { admin: ['Owner'], dev: ['Gamemaster'], play: ['Playtester'], banned: ['Banned'] }, gameCheckPort: 1 });
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
+    fs.writeFileSync(path.join(dir, 'network.js'), '(' + preload.toString() + ')();');
+    child = spawn(process.execPath, ['-r', path.join(dir, 'network.js'), path.join(dir, 'server.js')], {
+      cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1' }
+    });
+    let stderr = ''; child.stderr.on('data', data => { stderr += data; }); port = (await siteFiles.listening(child)).port;
+    const image = '20261125-' + 'a'.repeat(40) + '.png';
+    seed(image); let before = audit().length;
+    let result = await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor', byName: 'Forged actor' });
+    yes('approval really commits public entry and removes pending', result.status === 200 && read('data/gallery.json')[0].name === image && read('data/gallery-pending.json').length === 0);
+    yes('approval audit uses current authenticated staff name and exact picture', recorded(before, 'galleryapprove', image, 'Current Aela'));
+    before = audit().length; await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor' });
+    yes('unchanged approval retry has no duplicate action', audit().length === before);
+    result = await act('DELETE', '/api/gallery/approved', { name: image, byName: 'Forged actor' }, second, true);
+    yes('launcher removal actually removes public entry', result.status === 200 && read('data/gallery.json').length === 0);
+    yes('launcher removal names current verified ticket actor, not old ticket/body name', recorded(before, 'galleryremove', image, 'Current Brynjolf'));
+    before = audit().length; await act('DELETE', '/api/gallery/approved', { name: image }, second, true);
+    yes('already absent removal is not recorded again', audit().length === before);
+    seed(image, [{ id: 'report-one', name: image, why: 'Private report text', at: Date.now() }]); before = audit().length;
+    result = await act('POST', '/api/gallery/report/dismiss', { id: 'report-one', name: 'Forged picture', byName: 'Forged actor' });
+    yes('dismissal removes actual report', result.status === 200 && read('data/gallery-reports.json').length === 0);
+    yes('dismissal audit takes picture from stored report and omits private report text', recorded(before, 'gallerydismiss', image, 'Current Aela') && !JSON.stringify(audit().slice(before)).includes('Private report text'));
+    before = audit().length; await act('POST', '/api/gallery/report/dismiss', { id: 'report-one' });
+    yes('absent report dismissal is not recorded', audit().length === before);
+    for (const [method, route, body] of [['POST', '/api/gallery/approve', { name: image }], ['DELETE', '/api/gallery/approved', { name: image }], ['POST', '/api/gallery/report/dismiss', { id: 'refused' }]]) {
+      seed(image, [{ id: 'refused', name: image }]); before = audit().length;
+      result = await act(method, route, body, plain, true);
+      yes('unauthorized action cannot mutate or audit ' + route, result.status === 403 && audit().length === before && read('data/gallery-pending.json').length === 1 && read('data/gallery-reports.json').length === 1);
+    }
+    seed(image); before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery.json');
+    result = await act('POST', '/api/gallery/approve', { name: image });
+    yes('refused first approval save has no success audit', result.status === 500 && audit().length === before && read('data/gallery.json').length === 0);
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-pending.json');
+    result = await act('POST', '/api/gallery/approve', { name: image });
+    yes('committed approval still audited if later queue cleanup fails', result.status === 500 && result.body.approved === true && recorded(before, 'galleryapprove', image, 'Current Aela'));
+    before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), ''); await act('POST', '/api/gallery/approve', { name: image });
+    yes('finishing pending cleanup does not repeat committed approval audit', audit().length === before && read('data/gallery-pending.json').length === 0);
+    seed(image, [{ id: 'held', name: image, why: 'Evidence' }]); write('data/gallery.json', [{ name: image }]); before = audit().length;
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-pending.json');
+    result = await act('DELETE', '/api/gallery/approved', { name: image });
+    yes('committed removal is audited before later pending save refusal', result.status === 500 && read('data/gallery.json').length === 0 && recorded(before, 'galleryremove', image, 'Current Aela'));
+    seed(image, [{ id: 'save-refused', name: image }]); before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-reports.json');
+    result = await act('POST', '/api/gallery/report/dismiss', { id: 'save-refused' });
+    yes('failed dismissal preserves report without success audit', result.status === 500 && audit().length === before && read('data/gallery-reports.json').length === 1);
+    seed(image); write('data/gallery.json', [{ name: image }]); before = audit().length;
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery.json');
+    result = await act('DELETE', '/api/gallery/approved', { name: image });
+    yes('refused first removal save has no success audit or list loss', result.status === 500 && audit().length === before && read('data/gallery.json').length === 1 && read('data/gallery-pending.json').length === 1);
+    seed(image); before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: image });
+    yes('pending-only rejection records its committed removal', result.status === 200 && recorded(before, 'galleryremove', image, 'Current Aela') && read('data/gallery-pending.json').length === 0);
+    seed(image, [{ id: 'launcher-dismiss', name: image }]); before = audit().length;
+    result = await act('POST', '/api/gallery/report/dismiss', { id: 'launcher-dismiss' }, second, true);
+    yes('launcher dismissal retains canonical current actor and stored picture', result.status === 200 && recorded(before, 'gallerydismiss', image, 'Current Brynjolf'));
+    seed(image, [{ id: 'hold-evidence', name: image, why: 'Private held evidence' }]);
+    write('data/gallery.json', [{ name: image }]); fs.writeFileSync(path.join(dir, 'uploads', image), 'owned image fixture'); before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: image });
+    const held = read('uploads/uploads.json')[image];
+    yes('reported-file retention remains canonical and records one action across all writes', result.status === 200 && result.body.heldForReport === true
+      && fs.existsSync(path.join(dir, 'uploads', image)) && held.heldUntil > Date.now() && held.heldReports[0].why === 'Private held evidence'
+      && read('data/gallery.json').length === 0 && read('data/gallery-pending.json').length === 0 && read('data/gallery-reports.json').length === 0
+      && recorded(before, 'galleryremove', image, 'Current Aela') && !JSON.stringify(audit().slice(before)).includes('Private held evidence'));
+    yes('owned site remains running and blocks every unrecognized provider route', child.exitCode === null && !stderr.includes('fixture blocks external request'));
+  } catch (e) { fail++; console.error(e.stack || e); }
+  finally {
+    if (child && child.exitCode === null) { const ended = once(child, 'exit'); child.kill(); await ended; }
+    if (!path.resolve(dir).startsWith(parent + path.sep)) throw Error('refusing cleanup outside owned temp folder');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0;
+})();

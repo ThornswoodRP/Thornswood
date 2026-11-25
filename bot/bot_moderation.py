@@ -103,6 +103,9 @@ _MOD_DID = {
     'setclass': 'changed the class of %s',
     'setprofession': 'changed the profession of %s',
     'repair': 'repaired equipment for %s',
+    'galleryapprove': 'accepted gallery picture %s',
+    'galleryremove': 'removed gallery picture %s',
+    'gallerydismiss': 'dismissed a report on gallery picture %s',
     # Not staff: somebody's own /stuck (#414), said as its why reads.
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).
@@ -163,7 +166,11 @@ def moderation_text(where, row):
 
     did = _MOD_DID[row['did']]
     if '%s' in did:
-        did = did % person(row.get('whoName'), row.get('who'))
+        # Generated picture names exceed the character-name bound. Keep the
+        # filename distinct, escaped as typed, without treating it as a person.
+        subject = (clean(row.get('whoName'), 240) or 'an unnamed picture') if row['did'] in (
+            'galleryapprove', 'galleryremove', 'gallerydismiss') else person(row.get('whoName'), row.get('who'))
+        did = did % subject
     try:
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):
