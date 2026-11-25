@@ -5351,7 +5351,7 @@
              '<span style="color:' + (on ? '#8fb85e' : '#efe4cc') + '">' + what + '</span></div>';
     };
     const html =
-      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + row.n +
+      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + escapeHtml(row.n) +
       (row.y ? '<span style="color:#8fb85e;font-size:18px"> &middot; your party</span>' : '') +
       '</div>' +
       /*
