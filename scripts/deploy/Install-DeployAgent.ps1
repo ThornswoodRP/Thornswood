@@ -56,6 +56,11 @@
   Deployment waits on a pass (tools\DeployAgent\BotPass.cs). -NoBotPass
   takes it off again.
 
+  THE CONTENT BUILD (#5191). Where the gate's task Thornswood Gate is set
+  up, agent.json names content, and the agent builds every Deployment to
+  Content through the gate's Build-Content verb and puts the build on a
+  draft Release, content-<server>-<key>, which the merge release takes.
+
   THE SITE AND THE DISCORD BOT (#5190, #5187). agent.json names them, each
   only where its full install has set it up (the task Thornswood Docs, the
   service ThornswoodBot), and the agent then applies every Deployment to
@@ -194,7 +199,19 @@ foreach (`$tail in @(@((Join-Path `$from 'bot-pass.log'), 40), @((Join-Path `$fr
     Get-Content -LiteralPath `$tail[0] -Tail `$tail[1] | ForEach-Object { `$_ -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' }
   } else { 'no ' + `$tail[0] }
 }
-`$kept = @(Get-ChildItem -LiteralPath '$passRoot\passes' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 10)
+# What the copy's server threw, which the tail above misses once the world
+# loads around a character and its script warnings fill the last lines: each
+# "in server.tick" error (ts/index.ts, the tick's catch), and each stack that
+# ends in the tick's own frame (index.ts:192), which is how a throw caught
+# inside the tick is written, the login's among them (#6346). The lines
+# before it hold the message.
+`$srv = Join-Path `$from `$(if ('$Pass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })
+if (Test-Path -LiteralPath `$srv) {
+  `$thrown = @(Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8)
+  '--- what the copy''s server threw: ' + `$thrown.Count + ' line(s) in the tick, the first 5 with what was around them ---'
+  foreach (`$m in @(`$thrown | Select-Object -First 5)) { '  ---'; foreach (`$c in @(`$m.Context.PreContext) + @(`$m.Line) + @(`$m.Context.PostContext)) { `$c -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' } }
+}
+`$kept =@(Get-ChildItem -LiteralPath '$passRoot\passes' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 10)
 if (`$kept.Count) { '--- kept passes, newest 10 (-Status -Pass <name> prints one) ---'; foreach (`$k in `$kept) { '  ' + `$k.Name } } else { 'no kept passes yet in $passRoot\passes' }
 '--- agent.log, last 30 ---'
 `$log = '$Root\logs\agent.log'
@@ -347,6 +364,16 @@ foreach (`$app in @(
   `$cfg.environments | Add-Member -NotePropertyName `$app.name -NotePropertyValue `$e -Force
   'apps: ' + `$app.name + ' named; the agent applies its Deployments'
 }
+
+# The content build (#5191): the agent builds each Deployment to Content
+# through the gate's Build-Content verb and puts it on a draft Release the
+# merge release takes. Named only where the gate's task is set up
+# (Update-Gate.ps1), since the build runs through it.
+`$cfg.environments.PSObject.Properties.Remove('content')
+if (Get-ScheduledTask -TaskName 'Thornswood Gate' -ErrorAction SilentlyContinue) {
+  `$cfg.environments | Add-Member -NotePropertyName content -NotePropertyValue (New-Object PSObject) -Force
+  'content: named; the agent builds each Deployment to Content through the gate'
+} else { 'content: left out, the task Thornswood Gate is not on this box' }
 
 # Dev voice (#5187): a Release's voice part goes in with dev's Deployment,
 # into the folder Install-Voice.ps1 set up, under its task.

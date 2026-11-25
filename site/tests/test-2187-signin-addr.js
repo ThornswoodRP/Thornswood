@@ -82,4 +82,4 @@ yes('C4 privacy.md says the address is what our front door saw', /as our own fro
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

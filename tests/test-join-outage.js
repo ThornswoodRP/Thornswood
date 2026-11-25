@@ -89,6 +89,8 @@ const readTicket = (t) => (String(t || '').startsWith('tk:') ? { d: String(t).sl
 const body = async (req) => req.body;
 const sendJson = (res, code, obj) => { res.code = code; res.obj = obj; return res; };
 const slotsFor = () => 2;
+// The account's characters stay on its list whatever else is cut (#5938).
+const chars = require('../site/lib/characters');
 // The world is never full here (#481); test-seats.js runs that refusal.
 const gameStatus = { up: false, online: 0, max: 0 };
 const seatsFull = () => false;
@@ -237,5 +239,5 @@ const yes = (w, c) => {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack || e)); process.exitCode = 1; });

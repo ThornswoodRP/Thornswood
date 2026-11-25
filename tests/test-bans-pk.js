@@ -45,9 +45,9 @@
      character, and will not play a dead or banned one.
   6. The launcher: Roster reads the site's pk and banned lists (the lifted C#
      compiled with the build's compiler, tests/launcher-csc.js), and Chars
+     draws the site's list, where the site (site/lib/characters.js, run here)
      moves a dead character out of its slot, never picks it and lets it be
-     forgotten; and puts one an admin brought back into the lowest free slot
-     (RaiseRevived, compiled).
+     forgotten, and puts one an admin brought back into the lowest free slot.
   7. Undoing a PK: /unpk in the game (by the character in the world, by name,
      by profile number), refused while every slot is held, refused to staff
      who are not an admin; Undo PK on the hub; pk.json keeps every PK and
@@ -129,12 +129,6 @@ const gameDir = path.join(dir, 'game');
 const PRIV = path.join(gameDir, 'private');
 fs.mkdirSync(PRIV, { recursive: true });
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 function request(port, method, where, headers, body) {
   return new Promise((ok) => {
     const data = body === undefined ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
@@ -158,39 +152,6 @@ function request(port, method, where, headers, body) {
     });
     r.on('error', () => ok({ status: 0, j: null }));
     r.end(data);
-  });
-}
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
   });
 }
 function sign(v) { return crypto.createHmac('sha256', SECRET).update(String(v)).digest('hex').slice(0, 32); }
@@ -382,14 +343,14 @@ async function adminRoleOnly() {
     const sig = crypto.createHmac('sha256', secret2).update(id + '|' + name + '|' + at).digest('hex').slice(0, 32);
     return { Cookie: 'twa=' + encodeURIComponent(id + '|' + name + '|' + at + '|' + sig) };
   };
-  const port2 = await freePort();
+  let port2 = 0;
   const site2 = spawn(process.execPath, ['-r', path.join(d2, 'stub.js'), path.join(d2, 'server.js')], {
     cwd: d2, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port2), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           TS_STUB_GUILD: GUILD, TS_STUB_IDS: JSON.stringify(ids) })
   });
   try {
-    yes('the second scratch site starts, with Discord roles from the stub', await listening(site2, port2).then(() => true));
+    yes('the second scratch site starts, with Discord roles from the stub', await siteFiles.listening(site2).then((r) => (port2 = r.port, r)).then(() => true));
     const modC = cookie2(ids.mod, 'Gamemaster'), ownC = cookie2(ids.owner, 'Owner');
     let r = await request(port2, 'GET', '/api/all', modC);
     yes('the Gamemaster is staff and not an admin', r.status === 200 && r.j.me.dev === true && r.j.me.admin === false);
@@ -422,13 +383,13 @@ async function adminRoleOnly() {
 }
 
 (async function main() {
-  const port = await freePort();
+  let port = 0;
   const site = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   try {
-    yes('the scratch site starts', await listening(site, port).then(() => true));
+    yes('the scratch site starts', await siteFiles.listening(site).then((r) => (port = r.port, r)).then(() => true));
     const K = { 'X-Thornswood-Key': KEY };
     const game = (what, body) => request(port, 'POST', '/api/staff/game/' + what, K, body);
     const allowed = () => request(port, 'GET', '/api/allowed', K);
@@ -754,7 +715,7 @@ async function adminRoleOnly() {
     console.log('\nthe Linked accounts page and the menu:');
     const page = read(PAGE);
     const escM = /var esc = function \(s\) \{[\s\S]*?\n\};/.exec(page);
-    const names = ['banUntil', 'byLine', 'charName', 'charLine', 'linkedNotes', 'lengthPick', 'linkedControls', 'looseBans', 'deadList'];
+    const names = ['banUntil', 'byLine', 'charName', 'charLine', 'pcLine', 'linkedNotes', 'lengthPick', 'linkedControls', 'looseBans', 'deadList'];
     const fns = names.map((n) => braceGrab(page, 'function ' + n + '('));
     yes('the page has the character lines, the controls and the dead list', !!escM && fns.every(Boolean));
     if (escM && fns.every(Boolean)) {
@@ -871,18 +832,22 @@ async function adminRoleOnly() {
           /pk 2 True True/.test(out) && /banned 1 True/.test(out) && /none 0/.test(out));
       if (/ERROR/.test(out)) console.log(out);
     }
-    const bury = lift(charsCs, 'static string BuryDead(List<Row> rows)') || '';
-    yes('Chars moves a dead character out of its slot to DeadSlot and saves',
-        /Roster\.Dead\(r\.Id\)/.test(bury) && /r\.Slot = DeadSlot;/.test(bury) && /Save\(rows\);/.test(bury) &&
-        /const int DeadSlot = -1;/.test(charsCs));
+    // The list is the site's since #5938 (site/lib/characters.js): it moves
+    // a dead character out of its slot, never lets it be picked, lets it be
+    // forgotten, and brings one an admin revived back. The launcher draws
+    // what it is told; test-play-characters.js runs the site's half whole.
+    const chars = require('../site/lib/characters');
+    const L = { '101': { id: '101', profiles: [11, 12], spare: 99, chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] } };
+    const said = chars.settle(L, '101', { slots: 2, pk: (id) => id === 12, revived: () => false });
+    yes('the site moves a dead character out of its slot to the dead slot, and Chars knows that slot',
+        L['101'].chars.find((c) => c.id === 12).slot === chars.DEAD && chars.DEAD === -1 &&
+        /const int DeadSlot = -1;/.test(charsCs) && said.length === 1);
     const prep = lift(charsCs, 'public static string Prepare(Config cfg)') || '';
-    yes('before the id played last is chosen and the slots are tidied',
-        prep.indexOf('BuryDead(rows)') > 0 && prep.indexOf('BuryDead(rows)') < prep.indexOf('LastPlayedId(rows)') &&
-        prep.indexOf('Roster.Refresh(cfg)') < prep.indexOf('BuryDead(rows)'));
-    const chose = lift(charsCs, 'public static void Chose(int profileId)') || '';
-    yes('a dead character is never picked', /if \(r != null && r\.Slot == DeadSlot\) return;/.test(chose));
-    const forget = lift(charsCs, 'public static void Forget(int profileId)') || '';
-    yes('and can be forgotten with the bin', /r\.Slot != DeadSlot/.test(forget));
+    yes('before the id played last is chosen: Prepare asks the site for the list after the roster',
+        prep.indexOf('Roster.Refresh(cfg)') > 0 && prep.indexOf('Ask("", 0, 0, out fetched)') > prep.indexOf('Roster.Refresh(cfg)') &&
+        prep.indexOf('Ask("", 0, 0, out fetched)') < prep.indexOf('LastPlayedId(rows)'));
+    yes('a dead character is never picked', chars.choose(L, '101', 12, 1) !== null);
+    yes('and can be forgotten with the bin', chars.forget(L, '101', 12) === null && L['101'].retired.indexOf(12) >= 0);
     const write = lift(charsCs, 'static string CharactersJson(List<Row> rows, int last, int spare, int slots)') || '';
     yes('the menu list carries the dead with "pk":true in slot 0, and a banned character with "banned":true',
         /all\.AddRange\(DeadRows\(rows\)\)/.test(write) && /,\\"pk\\":true/.test(write) &&
@@ -892,36 +857,15 @@ async function adminRoleOnly() {
     yes('Roster.cs reads the site\'s revived list, and Revived is false for an id still dead',
         /ReadIds\(text, "revived"\)/.test(rosterCs) &&
         /return revived\.Contains\(profileId\) && !dead\.Contains\(profileId\);/.test(rosterCs));
-    const raise = lift(charsCs, 'static string RaiseRevived(List<Row> rows)') || '';
-    const nextSlot = lift(charsCs, 'static int NextSlot(List<Row> rows)') || '';
-    const findSlot = lift(charsCs, 'static Row Find(List<Row> rows, int slot)') || '';
-    yes('Chars has RaiseRevived, run in Prepare after BuryDead and before the slots are tidied',
-        !!raise && prep.indexOf('RaiseRevived(rows)') > prep.indexOf('BuryDead(rows)') &&
-        prep.indexOf('RaiseRevived(rows)') < prep.indexOf('TidySlots(rows, slots)'));
-    if (raise && nextSlot && findSlot && !lc.dotnet) {
-      yes('the .NET SDK the launcher builds with is on this machine', false);
-    } else if (raise && nextSlot && findSlot) {
-      const prog = 'using System; using System.Collections.Generic;\n' +
-        'static class Roster { public static HashSet<int> back = new HashSet<int>();\n' +
-        '  public static bool Revived(int id) { return back.Contains(id); } }\n' +
-        'static class T {\n class Row { public int Slot; public int Id; }\n const int DeadSlot = -1;\n' +
-        ' static int saved = 0;\n static void Save(List<Row> rows) { saved++; }\n' +
-        ' ' + findSlot + '\n ' + nextSlot + '\n ' + raise + '\n' +
-        ' static Row R(int id, int slot) { var r = new Row(); r.Id = id; r.Slot = slot; return r; }\n' +
-        ' static void Main() {\n' +
-        '  var rows = new List<Row> { R(99, 0), R(11, 1), R(12, DeadSlot), R(13, DeadSlot) };\n' +
-        '  Console.WriteLine("none " + (RaiseRevived(rows) == null) + " " + saved + " " + rows[2].Slot);\n' +
-        '  Roster.back.Add(12);\n' +
-        '  string line = RaiseRevived(rows);\n' +
-        '  Console.WriteLine("back " + rows[2].Slot + " " + rows[3].Slot + " " + saved);\n' +
-        '  Console.WriteLine(line);\n } }\n';
-      const out = buildAndRun(prog);
-      yes('the lifted RaiseRevived compiles with the compiler the launcher builds with, and moves nobody when the site named nobody',
-          /none True 0 -1/.test(out));
-      yes('and puts the one the site names as revived into the lowest free slot, leaves the other dead, and saves',
-          /back 2 -1 1/.test(out) && /An admin undid the PK of a character, so it can be played again: profile 12 to slot 2\./.test(out));
-      if (/ERROR/.test(out)) console.log(out);
-    }
+    const R = { '101': { id: '101', profiles: [11, 12, 13], spare: 99,
+                     chars: [{ id: 11, slot: 1 }, { id: 12, slot: -1 }, { id: 13, slot: -1 }] } };
+    const none = chars.settle(R, '101', { slots: 2, pk: () => false, revived: () => false });
+    yes('the site moves nobody back when nobody was revived',
+        none.length === 0 && R['101'].chars.find((c) => c.id === 12).slot === -1);
+    const back = chars.settle(R, '101', { slots: 2, pk: () => false, revived: (id) => id === 12 });
+    yes('and puts the one an admin revived into the lowest free slot, and leaves the other dead',
+        R['101'].chars.find((c) => c.id === 12).slot === 2 && R['101'].chars.find((c) => c.id === 13).slot === -1 &&
+        back.some((l) => l === 'An admin undid the PK of a character, so it can be played again: character 12 to slot 2.'));
 
     // ------------------------------------------------ 7. an admin undoes a PK --
     console.log('\nundoing a PK:');
@@ -1051,6 +995,5 @@ async function adminRoleOnly() {
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');
     process.exitCode = fail ? 1 : 0;
-    setTimeout(() => process.exit(process.exitCode), 1000).unref();
   }
 })();

@@ -164,7 +164,8 @@ try {
         'scripts/vps/Remote.ps1'              = 'runs what it is given; its help names a Windows service as an example'
         'scripts/deploy/Install-DeployAgent.ps1' = 'stops only the deploy agent''s own service, which the watchdog does not watch; it names the site''s task and the bot''s service only to see whether they are set up (the agent holds them itself when it swaps, App.cs)'
     }
-    $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | ForEach-Object { $_.FullName })
+    # Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+    $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' } | ForEach-Object { $_.FullName })
     $stoppers = @()
     foreach ($file in $files) {
         $rel = $file.Substring($repo.Length + 1).Replace('\', '/')
@@ -242,7 +243,7 @@ try {
         $hv.params.Service -eq ('^(' + ($names -join '|') + ')$') -and $hv.params.Why -eq 'text' -and
         $hv.params.Clear -eq 'switch' -and $hv.params.List -eq 'switch' -and $hv.params.Minutes -eq '^[0-9]{1,3}$')
     $wsText = Text $watchPath
-    Yes '  and an install through the gate that fails exits 1, so Box-Run says so' ($wsText.Contains("if (`"`$l`" -match '^FAILED') { `$c = 'Red'; `$failed = `$true }") -and $wsText.Contains('if ($failed) { exit 1 }'))
+    Yes '  and an install through the gate that fails exits 1, so Box-Run says so' ($wsText.Contains("if (`"`$l`" -match '^FAILED') { `$c = 'Red'; `$failed = `$true }") -and $wsText.Contains('$failed = Show-BoxLines @($out)') -and $wsText.Contains("if (`$failed) { Die 'The watchdog is not set up"))
 }
 catch {
     Yes ('the harness ran to the end: ' + $_.Exception.Message + ' at ' + $_.InvocationInfo.PositionMessage) $false

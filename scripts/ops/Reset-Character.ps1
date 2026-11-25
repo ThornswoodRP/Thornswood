@@ -9,10 +9,19 @@
   inventory and the same face straight back. This is the only thing that
   actually gives you a new one.
 
-  The change forms named with a bare number are the ones belonging to people.
-  Everything else in that folder describes the world and is left alone. Nothing
+  A character is a change form named with a runtime form's id in lowercase
+  hex and no plugin (0.json, 1f.json: the engine's FormDesc::ToString) whose
+  profileId is above 0 and which is not deleted (#5168, Release-List.ps1).
+  Until 12 Nov 2026 this took the forms named with digits alone, which left
+  every character whose id has a letter in place and threw away the world's
+  own runtime forms with a digit name. Everything that is not a character
+  describes the world and is left alone. Nothing
   is deleted: what is thrown away goes into a _discarded folder beside it,
-  which the game server's server-log.js deletes 30 days later (#3620).
+  which the game server's server-log.js deletes 30 days later (#3620). A
+  server that keeps its world in MongoDB (#6237) has it read out into
+  world-mongo-<stamp>\changeForms in its folder first (World.ps1), the
+  _discarded folder goes there, and the characters are taken out of the
+  database before the release list names them.
 
       .\Reset-Character.ps1            the VPS
       .\Reset-Character.ps1 -Local     a server running on this machine
@@ -64,6 +73,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here 'Release-List.ps1')
+. (Join-Path $Here '..\deploy\World.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -73,8 +83,14 @@ function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; if
 # The body of the job, written once and run in both places. Everything it needs
 # arrives as one argument, so there is no second copy of this logic to drift;
 # the release list's functions (Release-List.ps1) go in with it.
-$body = "param([string]`$Root)`n" + $ThornswoodReleaseList + "`n" + @'
-$forms = Join-Path $Root 'world\changeForms'
+$body = "param([string]`$Root)`n" + $ThornswoodReleaseList + "`n" + $ThornswoodWorld + "`n" + @'
+# The world where server-settings.json says it is (World.ps1, #6237): the
+# folder for the file driver, or read out of MongoDB into a folder of the
+# same shape, which Save writes back once the characters are moved.
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$world = Open-ThornswoodWorld $Root $stamp
+if ($world.Stop) { Write-Host ('STOP. ' + $world.Stop + '. Nothing was thrown away.'); exit 1 }
+$forms = $world.Forms
 if (-not (Test-Path -LiteralPath $forms)) { Write-Host 'no characters saved yet, nothing to do'; exit 0 }
 # A list there that is not one would be neither read by the server nor safe
 # to write over, so nothing is thrown away until somebody has looked at it.
@@ -87,17 +103,32 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
     Write-Host ("STOP. $list is not a list of deleted characters, so nothing was thrown away. Look at it, then run this again.")
     exit 1
 }
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $forms ('_discarded-' + $stamp)
 $moved = @()
-foreach ($f in (Get-ChildItem -LiteralPath $forms -Filter *.json -File)) {
-    if ($f.BaseName -notmatch '^[0-9]+$') { continue }
+$stuck = @()
+# The characters, by the one rule (#5168, Release-List.ps1): a runtime form's
+# hex name and a profileId above 0, so 1f.json goes as 12.json does and the
+# world's own runtime forms stay.
+$chars = Get-ThornswoodCharacterForms $forms 'a reset leaves it where it is'
+foreach ($n in $chars.notes) { Write-Host ("$n" -split '\|', 2)[1] }
+foreach ($p in $chars.files) {
     if (-not (Test-Path -LiteralPath $bin)) { New-Item -ItemType Directory -Path $bin -Force | Out-Null }
-    $to = Join-Path $bin $f.Name
-    try { Move-Item -LiteralPath $f.FullName -Destination $to -Force -ErrorAction Stop; $moved += $to }
-    catch { Write-Host ("could not move {0}: {1}" -f $f.Name, $_.Exception.Message) }
+    $name = Split-Path -Leaf $p
+    $to = Join-Path $bin $name
+    try { Move-Item -LiteralPath $p -Destination $to -Force -ErrorAction Stop; $moved += $to }
+    catch { $stuck += $name; Write-Host ("could not move {0}: {1}" -f $name, $_.Exception.Message) }
 }
-if ($moved.Count -eq 0) { Write-Host 'there was no character on the server to throw away'; exit 0 }
+# A character that could not be moved is still there on the next Play, so
+# the reset did not work (#4199): it ends 1, after the release list names
+# the ones that did go.
+if ($moved.Count -eq 0) {
+    if ($stuck.Count) { Write-Host ("STOP. {0} character change form(s) could not be moved ({1}), so the reset did not happen." -f $stuck.Count, ($stuck -join ', ')); exit 1 }
+    Write-Host 'there was no character on the server to throw away'; exit 0
+}
+# Out of MongoDB before anything is released: a character the release list
+# names must be gone from the world the server loads.
+$saved = Save-ThornswoodWorld $world
+if ($saved -like 'STOP|*') { Write-Host ('STOP. ' + $saved.Substring(5) + '. The characters are still in the world and nothing was released.'); exit 1 }
 Write-Host ("thrown away: {0} change form(s), kept at {1}" -f $moved.Count, $bin)
 # Only the characters, never the profile (#2668): Release-List.ps1 says why.
 $bad = $false
@@ -111,6 +142,7 @@ foreach ($l in @($found.notes) + @(Write-ThornswoodReleaseList -Root $Root -Acto
     }
 }
 if ($bad) { exit 1 }
+if ($stuck.Count) { Write-Host ("STOP. {0} character change form(s) could not be moved ({1}) and are still there." -f $stuck.Count, ($stuck -join ', ')); exit 1 }
 '@
 
 # What the box runs around the body (#2871): the server on this root's own
@@ -207,7 +239,10 @@ if ($UseLocal) {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-reset.ps1'
     Set-Content -LiteralPath $tmp -Value $body -Encoding UTF8
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $tmp -Root $Local
+    $resetCode = $LASTEXITCODE
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    # Done only when the reset says it worked (#4199), as the VPS path reads it.
+    if ($resetCode -ne 0) { Die "the reset exited with $resetCode, so the character is not thrown away. The lines above say why." }
 
     Write-Host ''
     Say 'Done. Press Play and creation runs from the top.' 'Green'

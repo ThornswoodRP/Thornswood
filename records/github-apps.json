@@ -1,5 +1,5 @@
 {
- "about": "What each GitHub App that works on Thornswood's repositories may do: the six Hermes Bots' two Apps, the box's admin App, the outside watcher's App and the engine pin robot (the redesign's part 20, plan lines 26 and 27, 1 Nov 2026). Each App holds exactly the permissions written here, at the level written, and only the webhook events written here, each with its reason in events_why: what its job needs and nothing more. Every night scripts/dev/Check-AppPermissions.js reads each App from GitHub (GET /apps/<slug>) and names any permission or event the App has that this does not give it, and any this gives it that it lacks; the night is red until GitHub and this file agree. An App's permissions are changed only by Patrick, on its settings page, then accepted on each installation; the change is a pull request to this file first, with the reason in the permission's why, and a card on the report page with the clicks. Patrick's own agents are listed apart under patrick_agents: none of them holds a Bot App's key, and no Bot App is one of them. The repositories each App is installed on are written here for people to read; the nightly check cannot see an installation (only the App's own key can), so the box admin App's installation-repos ask and each Bot host's own check read those. A why is this file's own note.",
+ "about": "What each GitHub App that works on Thornswood's repositories may do. Each App holds exactly the permissions written here, at the level written, and only the webhook events written here, each with its reason in events_why. Every night scripts/dev/Check-AppPermissions.js reads each public App from GitHub (GET /apps/<slug>) and fails if its permissions or events differ. The nightly checks a private App's record and lists it for an owner check. Patrick checks the actual private registration with Check-AppPermissions.js -Private using his GitHub sign-in. Patrick changes App permissions on its settings page and accepts them on each installation. The change starts with a pull request to this file, with the reason in the permission's why, and a card on the report page with the clicks. The separate patrick_agents list covers Patrick's own agents. Only the named holders have the Bot Apps' keys. The box admin App's installation-repos ask and each Bot host's own check verify installation repositories.",
  "apps": [
   {
    "slug": "thornswood-bramble",
@@ -75,6 +75,30 @@
    }
   },
   {
+   "slug": "thornswood-magpie-actions-read",
+   "id": 5828279,
+   "private_registration": true,
+   "for": "Magpie's read of repository Actions settings on Thornswood and skymp, approved by Patrick for Thornswood #4159",
+   "held_by": "the tw-git broker on the Hermes VM, key readable by tw-git alone (TWHermesAgents policy.yaml, brokers.magpie_actions_read)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood",
+    "ThornswoodRP/skymp"
+   ],
+   "never_on": [
+    "ThornswoodRP/TWHermesAgents",
+    "ThornswoodRP/Thornswood-Ops"
+   ],
+   "permissions": {
+    "administration": "read",
+    "metadata": "read"
+   },
+   "events": [],
+   "why": {
+    "administration": "GitHub requires repository Administration read for GET /repos/{owner}/{repo}/actions/permissions. The broker permits that exact GET only for Magpie, using a token scoped to one repository.",
+    "metadata": "GitHub gives every App Metadata read."
+   }
+  },
+  {
    "slug": "thornswood-box-admin",
    "id": 5537924,
    "for": "the box's admin service (scripts/vps/admin/admin.js): runner labels, the repository settings record, the About box and reading the Actions settings; the gate's Ship and box key tokens (ship-access.js, ops-access.js); and the Discord bot's GitHub token",
@@ -91,7 +115,7 @@
     "actions": "write",
     "actions_variables": "read",
     "administration": "write",
-    "contents": "read",
+    "contents": "write",
     "deployments": "write",
     "environments": "write",
     "issues": "write",
@@ -103,7 +127,7 @@
     "actions": "A Ship through the deploy gate (ship-access.js, #2841): starts thornswood-sign-manifest.yml on the fork and reads its runs. Nothing here starts a launcher build any more (#5385).",
     "actions_variables": "The settings ask reads variable names to compare with records/github-settings.json (#3534). Never a value.",
     "administration": "Runner labels and the runners' registration on Thornswood-Ops (ops-access.js runners), the rulesets, reporting, immutable releases, scanning, merge settings and collaborators of Thornswood and the fork (repo-settings), and the About box. Each ask takes a token with only the part it needs.",
-    "contents": "Reads the records on Thornswood's main that every ask makes GitHub match.",
+    "contents": "Reads the records on Thornswood's main that every ask makes GitHub match. Write since Patrick's B on q-5191-box-build-upload (12 Nov 2026, #5191): the deploy agent uploads the content build the box made (Build-ContentOnBox.ps1) to a Release of Thornswood for the merge release to sign, with a token of this App narrowed to contents write for that upload alone.",
     "deployments": "The deploy agent (tools/DeployAgent/GitHub.cs, #5180) reads the Deployments merge-release.yml asks for and posts each one's status, with a token of this App narrowed to contents read and deployments write.",
     "environments": "Renew-BoxKey.ps1 puts a box key into an environment secret of Thornswood-Ops (ops-access.js keys), which GitHub gives to Environments write alone; the settings ask reads environment names and where each deploys from (#3534).",
     "issues": "The Discord bot's token (#5260, Patrick's A): it posts Test tasks and known issues as comments and labels. Taken for Thornswood alone, every 30 minutes.",

@@ -11,7 +11,7 @@
 //     node scripts/dev/Build-HairDyeGamemode.js
 //
 // With --check it writes nothing and exits 1 when the block is not what the
-// two files make; tests/test-2675-hair-dye-wiring.js runs that check.
+// two files make; game/tests/test-2675-hair-dye-wiring.js runs that check.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -53,12 +53,18 @@ function build(gamemodeText, dataText, moduleText) {
 function read(p) { return fs.readFileSync(p, 'utf8'); }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const now = gamemodeSource.read(GAMEMODE);
   const next = build(now, read(DATA), read(MODULE));
   if (process.argv.includes('--check')) {
     if (next !== lf(now)) {
       console.log('the hair dye block is stale: run node scripts/dev/Build-HairDyeGamemode.js');
-      process.exit(1);
+      return 1;
     }
     console.log('the hair dye block matches game/data/hair-dyes.json and game/hair-dye.js');
   } else {

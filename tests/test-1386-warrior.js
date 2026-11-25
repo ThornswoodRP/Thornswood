@@ -73,7 +73,8 @@ yes('mp.onDeath, creditWork and withManeuvers are in the gamemode', !!onDeath &&
 if (!(progression && maneuvers && killTable && kills.every(Boolean) && hunts && racesLine && onDeath && credit && withManeuvers)) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 const RACES = JSON.parse(racesLine[1]);
 function raceDesc(edid) {
@@ -1275,7 +1276,7 @@ const settingsPage = fs.readFileSync(path.join(root, 'game', 'ui', 'thornswood-s
   Rush's speed rides the K panel's view and ends on a timer in memory. A
   restart takes the timer with it, and the server that comes up has nothing
   running, so the view it works out when the person is back (arrival in the
-  character block, tests/test-1642-effects-restart.js) has no speed on it.
+  character block, game/tests/test-1642-effects-restart.js) has no speed on it.
 */
 {
   const RUSHER = actor(0xff00000b, { pos: [7000, 0, 0] });
@@ -1417,4 +1418,4 @@ for (const field of ['life','runtime']) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

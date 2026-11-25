@@ -30,6 +30,38 @@ rebuild records a new commit, this file and
 `site\data\site\credits.md` have to change in the same pull request,
 or the build check goes red.
 
+## Contents
+
+- [How it reaches people](#how-it-reaches-people)
+- [.NET, Avalonia, SkiaSharp and Velopack, inside the launcher](#net-avalonia-skiasharp-and-velopack-inside-the-launcher)
+- [Concentus, SharpSRTP and BouncyCastle, inside the launcher](#concentus-sharpsrtp-and-bouncycastle-inside-the-launcher)
+- [NLayer, inside the launcher](#nlayer-inside-the-launcher)
+- [The voice's HRTF panner and its impulse responses, inside the launcher](#the-voices-hrtf-panner-and-its-impulse-responses-inside-the-launcher)
+- [zlib 1.3, translated into C# inside the launcher](#zlib-13-translated-into-c-inside-the-launcher)
+- [The SkyMP client runtime, built from the fork](#the-skymp-client-runtime-built-from-the-fork)
+- [From upstream SkyMP, not built here](#from-upstream-skymp-not-built-here)
+- [SkyMP's interface, built from the fork](#skymps-interface-built-from-the-fork)
+- [Thornswood's own sprite font](#thornswoods-own-sprite-font)
+- [Thornswood Client Runtime, Thornswood's mod on Nexus Mods](#thornswood-client-runtime-thornswoods-mod-on-nexus-mods)
+- [Thornswood Content, Thornswood's other mod on Nexus Mods](#thornswood-content-thornswoods-other-mod-on-nexus-mods)
+- [Shipped today with no licence this file can name](#shipped-today-with-no-licence-this-file-can-name)
+- [Built here from other people's work: behaviors and bodies](#built-here-from-other-peoples-work-behaviors-and-bodies)
+- [Bethesda's own files, made on each machine](#bethesdas-own-files-made-on-each-machine)
+- [The collection's menus, with no gold values](#the-collections-menus-with-no-gold-values)
+- [Made for Thornswood by somebody else](#made-for-thornswood-by-somebody-else)
+- [On the site](#on-the-site)
+- [Not shipped by Thornswood](#not-shipped-by-thornswood)
+- [texconv, Microsoft's texture converter, used to build and not shipped](#texconv-microsofts-texture-converter-used-to-build-and-not-shipped)
+- [Bethesda's master files, downloaded by the fork's build to test it and not shipped](#bethesdas-master-files-downloaded-by-the-forks-build-to-test-it-and-not-shipped)
+- [Kept in the repository, not shipped](#kept-in-the-repository-not-shipped)
+- [On our servers](#on-our-servers)
+- [The Discord bot, on the VPS](#the-discord-bot-on-the-vps)
+- [Where the source is](#where-the-source-is)
+- [What is still missing](#what-is-still-missing)
+- Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
+
+- [Pion native Windows relay, operator-only](#pion-native-windows-relay-operator-only)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe
@@ -109,24 +141,24 @@ names the ones in the first table, and the others come with them.
 |---|---|---|---|---|
 | Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 | 10.0.14 | The .NET class libraries, compiled into the exe | MIT, the package's `LICENSE.TXT` | `76c0f133981113273a0e50dba97a6107eead821f707565443e787f0aa9f9fc69` |
 | runtime.win-x64.Microsoft.DotNet.ILCompiler | 10.0.14 | The Native AOT compiler and the runtime it links into the exe (the garbage collector, threads, exceptions) | MIT | `e4279d8ed9bcc01b1d8a3a9b2c7db16f3249e098dc3081e15c6d93ef462e1bce` |
-| System.Security.Cryptography.ProtectedData | 10.0.14 | DPAPI, for the keys the launcher keeps on the PC (Secrets.cs); part of the framework on .NET Framework | MIT | `6ada18646ef345d3e43e25ea52973d5cba98cf9103df14df0a18feb685fa7f35` |
-| Avalonia | 12.1.4 | The window, its controls and the compiled markup | MIT | `90cf963a0e5fed7fc0e5cd9cefe3c159b78de086272c3ddde94c75cb83f9c4ac` |
-| Avalonia.Desktop | 12.1.4 | Picks the Windows platform at start | MIT | `5da57df4f56d32f3894475da869d3555a968085f5d93b73b3f5ae89f70a5cd58` |
-| Avalonia.Themes.Fluent | 12.1.4 | The controls' base look (App.axaml) | MIT | `0b2c317ee4dbc9b12c9cb564d4f99b10872b655a450c91a66ac063d9056a3c38` |
+| System.Security.Cryptography.ProtectedData | 11.0.0 | DPAPI, for the keys the launcher keeps on the PC (Secrets.cs); part of the framework on .NET Framework | MIT | `2645d1106c62c9fb0147e8b9ec7472689aa7a804c5e6560d957dacf31f5bb37e` |
+| Avalonia | 12.1.6 | The window, its controls and the compiled markup | MIT | `3fc15f809786ee99791620c5d3c25452487cb70d5cd99393f853e4d241361255` |
+| Avalonia.Desktop | 12.1.6 | Picks the Windows platform at start | MIT | `01547a36484ebcd67cc68b9f83d23e1cf1e5dd0246132f6169ccc6cdfb45e7b7` |
+| Avalonia.Themes.Fluent | 12.1.6 | The controls' base look (App.axaml) | MIT | `af6c7a862a16ee35aac0922deaa939f65436fc2433dacfe460e975ebc646047c` |
 | Velopack | 1.2.161 | The install's hand over at the first start, the update check, download and apply (Velo*.cs) | MIT | `d57275692b299751a12ee3e18283b5f7fe3e55339f96b1623345da095dc484ed` |
 
 Brought in by those:
 
 | Package | Version | What it is | Licence | sha256 of the .nupkg |
 |---|---|---|---|---|
-| Avalonia.Win32 | 12.1.4 | Avalonia on Windows | MIT | `743abeae210f287b846a42d292b2d8cc85b345bef8df13a01e481d252090b81b` |
-| Avalonia.Skia | 12.1.4 | Avalonia's drawing, on Skia | MIT | `f42e12d06df92ae116e5baaac5e0319cec090d990a303edc1afd0e7c202a6e69` |
-| Avalonia.HarfBuzz | 12.1.4 | Avalonia's text shaping, on HarfBuzz | MIT | `f52e5c1b6a00886ef46816ed2fc9a2c28844289b1af30bd7ea247e220d20c0cb` |
-| Avalonia.Remote.Protocol | 12.1.4 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `e115f5143ef0fc745cf171bb926ad1083ed4c833ca977a0eb11bdb0c41605f5c` |
-| Avalonia.FreeDesktop | 12.1.4 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `e689791338533943a246d3522055edb44229aa19eb7a8233801f0d89fb63da72` |
-| Avalonia.FreeDesktop.AtSpi | 12.1.4 | Accessibility on Linux, the same | MIT | `d8d29680c17ae46e887775e6840f96c37e68016f9edacbbb7b62d453e5685649` |
-| Avalonia.X11 | 12.1.4 | Avalonia on X11, the same | MIT | `c10179d2da3d0d7dfa75ba698a80674a3bed9b51a4d3a44ec829832c68e6d696` |
-| Avalonia.Native | 12.1.4 | Avalonia on macOS, the same | MIT | `418dbf45252748c5295a948436d646ed90d54a5872e8352467d181587bc1b51d` |
+| Avalonia.Win32 | 12.1.6 | Avalonia on Windows | MIT | `f7884291156695d01e3fdedf6ed385bbc02aa52c83d71b0c68905df18165cdae` |
+| Avalonia.Skia | 12.1.6 | Avalonia's drawing, on Skia | MIT | `5d767f1c7bc1603ec03fde2620fc1ac478f7fd5dc3e599cdcd1be2f6f7f5c68c` |
+| Avalonia.HarfBuzz | 12.1.6 | Avalonia's text shaping, on HarfBuzz | MIT | `0a14d3ad829dd9a705c3cf906101cbaa4d94a9fc26711959f7b0bf538a7556d2` |
+| Avalonia.Remote.Protocol | 12.1.6 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `366925200bbc15d42fd151cb8b5a8f6869f143260c8cb02514225dd92ada86fb` |
+| Avalonia.FreeDesktop | 12.1.6 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `f254c3076e5176da0e4708dd114331e0558bee729f347fbae4b261db040432d6` |
+| Avalonia.FreeDesktop.AtSpi | 12.1.6 | Accessibility on Linux, the same | MIT | `660c5603f16f5037aceddfba3eb07c9cf70d8cad49323f6d8cc319052b739eec` |
+| Avalonia.X11 | 12.1.6 | Avalonia on X11, the same | MIT | `7c72bcea42345d7b7122e35a6cd41b89ab68d1c0eb0f7e46fb3719c8545f5c93` |
+| Avalonia.Native | 12.1.6 | Avalonia on macOS, the same | MIT | `080a0cb7555967509c51a946728a48b42334ab75af05898bea93dab3f0dca5fc` |
 | Avalonia.Angle.Windows.Natives | 2.1.27548.20260419 | ANGLE, OpenGL ES on Direct3D, which Avalonia draws through on Windows (`av_libglesv2.dll`) | ANGLE's three-clause BSD licence, the package's `LICENSE` file | `76d67901097e9173d155efc4c2b7d2c8e3122f2c2e0415028eb0c88478a386f9` |
 | SkiaSharp | 3.119.4 | Skia for .NET: Avalonia's drawing, the header strip's WebP frames (Art.cs) and the gallery's smaller copies (Gallery.cs) | MIT | `e32a449d31945c0b9d169eb5bc676e1e3f589aab69888e49d703fdc1c384c176` |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | Skia itself, built for Windows (`libSkiaSharp.dll`) | MIT, with Skia's three-clause BSD licence and the others in its `THIRD-PARTY-NOTICES.txt` | `5a5698b1b4e1fdc9ffe9868df6874db5fa69f21a4de76ba71a01a542e9b43391` |
@@ -173,12 +205,14 @@ whose text the file carries.
 Downloaded from nuget.org and read on 1 November 2026. Their sources, as each
 nuspec names them:
 
-- .NET (the runtime packages and ProtectedData), by Microsoft and the .NET
-  Foundation: https://github.com/dotnet/dotnet at commit `0427b9ab` (in
-  full, `0427b9abbead3fa64c6655eb4290c537397131fa`).
-- Avalonia (every Avalonia package at 12.1.4), by the AvaloniaUI project:
-  https://github.com/AvaloniaUI/Avalonia at commit `2d79ba55` (in full,
-  `2d79ba55fae1b1e71c69f93a668080c9029e6a31`). Its ANGLE build:
+- .NET (the runtime packages), by Microsoft and the .NET Foundation:
+  https://github.com/dotnet/dotnet at commit `0427b9ab` (in full,
+  `0427b9abbead3fa64c6655eb4290c537397131fa`). ProtectedData 11.0.0 is from
+  the same repository at commit `297acf93` (in full,
+  `297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f`).
+- Avalonia (every Avalonia package at 12.1.6), by the AvaloniaUI project:
+  https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646` (in full,
+  `cf8e564674700348947e93ab19105f27afe859a9`). Its ANGLE build:
   https://github.com/AvaloniaUI/angle at commit `1c898059` (in full,
   `1c89805903c1482166356d3b950d474973180e61`).
 - SkiaSharp 3.119.4, by Microsoft: https://github.com/mono/SkiaSharp at
@@ -276,22 +310,22 @@ credits page, and the installer puts each beside `SOURCE CODE.txt`.
 NLayer, the MP3 decoder the launcher plays its menu theme with (MenuMusic.cs,
 since #3207, so the theme plays from the launcher's own process and the
 Windows Volume Mixer lists it as the launcher). Since the launcher moved to
-.NET 10 (#4823) it is the NuGet package `NLayer` 3.0.0, which
+.NET 10 (#4823) it is the NuGet package `NLayer` 3.0.1, which
 `launcher\app\Thornswood.csproj` references and the native build compiles
 into `Thornswood.exe` with the launcher's own code. No copy of it is kept in
 the repository and no file of it goes beside the exe.
 
 | File | Where it sits in the package | sha256 |
 |---|---|---|
-| `NLayer.dll` | `lib\net8.0` | `2cb48f87143445245a8161e9a823a83aa5b369dccae977a2311d0b42685caffa` |
+| `NLayer.dll` | `lib\net8.0` | `44a481f08d0437b135c78e102fdaac25abe122203af87ac63528fca859f7a498` |
 
-Version 3.0.0 (file version 3.0.0.0), as nuget.org serves it (the .nupkg's
+Version 3.0.1 (file version 3.0.1.0), as nuget.org serves it (the .nupkg's
 sha256 is
-`625b215f76453180d499c203f711aceedcce6e855c86a65716c0b1275afcb9c6`, the same
-package whose `netstandard2.0` file the launcher embedded from 26 October
-2026). Its source is
-https://github.com/naudio/NLayer at commit `046c7ce4` (in full,
-`046c7ce422970f8f0f0bc205d6c6341bcb7debf1`), the commit the package's nuspec
+`72086b1a15203d291b895fcef80ed40b669cdd34f978d5082874b466be074545`). From
+26 October 2026 the launcher embedded the `netstandard2.0` file of 3.0.0, the
+version before it. Its source is
+https://github.com/naudio/NLayer at commit `cdd16ea2` (in full,
+`cdd16ea2a389b30f99d5797ad7b09224ab29e01a`), the commit the package's nuspec
 and the file's own product version name. By Mark Heath, Andrew Ward and
 contributors.
 
@@ -389,16 +423,18 @@ file carries outside code and the file does not carry that project's notice.
 | `FromGameDeflate.cs` | zlib 1.3, `deflate.c` and `trees.c` | yes: zlib | A translation of zlib's code, above. |
 | `FromGameMath.cs` | numpy, OpenBLAS, LAPACK's `dgesv` | no | It does the arithmetic Build-NoticeBoard.py does with numpy in the same order and rounding, so the meshes come out the same bytes, and says what that order is. The order was measured from the results (19 Oct), not copied from their code: the inverse is a 3 by 3 LU solve written out by hand, and nothing in it is OpenBLAS's or LAPACK's source. |
 | `FromGameArchive.cs` | LZ4 | no | It decodes the LZ4 frame and block format the game's archives use, written from that published format and the BSA layout. Build-NoticeBoard.py calls the lz4 package for this; the launcher has its own short decoder instead, and no code of the lz4 library is in it. |
+| `ModlistFetch.cs` | 7-Zip | no | It downloads 7-Zip 25.01's own `7zr.exe` and installer from 7-Zip's GitHub release, each held to a sha256 it pins, takes `7z.exe` and `7z.dll` out of the installer with `7zr.exe`, and runs `7z.exe` to unpack the modlist's archives (#6244). It runs 7-Zip as a program; no code of 7-Zip is in it. |
+| `ModlistSetup.cs` | 7-Zip | no | It runs the modlist install in order: 7-Zip and Mod Organizer 2 through `ModlistFetch.cs`, the Nexus files, then the install itself (#6244). It names 7-Zip as one of those steps; no code of 7-Zip is in it. |
 
 ## The SkyMP client runtime, built from the fork
 
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `ecf364c0` (in full, `ecf364c012472338f3c15255e84c863f7d9eb446`). That
+commit `f191e166` (in full, `f191e166d506e6ea6f7e96bba1e11e413cba2fe9`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...ecf364c0.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...f191e166.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -667,7 +703,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`ecf364c0`, the commit the client record names.
+`f191e166`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -764,11 +800,13 @@ full text.
 
 Thornswood publishes this itself, as its own mod: Nexus Mods mod 192762,
 https://www.nexusmods.com/skyrimspecialedition/mods/192762, by EvilPatrick06.
-Revision 4 of the collection (`7essxf`, published 21 October 2026, revision id
-813945) carries version 1.0.1, file 823485, uploaded on 20 October, and it is
-not optional. Nexus gives that file as 152,002,702 bytes, and the archive it
+Revision 11, the newest published revision of the collection (`7essxf`) and
+the one `records\collection.json` follows, carries version 1.0.1, file
+823485, uploaded on 20 October, and it is not optional. Revision 3 was the
+first to carry that file, and none since has moved it
+(`docs\COLLECTION-REVISIONS.md`). Nexus gives that file as 152,002,702 bytes, and the archive it
 serves has md5 `74ef6a9f5cf0a5ba7dbab9c00cb67491`, the md5 the collection
-pins. Revision 3 carries the same file; revisions 1 and 2 carry version
+pins. Revisions 1 and 2 carry version
 1.0.0, under "Version 1.0.0, which revisions 1 and 2 still install" below.
 
 It is the largest thing somebody else wrote that Thornswood hands out: 67
@@ -861,7 +899,7 @@ from that file:
 - Require distributors and external end users to agree to terms that
   protect it at least as much as the licence does. Patrick decided on
   20 October 2026 (#421, option A) that the Client Runtime's README says so,
-  and the README of 1.0.1, the version revisions 3 and 4 install, does: by
+  and the README of 1.0.1, the version every revision since 3 installs, does: by
   installing the file you accept Microsoft's terms for it, use it only with
   the Thornswood client, keep its copyright and other notices as they are,
   do not hand it on apart from the mod, and Microsoft gives no warranty for
@@ -1359,6 +1397,13 @@ the copy the project's own Google Fonts folder keeps with its copyright line:
   whose page says no (#3649).
 - SKSE, which is in the collection, and Skyrim Special Edition, which each
   person owns.
+- 7-Zip and Mod Organizer 2, for the install from the collection's modlist
+  (#6244, not used by Play yet). The launcher downloads each from its own
+  release on GitHub on the person's machine and holds it to a hash it pins:
+  7-Zip 25.01 (Igor Pavlov, GNU LGPL with the unRAR restriction,
+  https://github.com/ip7z/7zip) in `launcher\app\ModlistFetch.cs`, and Mod
+  Organizer 2 2.5.2 (GPL-3.0, https://github.com/ModOrganizer2/modorganizer)
+  as `records\mo2.json` and the modlist pin it. Thornswood carries neither.
 - texconv, the tool the main menu picture is built with (next section).
 - Bethesda's five master files, which the fork's build downloads to run its
   unit tests (the section after texconv's).
@@ -1450,15 +1495,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `ecf364c012472338f3c15255e84c863f7d9eb446` on the public fork. The
+  name `f191e166d506e6ea6f7e96bba1e11e413cba2fe9` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...ecf364c0. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...f191e166. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `3007b70051fdf74e39df6fa42509ea882b4114cf3ecc7ee7d8633b6fd3a1a138`, built
-  2026-11-12T10:16:17Z. This is the recorded next release, not a deployment
+  is `7d67a14ad32fddb1b52928237ae351b1079024cc6b02df1ad7db4265d722fe10`, built
+  2026-11-19T08:56:39Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1495,7 +1540,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/ecf364c012472338f3c15255e84c863f7d9eb446
+https://github.com/ThornswoodRP/skymp/tree/f191e166d506e6ea6f7e96bba1e11e413cba2fe9
 
 For the engine Main runs until then:
 
@@ -1743,7 +1788,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 ## NLayer licence
 
-The text of `LICENSE` in https://github.com/naudio/NLayer at commit `046c7ce4`.
+The text of `LICENSE` in https://github.com/naudio/NLayer at commit `cdd16ea2`.
 
 ```
 MIT License
@@ -1920,7 +1965,7 @@ SOFTWARE.
 
 ## Avalonia licence
 
-The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `2d79ba55`, the commit every Avalonia 12.1.4 package names.
+The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646`, the commit every Avalonia 12.1.6 package names.
 
 ```
 The MIT License (MIT)
@@ -2143,3 +2188,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Pion native Windows relay, operator-only
+
+The operator-only Windows relay builds official Pion TURN v5.1.3 (MIT), source `f00fda475f1eb3eaa20daac3cd1c0f6a101b9db8`, with the SHA256-pinned official Go toolchain. Supplier source/module checksum pins are in `records/turn/pion-windows.json`; the transitive modules and their checksum-database hashes are locked in `tools/turn-relay/go.mod` and `go.sum`. Pion modules use MIT licences; Go and golang.org/x modules use BSD-3-Clause. Source/module licence files remain in the retained module cache and must accompany any separate redistribution. This package is not a launcher, mod or game dependency and contains no coturn/OpenSSL/DB/admin runtime. See [Windows TURN operations](docs/WINDOWS-TURN.md) for the narrowly permitted network mode and measured capacity/acceptance limits.

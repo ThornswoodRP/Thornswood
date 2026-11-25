@@ -264,8 +264,14 @@ Yes 'Ship-Rules.ps1 has no second hand-copied Daedric list' (
     $rulesText.Contains('ui-gone.json') -and ($rulesText.IndexOf($sampleGone, [StringComparison]::OrdinalIgnoreCase) -lt 0))
 Yes 'OwnGame.cs has no second hand-copied Daedric list' (
     $ogText.Contains('ui-gone.json') -and ($ogText.IndexOf($sampleGone, [StringComparison]::OrdinalIgnoreCase) -lt 0))
+# The launcher project embeds it, and Build-Launcher.ps1 checks every record
+# the project embeds, read off its EmbeddedResource items (#4684).
+$shipRulesProj = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Thornswood.csproj'))
+$shipRulesBl = [IO.File]::ReadAllText((Join-Path $Here 'scripts\release\Build-Launcher.ps1'))
 Yes 'Build-Launcher.ps1 embeds that record' (
-    ([IO.File]::ReadAllText((Join-Path $Here 'scripts\release\Build-Launcher.ps1'))).Contains('ui-gone.json'))
+    $shipRulesProj -match '<EmbeddedResource Include="\.\.\\\.\.\\records\\ui-gone\.json"><LogicalName>ui-gone\.json</LogicalName>' -and
+    $shipRulesBl.Contains("SelectNodes(`"//*[local-name()='EmbeddedResource']`")") -and
+    $shipRulesBl.Contains('Read-ThornswoodRecord -Path $path -Kind $kinds[0]'))
 
 Yes 'the real shipped build.js''s asset modules are committed as a test fixture' (Test-Path -LiteralPath $uiFixtureJs)
 $uiExpected = Get-UiFrontFixtureExpectedNames

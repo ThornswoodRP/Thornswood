@@ -53,7 +53,7 @@ namespace Thornswood
                     ((IPersistFile)obj).Save(lnk, true);
                     return null;
                 }
-                catch (Exception e) when (e is COMException || e is UnauthorizedAccessException || e is System.IO.IOException) { return e.Message; }
+                catch (Exception e) when (e is COMException || e is UnauthorizedAccessException || e is System.IO.IOException) { return Failure.Say("InstallShortcut", e); }
                 finally { Marshal.Release(unknown); }
             }
             finally { CoUninitialize(); }

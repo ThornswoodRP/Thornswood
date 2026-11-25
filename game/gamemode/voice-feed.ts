@@ -24,19 +24,20 @@
 
   function send(payload) {
     if (inFlight) return;           // never queue: a late position is worthless
-    inFlight = true;
-
     var body = JSON.stringify(payload);
-    var req = http.request({
-      host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
-    }, function (res) {
-      res.resume();
-      res.on('end', function () { inFlight = false; failures = 0; complained = false; });
-    });
+    inFlight = true;
+    var finished = false;
+    var deadline;
+    var req;
 
-    req.on('error', function () {
+    function finish(ok) {
+      // A truncated response can emit both error and close. Its late events
+      // must not release the slot held by a newer request.
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
       inFlight = false;
+      if (ok) { failures = 0; complained = false; return; }
       failures++;
       // Once, then quiet. Nobody needs this five times a second for an hour.
       if (failures === 25 && !complained) {
@@ -44,9 +45,31 @@
         console.log('[thornswood] voice service is not answering on ' + VOICE_PORT +
                     '. Proximity voice is off; everything else is unaffected.');
       }
-    });
-    req.setTimeout(1000, function () { try { req.destroy(); } catch (e) { } });
-    req.end(body);
+    }
+
+    try {
+      req = http.request({
+        host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+      }, function (res) {
+        res.on('end', function () { finish(res.statusCode >= 200 && res.statusCode < 300); });
+        res.on('error', function () { finish(false); });
+        res.on('close', function () { finish(false); });
+        res.resume();
+      });
+      req.on('error', function () { finish(false); });
+      req.on('close', function () { finish(false); });
+      // Bound the whole exchange, including a body that keeps trickling in.
+      deadline = setTimeout(function () {
+        finish(false);
+        req.destroy();
+      }, 1000);
+      req.end(body);
+    } catch (error) {
+      finish(false);
+      if (req) req.destroy();
+      throw error;
+    }
   }
 
   /*
@@ -71,20 +94,38 @@
   if (globalThis.__thornswoodVoiceFeed) {
     try { clearInterval(globalThis.__thornswoodVoiceFeed); } catch (e) { }
   }
+  /*
+    Who each actor is: their profile id and the name off their appearance.
+    Where they stand moves every pass, so it is read every pass; who they are
+    does not, and the appearance is a whole document the engine parses and
+    hands back on every read. So it is read once a second a person, which is
+    as soon as the voice pages need a new name, not five times (#5431: with
+    20 people on it was 160 engine reads a second for nothing, and put the
+    timers over their budget). A row is dropped once its actor is off line,
+    so nobody who comes back gets an old name.
+  */
+  var WHO_EVERY_MS = 1000;
+  var whoIs = {};   // actor id -> { pid, name, at }
+
   globalThis.__thornswoodVoiceFeed = setInterval(guard('voiceFeed', function () {
     var who = [];
     try {
       var online = mp.get(0, 'onlinePlayers') || [];
+      var now = Date.now();
+      var still = {};
       for (var i = 0; i < online.length; i++) {
         var id = online[i];
+        still[id] = true;
         try {
           var pos = mp.get(id, 'pos');
           if (!pos) continue;
           var angle = mp.get(id, 'angle') || [0, 0, 0];
-          // Each read once: five times a second for everybody on, an
-          // appearance read twice was ten parses a person a second (#385).
-          var pid = mp.get(id, 'profileId');
-          var look = mp.get(id, 'appearance');
+          var known = whoIs[id];
+          if (!known || now - known.at >= WHO_EVERY_MS || now < known.at) {
+            var look = mp.get(id, 'appearance');
+            known = whoIs[id] = { pid: mp.get(id, 'profileId'), name: String(look && look.name || ''), at: now };
+          }
+          var pid = known.pid;
           who.push({
             profileId: pid,
             actor: id,
@@ -94,10 +135,13 @@
             // side of a loading door do not, which is exactly the line voice
             // should stop at.
             cell: String(mp.get(id, 'worldOrCellDesc') || ''),
-            name: String(look && look.name || ''),
+            name: known.name,
             party: partyFor(pid)
           });
         } catch (e) { }
+      }
+      for (var gone in whoIs) {
+        if (Object.prototype.hasOwnProperty.call(whoIs, gone) && !still[gone]) { delete whoIs[gone]; }
       }
     } catch (e) { return; }
 

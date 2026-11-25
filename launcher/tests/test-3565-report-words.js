@@ -74,7 +74,7 @@ const zipParts = list('InTheZip');
 const sumParts = list('InTheSummary');
 yes('Diag.cs keeps the list of files in the zip (InTheZip)', !!zipParts && zipParts.length > 0);
 yes('Diag.cs keeps the list of parts of the summary (InTheSummary)', !!sumParts && sumParts.length > 0);
-if (!zipParts || !sumParts) { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!zipParts || !sumParts) { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
 const zipKeys = zipParts.map(p => p.key), sumKeys = sumParts.map(p => p.key);
 
 yes('every part in both lists has words', zipParts.concat(sumParts).every(p => p.words.trim().length > 0));
@@ -121,7 +121,7 @@ sumKeys.forEach(function (k) {
 const raw = all(/s\.AppendLine\(([^;]*)\);/g, summary).map(m => m[1].trim());
 const allowed = ['', '"ThornsWood - report"', '"==================="', 'DateTime.Now.ToString("dddd d MMMM yyyy, HH:mm")',
                  'k', 'new string(\'-\', k.Length)', 'k.PadRight(22) + v', '"none"',
-                 '(i.Blocking ? "[blocking] " : "[note]     ") + i.Text', '"could not check: " + ex.Message',
+                 '(i.Blocking ? "[blocking] " : "[note]     ") + i.Text', '"could not check: " + Failure.Why("Diag, a check for the report", ex)',
                  '"in " + dir', 'Path.GetFileName(f)'];
 const stray = raw.filter(r => allowed.indexOf(r) < 0);
 yes('Summary() writes no line of its own outside Add and Section' + (stray.length ? ' (writes ' + stray.join(' | ') + ')' : ''),
@@ -175,4 +175,4 @@ console.log('The page says: It holds ' + said(zipParts) + '. The summary says ' 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

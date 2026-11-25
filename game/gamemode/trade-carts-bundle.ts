@@ -305,6 +305,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -381,12 +383,17 @@ return module.exports;
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a stop's crate, the same as a dock's
     var RAID_REACH = 700;              // how close a raider stands to the driver: a trade's 10 metres
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return 'cart-' + kind + ':' + RUN + ':' + (++receiptN); }
+    /* A cart receipt's name is cart-kind:RUN:n, n kept on globalThis beside the run, as the ships keep theirs (#4928). */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodCartReceiptN) || 0) + 1;
+      g.__thornswoodCartReceiptN = n;
+      return 'cart-' + kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -633,7 +640,11 @@ return module.exports;
       routes: function () { return copy(reg.routes); },
       aboard: function (id) { return reg.ships.aboard(reg.state, id); },
       // Whether this character is driving a cart, for Raid cart under Near you on P.
-      driving: function (actorId) { return !!TRADE_CARTS.cartOfDriver(reg.state, H.partyOf(actorId)); },
+      // The P panel asks it for every pair near each other each pass, with the
+      // profile id the near list holds, so it reads nothing of the engine (#5431).
+      driving: function (actorId, profileId) {
+        return !!TRADE_CARTS.cartOfDriver(reg.state, { actor: Number(actorId) >>> 0, profile: Number(profileId) || 0 });
+      },
       open: act('open'), load: act('load'), depart: act('depart'), pullIn: act('pullIn'),
       begin: act('begin'), finish: act('finish'), undo: act('undo'),
       activated: activated, command: command

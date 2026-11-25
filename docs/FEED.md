@@ -16,6 +16,20 @@ fallback and the home of the release baseline, is retired. This page is every
 field in it, who writes each one, who reads it, and what goes wrong when it is
 wrong.
 
+## Contents
+
+- [Where it is and how a launcher reads it](#where-it-is-and-how-a-launcher-reads-it)
+- [A real entry, trimmed](#a-real-entry-trimmed)
+- [Top-level fields](#top-level-fields)
+- [How a launcher decides what is new](#how-a-launcher-decides-what-is-new)
+- [Syncing to the release record (#1050)](#syncing-to-the-release-record-1050)
+- [When the packs can go](#when-the-packs-can-go)
+- [version.json in two (#1050)](#versionjson-in-two-1050)
+- [Checks on every download](#checks-on-every-download)
+- [Main and dev](#main-and-dev)
+- [Putting a channel back (#442)](#putting-a-channel-back-442)
+- [What looks wrong in the feeds today](#what-looks-wrong-in-the-feeds-today)
+
 ## Where it is and how a launcher reads it
 
 ### Host cutover (#649) - live URL shape
@@ -38,9 +52,12 @@ what it does not is under "Checks on every download".
   read with the `ETag` the site sent, sends `If-None-Match` on the next check,
   and reads a 304 as that same document. The site answers the tag it issued
   with 304 and no body (`site/lib/serve.js`, the `/feed/version.json` route). The
-  launcher asks every thirty seconds while the game runs, and the document is
-  about ninety kilobytes, so that is roughly ten megabytes an hour per launcher
-  saved without slowing the check down. The tag and the document are held in
+  launcher asked every thirty seconds while the game ran, and the document was
+  then about ninety kilobytes, so that was roughly ten megabytes an hour per
+  launcher saved without slowing the check down. Since the split ("version.json
+  in two") it is far smaller: on 15 Nov 2026 the site answered 629 bytes for
+  main and 626 for dev, with 1,300 and 1,360 bytes of settings beside them.
+  The tag and the document are held in
   memory, never in `config.json`: a tag without the document it belongs to
   would ask, be told nothing had changed, and have nothing to read.
   `Cache-Control` stays `no-cache`, which means ask every time, so a release is
@@ -370,7 +387,7 @@ saved fields that come from elsewhere, as their rows say.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `id` | string | `yyyyMMdd-HHmmss` (`yyyyMMdd-HHmm` before #1057), `-dev` added on the dev channel, never one the feed already names (`Release-Name.ps1:New-ReleaseId`). A release is one pack since #1053 (`Publish-Update.ps1:so a release is not split into parts`); an id ending `-<part>` is an older pack, split to stay under GitHub's 2 GiB asset limit. Compared case-insensitively with `applied.txt`. An empty id is never offered. |
+| `id` | string | `yyyyMMdd-HHmmssZ`, the UTC time the release was made (`yyyyMMdd-HHmmss` and `yyyyMMdd-HHmm` in Mountain time before #4950 and #1057; `Release-Name.ps1:Get-ReleaseIdUtc` reads all three as the instant they name), `-dev` added on the dev channel, never one the feed already names (`Release-Name.ps1:New-ReleaseId`). A release is one pack since #1053 (`Publish-Update.ps1:so a release is not split into parts`); an id ending `-<part>` is an older pack, split to stay under GitHub's 2 GiB asset limit. Compared case-insensitively with `applied.txt`. An empty id is never offered. |
 | `url` | string | A thornswood.net host asset under `/feed/assets/<sha256>` or `/feed-dev/assets/<sha256>`, **or**, on a feed that still names `updateRepo`, a GitHub release asset in it (`Feed-Rules.ps1`). Since #897 a new pack is written as the site address. A GitHub one (a pack published before 28 Sep) is the browser download address, `https://github.com/<owner>/<name>/releases/download/<tag>/<file>`, since #445, or the older `api.github.com` asset id address; both stop answering when Thornswood-Releases is deleted (#907). Empty: the launcher skips it and writes it off as applied. A url that answers 404 fails the whole update and Play stays off. |
 | `sha256` | string, 64 hex | Mandatory; checked after download (`Updater.cs:Download`). |
 | `notes` | string | The whole Ship note, first line first. The update card shows it (`ShellUpdate.cs:pendingPacks[0].notes`). |
@@ -814,7 +831,8 @@ Now it is one command, and it goes the same way as every other update:
   Ship after #442 on each channel and holds the newest thirty. A release that
   named no record (every one before #441, and a `-NoUpload` run) is not one.
 - **Safety.** `-DryRun` builds the pack and sends nothing. The pack is checked
-  by `Check-Secrets.ps1` like a Ship's, the note by `Note-Rules.ps1`, and the
+  by `Check-Secrets.ps1` like a Ship's, the note by the release note rules
+  (`tools/ReleaseNotes/NoteRules.cs`), and the
   pack and its record are on the site before `version.json` names them. The
   feed and the baseline go back through `Feed-Store.ps1` in one send, which
   replaces nothing if another Ship or feed edit went out meanwhile.
@@ -824,34 +842,41 @@ Optional packs are the one thing a person can remove themselves
 
 ## What looks wrong in the feeds today
 
-Re-checked on 28 Sep against both live feeds on thornswood.net and the records
-in this repository (#897). The three problems this section once listed (dead
-private packs, main and dev launcher versions apart, `Updater.cs` behind the
-feed) are still cleared: main holds 75 packs and dev 92, none under the private
-source repository; main's `launcherVersion` is `1.1.101`, the same as `Version`
-in `Updater.cs` and as the dev feed's `mainVersion`; dev is on `1.1.101.34`.
-Both feeds carry `collectionUrl` ending `7essxf` and `collectionRevision` 1.
-The stale-main-clone hazard in `Publish-Update.ps1` is gone with the clones
-(#907): a dev publish reads main's feed from the site every time.
+Re-checked on 15 Nov 2026 against both live feeds on thornswood.net (each
+`version.json` and the settings it names, read over https) and the records in
+this repository. Since #5608 no launcher reads either feed but one from before
+Velopack, and the feed now moves that one to the new launcher (`feedMove` in
+`site\lib\feed.js`).
+
+- **Split, and small.** Both are answered split: `version.json` is 629 bytes
+  on main and 626 on dev, and the settings each names are 1,300 and 1,360
+  bytes, each hashing to its name. The store's generations behind them are
+  2,415 bytes on main and 2,497 on dev (the size in each ETag).
+- **No packs, and nothing on GitHub.** `packs` is empty on both, so neither
+  names a download on GitHub any more, and the three problems this section
+  once listed (dead private packs, main and dev launcher versions apart,
+  `Updater.cs` behind the feed) cannot come back while it stays so.
+- **The launcher named is the move program.** Both say `launcherVersion`
+  `2026.1102.716.1`, one step past their release's own `2026.1102.716` (and
+  `minLauncher`), so every older launcher takes it: main's is
+  `Thornswood-Move.exe` on the `main-build-1.3.69` Release, dev's
+  `Thornswood-Dev-Move.exe` on `build-1.3.77`, each held to `launcherSha256`.
+  Dev's `mainVersion` is `2026.1102.716.1` too. Main's unsigned 1.1.101 is no
+  longer named.
+- **Releases.** Main is on `20261102-121621` (commit `2f91748f`), dev on
+  `20261110-211137-dev` (commit `2021deec`).
+- **Collection.** Both carry `collectionUrl` ending `7essxf`; main is on
+  `collectionRevision` 7, dev on 8.
+- **Skyrim pin fields.** Both carry `expectedExeBytes` 37157144,
+  `newerExeBytes` 37910440 and the three depots, the same as
+  `records\skyrim-pin.json`.
 
 What differs, none of it broken:
 
-- **Download urls on GitHub**, on 28 Sep every one (main 77, dev 94), though
-  the site holds every one; each channel's next Ship moves them (see
-  "Downloads come from the site"). Thornswood-Releases is deleted only once
-  neither feed names one (#907).
-- **Both feeds' client runtime is behind the record.** Main names fork
-  commit `a922b480` and dev `10841f40` (read 29 Sep); `records\client-build.json`
-  is on `1a2e5995` since #1200 (the pin and both build records one commit, a
-  refused craft put right at once), on top of `b4543a86` from #898, which lets
-  the game hear the key up of a key
-  it holds while a panel has the keyboard, on top of `10841f40` (#1016, J
-  kept from the game's journal) and `267ac311` (#919, no mDNS responder in
-  the game's browser). The next dev Ship carries it.
-- **Main has no Skyrim pin fields.** The dev feed's `expectedExeBytes`,
-  `newerExeBytes` and `depots` match `records\skyrim-pin.json`; main was last
-  published before #874 added them, so main launchers use their compiled
-  values until the next main Ship.
-- **Main's live launcher is unsigned** (1.1.101 predates signing); the next
-  main Ship is the first signed one. See "Checks on every download" for what
-  the signer check does and does not prove (#912).
+- **Neither feed's client runtime is the pin.** Main names fork commit
+  `ec8e20f9` and dev `2921bc88`; `records\client-build.json` is on
+  `ee67f972`. Only a launcher from before Velopack reads `clientRuntime`
+  here, and the move program replaces it; a Velopack launcher takes the
+  client from its own Release (#5608).
+- **Both feeds stay until the site side of #5608 (#5783)** takes them down
+  with the scripts that write them.

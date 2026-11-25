@@ -36,7 +36,7 @@ const gamemodeSource = require('./gamemode-source.js');
 const ROOT = path.join(__dirname, '..', '..');
 const GAMEMODE = path.join(ROOT, 'game', 'gamemode');
 // Every game/data file a gamemode reader opens at run time with no copy of
-// its own inside gamemode.js. guild-sites.json is not here: Build-MerchantGamemode.js
+// its own inside gamemode.js. guild-sites.json is not here: Build-MerchantTables.js
 // carries it. merchant-traders.json is (#5137): that bundle carries the traders
 // only inside MERCHANT_TRADING, for its own install, and first steps reads them
 // at load to find the start town's Cook, so on a server it found nothing.
@@ -63,17 +63,23 @@ function build(gamemodeText) {
 }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const now = gamemodeSource.read(GAMEMODE);
   const next = build(now);
   if (process.argv.includes('--check')) {
     if (next !== now) {
       console.log('STAFF_DATA in game/gamemode.js is stale: run node scripts/dev/Build-StaffData.js');
-      process.exit(1);
+      return 1;
     }
     console.log('PASS STAFF_DATA matches game/data/' + FILES.join(', game/data/'));
-    process.exit(0);
+    return 0;
   }
-  if (next === now) { console.log('STAFF_DATA is already up to date'); process.exit(0); }
+  if (next === now) { console.log('STAFF_DATA is already up to date'); return 0; }
   gamemodeSource.write(GAMEMODE, next);
   console.log('wrote STAFF_DATA into game/gamemode.js');
 }

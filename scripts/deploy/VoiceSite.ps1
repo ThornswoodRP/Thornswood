@@ -18,19 +18,19 @@
 #>
 
 <#
-  Why this site address will not do, or '' when it will. Only https to a
-  plain host name and port: the service asks it with a Discord ticket in the
-  body, which goes over nothing else (#1304), and the address goes onto the
-  cmd.exe line that starts the service, where an & or a quote would start a
-  second command.
+  Why this site address will not do, or '' when it will. The co-hosted Site
+  can be reached on its exact loopback origin. Any remote Site needs HTTPS
+  for the Discord ticket. The address goes onto the cmd.exe line that
+  starts the service, so allow only a host and optional port.
 #>
 function Get-VoiceSiteProblem([string]$Site) {
     $s = "$Site".Trim()
     if (-not $s) {
         return 'the site address is empty. The voice service asks that site whether a Discord ticket owns the profile on every voice and chat join, so with none it refuses every join (503).'
     }
+    if ($s -cmatch '^http://127\.0\.0\.1:3001/?$') { return '' }
     if ($s -notmatch '^https://[A-Za-z0-9.-]+(:\d{1,5})?/?$') {
-        return "the site address '$s' is not https://<host> or https://<host>:<port>. The voice service sends the site a Discord ticket, which goes over https only, and the address goes onto the command line that starts it."
+        return 'use http://127.0.0.1:3001 for the Site on this box, or https://<host> with an optional port for a remote Site.'
     }
     return ''
 }

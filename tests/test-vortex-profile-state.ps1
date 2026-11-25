@@ -1,10 +1,10 @@
 param([string]$Scratch)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')  # C# 5 against the .NET Framework, through the .NET SDK the launcher builds with (#498, #4823)
 $repo=Split-Path -Parent $PSScriptRoot
 if(-not $Scratch){$Scratch=Join-Path ([IO.Path]::GetTempPath()) ('thornswood-vortex-state-'+[guid]::NewGuid().ToString('N'))}
 New-Item -ItemType Directory -Path $Scratch -Force | Out-Null
-& python (Join-Path $PSScriptRoot 'fixtures\vortex-profile-state.py') $Scratch
+$python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
+& $python (Join-Path $PSScriptRoot 'fixtures\vortex-profile-state.py') $Scratch
 if($LASTEXITCODE){throw 'Fixture generation failed'}
 . (Join-Path $repo 'scripts\mods\LoadOrder.ps1')
 $oldAppData=$env:APPDATA
@@ -44,14 +44,36 @@ try {
     $locked=Join-Path $Scratch 'compressed\Vortex\state.v2\MANIFEST-000002'
     $handle=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try{Check 'compressed' $null 'Thornswood' $true}finally{$handle.Dispose()}
-    # Compile the same helper at C# 5 against the .NET Framework as well:
-    # scripts\mods\LoadOrder.ps1 loads this file with Add-Type, which in
-    # Windows PowerShell is the .NET Framework compiler and stops at C# 5
-    # (docs/guide/settled-design.md). The .NET SDK the launcher builds
-    # with fetches the Framework's reference assemblies on any machine, so
-    # this runs everywhere (#4823). Build-FrameworkCode throws with what the
-    # compiler said when it refuses the file.
-    $null=Build-FrameworkCode -File ([IO.Path]::Combine($repo,'launcher','app','VortexProfileState.cs')) -Reference System.Xml
-    Write-Host 'PASS framework compilation: VortexProfileState.cs at C# 5 against the .NET Framework'
-    Write-Host ($count.ToString()+' profile cases and framework compilation passed')
+    # Run just the real caller statements, never Check-ShipReady or Ship itself.
+    function Read-Statements($scriptName, $pattern) {
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repo "scripts/release/$scriptName.ps1"), [ref]$null, [ref]$null)
+        $ast.FindAll({ param($node) $node -is [Management.Automation.Language.StatementAst] -and $node -isnot [Management.Automation.Language.CommandAst] -and $node.Extent.Text -match $pattern }, $true)
+    }
+    $ready = [scriptblock]::Create(((Read-Statements 'Check-ShipReady' '^(\$vpDir = \$null|\$vpWhy = ''''|try \{ \$vpDir = Assert-VortexProfile|Ready ''Vortex has a profile named Thornswood)') | ForEach-Object { $_.Extent.Text }) -join "`n")
+    $ship = [scriptblock]::Create((Read-Statements 'Ship' '^\$twProfile = Assert-VortexProfile').Extent.Text + "`n" + '$twProfile')
+    function Ready($label, $ok, $detail, $fix) { [pscustomobject]@{ Ok = $ok; Fix = $fix } }
+    $failures = @()
+    foreach ($row in @(
+        @{ Case = 'duplicate'; Why = '^More than one Vortex profile has this name' },
+        @{ Case = 'duplicate-missing-list'; Why = '^More than one Vortex profile has this name' },
+        @{ Case = 'corrupt'; Why = '^Vortex profile metadata cannot be verified.*Do not create another profile' },
+        @{ Case = 'renamed'; Why = "^Vortex profile 'Thornswood' was not found" },
+        @{ Case = 'compressed'; Why = '' }
+    )) {
+        $env:APPDATA = Join-Path $Scratch $row.Case
+        $report = & $ready
+        $shipWhy = ''; $dir = $null
+        try { $dir = & $ship } catch { $shipWhy = $_.Exception.Message }
+        $ok = if ($row.Why) {
+            $report -and -not $report.Ok -and $shipWhy -match $row.Why -and $report.Fix -eq $shipWhy
+        } else {
+            $report.Ok -and -not $shipWhy -and $dir -eq (Join-Path $env:APPDATA 'Vortex/skyrimse/profiles/active')
+        }
+        if ($ok) { $count++; Write-Host ('PASS both callers: ' + $row.Case) }
+        else { $failures += "$($row.Case): readiness '$($report.Fix)', Ship '$shipWhy'" }
+    }
+    if ($failures.Count) { throw ($failures -join "`n") }
+    # The cases above loaded VortexProfileState.cs through LoadOrder.ps1's
+    # own Add-Type in this pwsh, as Deploy-Gamemode and Ship load it (#5968).
+    Write-Host ($count.ToString()+' profile cases passed, with the file loaded by LoadOrder.ps1''s Add-Type')
 } finally {$env:APPDATA=$oldAppData}

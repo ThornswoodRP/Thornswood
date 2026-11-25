@@ -21,9 +21,20 @@ Patrick's Grok Bot lanes (Anvil, Herald, Waystone, Wyrd, Smeagle and Codex)
 only audit now (Patrick, 30 Oct): they look over the work and file what
 they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
-file binds them the same as a person. Their own notes are in an Obsidian
-vault on the shipping machine; nothing there is a rule, and what is true now
-is `ops\status.md` in the private ops repo.
+file binds them the same as a person. They work on Grok Bot's own cloud
+computer and file through its GitHub connector. When its included usage runs
+out, they do read-only work on the Hermes VM through the Grok
+Bot app there, as an account of their own that reaches nothing of the Bots'
+(Patrick, 12 Nov 2026, #5933). They never use the shipping
+machine. What is true now is `ops\status.md` in the private ops repo.
+
+Patrick's approved work hours (17 Nov 2026) permit audit work only from
+midnight to 7 AM Mountain, including the VM fallback. New Hermes worker
+issues may start only from 7 AM to midnight; an active worker
+may finish its issue after midnight, and Bramble works around the clock.
+Grok Bot's cloud jobs hold their own schedules. Their configured window
+must be verified in Grok Bot when these hours change; the VM app provides
+the local computer for a job, rather than setting its schedule.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
@@ -38,16 +49,14 @@ the game, which becomes an issue labelled `check: in game`. The agent runs
 each step once and says how it went on the Deployment, so nobody keeps or
 runs a note. When no gate verb does what is needed, the same pull request
 adds one to `scripts\vps\gate\verbs.json` and lists it in that verb's
-`afterDeploy`. No new run note goes in the private ops repo's
-`ops\claude-queue\`; Bramble runs the notes already there and takes them
-away as they are (since 1 Nov the Claude Desk neither runs those notes nor
-merges). A step only a person can take outside the game (a click in Vortex's
+`afterDeploy`. The private ops repo's run note folder is gone (12 Nov): the
+last notes became step files here, or went to the issue that owns what was
+left of them. Work that recurs or waits on a date is an issue, not a note. A
+step only a person can take outside the game (a click in Vortex's
 own window) is a card on Patrick's report page, never a note, and a main or
 live run still waits for Patrick's word. Bot branches carry the Bot's name
-(`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
-shared and sits detached at `origin/main`: branch work goes in a worktree in
-its ignored `worktrees` folder, removed with its branch once the pull request
-merges.
+(`wisp/3150-what-it-is`). How branch work goes in the shared clone on the
+shipping machine is in [Clone the repository](set-up-a-machine.md#clone-the-repository).
 
 A Bot writes test tasks the way "Test tasks and known issues" says, in
 its pull request and on the issue: Main for what any playtester can check,
@@ -82,9 +91,9 @@ A line that has to say it anyway (this section naming the word it bans, a
 document quoting a note as it went out) goes in
 `scripts\dev\Check-Words.allow.txt` with its reason; an allowance that no
 longer matches anything is itself a hit. Release notes are not files, so
-`scripts\release\Note-Rules.ps1` checks them when Ship or Rollback-Feed runs,
-before anything is built. The same build step runs `tests\test-check-words.ps1`
-and `tests\test-note-rules.ps1`, which plant a break of every rule and fail
+the release note rules, `tools\ReleaseNotes\NoteRules.cs`, check them when
+Ship or Rollback-Feed runs, before anything is built. The same build step runs `tests\test-check-words.ps1`
+and `scripts\tests\test-note-rules.ps1`, which plant a break of every rule and fail
 if either check lets one through. Secrets are checked by
 `scripts\dev\Check-Secrets.ps1` in the same build. It reads the files of
 `engine\skymp` too whenever the fork is checked out, and says so when it is
@@ -96,7 +105,7 @@ Two names are in no tracked file at all, code, tests, records, data,
 comes back: the multiplayer mod this build replaced (#497,
 `tests\test-old-name-gone.js`), and the SkyMP server `Thornswood-Content.esp`
 was salvaged from (#400, Patrick, 12 Oct: "no records may keep it";
-`tests\test-other-server-name-gone.js`), along with that server's two short
+`game\tests\test-other-server-name-gone.js`), along with that server's two short
 forms, the prefix its editor ids, scripts and folders carried (Patrick,
 15 Oct, decision C). Say "the other server" in prose and OtherServer in a
 file, folder or code name. A check that has to find that server's leftovers

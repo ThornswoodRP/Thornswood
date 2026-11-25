@@ -126,4 +126,4 @@ yes('no tracked file names the old multiplayer mod or its add-ons (' + hits.leng
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

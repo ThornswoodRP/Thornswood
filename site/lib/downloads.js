@@ -292,10 +292,10 @@ function downloadsBody(d) {
            '<p>One file. Download it and run it. The mods are not in it. It puts in ' +
            'the launcher with Thornswood&rsquo;s own content and opens it, and the ' +
            'launcher asks where to install and puts in the script extender. One box ' +
-           'there, Give Thornswood a Skyrim folder of its own, starts unticked. Ticked, ' +
+           'there, Give Thornswood a Skyrim folder of its own, starts ticked. Left ticked, ' +
            'Thornswood writes nothing of its own into your Steam copy, and once Vortex has deployed the ' +
-           'launcher builds a game folder of its own from it, mostly as hard links. Left ' +
-           'unticked, Thornswood&rsquo;s own files go into your Steam copy and the ' +
+           'launcher builds a game folder of its own from it, mostly as hard links. ' +
+           'Unticked, Thornswood&rsquo;s own files go into your Steam copy and the ' +
            'launcher asks before it builds the folder. The SkyMP files in it are free software, and the credits page ' +
            // Beside the download button because that is where the files are
            // handed over. Entry 170 on the To Do List: the source had to be
@@ -312,6 +312,14 @@ function downloadsBody(d) {
            'reinstall. Vortex keeps them in a profile of their own, so switching ' +
            'back to your usual profile and running Purge Mods leaves you where you ' +
            'started.</p>' +
+           // The two stops a new free Nexus account meets before Vortex can
+           // start (#4764). The counts are records\collection.json's, held
+           // there by tests\test-4764-adult-collection-steps.js.
+           '<p>Some of the collection&rsquo;s mods are marked adult, so first turn on ' +
+           'adult content in your Nexus Mods settings, or Nexus shows the collection ' +
+           'as hidden. On a free account Vortex opens each file&rsquo;s page on Nexus ' +
+           'and you press Slow download there, once for each file: 121 files, from ' +
+           '112 mods. A Premium account downloads them without pressing anything.</p>' +
            // The step said install the collection and never said where. The
            // address comes from version.json by way of the news feed, so there
            // is one copy of it and it cannot go stale here.

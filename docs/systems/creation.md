@@ -11,9 +11,11 @@ When the face is done they are dressed in a plain tunic and boots. A
 riekling is dressed in the riekling cut of the same tunic and in
 footwraps instead, because the tunic and boots are cut for the other peoples and
 do not fit a riekling (Patrick, 12 October 2026). The
-panel behind K opens on its own. On it:
+panel behind K opens on its own. It keeps the keyboard until creation is
+complete: K, Escape and waiting do not dismiss it or release movement in
+the hall. Close Skyrim remains available and asks for confirmation. On it:
 
-- **Home.** The town they wake in. This one is required before they leave
+- **Starting Location.** The town they wake in. This one is required before they leave
   the hall. Confirming it sends them to that town's start spot, not its inn
   (#2622).
 - **Class.** Hunter, Fisher, Gatherer, Miner or Farmer. Can be left for
@@ -23,6 +25,14 @@ panel behind K opens on its own. On it:
   the same way. Until it is picked, they cannot make anything that is
   somebody's work, smelting and tanning included. See
   [Professions](professions.md).
+
+Back and Next sit beside Close Skyrim at the bottom right, following every
+tab on the left through Review, including Skill tree and Profession guides.
+Profession has no Back button. Next stays grey until a profession and its
+half (or both Mage schools), a class, or Choose later is selected on the
+corresponding choice page. Starting Location requires a town. Reference
+pages require no selection. Choose later only defers that choice; the panel
+keeps the keyboard and movement stays blocked until Review is confirmed.
 
 They are handed 40 gold once, and nothing else, except a tool at the
 moment a pick that needs one is made: a pickaxe for a Miner, a
@@ -123,7 +133,7 @@ relog, a reload and a restart find them where they were. The Cook is
 answered from the E press the game already sends for anybody under the
 crosshair, within 400 of the Cook in the same cell, whether or not trading
 is open; the board from the board's own press; the work from the count every
-piece of work goes through. `tests\test-3166-first-steps.js` walks a new
+piece of work goes through. `game\tests\test-3166-first-steps.js` walks a new
 character through all of it on the whole gamemode.
 
 Somebody still choosing who puts the panel down gets it back on its

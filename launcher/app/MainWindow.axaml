@@ -361,6 +361,18 @@
       </Style>
     </ControlTheme>
 
+    <ControlTheme x:Key="SelectField" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+      <Setter Property="Background" Value="{DynamicResource Deep}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="2"/>
+      <Setter Property="Padding" Value="11,8"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="MinHeight" Value="38"/>
+      <Style Selector="^:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+    </ControlTheme>
+
     <!-- A slider in the launcher's own colours: a thin line, the filled part
          in the accent, a round thumb. The stock slider is a grey control of
          another look and would be the one thing on the page that is not ours.
@@ -1078,6 +1090,26 @@
                 <TextBlock x:Name="TxtThemeNote" Theme="{StaticResource Small}" Margin="0,0,0,18"/>
                 <StackPanel x:Name="ThemeEditor" Margin="0,0,0,30"/>
 
+                <TextBlock Text="Audio" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <TextBlock Text="Microphone" Theme="{StaticResource Body}"/>
+                  <ComboBox x:Name="BoxMicrophone" Theme="{StaticResource SelectField}"
+                            AutomationProperties.Name="Voice microphone"
+                            AutomationProperties.HelpText="Choose the input for voice. Changes take effect after you restart the launcher."
+                            MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                  <TextBlock x:Name="TxtMicrophoneNote" Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                             Text="Windows default uses your communications microphone, or the default recording input if none is set. Changes take effect after you restart the launcher."/>
+                  <TextBlock Text="Audio output" Theme="{StaticResource Body}" Margin="0,18,0,0"/>
+                  <ComboBox x:Name="BoxAudioOutput" Theme="{StaticResource SelectField}"
+                            AutomationProperties.Name="Audio output"
+                            AutomationProperties.HelpText="Choose the speakers or headphones. Changes take effect after restarting Thornswood and Skyrim."
+                            MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                             Text="Changes take effect after restarting Thornswood and Skyrim."/>
+                  <Button x:Name="BtnRefreshMicrophones" Theme="{StaticResource Ghost}" Content="Refresh audio devices"
+                          HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                </StackPanel>
+
                 <TextBlock Text="Music" Theme="{StaticResource Eyebrow}"/>
                 <StackPanel Margin="0,0,0,30">
                   <CheckBox x:Name="ChkMusic" Content="Play music while the launcher is open"/>
@@ -1186,8 +1218,7 @@
                     <TextBlock Theme="{StaticResource Body}" Text="Puts your Windows Skyrim folders back, then deletes this build and the launcher with it. Your own Skyrim in Steam is never touched: this is a separate copy and Steam does not know it exists. There is no undo, and the whole thing has to be downloaded again afterwards."/>
                     <CheckBox x:Name="ChkDeleteMods" Content="Delete Thornswood's copy of the game as well" Margin="0,13,0,0" IsChecked="True"/>
                     <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="This is Thornswood's own Game folder, built from what Vortex deployed. It is not the mods themselves and it is not your Skyrim in Steam, neither of which this can touch: taking the mods off is Purge in Vortex and nothing here does it for you. Untick this and the folder stays exactly where it is, so reinstalling reuses what is already on the disk instead of pulling the collection down again, which is the difference between a few minutes and an evening."/>
-                    <CheckBox x:Name="ChkKeepSaves" Content="Keep this build's saves and settings" Margin="0,13,0,0" IsChecked="True"/>
-                    <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="Leaves your characters, saves and settings in the Profile folder, so a reinstall picks them back up. The launcher's log, your Discord sign-in, name and picture, the support reports and the voice browser's data are not saves or settings, and go either way."/>
+                    <TextBlock Theme="{StaticResource Small}" Margin="0,13,0,0" Text="Your characters and settings are not on this PC: thornswood.net keeps them with your Discord account, so connecting Discord again after a reinstall, or on another PC, brings them back. Everything this launcher keeps here goes, its log and your Discord sign-in included."/>
                     <Button x:Name="BtnUninstall" Theme="{StaticResource Ghost}" Content="Uninstall Thornswood" HorizontalAlignment="Left" Margin="0,15,0,0"/>
                   </StackPanel>
                 </Border>

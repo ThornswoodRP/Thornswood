@@ -56,7 +56,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 const EM = String.fromCharCode(0x2014);
 const FORBIDDEN = new RegExp('pla' + 'yer', 'i');
@@ -85,7 +85,7 @@ yes('and no seat count is built into the launcher', /\[JsonInclude\] public int 
 const a = src.indexOf('// ==== thornswood seats ====');
 const b = src.indexOf('// ==== end thornswood seats ====');
 yes('the seats block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) done();
+if (!(a >= 0 && b > a)) { done(); return; }
 const block = src.slice(a, b);
 yes('the seats block comes after the join pass block, whose passes it reads',
     src.indexOf('// ==== end thornswood join pass ====') >= 0 && src.indexOf('// ==== end thornswood join pass ====') < a);
@@ -605,7 +605,7 @@ const next = site.indexOf("if ((p === '/api/play/start' || p === '/api/play/end'
 let route = (from >= 0 && next > from) ? site.slice(from, next) : '';
 if (route) route = route.slice(0, route.lastIndexOf('/*'));
 yes('the check in route is in server.js where this expects it', !!route);
-if (!route) done();
+if (!route) { done(); return; }
 yes('the route no longer refuses anybody for numbers', route.indexOf("why:'full'") < 0);
 yes('the launcher logs a yes that carries a message', /if \(st\.Message != null && st\.Message\.Length > 0\) log\(st\.Message\);/.test(doorCs));
 
@@ -614,6 +614,7 @@ async function join(standing, status, channel) {
   let sent = null;
   const env = {
     p: '/api/play/join', req: { method: 'POST' }, res: {},
+    chars: require('../site/lib/characters'),
     body: async function () { return JSON.stringify({ ticket: 'D1', profileId: 4242, channel: channel || '' }); },
     readTicket: function (s) { return s ? { d: String(s), n: 'name' } : null; },
     standing: async function () {

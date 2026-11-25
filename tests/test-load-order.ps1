@@ -194,7 +194,7 @@ try {
     $emptyCopies = @(Get-LoadOrderCopyDiffs @{})
     Yes 'fewer than two copies is no difference (Count 0, not a nested empty)' ($emptyCopies.Count -eq 0)
     $oneCopy = @(Get-LoadOrderCopyDiffs @{ 'only' = (Join-Path $tmp 'missing-plugins.txt') })
-    Yes 'one copy is no difference' ($oneCopy.Count -eq 0)
+    Yes 'one copy, not there, is said, never taken as agreeing (#4387)' ($oneCopy.Count -ge 1 -and @($oneCopy | Where-Object { $_ -match '^only is not there' }).Count -eq 1)
 
     $copyA = Join-Path $tmp 'copy-a-plugins.txt'
     $copyB = Join-Path $tmp 'copy-b-plugins.txt'

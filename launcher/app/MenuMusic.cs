@@ -41,6 +41,7 @@ namespace Thornswood
         static string mixerName = "Thornswood";
         static string mixerIcon;
         static Action<string> log;
+        static string audioOutputId;
 
         /// <summary>
         /// How many times the playback has been made this session, and closed.
@@ -49,15 +50,23 @@ namespace Thornswood
         public static int Opened, Closed;
 
         /// <summary>
+        /// Set by End: the music is over for the rest of this launcher's life,
+        /// and Decide never makes another playback.
+        /// </summary>
+        static volatile bool ended;
+
+        /// <summary>
         /// Remembers the track, the volume and what the mixer calls this
         /// build. The playback itself is made the first time Decide asks for the
         /// music, not here: a launcher that starts while the game runs, or
         /// with the music off in Settings, never makes one at all.
         /// </summary>
-        public static void Start(string file, double volume, string name, string icon, Action<string> say)
+        public static void Start(string file, double volume, string name, string icon, Action<string> say,
+            string outputId = null)
         {
             log = say;
             trackPath = file;
+            audioOutputId = outputId;
             wantVol = Clamp(volume);
             if (!string.IsNullOrEmpty(name)) mixerName = name;
             mixerIcon = icon;
@@ -89,10 +98,34 @@ namespace Thornswood
         /// </summary>
         public static void Decide(bool play, double volume)
         {
+            if (ended) return;
             wantPlay = play;
             wantVol = Clamp(volume);
             if (play && playback == null) { Open(); return; }
             if (playback != null) playback.Set(wantPlay, wantVol);
+        }
+
+        /// <summary>
+        /// Stops the theme for good and returns once its thread has let go of
+        /// the track. For the uninstall, which deletes Profile, where the track
+        /// is played from: on One on 12 Nov 2026 the theme was still playing
+        /// Profile\Music\thornswood-theme.mp3 when the uninstall came to it,
+        /// Windows refused to delete a file this process had open, and Profile
+        /// was left behind whole. Close alone is not enough for that, because
+        /// it does not wait for the thread, and the window going to the
+        /// background afterwards would make a new playback through Decide.
+        ///
+        /// The wait is on the playback's own thread, which lets go of the track
+        /// before it touches the sound device on its way out (Playback.Run), so
+        /// a slow sound driver does not hold this up. Safe to call any time, as
+        /// often as wanted, with or without a playback.
+        /// </summary>
+        public static void End()
+        {
+            ended = true;
+            var p = playback;
+            Close();
+            if (p != null) p.WaitReleased();
         }
 
         static void Open()
@@ -100,7 +133,7 @@ namespace Thornswood
             if (string.IsNullOrEmpty(trackPath)) return;
             try
             {
-                var p = new Playback(trackPath, mixerName, mixerIcon);
+                var p = new Playback(trackPath, mixerName, mixerIcon, audioOutputId);
                 p.Set(wantPlay, wantVol);
                 playback = p;
                 Opened++;
@@ -109,7 +142,7 @@ namespace Thornswood
             catch (Exception ex)
             {
                 playback = null;
-                Stamp("Menu music: did not start (" + ex.Message + ")");
+                Stamp("Menu music: did not start (" + Failure.Why("MenuMusic, starting", ex) + ")");
             }
         }
 
@@ -139,17 +172,20 @@ namespace Thornswood
             const int Buffers = 4;
             const int FramesPerBuffer = 4410;
 
-            readonly string path, name, icon;
+            readonly string path, name, icon, outputId;
             readonly AutoResetEvent done = new AutoResetEvent(false);
             readonly AutoResetEvent wake = new AutoResetEvent(false);
-            volatile bool play, stop;
+            // Set once the thread has closed the track, or never had it.
+            readonly ManualResetEvent released = new ManualResetEvent(false);
+            volatile bool play, stop, begun;
             double vol;
 
-            public Playback(string path, string name, string icon)
+            public Playback(string path, string name, string icon, string outputId)
             {
                 this.path = path;
                 this.name = name;
                 this.icon = icon;
+                this.outputId = outputId;
             }
 
             public void Set(bool play, double volume)
@@ -172,6 +208,16 @@ namespace Thornswood
                 t.Name = "Menu music";
                 t.SetApartmentState(ApartmentState.MTA);
                 t.Start();
+                begun = true;
+            }
+
+            /// <summary>
+            /// Returns once the thread has closed the track file. A playback
+            /// whose thread never started never opened it.
+            /// </summary>
+            public void WaitReleased()
+            {
+                if (begun) released.WaitOne();
             }
 
             void Run()
@@ -198,7 +244,11 @@ namespace Thornswood
                         Bits = 16,
                         Extra = 0
                     };
-                    int r = waveOutOpen(out dev, WaveMapper, ref fmt, done.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, CallbackEvent);
+                    var completion = done.SafeWaitHandle.DangerousGetHandle();
+                    int output = AudioOutput.WaveOutIndex(outputId);
+                    int r = waveOutOpen(out dev, output, ref fmt, completion, IntPtr.Zero, CallbackEvent);
+                    if (r != 0 && output != AudioOutput.WaveMapper)
+                        r = waveOutOpen(out dev, AudioOutput.WaveMapper, ref fmt, completion, IntPtr.Zero, CallbackEvent);
                     if (r != 0)
                     {
                         dev = IntPtr.Zero;
@@ -249,10 +299,14 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    Stamp("Menu music: stopped (" + ex.Message + ")");
+                    Stamp("Menu music: stopped (" + Failure.Why("MenuMusic, playing", ex) + ")");
                 }
                 finally
                 {
+                    // The track first, before the sound device: End waits for
+                    // this, and closing a file never waits on a driver.
+                    if (file != null) { try { file.Dispose(); } catch (Exception ex) { Swallow.Note("MenuMusic.Playback, dispose", ex); } }
+                    released.Set();
                     if (dev != IntPtr.Zero)
                     {
                         // Reset hands every queued buffer back, so each can be
@@ -267,9 +321,8 @@ namespace Thornswood
                         if (heads[i] != IntPtr.Zero) Marshal.FreeHGlobal(heads[i]);
                         if (datas[i] != IntPtr.Zero) Marshal.FreeHGlobal(datas[i]);
                     }
-                    // The two events are left to the collector: the shell may
+                    // The events are left to the collector: the shell may
                     // still Set wake on a playback whose thread has ended.
-                    if (file != null) { try { file.Dispose(); } catch (Exception ex) { Swallow.Note("MenuMusic.Playback, dispose", ex); } }
                 }
             }
 
@@ -366,7 +419,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    say("Menu music: could not name the mixer entry (" + ex.Message + ")");
+                    say("Menu music: could not name the mixer entry (" + Failure.Why("MenuMusic, the mixer entry", ex) + ")");
                 }
                 finally
                 {
@@ -434,7 +487,6 @@ namespace Thornswood
 
         // ------------------------------------------------------------ waveOut
 
-        const int WaveMapper = -1;
         const int CallbackEvent = 0x00050000;
         const int HeaderDone = 0x00000001;
         static readonly int HeaderSize = Marshal.SizeOf<WaveHeader>();

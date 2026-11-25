@@ -35,7 +35,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-5196-'));
@@ -46,7 +46,7 @@ const src = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').spli
 const a = src.indexOf('// ==== thornswood join pass ====');
 const b = src.indexOf('// ==== end thornswood join pass ====');
 yes('the join pass block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); return; }
 
 const KEY = 'test-5196-key-made-for-this-test';
 const PRIV = path.join(TMP, 'private');

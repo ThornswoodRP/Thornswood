@@ -18,8 +18,10 @@ const { GALLERY, GPENDING, GREPORTS, UPMETA } = require('./uploads');
 const { LINKED } = require('./discord');
 const { ROSTER } = require('./roster');
 const { ATTEMPTS } = require('./signins');
+const { PCS } = require('./pcs');
 const { SESSIONS, SLOGS } = require('./sessions');
 const { TROUBLE_FILE } = require('./trouble');
+const { SETTINGS } = require('./your-settings');
 
 // ==== thornswood deletion requests ====
 /*
@@ -84,9 +86,9 @@ function applyDeletionRequests() {
   }
 
   const SPEC = [
-    ['linked', LINKED, {}], ['rules', RULES_OK, {}], ['signins', ATTEMPTS, []], ['sessions', SESSIONS, []],
+    ['linked', LINKED, {}], ['rules', RULES_OK, {}], ['signins', ATTEMPTS, []], ['pcs', PCS, []], ['sessions', SESSIONS, []],
     ['trouble', TROUBLE_FILE, []], ['roster', ROSTER, {}], ['inbox', INBOX, []], ['pending', GPENDING, []],
-    ['gallery', GALLERY, []], ['reports', GREPORTS, []], ['umeta', UPMETA, {}]
+    ['gallery', GALLERY, []], ['reports', GREPORTS, []], ['umeta', UPMETA, {}], ['settings', SETTINGS, {}]
   ];
   const f = {};
   for (const [k, p, fallback] of SPEC) {
@@ -117,11 +119,13 @@ function applyDeletionRequests() {
     const mine = (v) => P.has(Number(v));
     if (has(L, id)) { delete L[id]; f.linked.dirty = true; gone('Discord link', 1); }
     if (has(f.rules.v, id)) { delete f.rules.v[id]; f.rules.dirty = true; gone('answer to the rules', 1); }
+    if (has(f.settings.v, id)) { delete f.settings.v[id]; f.settings.dirty = true; gone('settings', 1); }
     const filter = (k, keepIt, label) => {
       const keep = f[k].v.filter(keepIt);
       if (keep.length !== f[k].v.length) { gone(label, f[k].v.length - keep.length); f[k].v = keep; f[k].dirty = true; }
     };
     filter('signins', (x) => !(isObj(x) && String(x.id) === id), 'sign-in rows');
+    filter('pcs', (x) => !(isObj(x) && String(x.id) === id), 'PC rows');
     const kept = new Set(), ended = new Set();
     filter('sessions', (x) => {
       if (!(isObj(x) && String(x.who) === id)) return true;

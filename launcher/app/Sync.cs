@@ -124,6 +124,10 @@ namespace Thornswood
         /// </summary>
         public static bool ReleaseFilesKnown()
         {
+            // A fresh Velopack install has never synced. Its authenticated
+            // package list, not the legacy install-into-Steam record, owns
+            // the files first copied from Profile\Payload (#6457).
+            if (InstalledReleaseFiles() != null) return true;
             SyncState s = ReadSyncState();
             return s.Synced.Length == 0 || ReleaseFilesSha() == s.Synced;
         }
@@ -136,6 +140,10 @@ namespace Thornswood
         /// </summary>
         public static List<string> ReleaseFiles()
         {
+            // Use this installed version alone. A leftover sync record can
+            // belong to a different version or channel after a reinstall.
+            List<string> installed = InstalledReleaseFiles();
+            if (installed != null) return installed;
             var l = new List<string>();
             SyncState s = ReadSyncState();
             if (s.Synced.Length == 0 || ReleaseFilesSha() != s.Synced) return l;
@@ -446,7 +454,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    log("Could not put this update's plugin list in place: " + ex.Message + ". Press Fix in the launcher.");
+                    log("Could not put this update's plugin list in place: " + Failure.Why("Sync, the plugin list", ex, "plugins.txt") + ". Press Fix in the launcher.");
                 }
             }
             Swap.RepairConfigs();

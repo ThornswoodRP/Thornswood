@@ -18,7 +18,9 @@
   copies into a scratch folder standing in for C:\Windows\Temp on the box,
   and -Root points at a scratch bot folder with a fake bot.env.json. The
   service it restarts is one that does not exist, so nothing here is
-  restarted. Checks: the address lands whole and read back, every other
+  restarted, and a run that writes the address ends 1 with a FAILED line
+  naming the bot's restart, as it must on a box where the bot did not
+  restart (#4211). Checks: the address lands whole and read back, every other
   setting is kept, a second run changes nothing, off takes it out, a bad or
   blank answer sends nothing, a box with no bot.env.json refuses, and the
   address is in nothing printed or handed to ssh or scp.
@@ -158,12 +160,13 @@ try {
     Reset-Env
     $r = SetPing $url
     $e = EnvNow
-    Yes 'set: exit 0' ($r.Code -eq 0)
+    Yes 'set: the bot was not restarted (no such service here), so it ends 1 (#4211)' ($r.Code -eq 1)
     Yes 'set: bot.env.json holds the address, whole' ($e.PING_URL -ceq $url)
     Yes 'set: every other setting is kept' ($e.DISCORD_TOKEN -eq 'not-a-real-token' -and $e.THORNSWOOD_KEY -eq 'not-a-real-key' -and $e.JOIN_CHANNEL -eq 'welcome-travelers' -and $e.STAFF_ROLES -eq 'Owner,Dev,Gamemaster' -and $e.THORNSWOOD_SITE -eq 'https://thornswood.net')
     Yes 'set: it says the address was written and read back' ($r.Text -match 'ping address written to .*bot\.env\.json and read back')
     Yes 'set: it names only the host' ($r.Text -match 'a ping address on hc-ping\.example')
     Yes 'set: then restarts the bot by the service''s name (not here: no such service)' ($r.Text -match ('BOT NOT RESTARTED: the service ' + $service))
+    Yes 'set: and says so in a FAILED line naming the restart, not as one more printed line (#4211)' ($r.Text -match 'FAILED\s+restarting the bot[^\n]*BOT NOT RESTARTED')
     Yes 'set: the address is in nothing printed' (-not $r.Text.Contains($key) -and -not $r.Text.Contains($wire))
     $all = AllSent
     Yes 'set: the address is in nothing handed to ssh or scp, plain or base64' (-not $all.Contains($key) -and -not $all.Contains($wire))
@@ -183,9 +186,9 @@ try {
     # ---- 3. off
     $r = SetPing 'off'
     $e = EnvNow
-    Yes 'off: exit 0 and the address is gone' ($r.Code -eq 0 -and -not ($e.PSObject.Properties.Name -contains 'PING_URL'))
+    Yes 'off: the address is gone, and with no bot restarted here it ends 1 (#4211)' ($r.Code -eq 1 -and -not ($e.PSObject.Properties.Name -contains 'PING_URL'))
     Yes 'off: every other setting is kept' ($e.DISCORD_TOKEN -eq 'not-a-real-token' -and $e.STAFF_ROLES -eq 'Owner,Dev,Gamemaster')
-    Yes 'off: it says so, and to pause the check on the monitor' ($r.Text -match 'taken out of .*read back' -and $r.Text -match 'Pause or delete the check')
+    Yes 'off: it says it was taken out and read back, and that the bot did not restart onto it (#4211)' ($r.Text -match 'taken out of .*read back' -and $r.Text -match 'FAILED\s+restarting the bot')
     $r = SetPing 'OFF'
     Yes 'off again: nothing to change' ($r.Code -eq 0 -and $r.Text -match 'PING UNCHANGED')
 

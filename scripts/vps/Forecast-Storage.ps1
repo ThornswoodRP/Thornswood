@@ -47,7 +47,7 @@
 
   Reads the disk and appends one line to the history with -Record. Never
   deletes anything, never touches a service. -FreeBytes/-TotalBytes and
-  -Now stand in for a real reading so tests\test-storage-forecast.ps1 can
+  -Now stand in for a real reading so scripts\tests\test-storage-forecast.ps1 can
   run it offline.
 
   ON THE BOX, from this machine:

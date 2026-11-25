@@ -67,9 +67,10 @@ async function until(cond, ms) {
   return cond();
 }
 
+let siteServer = null;
 function siteThatSaysYes() {
   return new Promise((ok) => {
-    const site = http.createServer((req, res) => {
+    const site = siteServer = http.createServer((req, res) => {
       req.resume();
       req.on('end', () => {
         if (req.method === 'POST' && req.url === '/api/play/owns') {
@@ -131,7 +132,7 @@ async function service(site) {
   const slow = new Promise((ok, bad) => { late = setTimeout(() => bad(new Error('the voice service did not say it was listening on ' + port +
                                                                               ' within fifteen seconds. It printed:\n' + svc.log)), 15000); });
   try {
-    require(path.join(dir, 'voice-server.js'));
+    svc.stop = require(path.join(dir, 'voice-server.js')).stop;
     await Promise.race([heard, failed, slow]);
   } finally {
     clearTimeout(late);
@@ -172,6 +173,8 @@ async function openPage(port, pid) {
     ws.onmessage = (ev) => {
       let m = null;
       try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
+      // When it arrived, for the split printed when a burst check fails (#4146).
+      m.at = performance.now();
       me.got.push(m);
       if (m.t === 'welcome') me.peer = m.peer;
     };
@@ -203,6 +206,28 @@ function inWorld(port, pids) {
 const rosters = (me) => me.got.filter((m) => m.t === 'peers');
 const lastRoster = (me) => { const r = rosters(me); return r.length ? r[r.length - 1].peers : null; };
 const names = (list, peers) => !!list && peers.every((id) => list.some((row) => row.peer === id));
+/*
+  How one socket's rosters from index `from` on split a burst (#4146): for
+  each, when it arrived after the burst started and how many of `burst` it
+  carried, that is how many of those peers it is the first to name (a join)
+  or to leave out (a leave). Printed only when a burst check fails, so the
+  next failing run says whether the burst was read across turns and how it
+  was cut.
+*/
+function split(me, from, burst, leaving, t0) {
+  let prev = new Set((from > 0 ? rosters(me)[from - 1].peers : []).map((row) => row.peer));
+  return rosters(me).slice(from).map((m) => {
+    const now = new Set(m.peers.map((row) => row.peer));
+    const carried = burst.filter((id) => leaving ? prev.has(id) && !now.has(id) : !prev.has(id) && now.has(id)).length;
+    prev = now;
+    return '+' + (m.at - t0).toFixed(1) + ' ms: ' + carried;
+  }).join(', ');
+}
+function worst(list, from) {
+  let k = 0;
+  list.forEach((p, i) => { if (rosters(p).length - from[i] > rosters(list[k]).length - from[k]) k = i; });
+  return k;
+}
 
 (async () => {
   const site = await siteThatSaysYes();
@@ -216,7 +241,9 @@ const names = (list, peers) => !!list && peers.every((id) => list.some((row) => 
   }
   yes(PEOPLE + ' sockets are open before anybody joins', pages.length === PEOPLE && pages.every((p) => !p.closed));
 
+  const joinT0 = performance.now();
   for (const p of pages) p.ws.send(JSON.stringify({ t: 'join', profileId: p.pid, name: 'Person ' + p.pid }));
+  const joinLoopMs = performance.now() - joinT0;
   const allIn = await until(() => pages.every((p) => p.peer) &&
                                   pages.every((p) => names(lastRoster(p), pages.map((q) => q.peer))));
   yes('every one is welcomed and sent a roster naming all ' + PEOPLE, allIn,
@@ -231,6 +258,12 @@ const names = (list, peers) => !!list && peers.every((id) => list.some((row) => 
               ' (one per arrival would be ' + PEOPLE + ' to the first in and ' + (PEOPLE * (PEOPLE + 1) / 2) + ' in all)');
   yes('no socket is sent more than one roster for ' + PEOPLE + ' joins that arrive together',
       most <= MOST_ROSTERS, 'most ' + most + ', counts ' + counts.join(','));
+  if (most > MOST_ROSTERS) {
+    const k = worst(pages, pages.map(() => 0));
+    console.log('      the joins were sent in ' + joinLoopMs.toFixed(1) + ' ms; socket ' + pages[k].pid +
+                "'s rosters, as when each arrived and how many arrivals it carried: " +
+                split(pages[k], 0, pages.map((q) => q.peer), false, joinT0));
+  }
   yes('every socket is welcomed before it is sent its first roster',
       pages.every((p) => { const w = p.got.findIndex((m) => m.t === 'welcome'); const r = p.got.findIndex((m) => m.t === 'peers');
                            return w >= 0 && r > w; }));
@@ -242,7 +275,9 @@ const names = (list, peers) => !!list && peers.every((id) => list.some((row) => 
   const going = pages.slice(0, PEOPLE / 2);
   const staying = pages.slice(PEOPLE / 2);
   const before = staying.map((p) => rosters(p).length);
+  const leaveT0 = performance.now();
   for (const p of going) p.ws.close();
+  const leaveLoopMs = performance.now() - leaveT0;
   const goneIds = going.map((p) => p.peer);
   const left = await until(() => staying.every((p) => { const l = lastRoster(p);
     return l && l.length === staying.length && !l.some((row) => goneIds.indexOf(row.peer) >= 0); }));
@@ -252,6 +287,12 @@ const names = (list, peers) => !!list && peers.every((id) => list.some((row) => 
   console.log('      rosters per remaining socket for ' + going.length + ' leaving together: most ' + leaveMost);
   yes('and one roster, not one per departure', leaveMost <= MOST_ROSTERS,
       'most ' + leaveMost);
+  if (leaveMost > MOST_ROSTERS) {
+    const k = worst(staying, before);
+    console.log('      the closes were sent in ' + leaveLoopMs.toFixed(1) + ' ms; socket ' + staying[k].pid +
+                "'s rosters, as when each arrived and how many departures it carried: " +
+                split(staying[k], before[k], goneIds, true, leaveT0));
+  }
 
   // --------------------------------------------------- one alone, as ever
   const mark = staying.map((p) => rosters(p).length);
@@ -274,10 +315,13 @@ const names = (list, peers) => !!list && peers.every((id) => list.some((row) => 
 
 function finish() {
   for (const ws of opened) { try { ws.close(); } catch (e) { } }
-  if (svc) { try { fs.rmSync(svc.dir, { recursive: true, force: true }); } catch (e) { } }
+  // The service's asks to the stand-in site leave kept-alive connections open.
+  if (siteServer) { siteServer.closeAllConnections(); siteServer.close(); }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  // The service shares this process and its listener and timers never end,
-  // so the harness ends it.
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
+  // The service shares this process, so the harness stops it, and node ends
+  // once its listener, sockets and timers are closed (#6036).
+  const rm = () => { if (svc) { try { fs.rmSync(svc.dir, { recursive: true, force: true }); } catch (e) { } } };
+  if (svc && svc.stop) svc.stop().then(rm); else rm();
 }

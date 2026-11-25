@@ -142,8 +142,10 @@ if ($ServerZip) {
 }
 
 # The parts a merge release adds file by file (#5179). The bot pass is "bot",
-# so the Discord bot is "discord".
-$addParts = @('launcher', 'game', 'velopack', 'main', 'site', 'discord', 'voice', 'after')
+# so the Discord bot is "discord". "modlist" is the collection's Wabbajack
+# modlist, records\collection-modlist.wabbajack, which the launcher installs
+# from (#6244).
+$addParts = @('launcher', 'game', 'velopack', 'main', 'site', 'discord', 'voice', 'after', 'modlist')
 $adds = [ordered]@{}
 foreach ($pair in @($Add)) {
   if ($pair -notmatch '^([a-z]+)=(.+)$') { throw "-Add $pair is not <part>=<path>" }

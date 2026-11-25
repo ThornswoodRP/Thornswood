@@ -29,10 +29,16 @@ are gone, and nothing falls back to them.
 This folder keeps `licences\`, the GPL and AGPL texts and the licence texts
 of every library built into the launcher or shipped with it, handed over with
 the files (#421, #4823; `licences\README.txt` says where each comes from).
+Packaging stages its three texts (`GPL-3.0.txt`, `AGPL-3.0.txt` and the launcher
+library licences) beside `SOURCE CODE.txt` and stops without them. That licences
+folder is different from the payload's own licences folder: the payload's
+licences folder carries the client libraries' texts (the vcpkg libraries and
+front packages recorded in `records\client-licences.json`), while this folder
+holds the licences for the installer and launcher libraries.
 It no longer keeps a read me: `READ ME FIRST.txt` told people which of
-`Setup.bat` and `Install.bat` to run, and Velopack's Setup.exe carries no
-loose page, it opens the launcher, whose install window says each step. What
-a person reads before installing is the join guide on the site
+`Setup.bat` and `Install.bat` to run (#4752, #4824), and Velopack's Setup.exe
+carries no loose page, it opens the launcher, whose install window says each
+step. What a person reads before installing is the join guide on the site
 (`https://thornswood.net/join`, `site\data\site\join.md`), which that file
 already called the one that is right.
 
@@ -54,6 +60,56 @@ Velopack's Setup.exe from the release, then the launcher's first start on that
 machine. A launcher that finds its install folder recorded never shows the
 install window again; a stopped install records nothing, so the next start
 asks again.
+
+## The installer's tests
+
+Every test that reads, builds or runs the install's own files
+(`launcher\app\Install*.cs`) or this read me, what it holds, and which
+workflow runs it (#4186). A `.js` or `.ps1` is on the pull request gate
+unless `tests\gate-excluded.txt` names it, and the nightly runs every one; on
+a pull request the gate runs the ones its change can reach, and on main all of
+them. A `.py` runs only where a workflow names it. `tests\test-4186-installer-tests.js`
+reads those files and fails when this table leaves a test out, names one that
+is gone, or says another workflow than they give.
+
+| Test | What it holds | Runs on |
+|---|---|---|
+| `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
+| `launcher/tests/test-4459-setup-keys.ps1` | The install window works from the keyboard: focus starts on its first control, Esc closes it as Not now does, Enter on a tick box starts the install, and focus follows what the install says, run on the real window on Avalonia's headless platform | Pull request and nightly |
+| `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names a size typed in by hand | Pull request and nightly |
+| `launcher/tests/test-4680-collection-load-order.ps1` | A missing plugin list is no failed check while the launcher's own folder is not made, since Vortex writes it with the collection, and is still one once the folder is made: the real InstallSteps, run with no plugin list in AppData | Pull request and nightly |
+| `launcher/tests/test-4681-install-room.ps1` | What the install window says about room on each drive is what the install refuses: the window's line, its Install button and InstallSteps all read InstallPlace.Rooms and InstallPlace.Short, held over a spread of free space on both drives | Pull request and nightly |
+| `launcher/tests/test-4693-setup-reader.ps1` | A screen reader can use the install window: each drive is a radio button named by its letter and free space and reads as chosen or not, the links name their pages, the progress bar and log have names, and the bar's value and each status line are told to Windows as they change, read through the real window's automation peers on Avalonia's headless platform | Pull request and nightly |
+| `launcher/tests/test-4697-setup-ownership.ps1` | Runs setup's copy stage and uninstall in scratch folders: a collision leaves the existing file alone, failed copies do not become owned, and the list keeps files from earlier setups and launcher updates | Pull request and nightly |
+| `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
+| `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
+| `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
+| `launcher/tests/test-prior-acceptance.ps1` | The terms, privacy policy and rules are asked again of an install made before they were recorded, with the pages and words InstallAgreements.cs and the install window use | Pull request and nightly |
+| `launcher/tests/test-skyrim-pin.ps1` | The install reads the size of the server's SkyrimSE.exe from `records\skyrim-files.json`, the record the launcher's checks use, and keeps no copy | Pull request and nightly |
+| `test-4186-installer-tests.js` | This table: every installer test is in it, and each row's workflow is the one the gate's list and the workflows give | Pull request and nightly |
+| `test-4395-own-folder-words.js` | The own folder card in the install window, InstallPlace.cs and this read me say the same about where Thornswood's files go, ticked and unticked | Pull request and nightly |
+| `test-4687-setup-plugin-list.ps1` | Runs the real Build-SetupFiles.ps1 against a stand-in site: a release that recorded no plugin list stops it before the package is built and signed, and one with both lists goes on | Pull request and nightly |
+| `test-4824-install.py` | Builds the install steps with the .NET SDK and runs them against stand-in folders in every shape, and holds the window and the agreements to their rules. Run it by hand for now: no workflow runs it (#5840) | No workflow |
+| `test-component-readmes.js` | This read me matches what is here: only `licences\` and this file in `installer\`, the join guide named, and the folder InstallPlace.cs falls back to | Pull request and nightly |
+| `test-repo-docs.js` | This read me says what a person reads before installing is the join guide on the site, and `READ ME FIRST.txt` stays gone | Nightly only |
+| `test-shortcut-icons.ps1` | Builds Icons.cs with InstallShortcut.cs: the shortcuts' icon file is named after the exe's own art and kept, so the desktop and Start menu shortcuts keep their icons | Pull request and nightly |
+| `test-source-notice.ps1` | The source notice the install hands over: `SOURCE CODE.txt`, and the GPL and AGPL texts byte for byte from `licences\`, as InstallSteps.cs copies them | Nightly only |
+| `test-source-offer.ps1` | InstallSteps.cs copies `SOURCE CODE.txt` and the GPL, AGPL and voice library texts and replaces `licences\` whole, and Build-SetupFiles.ps1 packs the names InstallSteps.LicenceFiles lists | Nightly only |
+| `test-third-party.js` | InstallSteps.LicenceFiles names every text in `licences\` and nothing else, Build-SetupFiles.ps1 packs them, and Uninstall.cs removes them | Pull request and nightly |
+| `test-voice-hrtf.js` | The voice's two HRTF licence texts are in `licences\` and on InstallSteps.LicenceFiles | Pull request and nightly |
+
+### Named here, not installer tests
+
+These name an install file or this read me without testing the install.
+
+- `test-3003-one-install-rule.ps1`: names InstallPlace.cs in its header, to say a new install's folder is the launcher's choice and no script's.
+- `test-4115-collection-revision-link.ps1`: names this read me in a comment.
+- `test-4415-clean-install-run.js`: names InstallWindow.cs and InstallAgreements.cs to say what the clean install list follows; it reads only that list.
+- `test-5197-real-client.js`: reads InstallPlace.cs for the record that says where the launcher is installed, so the real game run finds it; it tests that run, not the install.
+- `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to say the setup window's names are read by `test-4693-setup-reader.ps1`.
+- `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
+- `test-3682-github-front.js`: names InstallWindow.cs to say where the install's log is written; it checks only that the crash form names that log.
+
 
 ## Why the install is in the launcher
 
@@ -84,8 +140,8 @@ first library holding `steamapps\common\Skyrim Special Edition\SkyrimSE.exe`).
 That is not a preference. With the own folder box ticked (below), Thornswood
 runs from a game folder the launcher builds out of the Steam copy mostly as
 hard links, and a hard link cannot cross a drive, so an install on another
-drive is one the launcher refuses to play from (`OwnGame.WhyNot`). Left
-unticked, the launcher asks to build that folder before Play
+drive is one the launcher refuses to play from (`OwnGame.WhyNot`).
+Unticked, the launcher asks to build that folder before Play
 (`OwnGameRequired`), and the same rule holds. The drive Skyrim is on is marked
 on its button, the line under the buttons says what a different drive costs,
 and pressing Install on a different drive asks once more before anything is
@@ -101,14 +157,16 @@ its own", and Choose Vortex's folder.
 
 The install does not make the folder. The launcher builds it (`OwnGame.Make`),
 out of what Vortex has deployed, and nothing is deployed while the install
-window is up. The box starts unticked. So the tick answers the launcher's own
-question in advance: it goes into `config.json` as `MakeOwnGame`, and the
-launcher then makes the folder without asking once Vortex has deployed.
-Ticked, Thornswood's own files go into
-`Profile\Payload` and nothing is written into the Steam copy (#1226); left
-unticked, which is the default, they go into the Steam copy with a list of what
-went there (`Profile\installed-into-game.txt`), and the launcher asks as it did
-before. A chosen Vortex folder is checked the way `OwnGame.PointAt` checks it
+window is up. The box starts ticked (decided 12 November: the own folder
+is the default for everyone). So the tick answers the launcher's own question
+in advance: it goes into `config.json` as `MakeOwnGame`, and the launcher then
+makes the folder without asking once Vortex has deployed. The launcher reads a
+`config.json` with no `MakeOwnGame` the same as ticked, so only an install
+whose box was unticked is asked. Ticked, which is the default, Thornswood's own
+files go into `Profile\Payload` and nothing is written into the Steam copy
+(#1226); unticked, they go into the Steam copy with a list of what went there
+(`Profile\installed-into-game.txt`), and the launcher asks before it makes the
+folder. A chosen Vortex folder is checked the way `OwnGame.PointAt` checks it
 (SkyrimSE.exe and `Data\vortex.deployment.json`) and saved as `VortexGame`, the
 field the Settings button writes. A second install over a folder the launcher
 already made writes Thornswood's files into it, separating any hard-linked name

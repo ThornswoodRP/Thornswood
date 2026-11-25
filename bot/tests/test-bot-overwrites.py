@@ -67,6 +67,12 @@ spec = importlib.util.spec_from_file_location(
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
+
 # The three bits, by their numbers on Discord's permissions page, rather than
 # by discord.py's names, so a wrong name in the builder cannot agree with
 # itself here.
@@ -79,7 +85,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'staffbump', 'open', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'staffbump', 'open', 'openread', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
@@ -272,6 +278,10 @@ class Guild(object):
         return await self._made('create_forum', name, **kw)
 
 
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 12 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
+
     async def onboarding(self):
         return types.SimpleNamespace(enabled=getattr(self, 'onboarding_enabled', False))
 
@@ -372,6 +382,7 @@ def live_server():
                          ow=B.overwrites(bare, s.get('mode', 'open'), roles,
                                          s.get('hold'), space=s.get('space'),
                                          read_extra=s.get('read_extra'),
+                                         extra=s.get('extra_roles'),
                                          faction=s.get('faction'),
                                          tickets=s.get('key') in B.TICKET_KEYS))
             ch.mode = s.get('mode', 'open')
@@ -464,6 +475,7 @@ try:
                          ow=B.overwrites(g, mode, roles, s.get('hold'),
                                          space=s.get('space'),
                                          read_extra=s.get('read_extra'),
+                                         extra=s.get('extra_roles'),
                                          faction=s.get('faction')))
             yes('without Administrator the bot sees, posts and reads in a new #%s' % s['name'],
                 gets_in(resolve(g, me, ch)))

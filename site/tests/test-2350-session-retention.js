@@ -31,7 +31,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -94,12 +93,6 @@ logSet('old0000000000001', '501', NOW - 400 * DAY);
 logSet('kept000000000002', '502', NOW - 400 * DAY);
 logSet('new0000000000004', '504', NOW - DAY);
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(where) {
@@ -139,10 +132,10 @@ function grab(name) {
 }
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
@@ -155,7 +148,7 @@ function grab(name) {
        all written by then however busy the machine is (#4082). The minute
        only bounds a site that never comes up. */
     for (let i = 0; i < 1200 && !up; i++) {
-      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { up = true; break; }
+      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }
@@ -187,7 +180,7 @@ function grab(name) {
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 
   // The count, with the function lifted out of the same server.js.
@@ -213,5 +206,5 @@ function grab(name) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

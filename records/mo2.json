@@ -1,0 +1,10 @@
+{
+  "issue": 6244,
+  "what": "The Mod Organizer 2 the Thornswood modlist installs (Install-NexusRevision.ps1 -Modlist): its release on GitHub, held to this size and sha256. Measured 16 Nov 2026 on the release's asset.",
+  "version": "2.5.2",
+  "url": "https://github.com/ModOrganizer2/modorganizer/releases/download/v2.5.2/Mod.Organizer-2.5.2.7z",
+  "name": "Mod.Organizer-2.5.2.7z",
+  "size": 149660212,
+  "sha256": "e6376efd87fd5ddd95aee959405e8f067afa526ea6c2c0c5aa03c5108bf4a815",
+  "licence": "GPL-3.0. Downloaded from its own release on GitHub by whoever installs; Thornswood does not ship it."
+}

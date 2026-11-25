@@ -1142,7 +1142,7 @@
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -1196,7 +1196,7 @@
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -1225,6 +1225,17 @@
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
       var bookAnswer = booksApi.command({ actorId: actorId, profileId: profileId, parts: parts });
       if (bookAnswer) { toProfile(profileId, bookAnswer); }
+      return true;
+    }
+
+    // K's Contracts section sends these, never typed (#4561): the contracts block.
+    if (word === '/contract') {
+      var contractsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodContracts;
+      if (!contractsApi) { toProfile(profileId, 'That is not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var contractAnswer = contractsApi.command({ actorId: actorId, profileId: profileId, parts: parts,
+                                                 text: String(cmd.text || ''), toProfile: toProfile });
+      if (contractAnswer) { toProfile(profileId, contractAnswer); }
       return true;
     }
 
@@ -1783,6 +1794,11 @@
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -1877,6 +1893,11 @@
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 
@@ -2433,6 +2454,7 @@
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and
@@ -2573,13 +2595,30 @@
     }
     restart.why = why || 'an update';
     restart.mode = (mode === 'restart' || mode === 'notice') ? mode : 'update';
-    broadcast(opening(Math.round(seconds / 60)));
+    broadcast(opening(seconds));
   }
 
-  function opening(mins) {
-    var when = mins >= 1
-      ? mins + (mins === 1 ? ' minute' : ' minutes')
-      : 'under a minute';
+  /*
+    THE OPENING NEVER NAMES MORE TIME THAN IS LEFT (#4541). It used to say
+    Math.round(seconds / 60) minutes, and requests come in part minutes, so
+    30 seconds opened with "1 minute", 90 with "2 minutes" and 150 with "3
+    minutes", and people were put out sooner than they were told. Now it
+    says the whole minutes and then the seconds over, each rounded down, so a
+    whole number of minutes reads as it always did and nothing is promised
+    that is not there.
+  */
+  function timeLeft(seconds) {
+    var total = Math.max(0, Math.floor(seconds));
+    if (total < 1) { return 'under a second'; }
+    var mins = Math.floor(total / 60), secs = total % 60;
+    var m = mins + (mins === 1 ? ' minute' : ' minutes');
+    var s = secs + (secs === 1 ? ' second' : ' seconds');
+    if (!mins) { return s; }
+    return secs ? m + ' and ' + s : m;
+  }
+
+  function opening(seconds) {
+    var when = timeLeft(seconds);
     /*
       Three modes, and only two of them end with anybody put out.
 

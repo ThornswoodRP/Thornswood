@@ -3,9 +3,8 @@
 Patrick's 12 October requirement is one Smith, Woodworker, Tailor, Enchanter,
 Cook and Alchemist in each of the ten book holds, 60 guild NPCs total, each
 with its own trade table and hold-specific quest work. See
-[Six trades in each hold](merchant-expansion.md). The 249-trader count below
-describes the current controller, not the requested final roster. Retirement
-must preserve its existing purse, stock and unfinished transfer records.
+[Six trades in each hold](merchant-expansion.md). That is the roster the
+server runs: 60 guild traders, one of each trade in every hold.
 
 The Merchant's Guild is the merchant NPCs of each hold. People cannot
 join it. There is no membership roll, join fee, dues, factor appointment,
@@ -30,17 +29,24 @@ from the price lists in faction and business books, submitted at
 that hold's drop box. See
 [Factions and businesses](factions.md) and [Property](property.md).
 
-For each item, the buy price is the average of the buy prices
-submitted to that hold. The sell price is the average of the sell
-prices. A blank is not a number. 0 is free, and it counts. The
-average is rounded to the nearest gold. A half rounds up.
+Only a line with both a buy and a sell price sets a trader's prices
+(Patrick, 12 Nov 2026). For each item, the buy price is the average
+of the buy prices on those lines submitted to that hold, and the sell
+price is the average of the sell prices on the same lines, so a trader
+never pays more for an item than it sells it for. 0 is free, and it
+counts. The average is rounded to the nearest gold. A half rounds up.
 
-A hold with no submitted buy for an item uses the average of the
-holds that did submit one. The same for a sell price. A hold that
-did submit its own price uses that price, so two holds can differ.
+A line with one side blank stays in the book and still shows in J,
+but no trader uses it. A book line cannot buy above its own sell: the
+book refuses it when the price is set. Two names for the same item,
+such as Iron Ingot and Iron Ingots, are one item.
 
-If no submitted list anywhere names a buy price, no trader buys it.
-If none names a sell price, no trader sells it.
+A hold with no line of its own for an item uses the other holds'
+prices, buy and sell together, never one side alone. A hold that did
+submit its own uses that, so two holds can differ.
+
+An item whose only lines are one-sided, anywhere, is not traded by the
+guild until someone submits a line with both.
 
 ## The trader's purse
 
@@ -54,7 +60,9 @@ They start with gold and no goods. Stock is what they have bought.
 The quests they give are on [Custom quests](quests.md). A supply
 quest pays out of this same purse. A scene quest does not. Its gold
 is created, at the amount written on that quest, and it does not
-run out. A letter is not a quest of theirs. The sender pays the
+run out. A guild commission does not either: its pay is new gold at
+the reward prices staff set, and the trader's purse is the same
+after it (#6180, [the quest catalogue](merchant-quest-catalogue.md#commission-pay)). A letter is not a quest of theirs. The sender pays the
 courier, on the notice board.
 
 ## Guild sites
@@ -95,13 +103,15 @@ reference to that service. It does not start an empty ledger. Renaming a
 book or editing its prices keeps its earlier submitted copy valid.
 
 Posting is 20 and 30 for everybody. Rent is the only debt the box pays
-down. The 249 retained, authored traders receive their one-time 250 balance
-and empty stock when admitted by the Dev server controller. The authoritative
+down. The 60 guild traders receive their one-time 250 balance and empty
+stock the first time the server stands each of them up. The authoritative
 ledger is in the private folder, with atomic replacement, integrity checking
 and a record of references not yet initialized. The per-NPC property mirrors
 it. A lost NPC save restores the ledger balance, including zero, rather than
 handing out 250 again. Missing or damaged ledger state refuses service.
-The initial merchant total is 62,250 gold across those 249 references. The
+The ledger keeps all 249 identities the guild once had; the 189 retired
+ones hold nothing, are never stood up and never receive a purse. The
+opening merchant total is 15,000 gold across the 60 guild traders. The
 server's minute report lists the verified count and first-time grants.
 Failed startup revokes the new service; paths into served resources, including
 Windows junctions, are refused before any ledger is written.
@@ -112,7 +122,7 @@ trader's shelf. An empty purse refuses a buy. An empty shelf refuses a
 sale. A supply turn-in is five of an item at that same buy price, paid
 from the same purse. Each character waits six hours after its completed
 supply before that trader offers the same supply again.
-Scene quests are not paid from the purse.
+Scene quests and guild commissions are not paid from the purse.
 
 The person must be the authenticated character and within 400 of that
 trader in the same place. Press E on the trader, then use the panel's

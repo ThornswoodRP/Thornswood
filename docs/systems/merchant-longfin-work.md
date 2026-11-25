@@ -42,7 +42,10 @@ Automated checks exercise real fishing and activation, Master class and pole
 gates, exact appointed merchant, source and ingredient substitution, actor
 replacement, shared waits, limits, extras, abandonment, failed writes and
 ordinary activation. Native source tests exercise the generated production
-exports. Pearl, crimson, geode, quest and trade regressions remain required.
+exports. The pearl, crimson and geode work have their own harnesses,
+`game/tests/test-merchant-pearl-bed.js`, `game/tests/test-merchant-crimson.js`
+and `game/tests/test-merchant-geode.js`, and this work's is
+`game/tests/test-merchant-longfin.js`.
 These are source checks; connected acceptance is a separate test.
 
 Matching Content reaches Dev's server before the matching client bytes are

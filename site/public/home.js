@@ -65,6 +65,19 @@ var PAGES = { '/world':1, '/rules':1, '/join':1, '/credits':1,
               '/privacy':1, '/terms':1, '/cookies':1 };
 var here = location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
 
+/* The open page's link in the top bar says so (#4127): aria-current="page"
+   on the one link to where this is, and on no other. Only the breadcrumb
+   said it before. Every public page is this file and this script, a whole
+   load each, so this runs once a page. */
+function markCurrent(bar, at) {
+  var links = bar.querySelectorAll('a');
+  for (var k = 0; k < links.length; k++) {
+    if (links[k].getAttribute('href') === at) links[k].setAttribute('aria-current', 'page');
+    else links[k].removeAttribute('aria-current');
+  }
+}
+markCurrent(nav, here);
+
 
 /* The anchor in a fetched page. Called after the markdown is on the page,
    because until then there is nothing with that id to scroll to. */
@@ -332,7 +345,8 @@ if (AGE_PATHS[here] && !ageOk()) {
                ? '<ul>' + det.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') +
                  (n.files ? '<li>' + n.files + ' files changed</li>' : '') + '</ul>'
                : '') +
-             '</div>';
+             (window.ThornswoodNewsPictures ? window.ThornswoodNewsPictures.html(n.image)
+               : (n.image && typeof n.image.alt === 'string' ? '<p>' + esc(n.image.alt) + '</p>' : '')) + '</div>';
     });
     show(out);
   }).catch(function () { show('<h1>Every release</h1><p>Could not load it.</p>'); });
@@ -907,6 +921,29 @@ if (AGE_PATHS[here] && !ageOk()) {
   });
 }
 
+// ==== thornswood lore pick ====
+/* The lore line under The World, picked again in the browser (#5978). The
+   site picks one each time it serves a page (#3147), but Cloudflare keeps the
+   public pages for five minutes (#5190), so everybody got the same line until
+   the copy ran out. /api/public hands out every line, so the pick is made
+   here, once a page load; the server's pick stays for a page whose script
+   never runs. The quote is under the fold, so the swap is not seen. */
+function pickLoreLine(lore, pick) {
+  var q = document.getElementById('loreLine');
+  var list = Array.isArray(lore) ? lore : [];
+  if (!q || !list.length) return;
+  var one = list[Math.min(list.length - 1, Math.floor(pick * list.length))];
+  if (!one || !one.text) return;
+  q.textContent = String(one.text);
+  if (one.from) {
+    var c = document.createElement('cite');
+    c.textContent = String(one.from);
+    q.appendChild(c);
+  }
+  q.hidden = false;
+}
+// ==== end thornswood lore pick ====
+
 /* The line under the title and the figure beside it: whether the world is
    up and who is in it, from /api/public. */
 function paintStatus(d) {
@@ -1002,6 +1039,7 @@ publicData()
     }
 
     paintStatus(d);
+    pickLoreLine(d.lines && d.lines.lore, Math.random());
 
     var rel = document.getElementById('releases');
     if (!rel) return;
@@ -1025,118 +1063,164 @@ publicData()
     var shots = (d.gallery || []).filter(function (shot) { return !/\.(mp4|webm)$/i.test(shot.name || ''); });
     if (show && band && shots.length) {
       band.hidden = false;
-      var i = 0;
-      /* Only the picture on show and the one after it are fetched (#3218).
-         Every picture had its address from the start, and loading="lazy" did
-         not hold the rest back: they are stacked in the same box, so all of
-         them are "in view" once the box is, and scrolling down to it fetched
-         every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
-         the band is far below the first screen. */
-      var frames = shots.map(function (s, n) {
-        var img = document.createElement('img');
-        img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
-        img.loading = 'lazy';
-        if (n === 0) img.className = 'on';
-        show.appendChild(img);
-        return img;
-      });
-      // A picture's smaller copies (#3218) are set with its address, so
-      // neither is fetched early. The band is the page's width less its
-      // margins, at most 1480.
-      function fetchFrame(n) {
-        var img = frames[n];
-        if (!img || img.getAttribute('src')) return;
-        if (shots[n].srcset) {
-          img.sizes = '(max-width: 1528px) calc(100vw - 48px), 1480px';
-          img.srcset = shots[n].srcset;
-        }
-        img.src = shots[n].url;
-      }
-      fetchFrame(0);
-      fetchFrame(1 % shots.length);
-      var cap = document.createElement('div');
-      cap.className = 'gal-cap';
-      cap.innerHTML = (shots[0].by ? esc(shots[0].by) + ' \u00b7 ' : '') +
-        '<a href="/gallery">Open the gallery</a>';
-      show.appendChild(cap);
-      if (shots.length > 1 && dots) {
-        dots.hidden = false;
-        shots.forEach(function (_s, n) {
-          var b = document.createElement('button');
-          b.type = 'button';
-          b.setAttribute('aria-label', 'Picture ' + (n + 1));
-          if (n === 0) b.className = 'on';
-          b.onclick = function () { go(n); };
-          dots.appendChild(b);
-        });
-      }
-      function go(n) {
-        i = ((n % shots.length) + shots.length) % shots.length;
-        fetchFrame(i);
-        fetchFrame((i + 1) % shots.length);
-        var imgs = show.querySelectorAll('img');
-        for (var k = 0; k < imgs.length; k++) {
-          imgs[k].className = k === i ? 'on' : '';
-        }
-        if (dots) {
-          var bs = dots.querySelectorAll('button');
-          for (var k = 0; k < bs.length; k++) {
-            bs[k].className = k === i ? 'on' : '';
-          }
-        }
-        cap.innerHTML = (shots[i].by ? esc(shots[i].by) + ' \u00b7 ' : '') +
-          '<a href="/gallery">Open the gallery</a>';
-      }
-      var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-      var timer = null;
-      var paused = false;
-      function stopFlip() {
-        if (timer) { clearInterval(timer); timer = null; }
-      }
-      function startFlip() {
-        stopFlip();
-        if (reduce || paused || shots.length < 2) return;
-        timer = setInterval(function () { go((i + 1) % shots.length); }, 5000);
-      }
-      function userStep(n) {
-        go(n);
-        paused = true;
-        stopFlip();
-        setTimeout(function () { paused = false; startFlip(); }, 8000);
-      }
-      if (shots.length > 1) {
-        var prev = document.createElement('button');
-        prev.type = 'button';
-        prev.className = 'gal-nav gal-prev';
-        prev.setAttribute('aria-label', 'Previous picture');
-        prev.innerHTML = '&#8249;';
-        prev.onclick = function () { userStep(i - 1); };
-        var next = document.createElement('button');
-        next.type = 'button';
-        next.className = 'gal-nav gal-next';
-        next.setAttribute('aria-label', 'Next picture');
-        next.innerHTML = '&#8250;';
-        next.onclick = function () { userStep(i + 1); };
-        show.appendChild(prev);
-        show.appendChild(next);
-        show.addEventListener('mouseenter', function () { paused = true; stopFlip(); });
-        show.addEventListener('mouseleave', function () { paused = false; startFlip(); });
-        if (dots) {
-          var bs0 = dots.querySelectorAll('button');
-          for (var d = 0; d < bs0.length; d++) {
-            (function (n) {
-              bs0[n].onclick = function () { userStep(n); };
-            })(d);
-          }
-        }
-        startFlip();
-      }
+      startSlideshow(show, dots, shots,
+        !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches));
     }
   })
   .catch(function(){
     var t = document.getElementById('livetext');
     if (t) t.textContent = '';
   });
+
+/*
+  The front page's slideshow of approved public shots (#4127). Its own
+  function so site\tests\test-4127-slideshow-a11y.js can run it on a stand-in
+  page with a clock it turns by hand.
+
+  It turns every 5 seconds unless something holds it: the pointer over it,
+  focus anywhere in it or on its dots, or its pause button. Until #4127 only
+  the pointer held it, so somebody tabbing through it watched it move under
+  them, and nothing stopped it for good. An arrow or a dot press holds it
+  for 8 seconds; each press clears the one before (two presses had left two
+  timers, the first restarting it early), and when the 8 seconds end it
+  turns again only if nothing else holds it (it had restarted with the
+  pointer still on it). Reduced motion: it never turns, and offers no pause.
+
+  The box is not a live region (home.html): it read every caption aloud
+  at every turn, wherever a screen reader was. The open picture's dot
+  carries aria-current.
+*/
+function startSlideshow(show, dots, shots, reduce) {
+  var i = 0;
+  /* Only the picture on show and the one after it are fetched (#3218).
+     Every picture had its address from the start, and loading="lazy" did
+     not hold the rest back: they are stacked in the same box, so all of
+     them are "in view" once the box is, and scrolling down to it fetched
+     every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
+     the band is far below the first screen. */
+  var frames = shots.map(function (s, n) {
+    var img = document.createElement('img');
+    img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
+    img.loading = 'lazy';
+    if (n === 0) img.className = 'on';
+    show.appendChild(img);
+    return img;
+  });
+  // A picture's smaller copies (#3218) are set with its address, so
+  // neither is fetched early. The band is the page's width less its
+  // margins, at most 1480.
+  function fetchFrame(n) {
+    var img = frames[n];
+    if (!img || img.getAttribute('src')) return;
+    if (shots[n].srcset) {
+      img.sizes = '(max-width: 1528px) calc(100vw - 48px), 1480px';
+      img.srcset = shots[n].srcset;
+    }
+    img.src = shots[n].url;
+  }
+  fetchFrame(0);
+  fetchFrame(1 % shots.length);
+  var cap = document.createElement('div');
+  cap.className = 'gal-cap';
+  cap.innerHTML = (shots[0].by ? esc(shots[0].by) + ' \u00b7 ' : '') +
+    '<a href="/gallery">Open the gallery</a>';
+  show.appendChild(cap);
+  if (shots.length > 1 && dots) {
+    dots.hidden = false;
+    shots.forEach(function (_s, n) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Picture ' + (n + 1));
+      if (n === 0) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
+      b.onclick = function () { userStep(n); };
+      dots.appendChild(b);
+    });
+  }
+  function go(n) {
+    i = ((n % shots.length) + shots.length) % shots.length;
+    fetchFrame(i);
+    fetchFrame((i + 1) % shots.length);
+    var imgs = show.querySelectorAll('img');
+    for (var k = 0; k < imgs.length; k++) {
+      imgs[k].className = k === i ? 'on' : '';
+    }
+    if (dots) {
+      var bs = dots.querySelectorAll('button');
+      for (var k = 0; k < bs.length; k++) {
+        bs[k].className = k === i ? 'on' : '';
+        if (k === i) bs[k].setAttribute('aria-current', 'true');
+        else bs[k].removeAttribute('aria-current');
+      }
+    }
+    cap.innerHTML = (shots[i].by ? esc(shots[i].by) + ' \u00b7 ' : '') +
+      '<a href="/gallery">Open the gallery</a>';
+  }
+  // What holds it. Each is its own, so one letting go never starts it
+  // while another still holds it.
+  var hovered = false, focused = false, stopped = false, stepped = null;
+  var timer = null;
+  function held() { return hovered || focused || stopped || stepped !== null; }
+  function stopFlip() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  function startFlip() {
+    stopFlip();
+    if (reduce || held() || shots.length < 2) return;
+    timer = setInterval(function () { go((i + 1) % shots.length); }, 5000);
+  }
+  function userStep(n) {
+    go(n);
+    stopFlip();
+    if (stepped !== null) clearTimeout(stepped);
+    stepped = setTimeout(function () { stepped = null; startFlip(); }, 8000);
+  }
+  if (shots.length < 2) return;
+  var prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'gal-nav gal-prev';
+  prev.setAttribute('aria-label', 'Previous picture');
+  prev.innerHTML = '&#8249;';
+  prev.onclick = function () { userStep(i - 1); };
+  var next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'gal-nav gal-next';
+  next.setAttribute('aria-label', 'Next picture');
+  next.innerHTML = '&#8250;';
+  next.onclick = function () { userStep(i + 1); };
+  show.appendChild(prev);
+  show.appendChild(next);
+  if (!reduce) {
+    var pause = document.createElement('button');
+    pause.type = 'button';
+    pause.className = 'gal-pause';
+    var said = function () {
+      pause.setAttribute('aria-label', stopped ? 'Play the slideshow' : 'Pause the slideshow');
+      pause.innerHTML = stopped ? '&#9654;' : '&#10074;&#10074;';
+    };
+    said();
+    pause.onclick = function () {
+      stopped = !stopped;
+      said();
+      if (stopped) stopFlip(); else startFlip();
+    };
+    show.appendChild(pause);
+  }
+  show.addEventListener('mouseenter', function () { hovered = true; stopFlip(); });
+  show.addEventListener('mouseleave', function () { hovered = false; startFlip(); });
+  // Focus in the box or on its dots holds it; it lets go only when focus
+  // goes somewhere that is neither.
+  var within = function (el) { return !!el && (show.contains(el) || (!!dots && dots.contains(el))); };
+  [show, dots].forEach(function (box) {
+    if (!box) return;
+    box.addEventListener('focusin', function () { focused = true; stopFlip(); });
+    box.addEventListener('focusout', function (e) {
+      if (within(e && e.relatedTarget)) return;
+      focused = false;
+      startFlip();
+    });
+  });
+  startFlip();
+}
 
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -1147,7 +1231,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c
    from the start, and the word comes out of the address so a reload or a
    shared link does not say it again. Only these three words are shown, and
    as text, never as markup. hub.js says the same three lines on its gate,
-   and tests\test-4406-signin-failure-line.js holds the two equal. It is
+   and site\tests\test-4406-signin-failure-line.js holds the two equal. It is
    here with the code that runs as the page loads, not among the helpers
    above show(), which site\tests\test-site-front-resilience.js lifts and
    runs on their own. */

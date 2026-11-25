@@ -136,7 +136,6 @@ namespace Thornswood
         static CheckBox chkAutoUpdate, chkVSync, chkKeepOpen, chkLockRes;
         static CheckBox chkCrashSnapshots; static TextBlock txtCrashFolder; static Button btnCrashFolder;
         static CheckBox chkMusic; static Slider sldMusic; static TextBlock txtMusic;
-        static CheckBox chkKeepSaves;
         static CheckBox chkDeleteMods;
         static Button btnUninstall;
         static Button btnServerMain, btnServerDev, btnServerPick, btnCheckDiagnostics, btnOpenSteam;
@@ -171,12 +170,18 @@ namespace Thornswood
         static Button[] navButtons;
         static Control[] pages;
 
+        // What Velo.LeaveCurrentFolder said, for launcher.log (#6129).
+        static string leftCurrentFolder;
+
         [STAThread]
         static void Main(string[] args)
         {
             // Velopack first (#4825): when it runs the exe about an install, an
             // update or an uninstall, this answers and the process ends here.
-            Velo.Start(args);
+            Velo.Start(args, Uninstall.FromVelopack);
+            // Out of the folder an update moves aside, before anything is
+            // started from here (#6129). Said in launcher.log once it is open.
+            leftCurrentFolder = Velo.LeaveCurrentFolder();
 
             // PerMonitorV2 is in the application manifest (#463), and Avalonia
             // rescales on WM_DPICHANGED by itself; WindowFit keeps the window
@@ -237,11 +242,7 @@ namespace Thornswood
                         try { Paths.Init(Velo.InstallRoot); }
                         catch (Exception initEx) { Swallow.Note("Shell.Main, paths", initEx); }
                     }
-                    Action<string> log = delegate (string line)
-                    {
-                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
-                        catch (Exception logEx) { Swallow.Note("Shell.Main, log", logEx); }
-                    };
+                    Action<string> log = delegate (string line) { LauncherLog.Line(line); };
                     log("COULD NOT START: " + ex.ToString());
                     // The update check is otherwise asked from the window, so a
                     // launcher that cannot open its window asks here, unless the
@@ -265,6 +266,7 @@ namespace Thornswood
             // The very last thing: an update downloaded and checked while the
             // launcher ran goes in now that the window has closed, everything
             // it put back is back and the lock is let go (Velo.ExitApply).
+            HandOverUpdate(Velo.StagedVersion);
             Velo.ExitApply();
         }
 
@@ -327,6 +329,7 @@ namespace Thornswood
             LogOnly("Launcher start: the window was on screen " + window.ToString("F1", inv) + " s after the launcher started" +
                     (startScanSeconds >= 0 ? ", " + startScanSeconds.ToString("F1", inv) + " s of it the mod check" : "") +
                     ", on launcher " + Updater.Version + ".");
+            if (leftCurrentFolder != null) LogOnly(leftCurrentFolder);
         }
 
         static void Run(string[] args)
@@ -390,6 +393,13 @@ namespace Thornswood
             Icons.Dev = cfg.IsDev;
             Art.Dev = cfg.IsDev;
             Discord.Channel = cfg.Channel;
+            // The person's launcher choices are kept with their Discord account
+            // (#5939), so they come down before the window is drawn in them.
+            // Four seconds at most: the window waits on it.
+            string tookSettings = null;
+            Config.Saved = YourSettings.Noted;
+            try { tookSettings = YourSettings.TakeLauncher(cfg, 4000); }
+            catch (Exception ex) { Swallow.Note("Shell.Run, the launcher's choices from the site", ex); }
 
             win = new MainWindow();
 
@@ -464,6 +474,7 @@ namespace Thornswood
                 Keep.TakeNote();
             }
             try { string leak = Leaks.Clean(cfg); if (leak != null) Log(leak); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
+            if (tookSettings != null) Log(tookSettings);
             // Once the own folder is made, Thornswood's files come out of the Steam copy, once (OwnGameClean.cs, #1226). Off the window's thread: it deletes.
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -512,8 +523,8 @@ namespace Thornswood
             // service which characters this Steam account owned, off the UI
             // thread, and always came back with nothing, because that route
             // wants the server secret and the launcher never sent one. The
-            // list lives in Profile\Characters\profiles.txt and the person
-            // picks at the game's main menu now.
+            // list is kept by the site under the Discord account (#5938) and
+            // the person picks at the game's main menu now.
             // Off the window's thread. Ending a stuck game waits on it, and at
             // this point the window has not even been shown yet.
             ThreadPool.QueueUserWorkItem(delegate
@@ -551,7 +562,7 @@ namespace Thornswood
             // starting, with the window built and nothing on it.
             var scanClock = Stopwatch.StartNew();
             try { RunScan(); }
-            catch (Exception ex) { Log("Could not check the mod list on the way in: " + ex.Message); }
+            catch (Exception ex) { Log("Could not check the mod list on the way in: " + Failure.Say("Shell.Run, the mod list on the way in", ex)); }
             startScanSeconds = scanClock.Elapsed.TotalSeconds;
             if (DrawStatus()) Log("Ready."); else Log("Something needs attention before you can play.");
             // Nobody should have to press anything to get a client file back.
@@ -585,6 +596,7 @@ namespace Thornswood
             win.ContentRendered += delegate
             {
                 try { LogStartTime(); } catch (Exception ex) { Swallow.Note("Shell.Run, saying how long the start took", ex); }
+                try { SayHandedUpdate(); } catch (Exception ex) { Swallow.Note("Shell.Run, the update the last launcher handed over", ex); }
                 if (Velo.Restarted)
                     ThreadPool.QueueUserWorkItem(delegate
                     {
@@ -633,7 +645,7 @@ namespace Thornswood
             Dispatcher.UIThread.UnhandledException += delegate (object faultSender, DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
-                try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); } catch (Exception ex) { Swallow.Note("Shell.Run, append", ex); }
+                LauncherLog.Text(fault.Exception.ToString() + Environment.NewLine);
                 // The launcher is native code with no symbols on the customer's
                 // machine, so each frame is also written as its method and its
                 // offset into the exe. The pdb the native build writes, kept on
@@ -658,7 +670,7 @@ namespace Thornswood
                         at.Append(ip != 0 && image != 0 ? " +0x" + (ip - image).ToString("x8") : " (no native offset)");
                         at.AppendLine();
                     }
-                    File.AppendAllText(Paths.LogFile, at.ToString());
+                    LauncherLog.Text(at.ToString());
                 }
                 catch (Exception atEx) { Swallow.Note("Shell.UnhandledException, native offsets", atEx); }
                 fault.Handled = true;
@@ -794,7 +806,7 @@ namespace Thornswood
             btnCheckDiagnostics = win.BtnCheckDiagnostics;
             btnOpenSteam = win.BtnOpenSteam;
             txtBrandSmall = win.TxtBrandSmall; txtBrandBig = win.TxtBrandBig;
-            btnUninstall = win.BtnUninstall; chkKeepSaves = win.ChkKeepSaves;
+            btnUninstall = win.BtnUninstall;
             chkDeleteMods = win.ChkDeleteMods;
             btnScan = win.BtnScan; btnFix = win.BtnFix;
 
@@ -914,7 +926,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    string why = ex.Message;
+                    string why = Failure.Why("Shell.ConnectDiscord", ex, "Discord") + ".";
                     Dispatcher.UIThread.Post(new Action(delegate
                     {
                         linkingDiscord = false;
@@ -1078,8 +1090,7 @@ namespace Thornswood
         {
             lastLogged = m;
             txtStatus.Text = m;
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch (Exception ex) { Swallow.Note("Shell.Log, append", ex); }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1089,8 +1100,7 @@ namespace Thornswood
         /// </summary>
         static void LogOnly(string m)
         {
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch { /* the log is the only place this line could have gone */ }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1117,7 +1127,7 @@ namespace Thornswood
                     : (DateTime.Now - gameClosedAt).TotalSeconds.ToString("0.0") + " s after the last game closed";
                 return "Play pressed by " + by + ", window " + (win != null && win.IsActive ? "active" : "not active") + ", " + when + ".";
             }
-            catch (Exception ex) { return "Play pressed (what pressed it could not be read: " + ex.Message + ")."; }
+            catch (Exception ex) { return "Play pressed (what pressed it could not be read: " + Failure.Why("Shell, what pressed Play", ex) + ")."; }
         }
 
         // ------------------------------------------------------------- pages
@@ -1145,6 +1155,11 @@ namespace Thornswood
             else if (i == PageNews) BuildNews();
             else if (i == PageDiag) BuildDiag();
             else if (i == PageGallery) BuildGalleryPage();
+            else if (i == PageSettings)
+            {
+                BuildMicrophoneSettings();
+                BuildOutputSettings();
+            }
 
             // The Play spotlight turns only on the Play page, so a page
             // change starts or stops it, the way the title video follows
@@ -1193,7 +1208,7 @@ namespace Thornswood
 
             HeaderFrames frames;
             try { frames = Art.HeaderVideo(); }
-            catch (Exception ex) { Stamp("Title band: the video did not play (" + ex.Message + "), the still picture stays"); return; }
+            catch (Exception ex) { Stamp("Title band: the video did not play (" + Failure.Why("Shell, the title band video", ex) + "), the still picture stays"); return; }
             if (frames == null) return;
 
             // The frame on screen. The decoding thread copies each finished
@@ -1238,7 +1253,7 @@ namespace Thornswood
                     }
                     catch (Exception ex)
                     {
-                        string why = ex.Message;
+                        string why = Failure.Why("Shell, a title band frame", ex);
                         Dispatcher.UIThread.Post(delegate { drop(why); });
                         frames.Dispose();
                         return;
@@ -1327,19 +1342,19 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Stamp("Menu music: could not copy the track out of the game folder (" + ex.Message + ")");
+                Stamp("Menu music: could not copy the track out of the game folder (" + Failure.Why("Shell, copying the menu track", ex) + ")");
                 return;
             }
             try
             {
                 double vol = Math.Max(0, Math.Min(100, cfg.MusicVolume)) / 100.0;
-                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp);
+                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp, cfg.AudioOutputId);
                 MusicDecide();
                 win.StateChanged += delegate { MusicDecide(); };
             }
             catch (Exception ex)
             {
-                Stamp("Menu music: " + ex.Message);
+                Stamp("Menu music: " + Failure.Why("Shell, starting the menu music", ex));
             }
         }
 
@@ -2406,7 +2421,6 @@ namespace Thornswood
             {
                 btnUninstall.Content = "Remove the dev build";
                 if (chkDeleteMods != null) chkDeleteMods.IsVisible = false;
-                if (chkKeepSaves != null) chkKeepSaves.IsVisible = false;
                 btnUninstall.Click += delegate
                 {
                     bool r = Ask.YesNo(
@@ -2414,7 +2428,7 @@ namespace Thornswood
                         "Thornswood Dev", Ask.Icon.Question);
                     if (!r) return;
                     try { Log(DevBuild.RemoveSelf()); }
-                    catch (Exception ex) { Log("Could not remove the dev build: " + ex.Message); return; }
+                    catch (Exception ex) { Log("Could not remove the dev build: " + Failure.Say("Shell, removing the dev build", ex)); return; }
                     try { Voice.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                     Quit();
                 };
@@ -2439,20 +2453,7 @@ namespace Thornswood
                     "Thornswood", Ask.Icon.Warning);
                 if (!r) return;
 
-                Log("Closing Skyrim...");
-                int n;
-                string still = CloseGameWaiting(out n);
-                if (still.Length > 0)
-                {
-                    Log("Skyrim would not close. " + still);
-                    Ask.Tell("Skyrim would not close.\n\n" + still, "Thornswood", Ask.Icon.Warning);
-                    DrawStatus();
-                    return;
-                }
-                Log(n > 0 ? "Closed Skyrim." : "Skyrim was already gone.");
-                // The two second tick does the rest: puts the Windows folders
-                // back, records the session and turns Play on again.
-                DrawStatus();
+                Begin(QuitGameNow());
             };
             chkCrashSnapshots.Click += delegate
             {
@@ -2547,7 +2548,24 @@ namespace Thornswood
                 // Not while Skyrim is being closed. Play or the update that
                 // asked for it carries on once it is gone, window or no window.
                 // The launcher ending itself (Quit) is not asked either.
-                if (!quitting && waitDepth > 0) { e.Cancel = true; Log("Wait for Skyrim to finish closing."); return; }
+                // What is running is said as it is: the line used to blame
+                // Skyrim for every wait, the scan after an update among them
+                // (#6129). An update that has to close the launcher closes it
+                // the moment the last wait ends (LetWindowGo); before, its
+                // close was dropped here and the launcher sat on Updating.
+                if (!quitting && waitDepth > 0)
+                {
+                    e.Cancel = true;
+                    string doing = stallDoing;
+                    if (Velo.Staged)
+                    {
+                        closeWhenWaitsEnd = true;
+                        Log("The update goes in as soon as the launcher has finished " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ".");
+                    }
+                    else
+                        Log("Wait for the launcher to finish " + (string.IsNullOrEmpty(doing) ? "what it is doing" : doing) + ", then close it.");
+                    return;
+                }
                 if (!quitting && playing)
                 {
                     bool r = Ask.YesNo(
@@ -2612,8 +2630,23 @@ namespace Thornswood
                 // nothing here is worth a wait on a network.
                 double ranFor = (DateTime.Now - playStartedAt).TotalMinutes;
                 int playedAs = chosenId;
+                // Against the character, not just the install. Skyrim keeps its
+                // own play time inside the save, and under SkyMP the character
+                // is a change form on the server with no save here at all, so
+                // the launcher is the only thing in a position to count, and
+                // the site keeps the count with the account (#5938). The
+                // character is whoever the menu's choice file named this
+                // session; 0 when it never did, and then nothing is counted.
+                // Since its pick, when Change character came first (#3128).
+                TimeSpan counted = DateTime.Now - PlayCountedFrom();
                 ThreadPool.QueueUserWorkItem(delegate
                 {
+                    try { Chars.AddPlaytime(playedAs, counted); }
+                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + playedAs + ": " + Failure.Say("Shell, play time of " + playedAs, ex, "thornswood.net")); }
+                    // The settings as the game left them, to the Discord
+                    // account that keeps them (#5939).
+                    try { YourSettings.SendBack(); }
+                    catch (Exception ex) { PresenceLog("Your settings were not sent to your Discord account: " + Failure.Say("Shell, sending settings", ex, "thornswood.net")); }
                     try { Discord.SessionEnd(playedAs, ranFor, "quit"); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
                     // Then the logs, on the same thread so they go after the
                     // row they attach to exists. This is the only moment they
@@ -2623,14 +2656,6 @@ namespace Thornswood
                     // asking the person to go and find four files themselves.
                     try { Discord.SessionLogs(); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                 });
-                // Against the character, not just the install. Skyrim keeps its
-                // own play time inside the save, and under SkyMP the character
-                // is a change form on the server with often no save here at all,
-                // so the launcher is the only thing in a position to count.
-                // The character is whoever the menu's choice file named this
-                // session; 0 when it never did, and then nothing is counted.
-                // Since its pick, when Change character came first (#3128).
-                try { Chars.AddPlaytime(chosenId, DateTime.Now - PlayCountedFrom()); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                 BuildStatRow();
                 btnPlay.Content = "PLAY";
                 btnQuitGame.IsVisible = false;
@@ -2757,7 +2782,7 @@ namespace Thornswood
         static void Open(string path)
         {
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-            catch (Exception ex) { Log("Could not open it: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open it: " + Failure.Say("Shell, opening a file", ex)); }
         }
 
         // ------------------------------------------------------------- checks
@@ -3270,7 +3295,7 @@ namespace Thornswood
                 psi.UseShellExecute = true;
                 Process.Start(psi);
             }
-            catch (Exception ex) { Log("Could not open the folder: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open the folder: " + Failure.Say("Shell, opening a folder", ex)); }
         }
 
         // ------------------------------------------------------------- settings
@@ -3887,7 +3912,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not delete the crash snapshot " + snapshot + ": " + ex.Message);
+                Log("Could not delete the crash snapshot " + snapshot + ": " + Failure.Say("Shell, deleting a crash snapshot", ex, snapshot));
             }
         }
 
@@ -4210,7 +4235,7 @@ namespace Thornswood
                     st = new Standing();
                     st.Ok = false;
                     st.Why = "offline";
-                    st.Message = "Could not reach thornswood.net: " + ex.Message;
+                    st.Message = "Could not reach thornswood.net: " + Failure.Say("Shell, checking in", ex, "thornswood.net");
                 }
 
                 Dispatcher.UIThread.Post(new Action(delegate
@@ -4282,7 +4307,7 @@ namespace Thornswood
         {
             if (playing) { Log("Quit the game first."); return; }
             try { Log(DevBuild.Switch(cfg, channel)); }
-            catch (Exception ex) { Log("Could not switch to " + channel + ": " + ex.Message); return; }
+            catch (Exception ex) { Log("Could not switch to " + channel + ": " + Failure.Say("Shell, switching to " + channel, ex)); return; }
             // What the old channel offered is not this one's.
             pendingLauncher = null;
             updateTried = null;
@@ -4305,7 +4330,6 @@ namespace Thornswood
                 return;
             }
 
-            bool keep = chkKeepSaves.IsChecked == true;
             // Ticked by default, which is what this always did. Unticking it is
             // the new part: the mods stay and a reinstall reuses them.
             bool dropMods = chkDeleteMods == null || chkDeleteMods.IsChecked == true;
@@ -4368,21 +4392,28 @@ namespace Thornswood
             }
 
             goes.AppendLine("    " + Paths.LauncherDir);
-            goes.AppendLine("    " + Paths.Personal);
-            if (!keep)
+            // The launcher itself, where Velopack's setup put it: its folder,
+            // shortcuts and Installed apps entry go by Velopack's own
+            // uninstall, once this launcher has closed (Uninstall.Finish).
+            try
             {
-                goes.AppendLine("    " + Paths.ProfileDir + "   (your characters and settings)");
-                goes.AppendLine("    " + Paths.CfgFile);
+                if (Velo.Installed)
+                    goes.AppendLine("    " + Velo.Locator.RootAppDir + "   (the launcher itself, its shortcuts and its entry in Installed apps)");
             }
+            catch (Exception ex) { Swallow.Note("Shell.DoUninstall, the launcher's own folder", ex); }
+            goes.AppendLine("    " + Paths.Personal);
+            // Nothing in Profile is the person's to keep: their characters and
+            // settings are kept with their Discord account on the site
+            // (#5938, #5939). With the game copy kept, its record stays
+            // beside it (Uninstall.Targets).
+            if (dropMods) goes.AppendLine("    " + Paths.ProfileDir + "   (the launcher's log, your Discord sign-in on this PC, and its records)");
             else
             {
-                stays.AppendLine("    " + Paths.ProfileDir + "   (your characters and settings)");
-                stays.AppendLine("    " + Paths.CfgFile);
-                // Kept saves and settings are only that (#3679): the log, the
-                // Discord sign-in, name and picture, the support reports and
-                // the browser folders inside Profile go either way.
-                goes.AppendLine("    From " + Paths.ProfileDir + ": " + LocalKeep.NotSavesInWords);
+                goes.AppendLine("    " + Paths.ProfileDir + ", all but the record of the game copy you keep");
+                stays.AppendLine("    The record of Thornswood's copy of the game, in " + Paths.ProfileDir);
             }
+            goes.AppendLine("    " + Paths.CfgFile);
+            stays.AppendLine("    Your characters and settings, kept with your Discord account on thornswood.net");
 
             // Named rather than removed quietly, because it is not where
             // anybody would look for it and it is usually the biggest thing on
@@ -4428,11 +4459,9 @@ namespace Thornswood
                 ? (dropMods ? "Thornswood's files come out of your Skyrim"
                             : "Thornswood's files stay in your Skyrim")
                 : (dropMods ? "The mods go" : "The mods stay where they are");
-            string chars = keep ? "your characters stay" : "your characters go";
-            string warn = keep ? "" : "  None of that can be got back.";
-
             bool r2 = Ask.YesNo(
-                "Last check. " + mods + ", and " + chars + "." + warn +
+                "Last check. " + mods + ". Your characters and settings stay with your Discord account on thornswood.net, " +
+                "so connecting Discord on a reinstall, or on another PC, brings them back." +
                 (Paths.Collection
                    ? "\n\nThe collection itself is Vortex's. Purge Mods there when you want it gone."
                    : "") +
@@ -4444,13 +4473,14 @@ namespace Thornswood
             string[] rest;
             try
             {
-                rest = Uninstall.Begin(cfg, keep, dropMods, Log);
+                rest = Uninstall.Begin(cfg, dropMods, Log);
             }
             catch (Exception ex)
             {
                 btnUninstall.IsEnabled = true;
-                Log("Uninstall stopped: " + ex.Message);
-                Ask.Tell(ex.Message + "\n\nNothing was removed.",
+                string stopped = Failure.Say("Shell, uninstall", ex);
+                Log("Uninstall stopped: " + stopped);
+                Ask.Tell(stopped + "\n\nNothing was removed.",
                                 "Thornswood", Ask.Icon.Warning);
                 return;
             }
@@ -4468,7 +4498,7 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Shell.DoUninstall, removing", ex); }
                 Dispatcher.UIThread.Post(new Action(delegate
                 {
-                    try { Uninstall.Finish(later, keep, dropMods); }
+                    try { Uninstall.Finish(later, dropMods); }
                     catch (Exception ex) { Swallow.Note("Shell.DoUninstall, handing over", ex); }
                     Quit();
                 }));
@@ -4561,7 +4591,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    string why = ex.Message;
+                    string why = Failure.Why("Shell, uninstall step", ex);
                     Dispatcher.UIThread.Post(new Action(delegate
                     {
                         Log("Could not put the client runtime back: " + why);
@@ -4681,7 +4711,12 @@ namespace Thornswood
                 int mine = revision;
                 int wants = Updater.ServerCollectionRevision;
                 txtUpdateTitle.Text = "Your mods need updating";
-                txtUpdateNote.Text =
+                if (OwnGame.FromMods)
+                    txtUpdateNote.Text =
+                        "The server was built against collection revision " + wants + " and the mods in Mod Organizer 2 are on " + mine +
+                        ", so part of what the server expects is not installed. Update installs revision " + wants + " in place of " + mine +
+                        " and keeps each mod settings file you changed.";
+                else txtUpdateNote.Text =
                     "The server was built against collection revision " + wants + " and this copy is on " + mine +
                     ", so part of what the server expects is not installed. The button brings Vortex " +
                     "forward: open Collections there and press Update on the Thornswood collection, which " +
@@ -4706,7 +4741,11 @@ namespace Thornswood
             else
             {
                 txtUpdateTitle.Text = "Your mods are not installed yet";
-                txtUpdateNote.Text =
+                if (OwnGame.FromMods)
+                    txtUpdateNote.Text =
+                        "The install of Thornswood's mods into Mod Organizer 2 in " + OwnGame.ModsFolder + " has not finished. " +
+                        "The button goes on from where it stopped; every file it has is kept.";
+                else txtUpdateNote.Text =
                     "Thornswood's mods are a collection on Nexus, and Vortex installs them into a " +
                     "profile of its own, so the Skyrim you already play is left alone. Nothing else " +
                     "here comes right until that is done, updates included.";
@@ -4766,6 +4805,9 @@ namespace Thornswood
         /// </summary>
         static void OpenCollection()
         {
+            // The mods come from the launcher's own Mod Organizer 2 (#6244):
+            // the button installs, updates or stops that install.
+            if (OwnGame.FromMods) { InstallModlist(); return; }
             int mine = Checks.CollectionRevision(cfg);
             string command = Checks.NxmCommand();
             try
@@ -4791,7 +4833,7 @@ namespace Thornswood
                     LogOnly("Vortex does not answer Nexus links on this machine, so the collection opens on the site.");
                 Process.Start(new ProcessStartInfo(page) { UseShellExecute = true });
             }
-            catch (Exception ex) { Log("Could not open the collection: " + ex.Message); }
+            catch (Exception ex) { Log("Could not open the collection: " + Failure.Say("Shell, opening the collection", ex, "Vortex")); }
         }
 
         /// <summary>
@@ -4819,6 +4861,7 @@ namespace Thornswood
         {
             int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
             int wants = Updater.ServerCollectionRevision;
+            if (OwnGame.FromMods) return ModlistButtonText(mine);
             if (mine > 0) return wants > mine ? "Update in Vortex" : "Open Vortex";
             return wants > 0 ? "Open revision " + wants : "Open the collection";
         }

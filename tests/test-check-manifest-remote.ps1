@@ -21,12 +21,16 @@ $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-manifest-' + [Guid]::NewGuid().To
 $Fake = Join-Path $T 'repo'; $Drive = Join-Path $T 'vpsC'; $Client = Join-Path $T 'client'; $Log = Join-Path $T 'remote.log'
 function W([string]$p, [string]$t) { [void][IO.Directory]::CreateDirectory((Split-Path -Parent $p)); [IO.File]::WriteAllText($p, $t, (New-Object Text.UTF8Encoding($false))) }
 $base = 'Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'
-function Server([string]$rel, [string[]]$order, [string]$dataDir = '') {
+function Server([string]$rel, [string[]]$order, [string]$dataDir = '', [string[]]$light = $null) {
     $root = Join-Path $Drive $rel
     $settings = if ($dataDir) { '{"dataDir":"' + $dataDir + '"}' } else { '{}' }
     W (Join-Path $root 'server-settings.json') $settings
     if ($order) {
-        $doc = (@{ loadOrder = $order; mods = @($order | ForEach-Object { @{ filename = $_ } }) } | ConvertTo-Json -Depth 4)
+        # A server that loads light plugins (#1715) writes them apart, in light
+        # order, and its whole order is the full plugins then the light ones.
+        $h = @{ loadOrder = @($order) + @($light | Where-Object { $_ }); mods = @($order | ForEach-Object { @{ filename = $_ } }) }
+        if ($null -ne $light) { $h.light = @($light | ForEach-Object { @{ filename = $_ } }) }
+        $doc = ($h | ConvertTo-Json -Depth 4)
         $d = if ($dataDir) { $dataDir } else { 'data' }
         W (Join-Path $root "$d\manifest.json") $doc
         W (Join-Path $root "$d\client\manifest.json") $doc
@@ -45,6 +49,7 @@ try {
     [IO.File]::Copy((Join-Path $Repo 'scripts\mods\LoadOrder.ps1'), (Join-Path $Fake 'scripts\mods\LoadOrder.ps1'))
 [void][IO.Directory]::CreateDirectory((Join-Path $Fake 'scripts\release'))
 [IO.File]::Copy((Join-Path $Repo 'scripts\release\Read-JsonFile.ps1'), (Join-Path $Fake 'scripts\release\Read-JsonFile.ps1'))
+[IO.File]::Copy((Join-Path $Repo 'scripts\release\SevenZip.ps1'), (Join-Path $Fake 'scripts\release\SevenZip.ps1'))
     W (Join-Path $Fake 'scripts\vps\Vps.ps1') "function Get-ThornswoodVpsUser { 'stub-user' }`nfunction Get-ThornswoodVpsAddress { '192.0.2.1' }`n"
     $q = { param($s) $s.Replace("'", "''") }
     W (Join-Path $Fake 'scripts\vps\Send-Script.ps1') @"
@@ -77,6 +82,7 @@ function Invoke-ThornswoodRemote {
     $r = Run @('-Dev')
     Yes '-Dev reads the -Dev root' ($r.Out -match 'reading .*Thornswood-Server-Dev \(dev\)' -and $r.Out -match 'server wants\s+6 plugins')
     Yes '  and says the build has one the dev server does not list, with dev advice' ($r.Out -match 'B\.esp' -and $r.Out -match 'one list runs out')
+    Yes '  and exits 1, because the lists differ (#4760)' ($r.Code -eq 1)
 
     # 2. A server one level down, in a folder with [ ] in its name.
     Reset
@@ -163,6 +169,71 @@ function Invoke-ThornswoodRemote {
     $r = Run @('-Full')
     Yes 'an order that parts company names the slot and says to press Fix, not redeploy' ($r.Out -match 'part company at slot 6' -and $r.Out -match 'Press Fix' -and $r.Out -match 'Do not redeploy')
     Yes '  and -Full prints the server list' ($r.Out -match '\s7\s+A\.esp')
+    Yes '  and exits 1 (#4760)' ($r.Code -eq 1)
+
+    # 7. The exit code for each finding (#4760). Until then every one of these
+    # printed its finding and exited 0, so whatever ran it read a pass.
+    Reset
+    Server 'Thornswood-Server' (@($order) + @('C.esp'))
+    $r = Run @()
+    Yes 'a plugin the server wants that the build does not have: named, exit 1' ($r.Out -match 'the server wants that you DO NOT have' -and $r.Out -match 'C\.esp' -and $r.Code -eq 1)
+
+    Reset
+    Server 'Thornswood-Server' $order
+    W (Join-Path $Drive 'Thornswood-Server\data\client\manifest.json') '{ not json'
+    $r = Run @()
+    Yes 'a manifest copy that cannot be read: named UNREADABLE, exit 1, though the other copy matches' ($r.Out -match 'UNREADABLE' -and $r.Out -match 'POSITION BY POSITION: identical' -and $r.Code -eq 1)
+
+    Reset
+    Server 'Thornswood-Server' $order
+    $plug = Join-Path $Client 'Profile\LocalAppData\plugins.txt'
+    $kept = [IO.File]::ReadAllText($plug)
+    [IO.File]::Delete($plug)
+    $r = Run @()
+    Yes 'no plugins.txt in the build to compare: says so, exit 1' ($r.Out -match 'No plugins\.txt at' -and $r.Code -eq 1)
+    W $plug $kept
+
+    $r = Run @()
+    Yes 'and with it back, identical: exit 0' ($r.Out -match 'POSITION BY POSITION: identical' -and $r.Code -eq 0)
+
+    $head = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\Check-Manifest.ps1'))
+    Yes 'its header says when it exits 0 and when 1' ($head -match '(?s)^<#.*Exit 0 when.*Exit 1\s+when.*#>')
+
+    # 8. Light plugins (#4128). A server that loads them names them in its
+    # light list, and in its whole order after the full plugins. The client's
+    # check walks the full plugins against mods and the light ones against
+    # light, so this compares each with each: a correct client with
+    # Thornswood-Last.esp light, last, is told nothing is missing.
+    foreach ($l in 'Small.esp', 'Thornswood-Last.esp') {
+        $h = [byte[]]::new(24); [Text.Encoding]::ASCII.GetBytes('TES4').CopyTo($h, 0); [BitConverter]::GetBytes([uint32]0x200).CopyTo($h, 8)
+        W (Join-Path $Client "Game\Data\$l") ''; [IO.File]::WriteAllBytes((Join-Path $Client "Game\Data\$l"), $h)
+    }
+    $light = 'Small.esp', 'Thornswood-Last.esp'
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n*Thornswood-Last.esp`r`n"
+    Reset
+    Server 'Thornswood-Server' $order '' $light
+    $r = Run @()
+    Yes 'light: a correct client with Thornswood-Last.esp light is told it has every plugin the server wants' ($r.Out -match 'you have every plugin the server wants' -and $r.Out -notmatch 'DO NOT have')
+    Yes '  and nothing the server does not list' ($r.Out -match 'you have nothing the server does not list')
+    Yes '  and the full plugins match position by position' ($r.Out -match 'POSITION BY POSITION: identical')
+    Yes '  and the light plugins match in order too' ($r.Out -match 'LIGHT PLUGINS, IN ORDER: identical')
+    Yes '  and it counts each list on its own' ($r.Out -match 'server wants\s+7 plugins and 2 light plugins' -and $r.Out -match 'you have\s+7 .* and 2 light')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n"
+    $r = Run @()
+    Yes 'light: a client without Thornswood-Last.esp is told the server wants it' ($r.Out -match 'DO NOT have' -and $r.Out -match '(?m)^\s+Thornswood-Last\.esp\s*$')
+    Yes '  and its full plugins still match' ($r.Out -match 'POSITION BY POSITION: identical')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Thornswood-Last.esp`r`n*Small.esp`r`n"
+    $r = Run @()
+    Yes 'light: light plugins in another order are named where they part' ($r.Out -match 'LIGHT PLUGINS, IN ORDER: they part company at light slot 1' -and $r.Out -match 'server: Small\.esp' -and $r.Out -match 'you:\s+Thornswood-Last\.esp')
+
+    W $plugFile "*A.esp`r`n*B.esp`r`n*Small.esp`r`n*Thornswood-Last.esp`r`n"
+    Reset
+    Server 'Thornswood-Server' $order
+    $r = Run @()
+    Yes 'light: a server with no light list loads none, so a client''s light plugins are left out, not called extra' ($r.Out -match 'you have nothing the server does not list' -and $r.Out -match 'POSITION BY POSITION: identical' -and $r.Out -notmatch 'LIGHT PLUGINS, IN ORDER')
+    W $plugFile $plugKept
 }
 finally { Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host ''

@@ -43,7 +43,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -53,7 +53,7 @@ function slice(src, start, end) {
 }
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); return; }
 
 const clock = { t: Date.UTC(2026, 9, 12, 20, 0, 0) };
 class FakeDate extends Date { static now() { return clock.t; } }
@@ -159,7 +159,7 @@ function makeBlock() {
 let W = makeBlock();
 yes('the property block runs, with the drop box in it', !!W && typeof W.dropboxCmd === 'function' &&
     typeof W.boxFare === 'function');
-if (!W) { done(); }
+if (!W) { done(); return; }
 
 function at(p, hold) {
   refs[p.a].pos = hold === 'riften' ? [100050, 0, 0] : [50, 0, 0];

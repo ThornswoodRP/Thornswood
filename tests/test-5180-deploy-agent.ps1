@@ -184,6 +184,9 @@ try {
             Yes '  and -Status prints where the last pass got to, its own lines and the copy server''s, addresses taken out' (
                 $null -ne $st -and $st.Parses -and $st.Text.Contains("'C:\Thornswood-BotPass\run'") -and $st.Text.Contains("'bot-pass.log'") -and
                 $st.Text.Contains('server\bot-pass-server.log') -and $st.Text.Contains("'<address>'") -and $st.Text.Contains('C:\Thornswood-BotPass\passes'))
+            Yes '  and every error the copy''s server threw in its tick or caught there, with the lines around it, which the last lines miss' (
+                $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8") -and
+                $st.Text.Contains("'server\bot-pass-server.log'"))
             $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
             Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
             $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '..\..\Windows')
@@ -269,18 +272,26 @@ $h = @{}; $want = ''
     $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value
     # The rules read verbs.json the way the broker does, which is not strict.
     function Ask([string]$line) { Set-StrictMode -Off; Test-ThornswoodGateRequest -Line $line -Verbs $verbs }
-    $req = Ask $lo
-    Yes "the agent's load order line is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
-    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50)'))
+    # The agent names the Deployment's commit with -At (#6166).
+    $loAt = $lo + ' -At 0123456789abcdef0123456789abcdef01234567'
+    $req = Ask $loAt
+    Yes "the agent's load order line, with -At and a commit, is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
+    Yes '  and it sends only the order (-OrderOnly), at the commit the agent names' ($lo.Contains(' -OrderOnly') -and $agentCs.Contains('LoadOrderLine + " -At " + commit') -and $agentCs.Contains('var line = LoadOrderLineAt(commit);'))
+    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(line, TimeSpan.FromMinutes(50)'))
+    Yes '  and the gate refuses an -At that is not a whole commit' (-not (Ask ($lo + ' -At main')).Ok)
     $req = Ask 'Check-ProdParity'
     Yes 'the gate takes the parity line the agent sends, Check-ProdParity' ($req.Ok -and $agentCs.Contains('Gate!.Run("Check-ProdParity"'))
     $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))
     Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
     $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
-    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json', 'game/data/last-plugin.recipe', 'game/content/Thornswood-Content.esp') {
+    $cp = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\ContentPaths.ps1'))
+    foreach ($f in 'records/collection.json', 'records/collection-plugins.json', 'records/collection-dropped.json', 'records/load-order.json') {
         $win = $f.Replace('/', '\')
-        Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and ($dg.Contains($f) -or $dg.Contains($win) -or $dg.Contains("'" + (Split-Path -Leaf $win) + "'")))
+        # -FromRecord reads the order Get-ThornswoodContentOrder makes (#6209), from these.
+        Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and $dg.Contains("'" + $f + "'") -and ($cp.Contains("'" + $f + "'") -or $dg.Contains($win)))
     }
+    $lop = [regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value
+    Yes '  and not when our own plugins change: they are the Release''s (#6175)' ($lop -ne '' -and -not $lop.Contains('Thornswood-Content.esp') -and -not $lop.Contains('last-plugin.recipe'))
     $prog = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\Program.cs'))
     Yes 'only the service takes the gate steps, never a deploy by tag inside a gate verb' ($prog -match '(?s)if \(verb == "service"\)\s*\{\s*agent\.Gate = new GatePipe\(\);')
 
@@ -290,7 +301,7 @@ $h = @{}; $want = ''
     else {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $tests = Join-Path $Repo 'tools\DeployAgent.Tests'
-        $rs = @(& dotnet restore $tests --locked-mode 2>&1 | ForEach-Object { "$_" })
+        $rs = @(& dotnet restore $tests --locked-mode --disable-build-servers 2>&1 | ForEach-Object { "$_" })
         $restored = $LASTEXITCODE -eq 0
         # When it refuses, dotnet's own error lines go in the FAIL lines
         # (#5925): a gate annotation carries a harness's FAIL lines and
@@ -315,7 +326,7 @@ $h = @{}; $want = ''
             $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
         }
         else {
-            $t = & dotnet test $tests --no-restore 2>&1
+            $t = & dotnet test $tests --no-restore --disable-build-servers 2>&1
             Yes 'dotnet test on tools/DeployAgent.Tests' ($LASTEXITCODE -eq 0)
             if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 30 | ForEach-Object { Write-Host "  $_" } }
         }

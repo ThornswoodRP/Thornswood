@@ -11,6 +11,9 @@
                        the branch, when it is still at that commit
       pwsh scripts/ops/Set-Ref.ps1 -Fork -DeleteBranch claude/what -Commit <40 hex>
                        the same in the fork, ThornswoodRP/skymp
+      pwsh scripts/ops/Set-Ref.ps1 -Ops -DeleteBranch claude/what -Commit <40 hex>
+                       the same in the private ops repository,
+                       ThornswoodRP/Thornswood-Ops
       pwsh scripts/ops/Set-Ref.ps1 -DeleteTag v1.1.47 -Commit <40 hex>
                        the tag, when it still names that commit
       pwsh scripts/ops/Set-Ref.ps1 -DeleteDraft 397526903
@@ -38,8 +41,14 @@
   nothing else) makes the call. No secret is in the session or the workflow.
   -Fork starts the fork's .github/workflows/thornswood-git-ref.yml instead,
   on GitHub's hosted runner (free in that public repository), which deletes
-  a branch by the same rules written into it; it makes no tags. A run's
-  token reaches only its own repository, so each has its own workflow.
+  a branch by the same rules written into it; it makes no tags. -Ops starts
+  the private ops repository's git-ref.yml, on that repository's own VPS
+  runners (it has no hosted minutes, #5529), which runs this script of the
+  public main with -OnGitHub and gives it a branch to delete and nothing
+  else: no tag, no tag delete, no draft (Ops #258, measured 15 Nov 2026: the
+  proxy refuses a cloud thread's branch delete there too, and the Bots'
+  tw_git deletes only a Bot's branch). A run's token reaches only its own
+  repository, so each has its own workflow.
 
   WHAT THE GITHUB HALF DOES, AND WHAT IT REFUSES.
     -Tag: only release/dev/<id>-dev and release/main/<id>, the names
@@ -106,6 +115,10 @@ param(
     [Parameter(ParameterSetName = 'Delete')]
     [Parameter(ParameterSetName = 'Run')]
     [switch]$Fork,
+    # The private ops repository's branch, through its git-ref.yml.
+    [Parameter(ParameterSetName = 'Delete')]
+    [Parameter(ParameterSetName = 'Run')]
+    [switch]$Ops,
     # The workflow's half. What to do comes from the environment the
     # workflow sets from its inputs, never from a command line.
     [Parameter(ParameterSetName = 'OnGitHub', Mandatory = $true)]
@@ -119,8 +132,9 @@ $ErrorActionPreference = 'Stop'
 
 $workflow = 'git-ref.yml'
 if ($Fork) { $GitHubRepo = 'ThornswoodRP/skymp'; $workflow = 'thornswood-git-ref.yml' }
+if ($Ops) { $GitHubRepo = 'ThornswoodRP/Thornswood-Ops' }
 $inActions = ($env:GITHUB_ACTIONS -eq 'true')
-$tagShape = '^release/(dev/\d{8}-\d{4}(\d{2})?-dev|main/\d{8}-\d{4}(\d{2})?)$'
+$tagShape = '^release/(dev/\d{8}-\d{4}(\d{2}Z?)?-dev|main/\d{8}-\d{4}(\d{2}Z?)?)$'
 $maxMessage = 4000
 
 # An annotation on the job, which GitHub keeps on its check run, so the
@@ -304,6 +318,7 @@ if ($OnGitHub) {
 }
 
 # ======================================================= the session half ===
+if ($Fork -and $Ops) { Die 'give -Fork or -Ops, not both: each names the one repository whose branch goes. Nothing was changed.' }
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'there is no gh here to start the git-ref workflow with. Nothing was changed.' }
 
 if (@('Tag', 'Delete', 'DeleteTag') -contains $PSCmdlet.ParameterSetName) {
@@ -329,7 +344,7 @@ if ($PSCmdlet.ParameterSetName -eq 'DeleteDraft') {
     if ($DeleteDraft -lt 1) { Die "$DeleteDraft is not a release id. Nothing was changed." }
 }
 . (Join-Path $PSScriptRoot 'WorkflowRun.ps1')
-$again = 'pwsh scripts/ops/Set-Ref.ps1 ' + $(if ($Fork) { '-Fork ' } else { '' }) + '-Run '
+$again = 'pwsh scripts/ops/Set-Ref.ps1 ' + $(if ($Fork) { '-Fork ' } elseif ($Ops) { '-Ops ' } else { '' }) + '-Run '
 
 # Waits for the run to end, then reads what the runner said: the Set-Ref
 # annotation on its job. -Started: this session started it, so from then on

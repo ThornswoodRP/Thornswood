@@ -100,5 +100,5 @@ function listening(srv, port) {
   if (fail) { console.log('log:\n' + log); }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -381,6 +381,15 @@ ROLES = [
     ('Support',              0xC9B46A, True,  SUPPORT),
 ]
 
+# THE BOTS (Patrick, 12 Nov 2026: "add a role called Clanker and make it be
+# one that stands out and include Paetreon, Thornswood, Jukebox, and
+# Dishboard"). Every bot in the server holds it, these four and any added
+# later (give_bots_clanker), so they show in one group of their own in the
+# member list, under staff and above everybody else. A bright colour no other
+# role uses, and no permissions: each bot's own role is what lets it work.
+CLANKER = 'Clanker'
+ROLES.append((CLANKER, 0x00E5FF, True, NONE))
+
 # In world. One Jarl per hold, and a hold for everybody else to belong to.
 # The Jarls are shown in their own group, the seats of the world; a Citizen
 # role keeps its colour and shows under Playtester (#3317, page card
@@ -506,8 +515,8 @@ for _name in FACTION_OFFICE_ROLES:
 # reads and nothing creates is the Banned mistake below.
 ROLES.append(('Business Owner', 0xA08C6A, False, NONE))
 
-# Joined, and answered the rules and age questions (#3317). Member sees the
-# front door and Information, read only; Playtester opens the rest.
+# Joined, and answered the rules and age questions (#3317). Member applies,
+# opens tickets and asks in #travelers-questions; Playtester opens the rest.
 ROLES.append(('Member', 0x8D9682, False, NONE))
 
 # THE ONE A BAN DEPENDS ON, and it was never created.
@@ -526,8 +535,8 @@ ROLES.append(('Updates Pings', 0x8D9682, False, NONE))
 # ROLES THIS NEVER MAKES, only puts in order.
 #
 # Discord makes Server Booster itself the first time somebody boosts, Patreon
-# makes its own when the shop is connected in its settings, and bot.py makes
-# the two ping roles the hold panel's buttons hand out. Creating any of them
+# makes its own when the shop is connected in its settings, and the bot makes
+# the two ping roles its buttons in #welcome hand out (bot_pings.py). Creating any of them
 # here would leave a second role of the same name that nothing hands out, and
 # whichever of the two Discord shows is a coin toss. Nor are their
 # permissions changed: the build leaves those to whatever made them. Their
@@ -549,8 +558,11 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 #        read         everybody reads, the council posts
 #        membersread  Member, Playtester and staff read, the council posts
 #        open         Playtester and staff talk, invisible to everybody else
-#        staffbump    Member and Playtester read and run no command, staff talk
-#                     and run commands (#disboard: staff bump, Patrick, 12 Nov)
+#        staffbump    everybody reads and runs no command, staff talk and run
+#                     commands (#disboard: staff bump, Patrick, 12 Nov)
+#        openread     everybody reads, Playtester and staff talk (#general-chat:
+#                     somebody who has not applied sees it is alive, Patrick,
+#                     16 Nov)
 #        testersread  Playtester and staff read, the council posts
 #        pathfind     the same people as open; the Playtesters category's own
 #        hold         a hold's hall: its Citizen, Jarl and officers, and HOLD_STAFF
@@ -573,12 +585,16 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 # other (the Loremasters reading the GM event plans, #3317).
 #
 # THE GATE (Patrick, 12 Nov 2026, page cards q-discord-hand-given-member and
-# q-discord-readback, A). Somebody who joins sees #rules and
-# #welcome-travelers, and talks in neither. Reacting to the bot's message in
-# #rules gives Member (bot_rules_gate.py, #5841), and the reaction is the
-# record that they accept the rules and are 18 or over. Member reads the
-# welcome and about channels and applies: the rest of Start Here, Tickets,
-# Applications, Information and the Roleplay Guide. Playtester, given when a
+# q-discord-readback, A; widened 16 Nov 2026: "keep those avaialble but than
+# lock the #apply channels untill they accept the rules and get the #member
+# role than once they do that they can apply than once approved they can
+# chat in general chat"). Somebody who joins reads Start Here, Information,
+# the Roleplay Guide, #welcome-travelers, #general-chat and
+# #travelers-questions, and talks in none of them, so they see the server is
+# alive before they apply. Reacting to the bot's message in #rules gives
+# Member (bot_rules_gate.py, #5841), and the reaction is the record that
+# they accept the rules and are 18 or over. Member applies, opens tickets
+# and asks in #travelers-questions. Playtester, given when a
 # playtest application is approved, opens everything else that is not staff.
 # Staff see their own space and Staff, and the council sees every space. From
 # #3317 (22 Oct) until then somebody with no role saw Start Here, Tickets and
@@ -649,9 +665,9 @@ PLAN = [
  ('Start Here', [
    dict(kind='text',  name='rules',       key='RULES',    mode='read',
         topic='Seven rules. Read them.', post=True),
-   dict(kind='text',  name='welcome',     key='WELCOME',  mode='membersread',
+   dict(kind='text',  name='welcome',     key='WELCOME',  mode='read',
         topic="Start here.", post=True),
-   dict(kind='text',  name='start-here',  key='START',    mode='membersread',
+   dict(kind='text',  name='start-here',  key='START',    mode='read',
         topic="How to actually get in and play.", post=True),
    # Where the Disboard listing is bumped. It was #say-hello until Patrick
    # renamed it #dishboard on 10 Nov 2026, and #disboard by 12 Nov (the audit
@@ -669,25 +685,25 @@ PLAN = [
         topic='Something happened and it should not have. Only you and staff see it.'),
  ]),
  ('Information', [
-   dict(kind='announce', name='news',     key='NEWS',     mode='membersread',
+   dict(kind='announce', name='news',     key='NEWS',     mode='read',
         topic='What changed, every time it changes.', post=True),
-   dict(kind='text',  name='updates',     key='UPDATES',  mode='membersread',
+   dict(kind='text',  name='updates',     key='UPDATES',  mode='read',
         topic="Restarts and outages. Check here before asking why you can't connect."),
-   dict(kind='text',  name='faq',         key='FAQ',      mode='membersread',
+   dict(kind='text',  name='faq',         key='FAQ',      mode='read',
         topic='Read this before you ask.', post=True),
  ]),
  # The rules of play and the world, read only, each with its changelog
  # (#3317). Both were in the talk categories before.
  ('Roleplay Guide', [
-   dict(kind='text',  name='game-rules',  key='GAMERULES', mode='membersread',
+   dict(kind='text',  name='game-rules',  key='GAMERULES', mode='read',
         topic='How roleplay works here. Nine rules, and what we let slide.',
         post=True, was=(('Thornswood', 'game-rules'), ('In Character', 'game-rules'))),
-   dict(kind='text',  name='lore',        key='LORE',     mode='membersread',
+   dict(kind='text',  name='lore',        key='LORE',     mode='read',
         topic='4E 252. What happened and who you can be.', post=True,
         was=(('In Character', 'lore'),)),
    # The sixteen factions, lore/factions.md as Patrick approved it on 22 Oct
    # (#3317), with its changelog like the rest.
-   dict(kind='text',  name='factions',    key='FACTIONS', mode='membersread',
+   dict(kind='text',  name='factions',    key='FACTIONS', mode='read',
         topic='The sixteen factions of 4E 252: who they are, where they keep, '
               'who leads them.', post=True),
  ]),
@@ -721,7 +737,18 @@ PLAN = [
         topic='A card for everybody who joins, posted by the bot. React to the '
               'rules in <#RULES> for the Member role.',
         was=(('Thornswood', 'welcome-travelers'),)),
-   dict(kind='text',  name='general-chat', key='GENERAL', mode='open',
+   # Somebody who has not applied yet asks here: everybody reads it, a
+   # Member asks, Playtester and staff answer (Patrick, 16 Nov 2026: "what
+   # would we name the channel they can post in?", then
+   # "travelers-questions"). Asking takes Member, the rules accepted.
+   dict(kind='text',  name='travelers-questions', key='QUESTIONS', mode='openread',
+        extra_roles=('Member',),
+        topic='Questions before you apply, or about anything you have read so '
+              'far. Ask here and staff will answer.'),
+   # Everybody reads it and does not post, so somebody who has not applied
+   # sees the server is alive; Playtester and staff talk (Patrick, 16 Nov
+   # 2026: "once approved they can chat in general chat").
+   dict(kind='text',  name='general-chat', key='GENERAL', mode='openread',
         topic="Out of character chat for everyone. Talk Thornswood, Skyrim, or "
               "whatever's on your mind, and keep it friendly. Bug reports go in "
               "<#RESULTS>, screenshots and clips go in <#MEDIA>.",
@@ -729,7 +756,8 @@ PLAN = [
    dict(kind='text',  name='media',       key='MEDIA',    mode='open',
         topic='Screenshots and clips. Talk about one in a thread under it.',
         was=(('Thornswood', 'media'),)),
-   dict(kind='text',  name='server-progression-and-economy', mode='open',
+   dict(kind='text',  name='server-progression-and-economy', key='ECONOMY', mode='open',
+        post=True, post_prefix='# Server progression and economy',
         topic='How the server grows and how its economy works: what you have '
               'seen, and what you would change. Ideas go in <#SUGGESTIONS>.',
         was=(('Thornswood', 'server-progression-and-economy'),)),
@@ -864,10 +892,16 @@ PLAN = [
  # What every staff member shares, and the council's own two channels.
  ('Staff', [
    # The staff #news, renamed so it is not taken for the public #news in
-   # Information, which carries the key and the release webhook.
-   dict(kind='announce', name='staff-announcements', mode='staffread',
-        topic='Announcements for every staff member. The council posts here.',
-        was=(('Staff', 'news'),)),
+   # Information, which carries the key and the release webhook. It was
+   # #staff-announcements from #3317 until Patrick named it #staff-news on
+   # 15 Nov 2026, so the staff pair matches the public one: #staff-news
+   # beside #news (releases: a dev release here by the id in
+   # dev-channel.txt, a main one in #news), #staff-updates beside #updates
+   # (restarts: a dev one in #staff-updates, a live one in #updates).
+   dict(kind='announce', name='staff-news', mode='staffread',
+        topic='Every dev release, and announcements for every staff member. '
+              'The council posts here.',
+        was=(('Staff', 'news'), ('Staff', 'staff-announcements'))),
    dict(kind='text',  name='council-decisions', mode='staffread',
         topic='Every council decision, with its date. The council posts here.'),
    # Where staff status updates go (Patrick, 11 Oct), and where the bot says
@@ -991,8 +1025,8 @@ CATEGORY_MODE = {
     'Start Here': 'public',
     'Tickets': 'membersread',
     'Applications': 'membersread',
-    'Information': 'membersread',
-    'Roleplay Guide': 'membersread',
+    'Information': 'read',
+    'Roleplay Guide': 'read',
     'Out of Character': 'open',
     'In Character': 'open',
     'Playtesters': 'pathfind',
@@ -1058,7 +1092,8 @@ RETIRED = [
 # Added 2 October after a run made channels again that had been moved or
 # renamed, and -Prune was one keystroke from taking the originals with it.
 KEEP = (
-    'general-chat', 'welcome-travelers', 'server-progression-and-economy',
+    'general-chat', 'welcome-travelers', 'travelers-questions',
+    'server-progression-and-economy',
     'play-testing', 'suggestions', 'dev-test-results', 'dev-test-findings',
     'test-results', 'test-tasks', 'jukebox',
     'test-findings', 'known-issues', 'dev-test-tasks',
@@ -1073,7 +1108,7 @@ KEEP = (
     # Their names from before #3317, and the channels #3317 renamed them to.
     # #tickets, the old closed ticket log, is not here any more: Patrick's
     # page card q-3317-ticket-split deletes it (RETIRED).
-    'ticket-log', 'staff-announcements', 'playtester voice',
+    'ticket-log', 'staff-announcements', 'staff-news', 'playtester voice',
     'news', 'help voice', 'support', 'council', 'council-decisions',
 ) + tuple(
     # The in-world roles (#2551, Patrick, 15 Oct: the office roles go in the
@@ -1298,6 +1333,33 @@ def _also(guild, roles, out, extra, talk):
     return out
 
 
+# The modes whose readers are roles by name, not a hold's, a faction's or
+# a staff space's own, which the Member line has no need of.
+_PLAIN_MODES = ('membersread', 'open', 'openread', 'pathfind', 'staffbump', 'testersread')
+
+
+def _seen_by(role):
+    """The channels of PLAN that somebody holding only this role sees, named
+       from the modes, so the audit's line about who sees what follows the
+       plan instead of saying an old order. None is somebody with no role."""
+    names = []
+    for _, chans in PLAN:
+        for ch in chans:
+            mode = ch.get('mode')
+            if everyone_reads(mode):
+                names.append('#' + ch['name'])
+            elif role is not None and mode in _PLAIN_MODES:
+                readers, talkers, _ = mode_audience(mode)
+                # A channel's own read_extra and extra_roles let one more
+                # role in there alone (#general-chat and #travelers-questions
+                # for Member).
+                readers = tuple(readers) + tuple(ch.get('read_extra') or ())
+                talkers = tuple(talkers) + tuple(ch.get('extra_roles') or ())
+                if role in readers or role in talkers:
+                    names.append('#' + ch['name'])
+    return ', '.join(names) or 'nothing'
+
+
 # Who each mode lets in, by role name: (readers, talkers, posters). A reader
 # sees and reads back and cannot post; a talker sees and posts; a poster in a
 # read only channel posts and tidies. A name in more than one list ends with
@@ -1309,10 +1371,10 @@ def mode_audience(mode, hold=None, space=None, faction=None):
         return (), (), COUNCIL_ROLES
     if mode == 'membersread':
         return ('Member',) + tester, (), COUNCIL_ROLES
-    if mode in ('open', 'pathfind'):
+    if mode in ('open', 'pathfind', 'openread'):
         return (), tester, ()
     if mode == 'staffbump':
-        return ('Member', 'Playtester'), STAFF, ()
+        return (), STAFF, ()
     if mode == 'testersread':
         return tester, (), COUNCIL_ROLES
     if mode in ('hold', 'holdread', 'holdcourt', 'holdguard'):
@@ -1410,19 +1472,25 @@ def overwrites(guild, mode, roles, hold=None, needs=BOT_NEEDS, extra=None,
                                              create_private_threads=False,
                                              send_messages_in_threads=True)
     if mode == 'staffbump':
-        # The readers run no command (a /bump is one); staff talk and get
-        # the commands back.
-        reader = discord.PermissionOverwrite(view_channel=True,
-                                             read_message_history=True,
-                                             send_messages=False,
-                                             create_public_threads=False,
-                                             send_messages_in_threads=False,
-                                             use_application_commands=False)
+        # Everybody reads and runs no command (a /bump is one), by
+        # @everyone's read only overwrite; staff talk and get the commands
+        # back.
         talk = discord.PermissionOverwrite(view_channel=True,
                                            send_messages=True,
                                            read_message_history=True,
                                            use_application_commands=True)
-    out = {ev: read_only if mode == 'read' else deny_all}
+    if mode == 'openread':
+        # @everyone's read only overwrite takes posting, threads and commands
+        # away, and a role's overwrite gives back only what it names, so the
+        # talkers get every one of them back: in #general-chat a Playtester
+        # still answers in a thread and runs a command.
+        talk = discord.PermissionOverwrite(view_channel=True,
+                                           send_messages=True,
+                                           read_message_history=True,
+                                           create_public_threads=True,
+                                           send_messages_in_threads=True,
+                                           use_application_commands=True)
+    out = {ev: read_only if everyone_reads(mode) else deny_all}
     for names, ow in ((readers, reader), (talkers, talk), (posters, poster)):
         for n in names:
             r = _named(guild, roles, n)
@@ -1761,7 +1829,27 @@ async def ensure_roles(guild):
                     failed.append('Discord took the role order but put %s' % wrong)
             except discord.HTTPException as e:
                 failed.append('the roles were not put in order (%s)' % refused(e))
+    await give_bots_clanker(guild, out.get(CLANKER))
     return out
+
+
+async def give_bots_clanker(guild, role):
+    """Clanker to every bot in the server that has not got it, this one
+       included, and to nobody else. It is never taken from anybody."""
+    if role is None:
+        return
+    for m in getattr(guild, 'members', None) or []:
+        if not getattr(m, 'bot', False) or role in getattr(m, 'roles', []):
+            continue
+        what = 'role %s for the bot %s' % (CLANKER, m.name)
+        if CHECK:
+            say('would give', what)
+            continue
+        try:
+            await m.add_roles(role, reason='Thornswood setup: every bot holds Clanker')
+            say('gave', what)
+        except discord.HTTPException as e:
+            failed.append('%s (%s)' % (what, refused(e)))
 
 
 def order_after(order, roles):
@@ -1904,6 +1992,30 @@ def gone_mentions(guild, text):
     return [int(i) for i in re.findall(r'<#(\d+)>', text or '') if int(i) not in have]
 
 
+async def rebuild_as_forum(guild, cat, spec, want, ow, old):
+    """The forum the plan wants in place of old, a text channel why_kept
+       found nothing in, or old itself when Discord refuses the forum (#4492).
+       The forum is made before old is deleted, so a refused forum leaves the
+       channel standing; a refused delete leaves both, and says so."""
+    try:
+        forum = await guild.create_forum(
+            want, category=cat, topic=topic_text(guild, spec),
+            overwrites=ow, reason='Thornswood setup, rebuilding a text channel as a forum')
+    except discord.HTTPException as e:
+        failed.append('#%s could not be rebuilt as a forum, and the text channel '
+                      'stays (%s)' % (want, refused(e)))
+        return old
+    made.append('#' + want + ' (rebuilt as a forum)')
+    try:
+        await old.delete(reason='Thornswood setup, rebuilt as a forum')
+    except discord.HTTPException as e:
+        failed.append('#%s: the forum is made, and the old text channel of that '
+                      'name could not be deleted (%s)' % (want, refused(e)))
+        return forum
+    say('rebuilt', want + ' is a forum now')
+    return forum
+
+
 async def ensure_channel(guild, cat, spec, roles, found):
     name = spec['name']
     kind = spec['kind']
@@ -1961,8 +2073,12 @@ async def ensure_channel(guild, cat, spec, roles, found):
     else:
         # Made before Community was on, so it came out as a text channel where
         # a forum was wanted. Discord cannot convert one into the other, so the
-        # only fix is to delete it and make it again, which is why this says so
-        # loudly rather than quietly leaving it wrong.
+        # only fix is a new forum and the old channel deleted, which is why this
+        # says so loudly rather than quietly leaving it wrong. The delete goes
+        # through why_kept, the check -Prune's own deletes go through, and
+        # here a message in the channel keeps it too: its name stays in the
+        # plan, so whatever is written in it is somebody's (#4492). The forum
+        # is made first, so a forum Discord refuses leaves the channel there.
         if kind == 'forum' and not isinstance(existing, getattr(discord, 'ForumChannel', ())):
             if PRUNE and want in KEEP:
                 say('note', '#' + want + ' is a text channel where a forum was '
@@ -1971,17 +2087,16 @@ async def ensure_channel(guild, cat, spec, roles, found):
             elif PRUNE and CHECK:
                 # -Check asks Discord for nothing; it said nothing of this
                 # and deleted the channel until #3317.
-                say('would rebuild', '#' + want + ' as a forum; this deletes it')
+                say('would rebuild', '#' + want + ' as a forum, and delete the text '
+                    'channel if no message and no open thread is in it')
             elif PRUNE:
-                try:
-                    await existing.delete(reason='wrong kind, rebuilding as a forum')
-                    existing = await guild.create_forum(
-                        want, category=cat, topic=topic_text(guild, spec),
-                        overwrites=ow, reason='Thornswood setup')
-                    made.append('#' + want + ' (rebuilt as a forum)')
-                    say('rebuilt', want + ' is a forum now')
-                except Exception:
-                    failed.append('#' + want + ' could not be rebuilt as a forum')
+                why = await why_kept(existing, await open_threads(guild), messages=True)
+                if why:
+                    say('left', '#%s is a text channel where a forum was wanted, '
+                        'and it stays: %s. Move or close what is in it, then '
+                        'run this again' % (want, why))
+                else:
+                    existing = await rebuild_as_forum(guild, cat, spec, want, ow, existing)
             else:
                 say('note', '#' + want + ' is a text channel where a forum was '
                     'wanted. The only fix for that deletes it, so ask first')
@@ -2178,6 +2293,13 @@ async def changelog_drift(channel, key, me_id):
             if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
                 linked = True
                 break
+        discussion = any(s.get('post_prefix') for _, specs in PLAN for s in specs
+                         if s['name'] == channel.name)
+        if not linked and discussion:
+            async for m in channel.pins(limit=None):
+                if doc_post_of_mine(m, me_id) and thread.mention in (m.content or ''):
+                    linked = True
+                    break
         if not linked:
             out.append('its post does not link its Changelog thread; -Posts writes the link')
     except discord.HTTPException as e:
@@ -2203,14 +2325,19 @@ def doc_post_of_mine(message, me_id):
     # they accepted the rules, so it is never deleted with the rules' words.
     if (getattr(message, 'content', '') or '').startswith(RULES_GATE_FIRST_LINE):
         return False
+    # A message with buttons is one of the bot's panels (the ping buttons in
+    # #welcome, bot_pings.py), which the bot keeps itself. post() never sends
+    # buttons, so none of its words are taken for one.
+    if getattr(message, 'components', None):
+        return False
     kind = getattr(message, 'type', None)
     return kind in (discord.MessageType.default, discord.MessageType.reply,
                     discord.MessageType.pins_add)
 
 
 async def post(channel, text, found):
-    """Put the words in, replacing anything this bot put there before, so the
-       rules can be edited in content.py and re run rather than in Discord."""
+    """Publish a maintained document. In a discussion channel, replace only
+       its owned guide posts and preserve the conversation."""
     if channel is None or text is None:
         return
     for token, ch in found.items():
@@ -2221,36 +2348,149 @@ async def post(channel, text, found):
     import re
     text = re.sub(r'<#([A-Z]+)>', lambda m: '#' + m.group(1).lower(), text)
 
-    # The old posts go first, or the new ones would sit under them twice
-    # over. A channel whose old posts cannot be read or removed is left as it
-    # is and named under "did not manage" (#2736): writing beside them is how
-    # a channel came to say its rules twice.
-    try:
-        async for old in channel.history(limit=50):
-            if doc_post_of_mine(old, client.user.id):
-                try:
-                    await old.delete()
-                except discord.NotFound:
-                    pass  # gone already, which is what this wanted
-    except discord.HTTPException as e:
-        failed.append('#%s was not rewritten: its old posts could not be removed (%s)'
-                      % (channel.name, refused(e)))
+    # A guide in an open discussion owns only its headed post. Other bot
+    # replies, as well as members' messages, remain part of that discussion.
+    prefix = next((s.get('post_prefix') for _, specs in PLAN for s in specs
+                   if s['name'] == channel.name), None)
+    if prefix:
+        text = text.strip()
+    if prefix and text.split('\n\n', 1)[0] != prefix:
+        failed.append('#%s was not rewritten: its discussion guide must start '
+                      'with its heading' % channel.name)
+        return
+    # The Changelog thread is this document's durable identity. A bot reply
+    # can quote the heading without being the guide that this run owns.
+    def guide_owner(words):
+        match = re.fullmatch(r'\*Last changed \d{1,2} [A-Z][a-z]{2} \d{4}: [^\n]+ '
+                             r'Every change is in the Changelog thread, (<#\d+>)\.\*',
+                             words.rsplit('\n\n', 1)[-1])
+        return match[1] if match else None
+
+    owner = guide_owner(text) if prefix else None
+    if prefix and not owner:
+        failed.append('#%s was not rewritten: its discussion guide needs its '
+                      'Changelog thread before it can be identified' % channel.name)
         return
 
     chunks, cur = [], ''
-    for para in text.split('\n\n'):
-        if len(cur) + len(para) + 2 > 1900:
+    if prefix:
+        paragraphs = text.split('\n\n')
+        footer = paragraphs[-1]
+        if not footer.startswith('*Last changed '):
+            failed.append('#%s was not rewritten: its discussion guide needs its '
+                          'Changelog thread footer in a paragraph of its own' % channel.name)
+            return
+        # Every part carries the document's heading and Changelog identity,
+        # and is pinned. A later update can find all of them after busy chat.
+        body = paragraphs[1:-1]
+        if not any(p.strip() for p in body):
+            failed.append('#%s was not rewritten: its discussion guide is empty' % channel.name)
+            return
+        single_room = 1900 - len(prefix) - len(footer) - 4
+        whole = '\n\n'.join(body)
+        parts = 1 if len(whole) <= single_room else 2
+        while True:
+            label = '*Part %d of %d*' % (parts, parts)
+            room = single_room if parts == 1 else single_room - len(label) - 2
+            groups, current = [], []
+            for para in body:
+                if len(para) > room:
+                    failed.append('#%s was not rewritten: each guide paragraph must '
+                                  'fit in one message' % channel.name)
+                    return
+                if current and len('\n\n'.join(current + [para])) > room:
+                    groups.append('\n\n'.join(current))
+                    current = []
+                current.append(para)
+            if current:
+                groups.append('\n\n'.join(current))
+            if len(str(len(groups))) == len(str(parts)):
+                break
+            parts = len(groups)
+        for i, group in enumerate(groups, 1):
+            part = '*Part %d of %d*\n\n' % (i, len(groups)) if len(groups) > 1 else ''
+            chunks.append(prefix + '\n\n' + part + group + '\n\n' + footer)
+    else:
+        for para in text.split('\n\n'):
+            if len(cur) + len(para) + 2 > 1900:
+                chunks.append(cur.strip())
+                cur = ''
+            cur += para + '\n\n'
+        if cur.strip():
             chunks.append(cur.strip())
-            cur = ''
-        cur += para + '\n\n'
-    if cur.strip():
-        chunks.append(cur.strip())
+    def managed(m):
+        return (doc_post_of_mine(m, client.user.id)
+                and (not prefix or (m.content.split('\n', 1)[0] == prefix
+                     and guide_owner(m.content) == owner)))
 
-    first = None
-    for c in chunks:
-        m = await channel.send(c)
-        first = first or m
-    if first:
+    # The old posts are found first and taken down last, once every new one
+    # is in (#4493). Until then they went first, and a send Discord refused
+    # left the channel empty or half written and ended the run before the
+    # channels after it. A channel whose old posts cannot be read is left as
+    # it is and named under "did not manage" (#2736): writing beside them is
+    # how a channel came to say its rules twice.
+    try:
+        old_posts = [m async for m in channel.history(limit=50) if managed(m)]
+        if prefix:
+            # Discussion can push the guide out of the recent messages.
+            # Its pin remains the stable way to find and replace that copy.
+            async for m in channel.pins(limit=None):
+                if (managed(m)
+                        and all(old.id != m.id for old in old_posts)):
+                    old_posts.append(m)
+    except discord.HTTPException as e:
+        failed.append('#%s was not rewritten: its old posts could not be read (%s)'
+                      % (channel.name, refused(e)))
+        return
+
+    sent = []
+    try:
+        for i, c in enumerate(chunks, 1):
+            doing = 'post %d of %d could not be sent' % (i, len(chunks))
+            sent.append(await channel.send(c))
+        if prefix:
+            for i, m in enumerate(sent, 1):
+                doing = 'post %d of %d could not be pinned' % (i, len(sent))
+                await m.pin()
+    except discord.HTTPException as e:
+        failed.append('#%s was not rewritten: %s (%s); '
+                      'its old words stay' % (channel.name, doing, refused(e)))
+        # The part that did go would sit under the old words and say them
+        # twice over (#2736), so it comes back out.
+        for m in sent:
+            try:
+                await m.delete()
+            except discord.NotFound:
+                pass  # gone already, which is what this wanted
+            except discord.HTTPException as e2:
+                pin_state = 'not pinned'
+                if prefix:
+                    try:
+                        await m.unpin()
+                        pin_state = 'not pinned'
+                    except discord.NotFound:
+                        continue
+                    except discord.HTTPException:
+                        pin_state = 'pin status unknown'
+                failed.append('#%s: replacement message %s could not be taken back '
+                              '(%s; %s). Its old words stay; remove this replacement '
+                              'before publishing again.'
+                              % (channel.name, m.id, refused(e2), pin_state))
+        return
+
+    for old in old_posts:
+        try:
+            await old.delete()
+        except discord.NotFound:
+            pass  # gone already, which is what this wanted
+        except discord.HTTPException as e:
+            failed.append('#%s: its new words are in, but its old posts could not all be '
+                          'removed, so it says them twice until the next -Posts (%s)'
+                          % (channel.name, refused(e)))
+            break
+
+    first = sent[0] if sent else None
+    if first and not prefix:
         try:
             await first.pin()
         except discord.HTTPException as e:
@@ -2724,6 +2964,227 @@ async def keep_onboarding_off(guild):
         failed.append("could not switch Discord's Onboarding off (%s)" % refused(e))
 
 
+# ONBOARDING'S DEFAULT CHANNELS. Onboarding keeps its list of default channels
+# while it is off, and Discord refuses to shut @everyone out of any channel on
+# that list: the build of 12 Nov 2026 left #start-here and #disboard open with
+# "400 Onboarding channels must be readable by everyone", with Onboarding off.
+# So before a channel is gated, the build takes every channel the plan shuts
+# @everyone out of off that list, and leaves the rest of the list and every
+# other Onboarding setting as they are.
+def everyone_reads(mode):
+    """Whether a mode lets @everyone read."""
+    return mode in ('public', 'read', 'staffbump', 'openread')
+
+
+def plan_modes():
+    """{channel name: its mode} for every text channel of the plan."""
+    modes = {}
+    for _cat, specs in PLAN:
+        for spec in specs:
+            if spec['kind'] != 'voice':
+                modes.setdefault(spec['name'], spec.get('mode', 'open'))
+    return modes
+
+
+def onboarding_shut(guild, ob):
+    """The default channels of Onboarding that the plan shuts @everyone out
+       of, as (id, name). A channel the plan does not name is left alone."""
+    modes = plan_modes()
+    out = []
+    for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+        ch = guild.get_channel(cid)
+        name = getattr(ch, 'name', None)
+        if name in modes and not everyone_reads(modes[name]):
+            out.append((cid, name))
+    return out
+
+
+async def keep_onboarding_channels(guild):
+    try:
+        ob = await guild.onboarding()
+    except discord.HTTPException as e:
+        failed.append("could not read Discord's Onboarding (%s)" % refused(e))
+        return
+    shut = onboarding_shut(guild, ob)
+    if not shut:
+        return
+    what = ("#%s off Discord's Onboarding default channels, which the plan shuts "
+            "@everyone out of" % ', #'.join(n for _i, n in shut))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    # Onboarding's list keeps the id of a channel deleted since, and Discord
+    # refuses the whole edit over one ("400 Invalid Form Body In
+    # default_channel_ids: Unknown channel", the live build of 12 Nov, 4:03
+    # PM). So the list sent back holds only channels the server still has.
+    gone = set(i for i, _n in shut)
+    stale = [i for i in sorted(ob.default_channel_ids)
+             if i not in gone and guild.get_channel(i) is None]
+    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids)
+            if i not in gone and i not in stale]
+    try:
+        await guild.edit_onboarding(default_channels=keep,
+                                    reason='Thornswood setup, the plan gates these channels')
+        say('onboarding', 'took ' + what)
+        if stale:
+            say('onboarding', 'and %d deleted channel(s) it still listed' % len(stale))
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
+
+
+def welcome_shut(guild, ws):
+    """The channels of Discord's Welcome Screen that the plan shuts @everyone
+       out of, as (id, name). The live build of 12 Nov, 5:20 PM (main
+       54e22c0) took #start-here and #disboard off Onboarding's default
+       channels, and Discord still refused to gate them, "400 Onboarding
+       channels must be readable by everyone": Discord holds every channel
+       somebody new is pointed to to that rule, and the Welcome Screen of a
+       Community server points to channels too."""
+    modes = plan_modes()
+    out = []
+    for wc in getattr(ws, 'welcome_channels', None) or []:
+        ch = getattr(wc, 'channel', None)
+        cid = getattr(ch, 'id', None)
+        name = getattr(guild.get_channel(cid), 'name', None) if cid else None
+        if name in modes and not everyone_reads(modes[name]):
+            out.append((cid, name))
+    return out
+
+
+async def read_server_guide(guild):
+    """Discord's Server Guide for the server, as Discord sends it."""
+    from discord.http import Route
+    return await client.http.request(
+        Route('GET', '/guilds/{guild_id}/new-member-welcome', guild_id=guild.id))
+
+
+# The two lists of the Server Guide that point somebody new at a channel: its
+# new member actions ("Bump the server") and its resource channels.
+GUIDE_LISTS = ('new_member_actions', 'resource_channels')
+
+# Where a person changes the Server Guide. Discord keeps it from bots: the
+# build of 12 Nov, 6:21 PM Mountain (main 7c0bc7c) sent it back without the
+# gated channels and Discord answered "403 Bots cannot use this endpoint".
+GUIDE_WHERE = 'Server Settings, Onboarding, Server Guide'
+
+
+async def tell_server_guide(guild):
+    """Says, as a failure, which channels the plan gates are in Discord's
+       Server Guide, and any channel the server no longer has, so a person
+       takes them off there before the build can gate them.
+
+       The audit of 12 Nov, 5:55 PM Mountain (main 5a47af5) found #start-here
+       and #disboard in the Server Guide, once they were off Onboarding's
+       default channels and the Welcome Screen held neither, and Discord
+       refuses to gate a channel there: "400 Onboarding channels must be
+       readable by everyone". A bot can read the guide but not change it."""
+    try:
+        guide = await read_server_guide(guild)
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) in (403, 404):
+            return
+        failed.append("could not read Discord's Server Guide (%s)" % refused(e))
+        return
+    if not isinstance(guide, dict):
+        return
+    modes = plan_modes()
+    drop = {}
+    for key in GUIDE_LISTS:
+        for entry in guide.get(key) or []:
+            try:
+                cid = int((entry or {}).get('channel_id') or 0)
+            except (TypeError, ValueError):
+                continue
+            ch = guild.get_channel(cid)
+            name = getattr(ch, 'name', None)
+            if ch is None:
+                drop[cid] = 'a deleted channel'
+            elif name in modes and not everyone_reads(modes[name]):
+                drop[cid] = '#' + name
+    if not drop:
+        return
+    failed.append("%s is in Discord's Server Guide, which bots cannot change. Take "
+                  "it off by hand in %s, then build again: until then Discord "
+                  "refuses to gate it" % (', '.join(sorted(set(drop.values()))),
+                                          GUIDE_WHERE))
+
+
+def guide_shut(guild, guide):
+    """The names of the channels the plan gates that Discord's Server Guide
+       names anywhere in it (its actions and its resource channels)."""
+    modes = plan_modes()
+    ids = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k == 'channel_id' and v:
+                    ids.add(int(v))
+                else:
+                    walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(guide)
+    out = set()
+    for cid in ids:
+        name = getattr(guild.get_channel(cid), 'name', None)
+        if name in modes and not everyone_reads(modes[name]):
+            out.add(name)
+    return out
+
+
+def prompt_shut(guild, ob):
+    """The answers of Onboarding's questions that point to a channel the plan
+       shuts @everyone out of, as 'question: answer: #channel'. The audit says
+       them; the build does not rewrite Onboarding's questions."""
+    modes = plan_modes()
+    out = []
+    for prompt in getattr(ob, 'prompts', None) or []:
+        for opt in getattr(prompt, 'options', None) or []:
+            for cid in sorted(getattr(opt, 'channel_ids', None) or ()):
+                name = getattr(guild.get_channel(cid), 'name', None)
+                if name in modes and not everyone_reads(modes[name]):
+                    out.append('%s: %s: #%s' % (getattr(prompt, 'title', '?'),
+                                                getattr(opt, 'title', '?'), name))
+    return out
+
+
+async def keep_welcome_screen(guild):
+    """Takes the channels the plan gates off the Welcome Screen, before any
+       channel is gated, and leaves its words, its other channels and whether
+       it is on as they are. A server with no Welcome Screen is left alone."""
+    try:
+        ws = await guild.welcome_screen()
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) in (403, 404):
+            return
+        failed.append("could not read Discord's Welcome Screen (%s)" % refused(e))
+        return
+    shut = welcome_shut(guild, ws)
+    if not shut:
+        return
+    what = ("#%s off Discord's Welcome Screen, which the plan shuts @everyone out of"
+            % ', #'.join(n for _i, n in shut))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    gone = set(i for i, _n in shut)
+    keep = []
+    for wc in ws.welcome_channels:
+        cid = getattr(getattr(wc, 'channel', None), 'id', None)
+        if cid in gone or guild.get_channel(cid) is None:
+            continue
+        keep.append(discord.WelcomeChannel(channel=wc.channel, description=wc.description,
+                                           emoji=wc.emoji))
+    try:
+        await guild.edit_welcome_screen(welcome_channels=keep,
+                                        reason='Thornswood setup, the plan gates these channels')
+        say('welcome', 'took ' + what)
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
+
+
 # --------------------------------------------------------------- layout --
 # THE LAYOUT, WRITTEN OUT (#3317, Patrick, 22 Oct: "we also need to document
 # the discord layout somewhere ... so that we dont accidentally drift using
@@ -2757,9 +3218,12 @@ ROLE_DOES = {
     'Content Creator': 'Thornswood\'s own social media and content, not '
                        'community creators.',
     'Support': 'Answers help tickets and playtest applications, and gives Playtester.',
+    'Clanker': 'Every bot in the server: Thornswood, Patreon, Jockie Music, '
+               'DISBOARD and any added later. A build gives it.',
     'Playtester': 'Plays the main build. Opens the Discord past Information.',
-    'Member': 'Joined and answered the rules and age questions. Sees Start '
-              'Here, Applications and Information.',
+    'Member': 'Reacted to the rules in #rules, which says 18 or over and the '
+              'rules accepted. Applies, opens tickets and asks in '
+              '#travelers-questions.',
     'Banned': 'Takes the site and the game away (site/server.js, access.banned).',
     'Thalmor Boot-Licker': 'A Patreon tier; Patreon gives and takes it.',
     'Talos Worshiper': 'A Patreon tier; Patreon gives and takes it.',
@@ -2813,7 +3277,7 @@ def _made_by(name):
     if name == 'Patreon':
         return 'Patreon'
     if name in ('News Pings', 'Updates Pings'):
-        return 'bot.py'
+        return 'the bot (bot_pings.py)'
     return 'the build'
 
 
@@ -2829,7 +3293,7 @@ def _audience_words(mode, hold=None, space=None, read_extra=(), extra=(), factio
     readers = tuple(readers) + tuple(read_extra or ())
     talkers = tuple(talkers) + tuple(extra or ())
     see = readers + talkers + posters
-    if mode == 'read':
+    if everyone_reads(mode):
         return ('everybody', _names_words(talkers + posters),
                 _names_words(posters) if posters else '')
     return (_names_words(see), _names_words(talkers + posters) if talkers or posters else 'nobody',
@@ -2906,7 +3370,8 @@ def layout():
     w('')
     w('| Mode | Sees | Talks | Posts |')
     w('|---|---|---|---|')
-    for mode in ('public', 'read', 'membersread', 'staffbump', 'open', 'pathfind',
+    for mode in ('public', 'read', 'membersread', 'staffbump', 'open', 'openread',
+                 'pathfind',
                  'testersread',
                  'staff', 'staffread', 'council'):
         r, t, p = _audience_words(mode)
@@ -2974,7 +3439,23 @@ def layout():
     w('Roles never deleted: every Jarl, Citizen and office role, and every '
       'faction\'s Leader, member and Officer role.')
     w('')
-    return '\n'.join(L)
+    return '\n'.join(_with_contents(L))
+
+
+def _with_contents(L):
+    """The page with a Contents linking each ## heading, put before the
+       first one. Every doc over 300 lines carries one
+       (tests/test-4336-long-docs-contents.js), and this page is written
+       here, so it is made here from the headings the page has."""
+    heads = [x[3:] for x in L if x.startswith('## ')]
+    if not heads:
+        return L
+    first = L.index('## ' + heads[0])
+    toc = ['## Contents', '']
+    for h in heads:
+        slug = re.sub(r'[^a-z0-9 -]', '', h.lower()).replace(' ', '-')
+        toc.append('- [%s](#%s)' % (h, slug))
+    return L[:first] + toc + [''] + L[first:]
 
 
 async def audit(guild):
@@ -3019,6 +3500,39 @@ async def audit(guild):
         off("Discord's Onboarding is on; " + ONBOARDING_WHY + '. A build switches it off')
     elif on is not False:
         off("Discord's Onboarding could not be read (%s)" % on)
+    try:
+        ob = await guild.onboarding()
+        for _i, name in onboarding_shut(guild, ob):
+            off("#%s is a default channel of Discord's Onboarding, so Discord refuses "
+                "to shut @everyone out of it as the plan does; a build takes it off "
+                "that list" % name)
+        for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+            if guild.get_channel(cid) is None:
+                off("Discord's Onboarding still lists channel %d, which the server no "
+                    "longer has; a build leaves it off the list it sends back" % cid)
+        for where in prompt_shut(guild, ob):
+            off("an Onboarding answer points to a channel the plan gates, which "
+                "Discord then refuses to gate: %s" % where)
+    except discord.HTTPException as e:
+        off("Discord's Onboarding default channels could not be read (%s)" % refused(e))
+    # The Server Guide (Server Settings, Onboarding, Server Guide) points
+    # people at channels as well, and discord.py has no call for it, so it
+    # is read here, read only, to see whether it names a gated channel.
+    try:
+        for name in sorted(guide_shut(guild, await read_server_guide(guild))):
+            off("#%s is in Discord's Server Guide, so Discord refuses to shut "
+                "@everyone out of it as the plan does; a person takes it off in "
+                "%s, which bots cannot change" % (name, GUIDE_WHERE))
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) not in (403, 404):
+            off("Discord's Server Guide could not be read (%s)" % refused(e))
+    try:
+        for _i, name in welcome_shut(guild, await guild.welcome_screen()):
+            off("#%s is on Discord's Welcome Screen, so Discord refuses to shut "
+                "@everyone out of it as the plan does; a build takes it off" % name)
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) not in (403, 404):
+            off("Discord's Welcome Screen could not be read (%s)" % refused(e))
 
     print('\n  Roles against the plan', flush=True)
     for name, _, _, want in ROLES:
@@ -3069,13 +3583,13 @@ async def audit(guild):
         only = [m for m in member.members
                 if (tester is None or tester not in m.roles)
                 and not any(x.name in staff_held for x in m.roles)]
-        line('Member and neither Playtester nor staff, so Start Here and '
-             'Information only: %d (%s)'
-             % (len(only), ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
+        line('Member and neither Playtester nor staff, so %s only: %d (%s)'
+             % (_seen_by('Member'), len(only),
+                ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
     nobody = [m for m in guild.members
               if not getattr(m, 'bot', False)
               and not [x for x in m.roles if x != guild.default_role]]
-    line('no role at all, so Start Here only: %d' % len(nobody))
+    line('no role at all, so %s only: %d' % (_seen_by(None), len(nobody)))
     for m, cat, held in doubles(guild.members):
         off('%s holds %s, two ranks of %s' % (_who(m), ' and '.join(held), cat))
     for m, staff, seats in seat_clashes(guild.members):
@@ -3280,6 +3794,35 @@ async def open_threads(guild):
     return out
 
 
+async def why_kept(ch, busy, messages=False):
+    """Why the build leaves a channel it would otherwise delete, in words, or
+       None when nothing goes with it. The one check both of the build's
+       channel deletes go through (#4492): -Prune's of a channel the plan no
+       longer has, and the rebuild of a text channel as the forum the plan
+       wants. busy is open_threads()'s answer, None when Discord would not
+       list the threads, which is never taken as none open.
+
+       messages=True leaves a channel that holds any message too. The rebuild
+       asks for it: the channel's name stays in the plan, so what is written
+       in it is somebody's (#bugs, #character-introductions and #tales, made
+       as text channels before Community). The prune list does not: a
+       channel the plan retired, such as the old ticket dropdown or closed
+       ticket log, holds messages by design and goes once no thread is open
+       in it."""
+    if busy is None:
+        return ('Discord would not say which threads are open, and an open '
+                'ticket would go with it')
+    if busy.get(ch.id):
+        return '%d thread(s) still open in it' % busy[ch.id]
+    if messages:
+        try:
+            async for _m in ch.history(limit=1):
+                return 'it holds messages, which would go with it'
+        except discord.HTTPException as e:
+            return 'its messages could not be read (%s)' % refused(e)
+    return None
+
+
 async def keep_order(guild):
     moves = order_wanted(guild)
     if not moves:
@@ -3363,6 +3906,9 @@ async def on_ready():
         # only said there.
         if not ONLY:
             await keep_onboarding_off(guild)
+            await keep_onboarding_channels(guild)
+            await keep_welcome_screen(guild)
+            await tell_server_guide(guild)
         elif await onboarding_on(guild) is True:
             say('note', "Discord's Onboarding is on, and a whole build switches it off")
 
@@ -3474,14 +4020,12 @@ async def on_ready():
             if PRUNE:
                 busy = await open_threads(guild)
                 for ch in extra:
-                    if busy is None:
-                        failed.append('#%s was not removed: Discord would not say which '
-                                      'threads are open, and an open ticket would go '
-                                      'with it' % ch.name)
+                    why = await why_kept(ch, busy)
+                    if why and busy is None:
+                        failed.append('#%s was not removed: %s' % (ch.name, why))
                         continue
-                    if busy.get(ch.id):
-                        say('left', '#%s: %d thread(s) still open in it; it goes once '
-                            'they are closed' % (ch.name, busy[ch.id]))
+                    if why:
+                        say('left', '#%s: %s; it goes once they are closed' % (ch.name, why))
                         continue
                     if CHECK:
                         say('would remove', '#' + ch.name)

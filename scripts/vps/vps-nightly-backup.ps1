@@ -39,6 +39,16 @@
   the dev voice service, and anything over the size cap. All of those come
   back from the repo. Uploads are always taken in full.
 
+  A server that keeps its world in MongoDB (#6237) has it read out instead,
+  with the backup user (MongoUri), into the same place in the backup:
+  game\world\changeForms, one file per form, named and laid out as the
+  file driver lays out a world, so a restore, a rehearsal and a deletion
+  read either alike (World.ps1, beside this on the box as world.ps1, which
+  Install-Backup.ps1 sends with it). MongoDB keeps each document whole, so
+  none is torn; one saved while it is read may be the newer save or the one
+  before. A world that could not be read out is said, and the run ends
+  non-zero once the rest is taken.
+
   The server writes world while this runs, so a file can be caught half
   written. Every .json taken from a world folder is read back, and one that
   does not parse is copied again a moment later; one that still does not is
@@ -53,8 +63,9 @@
   definition, or in the log.
 
   Kept: seven daily and four weekly. A weekly is whichever run lands on a
-  Sunday. Nothing else is deleted, ever, including anything a person put in
-  that folder by hand.
+  Sunday. A copy made without the game servers is marked .incomplete when it
+  is made and never pushes a whole copy out (#4205). Nothing else is deleted,
+  ever, including anything a person put in that folder by hand.
 
   Restoring one is RESTORING.md in the ops repo, which is also how you check that any of
   this works. A backup nobody has restored is a guess.
@@ -70,6 +81,10 @@ param(
   # The record of completed deletion requests (Delete-Person.ps1, #2351).
   [string]$DeletionRoot = 'C:\Thornswood-Deletions',
   [string]$Out        = 'C:\Thornswood-Backup',
+  # The backup user's connection file (Install-Mongo.ps1, #6237), which this
+  # task alone of the tasks may read: a server that keeps its world in
+  # MongoDB is read out with it. Its role reads every world and changes none.
+  [string]$MongoUri   = 'C:\Thornswood-Mongo\access\backup.uri',
   # The passphrase. Created by Install-Backup.ps1 if it is not already there,
   # and the one thing in all of this that has to be kept somewhere else as
   # well: lose it and the backups are noise.
@@ -111,7 +126,7 @@ Note "---- nightly backup $stamp ----"
 # The server folders' turn, which the server installs and deploys take too
 # (#3247). A copy of scripts\deploy\ServerFolderTurn.ps1 below its header:
 # this script runs on its own on the box, from the task Install-Backup.ps1
-# makes. tests\test-3247-server-folder-turn.ps1 fails when the two differ.
+# makes. scripts\tests\test-3247-server-folder-turn.ps1 fails when the two differ.
 # ---- ServerFolderTurn.ps1 (copy) ----
 
 # The server folders' turn (#3247). The nightly backup reads each game
@@ -303,6 +318,44 @@ function Mend($from, $to) {
   if ($bad) { Note ("  TORN      {0}: {1} file(s) would not parse after three copies" -f $to, $bad) }
 }
 
+# A server's world, wherever it keeps it (#6237): its world folder, taken
+# and mended as above, or read out of MongoDB into the same place.
+$worldsNotTaken = @()
+$worldPs = Join-Path $PSScriptRoot 'world.ps1'
+if (Test-Path -LiteralPath $worldPs) { . $worldPs }
+function TakeWorld($root, $to) {
+  $settings = Join-Path $root 'server-settings.json'
+  if (-not (Get-Command Get-ThornswoodWorld -ErrorAction SilentlyContinue)) {
+    # Without world.ps1 a server's settings are not read; its world folder
+    # is taken as before, and one in MongoDB is said below.
+    $w = @{ Stop = ''; Driver = 'file'; Forms = (Join-Path $root 'world\changeForms') }
+    $cfgText = ''
+    if (Test-Path -LiteralPath $settings) {
+      try { $cfgText = [IO.File]::ReadAllText($settings) }
+      catch { $w = @{ Stop = ($settings + ' could not be read (' + $_.Exception.Message + '), so where the world is kept is not known') } }
+    }
+    if (-not $w.Stop -and $cfgText -match '"databaseDriver"\s*:\s*"mongodb"') { $w = @{ Stop = ('world.ps1 is not beside this script, so ' + $root + '''s world in MongoDB could not be read out. Run Install-Backup.ps1 again') } }
+  } else { $w = Get-ThornswoodWorld $root }
+  if ($w.Stop) { Note ('  WORLD NOT TAKEN ' + $to + ': ' + $w.Stop); $script:worldsNotTaken += $to; return }
+  if ($w.Driver -eq 'file') {
+    Grab (Split-Path -Parent $w.Forms) $to
+    Mend (Split-Path -Parent $w.Forms) $to
+    return
+  }
+  $dest = Join-Path $stage ($to + '\changeForms')
+  $manifest = Join-Path $ownedStage (($to -replace '[\\/]', '-') + '.export.json')
+  $said = @(Invoke-ThornswoodWorldJs @{ op = 'export'; uri = $MongoUri; db = $w.Db; to = $dest; manifest = $manifest; live = $true })
+  $done = @($said | Where-Object { $_ -like 'EXPORTED|*' })
+  if (-not $done.Count) {
+    Note ('  WORLD NOT TAKEN ' + $to + ': ' + $w.Db + ' in MongoDB could not be read out: ' + (($said | Where-Object { $_ }) -join ' '))
+    $script:worldsNotTaken += $to
+    return
+  }
+  $n = [int](($done[0] -split '\|')[1])
+  $script:took += $n
+  Note ("  {0,-42} {1} forms, read out of {2} in MongoDB" -f $to, $n, $w.Db)
+}
+
 # How many people a world folder holds: the runtime change forms, named with
 # their form id in lowercase hex and no plugin (the engine's
 # FormDesc::ToString, %x, so a.json and 1f.json as well as 3.json), are
@@ -339,8 +392,7 @@ else {
   try {
     $servers = @(@{ Root = $GameRoot; Tag = 'game' }, @{ Root = $DevGameRoot; Tag = 'game-dev' })
     foreach ($sv in $servers) {
-      Grab (Join-Path $sv.Root 'world')                ($sv.Tag + '\world')
-      Mend (Join-Path $sv.Root 'world')                ($sv.Tag + '\world')
+      TakeWorld $sv.Root                               ($sv.Tag + '\world')
       Grab (Join-Path $sv.Root 'private')              ($sv.Tag + '\private')
       Grab (Join-Path $sv.Root 'data')                 ($sv.Tag + '\data')
       Grab (Join-Path $sv.Root 'server-settings.json') ($sv.Tag + '\server-settings.json')
@@ -505,20 +557,41 @@ if ($Plain) {
   }
 }
 
+# ------------------------------------------------------------ marked ----
+# A copy made without the game servers is marked now, as it is made (#4205),
+# so retention below never counts it as a daily or a weekly; the run still
+# ends non-zero at the end, as before.
+$made = $(if ($Plain) { $archive } else { $archive + '.enc' })
+if ($serversNotTaken) { Set-Content -LiteralPath ($made + '.incomplete') -Value ('made without the game servers: ' + $serversNotTaken) -Encoding UTF8; Note ('  marked    ' + [IO.Path]::GetFileName($made) + ' as made without the game servers') }
+
 # ------------------------------------------------------------ retention ----
 # A weekly is a run that landed on a Sunday. Everything is matched by name, so
 # nothing anybody put in this folder by hand is ever considered.
+# A copy made without the game servers (#4205) has <archive>.incomplete
+# beside it, written when it was made, and never pushes a whole copy out:
+# counted as a daily, a week of nights without the servers left no copy with
+# the world in it. It takes only a daily place no whole daily needs, and only
+# while it is newer than the newest whole copy, so the server still keeps no
+# more than seven daily and four weekly copies (site/data/site/privacy.md).
+# Its mark goes with it.
 $all = Get-ChildItem -LiteralPath $Out -File |
        Where-Object { $_.Name -match '^thornswood-(\d{8})-(\d{6})\.zip(\.enc)?$' } |
        Sort-Object Name -Descending
-$weekly = @(); $daily = @()
+$weekly = @(); $daily = @(); $partial = @()
 foreach ($f in $all) {
+  if (Test-Path -LiteralPath ($f.FullName + '.incomplete')) { $partial += $f; continue }
   $d = [datetime]::ParseExact($f.Name.Substring(11, 8), 'yyyyMMdd', $null)
   if ($d.DayOfWeek -eq 'Sunday') { $weekly += $f } else { $daily += $f }
 }
 $drop = @()
 if ($daily.Count  -gt $KeepDaily)  { $drop += $daily[$KeepDaily..($daily.Count - 1)] }
 if ($weekly.Count -gt $KeepWeekly) { $drop += $weekly[$KeepWeekly..($weekly.Count - 1)] }
+# The stamp, yyyyMMdd-HHmmss, orders copies whatever their ending.
+$newestWhole = @($daily + $weekly | ForEach-Object { $_.Name.Substring(11, 15) } | Sort-Object -Descending | Select-Object -First 1)
+$room = $KeepDaily - [Math]::Min($daily.Count, $KeepDaily)
+$keepPartial = @($partial | Where-Object { -not $newestWhole.Count -or $_.Name.Substring(11, 15) -gt $newestWhole[0] } |
+                 Select-Object -First $room | ForEach-Object { $_.Name })
+$drop += @($partial | Where-Object { $keepPartial -notcontains $_.Name })
 # A copy that will not delete is said, by name and the kind of error, never
 # logged as dropped (#2354). It used to be Remove-Item -EA SilentlyContinue
 # and then "dropped" whatever happened, so a copy past the seven daily and
@@ -532,6 +605,8 @@ foreach ($f in $drop) {
   try {
     Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
     if (Test-Path -LiteralPath $f.FullName) { throw [IO.IOException]::new('still there after the delete') }
+    $mark = $f.FullName + '.incomplete'
+    if (Test-Path -LiteralPath $mark) { Remove-Item -LiteralPath $mark -Force -ErrorAction Stop }
     Note "  dropped   $($f.Name)"
   } catch {
     $ex = $_.Exception
@@ -548,12 +623,15 @@ if ($stuck.Count) {
   Remove-Item -LiteralPath $failedList -Force -ErrorAction Stop
   Note '  every copy past retention went this time, so retention-failed.txt is gone'
 }
-Note ("  kept      {0} daily, {1} weekly" -f [Math]::Min($daily.Count, $KeepDaily), [Math]::Min($weekly.Count, $KeepWeekly))
+Note ("  kept      {0} daily, {1} weekly, {2} made without the game servers" -f [Math]::Min($daily.Count, $KeepDaily), [Math]::Min($weekly.Count, $KeepWeekly), $keepPartial.Count)
 if ($stuck.Count) {
   throw ("Retention failed: {0} backup(s) past the seven daily and four weekly would not delete (listed in {1}). Tonight's backup itself was made." -f $stuck.Count, $failedList)
 }
 if ($serversNotTaken) {
   throw ("The game servers were not taken (" + $serversNotTaken + "). Tonight's backup was made without them (#3247).")
+}
+if ($worldsNotTaken.Count) {
+  throw ("The world of " + ($worldsNotTaken -join ' and ') + " was not taken (WORLD NOT TAKEN above). Tonight's backup was made without it (#6237).")
 }
 if ($denied) {
   throw ("{0} place(s) could not be read by the backup task (NO ACCESS above). Tonight's backup was made without them. Run Install-Backup.ps1 again, which gives the task read there (#2612)." -f $denied)

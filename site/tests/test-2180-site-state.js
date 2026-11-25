@@ -31,7 +31,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
@@ -70,9 +69,6 @@ function scratch() {
   return dir;
 }
 
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
 function request(port, method, where, headers, body) {
   return new Promise((ok) => {
     const data = body === undefined ? '' : JSON.stringify(body);
@@ -90,39 +86,18 @@ function ticketFor(d) {
   return 'tk1.' + body + '.' + sign('ticket:' + body);
 }
 
-/* Waits for this run's own "[thornswood-docs] listening on ...:port" line
-   (#1727), so nothing is asked of a port something else took in between. */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(null); } };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port + ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(dir) {
-  const port = await freePort();
-  const run = { port, log: '', site: null, up: false };
+  const run = { port: 0, log: '', site: null, up: false };
   const srv = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   run.site = srv;
   srv.stdout.on('data', (d) => { run.log += d; });
   srv.stderr.on('data', (d) => { run.log += d; });
-  try { await listening(srv, port); run.up = true; } catch (e) { run.log += '\n' + e.message; }
+  try { run.port = (await siteFiles.listening(srv)).port; run.up = true; } catch (e) { run.log += '\n' + e.message; }
   return run;
 }
 async function stop(run, dir) {
@@ -261,5 +236,5 @@ function siteSaid(dir) {
   }
   if (fail) console.log('second site log:\n' + run2.log);
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

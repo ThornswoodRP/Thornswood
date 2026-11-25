@@ -2,8 +2,13 @@
   LoadOrder.ps1
 
   The load order as the game counts it, and how to put a plugin list into the
-  server's order. Dot-sourced by Publish-Update.ps1, so the reference plugin
-  list that goes into a pack ships in the order the server actually runs.
+  server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1,
+  Check-Manifest.ps1 and Find-MissingMasters.ps1 in scripts\mods, and by Check-ShipReady.ps1,
+  Publish-Update.ps1, Scrub-Feed.ps1 and Ship.ps1 in scripts\release, and by
+  the harnesses test-4735-revision-readers.ps1, test-bad-json-records.ps1 and
+  test-collection-export.ps1 in scripts\tests; for
+  Publish-Update.ps1, so the reference plugin list that goes into a pack ships
+  in the order the server actually runs.
 
   The same rule as launcher\app\LoadOrder.cs in the launcher, function for
   function, and the two are held to identical output by a test. Change one,
@@ -99,11 +104,15 @@ function Get-VortexStateDir {
   and then as the legacy folder's number, so Ship and Publish-Update were
   handed a revision nobody had read. Now it throws a sentence naming
   state.v2, and the caller says it.
+
+  A DATABASE THAT READS IS THE ANSWER (#6085). When state.v2 reads and names
+  no installed revision of the slug, the collection is not installed and this
+  is 0; a collection_<slug>_<rev>_ folder left behind by an old Vortex is not
+  read in its place. The folder parse is only for a machine with no database.
 #>
 function Get-CollectionRevision([string]$Slug) {
     if (-not $Slug) { return 0 }
-    $fromState = Get-CollectionRevisionFromState $Slug
-    if ($fromState -gt 0) { return $fromState }
+    if (Get-VortexDatabaseDir) { return Get-CollectionRevisionFromState $Slug }
     return Get-CollectionRevisionFromFolder $Slug
 }
 
@@ -146,9 +155,9 @@ function Read-VortexCollectionState([string]$St, [scriptblock]$Read) {
 function Import-VortexStateReader {
     if ('Thornswood.VortexProfileState' -as [type]) { return }
     $source = Join-Path $PSScriptRoot '..\..\launcher\app\VortexProfileState.cs'
-    if ($PSVersionTable.PSVersion.Major -le 5) {
-        Add-Type -LiteralPath $source -ReferencedAssemblies System.dll,System.Core.dll,System.Xml.dll
-    } else { Add-Type -LiteralPath $source }
+    # pwsh 7, where every script runs (#5356): its Add-Type has every
+    # assembly the file uses already (#5968).
+    Add-Type -LiteralPath $source
 }
 <#
   The legacy fallback: the revision out of the old folder name, or 0. Kept for
@@ -327,29 +336,12 @@ function Get-CollectionExportArchive([string]$Folder) {
 }
 
 <#
-  The 7-Zip on this machine, or $null. Only used to read one collection.json
+  The 7-Zip on this machine is SevenZip.ps1's Find-SevenZip, the one rule the
+  Nexus scripts use too (#4424). Only used here to read one collection.json
   out of a Vortex export archive, so nothing here installs it: a machine
   without 7-Zip is told to pass the extracted file with -Collection instead.
-  Vortex's own copy counts, since a machine with Vortex on it usually has one.
 #>
-function Get-SevenZipPath {
-    $spots = New-Object Collections.Generic.List[string]
-    if ($env:ProgramFiles) {
-        [void]$spots.Add((Join-Path $env:ProgramFiles '7-Zip\7z.exe'))
-        [void]$spots.Add((Join-Path $env:ProgramFiles 'Black Tree Gaming Ltd\Vortex\resources\7z.exe'))
-    }
-    if (${env:ProgramFiles(x86)}) { [void]$spots.Add((Join-Path ${env:ProgramFiles(x86)} '7-Zip\7z.exe')) }
-    if ($env:LOCALAPPDATA) {
-        [void]$spots.Add((Join-Path $env:LOCALAPPDATA 'Programs\7-Zip\7z.exe'))
-        [void]$spots.Add((Join-Path $env:LOCALAPPDATA 'Programs\Vortex\resources\7z.exe'))
-    }
-    foreach ($p in $spots) { if (Test-Path -LiteralPath $p -PathType Leaf) { return $p } }
-    foreach ($n in '7z', '7za', '7zz') {
-        $c = @(Get-Command $n -CommandType Application -EA SilentlyContinue) | Select-Object -First 1
-        if ($c) { return $c.Source }
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot '..\release\SevenZip.ps1')
 
 <#
   One collection.json read out of an export archive, cached under the temp
@@ -387,7 +379,7 @@ function Expand-CollectionJson($Archive) {
         if (Test-Path -LiteralPath $out -PathType Leaf) { return $out }
     }
 
-    $exe = Get-SevenZipPath
+    $exe = Find-SevenZip
     if ($exe) {
         # 7-Zip writes to stderr on a warning, which is a terminating error in
         # the callers that run with ErrorActionPreference Stop, so it is
@@ -516,7 +508,12 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
         # The current LevelDB metadata survives compaction; transition text does not.
         Import-VortexStateReader
         try { return [Thornswood.VortexProfileState]::Find($st, $profilesRoot, $Name) }
-        catch { throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.' }
+        catch {
+            # PowerShell wraps exceptions from the shared reader's method call.
+            $cause = $_.Exception.GetBaseException()
+            if ($cause -is [Thornswood.VortexProfileState+DuplicateProfileException]) { throw $cause }
+            throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.'
+        }
     }
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     if (Test-Path -LiteralPath $st) {
@@ -530,9 +527,14 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
             } catch { }
         }
     }
+    # A folder holding plugins.txt is a deployed profile, and wins over one
+    # that does not, whichever the state names first (#4387).
     foreach ($id in $ids) {
         $dir = Join-Path $profilesRoot $id
         if (Test-Path -LiteralPath (Join-Path $dir 'plugins.txt')) { return $dir }
+    }
+    foreach ($id in $ids) {
+        $dir = Join-Path $profilesRoot $id
         if (Test-Path -LiteralPath $dir) { return $dir }
     }
     return $null
@@ -544,8 +546,15 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
 #>
 function Assert-VortexProfile([string]$Name = 'Thornswood') {
     $dir = Get-VortexProfileDir $Name
-    if ($dir) { return $dir }
-    throw ("Vortex profile '$Name' was not found. In Vortex, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+    if (-not $dir) {
+        throw ("Vortex profile '$Name' was not found. In Vortex, turn on Profile Management under Settings, Interface, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+    }
+    # A profile folder with no plugins.txt is one Vortex never deployed the
+    # collection into: there is no load order in it to read or check (#4387).
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'plugins.txt') -PathType Leaf)) {
+        throw ("Vortex profile '$Name' at $dir holds no plugins.txt, so the collection was never deployed into it. In Vortex, switch to the $Name profile and deploy the collection, then try again.")
+    }
+    return $dir
 }
 
 <#
@@ -554,19 +563,43 @@ function Assert-VortexProfile([string]$Name = 'Thornswood') {
 #>
 function Get-LoadOrderCopyDiffs([hashtable]$Copies) {
     $diffs = New-Object Collections.Generic.List[string]
-    if (-not $Copies -or $Copies.Count -lt 2) { return [string[]]$diffs.ToArray() }
+    if (-not $Copies -or $Copies.Count -eq 0) { return [string[]]$diffs.ToArray() }
     $names = @($Copies.Keys | Sort-Object)
-    for ($i = 0; $i -lt $names.Count; $i++) {
-        for ($j = $i + 1; $j -lt $names.Count; $j++) {
-            $aName = $names[$i]; $bName = $names[$j]
-            $aPath = [string]$Copies[$aName]; $bPath = [string]$Copies[$bName]
-            if (-not $aPath -or -not $bPath) { continue }
-            if (-not (Test-Path -LiteralPath $aPath)) { continue }
-            if (-not (Test-Path -LiteralPath $bPath)) { continue }
-            $aLines = @(Get-Content -LiteralPath $aPath -ErrorAction SilentlyContinue)
-            $bLines = @(Get-Content -LiteralPath $bPath -ErrorAction SilentlyContinue)
-            $aEn = @($aLines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
-            $bEn = @($bLines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
+    # Every copy named is read first. One that is not there, or cannot be
+    # read, is said by name, never skipped or taken as an empty list (#4387).
+    $read = [ordered]@{}
+    foreach ($n in $names) {
+        $p = [string]$Copies[$n]
+        if (-not $p -or -not (Test-Path -LiteralPath $p)) {
+            [void]$diffs.Add("$n is not there" + $(if ($p) { " ($p)" } else { '' }))
+            continue
+        }
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+            [void]$diffs.Add("$n cannot be read: $p is not a file")
+            continue
+        }
+        try { $lines = @(Get-Content -LiteralPath $p -ErrorAction Stop) }
+        catch {
+            [void]$diffs.Add(("$n cannot be read ({0}): {1}" -f $p, $_.Exception.Message))
+            continue
+        }
+        $read[$n] = @($lines | ForEach-Object { Get-LoadOrderEnabledName $_ } | Where-Object { $_ })
+    }
+    # Agreement needs two copies to compare. Fewer is said, never taken as
+    # agreeing (#4387).
+    if ($read.Count -lt 2) {
+        if ($names.Count -lt 2) {
+            [void]$diffs.Add(("only one load order copy was named, {0}, so there is nothing to compare it with" -f $names[0]))
+        } else {
+            [void]$diffs.Add(("only {0} of the {1} load order copies could be read ({2}), so whether they agree was not checked" -f $read.Count, $names.Count, $(if ($read.Count) { @($read.Keys) -join ', ' } else { 'none' })))
+        }
+        return [string[]]$diffs.ToArray()
+    }
+    $rn = @($read.Keys)
+    for ($i = 0; $i -lt $rn.Count; $i++) {
+        for ($j = $i + 1; $j -lt $rn.Count; $j++) {
+            $aName = $rn[$i]; $bName = $rn[$j]
+            $aEn = @($read[$aName]); $bEn = @($read[$bName])
             $mismatch = Get-LoadOrderFirstMismatch $aEn $bEn
             if ($mismatch -ge 0) {
                 $aAt = if ($mismatch -lt $aEn.Count) { $aEn[$mismatch] } else { '(end)' }

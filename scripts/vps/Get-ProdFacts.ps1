@@ -106,13 +106,17 @@ function Get-ProdFacts {
         $settings[$f] = if (Test-Path -LiteralPath $f) { try { ConvertTo-SettingShape (Get-Content -LiteralPath $f -Raw | ConvertFrom-Json) } catch { 'unreadable' } } else { 'missing' }
     }
     # As the firewall takes them (#3896): from the box's own policy once
-    # Set-InboundRules.ps1 -Own has it ignore local rules.
+    # Set-InboundRules.ps1 -Own has it ignore local rules. The active store
+    # still lists a rule an installer adds to the local store after that, so
+    # each rule says which store it came from and which profiles it covers,
+    # and Check-ProdParity judges whether the firewall takes it.
     $inbound = @()
     foreach ($fw in @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Enabled True -Action Allow)) {
         $pf = $fw | Get-NetFirewallPortFilter
         $af = $fw | Get-NetFirewallAddressFilter
         $inbound += [ordered]@{ name = [string]$fw.Name; displayName = [string]$fw.DisplayName; protocol = [string]$pf.Protocol
-                                ports = @(@($pf.LocalPort) | ForEach-Object { [string]$_ }); remote = @(@($af.RemoteAddress) | ForEach-Object { [string]$_ }) }
+                                ports = @(@($pf.LocalPort) | ForEach-Object { [string]$_ }); remote = @(@($af.RemoteAddress) | ForEach-Object { [string]$_ })
+                                store = [string]$fw.PolicyStoreSourceType; profiles = [string]$fw.Profile }
     }
     $fwProfiles = @(Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object { [ordered]@{ name = [string]$_.Name; allowLocalRules = [string]$_.AllowLocalFirewallRules } })
     $edgeKey = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft Edge' -ErrorAction SilentlyContinue

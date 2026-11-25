@@ -38,7 +38,7 @@ const setBody = setAt >= 0 ? GM.slice(setAt, setAt + 2200) : '';
 yes('setLock is in the gamemode', setAt >= 0);
 // Since #2281 (#2256) both lines come from lockLine, and the others told are
 // the people near enough to see the door (LOCK_HEARD), not every profile
-// online. tests/test-2256-locked-for-everyone.js drives who hears it.
+// online. game/tests/test-2256-locked-for-everyone.js drives who hears it.
 const lineAt = GM.indexOf('function lockLine(building, on, mine)');
 const lineBody = lineAt >= 0 ? GM.slice(lineAt, lineAt + 600) : '';
 yes('setLock still tells the locker You lock / You unlock',
@@ -52,4 +52,4 @@ yes('setLock tells the other online profiles near the door the building is locke
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

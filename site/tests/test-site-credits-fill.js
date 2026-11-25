@@ -21,7 +21,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const net = require('net');
 const http = require('http');
 const { spawn } = require('child_process');
 const siteFiles = require('../../tests/site-files');
@@ -108,12 +107,6 @@ out = fill(CREDITS, { live: { commit: '<img src=x onerror=alert(1)>' } }, { publ
 yes('and with nothing good in either, the page is the hand text', out === CREDITS);
 
 // ---- part two: the server, end to end ----------------------------------------
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer(); s.on('error', no);
-    s.listen(0, '127.0.0.1', function () { const p = s.address().port; s.close(function () { ok(p); }); });
-  });
-}
 function get(port, route) {
   return new Promise(function (ok) {
     http.get({ host: '127.0.0.1', port: port, path: route, agent: false }, function (res) {
@@ -129,21 +122,22 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   let child = null;
   try {
     siteFiles.copy(dir);
-    fs.mkdirSync(path.join(dir, 'public'));
+    fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
     fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
     const marked = fs.readdirSync(path.join(APP, 'public')).filter(function (n) { return /^marked-.*\.js$/.test(n); });
     for (const m of marked) fs.copyFileSync(path.join(APP, 'public', m), path.join(dir, 'public', m));
     fs.mkdirSync(path.join(dir, 'data', 'site'), { recursive: true });
     fs.copyFileSync(path.join(APP, 'data', 'site', 'credits.md'), path.join(dir, 'data', 'site', 'credits.md'));
-    const port = await freePort();
+    let port = 0;
     let log = '';
     child = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
     });
     child.stdout.on('data', function (d) { log += d; }); child.stderr.on('data', function (d) { log += d; });
-    for (let i = 0; i < 200 && log.indexOf('listening on ') < 0; i++) await wait(50);
-    yes('the copy starts', log.indexOf('listening on ') >= 0);
+    for (let i = 0; i < 200 && !siteFiles.saidPort(log); i++) await wait(50);
+    yes('the copy starts', siteFiles.saidPort(log) > 0);
+    port = siteFiles.saidPort(log);
 
     let r = await get(port, '/credits');
     yes('no deployed-build.json: /credits is 200 with the hand text', r.status === 200 && r.body.indexOf('this page names it here once') >= 0);
@@ -175,5 +169,5 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   }
   yes('the temp folder is gone', !fs.existsSync(dir));
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

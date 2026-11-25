@@ -97,4 +97,4 @@ yes('R every line giving ombo2a\'s revision 5 names ombo2a' +
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

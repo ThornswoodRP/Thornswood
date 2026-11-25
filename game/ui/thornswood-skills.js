@@ -27,8 +27,8 @@
   has to be made before leaving the hall; class and profession can be left
   for later with the last card in each of those sections and picked in the
   world from this same panel, one Confirm at a time. There is no Close
-  button while creating (Escape and K still shut it, and the server's
-  reminder opens it again). The panel closes itself on the home's answer.
+  button while creating. Escape and K keep it open until creation is
+  complete. The panel closes itself on the server's answer.
 
   NOTHING HERE DECIDES ANYTHING. It reads what the server says this character
   is and sends what was picked. Every rule in the rulebook, one class only,
@@ -400,8 +400,9 @@
     },
     /*
       The profession guides (#3165): a page per profession, which is
-      Patrick's answer A on the issue. The facts are GUIDES below, built out
-      of the server's own tables; the sentences are GUIDE_TEXT.
+      Patrick's answer A on the issue. The facts are the guides file
+      (guidesNow below), built out of the server's own tables; the sentences
+      are GUIDE_TEXT.
     */
     guides: {
       title: 'Profession guides',
@@ -434,6 +435,15 @@
     hairdye: {
       title: 'Hair dye',
       lead: 'A dye you carry colours your own hair, or the hair of somebody in front of you once they say yes. Each one is used up.',
+      rows: []
+    },
+    /*
+      Contracts (#4561). The contracts themselves are the server's, under
+      mine.contracts; this is the title and the sentence over the page.
+    */
+    contracts: {
+      title: 'Contracts',
+      lead: 'A contract is between two people, in your own words: a supply deal, a guard or an escort hired. Both of you sign it, and it is kept. Nothing is moved or held by it, you keep the terms. Only the two of you, and staff, can read it.',
       rows: []
     },
     /*
@@ -474,7 +484,7 @@
       rows: []
     },
     home: {
-      title: 'Home',
+      title: 'Starting Location',
       lead: 'The town you start in. You arrive at a quiet spot in or near it, not in its inn.',
       rows: []   // the server sends the towns while you are new
     },
@@ -507,10 +517,13 @@
     scripts/dev/Build-ProfessionGuides.js out of game/data/recipes.json (the
     rows the recipe book counts), game/data/mine-buildings.json,
     game/data/hunts.json and the gamemode's BENCH_ACCESS, MANEUVERS and
-    tuning. It rides in this file rather than on the panel the server sends,
-    because it is the same for everybody and the panel is sent on every
-    write; what is a person's own on the page, their profession and rank, is
-    read from that panel as everything else here is.
+    tuning. They are a file of their own, game/ui/thornswood-profession-guides.js,
+    a step of the content chain (#6193), which the front injects with the
+    other overlays and which puts them on window.ThornswoodTables. They ride
+    in the page rather than on the panel the server sends, because they are
+    the same for everybody and the panel is sent on every write; what is a
+    person's own on the page, their profession and rank, is read from that
+    panel as everything else here is.
 
       ladder:   { per: { advanced, expert, master }, rest: { <rank>: n },
                   craftRest, party (a percent), perSpell, perRank, toolUses }
@@ -521,13 +534,14 @@
                      materials: [ [ name, recipes, class, rank, bench, [ from ],
                                     [ where ], more places ] ] } }
 
-    Run the script after any of those change; tests/test-3165-profession-guides.js
-    runs it with --check and fails while this block is stale.
+    Read when a page is drawn, so the order the two files come in does not
+    matter; while that file is not in, the page says so.
+    game/tests/test-3165-profession-guides.js holds the two together.
   */
-  // ==== PROFESSION_GUIDES ====
-  /* Built by scripts/dev/Build-ProfessionGuides.js out of game/data and game/gamemode.js. Do not hand edit. */
-  var GUIDES = {"ladder":{"per":{"advanced":100,"expert":250,"master":600},"rest":{"novice":1.5,"advanced":1.2,"expert":0.9,"master":0.6},"craftRest":15,"party":15,"perSpell":5,"perRank":10,"toolUses":50},"professions":{"warrior":{"halves":{"bulwark":{"count":0,"families":[],"first":[],"race":0,"benches":[],"maneuvers":[["Set","novice",15,45],["Plant","advanced",20,60],["Cover","expert",25,90],["Wall","master",40,180]]},"berserker":{"count":0,"families":[],"first":[],"race":0,"benches":[],"maneuvers":[["Rush","novice",15,30],["Heavy","advanced",20,45],["Break","expert",25,60],["Wreck","master",40,120]]}},"materials":[]},"mage":{"halves":{},"materials":[]},"alchemist":{"halves":{"blightbrewer":{"count":0,"families":[],"first":[],"race":0,"benches":[["Alchemy lab","novice"]]},"physicker":{"count":12,"families":[["Other food and drink",3,3,3,1],["Other goods",1,1,0,0]],"first":["Potion of Minor Healing","Poultice"],"race":0,"benches":[["Alchemy lab","novice"]]}},"materials":[["Blue Mountain Flower",4,"gatherer","advanced","",[],[],0],["Eye of Sabre Cat",3,"hunter","novice","",[],["Sabre Cat","Vale Sabre Cat","Animal Gladiator"],1],["Mudcrab Chitin",3,"hunter","novice","",[],["Mudcrab"],0],["Swamp Fungal Pod",3,"gatherer","advanced","",[],[],0],["Wheat",3,"farmer","advanced","",[],[],0],["Blisterwort",2,"gatherer","expert","",[],[],0],["Snowberries",2,"gatherer","advanced","",[],[],0],["White Cap",2,"gatherer","novice","",[],[],0],["Creep Cluster",1,"gatherer","novice","",[],[],0],["Fire Salts",1,"miner","expert","",[],[],0]]},"cook":{"halves":{"hearthcook":{"count":64,"families":[["Other food and drink",7,9,0,0],["Stews",5,2,4,1],["Meat dishes",7,3,0,1],["Soups",4,2,3,0],["Bread",0,4,0,0],["Vegetable dishes",3,1,0,0],["Cheese",0,3,0,0],["Fish dishes",2,0,0,0],["Chowders",1,0,0,0],["Crab dishes",1,0,0,0],["Ingredients",0,0,0,1]],"first":["First Planting Mead","Beef Stew","Cabbage Soup","Cooked Beef"],"race":0,"benches":[["Cookpot","novice"],["Grain mill","novice"],["Oven","novice"]]},"confectioner":{"count":12,"families":[["Desserts",1,10,1,0]],"first":["Apple Dumpling"],"race":0,"benches":[["Oven","novice"]]}},"materials":[["Salt Pile",46,"miner","novice","",[],[],0],["Butter",23,"farmer","novice","",[],[],0],["Sack of Flour",19,"farmer","advanced","Grain mill",["Wheat"],[],0],["Garlic",16,"gatherer","novice","",[],[],0],["Frost Mirriam",12,"gatherer","novice","",[],[],0],["Lavender",8,"gatherer","novice","",[],[],0],["Chicken's Egg",7,"farmer","novice","",[],[],0],["Juniper Berries",7,"gatherer","novice","",[],[],0],["Snowberries",7,"gatherer","advanced","",[],[],0],["Elves Ear",6,"gatherer","expert","",[],[],0]]},"smith":{"halves":{"platewright":{"count":244,"families":[["Body armour",21,51,11,7],["Helmets",9,21,8,5],["Gauntlets",12,18,6,5],["Armoured boots",8,16,6,5],["Shields",2,9,3,2],["Ingots",11,0,0,0],["Other armour and clothing",2,1,0,0],["Leather",2,0,0,0],["Hats and hoods",0,1,0,0],["Other goods",1,0,0,0],["Robes and body wear",0,1,0,0]],"first":["Fur Armor","Corundum Ingot","Ancient Nord Gauntlets","Fur Helmet"],"race":13,"benches":[["Forge","novice"],["Smelter","novice"],["Tanning rack","novice"],["Skyforge","advanced"]]},"edgewright":{"count":83,"families":[["Swords",1,7,3,2],["War axes",2,6,3,2],["Battleaxes",1,5,2,2],["Greatswords",1,5,2,2],["Maces",2,4,2,2],["Daggers",1,4,2,2],["Warhammers",1,4,2,2],["Other goods",8,0,0,0],["Other weapons",1,0,0,0]],"first":["Alembic","Iron War Axe","Iron Battleaxe","Iron Dagger"],"race":1,"benches":[["Forge","novice"],["Skyforge","advanced"]]}},"materials":[["Leather Strips",284,"hunter","novice","Tanning rack",["Leather"],[],0],["Iron Ingot",174,"miner","novice","Smelter",["Iron Ore"],["Raven Rock Mine","Halted Stream Camp","Fort Fellhammer Mines"],43],["Steel Ingot",134,"miner","advanced","Smelter",["Corundum Ore","Iron Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Leather",80,"hunter","novice","Tanning rack",[],[],0],["Corundum Ingot",41,"miner","advanced","Smelter",["Corundum Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Refined Moonstone",30,"miner","expert","Smelter",["Moonstone Ore"],["Soljund's Sinkhole","Mzulft","Mzulft Boilery"],11],["Quicksilver Ingot",25,"miner","advanced","Smelter",["Quicksilver Ore"],["Quicksilver Mine","Blind Cliff Bastion","Altar of Thrond Cave"],10],["Ebony Ingot",21,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1],["Orichalcum Ingot",17,"miner","advanced","Smelter",["Orichalcum Ore"],["Bilegulch Mine","Dushnikh Mine","Mor Khazgur Mine"],5],["Netch Leather",16,"hunter","advanced","",[],["Betty Netch","Bull Netch"],0]]},"enchanter":{"halves":{"bladebinder":{"count":13,"families":[["Staves",3,6,4,0]],"first":["Staff of Flames"],"race":0,"benches":[["Arcane enchanter","novice"],["Staff enchanter","novice"]]},"wardweaver":{"count":0,"families":[],"first":[],"race":0,"benches":[["Arcane enchanter","novice"]]}},"materials":[["Heart Stone",13,"miner","master","",[],["Coldcinder Cave","Broken Tusk Mine","Fort Frostmoth"],1],["Unenchanted Destruction Staff",10,"","","",[],[],0],["Unenchanted Restoration Staff",2,"","","",[],[],0],["Unenchanted Conjuration Staff",1,"","","",[],[],0]]},"tailor":{"halves":{"liverywright":{"count":82,"families":[["Robes and body wear",38,0,5,3],["Hats and hoods",15,0,0,1],["Other armour and clothing",0,10,0,0],["Shoes and light boots",7,0,0,0],["Gloves",3,0,0,0]],"first":["Black Robes","Black Cowl","Boots"],"race":2,"benches":[["Forge","novice"],["Loom","novice"],["Tanning rack","advanced"]]},"haberdasher":{"count":171,"families":[["Robes and body wear",43,2,0,3],["Shoes and light boots",31,1,1,6],["Hats and hoods",23,6,1,2],["Other armour and clothing",2,12,6,0],["Other goods",13,4,0,0],["Gloves",6,1,2,6]],"first":["Belted Tunic","Chef's Hat","Boots","Bandage"],"race":23,"benches":[["Forge","novice"],["Loom","novice"],["Tanning rack","novice"]]}},"materials":[["Thread",164,"gatherer","novice","Loom",["Tundra Cotton"],[],0],["Leather",104,"hunter","novice","Tanning rack",[],[],0],["Leather Strips",60,"hunter","novice","Tanning rack",["Leather"],[],0],["Linen Wrap",39,"","","",[],[],0],["Troll Fat",32,"hunter","advanced","",[],["Frost Troll","Troll","Snow Troll"],2],["Fur Plate",19,"hunter","novice","Tanning rack",[],[],0],["Gold Ingot",7,"miner","expert","Smelter",["Gold Ore"],["Kolskeggr Mine","Frossel","Darkshade"],14],["Common Soul Gem",5,"","","",[],[],0],["Dwarven Metal Ingot",4,"","","",[],[],0],["Ebony Ingot",4,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1]]},"woodworker":{"halves":{"charburner":{"count":5,"families":[["Other goods",2,1,1,1]],"first":["Poor Charcoal"],"race":0,"benches":[["Charcoal kiln","novice"]]},"woodwright":{"count":45,"families":[["Other goods",15,0,1,1],["Arrows and bolts",3,5,3,2],["Bows",0,3,5,2],["Other weapons",3,0,0,0],["Greatswords",0,2,0,0]],"first":["Bar Stool","Drum","Dwarven Arrow"],"race":3,"benches":[["Charcoal kiln","novice"],["Forge","novice"],["Woodworking bench","novice"],["Dawnguard bench","advanced"],["Skyforge","advanced"]]}},"materials":[["Firewood",37,"woodworker","novice","",[],[],0],["Leather Strips",13,"hunter","novice","Tanning rack",["Leather"],[],0],["Iron Ingot",10,"miner","novice","Smelter",["Iron Ore"],["Raven Rock Mine","Halted Stream Camp","Fort Fellhammer Mines"],43],["Steel Ingot",10,"miner","advanced","Smelter",["Corundum Ore","Iron Ore"],["Knifepoint Mine","Dead Drop Mine","Goldenrock Mine"],18],["Tundra Cotton",6,"gatherer","novice","",[],[],0],["Dwarven Metal Ingot",4,"","","",[],[],0],["Refined Moonstone",4,"miner","expert","Smelter",["Moonstone Ore"],["Soljund's Sinkhole","Mzulft","Mzulft Boilery"],11],["Quicksilver Ingot",3,"miner","advanced","Smelter",["Quicksilver Ore"],["Quicksilver Mine","Blind Cliff Bastion","Altar of Thrond Cave"],10],["Chaurus Chitin",2,"hunter","expert","",[],["Chaurus","Frozen Chaurus","Chaurus Hunter"],3],["Ebony Ingot",2,"miner","master","Smelter",["Ebony Ore"],["Gloombound Mine","Raven Rock Mine","Redbelly Mine"],1]]}}};
-  // ==== end PROFESSION_GUIDES ====
+  function guidesNow() {
+    var t = window.ThornswoodTables;
+    return (t && typeof t.PROFESSION_GUIDES === 'object' && t.PROFESSION_GUIDES) || null;
+  }
 
   /*
     The page's own sentences around those facts, one set per profession:
@@ -634,6 +648,7 @@
   var endArmed = null;     // an End pressed once, waiting for the second press: { key, at }
   var apprSent = null;     // an End sent and not yet answered: { key, name, at }
   var dyeTarget = null;    // who the look prompt's K opened Hair dye on: { id, name } (#2675)
+  var contractWith = null; // who the look prompt's K opened Contracts on: { id, name } (#4561)
 
   // ------------------------------------------------------------------ css --
   /*
@@ -768,6 +783,8 @@
     'color:#e9d19b;background:rgba(0,0,0,.25);font-family:inherit;cursor:pointer}',
     '#ts-skills .tsbtn.primary{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#ts-skills .tsbtn.primary.off{opacity:.35;pointer-events:none}',
+    '#ts-skills .tsbtn:disabled{color:#89857c;border-color:rgba(137,133,124,.4);cursor:default}',
+    '#ts-skills .tsbtn:focus-visible{outline:2px solid #e9d19b;outline-offset:3px}',
     // Close Skyrim once it is armed, the colours of the character page's own
     // Close the game when it asks the second time (thornswood-select.js).
     '#ts-skills .tsbtn.danger{border-color:#e9a27a;color:#f6c9b0;background:rgba(120,40,30,.45)}',
@@ -862,6 +879,8 @@
         '<div class="tsbtn ghost" data-act="switch">Change character</div>' +
         '<div class="tsbtn ghost" data-act="help">Help</div>' +
         '<div class="tsbtn ghost" data-act="settings">Settings</div>' +
+        '<button type="button" class="tsbtn ghost" data-act="back">Back</button>' +
+        '<button type="button" class="tsbtn ghost" data-act="next">Next</button>' +
         '<div class="tsbtn ghost" data-act="close"><span>Close</span><span class="key">K</span></div>' +
         '<div class="tsbtn primary" data-act="confirm">Confirm</div>' +
       '</div></div>' +
@@ -875,6 +894,8 @@
   var elStatus = root.querySelector('.status');
   var elConfirm = root.querySelector('[data-act="confirm"]');
   var elClose = root.querySelector('[data-act="close"]');
+  var elBack = root.querySelector('[data-act="back"]');
+  var elNext = root.querySelector('[data-act="next"]');
   // Help (#1633), beside Close: the help panel, and this one put down. Never
   // while creating, where this panel is the whole of what there is to do.
   var elHelp = root.querySelector('[data-act="help"]');
@@ -1224,6 +1245,21 @@
     var v = dyeView();
     return (v && Array.isArray(v.dyes)) ? v.dyes.filter(function (d) {
       return d && typeof d.id === 'string' && /^[a-z0-9-]+$/.test(d.id);
+    }) : [];
+  }
+  /*
+    Contracts (#4561): the server's, under mine.contracts, or null with none.
+    Only this person's own, and every signed one for staff (all).
+  */
+  function contractsView() {
+    var got = mine && mine.contracts;
+    if (!got || typeof got !== 'object' || Array.isArray(got)) return null;
+    return got;
+  }
+  function contractList(field) {
+    var v = contractsView();
+    return (v && Array.isArray(v[field])) ? v[field].filter(function (c) {
+      return c && Number(c.n) > 0 && typeof c.terms === 'string';
     }) : [];
   }
   /* Masters and apprentices (#1634): the server's, under mine.apprentice, or null with no profession. */
@@ -1596,10 +1632,42 @@
     if (section === 'body') return 0;
     // The Alchemy journal is what is true, and nothing on it is sent.
     if (section === 'alchemy') return 0;
+    // Contracts are read and pressed with the mouse, and typed into (#4561).
+    if (section === 'contracts') return 0;
     return rows().length + (laterOffered(section) ? 1 : 0);
   }
   /* Another section: the top row, and the status line back to the hint. */
   function goTo(sec) { section = sec; rowAt = 0; status = ''; statusKind = ''; }
+
+  // Use the sidebar's actual order, including its reference and conditional
+  // pages. Only pages with a choice gate Next; neither button sends a pick.
+  function canCreationNext() {
+    if (!creating()) return false;
+    if (section === 'profession') {
+      var p = softProf();
+      return haveProf() || !!later.profession || !!(p && p.whole);
+    }
+    if (section === 'class') return haveClass() || !!later['class'] || !!softClass();
+    if (section === 'home') return haveHome() || !!softHome();
+    return true;
+  }
+  function drawCreationNav() {
+    var cr = creating();
+    var at = sections.indexOf(section);
+    elBack.style.display = cr && at > 0 ? '' : 'none';
+    elNext.style.display = cr && at >= 0 && at < sections.length - 1 ? '' : 'none';
+    elNext.disabled = !canCreationNext();
+  }
+  function creationStep(direction) {
+    if (!creating() || (direction !== -1 && direction !== 1)) return;
+    var at = sections.indexOf(section);
+    var next = at + direction;
+    if (at < 0 || next < 0 || next >= sections.length || (direction === 1 && !canCreationNext())) return;
+    goTo(sections[next]);
+    draw();
+    elBody.tabIndex = -1;
+    elBody.focus();
+  }
 
   // ------------------------------------------------------------------ draw --
   /*
@@ -1681,6 +1749,8 @@
     if (!creating() && (apprView() || candidate)) sections.push('apprentice');
     // Hair dye (#2675): only while you carry one or one is steeping.
     if (!creating() && dyeView()) sections.push('hairdye');
+    // Contracts (#4561): once there is one, or the look prompt's K opened it on somebody.
+    if (!creating() && (contractsView() || contractWith)) sections.push('contracts');
     if (propertyRows().length) sections.push('property');
     // First steps (#3166), first in the list while a new character has them.
     if (!creating() && startView()) {
@@ -1700,6 +1770,7 @@
     }
     drawProgress();
     drawFoot();
+    drawCreationNav();
   }
 
   /*
@@ -1723,7 +1794,7 @@
     if (creating()) {
       elTitle.textContent = 'Begin your life in Thornswood';
       elWho.textContent = '';
-      elWho.appendChild(el('div', '', 'Choose a home. Your class and profession can be chosen here too, or later in the world. Nothing is sent until you press Confirm in Review.'));
+      elWho.appendChild(el('div', '', 'Use Next and Back to work through the tabs. Choose a Starting Location; class and profession can wait until later. Confirm in Review sends your choices and takes you there.'));
       return;
     }
     elTitle.textContent = DATA[section] ? DATA[section].title : '';
@@ -1765,7 +1836,7 @@
       soft = softHome();
       return soft ? { t: soft.t, c: 'chosen' } : { t: 'choose one', c: 'need' };
     }
-    if (sec === 'review') return (haveHome() || softHome()) ? { t: 'ready to begin', c: 'chosen' } : { t: 'needs a home', c: 'need' };
+    if (sec === 'review') return (haveHome() || softHome()) ? { t: 'ready to begin', c: 'chosen' } : { t: 'needs a starting location', c: 'need' };
     if (sec === 'spells') {
       var sp = pointsLeft();
       var m = markedCount();
@@ -1794,6 +1865,11 @@
       if (dyeTarget && hdN) return { t: 'dye ' + dyeTarget.name, c: 'need' };
       if (hdV && hdV.steeping && !hdN) return { t: 'steeping', c: '' };
       return { t: hdN + (hdN === 1 ? ' dye' : ' dyes'), c: 'set' };
+    }
+    if (sec === 'contracts') {
+      var ctW = contractList('waiting').length, ctS = contractList('signed').length;
+      if (ctW) return { t: ctW + ' to sign', c: 'need' };
+      return { t: ctS + ' signed', c: ctS ? 'set' : '' };
     }
     if (sec === 'alchemy') {
       var alE = alchemyList('eaten').length, alR = alchemyList('recipes').length;
@@ -1908,6 +1984,7 @@
     else if (section === 'office') drawOffice();
     else if (section === 'body') drawNeeds();
     else if (section === 'alchemy') drawAlchemy();
+    else if (section === 'contracts') drawContracts();
     else if (section === 'review') drawReview();
     else drawTree();
   }
@@ -3073,7 +3150,7 @@
     A: what it makes, where the materials come from, how it ranks up. The
     tabs across the top are the eight professions; the page opens on your
     own, or while creating on the one marked, and a tab press reads another.
-    Nothing on it is picked or sent. The facts are GUIDES, the sentences
+    Nothing on it is picked or sent. The facts are guidesNow(), the sentences
     GUIDE_TEXT, and a person's own rank is the panel's, as everywhere here.
   */
   function guideRows() { return DATA.profession ? DATA.profession.rows : []; }
@@ -3089,9 +3166,10 @@
     if (creating() && p && p.row && guideHas(p.row)) return p.row;
     return '';
   }
-  // A ladder number in a sentence: {perSpell} and the like, out of GUIDES.ladder.
+  // A ladder number in a sentence: {perSpell} and the like, out of the guides' ladder.
   function guideFill(text) {
-    var ladder = (typeof GUIDES === 'object' && GUIDES && GUIDES.ladder) || {};
+    var g = guidesNow();
+    var ladder = (g && g.ladder) || {};
     return String(text || '').replace(/\{(\w+)\}/g, function (all, k) { return ladder[k] !== undefined ? String(ladder[k]) : all; });
   }
   function guideList(names) {
@@ -3140,7 +3218,7 @@
   }
 
   function drawGuides() {
-    var g = (typeof GUIDES === 'object' && GUIDES) ? GUIDES : null;
+    var g = guidesNow();
     var at = guideProf();
     var tabs = el('div', 'halves eight');
     guideRows().forEach(function (r) {
@@ -3405,9 +3483,9 @@
     if (haveClass()) out.push({ k: 'Class', v: nameOf('class', mine['class']), c: 'set' });
     else if ((soft = softClass())) out.push({ k: 'Class', v: soft.t, c: 'chosen' });
     else out.push({ k: 'Class', v: later['class'] ? 'later' : 'not chosen yet', c: 'dim' });
-    if (haveHome()) out.push({ k: 'Home', v: cap(mine.home) + (holdOf(mine.home) ? ', ' + holdOf(mine.home) : ''), c: 'set' });
-    else if ((soft = softHome())) out.push({ k: 'Home', v: soft.t + (soft.hold ? ', ' + soft.hold : ''), c: 'chosen' });
-    else out.push({ k: 'Home', v: 'not chosen yet', c: 'need' });
+    if (haveHome()) out.push({ k: 'Starting Location', v: cap(mine.home) + (holdOf(mine.home) ? ', ' + holdOf(mine.home) : ''), c: 'set' });
+    else if ((soft = softHome())) out.push({ k: 'Starting Location', v: soft.t + (soft.hold ? ', ' + soft.hold : ''), c: 'chosen' });
+    else out.push({ k: 'Starting Location', v: 'not chosen yet', c: 'need' });
     return out;
   }
   function drawReview() {
@@ -3419,7 +3497,7 @@
       wrap.appendChild(row);
     });
     elBody.appendChild(wrap);
-    elBody.appendChild(el('p', 'lead', 'A home is the one thing that has to be chosen. The rest can wait for the world.'));
+    elBody.appendChild(el('p', 'lead', 'A Starting Location is required. Class and profession can wait until you are in the world. Confirm takes you to your starting location.'));
   }
 
   function drawTree() {
@@ -3503,24 +3581,10 @@
   }
 
   /*
-    The status line and the two buttons: three elements, set in place, never
-    rebuilt. In the world Confirm sits under every section that sends.
-
-    CLOSE IS THERE WHILE CREATING NOW, and it used to be hidden.
-
-    Djinn, 21 September: "There is no way to leave the character creation
-    screen except to make a character then log out. this needs a resolution."
-    The old note here said Escape and K shut the panel "and the server's
-    reminder brings it back", which is exactly the complaint written down as
-    though it were the design: you could shut it and it reopened thirty
-    seconds later, so you could not shut it.
-
-    Hiding the button did not stop anybody leaving either, since Escape
-    already worked. All it did was hide that leaving was possible, from the
-    people most likely to want it. The button is honest about what it does
-    now, and closing tells the server, which holds the reminder off for ten
-    minutes instead of thirty seconds. Nothing about the character is decided
-    by it.
+    Footer controls are updated in place. In creation only Review offers
+    Confirm, and Close Skyrim asks twice; K and Escape cannot dismiss it.
+    Back and Next are drawn separately from the status cache because their
+    state depends on the current tab even when its hint has not changed.
   */
   function drawFoot() {
     var cr = creating();
@@ -3533,7 +3597,7 @@
     // the tree's own sending, so neither carries a Confirm.
     var showConfirm = cr ? section === 'review'
       : (section !== 'start' && section !== 'tree' && section !== 'recipes' && section !== 'guides' && section !== 'property' && section !== 'office' &&
-         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college');
+         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college' && section !== 'contracts');
     var shut = closeWord();
     var key = JSON.stringify([line, statusKind, can, label, showConfirm, cr, shut, keyName]);
     if (key === footKey) return;
@@ -3592,6 +3656,7 @@
     if (section === 'office') return 'Each button is checked again by the server, and it answers in the chat.';
     if (section === 'body') return 'As the server counted it when K opened. Read again asks it now.';
     if (section === 'alchemy') return 'What your character knows, as K opened. Nothing here is picked or sent.';
+    if (section === 'contracts') return 'Each button is checked again by the server, and it answers in the chat.';
     if (section === 'staff') {
       if (staffWaiting()) return 'Sent. The server is checking.';
       if (markedStaffDescs().length) return 'Unlock sends the staff spells you marked, one staff spell point each.';
@@ -3600,8 +3665,8 @@
       return 'Mark the staff spells you want, then press Unlock. One staff spell point each, no tome needed.';
     }
     if (section === 'review') {
-      if (!(haveHome() || softHome())) return 'Pick a home first. Confirm sends everything you chose to the server.';
-      return 'Confirm sends everything you chose to the server and takes you to your home town.';
+      if (!(haveHome() || softHome())) return 'Pick a Starting Location first. Confirm sends everything you chose to the server.';
+      return 'Confirm sends everything you chose to the server and takes you to your starting location.';
     }
     // The later lines are creation's: the mark is only ever set there.
     if (section === 'class') {
@@ -3616,7 +3681,7 @@
       if (creating()) return 'Pick a profession and its half and move on, or choose later and pick it in the world. Nothing is sent until Confirm.';
       return 'Pick a profession and its half, then confirm.';
     }
-    if (section === 'home') return haveHome() ? 'Home is set.' : 'Pick the town you will start in and move on to Review. A home is the one thing you must choose before you leave the hall.';
+    if (section === 'home') return haveHome() ? 'Starting Location is set.' : 'Pick the town you will start in, then press Next to Review. A Starting Location is required before you leave the hall.';
     return '';
   }
 
@@ -3793,6 +3858,91 @@
     });
     if (wrap.children.length) elBody.appendChild(wrap);
     if (!dyes.length) elBody.appendChild(el('div', 'desc', 'You carry no dye right now.'));
+  }
+  /*
+    CONTRACTS (#4561). Write sends '/contract offer <id> :: <terms>' to the
+    person the look prompt's K opened it on, and the writer signs it as it
+    goes; Sign, Refuse and Take it back send '/contract sign|refuse|withdraw
+    <n>'. Nobody is told to type any of it (Patrick, 4 Oct: buttons). The
+    terms go as one line, their line breaks as \n, because the chat socket
+    carries one line at a time (the journal's pages do the same). The server
+    asks every rule again: reach, who it is written to, the length.
+  */
+  function contractCard(c, act) {
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'name', String(c.from || 'Somebody') + ' and ' + String(c.to || 'somebody')));
+    var when = function (t) { try { return new Date(Number(t)).toLocaleDateString(); } catch (e) { return ''; } };
+    card.appendChild(el('div', 'desc', 'Written and signed by ' + String(c.from || 'somebody') +
+      (c.at ? ' on ' + when(c.at) : '') +
+      (c.signedAt ? '. Signed by ' + String(c.to || 'somebody') + ' on ' + when(c.signedAt) + '.' : '. Not signed by ' + String(c.to || 'them') + ' yet.')));
+    var terms = el('div', 'desc', String(c.terms));
+    terms.style.whiteSpace = 'pre-wrap';
+    card.appendChild(terms);
+    if (act) card.appendChild(act);
+    return card;
+  }
+  function contractButtons(list) {
+    var line = el('div', 'guest');
+    list.forEach(function (b) {
+      var go = el('span', 'act', b.label);
+      go.onclick = function (ev) { ev.stopPropagation(); dyePress(b.line, b.done); };
+      line.appendChild(go);
+    });
+    return line;
+  }
+  function drawContracts() {
+    var v = contractsView() || {};
+    var chars = Number(v.chars) || 1000;
+    if (contractWith) {
+      var who = contractWith;
+      var write = el('div', 'card');
+      write.appendChild(el('div', 'name', 'A contract with ' + who.name));
+      write.appendChild(el('div', 'desc', 'Write the terms in your own words. You sign it as you give it to them, and they sign or refuse it on their own K.'));
+      var box = document.createElement('textarea');
+      box.maxLength = chars;
+      box.rows = 6;
+      box.style.width = '100%';
+      box.style.boxSizing = 'border-box';
+      write.appendChild(box);
+      var send = el('div', 'guest');
+      var go = el('span', 'act', 'Sign and give to ' + who.name);
+      go.onclick = function (ev) {
+        ev.stopPropagation();
+        var raw = String(box.value || '');
+        if (!raw.trim()) { status = 'Write the terms first.'; statusKind = 'no'; draw(); return; }
+        if (raw.length > chars) { status = 'That contract is ' + raw.length + ' characters long and one holds ' + chars + '.'; statusKind = 'no'; draw(); return; }
+        contractWith = null;
+        dyePress('/contract offer ' + who.id + ' :: ' + raw.split('\n').join('\\n'), 'Given to ' + who.name + '. It is kept once they sign it too.');
+      };
+      send.appendChild(go);
+      write.appendChild(send);
+      elBody.appendChild(write);
+    }
+    var wrap = el('div', 'cards');
+    contractList('waiting').forEach(function (c) {
+      wrap.appendChild(contractCard(c, contractButtons([
+        { label: 'Sign', line: '/contract sign ' + Number(c.n), done: 'Signed. The server answers in the chat.' },
+        { label: 'Refuse', line: '/contract refuse ' + Number(c.n), done: 'Refused. The server answers in the chat.' }
+      ])));
+    });
+    contractList('sent').forEach(function (c) {
+      wrap.appendChild(contractCard(c, contractButtons([
+        { label: 'Take it back', line: '/contract withdraw ' + Number(c.n), done: 'Taken back. The server answers in the chat.' }
+      ])));
+    });
+    contractList('signed').forEach(function (c) { wrap.appendChild(contractCard(c)); });
+    if (wrap.children.length) elBody.appendChild(wrap);
+    // Staff read every signed contract (decided 22 Oct): the server sends all only to staff.
+    var all = contractList('all');
+    if (contractsView() && Array.isArray(contractsView().all)) {
+      elBody.appendChild(el('div', 'desc', all.length ? 'Every other signed contract, for staff:' : 'No other signed contracts, for staff.'));
+      var allWrap = el('div', 'cards');
+      all.forEach(function (c) { allWrap.appendChild(contractCard(c)); });
+      if (allWrap.children.length) elBody.appendChild(allWrap);
+    }
+    if (!contractWith && !wrap.children.length) {
+      elBody.appendChild(el('div', 'desc', 'No contracts yet. Look at somebody and press ' + (keyName || 'K') + ' to write one with them.'));
+    }
   }
   function takeOnPress(half) {
     if (!candidate) return;
@@ -3987,19 +4137,11 @@
   function leave() { closing = false; status = ''; statusKind = ''; later = {}; api.close(); }
 
   /*
-    Shut by hand: the Close button, or Escape.
-
-    While creating this also tells the server, which holds its reminder off
-    for ten minutes instead of pushing the panel back in thirty seconds. That
-    difference is the whole of Djinn's "there is no way to leave the character
-    creation screen": closing already worked, it just did not last.
-
-    Only from the two deliberate ways out. leave() above is creation ENDING
-    and must not send it, and the server ignores it once the stage is past
-    choosing anyway, so the two guards agree.
+    Closing a panel never dismisses unfinished creation. Its Close Skyrim
+    button remains available, with its own two-press confirmation.
   */
   function closeByHand() {
-    if (creating()) { tell('pick', 'later'); }
+    if (creating()) return;
     api.close();
   }
 
@@ -4028,10 +4170,9 @@
     reminder again from nothing on the next login (the seenAt check in its
     'choosing' stage), so a session that is ending has nothing to hold off.
 
-    Outside creation the button is Close and puts the panel down, as it
-    always has. Escape and K still put the panel down while creating;
-    neither of them closes the game, which is why the K key cap is not
-    shown beside Close Skyrim.
+    Outside creation the button is Close and puts the panel down. During
+    creation Escape and K keep it open; neither closes the game, which is
+    why the K key cap is not shown beside Close Skyrim.
   */
   var QUIT_ARM_MS = 5000;
   var QUIT_BACK_MS = 6000;
@@ -4176,9 +4317,13 @@
   */
   function onKey(e) {
     if (root.className === 'gone') return;
+    // Native footer buttons own Enter and Space; the row shortcuts below
+    // must not turn keyboard navigation into a choice or confirmation.
+    if ((e.target === elBack || e.target === elNext) && (e.key === 'Enter' || e.key === ' ')) return;
     // A number being typed into the Office page's rent (#1638) is the box's,
-    // Enter and the arrows included. Escape still closes.
-    if (e.target && e.target.tagName === 'INPUT' && e.key !== 'Escape') return;
+    // Enter and the arrows included. Escape still closes. And the terms of a
+    // contract (#4561), K among them: a contract may say "keep".
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
     var n = countRows();
     if (e.key === 'Escape') { closeByHand(); e.preventDefault(); return; }
     /*
@@ -4241,6 +4386,8 @@
   }
   window.addEventListener('keydown', onKey, true);
   elConfirm.onclick = confirm;
+  elBack.onclick = function () { creationStep(-1); };
+  elNext.onclick = function () { creationStep(1); };
   elClose.onclick = function () { closeButton(); };
   // The help opens first, so the keyboard is never let go between the two.
   elHelp.onclick = function () {
@@ -4271,11 +4418,13 @@
       tell('refresh');   // the server says again what this character is
     },
     close: function () {
+      if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)
+      contractWith = null; // and for Contracts' (#4561)
       endArmed = null;
       guideAt = '';       // the guides open on your own profession again next time (#3165)
       tell('closed');
@@ -4326,6 +4475,22 @@
       if (!/^[0-9a-f]+$/i.test(id)) return;
       dyeTarget = { id: id, name: String(who.name || 'Somebody') };
       goTo('hairdye');
+      if (root.className === 'gone') api.open(); else draw();
+    },
+    /*
+      The look prompt's K on somebody with no Take on and no dye to offer
+      (#4561): the front hands over the form id under the crosshair and the
+      name, and the panel opens on Contracts with a box to write one with
+      them, and anything they wrote you waiting to be signed. Never while
+      creating.
+    */
+    contractWith: function (who) {
+      if (creating() || !who || typeof who !== 'object') return;
+      var id = String(who.id || '');
+      if (!/^[0-9a-f]+$/i.test(id)) return;
+      contractWith = { id: id, name: String(who.name || 'Somebody') };
+      endArmed = null;
+      goTo('contracts');
       if (root.className === 'gone') api.open(); else draw();
     },
     /*

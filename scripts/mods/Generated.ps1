@@ -2,8 +2,10 @@
 .SYNOPSIS
   Thornswood's animation and body files, for a script: what they are, what
   they were built from, whether the ones in a game folder are current, and
-  the build itself. Dot-sourced by Build-Generated.ps1, Check-CoveredBodies.ps1
-  and the harnesses.
+  the build itself. Dot-sourced by Build-Generated.ps1 and
+  Check-CoveredBodies.ps1 in scripts\mods, by the harness
+  test-2180-release-records.ps1 in scripts\tests, and by the harnesses in
+  tests.
 
 .DESCRIPTION
   Issue #1247, and since 27 Oct 2026 #3715. The behavior files Pandora
@@ -27,15 +29,13 @@
   in Generated.cs.
 #>
 
-# Compiles the launcher's three files once per session. Windows PowerShell 5.1
-# names the assemblies they use; PowerShell 7 has them all already.
+# Compiles the launcher's three files once per session, with the Add-Type of
+# pwsh 7, where every script runs (#5356), which has every assembly they use.
 function Import-GeneratedTypes {
     if ('Thornswood.GeneratedBuild' -as [type]) { return }
     $app = Join-Path $PSScriptRoot '..\..\launcher\app'
     $files = @('Generated.cs', 'GeneratedBuild.cs', 'CoveredBodies.cs' | ForEach-Object { (Resolve-Path -LiteralPath (Join-Path $app $_)).Path })
-    if ($PSVersionTable.PSVersion.Major -le 5) {
-        Add-Type -LiteralPath $files -ReferencedAssemblies System.dll, System.Core.dll, System.Xml.dll
-    } else { Add-Type -LiteralPath $files }
+    Add-Type -LiteralPath $files
 }
 Import-GeneratedTypes
 

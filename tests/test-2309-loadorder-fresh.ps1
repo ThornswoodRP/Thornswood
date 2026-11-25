@@ -74,6 +74,18 @@ Yes '  and it holds the box read between its markers' ($block.Contains('# ==== t
 $Scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-2309-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $Scratch | Out-Null
 $oldServerDir = $env:THORNSWOOD_TEST_SERVER_DIR
+# This machine's own data is LOCALAPPDATA (Where.ps1 Get-MachineData asks the
+# variable first, and the known folder only when it is empty), and a Ship
+# machine records its engine build there (engine-build.json, #2019, #3047).
+# Read from the real one, that record sent Where.ps1 ServerDist to CI's build
+# of a pin the scratch checkout has no record of, and the test stopped before
+# its checks (#4168). A fresh checkout on a fresh machine has empty user
+# folders, so this run has its own.
+$oldLocalAppData = $env:LOCALAPPDATA
+$oldAppData = $env:APPDATA
+$env:LOCALAPPDATA = Join-Path $Scratch 'localappdata'
+$env:APPDATA = Join-Path $Scratch 'appdata'
+New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA, $env:APPDATA | Out-Null
 try {
     # ---- the fresh checkout ---------------------------------------------------------------
     $fresh = Join-Path $Scratch 'fresh'
@@ -99,13 +111,14 @@ try {
     $env:THORNSWOOD_TEST_SERVER_DIR = $box
 
     . (Join-Path $repo 'scripts\release\Read-JsonFile.ps1')
-    function Plan([bool]$loadOrder, [string]$distArg, [string[]]$dropArg = @()) {
+    function Plan([bool]$loadOrder, [string]$distArg, [string[]]$dropArg = @(), [bool]$orderOnly = $false) {
         # The variables the script has by the time it reaches the block.
         $Here = Join-Path $fresh 'scripts\deploy'
         $LoadOrder = $loadOrder
         $Dist = $distArg
         $FromRecord = $false
         $DropPlugins = $dropArg
+        $OrderOnly = $orderOnly
         $Root = $box
         $User = 'Administrator'
         $Vps = '127.0.0.1'
@@ -132,6 +145,9 @@ try {
     Yes '  and it is kept: no list goes up to rewrite it' ($p.OrderWire -eq '')
     Yes ("  our content plugin goes up, from the checkout, when the box holds another size ({0})" -f ($p.Send -join ', ')) (($p.Send -join '|') -eq 'Thornswood-Content.esp')
     Yes '  and Skyrim.esm, the same on both, does not' ($p.Send -notcontains 'Skyrim.esm')
+    # -OrderOnly (#6166, #6175): our plugins are the Release's, put in by the agent.
+    $p = Plan $true '' @() $true
+    Yes ('  with -OrderOnly our content plugin does not go up, the agent puts the Release''s in' + $(if ($p.Thrown) { ': ' + $p.Thrown } else { '' })) ($p.Thrown -eq '' -and @($p.Send).Count -eq 0)
 
     Put (Join-Path $box 'plugins\Thornswood-Content.esp') 'the content plugin, version one'
     Yes '  (the box copy is now the same length as the checkout''s)' ((Get-Item -LiteralPath (Join-Path $box 'plugins\Thornswood-Content.esp')).Length -eq (Get-Item -LiteralPath $ours).Length)
@@ -196,6 +212,8 @@ try {
 }
 finally {
     $env:THORNSWOOD_TEST_SERVER_DIR = $oldServerDir
+    $env:LOCALAPPDATA = $oldLocalAppData
+    $env:APPDATA = $oldAppData
     Remove-Item -LiteralPath $Scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
 Done

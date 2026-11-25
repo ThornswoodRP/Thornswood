@@ -83,14 +83,17 @@ function switchedOff(file) { return readPluginsTxt(file).off; }
 
 // The load order of a builder that reads every plugin in it. A table built
 // without one of them describes a load order nobody runs, so a plugin in it
-// that is not on disk stops the build, as it stops Build-DoorTable.py.
+// that is not on disk stops the build, as it stops Build-DoorTable.py: it
+// answers null then, with process.exitCode 1, and the builder returns
+// rather than calling node's exit function, which can hang on Node 24 (#6036).
 function loadedOrder(file, dataDir) {
-  if (!fs.existsSync(file)) { console.error('STOP. there is no plugins.txt at ' + file); process.exit(1); }
+  if (!fs.existsSync(file)) { console.error('STOP. there is no plugins.txt at ' + file); process.exitCode = 1; return null; }
   const order = loadOrder(file);
   const gone = order.filter((n) => !fs.existsSync(pluginPath(dataDir, n)));
   if (gone.length) {
     console.error('STOP. ' + gone.length + ' plugin(s) are not in ' + dataDir + ': ' + gone.slice(0, 6).join(', '));
-    process.exit(1);
+    process.exitCode = 1;
+    return null;
   }
   return order;
 }

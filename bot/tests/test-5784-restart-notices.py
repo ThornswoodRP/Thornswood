@@ -11,7 +11,9 @@ It holds:
     that does not read or is not a notice is left out;
   - a "coming" is posted once, ahead, with the time it goes down as Discord's
     own timestamp; the live server's in #updates with the Updates Pings
-    role's mention, a dev one in the dev updates channel with none; one whose
+    role's mention, a dev one in #staff-updates (staff-channel.txt's id),
+    never in #staff-news among the dev release posts, with the same mention
+    for the staff who took the role; one whose
     notice says logOut (the machine restarts for Windows updates) tells
     people to log out;
   - "back", "down" and "off" are posted once each, after a "coming" was;
@@ -75,7 +77,7 @@ class World:
     async def send(self, channel, doc, what):
         if channel in self.down:
             return None
-        self.posts.append((channel, doc['id'], what, bot.restart_text(doc, what, ping='@pings' if channel == 'main' and what == 'coming' else '')))
+        self.posts.append((channel, doc['id'], what, bot.restart_text(doc, what, ping='@pings' if what == 'coming' else '')))
         return Msg(700 + len(self.posts))
 
     def save(self, state):
@@ -132,8 +134,8 @@ yes('a restart of the whole machine tells people to log out, not that the world 
 # ---- dev, down and off -----------------------------------------------------
 state, w = {}, World()
 run(state, w, [notice('dev', 'dev-1', down=NOW + 60), notice('main', 'main-2')])
-yes('a dev restart goes to the dev updates channel with no ping',
-    ('dev', 'dev-1', 'coming') == w.posts[0][:3] and w.posts[0][3].startswith('The dev server restarts'))
+yes('a dev restart goes to the dev channel',
+    ('dev', 'dev-1', 'coming') == w.posts[0][:3] and w.posts[0][3].startswith('@pings The dev server restarts'))
 run(state, w, [notice('dev', 'dev-1', 'down', down=NOW + 60), notice('main', 'main-2', 'off')])
 yes('one that did not come back, and one called off, are each said',
     'did not come back' in w.posts[2][3] and 'called off' in w.posts[3][3] and 'The server stays up' in w.posts[3][3])
@@ -171,7 +173,69 @@ yes('#updates is the Information category\'s, as Build-Discord.py plans it',
     "('Information', [" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
     and "name='updates'" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
     and bot.UPDATES_CATEGORY == 'information' and bot.UPDATES_NAME == 'updates')
-yes('the ping role is the one the hold panel hands out', ('updates', bot.UPDATES_PING_ROLE, 'Updates pings') in bot.PINGS)
+yes('the ping role is the one the button in #welcome hands out', ('updates', bot.UPDATES_PING_ROLE, 'Updates pings') in bot.PINGS)
+
+# ---- the dev channel is #staff-updates -------------------------------------
+# Patrick, 15 Nov 2026: the dev restart of 12:42 PM and its "back up" went to
+# #staff-news (dev-channel.txt), among the dev release posts. A dev restart is
+# an update, so it goes to #staff-updates, by staff-channel.txt's id.
+def _file_id(name):
+    with open(os.path.join(HERE, name)) as f:
+        return int(f.read().strip())
+
+
+STAFF_UPDATES = _file_id('staff-channel.txt')
+STAFF_NEWS = _file_id('dev-channel.txt')
+
+
+class Role:
+    def __init__(self, name, i):
+        self.name, self.mention = name, '<@&%d>' % i
+
+
+ROLES = [Role('News Pings', 7), Role('Updates Pings', 8)]
+
+
+class Chan:
+    def __init__(self, i):
+        self.id, self.said, self.allowed = i, [], []
+        self.guild = type('G', (), {'roles': ROLES})()
+
+    async def send(self, text, allowed_mentions=None):
+        self.said.append(text)
+        self.allowed.append(allowed_mentions)
+        return Msg(len(self.said))
+
+
+class Client:
+    def __init__(self):
+        self.chans = {}
+
+    def get_channel(self, i):
+        return self.chans.setdefault(i, Chan(i))
+
+
+real_client, real_watch = bot.client, bot.WATCH_ID
+fake = Client()
+bot.client = fake
+bot.WATCH_ID = STAFF_UPDATES
+try:
+    asyncio.run(bot._restart_send('dev', notice('dev', 'dev-9', down=NOW + 60), 'coming', set()))
+    asyncio.run(bot._restart_send('dev', notice('dev', 'dev-9', 'back', down=NOW + 60), 'end', set()))
+finally:
+    bot.client, bot.WATCH_ID = real_client, real_watch
+yes('a dev restart and its back up are said in #staff-updates, staff-channel.txt\'s id',
+    list(fake.chans) == [STAFF_UPDATES] and len(fake.chans[STAFF_UPDATES].said) == 2
+    and fake.chans[STAFF_UPDATES].said[1] == 'The dev server is back up after the restart.')
+said, allowed = fake.chans[STAFF_UPDATES].said, fake.chans[STAFF_UPDATES].allowed
+yes('  its coming pings Updates Pings, the staff side of #updates, and only that role',
+    said[0].startswith('<@&8> The dev server restarts') and allowed[0].roles == [ROLES[1]]
+    and allowed[0].everyone is False and allowed[0].users is False)
+yes('  its back up pings nobody', '<@&' not in said[1] and allowed[1].roles is False)
+yes('  and nothing goes to #staff-news, the dev release channel', STAFF_NEWS not in fake.chans
+    and STAFF_NEWS != STAFF_UPDATES)
+yes('  the bot reads #staff-updates from staff-channel.txt unless WATCH_CHANNEL_ID says otherwise',
+    os.environ.get('WATCH_CHANNEL_ID') or real_watch == STAFF_UPDATES)
 
 print()
 print('%d failed' % len(FAIL) if FAIL else 'all passed')

@@ -69,12 +69,6 @@ function grab(src, name) {
   }
   return '';
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const DAY = 86400000;
 const NOW = Date.now();
@@ -228,10 +222,9 @@ async function sweep() {
   });
 
   async function run(env) {
-    const port = await freePort();
     const srv = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                             THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') }, env || {})
     });
     let out = '';
@@ -250,7 +243,7 @@ async function sweep() {
     await new Promise((ok) => {
       srv.on('exit', ok);
       try { srv.kill(); } catch (e) { ok(); }
-      setTimeout(ok, 3000);
+      setTimeout(ok, 3000).unref();
     });
     return { up, out };
   }
@@ -439,5 +432,5 @@ function page() {
   gameServer();
   page();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

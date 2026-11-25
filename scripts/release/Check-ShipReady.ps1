@@ -83,7 +83,7 @@ function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Ho
 # somebody's decision rather than a command. $who is who runs it. $level is
 # 'need' for what would stop a Ship, and 'warn' for what does not stop one but
 # gets in the way of something around it (the live deploys); a warn
-# never changes the verdict. tests\test-ship-ready.ps1 lifts this and the
+# never changes the verdict. scripts\tests\test-ship-ready.ps1 lifts this and the
 # functions below out of the script and runs them.
 function New-Row([string]$what, [bool]$ok, [string]$detail, [string]$fix, [string]$who = 'either', [string]$level = 'need') {
   return [pscustomobject]@{ What = $what; Ok = $ok; Detail = $detail; Fix = $fix; Who = $who; Level = $level }
@@ -420,11 +420,12 @@ try {
     }
 } catch { Say ('  note  the collection revision check did not run: ' + $_.Exception.Message) 'DarkGray' }
 # Ship stops on this too (Assert-VortexProfile, #557): it reads the load order
-# from the Vortex profile named Thornswood and no other.
-$vpDir = $null
-try { $vpDir = Get-VortexProfileDir 'Thornswood' } catch { $vpDir = $null }
-Ready 'Vortex has a profile named Thornswood' ([bool]$vpDir) $(if ($vpDir) { $vpDir } else { '' }) `
-  'In Vortex: Profiles, add one named Thornswood, switch to it, install the Thornswood collection and let it deploy'
+# from the Vortex profile named Thornswood and no other, and only once the
+# collection was deployed into it, which leaves its plugins.txt (#4387).
+$vpDir = $null; $vpWhy = ''
+try { $vpDir = Assert-VortexProfile 'Thornswood' } catch { $vpWhy = $_.Exception.Message }
+Ready 'Vortex has a profile named Thornswood, deployed' ([bool]$vpDir) $(if ($vpDir) { $vpDir } else { '' }) `
+  $(if ($vpWhy) { $vpWhy } else { 'In Vortex: turn on Profile Management under Settings, Interface, go to Profiles, add one named Thornswood, switch to it, install the Thornswood collection and let it deploy' })
 # A ship root's launcher is never started (#2603), so the folder is made the
 # way a Ship makes it first, by Update-ShipRoot.ps1. The animation and body
 # files are not built there: no release carries them (#3715).

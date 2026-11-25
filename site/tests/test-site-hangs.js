@@ -171,45 +171,6 @@ fs.writeFileSync(path.join(dir, 'fake-discord.js'), [
   "};"
 ].join('\n'));
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 /*
   Waits for a line the site says when it settles a request nobody is left to
   answer: a body or an upload whose sender went (#3062). There is no answer
@@ -347,18 +308,18 @@ function pageChecks() {
       'and ' + PLAY_ANSWER_MS + ' ms for anything else',
       SUBMIT_WAIT_MS > 0 && SUBMIT_WAIT_MS < QUICK && PLAY_ANSWER_MS > SUBMIT_WAIT_MS + 5000);
   const dport = await new Promise((ok) => discord.listen(0, '127.0.0.1', () => ok(discord.address().port)));
-  port = await freePort();
+  port = 0;
   let log = '';
   const site = spawn(process.execPath, ['-r', path.join(dir, 'fake-discord.js'), path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           FAKE_DISCORD_PORT: String(dport) })
   });
   site.stdout.on('data', (d) => { log += d; });
   site.stderr.on('data', (d) => { log += d; });
   const t0 = Date.now();
   try {
-    yes('the scratch site starts', await listening(site, port).then(() => true));
+    yes('the scratch site starts', await siteFiles.listening(site).then((r) => (port = r.port, r)).then(() => true));
     let r;
 
     // ----------------------------------------------- #1164 launcher doors --
@@ -541,5 +502,5 @@ function pageChecks() {
   // On a failure the site's own lines go with it, so a slow answer on a
   // runner nobody can log in to says what the site was doing (#2358).
   if (fail) console.log('---- what the site printed\n' + log);
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

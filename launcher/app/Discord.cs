@@ -25,6 +25,7 @@
 //   Discord.SessionStart/End -> both ends of a session, for the site's log
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -33,6 +34,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Microsoft.Win32;
 
 namespace Thornswood
 {
@@ -262,8 +264,8 @@ namespace Thornswood
         /// The Discord id inside the ticket this copy holds, or "" when it is
         /// not linked or the ticket cannot be read.
         ///
-        /// Which account the launcher is acting for, so the character list
-        /// can tell when that changes (Chars.EnsureSpare). Not a check of the
+        /// Which account the launcher is acting for, for the picture's
+        /// address (AvatarUrl). Not a check of the
         /// ticket: the site checks the signature on every call, and nothing
         /// here is let in or kept out on this.
         /// </summary>
@@ -295,9 +297,8 @@ namespace Thornswood
         /// <summary>
         /// Every file this account leaves in folder: the sign-in ticket, the
         /// name and picture kept beside it, the site's last staff answer and
-        /// the door's last yes or no. Forget deletes them, and so does an
-        /// uninstall that keeps the saves and settings (LocalKeep.NotSaves,
-        /// #3679), so the two cannot name different files.
+        /// the door's last yes or no. Forget deletes them, and an uninstall
+        /// removes them with the rest of Profile (#3679).
         /// </summary>
         public static string[] AccountFiles(string folder)
         {
@@ -470,7 +471,7 @@ namespace Thornswood
                         ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
                         ctx.Response.Close();
                     }
-                    catch (Exception e) { if (!good) error = e.Message; }
+                    catch (Exception e) { if (!good) error = Failure.Why("Discord, the sign in", e); }
 
                     if (good) { done.Set(); return; }
                 }
@@ -596,6 +597,34 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// This PC, as a one-way hash of the machine id Windows gives it at
+        /// install (MachineGuid), or "" when it cannot be read (Patrick's
+        /// answer A on q-hwid-collect, 16 Nov 2026). Sent with each join pass
+        /// so staff can see which accounts play from the same PC; the id
+        /// itself never leaves the machine, and the site hashes this again
+        /// with its own secret before it keeps it for 30 days (the privacy
+        /// page, "This PC").
+        /// </summary>
+        public static string PcId()
+        {
+            if (!OperatingSystem.IsWindows()) return "";
+            string guid = "";
+            try
+            {
+                using (RegistryKey k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
+                                                  .OpenSubKey(@"SOFTWARE\Microsoft\Cryptography"))
+                {
+                    guid = k == null ? "" : Convert.ToString(k.GetValue("MachineGuid"), CultureInfo.InvariantCulture) ?? "";
+                }
+            }
+            catch (Exception ex) { Swallow.Note("Discord.PcId, the join pass is asked for without it", ex); return ""; }
+            guid = guid.Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(guid, "^[0-9a-f-]{32,40}$")) return "";
+            byte[] h = SHA256.HashData(Encoding.UTF8.GetBytes("thornswood-pc:" + guid));
+            return Convert.ToHexString(h).ToLowerInvariant();
+        }
+
+        /// <summary>
         /// A join pass for one character, or "" with why saying why not (#937).
         ///
         /// The game server ends a session that has not shown it one, so this
@@ -623,7 +652,8 @@ namespace Thornswood
             string body = "{\"ticket\":\"" + Escape(Ticket) + "\"" +
                           ",\"profileId\":" + profileId.ToString(CultureInfo.InvariantCulture) +
                           ",\"channel\":\"" + Escape(string.IsNullOrEmpty(Channel) ? "main" : Channel) + "\"" +
-                          ",\"version\":\"" + Escape(Updater.Version) + "\"}";
+                          ",\"version\":\"" + Escape(Updater.Version) + "\"" +
+                          ",\"pc\":\"" + PcId() + "\"}";
             string reply;
             int code = PostJson(Site + "/api/play/pass", body, out reply);
             if (code == 0)
@@ -668,7 +698,40 @@ namespace Thornswood
         public static string NewSession()
         {
             session = Guid.NewGuid().ToString("N");
+            lock (played) played.Clear();
             return session;
+        }
+
+        /// <summary>
+        /// Every character picked at the game's menu in this session, in the
+        /// order first picked. Change character (#3128) brings the menu back
+        /// without closing the game, so one session can play several, and the
+        /// end has to name each of them, not only the last (#4643). Filled from
+        /// the window's two second tick, read by the end on a pool thread.
+        /// </summary>
+        static readonly List<int> played = new List<int>();
+
+        /// <summary>A character was picked at the game's menu in this session.</summary>
+        public static void Played(int profileId)
+        {
+            if (profileId <= 0) return;
+            lock (played) { if (!played.Contains(profileId)) played.Add(profileId); }
+        }
+
+        /// <summary>The end's list of every character played, as JSON: "" when none was picked.</summary>
+        internal static string PlayedJson()
+        {
+            lock (played)
+            {
+                if (played.Count == 0) return "";
+                var sb = new StringBuilder(",\"profiles\":[");
+                for (int i = 0; i < played.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append(played[i].ToString(CultureInfo.InvariantCulture));
+                }
+                return sb.Append("]").ToString();
+            }
         }
 
         /// <summary>The game has just been started. Call it from a pool thread.</summary>
@@ -749,13 +812,14 @@ namespace Thornswood
             // A launcher that took a running session over, or one that was
             // itself replaced mid session, has no id of its own. It makes one
             // and sends the end alone; the site records that as a session whose
-            // start was never seen, which is the truth of it.
-            if (session.Length == 0) NewSession();
+            // start was never seen, which is the truth of it. The characters
+            // it saw picked stay on the list.
+            if (session.Length == 0) session = Guid.NewGuid().ToString("N");
             double m = minutes;
             if (m < 0 || m > 60 * 24 * 7 || double.IsNaN(m)) m = 0;
             string reason = why == "update" ? "update" : "quit";
             Send("end", Site + "/api/play/end",
-                 Head(profileId) +
+                 Head(profileId) + PlayedJson() +
                  ",\"minutes\":" + m.ToString("F1", CultureInfo.InvariantCulture) +
                  ",\"why\":\"" + reason + "\"}");
         }
@@ -863,7 +927,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Note("Could not send this session's logs: " + ex.Message);
+                Note("Could not send this session's logs: " + Failure.Say("Discord, the session's logs", ex, "thornswood.net"));
             }
         }
 
@@ -1193,7 +1257,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Note("Could not tell thornswood.net the session " + what + ": " + ex.Message);
+                Note("Could not tell thornswood.net the session " + what + ": " + Failure.Say("Discord, the session " + what, ex, "thornswood.net"));
             }
         }
 
@@ -1203,13 +1267,7 @@ namespace Thornswood
         /// </summary>
         static void Note(string line)
         {
-            try
-            {
-                Directory.CreateDirectory(Folder);
-                File.AppendAllText(Path.Combine(Folder, "launcher.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine);
-            }
-            catch (Exception ex) { Swallow.Note("Discord.Note", ex); }
+            LauncherLog.Line(line);
         }
 
         public static int PostJson(string url, string json, out string reply)

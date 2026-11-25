@@ -19,7 +19,7 @@
 //   F  the words: out of the list named to everybody and /help, out of the
 //      pages, and the pages say how studying is reached with no /study
 //
-// The traps from the issue: tests/test-1388-apprentice.js slices the same
+// The traps from the issue: game/tests/test-1388-apprentice.js slices the same
 // functions, and the server keeps answering the line the buttons send.
 //
 // Read only.
@@ -60,7 +60,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(text, a, b) {
   const i = text.indexOf(a);
@@ -75,7 +75,7 @@ const SOCIAL_CMDS = between(src, "    if (word === '/friend' || word === '/party
                             "    if (word === '/rest') {");
 yes('the rules, the character store, the social block and the /yes branch are in the gamemode',
     !!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS));
-if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS)) { done(); }
+if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS)) { done(); return; }
 
 /* One server over a store, the way test-1388-apprentice.js builds it. */
 function server(store, online, gone) {
@@ -366,7 +366,7 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
   try { vm.runInContext(ui, box, { filename: 'thornswood-skills.js' }); } catch (e) { ran = false; console.log(e); }
   const api = win.thornswoodSkills;
   yes('D: the K panel runs in a stand-in document and has takeOn', ran && !!api && typeof api.takeOn === 'function');
-  if (!api) { done(); }
+  if (!api) { done(); return; }
   const root = docu.body.children[0];
   const nav = root._q['.nav'], body = root._q['.body'], status = root._q['.status'], confirmBtn = root._q['[data-act="confirm"]'];
   const navNames = function () {
@@ -484,9 +484,9 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
       !/iniNumber\(ini, 'Apprentice/.test(front));
   const dp = between(front, '  function drawPrompt(row) {', '\n  }\n');
   let drawn = [];
-  const draw = dp && new Function('T', 'FRIEND_NAME', 'TRADE_NAME', 'MUTE_NAME', 'PARTY_NAME', 'SLEEP_NAME', 'APPRENTICE_NAME', 'LOOK_CSS',
+  const draw = dp && new Function('T', 'FRIEND_NAME', 'TRADE_NAME', 'MUTE_NAME', 'PARTY_NAME', 'SLEEP_NAME', 'APPRENTICE_NAME', 'CONTRACT_NAME', 'LOOK_CSS',
     'var lookingSig = "";\n' + dp + '\n  }\nreturn drawPrompt;')(
-    { js: function (s) { drawn.push(s); return true; } }, 'Y', 'H', 'L', 'P', 'U', 'K', '');
+    { js: function (s) { drawn.push(s); return true; } }, 'Y', 'H', 'L', 'P', 'U', 'K', 'K', '');
   yes('E2: drawPrompt is in the front plugin and runs', typeof draw === 'function');
   if (draw) {
     draw({ n: 'Lina', f: 0, m: 0, y: 0, s: 0 });
@@ -520,8 +520,8 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
         press({ lookingAt: hex(LINA), near: near, open: true }) === false &&
         press({ lookingAt: hex(LINA), near: near, busy: true }) === false && calls.length === 0);
     yes('E3: and the key handler asks it before K opens or shuts the panel',
-        // The hair dye's K (#2675) may come between: it is asked after this one.
-        /if \(e\.code === APPRENTICE_KEY && apprenticePress\(\)\) \{ return; \}\n(?:    \/\/[^\n]*\n    if \(e\.code === HAIR_DYE_KEY && hairDyePress\(\)\) \{ return; \}\n)?    if \(e\.code === SKILLS_KEY\) \{/.test(front));
+        // The hair dye's K (#2675) and the contract's (#4561) may come between: each is asked after this one.
+        /if \(e\.code === APPRENTICE_KEY && apprenticePress\(\)\) \{ return; \}\n(?:    \/\/[^\n]*\n    if \(e\.code === HAIR_DYE_KEY && hairDyePress\(\)\) \{ return; \}\n)?(?:    \/\/[^\n]*\n    if \(e\.code === CONTRACT_KEY && contractPress\(\)\) \{ return; \}\n)?    if \(e\.code === SKILLS_KEY\) \{/.test(front));
   }
   // The row on Settings in the game (#3126), where the Controls page's was.
   const settingsPage = read('game', 'ui', 'thornswood-settings.js');

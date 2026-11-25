@@ -34,7 +34,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -124,12 +123,6 @@ function jpg(w, h, turn) {
   return Buffer.concat(parts);
 }
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(method, where, headers, body) {
@@ -144,7 +137,7 @@ function ask(method, where, headers, body) {
         const raw = Buffer.concat(chunks), text = raw.toString('utf8');
         let json = null;
         try { json = JSON.parse(text); } catch (e) { json = null; }
-        done({ status: res.statusCode, type: String(res.headers['content-type'] || ''), body: text, raw: raw, json: json });
+        done({ status: res.statusCode, cache: res.headers['cache-control'], type: String(res.headers['content-type'] || ''), body: text, raw: raw, json: json });
       });
     });
     req.on('error', (e) => done({ status: 0, body: String(e), json: null }));
@@ -165,18 +158,19 @@ const pendingOf = (name) => (readJson('gallery-pending.json') || []).find((x) =>
 const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name === name);
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', (d) => { out += d; });
   try {
-    for (let i = 0; i < 100 && out.indexOf('listening on ') < 0 && srv.exitCode === null; i++) await wait(50);
-    if (out.indexOf('listening on ') < 0) throw new Error('the scratch site never came up:\n' + out);
+    for (let i = 0; i < 100 && !siteFiles.saidPort(out) && srv.exitCode === null; i++) await wait(50);
+    if (!siteFiles.saidPort(out)) throw new Error('the scratch site never came up:\n' + out);
+    PORT = siteFiles.saidPort(out);
 
     // ---- a picture, sent from the launcher ----------------------------------
     let r = await submit(MEMBER_ID, 'Shot one.png', png(2000, 1000), 'image/png');
@@ -287,18 +281,34 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
     r = await copy(MEMBER_ID, D, 800, jpg(800, 1600), 'image/jpeg');
     yes('and 800 by 1600 goes in (' + r.status + ')', r.status === 200);
 
+    // Each variant must reach the origin again on a later request, not be
+    // reused by a browser or shared HTTP cache after staff take it down.
+    const variants = ['', '?w=800', '?w=1600'];
+    const other = '/shot/' + encodeURIComponent(B);
+    for (const url of variants.map((suffix) => enc + suffix).concat(other)) {
+      r = await ask('GET', url);
+      yes(url + ' serves without allowing HTTP storage (' + r.cache + ')', r.status === 200 && r.cache === 'no-store');
+    }
+
     // ---- deleting the picture deletes its copies ------------------------------
     r = await ask('DELETE', '/api/gallery/approved?' + T(ADMIN_ID), { 'content-type': 'application/json' }, JSON.stringify({ name: A }));
     yes('deleting the picture answers that its file went (' + r.status + ')', r.status === 200 && r.json && r.json.fileDeleted === true);
     yes('and its copies went with it',
         !fs.existsSync(small(A, 800, '.webp')) && !fs.existsSync(small(A, 1600, '.webp')) && !fs.existsSync(path.join(dir, 'uploads', A)));
     yes('the other pictures\' copies are still there', fs.existsSync(small(B, 800, '.webp')) && fs.existsSync(small(D, 800, '.jpg')));
+    for (const suffix of variants) {
+      r = await ask('GET', enc + suffix);
+      yes(enc + suffix + ' is no longer served and its 404 is not stored', r.status === 404 && r.cache === 'no-store');
+    }
+    r = await ask('GET', other);
+    yes('the other picture is still served unchanged without HTTP storage',
+        r.status === 200 && r.cache === 'no-store' && r.raw.equals(png(1700, 850)));
   } catch (e) {
     fail++;
     console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));
   }
 
-  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
+  await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 
   // ---- the three clients -----------------------------------------------------
@@ -332,5 +342,5 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

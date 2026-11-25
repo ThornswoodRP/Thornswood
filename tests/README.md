@@ -20,31 +20,43 @@ Most of them run on every pull request as well, in the build check
 runners at once): every
 `test-*.js` and `test-*.ps1` here that `gate-excluded.txt` does not name, as
 `scripts\dev\Gate-Harnesses.ps1` lists them when the build runs (issue
-#3009). A new harness is on that gate the moment it is in this folder, and
-touches no shared line; say in its header why it exists. To keep one off the
-gate, add a line to `gate-excluded.txt`, `name  reason`, in name order. A
+#3009). A new harness is on that gate the moment it is in this folder or in
+a product's own tests folder, and touches no shared line; say in its header
+why it exists. One that reads only one product goes beside that product
+("Beside their product" below), and one that reads two or more goes here.
+To keep one off the gate, add a line to `gate-excluded.txt`, `name  reason`, in name order. A
 harness build.yml runs in a step of its own (`test-old-name-gone.js`, issue #497)
 has a line there too, "own step in build.yml", so the gate does not run it
 twice. The "not sorted yet" lines are minutes together, which is why they
 come onto the gate a few at a time.
 
 The voice service's own harnesses are beside it in `voice\tests\`, and the
-bot's Python ones in `bot\`, because they are run from there.
+bot's Python ones in `bot\tests\`, because they are run from there.
 
 ## Beside their product
 
-The repository's folders are being grouped by product, with each product's
-harnesses beside its code (plan line 42, 1 Nov 2026), one product at a time.
-A product's harnesses go in a `tests` folder of its own, one folder below the
-top: `launcher\tests\`, `site\tests\`. This folder keeps the checks that are
+The repository's folders are grouped by product, with each product's
+harnesses beside its code (plan line 42, 1 Nov 2026). A product's harnesses
+go in a `tests` folder of its own, one folder below the top:
+`launcher\tests\`, `site\tests\`. This folder keeps the checks that are
 about the whole repository (the gate, the words, the secrets, the scripts'
-paths), the shared helpers (`Windows.ps1`, `Launcher-Csc.ps1`,
-`launcher-csc.js`, `fork-git.js` and the rest) and `fixtures\`, and every
-harness whose product has not moved yet. Moved on 1 Nov 2026: the launcher's
-(`launcher\tests\`), voice's (`voice\tests\`), the setup program's
-(`installer\tests\`) and the site's (`site\tests\`). Its harnesses are no part of the launcher:
-`LauncherVersion.ps1` and Ship's launcher fingerprint leave that folder out,
-so a change to one gives no launcher a new number.
+paths), the harnesses that read two products or more, the shared helpers
+(`Windows.ps1`, `Launcher-Csc.ps1`, `launcher-csc.js`, `fork-git.js` and the
+rest) and `fixtures\`. Moved on 1 Nov 2026: the launcher's
+(`launcher\tests\`), voice's (`voice\tests\`) and the site's
+(`site\tests\`). Moved on 12 Nov 2026: the game's (`game\tests\`), every
+harness that reads only the game: the gamemode and its parts, the game's
+plugins, data and pages, and the builders in `scripts\dev` and
+`scripts\mods` that make its tables; and the scripts' (`scripts\tests\`),
+every harness that reads only the box, release and developer scripts. A
+harness that reads two products, the game and the launcher say, stays here,
+because it checks how they fit together. The few that open pull requests
+were changing on 12 Nov stay here until those merge (#5341).
+
+A product's harnesses are no part of it. `LauncherVersion.ps1` and Ship's
+launcher fingerprint leave `launcher\tests` out, so a change to one gives no
+launcher a new number, and the merge release leaves `launcher\tests` and
+`game\tests` out, so a change to a check starts no release.
 
 The gate and the nightly find both kinds through one list,
 `scripts\dev\Harness-Files.ps1`. A harness here goes by its file name, as
@@ -62,7 +74,8 @@ const lc = require('../../tests/launcher-csc');
 
 A check that reads a whole product folder for something its code must never
 do leaves that folder's `tests` out, since a harness names the very thing it
-looks for (`test-browser-args.ps1`, `test-3003-one-install-rule.ps1`).
+looks for (`test-browser-args.ps1`, `test-3003-one-install-rule.ps1`, and
+the checks that read every script, which leave `scripts\tests` out).
 
 Moving a product's harnesses is one pull request for that product, and only
 while no open pull request changes any of them: a moved file and an edit to
@@ -74,35 +87,70 @@ workflows, in the scripts' comments and in the docs.
 
 They moved here from `tools\` on 25 September (issue #440, phase 5), and
 `tools\` itself went on 29 September (phase 10). Each one finds the repository
-folder from here, one folder up: a `.js` harness through `REPO_DIR`, declared at
-its top as `path.join(__dirname, '..')`, and a `.ps1` harness through the line
-after its `$Here = $PSScriptRoot` that points `$Here` at the repository folder.
-One beside its product is two folders below the top, so its `REPO_DIR` is
-`path.join(__dirname, '..', '..')` and its `$Here` goes up twice.
-A new harness does the same; copying the top of an existing one is the easy way.
+folder from here, one folder up: a `.js` harness usually through `REPO_DIR`,
+`ROOT` or `REPO`, declared at its top as `path.join(__dirname, '..')`, and a
+`.ps1` harness through the line after its `$Here = $PSScriptRoot` that points
+`$Here` at the repository folder. One beside its product is two folders below the
+top, so its path goes up twice (`path.join(__dirname, '..', '..')` and its `$Here`
+goes up twice). A new harness does the same; copying the top of an existing one
+is the easy way.
 
 ## Running them
 
 From the repository folder:
 
 ```
-node tests\test-farming.js
+node game\tests\test-farming.js
 pwsh -NoProfile -File tests\test-ship-rules.ps1
 ```
 
 and one beside its product by its path, `pwsh -NoProfile -File
 launcher\tests\test-498-msbuild.ps1`.
 
-Each prints a PASS or FAIL line per check and ends on `N passed, M failed`,
-and exits 1 when anything failed. A harness that reads something only one
+Many harnesses print a PASS or FAIL line per check and end on `N passed, M failed`,
+and exit 1 when anything failed. Others, including many JavaScript checks, use
+node's `assert`, stop at the first failure and print neither, exiting 0 on success
+or throwing on an assertion failure. A harness that reads something only one
 machine has, such as the game folder, says SKIP for that part and checks the
 rest.
 
 Those lines are what the gate's report is made of (#5295). Every line that
 starts PASS, FAIL, SKIP or NOT RUN, after any spaces, is one check, named
 by the rest of the line, in the report scripts\dev\Nightly-Harnesses.ps1
--Report writes and on the run's page. So give each check a line of its own
-that names it, and print nothing else that starts with one of those words.
+-Report writes and on the run's page. When a harness exits non-zero without
+printing a FAIL line (such as an uncaught assertion failure or crash), the
+runner records a failing check from its exit. Where a harness prints checks, give
+each check a line of its own that names it, and print nothing else that starts
+with one of those words.
+
+## Run by hand
+
+Every script in this folder is a harness, run by a workflow step, used by
+another script, or listed here with the command that runs it;
+`test-4195-every-test-script-runs.ps1` fails on one that is none of those
+(#4195). These two check the merchant code against a built server addon and
+the game's own plugins, which no gate or nightly machine has, so they are run
+by hand on a machine that has both. Neither connects to Main or Dev: each
+starts an offline server of its own on a port the system picks.
+
+```
+node tests/native-merchant-settlement.js <built addon .node> <installed record .json>
+node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> <scratch folder> [mammoth|orchard]
+```
+
+- `native-merchant-settlement.js` runs merchant sales and a quest payment
+  through the addon itself: the private economy ledger written and read back
+  after a reload, each saved debit and credit, a quest record that cannot pay
+  twice, and a ledger write refused through a folder the site serves. It
+  leaves its scratch folder in the temp folder, since the addon may still
+  hold files there.
+- `native-retrieval-sources.js` holds the seven retrieval sources in
+  `game/data/merchant-retrievals.json` to the addon's own record lookup:
+  winning plugin, raw id and the hash of every field. `mammoth` adds the
+  three mammoth placements and `orchard` those and the ten orchard ones,
+  with a write and read back of the orchard plots. Each plugin must match
+  its pinned sha256, and the scratch folder must be inside `temp` two
+  folders above the repository.
 
 ## A harness that runs box code, or needs Windows
 
@@ -131,10 +179,12 @@ $cmd = Get-WindowsPath 'System32\cmd.exe'
 
 Off Windows it says SKIP for that part and checks the rest, or, when the
 whole harness is about Windows, prints one `NOT RUN` line saying why and
-exits 0. `Get-WindowsPowerShell` is kept only for the launcher harnesses,
-whose scripts run on people's own PCs, until the launcher's pull request
-lands; nothing on the box starts Windows PowerShell 5.1. A harness that
-loads `tests\Launcher-Csc.ps1` has `$OnWindows` from it too.
+exits 0. Every script runs in PowerShell 7 (#5356), so a harness that
+runs one in a child shell asks `Get-BoxPowerShell`. `Get-WindowsPowerShell`
+is only for what the launcher leaves a person's PC to run in Windows
+PowerShell 5.1 (the uninstall's farewell), and only a launcher harness asks
+for it. A harness that loads `tests\Launcher-Csc.ps1` has
+`$OnWindows` from it too.
 
 Before issue #2957 each harness found these itself, by joining onto
 `$env:SystemRoot` or asking `Get-Command` for powershell.exe, and copied the
@@ -185,24 +235,20 @@ $asm = Add-LauncherType -Source $configSrc, $stub
 $T = $asm.GetType('Thornswood.Updater')
 ```
 
-A few launcher files are also loaded by scripts with `Add-Type`, which under
-Windows PowerShell 5.1 is the .NET Framework's own compiler: C# 5, and none
-of .NET 10's libraries (`scripts\mods\LoadOrder.ps1` loads
-`VortexProfileState.cs`, `scripts\mods\Generated.ps1` loads `Generated.cs`
-and the files beside it, `scripts\release\Go.ps1` loads `LastPlugin.cs` and
-the `FromGame*.cs` files). A harness for such a file (`test-2791-last-plugin`,
-`test-2827-from-game`, `test-vortex-profile-state`) dot-sources
-`tests\Framework-Csc.ps1` as well and builds the file with
-`Build-FrameworkCode` too: a .NET Framework 4.8 project at C# 5, through the
-same .NET SDK, which fetches the Framework's reference assemblies as a
-package, so it works on Linux as well. So a file that only .NET 10 compiles
-fails in the harness, not on the machine that runs the script. It is for
-compiling only; off Windows there is no .NET Framework to run the result on.
-The file's header has every switch:
+A few launcher files are also loaded by scripts with `Add-Type`
+(`scripts\mods\LoadOrder.ps1` loads `VortexProfileState.cs`,
+`scripts\mods\Generated.ps1` loads `Generated.cs` and the files beside it,
+`scripts\release\Go.ps1` loads the `FromGame*.cs` files). Every script runs
+in pwsh 7 (#5356), whose `Add-Type` compiles with its own Roslyn against the
+.NET it runs on, with none of the project's packages. A harness for such a
+file loads it through the script itself (`test-vortex-profile-state`), or
+calls `Test-ScriptAddType` from `tests\Launcher-Csc.ps1`, which makes the
+script's own `Add-Type` call in a pwsh of its own and throws with what the
+compiler said (`test-2827-from-game`, #5968):
 
 ```
-. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')
-$null = Build-FrameworkCode -File (Join-Path $App 'VortexProfileState.cs') -Reference System.Xml
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')
+Test-ScriptAddType -File (Join-Path $App 'VortexProfileState.cs')
 ```
 
 Before issue #2821 eighteen harnesses compiled launcher code with `Add-Type`

@@ -49,7 +49,9 @@ function Get-AccountLineFault([string]$line) {
 }
 
 $calls = 0
-foreach ($f in Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1') {
+# Not the scripts' own harnesses in scripts\tests (#5341), which plant the very
+# calls this looks for.
+foreach ($f in Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' }) {
     $rel = [IO.Path]::GetRelativePath($Repo, $f.FullName).Replace('\', '/')
     $lines = [IO.File]::ReadAllLines($f.FullName)
     for ($i = 0; $i -lt $lines.Count; $i++) {

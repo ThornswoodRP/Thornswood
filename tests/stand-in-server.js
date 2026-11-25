@@ -781,7 +781,19 @@ function world(opts) {
     getActorCellOrWorld: function (a) { const r = store.get(a >>> 0); return r ? r.worldOrCellDesc : ''; },
     getActorName: function (a) { const r = store.get(a >>> 0); return r && r.appearance ? r.appearance.name : ''; },
     getNeighborsByPosition: function (cell, pos) {
-      return online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      /*
+        What WorldState::GetNeighborsByPosition hands back: the forms around
+        the position, the placed references of the cell with them (the fork's
+        LoadCellsTest asks an empty cell and gets its references), and the
+        people online there. A chest, a forge or a loom a harness placed with
+        w.ref is one of them (#4578). The NPCs of the placed cast are not
+        given here.
+      */
+      const out = online.filter(function (a) { const r = store.get(a); return r && r.worldOrCellDesc === cell; });
+      for (const [rid, r] of store) {
+        if (r && r.type !== 'NPC_' && r.worldOrCellDesc === cell && out.indexOf(rid) < 0) { out.push(rid); }
+      }
+      return out;
     },
     setRaceMenuOpen: function (a, open) { saw(a >>> 0, 'raceMenu', '', !!open); },
     sendCustomPacket: function (u, text) { saw(impl.getUserActor(u), 'packet', '', String(text)); },
@@ -927,17 +939,31 @@ function world(opts) {
   let proc = null;
   let reloads = 0;
   function boot() {
-    const timers = [];
+    // Keep only live timers. Long scenarios run days of game time and a
+    // completed HTTP deadline should cost nothing in each later clock step.
+    const timers = new Set();
+    function register(t) {
+      t.unref = function () { return t; };
+      t.ref = t.unref;
+      timers.add(t);
+      return t;
+    }
+    function clear(t) { timers.delete(t); }
     function line() { w.log.push([].slice.call(arguments).map(String).join(' ')); }
     const box = {
       mp: makeMp(), require: fakeRequire, process: process, Buffer: Buffer,
       console: { log: line, error: line, warn: line, info: line },
-      setInterval: function (fn, ms) { const t = { fn: fn, every: Math.max(1, Number(ms) || 1), at: clock + Math.max(1, Number(ms) || 1) }; t.unref = function () { return t; }; t.ref = t.unref; timers.push(t); return t; },
-      clearInterval: function (t) { if (t) { t.gone = true; } },
-      setTimeout: function (fn, ms) { const a = [].slice.call(arguments, 2); const t = { fn: function () { fn.apply(null, a); }, at: clock + (Number(ms) || 0) }; t.unref = function () { return t; }; t.ref = t.unref; timers.push(t); return t; },
-      clearTimeout: function (t) { if (t) { t.gone = true; } },
-      setImmediate: function (fn) { const t = { fn: fn, at: clock }; timers.push(t); return t; },
-      clearImmediate: function (t) { if (t) { t.gone = true; } },
+      setInterval: function (fn, ms) {
+        const every = Math.max(1, Number(ms) || 1);
+        return register({ fn, every, at: clock + every });
+      },
+      clearInterval: clear,
+      setTimeout: function (fn, ms, ...args) {
+        return register({ fn: () => fn.apply(null, args), at: clock + (Number(ms) || 0) });
+      },
+      clearTimeout: clear,
+      setImmediate: function (fn) { return register({ fn, at: clock }); },
+      clearImmediate: clear,
       queueMicrotask: queueMicrotask,
       Date: FakeDate, URL: URL, URLSearchParams: URLSearchParams, TextEncoder: TextEncoder, TextDecoder: TextDecoder
     };
@@ -990,8 +1016,8 @@ function world(opts) {
     for (;;) {
       let next = null;
       const timers = proc.timers;
-      for (let i = 0; i < timers.length; i++) {
-        if (!timers[i].gone && (!next || timers[i].at < next.at)) { next = timers[i]; }
+      for (const timer of timers) {
+        if (!next || timer.at < next.at) { next = timer; }
       }
       // The launchers renew their passes every minute and the front plugin sends them on.
       if (passAt <= end && (!next || passAt <= next.at)) {
@@ -1019,7 +1045,7 @@ function world(opts) {
       }
       if (!next || next.at > end) { break; }
       clock = Math.max(clock, next.at);
-      if (next.every) { next.at += next.every; } else { next.gone = true; }
+      if (next.every) { next.at += next.every; } else { timers.delete(next); }
       try { next.fn(); } catch (e) { w.threw.push(e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e)); }
     }
     clock = end;
@@ -1028,7 +1054,7 @@ function world(opts) {
   w.loaded = function () { return proc && !proc.err; };
   w.loadError = function () { return proc && proc.err ? (proc.err.stack || String(proc.err)) : ''; };
   w.box = function () { return proc.box; };
-  w.timers = function () { return proc.timers.filter(function (t) { return !t.gone; }).map(function (t) { return { every: t.every || 0, at: t.at }; }); };
+  w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
   /* The gamemode deployed again while the server runs: same process, same mp. */
   w.reload = function () { proc.err = null; load(); return w.loaded(); };
@@ -1457,8 +1483,8 @@ let catalogueCache = null;
 function npcCatalogue() {
   if (catalogueCache) { return catalogueCache; }
   const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
-  const at = gm.indexOf('const NPC_POPULATION_DATA = ');
-  const population = JSON.parse(gm.slice(at + 'const NPC_POPULATION_DATA = '.length, gm.indexOf('\n', at)).replace(/;\s*$/, ''));
+  // The catalogue is the table NPC_POPULATION_DATA too (#5191, stage 4).
+  const population = require('./gamemode-tables.js').inGamemode(gm, 'NPC_POPULATION_DATA');
   // The item catalogues are tables beside the gamemode since #5191 (#5427).
   const tables = path.join(REPO_DIR, 'game', 'gamemode-tables');
   const text = [gm].concat(fs.readdirSync(tables).filter(function (n) { return /\.json$/.test(n); }).sort()
@@ -1513,7 +1539,7 @@ function checks() {
       }
       console.log('');
       console.log(pass + ' passed, ' + fail + ' failed');
-      process.exit(fail ? 1 : 0);
+      process.exitCode = fail ? 1 : 0;
     }
   };
   return c;

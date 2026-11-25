@@ -6,8 +6,8 @@
   wrote into the repository's game\, records\ and docs\systems\ folders.
   Issue #2899.
 
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}'
-      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --check --masters '{data}' --plugins '{plugins}'
+      pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Add-ContentRecords.py --masters '{data}' --plugins '{plugins}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Build-LastPlugin.py --data '{data}'
       pwsh scripts/mods/Run-OnBox.ps1 scripts/mods/Rebuild-ContentTables.ps1 -Data '{data}' -PluginsTxt '{plugins}'
 
@@ -18,7 +18,8 @@
   21 Oct 2026 though the box held what they read. The last line above runs
   the whole chain of scripts\mods\content-tables.json. Since #3105 its
   tables are the ones a game PC writes: every builder reads the load order
-  game\data\npc-population.json records, on the box and on a PC alike, and
+  the commit records (records\load-order.json since #5191), on the box and
+  on a PC alike, and
   the crime table reads the script pack a PC made (records\papyrus-scripts.json).
 
   WHY. Patrick, 20 Oct 2026: "let's make the content plugin available in the
@@ -64,6 +65,14 @@
                   never lists (own_plugins.py). The builders that take a
                   plugin list read the load order the server runs, not
                   whichever profile a PC last had
+  With -Collection (Build-ContentOnBox.ps1, #5191) the run is built from
+  the commit's record instead of the server: data\ takes the plugins of the
+  collection's store at the record's revision (CollectionStore.ps1, the
+  folder -Collection names) over the server's, and plugins.txt is the load
+  order the commit records, moved to that revision (ContentPaths.ps1,
+  Get-ThornswoodContentOrder). The server's folder then gives only what no
+  collection installs, the game's own masters among them. A build for a
+  revision no server runs yet reads that revision's plugins in its order.
   '{data}' in an argument is the data folder, '{plugins}' the plugin list and
   '{repo}' the repository folder, all on the box. THORNSWOOD_DATA names the
   data folder too, for the tools that read it. The tool runs at below normal
@@ -98,11 +107,10 @@ param(
     [string]$VpsHost = '',
     [string]$VpsUser = '',
 
-    # A folder that gets a copy of every file the tool wrote, at its
-    # repository path, as well as this checkout. The deploy gate's
-    # Rebuild-ContentTables verb sets it to the run's out folder, so what the
-    # box wrote goes back to the session that asked (Rebuild-OnBox.ps1).
-    [string]$Out = ''
+    # The box's store of the collection's plugins at the revision
+    # records\collection-plugins.json names (CollectionStore.ps1): the run is
+    # then built from the commit's record, the header says how.
+    [string]$Collection = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +118,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here '..\deploy\Artifact.ps1')
 . (Join-Path $Here 'OnBox.ps1')
+. (Join-Path $Here 'ContentPaths.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 $repo = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
@@ -131,63 +140,28 @@ foreach ($a in $Arguments) {
 }
 
 $serverRoot = $(if ($Server -eq 'main') { 'C:\Thornswood-Server' } else { 'C:\Thornswood-Server-Dev' })
-$paths = @('scripts/mods', 'scripts/dev', 'game/content', 'game/data', 'records', 'layout.json')
-# And whatever else a builder of the content chain reads, uses or writes
-# (scripts\mods\content-tables.json). Until #2962 the artifact held only the
-# folders above, so every builder that writes its table into game\gamemode.js
-# (the building holds, the woodworking benches, the doors and five more)
-# stopped on the box with "No such file" for gamemode.js, and the one that
-# reads docs\systems\cut-items.json would have too. Every builder since
-# #3100, not only the Python ones, because the whole chain runs here. Until
-# #3425 the list named only the tables, so the K panel's book that
-# Build-SpellTable.ps1 reads (game\ui) and the game scripts
-# Build-MerchantGamemode.js embeds never went up, and the run stopped at the
-# spell table; their uses name them now.
-$chainFiles = [IO.File]::ReadAllText((Join-Path $Here 'content-tables.json')) | ConvertFrom-Json
-foreach ($s in @($chainFiles.steps)) {
-    foreach ($p in @(@($s.reads) + @($s.readsBack) + @($s.uses) + @($s.writes) | Where-Object { $_ })) {
-        $p = [string]$p
-        if (-not @($paths | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $paths += $p }
-    }
+# What goes up and what may come back: ContentPaths.ps1 says which, for
+# this tool and every builder of scripts\mods\content-tables.json.
+$content = Get-ThornswoodContentPaths -Repo $repo -Tool $tool
+$paths = $content.Paths
+$watch = $content.Watch
+$order = @()
+if ($Collection) {
+    $recordOrder = Get-ThornswoodContentOrder -Repo $repo
+    $order = $recordOrder.Names
+    Say ('the load order this commit records, at collection ' + $recordOrder.Slug + ' revision ' + $recordOrder.Revision + ': ' + $order.Count + ' plugins' +
+        $(if ($recordOrder.Added.Count) { ', with ' + ($recordOrder.Added -join ', ') + ' added' } else { '' }) +
+        $(if ($recordOrder.Dropped.Count) { ', without ' + ($recordOrder.Dropped -join ', ') } else { '' })) 'DarkGray'
 }
-# What comes back: game\, records\ and docs\systems\, and every file a
-# step writes outside them, so a table a builder writes is never left on
-# the box (#3425).
-$watch = @('game', 'records', 'docs/systems')
-foreach ($p in @($chainFiles.steps | ForEach-Object { @($_.writes) } | Where-Object { $_ })) {
-    $p = [string]$p
-    if (-not @($watch | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $watch += $p }
-}
-# And every script a builder, or this run's own tool, loads from beside it
-# outside the folders above, and what that one loads in turn: a .ps1's
-# . (Join-Path $PSScriptRoot '<path>') and a .js's require('./<path>').
-# Build-RecipeTable.ps1 loads scripts\deploy\ServerOrder.ps1, which loads
-# scripts\release\Read-JsonFile.ps1. A game script a step uses is read the
-# same way: game\merchant-commissions.js requires
-# .\merchant-commission-state.js beside it.
-$load = New-Object 'Collections.Generic.Queue[string]'
-foreach ($t in @(@($chainFiles.steps | ForEach-Object { [string]$_.tool }) + @($chainFiles.steps | ForEach-Object { @($_.uses) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }) + $tool)) { $load.Enqueue([string]$t) }
-$seen = @{}
-while ($load.Count) {
-    $t = $load.Dequeue()
-    if ($seen.ContainsKey($t)) { continue }
-    $seen[$t] = $true
-    $full = Join-Path $repo $t
-    if (-not (Test-Path -LiteralPath $full)) { continue }
-    $text = [IO.File]::ReadAllText($full)
-    $found = @([regex]::Matches($text, "\.\s+\(Join-Path\s+\`$PSScriptRoot\s+'([^']+)'\)") + [regex]::Matches($text, "require\(\s*['""](\.\.?/[^'""]+)['""]\s*\)"))
-    foreach ($m in $found) {
-        $parts = New-Object 'Collections.Generic.List[string]'
-        foreach ($w in @(($t.Substring(0, $t.LastIndexOf('/')) + '/' + $m.Groups[1].Value.Replace('\', '/')).Split('/'))) {
-            if ($w -eq '..') { if ($parts.Count) { $parts.RemoveAt($parts.Count - 1) } } elseif ($w -and $w -ne '.') { $parts.Add($w) }
-        }
-        $p = $parts -join '/'
-        if ($t -like '*.js' -and -not [IO.Path]::GetExtension($p)) { $p += '.js' }
-        if ($p -notmatch '^(scripts|game)/' -or -not (Test-Path -LiteralPath (Join-Path $repo $p) -PathType Leaf)) { continue }
-        if (-not @($paths | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $paths += $p }
-        $load.Enqueue($p)
-    }
-}
+# What a content build writes is not committed (#5191, stage 4e), so a
+# written file the commit does not have yet, or a folder that holds only
+# such files (game/content, #6351), is one an earlier step of this build has
+# still to make, and goes up only once that step's run committed it
+# (Build-ContentOnBox.ps1, Save-Step).
+$paths = Select-ThornswoodSentPaths -Repo $repo -Commit 'HEAD' -Paths $paths
+# The plugins the build makes, whose server copies the run leaves out of its
+# Data folder even while the commit has none of them yet (OnBox.ps1, #6351).
+$own = @(Get-ThornswoodBuiltPaths -Repo $repo | Where-Object { $_ -cmatch '^game/content/[^/]+\.(esp|esm|esl)$' } | ForEach-Object { $_.Substring('game/content/'.Length) })
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
@@ -204,13 +178,13 @@ try {
     $runFar = $box.Far
     foreach ($l in $box.Said) { Say ('box  ' + $l) 'DarkGray' }
     if (-not $box.Made) { throw ('could not make ' + $run + ' on the box. What ssh said is above.') }
-    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch
+    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection -Own $own
     # The run's own script goes into its folder, so it goes with the folder.
     $farFile = Join-Path $local 'run.ps1'
     [IO.File]::WriteAllText($farFile, $farRun, (New-Object Text.UTF8Encoding($true)))
     Send-ThornswoodArtifactFile $artifact.Zip $target $ssh ($runFar + '/tools.zip')
     Send-ThornswoodArtifactFile $farFile $target $ssh ($runFar + '/run.ps1')
-    Say ("running $tool on the box, against the $Server server's plugins") 'Cyan'
+    Say ("running $tool on the box, against the $Server server's plugins" + $(if ($Collection) { ' with the collection''s store over them, in the order this commit records' } else { '' })) 'Cyan'
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { $lines = @(Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Bypass -Script ("& '" + $run + "\run.ps1'") | Where-Object { $_ -is [string] } | ForEach-Object { $_.Trim() }) } finally { $ErrorActionPreference = $eap }
@@ -221,7 +195,14 @@ try {
         if ($l -cmatch '^EXIT (-?\d+)\s*$') { $exit = [int]$Matches[1]; continue }
         Write-Host $l
     }
-    if ($null -eq $exit) { throw 'the box did not say how the tool ended, so nothing was brought back.' }
+    if ($null -eq $exit) {
+        # The run stopped before the tool ended; its STOP line says why
+        # (OnBox.ps1), and goes on in what this throws, so a content build's
+        # status carries it (#6351).
+        $why = @($lines | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
+        if ($why) { throw ('the run on the box stopped before the tool ended, so nothing was brought back: ' + $why.Substring(6)) }
+        throw 'the box did not say how the tool ended, so nothing was brought back.'
+    }
     $code = $exit
 
     if ($changed.Count) {
@@ -244,11 +225,9 @@ try {
             Say ''
             Say ('the tool wrote ' + $changed.Count + ' file(s), now in this checkout:') 'Green'
             foreach ($e in $zip.Entries) {
-                foreach ($into in @($repo, $Out | Where-Object { $_ })) {
-                    $dest = Join-Path $into $e.FullName
-                    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
-                    [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
-                }
+                $dest = Join-Path $repo $e.FullName
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
                 Say ('  ' + $e.FullName)
             }
         } finally { $zip.Dispose() }
@@ -266,5 +245,11 @@ try {
     }
     Remove-Item -LiteralPath $local -Recurse -Force -ErrorAction SilentlyContinue
 }
-Say ('the tool exited ' + $code) $(if ($code -eq 0) { 'Green' } else { 'Yellow' })
+Write-Output ('the tool exited ' + $code)
+# Why, on a STOP line of its own, last, so whoever ran this can carry it on:
+# Build-ContentOnBox.ps1 puts it in the content build's status (#6351).
+if ($code -ne 0) {
+    $why = Get-ThornswoodToolReason $lines
+    if ($why) { Write-Output ('STOP. ' + $why) }
+}
 exit $code

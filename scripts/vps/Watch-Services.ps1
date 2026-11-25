@@ -58,7 +58,7 @@
   Discord where a pasted webhook points and refuses any other channel, and
   the report this prints with no switch says where the one on the box points
   (#2501: until 12 Oct nothing checked, and the bot itself was saying the
-  watchdog's messages in the dev updates channel).
+  watchdog's messages in #staff-news).
 
   Anything else on this box that needs to tell staff something (the bot's own
   wrapper, issue #449) appends a line of the same shape to alerts.jsonl and
@@ -199,6 +199,23 @@ function Remote($script) {
   # Send-Script.ps1 (issue #1070): a long script goes by scp and its run takes
   # it off the box before it runs, and the far side's exit code comes back.
   return Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $script
+}
+
+# What the box said for -Install and -SetWebhook, a line each, and whether it
+# failed: a FAILED line, or nothing back at all. Each of their steps on the
+# box says FAILED with why when it does not work, so this is the one place
+# that turns that into the exit code (#5155, #4207). Called with @(...), so
+# an answer of nothing stays empty and is not taken for one empty line.
+function Show-BoxLines([object[]]$out) {
+  $failed = -not @($out).Count
+  if ($failed) { Say '  FAILED    the box said nothing back' 'Red' }
+  foreach ($l in $out) {
+    $c = 'Gray'
+    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
+    if ("$l" -match '^(wrote|made|ran|saved|posted)') { $c = 'Green' }
+    Say "  $l" $c
+  }
+  return $failed
 }
 
 Write-Host ''
@@ -956,6 +973,14 @@ $checks = @(
   # Ready, unlike Health, is restarted for: the header says why.
   @{ Name = 'tunnel';    Task = 'Thornswood Tunnel';     Port = 20241; Say = 'The Cloudflare tunnel, which carries the website, both update feeds and the ssh bridge'; Ready = 'http://127.0.0.1:20241/ready' }
 )
+# MongoDB, where a game server keeps its world once Move-World has moved it
+# (#6237): a server whose database does not answer cannot load or save. Put
+# first, so a run starts it before it looks at the game servers. Only once
+# Install-Mongo.ps1 has installed it (bin\installed.json), so a box without
+# it is not told about a task that is not there.
+if (Test-Path -LiteralPath 'C:\Thornswood-Mongo\bin\installed.json') {
+  $checks = @(@{ Name = 'mongo'; Task = 'Thornswood Mongo'; Port = 27017; Say = 'MongoDB, which keeps the game servers'' worlds' }) + $checks
+}
 
 # Told about and never restarted. The runner's service name is the one
 # Install-Runner.ps1 registers, actions.runner.<owner>-<repo>.<runner name>,
@@ -972,7 +997,7 @@ $tellOnly = @(
      Fix = 'A restart does not mend a file, so the watchdog leaves the website running, and the site writes nothing over a file it cannot read. Repair the file by hand on the box, from the backup in C:\Thornswood-Backup; the site reads it again at its next request.' },
   # Caddy's own certificate (#2995), which only this box can reach now.
   @{ Name = 'cert'; Say = 'The certificate Caddy holds for thornswood.net'; Fails = 'needs a look'; Recovers = 'is fine again'; Cert = 'https://thornswood.net/'; Days = 14
-     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Cloudflare reaches it over port 443 for the renewal, so Set-WebFirewall.ps1 -Check says whether 443 still takes Cloudflare.' }
+     Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Let''s Encrypt''s check reaches Caddy through Cloudflare, down the tunnel to 443 on the box (#5351), so Set-WebFirewall.ps1 -Check says whether the tunnel carries both names.' }
 )
 
 # What is wrong with one of $checks when it does not answer, in words.
@@ -1317,13 +1342,9 @@ try {
   $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($put))
   $out = $url | Invoke-ThornswoodNative { $input | & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" } 2>&1
   $url = $null
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red' }
-    if ("$l" -match '^(saved|posted)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  $failed = Show-BoxLines @($out)
   Write-Host ''
+  if ($failed) { Die 'The webhook is not set as it should be: the FAILED line above says which step. Run -SetWebhook again once that is mended.' }
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
@@ -1341,10 +1362,14 @@ if ($Install) {
   $out = Remote @"
 `$ErrorActionPreference = 'Continue'
 $(Get-ThornswoodLockedFolderScript $Root)
-[IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
-'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
-[IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
-'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+try {
+  [IO.File]::WriteAllBytes('$Root\watch.ps1', [Convert]::FromBase64String('$b64'))
+  'wrote     $Root\watch.ps1  ' + (Get-Item '$Root\watch.ps1').Length + ' bytes'
+} catch { 'FAILED    $Root\watch.ps1 could not be written: ' + `$_.Exception.Message }
+try {
+  [IO.File]::WriteAllBytes('$Root\say-staff.ps1', [Convert]::FromBase64String('$sayB64'))
+  'wrote     $Root\say-staff.ps1  ' + (Get-Item '$Root\say-staff.ps1').Length + ' bytes, for staff notices from agents'
+} catch { 'FAILED    $Root\say-staff.ps1 could not be written: ' + `$_.Exception.Message }
 
 # Every five minutes, as SYSTEM, so it keeps going when nobody is logged in.
 #
@@ -1362,12 +1387,18 @@ $(Get-ThornswoodLockedFolderScript $Root)
 `$p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 try {
   Register-ScheduledTask -TaskName '$Task' -Action `$a -Trigger `$tr -Settings `$s -Principal `$p -Force -ErrorAction Stop | Out-Null
-  'made      the task, every five minutes, at priority ' + (Get-ScheduledTask -TaskName '$Task').Settings.Priority
+  # Read back, so a task the scheduler did not keep is said and not taken
+  # for registered (#4207).
+  `$made = Get-ScheduledTask -TaskName '$Task' -ErrorAction SilentlyContinue
+  if (`$made) { 'made      the task, every five minutes, at priority ' + `$made.Settings.Priority }
+  else { 'FAILED    the task is not there after registering it' }
 } catch { 'FAILED    the task could not be registered: ' + `$_.Exception.Message }
 
 # Run it once now so the log has something in it and any problem shows up
 # here rather than in five minutes when nobody is watching.
-`$null = & schtasks /run /tn '$Task' 2>&1
+`$said = & schtasks /run /tn '$Task' 2>&1
+if (`$LASTEXITCODE -ne 0) { 'FAILED    its first run was refused: ' + ((@(`$said) | ForEach-Object { "`$_" }) -join ' ') }
+else { 'ran       the task once' }
 Start-Sleep -Seconds 8
 if (Test-Path '$Root\watch.log') {
   'first run:'
@@ -1381,14 +1412,10 @@ if (Test-Path '$Root\alerts-webhook.txt') {
 "@
 
   # A FAILED line, or nothing back, is exit 1, so a run through the gate
-  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work (#5155).
-  $failed = -not @($out).Count
-  foreach ($l in $out) {
-    $c = 'Gray'
-    if ("$l" -match '^FAILED') { $c = 'Red'; $failed = $true }
-    if ("$l" -match '^(wrote|made)') { $c = 'Green' }
-    Say "  $l" $c
-  }
+  # (Box-Run.ps1 -Line 'Watch-Services -Install') says it did not work
+  # (#5155), and nothing here says the watchdog runs when it may not (#4207).
+  $failed = Show-BoxLines @($out)
+  if ($failed) { Die 'The watchdog is not set up as it should be: the FAILED line above says which step. Run -Install again once that is mended.' }
 
   Head 'From now on'
   Say '  Anything that stops gets started again within five minutes,' 'DarkGray'
@@ -1397,7 +1424,6 @@ if (Test-Path '$Root\alerts-webhook.txt') {
   Say '  Run this script with no switches to see what it has been doing.' 'DarkGray'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
-  if ($failed) { exit 1 }
   exit 0
 }
 

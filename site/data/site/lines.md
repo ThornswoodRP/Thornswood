@@ -5,7 +5,9 @@ Everything that shows a hint or a line of lore takes it from here, so a line
 changed here changes everywhere at the next deploy:
 
 - the site's front page shows one lore line under The World, picked at random
-  each time the page is served (`site\server.js`, `readLines`);
+  each time the page is served (`site\server.js`, `readLines`) and again in
+  the browser at each load from `/api/public`, since Cloudflare keeps a page
+  for five minutes (`site\public\home.js`, `pickLoreLine`);
 - the site hands the lot out in `/api/public` as `lines`, and the Discord bot
   shows one of them as its status, a new one every fifteen minutes
   (`bot\bot.py`, `watch_lines`);

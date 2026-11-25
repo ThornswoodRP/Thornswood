@@ -35,7 +35,6 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
@@ -73,45 +72,15 @@ function scratch() {
   }));
   return { dir, secret };
 }
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
-/* Waits for this run's site to say it is listening on its port (#1727). */
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const mm = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (mm && Number(mm[1]) === port) end(null);
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) bad(err); else ok();
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
+/* Starts this run's site on port 0 and waits for the port it says it got
+   (#6136), so nothing is asked of a port before this run's site holds it. */
 async function start(s) {
-  const port = await freePort();
+  let port = 0;
   const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  await listening(srv, port);
+  await siteFiles.listening(srv).then((r) => (port = r.port, r));
   s.port = port; s.srv = srv;
 }
 /* Stopped, and let go of its folder, when it has closed. */
@@ -164,8 +133,9 @@ function fnSource(src, name) {
   return src.slice(at + 1, i + 1);
 }
 // Whichever of these the hub has: the inbox page, its buttons and how they
-// save, the test marks' save, and the page editor.
-const LIFTED = ['each', 'drawInbox', 'saveInbox', 'inboxAct', 'inboxName', 'saveResult', 'drawEdit']
+// save, the test marks' save, and the page editor, with the shared readers
+// those saves use to say why the site refused (#4187).
+const LIFTED = ['each', 'siteSaid', 'whyWords', 'notSaved', 'drawInbox', 'saveInbox', 'inboxAct', 'inboxName', 'saveResult', 'drawEdit']
   .map((n) => fnSource(HUB, n)).filter(Boolean).join('\n');
 yes('the hub has its inbox page, the test marks\' save and the page editor',
     ['drawInbox', 'saveResult', 'drawEdit'].every((n) => fnSource(HUB, n)));
@@ -356,5 +326,5 @@ function press(hub, kind, id) {
     try { fs.rmSync(s.dir, { recursive: true, force: true }); } catch (e) { }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

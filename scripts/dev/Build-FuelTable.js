@@ -35,7 +35,7 @@
 // smelts nobody owns that make one of the table's ingots (the dwarven smelt
 // KEPT_SMELT keeps is one). A row that is not in this table burns nothing.
 //
-// Run it after Build-RecipeTable.ps1 rebuilds recipes.json. tests\test-1398-fuel.js
+// Run it after Build-RecipeTable.ps1 rebuilds recipes.json. game\tests\test-1398-fuel.js
 // fails while the table and this script disagree.
 //
 // Read only except for the FUEL_BY_RECIPE table, which it writes.
@@ -139,7 +139,14 @@ function tableJson(table) {
 module.exports = { METALS: METALS, INGOTS: INGOTS, fuelOf: fuelOf, fuelTable: fuelTable, tableJson: tableJson };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--tables'], ['--print']);
+  if (!opts) return;
   const ROOT = path.join(__dirname, '..', '..');
   const RECIPES = opts['--recipes'] || path.join(ROOT, 'game', 'data', 'recipes.json');
   const DIR = opts['--tables'] || TABLES.DIR;
@@ -150,7 +157,7 @@ if (require.main === module) {
       const row = (data.recipes || {})[k] || (data.unowned || {})[k] || {};
       console.log(table[k][2] + '\t' + table[k][0] + '\t' + (table[k][1] || '-') + '\t' + row.name + '\t' + k);
     });
-    process.exit(0);
+    return 0;
   }
   const per = [0, 0, 0, 0, 0];
   Object.keys(table).forEach(function (k) { per[table[k][0]]++; });

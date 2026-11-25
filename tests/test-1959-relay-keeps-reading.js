@@ -18,7 +18,7 @@
   Both orders, against the real service, the chat and the overlay, with a
   stand-in browser as in tests\test-1924-voice-whole-view.js (itself from
   tests\test-1869-voice-negotiation.js). In each order four people share a
-  cell: the game's own person, Aela talking 6 metres away, Brynjolf quiet 5
+  cell: the game's own person, Aela talking 4 metres away, Brynjolf quiet 1
   metres away, and Camilla walking 20 metres off. The launcher takes the
   audio (the plugin pushes its state in, which is how it arrives in the
   game). Then Aela stops, Brynjolf talks, Brynjolf whispers, staff silence
@@ -148,8 +148,8 @@ function person(pid, name) {
 
 /*
   Where everybody stands, posted as the gamemode posts it, for every room
-  the run has set up. A unit is a seventieth of a metre. Aela is 6 metres in
-  front, Brynjolf 5 metres to the side, and Camilla walks a unit further
+  the run has set up. A unit is a seventieth of a metre. Aela is 4 metres in
+  front, Brynjolf 1 metre to the side, and Camilla walks a unit further
   each post, 20 metres off.
 */
 const rooms = [];
@@ -159,8 +159,8 @@ function where() {
   const who = [];
   for (const r of rooms) {
     const row = (pid, name, pos) => ({ profileId: pid, name: name, pos: pos, angleZ: 0, cell: r.cell, actor: ACTOR(pid) });
-    who.push(row(r.me, 'Gerdur', [0, 0, 0]), row(r.a, 'Aela', [0, 420, 0]),
-             row(r.b, 'Brynjolf', [350, 0, 0]), row(r.c, 'Camilla', [-1400 - step, 0, 0]));
+    who.push(row(r.me, 'Gerdur', [0, 0, 0]), row(r.a, 'Aela', [0, 280, 0]),
+             row(r.b, 'Brynjolf', [70, 0, 0]), row(r.c, 'Camilla', [-1400 - step, 0, 0]));
   }
   return post('/positions', { who: who });
 }
@@ -274,7 +274,8 @@ function tableFrom(wire) {
   for (const m of wire) {
     if (m.t === 'pos') { t = Object.assign({}, m.who); }
     if (m.t === 'moved' && t) {
-      Object.assign(t, m.who || {});
+      // A row already held comes as the fields that changed (#5358).
+      for (const k of Object.keys(m.who || {})) t[k] = Object.assign({}, t[k] || {}, m.who[k]);
       for (const id of m.gone || []) delete t[id];
     }
   }
@@ -323,7 +324,7 @@ async function order(n, relayFirst, base, cell) {
       !G.V.state().mic && G.pcs.every((pc) => pc.closed));
   yes('its own row on the roster says it carries no voice (#1925)',
       await until(() => { const ro = lastRoster(G); return !!ro && ro.peers.some((p) => p.peer === G.peer() && p.voice === false); }));
-  yes('Aela, talking 6 metres away, is marked', await until(() => G.marks() === mark(r.a, 'local')));
+  yes('Aela, talking 4 metres away, is marked', await until(() => G.marks() === mark(r.a, 'local')));
 
   // Everything below happens with the launcher holding the audio.
   A.send({ t: 'talk', on: false });
@@ -385,7 +386,7 @@ async function order(n, relayFirst, base, cell) {
   for (const s of sockets) { try { s.onclose = null; s.close(); } catch (e) { } }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } };
-  if (srv && srv.exitCode === null) { srv.once('exit', () => { rm(); process.exit(fail ? 1 : 0); }); srv.kill(); }
-  else { rm(); process.exit(fail ? 1 : 0); }
-  setTimeout(() => { rm(); process.exit(fail ? 1 : 0); }, 2000).unref();
+  process.exitCode = fail ? 1 : 0;
+  if (srv && srv.exitCode === null) { srv.once('exit', rm); srv.kill(); }
+  else { rm(); }
 });

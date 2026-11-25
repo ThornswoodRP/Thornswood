@@ -25,8 +25,8 @@
        and bars come back as written, and a control character in the output
        does not break the file;
     4. the merge reads several share reports into one, every suite once,
-       counts them, and writes a summary naming each failing check beside
-       its harness; it exits 0 when the reports are all there, failing
+       counts them, and writes a summary naming each failing check under
+       its harness, with the command that runs the harness alone (#4178); it exits 0 when the reports are all there, failing
        checks or not;
     5. it says so and exits 1 when fewer reports came than -Expect, or one
        is not a harness report, so a share that died early is not hidden
@@ -145,11 +145,11 @@ try {
         "console.log('PASS: with a colon');`n" +
         "console.log('a line that is no check, PASS in the middle');`n" +
         "console.log('FAIL  ' + " + ($odd | ConvertTo-Json) + " + String.fromCharCode(7));`n" +
-        "process.exit(1);`n")
+        "process.exitCode = 1;`n")
     Put (Join-Path $a 'tests\test-2-skips.ps1') ("Write-Host 'PASS  ran here'`nWrite-Host 'SKIP  needs Windows'`nWrite-Host 'NOT RUN  needs the box'`nexit 0`n")
     Put (Join-Path $a 'tests\test-3-throws.js') "console.log('PASS  before it threw');`nconsole.log('the last words');`nthrow new Error('it broke here');`n"
     Put (Join-Path $a 'tests\test-4-hang.js') "// NIGHTLY CLOCK: 3 seconds. A stand-in that never ends.`nconsole.log('PASS  started');`nsetInterval(() => {}, 1000);`n"
-    Put (Join-Path $a 'tests\test-5-late.js') "// NIGHTLY CLOCK: 600 seconds`nprocess.exit(0);`n"
+    Put (Join-Path $a 'tests\test-5-late.js') "// NIGHTLY CLOCK: 600 seconds`nprocess.exitCode = 0;`n"
     $one = Join-Path $work 'reports\share-1.xml'
     $r = Run $a @('-Report', $one, '-BudgetSeconds', '400')
     Yes "the share is red, as before (exit $($r.Code))" ($r.Code -eq 1)
@@ -194,7 +194,7 @@ try {
 
     # ---- 4 and 5. the merge -------------------------------------------------------
     $b = Join-Path $work 'green'
-    Put (Join-Path $b 'tests\test-6-green.js') "console.log('PASS  all well');`nprocess.exit(0);`n"
+    Put (Join-Path $b 'tests\test-6-green.js') "console.log('PASS  all well');`nprocess.exitCode = 0;`n"
     $two = Join-Path $work 'reports\share-2.xml'
     $null = Run $b @('-Report', $two)
     $merged = Join-Path $work 'merged.xml'
@@ -210,8 +210,8 @@ try {
         Yes '   and counts them all' ([int]$all.DocumentElement.GetAttribute('failures') -eq 5 -and [int]$all.DocumentElement.GetAttribute('tests') -eq (@($all.DocumentElement.SelectNodes('testsuite/testcase')).Count))
     } else { Yes '4. the merged report reads as XML' $false }
     Yes '4. the summary is headed and counts the checks' ($md -match '(?m)^## Gate harnesses\s*$' -and $md -match '(?m)^\d+ checks in 6 harnesses: 5 failed, 2 skipped\.\s*$')
-    Yes '   and names each failing check beside its harness' ($md -match '(?m)^\| test-1-mixed\.js \| indented, with no two spaces \|\s*$' -and $md -match '(?m)^\| test-4-hang\.js \| the harness timed out after 3 s and was killed \|\s*$')
-    Yes '   a bar in a check does not split its row' ($md -match '(?m)^\| test-1-mixed\.js \| quotes .* a \\\| bar \|\s*$')
+    Yes '   and names each failing check under its harness, with the command that runs it alone (#4178)' ($md -match '(?m)^### test-1-mixed\.js\s*$' -and $md -match '(?m)^FAIL  indented, with no two spaces\s*$' -and $md -match '(?m)^### test-4-hang\.js\s*$' -and $md -match '(?m)^FAIL  the harness timed out after 3 s and was killed\s*$' -and $md -match '(?m)^node tests/test-1-mixed\.js\s*$')
+    Yes '   a bar in a check is kept as written, on its own line' ($md -match '(?m)^FAIL  quotes .* a \| bar\s*$')
     Yes '   and no passing check is listed' ($md -notmatch 'all well' -and $md -notmatch 'one thing')
 
     $m = Merge @('-Path', (Join-Path $work 'reports'), '-Expect', '3', '-Summary', (Join-Path $work 'short.md'))
@@ -231,7 +231,7 @@ try {
     $r = Run $a @('-Summary', $page, '-Title', 'Gate harnesses, share 2 of 5', '-BudgetSeconds', '400')
     $md = $(if (Test-Path -LiteralPath $page) { [IO.File]::ReadAllText($page) } else { '' })
     Yes "7. -Summary writes the run's section, under the title given (exit $($r.Code))" ($r.Code -eq 1 -and $md -match '(?m)^## Gate harnesses, share 2 of 5\s*$' -and $md -match '(?m)^\d+ checks in 5 harnesses: 5 failed, 2 skipped\.\s*$')
-    Yes '   naming each failing check by harness' ($md -match '(?m)^\| test-3-throws\.js \| the harness ended with exit 1 and no FAIL line \|\s*$')
+    Yes '   naming each failing check by harness' ($md -match '(?m)^### test-3-throws\.js\s*$' -and $md -match '(?m)^FAIL  the harness ended with exit 1 and no FAIL line\s*$')
     $r = Run $b @('-Summary', $page)
     $md = [IO.File]::ReadAllText($page)
     Yes "   a second run adds its own section after the first, a share's own title by default (exit $($r.Code))" ($r.Code -eq 0 -and $md -match '(?m)^## Harnesses, share 1 of 1\s*$' -and $md.IndexOf('## Gate harnesses, share 2 of 5') -lt $md.IndexOf('## Harnesses, share 1 of 1'))

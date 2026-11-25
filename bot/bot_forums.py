@@ -5,56 +5,73 @@ board.
 Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
+import datetime
+import urllib.error
 
 import discord
 
 from bot_core import _state_read, _state_write, log
-from bot_testing import FINDINGS_NAME, KNOWN_STATE, _utc_stamp, task_tag_of
+from bot_testing import KNOWN_STATE, _utc_stamp, task_tag_of
 from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
     TASK_TAG, finding_gone, github_changed_since, github_closed_since,
     github_comments, github_issue, github_open_findings, github_timeline,
-    issue_tags_found, merged_fix)
-from bot_task_text import (_all_marked, _marked, dev_chunks, dev_render,
-    dev_task_of, fix_refs, issue_tags, known_body, known_title, last_task,
-    main_task_of, strip_footer, test_task_of)
+    issue_deleted, merged_fix)
+from bot_task_text import (_all_marked, _marked, checked_since, dev_chunks, dev_render,
+    dev_task_of, fix_refs, issue_tags, main_task_of, strip_footer,
+    test_task_of)
 from bot_post_rules import (fix_in_main, post_problems, refuse,
     task_server_line)
 
 
+# How often #dev-test-tasks asks whether each post's issue is still there.
+DEV_SWEEP_HOURS = 1
+
+
+def _hours_before(stamp, hours):
+    """The UTC stamp hours before stamp, in the same form."""
+    t = datetime.datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ')
+    return (t - datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def known_of(issue, comments):
-    """(title, body, tags) for the #known-issues post: the last "Known
-       issue:" comment, or the issue's title and a plain line until somebody
-       writes one."""
+    """(title, body, tags) for the #known-issues post, from the issue's last
+       "Known issue:" comment, or None when nobody has written one.
+
+       Until 12 Nov an issue with no such comment was posted anyway, under
+       its own title cut to 45 characters and one fixed line ("Known on
+       Main. The team is working on it..."), so every post nobody wrote had
+       a title stopped mid-sentence and said nothing of the problem (Patrick,
+       12 Nov: "the title is supposed to be a summary and the details in the
+       actual post"). The bot never makes up a post's words now: with no
+       comment the post is refused (NO_KNOWN_COMMENT), and the issue is told
+       what to write."""
     got = _marked(issue, comments, KNOWN_MARK)
-    if got:
-        return got[0], strip_footer(got[1]) or known_body(issue), issue_tags(issue, got[2])
-    return known_title(issue), known_body(issue), issue_tags(issue)
+    if not got:
+        return None
+    return got[0], strip_footer(got[1]), issue_tags(issue, got[2])
 
 
 def _sig(title, body, tags):
     return '%s\n%s\n%s' % (title, body, ','.join(sorted(tags)))
 
 
-def default_task_body(issue):
-    """The body for a fixed finding nobody wrote a test task for. Its issue
-       closed when the fix reached main, so that is where to check it."""
-    return ('This was fixed and the fix is on main. Check it on main, and say '
-            'in #%s if it still happens.' % FINDINGS_NAME)
-
-
 def task_post_of(issue, comments, dev_since=None):
     """(title, body, tags) for an issue's #test-tasks post, from its Main
-       test task, or None when it gets none: not a finding and nobody wrote a
-       test task, or its only test tasks say Server: Dev, which are
-       #dev-test-tasks'."""
+       test task, or None when it gets none: nobody wrote a Main test task,
+       or its only test tasks say Server: Dev, which are #dev-test-tasks'.
+
+       A fixed finding with no test task gets no post. Until 12 Nov it got
+       one made up from its title cut to 45 characters and "This was fixed
+       and the fix is on main. Check it on main", which told a tester
+       neither what to try nor what should happen (Patrick, 12 Nov). The
+       test task is written with the fix (docs/guide/the-board.md), or the
+       pull request says nobody would notice it."""
     task = main_task_of(issue, comments, dev_since)
-    if task is not None:
-        return task[0], strip_footer(task[1]) or 'Check this on main.', [TASK_TAG]
-    if last_task(issue, comments, dev_since) is not None:
+    if task is None:
         return None
-    if issue_tags_found(issue):
-        return known_title(issue), default_task_body(issue), [TASK_TAG]
-    return None
+    if checked_since(comments, task[3]):
+        return None     # checked and passed: nothing left for testers
+    return task[0], strip_footer(task[1]), [TASK_TAG]
 
 
 async def _forum_thread(forum, tid):
@@ -105,28 +122,70 @@ async def _forum_post(forum, title, body, tags, me_id=None):
     return getattr(made, 'thread', made)
 
 
+def _refusal(what, forum, th, e):
+    """The log line for a change Discord refused, in Discord's own words:
+       its status, message and code (#4228). Until then each pass caught the
+       refusal and said nothing, so a post kept its old title, tags and text
+       and nobody could see why."""
+    return ('#%s: Discord refused to %s the post "%s" (%s): %s %s (code %s)'
+            % (getattr(forum, 'name', '?'), what, getattr(th, 'name', '?'),
+               getattr(th, 'id', '?'), getattr(e, 'status', '?'),
+               getattr(e, 'text', '') or str(e), getattr(e, 'code', '?')))
+
+
 async def _forum_drop(forum, tid):
     th = await _forum_thread(forum, tid)
     if th is not None:
-        await th.delete()
+        try:
+            await th.delete()
+        except discord.HTTPException as e:
+            log(_refusal('remove', forum, th, e))
+            raise
 
 
-async def _forum_edit(forum, tid, title, body, tags):
+async def _forum_edit(forum, tid, title, body, tags, then=None):
     """Brings an existing post to this title, body and tags. False when the
-       post is gone (deleted by hand), so the caller can make it again."""
+       post is gone (deleted by hand), so the caller can make it again.
+
+       Discord archives a post after a few quiet days and refuses every
+       change to an archived one (400, code 50083), so an archived post is
+       unarchived first and archived again after, as it was (#4228). then,
+       when given, is awaited with the thread while it is still open: a dev
+       post's follow-up messages are in the same thread. A refusal is logged
+       with Discord's words and raised, so the pass keeps its record."""
     th = await _forum_thread(forum, tid)
     if th is None:
         return False
     applied = [x for x in (task_tag_of(forum, n) for n in tags) if x is not None]
-    await th.edit(name=title, applied_tags=applied)
-    msg = getattr(th, 'starter_message', None)
-    if msg is None:
-        try:
-            msg = await th.fetch_message(th.id)
-        except discord.NotFound:
-            msg = None
-    if msg is not None:
-        await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+    was_archived = bool(getattr(th, 'archived', False))
+    opened = False
+    step = 'unarchive'
+    try:
+        if was_archived:
+            await th.edit(archived=False)
+            opened = True
+        step = 'edit'
+        await th.edit(name=title, applied_tags=applied)
+        msg = getattr(th, 'starter_message', None)
+        if msg is None:
+            try:
+                msg = await th.fetch_message(th.id)
+            except discord.NotFound:
+                msg = None
+        if msg is not None:
+            await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+        if then is not None:
+            await then(th)
+    except discord.HTTPException as e:
+        log(_refusal(step, forum, th, e))
+        raise
+    finally:
+        if opened:
+            try:
+                await th.edit(archived=True)
+            except discord.HTTPException as e:
+                log(_refusal('archive again', forum, th, e))
+                raise
     return True
 
 
@@ -186,8 +245,13 @@ async def _dev_post(forum, title, chunks, tags, me_id=None):
         more = []
     else:
         th = found
-        await _forum_edit(forum, th.id, title, chunks[0], tags)
-        more = await _thread_more(th, me_id)
+        got = []
+
+        async def follow(t):
+            # While the post is open: an archived one refuses every message.
+            got.append(await _sync_more(t, chunks[1:], await _thread_more(t, me_id)))
+        await _forum_edit(forum, th.id, title, chunks[0], tags, then=follow)
+        return th, got[0]
     return th, await _sync_more(th, chunks[1:], more)
 
 
@@ -262,7 +326,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
         if not have and read.get(key) == mark:
             continue                # read at this update time: no post
         comments = await loop.run_in_executor(None, github_comments, num, get)
-        if _all_marked(issue, comments, TASK_MARK, room=None):
+        if _all_marked(issue, comments, TASK_MARK):
             why[key] = 'it has a "Test task:" comment'
             unposted(key, mark)
             continue                # it has a test task: being checked, not known
@@ -270,11 +334,15 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
             why[key] = 'done-on-merge wrote its merged fix on it'
             unposted(key, mark)
             continue                # fixed, waiting on main: not a known issue
-        title, body, tags = known_of(issue, comments)
+        post = known_of(issue, comments)
+        title, body, tags = post or ('', '', issue_tags(issue))
         taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
+        # With no "Known issue:" comment there are no words to post, so
+        # nothing goes up whether the rules are checked or not: the bot never
+        # writes a post's words itself (known_of).
         if refuse(state, 'known', num, post_problems(
-                'known', title, body, issue=issue,
-                has_task=False, taken_titles=taken), say):
+                'known', title, body, issue=issue, written=post is not None,
+                has_task=False, taken_titles=taken), say) or post is None:
             if have:
                 listed.add(num)     # the post already up stays as it was
             why[key] = 'its post breaks a rule'
@@ -359,7 +427,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         # The rules check before a #test-tasks post goes up or is edited.
         task = main_task_of(issue, comments, dev_since)
         if task is None:
-            return False    # the bot's own line for a fixed finding
+            return False    # no post is made of it (task_post_of)
         timeline = await loop.run_in_executor(None, github_timeline, num, get)
         refs = await loop.run_in_executor(None, fix_refs, timeline, get)
         inmain = await loop.run_in_executor(None, fix_in_main, *refs, get)
@@ -376,7 +444,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     # once it changes. Until 1 Nov only a posted issue was remembered, and
     # every pass read the comments of every other issue closed since 'since'
     # again: about 1,200 calls a pass, the whole hourly allowance in four
-    # passes (#5184).
+    # passes (#4331, #5184).
     read = state.setdefault('tasks_read', {})
     for key in [k for k in read if int(k) not in closed]:
         read.pop(key, None)
@@ -456,8 +524,20 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         try:
             issue = await loop.run_in_executor(None, github_issue, int(key), get)
-        except Exception:
+        except urllib.error.HTTPError as e:
+            if e.code not in (404, 410):
+                continue        # not read this pass: the post stays as it is
+            # Deleted: it is in no list any more, so only this read finds it.
+            try:
+                await _forum_drop(forum, have['thread_id'])
+            except discord.HTTPException:
+                continue
+            rec.pop(key, None)
+            state['_dirty'] = True
+            removed.append(int(key))
             continue
+        except Exception:
+            continue            # not read this pass: the post stays as it is
         if str(issue.get('state')) == 'open':
             try:
                 await _forum_drop(forum, have['thread_id'])
@@ -540,6 +620,8 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             continue            # read at this update time on an earlier pass
         comments = await loop.run_in_executor(None, github_comments, num, get)
         task = dev_task_of(issue, comments, since)
+        if task is not None and checked_since(comments, task[3]):
+            task = None         # checked and passed: the post comes down
         post = None
         if task is not None:
             taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
@@ -563,10 +645,15 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
                 sig = _sig(title, body, tags)
                 chunks = dev_chunks(body)
                 if have and have.get('sig') != sig:
-                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags):
-                        th = await _forum_thread(forum, have['thread_id'])
-                        have['more'] = await _sync_more(th, chunks[1:],
-                                                        have.get('more') or [])
+                    got = []
+
+                    async def follow(t, was=have.get('more') or [], rest=chunks[1:]):
+                        # While the post is open: an archived one refuses
+                        # every message (#4228).
+                        got.append(await _sync_more(t, rest, was))
+                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags,
+                                         then=follow):
+                        have['more'] = got[0]
                         edited.append(num)
                     else:
                         rec.pop(key, None)     # deleted by hand: made again
@@ -585,6 +672,29 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             refused.append(upd)
             continue
         read[key] = upd
+        state['_dirty'] = True
+    # A deleted issue is in no changed list, so its post would stay for good
+    # (#5197: six did). Once an hour every post whose issue this pass did not
+    # read asks GitHub whether its issue is still there.
+    stamp = now or _utc_stamp()
+    if (state.get('dev_swept') or '') <= _hours_before(stamp, DEV_SWEEP_HOURS):
+        for key, have in list(rec.items()):
+            if int(key) in changed:
+                continue
+            try:
+                gone = await loop.run_in_executor(None, issue_deleted, int(key), get)
+            except Exception:
+                continue        # not read this hour: asked again next hour
+            if not gone:
+                continue
+            try:
+                await _forum_drop(forum, have['thread_id'])
+            except discord.HTTPException:
+                continue
+            rec.pop(key, None)
+            read.pop(key, None)
+            removed.append(int(key))
+        state['dev_swept'] = stamp
         state['_dirty'] = True
     # GitHub's since is inclusive, so the next pass starts at the newest
     # update read, or at the oldest one Discord refused, to try it again.

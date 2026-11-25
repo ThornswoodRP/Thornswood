@@ -70,7 +70,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function slice(src, start, end) {
@@ -110,7 +110,7 @@ const mintedSrc = liftFrom(gm, 'function mintedEntry(entry) {', '');
 const unfitSrc = liftFrom(gm, 'function unfitToMake(actorId, workbenchId) {', '');
 yes('the property, character and farming blocks and the pack helpers are in the gamemode',
     !!propBlock && !!charBlock && !!farmBlock && !!addItemSrc && !!takeItemSrc && !!unfitSrc);
-if (!propBlock || !charBlock || !farmBlock || !addItemSrc || !takeItemSrc || !unfitSrc) { done(); }
+if (!propBlock || !charBlock || !farmBlock || !addItemSrc || !takeItemSrc || !unfitSrc) { done(); return; }
 
 // ================================================================ the server
 const clock = { t: Date.UTC(2026, 9, 4, 20, 0, 0) };
@@ -210,7 +210,7 @@ const box = {
   guard: function (n, f) { return f; },
   setInterval: function () { return 1; }, clearInterval: function () { },
   log: function () { },
-  // Alice holds her hammer (#3162); tests/test-3162-bench-tools.js asks the refusal.
+  // Alice holds her hammer (#3162); game/tests/test-3162-bench-tools.js asks the refusal.
   toolGate: function () { return null; }, wearTool: function () { return null; },
   __thornswoodCharacter: {
     stateOf: function (actorId) { return { prof: actorId === ALICE.a ? 'smith' : 'cook' }; },
@@ -224,7 +224,7 @@ inDir(function () {
 });
 const W = box.__thornswoodProperty;
 yes('the property block runs and publishes itself', !!W && typeof W.command === 'function');
-if (!W) { done(); }
+if (!W) { done(); return; }
 
 const every = [];
 function word(p, w, args) {
@@ -460,7 +460,7 @@ function keys(p) { return pack(p).filter(function (e) { return e.baseId === idOf
     function text(n) { return [n.textContent].concat(n.kids.map(text)).join(' '); }
     const body = node('div');
     // The rows are on the panel view, mine.property, where writeState puts
-    // them (#1717); tests/test-1717-property-page.js runs that whole road.
+    // them (#1717); game/tests/test-1717-property-page.js runs that whole road.
     const mine = { property: [
       { name: 'Honeyside', mine: true, locked: false, keyed: false, b: HOME, sleep: [],
         rent: { amount: 50, every: 7, owed: 50 } },
@@ -486,6 +486,8 @@ const CLIENT = {
   gameMenuOpen: liftFrom(front, 'function gameMenuOpen() {', '  '),
   busyMenuOpenNow: liftFrom(front, 'function busyMenuOpenNow(except) {', '  '),
   stampedMolds: liftFrom(front, 'function stampedMolds(pc, base) {', '  '),
+  // The client tables (#5191) are read through clientTable; the rig loads none.
+  clientTable: 'const clientTableSaid = {};\n' + liftFrom(front, 'function clientTable(name) {', '  '),
   menus: (function () {
     const a = front.indexOf('  const KEYBOARD_MENUS = [');
     const b = a < 0 ? -1 : front.indexOf('\n  ];\n', a);
@@ -547,7 +549,7 @@ function client() {
   };
   const body = [
     CLIENT.iniNumber, CLIENT.keyName, CLIENT.anyClaim, CLIENT.gameMenuOpen, CLIENT.menus,
-    CLIENT.busyMenuOpenNow,
+    CLIENT.busyMenuOpenNow, CLIENT.clientTable,
     'const LOCK_KEY = 45; const LOCK_NAME = keyName(LOCK_KEY);',
     'const MOLD_KEY = 22; const MOLD_NAME = keyName(MOLD_KEY);',
     "const MOLD_FILE = 'Thornswood-Content.esp'; const MOLD_ITEM = 0x15495; const DOOR_TYPE = 29;",

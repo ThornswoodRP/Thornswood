@@ -11,7 +11,7 @@
 //           for the person, which the engine clears when they move.
 //   /needs  gone with #1631, and back as a line of text for somebody who
 //           hid the bars (Patrick, 11 Oct, #2267): one of the words people
-//           are told, and tests/test-2267-needs-text.js holds what it says.
+//           are told, and game/tests/test-2267-needs-text.js holds what it says.
 //           The four bars, and the Body page on K, still say it all.
 //   /eat, /drink  gone. They fed and watered with no item at all; eating and
 //           drinking is the item (/ate). Said on #1382 before it went.
@@ -65,7 +65,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -93,7 +93,7 @@ const chatBlock = slice(gm, '// ==== thornswood chat commands ====', '// ==== en
 const charBlock = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
 yes('the needs, property, chat commands and character blocks are in the gamemode',
     !!needsBlock && !!propBlock && !!chatBlock && !!charBlock);
-if (!needsBlock || !propBlock || !chatBlock || !charBlock) { done(); }
+if (!needsBlock || !propBlock || !chatBlock || !charBlock) { done(); return; }
 
 // ==================================================== A. nothing is typed
 const GONE = ['/eat', '/drink', '/bard'];
@@ -341,7 +341,7 @@ function needsRig() {
   finally { process.chdir(was); }
   const B = box.__thornswoodBeds;
   yes('C0 the property block runs and publishes the beds', !!B && typeof B.tick === 'function');
-  if (!B) { done(); }
+  if (!B) { done(); return; }
   function tick() { process.chdir(dir); try { B.tick(); } finally { process.chdir(was); } }
   function resting(id) { return N.settle(id).resting; }
 
@@ -411,7 +411,7 @@ function needsRig() {
 
   yes('D2 K has a Body section in the world, never while creating, with no Confirm',
       /if \(!creating\(\) && bodyView\(\)\) sections\.push\('body'\);/.test(skills) &&
-      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?\);/.test(skills) &&
+      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?(?: && section !== 'contracts')?\);/.test(skills) &&
       /if \(section === 'body'\) return 0;/.test(skills));
 
   const parts = ['function bodyView() {', 'function bodyWorries(v) {', 'function tempWord(t) {', 'function drawNeeds() {']

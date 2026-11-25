@@ -257,7 +257,7 @@ namespace Thornswood
             {
                 bool ok = false;
                 try { ok = Run(cfg, log, status); }
-                catch (Exception ex) { Stop("The downgrade stopped: " + ex.Message, log, status); }
+                catch (Exception ex) { Stop("The downgrade stopped: " + Failure.Say("Downgrade, the run", ex), log, status); }
                 finally { running = false; }
                 try { done(ok); } catch (Exception ex) { Swallow.Note("Downgrade.Start, done callback", ex); }
             });
@@ -626,7 +626,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return Stop(ex.Message, log, status);
+                return Stop(Failure.Say("Downgrade, putting the files in place", ex), log, status);
             }
             log(took);
 
@@ -679,7 +679,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                log("Windows would not open " + link + " (" + ex.Message + "), so steam.exe is asked directly.");
+                log("Windows would not open " + link + " (" + Failure.Why("Downgrade, opening " + link, ex, link) + "), so steam.exe is asked directly.");
             }
             string root = "";
             try { root = Steam.Path_() ?? ""; }
@@ -698,7 +698,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                log("steam.exe would not take " + link + " either: " + ex.Message);
+                log("steam.exe would not take " + link + " either: " + Failure.Say("Downgrade, steam.exe with " + link, ex, "steam.exe"));
                 return false;
             }
         }
@@ -1578,7 +1578,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                string why = "Could not remove " + folder + ", left over from an earlier attempt: " + ex.Message +
+                string why = "Could not remove " + folder + ", left over from an earlier attempt: " + Failure.Why("Downgrade, removing " + folder, ex, folder) +
                              " If Steam is still downloading into it, let that finish or restart Steam. Then delete that folder and press the button again.";
                 // Through Stop, so the bar goes too, as every other early stop does.
                 return Stop(why, log, status);

@@ -9,9 +9,9 @@ these distances.
 
 | Voice | Full strength out to | Gone at | The mark |
 | --- | --- | --- | --- |
-| Whisper | 1.5 metres | 7 metres | Pale blue |
-| Ordinary | 4 metres | 30 metres | White |
-| Yell | 9 metres | 85 metres | Amber |
+| Whisper | 0.5 metres | 1.7 metres | Pale blue |
+| Ordinary | 1.35 metres | 6 metres | White |
+| Yell | 5.3 metres | 30 metres | Amber |
 
 A yell is louder than a whisper at the same spot. Past the far
 number, the level is nothing.
@@ -32,10 +32,8 @@ The mark is its own mark, above the name. It does not recolor the
 name. A friend request, a party invite, or a trade offer is a
 different prompt, with Accept and Refuse. It is not this mark.
 
-You see it only when you are inside that person's range. A whisper
-is gone at 7 metres, ordinary speech at 30, a yell at 85. Outside
-that, there is no mark. There is no dim mark for someone you cannot
-hear.
+You see it only when you are inside that person's range, using the
+distances in the table above.
 
 You do not see the mark on your own head. The microphone at the
 bottom of your screen names the distance you are on, and while you
@@ -70,8 +68,9 @@ their name does not turn off either. The party map marker and the
 arrow on the strip stay when the name is hidden, so you can still
 find someone in your party. That is on [Party](party.md).
 
-P lists the three switches for each friend and for each person in
-your party. The look-at prompt offers the same three.
+The look-at prompt offers only the voice switch, on L. The party rows on P
+have no switches; a party member's three are beside them under Friends or
+Near you.
 
 ## Every name
 
@@ -89,8 +88,13 @@ Gamemaster, Dev, Loremaster, Moderator.
 `/silence` and the name, then the minutes if not 30 (a day at most)
 and why. Their voice, their local text, the words above their head,
 and the speaking mark stop for everybody. They are told how long. They
-cannot lift it. `/unsilence` and the name, from any staff member,
+cannot lift it. `/unsilence` and the name, from any staff member but the one silenced,
 lifts it, and it lifts by itself when the minutes run out.
+
+`/silence` on somebody already silenced starts their time again from
+then, for the minutes given, so it can make a silence shorter as well
+as longer. It does not lift it; only `/unsilence` or the time running
+out does.
 
 `/silence` with nothing after it says how it is used.
 
@@ -106,9 +110,9 @@ head, the same line typed chat draws there. It is off. It stays off
 until staff turn it on with `THORNSWOOD_CAPTIONS=on`, and nothing
 sends it any words yet.
 
-When it is on, the words go to the people who can hear the speaker
-and nobody else: the same cell, out to 7 metres for a whisper, 30
-for ordinary speech and 85 for a yell. The speaker sees their own.
+When it is on, the service uses a separate distance for captions in
+the same cell. By default a whisper reaches 7 metres, ordinary speech
+30 and a yell 85. The speaker sees their own.
 The service never writes them down. A staff silence stops them.
 
 Staff can tune it without a release:
@@ -152,8 +156,8 @@ asked on #1628.
 
 The mark above the head is drawn while the microphone is open. It
 sits above the name, and it does not recolor the name. Whisper is
-pale blue and gone at 7 metres, ordinary speech is white and gone at
-30, and a yell is amber and gone at 85. Same cell first. You do not
+pale blue and gone at 1.7 metres, ordinary speech is white and gone at
+6, and a yell is amber and gone at 30. Same cell first. You do not
 see it on your own head. A voice mute hides it. Hiding a name does
 not, and neither does turning their text off. The launcher still
 draws its own speaking light.

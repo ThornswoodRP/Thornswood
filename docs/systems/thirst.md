@@ -24,13 +24,13 @@ Cold speeds it on the same steps as hunger: 1.25 when cold is weary,
 | --- | --- |
 | An ordinary drink | 20 |
 | The first ale | 30, then less. See [Drink](drink.md) |
+| A soup, a stew or a chowder | 10, on top of its 25 hunger. See [Food](food.md) |
 | A potion or a poison | 5 |
 
 A poison counts as a sip because putting it on a blade and drinking it
 are the same event.
 
-A stew or a soup that is food also gives a little thirst when it is a
-liquid meal. See [Food](food.md). A dry ration does not.
+A dry ration is food only, and gives no thirst.
 
 ## Water
 
@@ -52,8 +52,11 @@ out.
 ## Where this is
 
 The clock, the bands, the 20, the ale curve and the potion sip of 5 are
-in the server, and so is cold speeding thirst. The server does not yet
-know whether the water you drank was a well or a ditch. Soups do not
-yet add thirst on top of hunger. The bed is the one the server saw
-them lie down in, by whose it is, the same as for rest. See
-[Exhaustion](exhaustion.md).
+in the server, and so is cold speeding thirst. So is where the water
+came from: the server keeps whether each bottle was filled at a well,
+a river or the sea, gives it that water's thirst, and drinking takes
+the worst you carry first. See [Drink](drink.md), Where this is. A
+soup, stew or chowder adds its 10 thirst on top of its hunger, by its
+group in game/data/food-groups.json. See [Food](food.md). The bed is
+the one the server saw them lie down in, by whose it is, the same as
+for rest. See [Exhaustion](exhaustion.md).

@@ -7,6 +7,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -66,7 +69,7 @@ namespace Thornswood
         Button btnGo, btnClose, btnPick, btnVortexPick, btnVortexForget;
         CheckBox chkOwn, chkAge;
         CheckBox[] agree;
-        readonly List<Button> driveButtons = new List<Button>();
+        readonly List<DriveButton> driveButtons = new List<DriveButton>();
 
         string installRoot;
         string vortexGame = "";
@@ -168,8 +171,8 @@ namespace Thornswood
             txtBody = new TextBlock
             {
                 Foreground = B("Muted"), FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
-                Text = "This puts Thornswood's own content on your PC. With Thornswood's own Skyrim folder chosen below, it does not install into the Skyrim you already have on Steam, and that copy is left as it is, for you to play and mod however you like. Without it, Thornswood's own content goes into that copy until you turn the folder on in the launcher, which then takes it back out.\n\n" +
-                       "Thornswood runs from its own game folder. The launcher builds it out of your Steam copy and what Vortex has deployed there, most of it as hard links that take no extra space, and copies of the few files other programs rewrite. Hard links only work inside one drive, so Thornswood goes on the same drive as Skyrim.\n\n" +
+                Text = "This puts Thornswood's own content on your PC. With the box for Thornswood's own Skyrim folder below left ticked, as it starts, it does not install into the Skyrim you already have on Steam, and that copy is left as it is, for you to play and mod however you like. Unticked, Thornswood's own content goes into that copy until the launcher makes the folder, and then the launcher takes it back out.\n\n" +
+                       "Thornswood only plays from its own game folder. The launcher builds it out of your Steam copy and what Vortex has deployed there, most of it as hard links that take no extra space, and copies of the few files other programs rewrite. Hard links only work inside one drive, so Thornswood goes on the same drive as Skyrim.\n\n" +
                        "The mods themselves come from a collection on Nexus. Vortex installs them into a profile of their own, so switching back to your usual profile and running Purge Mods leaves your Skyrim where you started. The launcher has the link and walks you through it.\n\n" +
                        "Nothing of Bethesda's is renamed or deleted. You need Steam running and Skyrim on build 1.6.1170.",
             };
@@ -201,7 +204,8 @@ namespace Thornswood
 
             // Thornswood's own Skyrim folder, offered here as well as in the
             // launcher's Settings, Maintenance (issue #906), in that panel's
-            // own words, so the two say the same thing.
+            // own words, so the two say the same thing. The box starts ticked
+            // (Patrick, 12 Nov): the own folder is the default for everyone.
             var ownStack = new StackPanel();
             ownStack.Children.Add(Caption("Thornswood's own Skyrim folder"));
             ownStack.Children.Add(new TextBlock
@@ -210,7 +214,8 @@ namespace Thornswood
                 Text = "Runs Thornswood from a Skyrim folder of its own, made from what Vortex has deployed while the Thornswood profile is on. Any other Vortex profile can then use the Steam copy without reaching Thornswood, and switching profiles in Vortex no longer takes Thornswood's mods away. The big files are links to Vortex's copies, so the collection is not on the disk twice. When Vortex deploys a newer Thornswood collection, the launcher brings it in by itself the next time it starts.",
             });
             chkOwn = Box("Give Thornswood a Skyrim folder of its own", new Thickness(0, 12, 0, 0));
-            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); };
+            chkOwn.IsChecked = true;
+            chkOwn.IsCheckedChanged += delegate { SayOwnGame(); SayRoom(); };
             ownStack.Children.Add(chkOwn);
             txtOwn = Small(new Thickness(0, 8, 0, 0));
             txtOwn.LineHeight = 18;
@@ -241,6 +246,9 @@ namespace Thornswood
                 Padding = new Thickness(10, 8), Background = B("Deep"), Foreground = B("Muted"), BorderBrush = B("Line"), BorderThickness = new Thickness(1),
             };
             body.Children.Add(txtLog);
+            // A screen reader names the log by what it is, not by nothing
+            // (#4693).
+            AutomationProperties.SetName(txtLog, "What the install says");
 
             scroll.Content = body;
             middle.Children.Add(scroll);
@@ -248,8 +256,14 @@ namespace Thornswood
             var statStack = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
             bar = new ProgressBar { Height = 5, Minimum = 0, Maximum = 1000, Foreground = B("Accent"), Background = B("Deep"), Margin = new Thickness(0, 20, 0, 0), IsVisible = false };
             statStack.Children.Add(bar);
+            AutomationProperties.SetName(bar, "Install progress");
             txtStat = new TextBlock { Foreground = B("Faint"), FontSize = 11.5, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 11, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             statStack.Children.Add(txtStat);
+            // The status line is a live region: each new line of the install
+            // is said when it comes, without moving focus. With it off, as
+            // Avalonia leaves every control, Windows is told nothing changed
+            // (#4693).
+            AutomationProperties.SetLiveSetting(txtStat, AutomationLiveSetting.Polite);
             Grid.SetRow(statStack, 1);
             middle.Children.Add(statStack);
             Grid.SetRow(middle, 1);
@@ -278,6 +292,7 @@ namespace Thornswood
                 row.Children.Add(agree[i]);
                 var link = new HyperlinkButton { Content = linkWords[i], Foreground = B("Accent"), FontSize = 12.5, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 ToolTip.SetTip(link, "Opens thornswood.net/" + page + " in your browser");
+                AutomationProperties.SetName(link, InstallAgreements.LinkNames[i]);
                 link.Click += delegate { OpenPage(InstallAgreements.Site + "/" + page); };
                 row.Children.Add(link);
                 boxes.Children.Add(row);
@@ -362,26 +377,103 @@ namespace Thornswood
                 if (d.DriveType != DriveType.Fixed || !d.IsReady) continue;
                 try { free = d.AvailableFreeSpace; }
                 catch (IOException) { continue; }
+                AddDrive(d.Name, free);
+            }
+        }
 
-                var sp = new StackPanel();
-                sp.Children.Add(new TextBlock { Text = d.Name.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 14, Foreground = B("Ink") });
-                sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = 11, Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
-                // The one drive this install can work on gets said so on the
-                // button itself, not only in the line underneath, because the
-                // buttons are what a person reads before pressing one.
-                if (InstallPlace.SameDrive(d.Name, skyrimDrive))
-                    sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = 11, Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
+        /// <summary>
+        /// One drive's button: its letter, its free space, and Skyrim is here
+        /// on Skyrim's. Pressing it installs there.
+        /// </summary>
+        DriveButton AddDrive(string driveName, long free)
+        {
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock { Text = driveName.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 14, Foreground = B("Ink") });
+            sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = 11, Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
+            // The one drive this install can work on gets said so on the
+            // button itself, not only in the line underneath, because the
+            // buttons are what a person reads before pressing one.
+            bool skyrimHere = InstallPlace.SameDrive(driveName, skyrimDrive);
+            if (skyrimHere)
+                sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = 11, Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
 
-                string name = d.Name;
-                var b = new Button
+            string name = driveName;
+            var b = new DriveButton
+            {
+                Content = sp, Padding = new Thickness(15, 9), Margin = new Thickness(0, 0, 8, 8), MinWidth = 104,
+                HorizontalContentAlignment = HorizontalAlignment.Left, Tag = name,
+                BorderBrush = B("Line"), Background = B("Deep"), Foreground = B("Ink"),
+            };
+            // What a screen reader says for it: the same words the button
+            // shows. Without this Avalonia names a button whose content is a
+            // panel by its first line alone, so each drive was read as only
+            // its letter, with no free space and no Skyrim is here (#4693).
+            AutomationProperties.SetName(b, InstallPlace.Letter(name) + ", " + InstallPlace.Gb(free) + " free" + (skyrimHere ? ", Skyrim is here" : ""));
+            b.Click += delegate { SetRoot(Path.Combine(name, "Thornswood")); };
+            driveRow.Children.Add(b);
+            driveButtons.Add(b);
+            return b;
+        }
+
+        /// <summary>
+        /// A drive's button. The drives are one choice of several, so to a
+        /// screen reader each is a radio button, chosen or not, and says so
+        /// when that changes (#4693). On screen it is the window's Button as
+        /// before, chosen shown by its edge, and Enter on it presses it.
+        /// </summary>
+        sealed class DriveButton : Button
+        {
+            bool chosen;
+
+            // Drawn with Button's own look: a subclass otherwise has none.
+            protected override Type StyleKeyOverride { get { return typeof(Button); } }
+
+            public bool Chosen
+            {
+                get { return chosen; }
+                set
                 {
-                    Content = sp, Padding = new Thickness(15, 9), Margin = new Thickness(0, 0, 8, 8), MinWidth = 104,
-                    HorizontalContentAlignment = HorizontalAlignment.Left, Tag = name,
-                    BorderBrush = B("Line"), Background = B("Deep"), Foreground = B("Ink"),
-                };
-                b.Click += delegate { SetRoot(Path.Combine(name, "Thornswood")); };
-                driveRow.Children.Add(b);
-                driveButtons.Add(b);
+                    if (chosen == value) return;
+                    chosen = value;
+                    // Only a peer Windows has asked for has anyone to tell.
+                    (ControlAutomationPeer.FromElement(this) as DrivePeer)?.SayChosen(!value, value);
+                }
+            }
+
+            protected override AutomationPeer OnCreateAutomationPeer() { return new DrivePeer(this); }
+        }
+
+        /// <summary>
+        /// A drive's button to UI Automation: a radio button with the
+        /// SelectionItem pattern, selected when it is the install's drive.
+        /// Avalonia's RadioButtonAutomationPeer needs a RadioButton, which
+        /// would draw a dot and tick itself on a click; this keeps the button.
+        /// </summary>
+        sealed class DrivePeer : ButtonAutomationPeer, ISelectionItemProvider
+        {
+            public DrivePeer(DriveButton owner) : base(owner) { }
+
+            protected override AutomationControlType GetAutomationControlTypeCore() { return AutomationControlType.RadioButton; }
+
+            public bool IsSelected { get { return ((DriveButton)Owner).Chosen; } }
+
+            public ISelectionProvider SelectionContainer { get { return null; } }
+
+            public void Select() { Invoke(); }
+
+            public void AddToSelection()
+            {
+                if (!IsSelected) throw new InvalidOperationException("A drive is chosen by pressing it.");
+            }
+
+            public void RemoveFromSelection()
+            {
+                if (IsSelected) throw new InvalidOperationException("A drive stays chosen until another is pressed.");
+            }
+
+            public void SayChosen(bool was, bool now)
+            {
+                RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, was, now);
             }
         }
 
@@ -391,19 +483,36 @@ namespace Thornswood
             installRoot = path.TrimEnd('\\');
             txtRoot.Text = installRoot;
             string root = InstallPlace.DriveOf(installRoot);
-            foreach (Button b in driveButtons)
+            foreach (DriveButton b in driveButtons)
             {
                 bool on = string.Equals((string)b.Tag, root, StringComparison.OrdinalIgnoreCase);
                 b.Background = B(on ? "CardHover" : "Deep");
                 b.BorderBrush = B(on ? "Accent" : "Line");
+                b.Chosen = on;
             }
 
             string colour;
             txtSkyrim.Text = InstallPlace.SaySkyrim(skyrimDrive, root, out colour);
             txtSkyrim.Foreground = B(colour);
-            txtRoom.Text = InstallPlace.SayRoom(FreeOn(root), out colour);
-            txtRoom.Foreground = B(colour);
+            SayRoom();
             SayOwnGame();
+        }
+
+        /// <summary>
+        /// The drives this install writes to and the room each needs, by what
+        /// the window says now: the same rule InstallSteps stops by (#4681).
+        /// </summary>
+        List<InstallPlace.Room> Rooms()
+        {
+            bool intoSteam = chkOwn.IsChecked != true && !InstallPlace.MadeOwn(installRoot);
+            return InstallPlace.Rooms(InstallPlace.DriveOf(installRoot), InstallPlace.DriveOf(skyrimPath), intoSteam);
+        }
+
+        void SayRoom()
+        {
+            string colour;
+            txtRoom.Text = InstallPlace.SayRoom(Rooms(), FreeOn, out colour);
+            txtRoom.Foreground = B(colour);
         }
 
         static long FreeOn(string driveRoot)
@@ -438,10 +547,11 @@ namespace Thornswood
         // collection is the step after this. So a tick is the launcher's own
         // question answered in advance, written into config.json as
         // MakeOwnGame, and the launcher then makes the folder without asking
-        // once Vortex has deployed (ShellOwnGame.AskOwnGame). No tick is what
-        // every install did before: the launcher asks. Thornswood will not
-        // start out of a shared Skyrim either way (OwnGameRequired), which is
-        // why the off line says Play asks for it too.
+        // once Vortex has deployed (ShellOwnGame.AskOwnGame). The box starts
+        // ticked (Patrick, 12 Nov), because Thornswood will not start out of a
+        // shared Skyrim (OwnGameRequired): a question whose no leaves Play
+        // shut only stands between a new install and the game. Unticked, the
+        // launcher asks first, and Play asks for it too.
         //
         // The tick also decides where Thornswood's own files go (#1226,
         // Patrick, 29 Sep): ticked, Profile\Payload, and nothing is written
@@ -553,11 +663,11 @@ namespace Thornswood
             {
                 if (!Ask.YesNo(InstallPlace.OtherDriveQuestion(skyrimDrive, root), Title_, Ask.Icon.Warning)) return;
             }
-            long free = FreeOn(root);
-            if (free >= 0 && free < InstallPlace.Needed)
+            InstallPlace.Room shortOn;
+            string refused = InstallPlace.Short(Rooms(), FreeOn, out shortOn);
+            if (refused != null)
             {
-                Ask.Tell("There is only " + InstallPlace.Gb(free) + " free on " + root + " and this needs about " +
-                         InstallPlace.Gb(InstallPlace.Needed) + ".\n\nPick another drive.", Title_, Ask.Icon.Warning);
+                Ask.Tell(refused, Title_, Ask.Icon.Warning);
                 return;
             }
 
@@ -630,8 +740,9 @@ namespace Thornswood
             catch (InstallStop stop)
             {
                 Line("");
-                Line("STOP. " + stop.Message);
-                why = stop.Message;
+                string stopped = Failure.Say("InstallWindow, the install stopped", stop);
+                Line("STOP. " + stopped);
+                why = stopped;
             }
             catch (Exception e)
             {
@@ -639,9 +750,10 @@ namespace Thornswood
                 // an exception left to escape it ends the launcher with no
                 // word. So it is said like a stop, in full in the log.
                 Line("");
-                Line("STOP. " + e.Message);
+                string failed = Failure.Say("InstallWindow, the install", e);
+                Line("STOP. " + failed);
                 Log(e.ToString());
-                why = e.Message;
+                why = failed;
             }
             finally
             {

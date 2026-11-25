@@ -13,6 +13,7 @@ from bot_core import (UPPER_STAFF_IDS, WELCOME, _int_env, by_name, client, log,
     tree, warn_upper_staff_config)
 from bot_joins import watch_join_numbers
 from bot_holds import ensure_hold_panel
+from bot_pings import ensure_ping_panel
 from bot_rules_gate import ensure_rules_gate
 from bot_staff_channel import watch_trouble
 from bot_reports import watch_reports
@@ -140,7 +141,8 @@ async def register_commands():
         log('slash commands already registered: %s' % (', '.join(want) or 'none'))
         return
 
-    synced = list(done)
+    synced = []
+    failed = False
     for g in client.guilds:
         try:
             tree.copy_global_to(guild=g)
@@ -150,6 +152,7 @@ async def register_commands():
             log('registered in "%s": %s'
                 % (g.name, ', '.join('/' + n for n in want) or 'nothing'))
         except Exception:
+            failed = True
             # Named rather than said as "the commands", because which ones
             # they are is the first thing anybody asks when none appear.
             log('could not register %s in "%s", the buttons still work:\n'
@@ -162,7 +165,8 @@ async def register_commands():
         log('could not clear the global commands, so a command may appear '
             'twice in the picker:\n' + traceback.format_exc())
 
-    _stamp_write(want, synced)
+    if not failed:
+        _stamp_write(want, synced)
 
 
 @client.event
@@ -192,6 +196,7 @@ async def on_ready():
         await ensure_panel(g)
         await ensure_hold_panel(g)
         await ensure_rules_gate(g)
+        await ensure_ping_panel(g)
         await ensure_office_roles(g)
         await ensure_office_panel(g)
         await ensure_faction_panel(g)

@@ -77,6 +77,12 @@ spec = importlib.util.spec_from_file_location(
     'build_discord_2519', os.path.join(HERE, 'Build-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
+
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
 discord = B.discord
 
 
@@ -191,6 +197,10 @@ class Guild(object):
         self._state = types.SimpleNamespace(http=types.SimpleNamespace(
             bulk_channel_update=self._positions))
 
+
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 12 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
 
     async def onboarding(self):
         return types.SimpleNamespace(enabled=getattr(self, 'onboarding_enabled', False))
@@ -555,9 +565,19 @@ try:
             and '#factions and its changelog' in out)
 
         g = live_server()
-        out = written(g, only='playtester-rules', posts=True)
-        yes('a named channel whose words are a draft is never written',
-            wrote == [] and 'its words are a draft waiting on approval' in out)
+        saved_drafts = B.C.DRAFTS
+        try:
+            B.C.DRAFTS = saved_drafts + ('TESTERRULES',)
+            out = written(g, only='playtester-rules', posts=True)
+            yes('a named channel whose words are a draft is never written',
+                wrote == [] and 'its words are a draft waiting on approval' in out)
+        finally:
+            B.C.DRAFTS = saved_drafts
+
+        g = live_server()
+        written(g, only='playtester-rules', posts=True)
+        yes('the approved playtesting rules are written',
+            [w[0] for w in wrote] == ['playtester-rules'])
 
         g = live_server()
         out = written(g, posts=True)

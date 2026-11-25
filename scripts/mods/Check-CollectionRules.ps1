@@ -4,9 +4,14 @@
       .\scripts\mods\Check-CollectionRules.ps1
       .\scripts\mods\Check-CollectionRules.ps1 -List "$env:LOCALAPPDATA\Skyrim Special Edition\plugins.txt"
       .\scripts\mods\Check-CollectionRules.ps1 -Collection <collection.json or its folder> -List <plugins.txt> -Data <Data folder>
+      .\scripts\mods\Check-CollectionRules.ps1 -Root <a Thornswood install>
 
   Whether the plugin rules the Nexus collection carries hold a clean install
   to a plugin list's order. Entry 274 on the To Do List.
+
+  -Root is the Thornswood install the defaults are under (Where.ps1 Install
+  when it is not given): -List is its Profile\Default\plugins.txt, -Data its
+  Game\Data, and the collection's address is read from its config.json.
 
   WHY IT EXISTS. Revisions 2 to 4 of the old ombo2a collection carried no
   plugin rules at all, so a first-time person installed, got whatever order
@@ -23,7 +28,7 @@
   that and the new plugin floats, which is the same load order mismatch this
   entry exists to stop, arriving one revision later with nobody connecting
   the two." Nothing read the rules against a list, so nothing would have said
-  so. This does. It says NO, and exits 1, for any of five things:
+  so. This does. It says NOT HELD, and exits 1, for any of five things:
 
     - a full plugin the list enables that no rule names. It floats. The next
       upload needs a rule loading it after the full plugin above it.
@@ -31,7 +36,10 @@
     - two full plugins next to each other that no chain of rules keeps in that
       order, so LOOT is free to swap them.
     - a full plugin a rule names that the list does not enable, which means
-      the collection and the list disagree about what is in the order.
+      the collection and the list disagree about what is in the order. One
+      the collection installs switched off on purpose (records\collection.json,
+      enabled false) and that is in Data is allowed, and named as allowed
+      (#4728).
     - a rule that goes round in a circle with the order the game itself
       sets (every master first, each plugin after its own masters), light
       plugins included. LOOT can never keep it and says "cyclic interaction"
@@ -85,11 +93,12 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'LoadOrder.ps1')
 . (Join-Path $Here 'PluginRuleLoops.ps1')
+. (Join-Path $Here '..\dev\OwnPlugins.ps1')   # $OwnPluginsMadeInData
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Stop-Check([string]$m) {
   Write-Host ''
-  Say "  STOP. $m" 'Red'
+  Write-Output "  STOP. $m"
   Write-Host ''
   exit 1
 }
@@ -105,16 +114,27 @@ Write-Host "  THORNSWOOD  -  do the collection's plugin rules hold this list's o
 Write-Host ''
 
 # ------------------------------------------------------------ the collection --
-# The address comes out of this machine's config.json, as Check-ShipReady
-# reads it, and falls back to the one the launcher ships with (Config.Collection
-# in launcher\app\Config.cs). The newest revision Vortex has installed is the one
-# read, and it is named in the output, because a stale revision was the whole
-# problem on 22 September.
+# The address comes out of this machine's config.json. A missing file may use
+# the launcher's default (Config.Collection in launcher\app\Config.cs); a
+# failed read or parse may not. Name the newest installed revision in the
+# output so a stale revision cannot be mistaken for the one just checked.
 $revision = 0
 $collectionFolder = ''
 if (-not $Collection) {
   $url = ''
-  try { $url = [string](Get-Content -LiteralPath (Join-Path $Root 'config.json') -Raw | ConvertFrom-Json).CollectionUrl } catch { }
+  $configPath = Join-Path $Root 'config.json'
+  try { $configText = [IO.File]::ReadAllText($configPath) }
+  catch [IO.FileNotFoundException], [IO.DirectoryNotFoundException] { $configText = $null }
+  catch [UnauthorizedAccessException] { Stop-Check "cannot read config at ${configPath}: access denied." }
+  catch [IO.IOException] { Stop-Check "cannot read config at ${configPath}: file I/O failed." }
+  catch { Stop-Check "cannot read config at ${configPath}: $($_.Exception.GetBaseException().GetType().Name)." }
+  if ($null -ne $configText) {
+    # JSON parser errors can include the input. Only report a fixed reason.
+    if ([string]::IsNullOrWhiteSpace($configText)) { Stop-Check "invalid JSON in config at ${configPath}: the file is empty." }
+    try { $config = ConvertFrom-Json -InputObject $configText -ErrorAction Stop }
+    catch { Stop-Check "invalid JSON in config at ${configPath}: could not parse it." }
+    $url = [string]$config.CollectionUrl
+  }
   if (-not $url) { $url = 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf' }
   $slug = Get-CollectionSlug $url
   # A Vortex database that does not read, or a moved staging folder whose
@@ -161,7 +181,7 @@ if (-not (Test-Path -LiteralPath $Collection -PathType Leaf)) {
     # Only a .7z needs 7-Zip. A .zip is opened with what .NET has, so on a
     # machine without 7-Zip an empty .zip still holds no collection.json, and
     # saying 7-Zip is missing would send somebody to install it for nothing.
-    if ($archives[0].Extension -ne '.zip' -and -not (Get-SevenZipPath)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
+    if ($archives[0].Extension -ne '.zip' -and -not (Find-SevenZip)) { $why = 'reading a .7z needs 7-Zip and this machine has none' }
     Stop-Check ("no loose collection.json in {0}, and none could be read out of {1}: {2}. Unpack it and pass the collection.json with -Collection." -f $collectionFolder, $archives[0].Name, $why)
   }
   Stop-Check "no collection.json at $Collection"
@@ -213,6 +233,17 @@ foreach ($r in $rules) {
 }
 
 # ------------------------------------------------------------------ the list --
+# The plugins the collection installs switched off on purpose, as the record
+# of the collection writes them (records\collection.json, enabled false). They
+# are in Data, and the launcher switches on the ones the servers load, so a
+# rule may name one and a list may leave one off (#4728).
+$offOnPurpose = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+$recordPath = Join-Path $Here '..\..\records\collection.json'
+if (Test-Path -LiteralPath $recordPath -PathType Leaf) {
+  try { $record = [IO.File]::ReadAllText($recordPath) | ConvertFrom-Json } catch { Stop-Check ("$recordPath is not JSON: " + $_.Exception.Message) }
+  foreach ($p in @($record.plugins)) { if ($null -ne $p -and $p.enabled -eq $false) { $offOnPurpose[[string]$p.name] = [string]$p.name } }
+}
+
 if (-not (Test-Path -LiteralPath $List -PathType Leaf)) { Stop-Check "no plugin list at $List. Pass the one to check with -List." }
 if (-not (Test-Path -LiteralPath $Data -PathType Container)) {
   Stop-Check "no Data folder at $Data. Light plugins cannot be told from full ones without their headers. Pass the game's Data folder with -Data."
@@ -224,6 +255,9 @@ $present = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalI
 $full = New-Object Collections.Generic.List[string]
 $absent = New-Object Collections.Generic.List[string]
 $lightCount = 0
+# Made on each machine from its recipe and always loaded last
+# (OwnPlugins.ps1): no collection installs it, so no rule can name it.
+$madeHere = New-Object Collections.Generic.List[string]
 foreach ($m in $script:LoadOrderMasters) { [void]$present.Add($m) }
 for ($i = 0; $i -lt $file.Lines.Count; $i++) {
   $n = Get-LoadOrderEnabledName $file.Lines[$i]
@@ -232,12 +266,22 @@ for ($i = 0; $i -lt $file.Lines.Count; $i++) {
   $lineOf[$n] = $i + 1
   [void]$present.Add($n)
   if (Test-LoadOrderMaster $n) { continue }
+  if (@($script:OwnPluginsMadeInData) -icontains $n) { [void]$madeHere.Add($n); continue }
   $path = Join-Path $Data $n
   if ($n -notmatch '\.esl$' -and -not [IO.File]::Exists($path)) { [void]$absent.Add($n) }
   if (Test-LoadOrderLight $path) { $lightCount++; continue }
   [void]$full.Add($n)
 }
 if ($lineOf.Count -eq 0) { Stop-Check "$List enables nothing." }
+
+# A plugin file in Data, found by name in any case: a rule names it in lower
+# case, as Vortex writes them, and a file system that keeps case (Linux) does
+# not find it by that name (#2989). $null when Data has none.
+function Find-DataPlugin([string]$n) {
+  $path = Join-Path $Data $n
+  if ([IO.File]::Exists($path)) { return $path }
+  return (@([IO.Directory]::EnumerateFiles($Data)) | Where-Object { [IO.Path]::GetFileName($_) -ieq $n } | Select-Object -First 1)
+}
 
 $pos = [Collections.Generic.Dictionary[string, int]]::new([StringComparer]::OrdinalIgnoreCase)
 for ($i = 0; $i -lt $full.Count; $i++) { $pos[$full[$i]] = $i }
@@ -258,6 +302,9 @@ Say ("  data        {0}" -f $Data) 'DarkGray'
 if ($absent.Count) {
   Say ("  note        {0} enabled plugin(s) are not in the Data folder and are counted as full: {1}" -f $absent.Count, ($absent -join ', ')) 'Yellow'
 }
+if ($madeHere.Count) {
+  Say ("  note        {0} is made on each machine from its recipe and loads last, so no rule names it: left out" -f ($madeHere -join ', ')) 'DarkGray'
+}
 Write-Host ''
 
 $script:problems = 0
@@ -267,9 +314,9 @@ function AfterRuleLine([string]$before, [string]$after) {
   return ('Exact next after-rule: { "name": "' + $after.ToLowerInvariant() + '", "after": ["' + $before.ToLowerInvariant() + '"] }')
 }
 function Verdict([string]$what, [string[]]$lines) {
-  if ($null -eq $lines -or $lines.Count -eq 0) { Say ("  yes   " + $what) 'Green'; return }
+  if ($null -eq $lines -or $lines.Count -eq 0) { Write-Output ("  yes   " + $what); return }
   $script:problems += $lines.Count
-  Say ("  NO    " + $what) 'Red'
+  Write-Output ("  NO    " + $what)
   foreach ($l in $lines) { Say ("          " + $l) 'Yellow' }
 }
 
@@ -340,21 +387,26 @@ if ($edges.Count -eq 0) {
   }
   Verdict ("every pair of full plugins next to each other is held in that order ({0} pairs)" -f $pairs) $out.ToArray()
 
-  # Four: a full plugin a rule names that the list does not enable. A rule
-  # names it in lower case, as Vortex writes them; Windows finds the file in
-  # any case, and a file system that keeps case (Linux) does not, so the file
-  # is looked for by name there (#2989).
+  # Four: a full plugin a rule names that the list does not enable. One the
+  # collection installs switched off on purpose (records\collection.json,
+  # enabled false) and that is in Data is allowed, and named as allowed, so a
+  # pass says what it passed over (#4728); any other is a disagreement about
+  # what is in the order.
   $out = New-Object Collections.Generic.List[string]
+  $allowedOff = New-Object Collections.Generic.List[string]
   foreach ($n in @($named | Sort-Object)) {
     if ($present.Contains($n)) { continue }
-    $path = Join-Path $Data $n
-    if (-not [IO.File]::Exists($path)) {
-      $path = @(@([IO.Directory]::EnumerateFiles($Data)) | Where-Object { [IO.Path]::GetFileName($_) -ieq $n }) + @($path) | Select-Object -First 1
-    }
+    $path = Find-DataPlugin $n
+    if (-not $path) { $path = Join-Path $Data $n }
     if (Test-LoadOrderLight $path) { continue }
+    if ($offOnPurpose.ContainsKey($n) -and [IO.File]::Exists($path)) {
+      [void]$allowedOff.Add($offOnPurpose[$n] + ': allowed off. The collection installs it switched off on purpose (records\collection.json, enabled false) and it is in Data. Its rules hold nothing on this list, so no other plugin may hang on it alone.')
+      continue
+    }
     [void]$out.Add($n + ': a rule names it and the list does not enable it.')
   }
-  Verdict 'every full plugin a rule names is enabled in the list' $out.ToArray()
+  Verdict 'every full plugin a rule names is enabled in the list, or installed switched off on purpose' $out.ToArray()
+  foreach ($l in $allowedOff) { Say ("          " + $l) 'DarkGray' }
 
   # Five: a rule that goes round in a circle with the order the game sets,
   # every master first and each plugin after its own masters. Light plugins
@@ -380,14 +432,14 @@ if ($edges.Count -eq 0) {
 
 Write-Host ''
 if ($script:problems -eq 0) {
-  Say "  HELD. A clean install that keeps these rules puts this list's full plugins in this list's order." 'Green'
+  Write-Output "  HELD. A clean install that keeps these rules puts this list's full plugins in this list's order."
   if ($full.Count) {
     Say ("  The chain ends at {0}. A plugin added to the collection later needs a rule loading it after that one, or it floats." -f $full[$full.Count - 1]) 'DarkGray'
   }
   Write-Host ''
   exit 0
 }
-Say ("  NOT HELD. {0} problem(s) above. A clean install that keeps these rules will not come out in this list's order." -f $script:problems) 'Red'
+Write-Output ("  NOT HELD. {0} problem(s) above. A clean install that keeps these rules will not come out in this list's order." -f $script:problems)
 Say '  Either the list is out of the server''s order, or the collection needs a rule in its next upload. The lines above name the plugins.' 'DarkGray'
 Write-Host ''
 exit 1

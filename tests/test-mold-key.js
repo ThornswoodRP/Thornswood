@@ -324,6 +324,10 @@ function client(opt) {
     // is looked at here; test-2675-hair-dye-wiring.js has what it does.
     'const HAIR_DYE_KEY = SKILLS_KEY;',
     'function hairDyePress() { return false; }',
+    // K on anybody else writes a contract with them (#4561), asked after the
+    // two above. Nobody is looked at here; test-4561-contracts.js has what it does.
+    'const CONTRACT_KEY = SKILLS_KEY;',
+    'function contractPress() { return false; }',
     PIECES_FRONT.keys,
     'return { MOLD_KEY: MOLD_KEY, MOLD_NAME: MOLD_NAME, moldPress: moldPress };'
   ].join('\n');
@@ -991,4 +995,4 @@ if (missingGm.length === 0 && KEY_DESC && MOLD_DESC && DEED_DESC && RECIPE_DESC 
 Date.now = realNow;
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -79,7 +79,7 @@ const FORCE = [
 // What makes a Linux trace no promise about the Windows run. A code file the
 // harness read that asks which system it is on, or reaches for something
 // only Windows has, can take another path there.
-const PLATFORM = /\$IsWindows|\$IsLinux|\$IsMacOS|\$OnWindows|\$env:OS\b|Windows_NT|PSEdition|PSVersionTable|OSVersion|RuntimeInformation|process\.platform|os\.platform\(|os\.type\(|['"]win32['"]|sys\.platform|os\.name\b|platform\.system|powershell\.exe|cmd\.exe|Get-WindowsPowerShell|Get-WindowsPath|\$env:(SystemRoot|WINDIR|windir|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)|process\.env\.(SystemRoot|WINDIR|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)/;
+const PLATFORM = /\$IsWindows|\$IsLinux|\$IsMacOS|\$OnWindows|\$env:OS\b|Windows_NT|PSEdition|PSVersionTable|OSVersion|RuntimeInformation|process\.platform|os\.platform\(|os\.type\(|['"]win32['"]|sys\.platform|os\.name\b|platform\.system|powershell\.exe|cmd\.exe|Get-WindowsPath|\$env:(SystemRoot|WINDIR|windir|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)|process\.env\.(SystemRoot|WINDIR|LOCALAPPDATA|APPDATA|USERPROFILE|ProgramFiles|ProgramData|ComSpec)/;
 const CODE = /\.(ps1|psm1|psd1|js|cjs|mjs|py|cmd|bat|sh)$/i;
 // Which program runs a code file. "python3.12" and "pwsh.exe" count as
 // python and pwsh.
@@ -427,6 +427,80 @@ function pick(tracesFile, treeFile, commit, gate) {
   return r;
 }
 
+// ---- the content checks (#5191, stage 4) -------------------------------------
+
+/*
+  Nothing the content build writes is committed (Patrick's B on #5191): the
+  content plugin and the tables out of the load order are the box's build,
+  laid over each checkout by scripts/release/Get-ContentBuild.ps1, and git
+  does not see them. So a change between two builds is no change between two
+  trees, and select above cannot see it.
+
+  checks: the gate harnesses a new build can affect, as if every file it
+  writes changed in place (select, with those as the change). Every harness
+  that cannot be cleared by its reads, one that always runs or that the map
+  does not name, is one. The merge release runs these over the build of the
+  merge before anything carries it.
+
+  stale: on a checkout whose content inputs are not the newest build's (a
+  pull request that changes a source, a builder or a script a builder
+  loads), the content checks whose result there says nothing about the
+  change: each reads the build, which is of the old inputs, and a changed
+  input beside it, so one that holds a table to its source fails until the
+  box builds the new one. The map says so for a harness it traced. For one
+  it cannot clear (always run, or not in the map) its own text decides:
+  naming a file the build writes. The merge release runs them all over the
+  merge's own build before anything carries it.
+
+  writes: the files and folders the build writes; inputs: the paths its key
+  is made of (scripts/mods/ContentPaths.ps1), a folder for all under it. The
+  change in them is measured from the commit the build was made of
+  (content-build.json names it) to this checkout's HEAD, so a change main
+  made since the map was traced, which the build already carries, is none.
+*/
+function under(p, roots) { const l = lower(p); return roots.some(r => { const q = lower(r); return l === q || l.startsWith(q + '/'); }); }
+function writtenFiles(writes, files) {
+  const out = [];
+  for (const w of writes) {
+    const inside = files.filter(f => lower(f).startsWith(lower(w) + '/'));
+    if (inside.length) { out.push(...inside); } else { out.push(w); }
+  }
+  return [...new Set(out)];
+}
+function contentChecks(map, gate, files, writes) {
+  return select({ map: map, gate: gate, changes: writtenFiles(writes, files).map(p => ({ status: 'M', path: p })), baseFiles: files, headFiles: files });
+}
+function harnessFile(name) { return name.indexOf('/') >= 0 ? path.join(REPO, name) : path.join(REPO, 'tests', name); }
+function staleChecks(map, gate, base, head, writes, inputs) {
+  const files = [...head.keys()];
+  const checks = contentChecks(map, gate, files, writes);
+  const changed = changesBetween(base, head).filter(c => under(c.path, inputs));
+  const out = { run: [], why: {}, changed: changed.length };
+  if (!changed.length) { return out; }
+  const reach = select({ map: map, gate: checks.run, changes: changed, baseFiles: [...base.keys()], headFiles: files });
+  const marks = writes.map(w => (path.extname(w) ? path.basename(w) : w));
+  for (const n of checks.run) {
+    const h = map && map.harnesses ? map.harnesses[n] : null;
+    if (h && !h.always) {
+      if (reach.run.indexOf(n) >= 0) { out.run.push(n); out.why[n] = checks.why[n] + ', and ' + reach.why[n]; }
+      continue;
+    }
+    let text = '';
+    try { text = fs.readFileSync(harnessFile(n), 'utf8'); } catch (e) { text = ''; }
+    const m = marks.find(k => text.indexOf(k) >= 0 || text.indexOf(k.split('/').join('\\')) >= 0);
+    if (m) { out.run.push(n); out.why[n] = (h ? 'the map cannot clear it (' + h.always + ')' : 'not in the read map') + ', and it names ' + m + ', which the build writes'; }
+  }
+  return out;
+}
+function readList(file) { return fs.readFileSync(file, 'utf8').split(/\r?\n/).map(s => s.trim()).filter(Boolean); }
+function loadMap(tracesFile, commit) {
+  // '-': no map, so every harness is one the map cannot clear.
+  if (tracesFile === '-') { return null; }
+  const map = /\.json$/.test(tracesFile) ? JSON.parse(fs.readFileSync(tracesFile, 'utf8')) : build(tracesFile, REPO, commit);
+  if (map.commit !== commit) { throw new Error('the map is of ' + map.commit + ', not ' + commit); }
+  return map;
+}
+
 // ---- platforms: which harnesses Linux runs as fully as Windows (#5293) -----
 
 /*
@@ -476,6 +550,12 @@ function platforms(windowsStarts, linuxStarts, commit) {
 }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const [cmd, a, b, c, d, e] = process.argv.slice(2);
   if (cmd === 'build' && a && b) {
     const map = build(a, REPO, c);
@@ -510,9 +590,27 @@ if (require.main === module) {
       console.log(`${r.run.length} of ${gate.length} gate harnesses can be affected by this change, measured from the gate traced on ${c.slice(0, 8)}; ${r.skipped.length} cannot and do not run.`);
       for (const n of r.run) { console.log('  runs ' + n + ': ' + r.why[n]); }
     }
+  } else if ((cmd === 'checks' || cmd === 'stale') && a && b && c && d && e && process.argv[8] && (cmd === 'checks' || process.argv[9])) {
+    // checks <map> - <commit> <gate.txt> <writes.txt> <out.txt>
+    // stale  <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt>
+    //   <built> the commit the newest content build was built from, fetched
+    const map = loadMap(a, c);
+    const gate = readGate(d), writes = readList(e);
+    const head = parseTree(git(['ls-tree', '-r', '-z', '--full-tree', 'HEAD']));
+    let r;
+    if (cmd === 'checks') {
+      r = contentChecks(map, gate, [...head.keys()], writes);
+      console.log(`${r.run.length} of ${gate.length} gate harnesses can be affected by a content build of ${writes.length} paths, measured on the gate traced on ${c.slice(0, 8)}.`);
+    } else {
+      const built = parseTree(git(['ls-tree', '-r', '-z', '--full-tree', b]));
+      r = staleChecks(map, gate, built, head, writes, readList(process.argv[8]));
+      console.log(`${r.run.length} content checks read a content input changed since the build's ${b.slice(0, 8)} (${r.changed} changed), measured on the gate traced on ${c.slice(0, 8)}.`);
+    }
+    fs.writeFileSync(cmd === 'checks' ? process.argv[8] : process.argv[9], r.run.map(n => n + '\n').join(''));
+    for (const n of r.run) { console.log('  ' + n + ': ' + r.why[n]); }
   } else {
-    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt>');
-    process.exit(2);
+    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt> | checks <map> - <commit> <gate.txt> <writes.txt> <out.txt> | stale <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt>');
+    return 2;
   }
 }
-module.exports = { platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };
+module.exports = { contentChecks: contentChecks, staleChecks: staleChecks, platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };

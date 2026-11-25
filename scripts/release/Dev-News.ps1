@@ -88,9 +88,12 @@ function Get-DevReleaseTags([string]$sourceRepo) {
             if ($f.Count -lt 4 -or $f[1] -ne 'tag' -or $f[2] -notmatch '^[0-9a-f]{40}$') { continue }
             $id = $f[0] -replace '^refs/tags/release/dev/', ''
             $from = [datetime]::MinValue; $to = [datetime]::MinValue
-            # The first 13 characters of an id are its minute in both shapes
-            # it has had, yyyyMMdd-HHmm and yyyyMMdd-HHmmss (New-ReleaseId).
-            if ($id.Length -lt 13 -or -not [datetime]::TryParseExact($id.Substring(0, 13), 'yyyyMMdd-HHmm', $inv, 'None', [ref]$from)) { continue }
+            # The minute its id names, on the team's clock the notes are dated
+            # by: a UTC id since #4950, Mountain time before (Get-ReleaseIdUtc).
+            $made = Get-ReleaseIdUtc $id
+            if ($null -eq $made) { continue }
+            $from = Get-TeamNow $made
+            $from = $from.AddSeconds(-$from.Second)
             # "2026-10-01 20:04:26 -0600": the tagger's own clock.
             $at = $f[3].Trim()
             if ($at.Length -lt 16 -or -not [datetime]::TryParseExact($at.Substring(0, 16), 'yyyy-MM-dd HH:mm', $inv, 'None', [ref]$to)) { continue }
@@ -176,7 +179,7 @@ function Update-DevNewsChannels($doc, $news, $mainDoc, [string]$sourceRepo) {
     $script:holdsSeen = @{}
     # Every commit a target holds as an ancestor, from one rev-list for each
     # target, in place of a merge-base --is-ancestor for every pair (#3168):
-    # tests\test-2401-legacy-dev-marks.ps1 started 382 of those, nearly
+    # scripts\tests\test-2401-legacy-dev-marks.ps1 started 382 of those, nearly
     # 2,000 processes on the box with the rest. $null when git cannot list
     # it, and then each pair is asked the old way.
     $script:ancestorsOf = @{}
@@ -211,7 +214,7 @@ function Update-DevNewsChannels($doc, $news, $mainDoc, [string]$sourceRepo) {
                 # one git: diff target...commit is the diff from their merge
                 # base, and fails where they have none, as merge-base did.
                 # It was a merge-base and then a diff, 117 of each in
-                # tests\test-2401-legacy-dev-marks.ps1, each two processes on
+                # scripts\tests\test-2401-legacy-dev-marks.ps1, each two processes on
                 # the box behind Git's cmd\git.exe and each a Defender scan
                 # (#3835).
                 $changed = Invoke-ReleaseGit $sourceRepo @('diff', '--name-only', ($target + '...' + $commit))

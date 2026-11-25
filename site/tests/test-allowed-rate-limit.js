@@ -324,11 +324,11 @@ function five() {
   finished = true;
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
   finished = true;
   console.log('FAIL  ' + (e && e.hang ? 'the route ' + e.message : 'the harness threw: ' + (e && e.stack || e)));
   console.log('');
   console.log(pass + ' passed, ' + (fail + 1) + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
 });

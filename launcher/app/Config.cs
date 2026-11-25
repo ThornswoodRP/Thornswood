@@ -54,8 +54,8 @@ namespace Thornswood
         /// /voice-dev on the dev build.
         /// </summary>
         /// <remarks>
-        /// Everything voice does goes through Caddy on 443: one door with a
-        /// certificate on it, and wss:// rather than ws://, so nobody's voice
+        /// HTTPS requests go through Caddy on 443; canonical signaling
+        /// uses its dedicated trusted socket. Both use TLS, so nobody's voice
         /// signalling, join token or Discord ticket crosses the internet in
         /// the clear.
         ///
@@ -87,10 +87,23 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The same address as a WebSocket url, which is always wss (#1304).
+        /// The signaling socket, always wss. Each canonical channel has its
+        /// own trusted ingress; HTTPS authentication keeps using VoiceBase.
         /// </summary>
         public string VoiceSocket()
         {
+            bool canonicalHost = string.Equals(ServerAddress, "play.thornswood.net", StringComparison.OrdinalIgnoreCase);
+            if (IsDev && canonicalHost
+                && ServerPort == "7787" && VoicePort == "7789"
+                && VoiceBase() == Voice + "-dev")
+            {
+                return "wss://dev-signal.thornswood.net:44789/voice-dev/";
+            }
+            bool main = string.IsNullOrEmpty(Channel) || string.Equals(Channel, "main", StringComparison.OrdinalIgnoreCase);
+            if (main && canonicalHost && ServerPort == "7777" && VoicePort == "7778" && VoiceBase() == Voice)
+            {
+                return "wss://main-signal.thornswood.net:44789/voice/";
+            }
             return "wss://" + VoiceBase().Substring(8) + "/";
         }
 
@@ -106,6 +119,10 @@ namespace Thornswood
           than whoever built the release.
         */
         [JsonInclude] public string MicrophoneName = "";
+
+        [JsonInclude] public string AudioOutputId = "";
+        [JsonInclude] public string AudioOutputName = "";
+        [JsonInclude] public bool AudioOutputConfigured;
 
         [JsonInclude, JsonPropertyName("VoiceAuto")] public bool? VoiceAutoSetting = true;
 
@@ -257,13 +274,24 @@ namespace Thornswood
         // has been moved to a folder of its own so the Steam copy can stay clean.
         [JsonInclude] public string VortexGame = "";
 
-        // Thornswood's own Skyrim folder was asked for when Thornswood was
-        // installed: the setup window's tick box, written here by
-        // Setup-Thornswood.ps1 -MakeOwnGame (issue #906). True, the launcher
-        // makes the folder without asking the moment it can (AskOwnGame in
-        // ShellOwnGame.cs). False or absent, which is every install before
-        // that and every install left unticked, it asks first as it always has.
-        [JsonInclude] public bool MakeOwnGame;
+        // Whether the launcher makes Thornswood's own Skyrim folder without
+        // asking, the moment it can (AskOwnGame in ShellOwnGame.cs). The setup
+        // window's tick box, "Give Thornswood a Skyrim folder of its own",
+        // writes it (InstallSteps.OwnFolderCard, issue #906). The box starts
+        // ticked and an absent key counts as ticked (Patrick, 12 Nov: the own
+        // folder is the default for everyone), because Thornswood only plays
+        // from that folder (OwnGameRequired) and a question whose no leaves
+        // Play shut is not a real choice. Only an explicit false, the box
+        // unticked, has the launcher ask first. Nullable for the same reason
+        // as StopServerSetting below: the serializer skips field initialisers.
+        [JsonInclude, JsonPropertyName("MakeOwnGame")] public bool? MakeOwnGameSetting = true;
+
+        [JsonIgnore]
+        public bool MakeOwnGame
+        {
+            get { return MakeOwnGameSetting != false; }
+            set { MakeOwnGameSetting = value; }
+        }
 
         // Which in game browser the last Play left SkyrimPlatform.ini naming,
         // "nirnlab" or "tilted", so the Settings page can say it after a
@@ -359,14 +387,31 @@ namespace Thornswood
             // Still no throw, so every caller behaves as it did, but a Save
             // that failed now says so in launcher.log. It used to be the
             // tester saying the Save button did nothing, and nothing else.
-            catch (Exception ex) { Swallow.Note("Config.Save, writing " + path, ex); }
+            catch (Exception ex) { Swallow.Note("Config.Save, writing " + path, ex); return; }
+            // The person's own choices in it go to their Discord account
+            // (#5939): the launcher hangs YourSettings.Noted here as it
+            // starts. A hook rather than a call, so the tools and harnesses
+            // that build Config.cs without the rest of the launcher still do.
+            Action<Config> saved = Saved;
+            if (saved == null) return;
+            try { saved(this); }
+            catch (Exception ex) { Swallow.Note("Config.Save, sending the person's choices", ex); }
         }
+
+        /// <summary>Told after each Save that wrote the file.</summary>
+        public static Action<Config> Saved;
     }
 
     /// <summary>
     /// One note on the News tab: one build Release's notes (ReleaseNews.cs,
     /// #5187). Filled by the launcher from GitHub.
     /// </summary>
+    public sealed class NewsPicture
+    {
+        public string Url { get; set; } = "";
+        public string Alt { get; set; } = "";
+    }
+
     public class NewsItem
     {
         // When the Release was published, M-d-yyyy h:mm tt in this machine's time.
@@ -376,6 +421,7 @@ namespace Thornswood
         // What changed in that release, one line each: the "- " lines of the
         // Release's notes.
         public string[] details = null;
+        public NewsPicture image = null;
 
         // Which build this note came out on. Empty is a release main's
         // Deployment has reached, the build everybody plays. "dev" is one

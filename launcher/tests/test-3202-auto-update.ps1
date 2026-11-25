@@ -93,11 +93,11 @@ Yes 'LauncherAnswer and ShowUpdate only paint the answer and start no update the
 Yes 'the game closing runs an update check' ($shell -match '(?s)Discord\.SessionEnd\(.*?CheckUpdatesBackground\(false\)' -and $shell -notmatch 'closedForUpdate')
 
 # ---- 5: one update at a time --------------------------------------------------------
-$run = Body $upd 'static void RunUpdate(Action<bool> after)'
+$run = Body $upd 'static async Task RunUpdateAsync(Action<bool> after)'
 $guard = $run.IndexOf('if (updating) {')
 $set = $run.IndexOf('updating = true;')
 Yes 'RunUpdate refuses a second update while one is going in' ($guard -ge 0 -and $guard -lt $set)
-Yes 'and marks one only once the game is out of the way' ($run.IndexOf('if (!ClearStuckGame(true)) return;') -lt $set)
+Yes 'and marks one only once the game is out of the way' ($run.IndexOf('if (!await ClearStuckGame(true)) return;') -lt $set)
 # An update that went in closes the launcher for Velopack to start the new
 # one (#4825), so only the failure has a launcher left to clear it in.
 Yes 'and clears it when the update failed; one that went in closes the launcher' (([regex]::Matches($run, 'updating = false;')).Count -eq 1 -and $run -match 'win\.Close\(\);')

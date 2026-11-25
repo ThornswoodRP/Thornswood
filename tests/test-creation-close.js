@@ -36,6 +36,7 @@
 //
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
+const vm = require('vm');
 const fs = require('fs');
 const path = require('path');
 const CR = String.fromCharCode(13);
@@ -232,17 +233,15 @@ if (P.drawFoot && P.closeByHand && P.onclick) {
     w.press();
     yes('K7 and two presses never send a quit or anything else', w.quits() === 0 && w.told.length === 0);
   }
-  // Escape and K put the panel down while creating, as Djinn asked, and never
-  // close the game.
+  // Creation owns input until the server confirms completion.
   {
-    yes('K8 Escape still puts the panel down by hand',
-        /e\.key === 'Escape'\) \{ closeByHand\(\);/.test(page));
-    yes('K8 and K still toggles it by hand',
-        /toggle: function \(\) \{\s*if \(root\.className === 'gone'\) \{ api\.open\(\); \} else \{ closeByHand\(\); \}/.test(page));
     const w = panelRig(true);
     w.hand();
-    yes('K8 which puts the panel down and holds the reminder off, and closes no game',
-        w.closed === 1 && w.told.join('|') === 'pick later' && w.quits() === 0);
+    yes('K8 Escape and K keep creation open without postponing it',
+        w.closed === 0 && w.told.length === 0 && w.quits() === 0);
+    w.mine.creating = false;
+    w.hand();
+    yes('K8 the same close works after creation completes', w.closed === 1);
   }
 }
 
@@ -567,11 +566,40 @@ yes('the shipped Thornswood.ini carries CloseGameKey = 68', !!iniM && Number(ini
 }
 
 // The social key guard (pull request 291) stays: the five keys over the
-// RaceSex Menu are tests\test-social-keys.js, and it is not touched here.
+// RaceSex Menu are game\tests\test-social-keys.js, and it is not touched here.
 yes('the social keys still wait out the RaceSex Menu',
     /if \(e\.code === FRIEND_KEY \|\| e\.code === TRADE_KEY \|\| e\.code === MUTE_KEY \|\|/.test(front) &&
     /const KEYBOARD_MENUS = \[[\s\S]*?'RaceSex Menu'/.test(front));
 
+// API callers and the focus timeout must obey the same creation boundary.
+{
+  const method = page.slice(page.indexOf('    close: function () {'), page.indexOf('    toggle: function () {'));
+  const w = { root: { className: '' }, active: true, told: [],
+    quitArmed: 0, candidate: null, dyeTarget: null, contractWith: null, endArmed: null, guideAt: '' };
+  w.creating = () => w.active;
+  w.tell = (message) => w.told.push(message);
+  vm.runInNewContext('var api = {' + method + '}; api.close();', w);
+  yes('K9 programmatic close cannot release an unfinished character', w.root.className === '' && w.told.length === 0);
+  w.active = false;
+  vm.runInNewContext('api.close();', w);
+  yes('K9 completion permits the normal close and focus release', w.root.className === 'gone' && w.told.join() === 'closed');
+
+  const start = front.indexOf('    for (const who in claimedAt) {');
+  const end = front.indexOf('    checkServer(now);', start);
+  const cap = front.slice(start, end);
+  function capped(creatingNow, who) {
+    const calls = [];
+    const state = { claimedAt: { [who]: 1 }, claims: { [who]: true }, now: 130001,
+      skillsCreating: creatingNow, CAP_CLOSES: { skills: 'thornswoodSkills', party: 'thornswoodParty' },
+      choiceUp: () => false, log: () => {}, T: { js: () => calls.push('close'), claimFocus: () => calls.push('release') } };
+    vm.runInNewContext(cap, state);
+    return calls.join();
+  }
+  yes('K10 creation survives the two-minute focus timeout', capped(true, 'skills') === '');
+  yes('K10 ordinary skills panels still time out', capped(false, 'skills') === 'close,release');
+  yes('K10 the creation exception does not retain unrelated panels', capped(true, 'party') === 'close,release');
+}
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

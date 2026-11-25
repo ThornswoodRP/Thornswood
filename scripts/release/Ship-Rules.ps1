@@ -2210,14 +2210,17 @@ function Get-ShipSkyUIFeedChange([string]$GameDir, [hashtable]$Record, [string[]
 }
 
 function Get-ShipLastPluginProblem([string]$RepoDir, [string[]]$Enabled, [string[]]$Ccc = @()) {
-    $rebuild = 'Build it again for this load order: python scripts\mods\Build-LastPlugin.py --data <a Data folder holding the collection''s bytes>, then commit game\data\last-plugin.recipe and game\data\last-plugin.json.'
+    $rebuild = 'Lay the box''s content build of this commit, which makes both at each merge and commits neither (#5191): pwsh scripts\release\Get-ContentBuild.ps1 -Take. On a PC with the game, python scripts\mods\Build-LastPlugin.py --data <a Data folder holding the collection''s bytes> builds them for this load order.'
     $recipe = Join-Path $RepoDir $ShipLastRecipe
     $mpath = Join-Path $RepoDir $ShipLastManifest
     if (-not (Test-Path -LiteralPath $mpath)) { return "the checkout has the recipe for $ShipLastPlugin and no $ShipLastManifest saying what it was built against." }
     try { $m = ([IO.File]::ReadAllText($mpath) -replace '^\uFEFF', '') | ConvertFrom-Json } catch { return "$ShipLastManifest does not read as JSON: " + $_.Exception.Message }
     $rpath = Join-Path $RepoDir 'records\collection-plugins.json'
     if (-not (Test-Path -LiteralPath $rpath)) { return "there is no records\collection-plugins.json, so nothing says which bytes the collection gives people." }
-    try { $record = ([IO.File]::ReadAllText($rpath) -replace '^\uFEFF', '') | ConvertFrom-Json } catch { return "records\collection-plugins.json does not read as JSON: " + $_.Exception.Message }
+    # Through RecordShape.ps1, as the deploys read it (#4279): a version this
+    # checkout does not know or a plugin listed twice is not a record of
+    # which bytes the collection gives people.
+    try { $record = Read-ThornswoodRecord -Path $rpath -Kind collection-plugins } catch { return $_.Exception.Message }
     $rows = @{}
     foreach ($r in @($record.plugins)) { $rows[([string]$r.name).ToLowerInvariant()] = $r }
     $sha = [Security.Cryptography.SHA256]::Create()

@@ -1,11 +1,12 @@
 <#
   Load-Box.ps1
 
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Load-Test -From dev -Shape crowd -Steps 10,25,50 -Play fight,host,trade'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Load-Test -From dev -Shape crowd -Steps 10,25,50 -Play fight,host,trade,quest'
 
   #4623. The load test with the collection's world: its NPCs, the gamemode's
   NPC runtime, merchants and quests, and bots that fight, host the NPCs near
-  them and ask the guild traders to trade. The collection's plugins are
+  them, ask the guild traders to trade and take and leave their work
+  (load-bots.js, quest). The collection's plugins are
   other people's and are only on the box, so this runs there, through the
   deploy gate (verbs.json "Load-Test"), and nothing of the collection leaves
   it. The runner's load test (.github\workflows\load-test.yml) is the same
@@ -19,8 +20,14 @@
        C:\Thornswood-Server, dev is C:\Thornswood-Server-Dev) in a folder of
        its own under the account's temp folder (New-LoadServer.js --from):
        the server's program and gamemode.js and the plugins its loadOrder
-       names, read and never written, with its own port, its own voice
-       service on 127.0.0.1, an empty world and a pass key made for the run;
+       names, read and never written, copies of its merchant ledger and the
+       hold price lists the traders quote from, its own port, its own voice
+       service on 127.0.0.1, an empty world and a pass key made for the run.
+       The empty world is kept the way the server keeps its own (#6237): in
+       a folder, or, for a server whose world is in MongoDB, in the load
+       test's own database (records\mongodb.json "load", thornswood-load),
+       emptied before the copy starts and again when it ends, never the
+       server's database;
     3. runs Load-Test.js on it, which also stops before each step if
        anybody joins either server, and at 60% of the box's CPU, because the
        box's cores are the game servers' as well;
@@ -41,8 +48,8 @@ param(
     [string]$Steps = '10,25,50',
     [ValidatePattern('^[0-9]{2,3}$')]
     [string]$Hold = '60',
-    [ValidatePattern('^((fight|host|trade)(,(fight|host|trade)){0,2})?$')]
-    [string]$Play = 'fight,host,trade',
+    [ValidatePattern('^((fight|host|trade|quest)(,(fight|host|trade|quest)){0,3})?$')]
+    [string]$Play = 'fight,host,trade,quest',
     [string]$Out = '',
     # For the harness: the folder the servers are installed in and the
     # online.json addresses, which on the box are the ones below.
@@ -90,11 +97,29 @@ foreach ($p in @($Port, ($Port + 1), $VoicePort)) {
 
 $most = ($Steps -split ',' | ForEach-Object { [int]$_ } | Measure-Object -Maximum).Maximum
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('thornswood-load-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+
+# The world the copy keeps: the way the server keeps its own (#6237).
+. (Join-Path $Here '..\deploy\World.ps1')
+. (Join-Path $Here '..\deploy\Mongo.ps1')
+$theirs = Get-ThornswoodWorld $root
+if ($theirs.Stop) { Stop-Run $theirs.Stop }
+$loadWorld = $null
+$worldArgs = @()
+if ($theirs.Driver -eq 'mongodb') {
+    $rec = Read-ThornswoodMongoRecord (Join-Path $Here '..\..\records\mongodb.json')
+    $lu = @(Get-ThornswoodMongoUsers $rec | Where-Object { $_.User -eq [string]$rec.load.user })[0]
+    $loadWorld = @{ Driver = 'mongodb'; Db = $lu.Db; UriFile = $lu.File }
+    $e = Clear-ThornswoodScratchWorld $loadWorld
+    if ($e -like 'STOP|*') { Stop-Run ($e.Substring(5) + ', so the copy would not start on an empty world') }
+    Say ($lu.Db + ' emptied for the copy, ' + ($e -split '\|')[1] + ' form(s) were left from before')
+    $worldArgs = @('--world-db', $lu.Db, '--world-uri', $lu.File)
+}
+
 $code = 1
 $why = ''
 try {
     # 2. The copy.
-    & $node (Join-Path $Here 'New-LoadServer.js') --from $root --out $work --shape $Shape --seats ([string]$most) --port ([string]$Port) --voice-port ([string]$VoicePort)
+    & $node (Join-Path $Here 'New-LoadServer.js') --from $root --out $work --shape $Shape --seats ([string]$most) --port ([string]$Port) --voice-port ([string]$VoicePort) @worldArgs
     if ($LASTEXITCODE -ne 0) {
         $why = 'the copy could not be laid out (above)'
     } else {
@@ -120,6 +145,12 @@ try {
 } finally {
     if (Test-Path -LiteralPath $work) {
         try { Remove-Item -LiteralPath $work -Recurse -Force } catch { Say ('the copy at ' + $work + ' could not be removed: ' + $_.Exception.Message) }
+    }
+    # The bots' characters, out of the load test's database as the copy goes.
+    if ($loadWorld) {
+        $e = Clear-ThornswoodScratchWorld $loadWorld
+        if ($e -like 'STOP|*') { Say ($e.Substring(5) + '. It holds the bots'' characters; the next run empties it first.'); if (-not $why) { $why = $e.Substring(5) } }
+        else { Say ($loadWorld.Db + ' emptied, ' + ($e -split '\|')[1] + ' form(s)') }
     }
 }
 if ($why) { Stop-Run $why }

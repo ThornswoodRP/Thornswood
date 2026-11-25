@@ -98,11 +98,44 @@ namespace Thornswood
             }
         }
 
-        public static void SetMode(string mode)
+        public static bool SetMode(string mode)
         {
-            if (mode == "Fullscreen") { Set("Fullscreen", "true"); Set("Borderless", "false"); }
-            else if (mode == "Windowed") { Set("Fullscreen", "false"); Set("Borderless", "false"); }
-            else { Set("Fullscreen", "false"); Set("Borderless", "true"); }
+            if (mode == "Fullscreen") return Set("Fullscreen", "true") & Set("Borderless", "false");
+            if (mode == "Windowed") return Set("Fullscreen", "false") & Set("Borderless", "false");
+            return Set("Fullscreen", "false") & Set("Borderless", "true");
+        }
+
+        /// <summary>
+        /// Writes the mode the launcher shows as Display Tweaks' own two lines,
+        /// before every Play.
+        ///
+        /// Display Tweaks takes the mode from its Fullscreen and Borderless
+        /// lines only when they are written out. Commented out, as the
+        /// collection ships them, it takes Skyrim's bFull Screen and
+        /// bBorderless from SkyrimPrefs.ini instead, and bFull Screen is 1 on
+        /// plenty of machines. Mode reads the commented lines as borderless, so
+        /// the launcher's Display page and its Play line said borderless while
+        /// the game ran in exclusive full screen, where a hang leaves a black
+        /// screen nothing can come in front of (#5946). With the lines written,
+        /// what Mode says is what Display Tweaks does.
+        ///
+        /// Returns the line for the log when it wrote them, or when it could
+        /// not; null when they already said the mode, or there is no Display
+        /// Tweaks to tell.
+        /// </summary>
+        public static string PinMode()
+        {
+            if (!Available) return null;
+            string mode = Mode;
+            bool full = mode == "Fullscreen", borderless = mode == "Borderless";
+            if (Get("Fullscreen") != null && GetBool("Fullscreen", false) == full
+                && Get("Borderless") != null && GetBool("Borderless", true) == borderless)
+                return null;
+            string name = mode == "Fullscreen" ? "exclusive full screen" : mode.ToLowerInvariant();
+            if (!SetMode(mode))
+                return "Could not write the display mode (" + name + ") into " + IniPath
+                     + ", so the game takes it from SkyrimPrefs.ini, which may be exclusive full screen.";
+            return "Wrote the display mode, " + name + ", into SSE Display Tweaks' settings, so the game runs in the mode the launcher shows and not whatever SkyrimPrefs.ini says.";
         }
 
         /// <summary>

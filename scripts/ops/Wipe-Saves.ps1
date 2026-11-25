@@ -108,7 +108,11 @@
   It does NOT delete anything. It stops the server, renames the storage out of
   the way with today's date on it, and starts the server again on an empty one.
   The old storage sits beside the new one for 30 days, which means a wipe you
-  regret at midnight is a rename away from being undone instead of gone. Then
+  regret at midnight is a rename away from being undone instead of gone. A
+  server that keeps its world in MongoDB (#6237) has it read out into the
+  same world-before-<stamp>\changeForms folder, one file per form, before the
+  database is emptied (World.ps1); undoing that one is Restore-Server.ps1's
+  step putting the folder back into the database. Then
   the game server's server-log.js deletes it, by the date in its name, and
   says so in server.log (#3620, Patrick's B: the privacy page says a
   character is kept until a wipe, and the copy is a character too).
@@ -172,6 +176,8 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 . (Join-Path $Here 'Release-List.ps1')
+# Where each server keeps its world (#6237): its world folder, or MongoDB.
+. (Join-Path $Here '..\deploy\World.ps1')
 # The hold it writes while the servers are stopped (#5155), so the watchdog
 # does not start them while their saves are moved.
 . (Join-Path $Here '..\vps\ServerHold.ps1')
@@ -221,6 +227,7 @@ Say "  on $Vps" 'DarkGray'
 Head 'What would go'
 $lines = Remote @"
 `$ErrorActionPreference = 'Continue'
+$ThornswoodWorld
 `$roots = @()
 foreach (`$d in (Get-ChildItem 'C:\' -Directory -EA SilentlyContinue)) {
   if (Test-Path (Join-Path `$d.FullName 'server-settings.json')) { `$roots += `$d.FullName }
@@ -257,7 +264,14 @@ foreach (`$r in `$roots) {
     'NAMEERR|' + `$r + '|' + ("`$(`$_.Exception.Message)" -replace '[|\r\n]', ' ')
   }
   if (`$taskOf.ContainsKey(`$r)) { 'TASK|' + `$r + '|' + `$taskOf[`$r] } else { 'NOTASK|' + `$r }
+  # A world in MongoDB is counted there; its server keeps no world folder.
+  `$w = Get-ThornswoodWorld `$r
+  if (`$w.Driver -eq 'mongodb') {
+    `$c = Get-ThornswoodWorldCount `$w
+    if (`$c -like 'COUNT|*') { 'ITEM|' + `$w.Db + ' in MongoDB|0|' + (`$c -split '\|')[1] } else { 'WORLDERR|' + `$r + '|' + (`$c.Substring(5) -replace '[|\r\n]', ' ') }
+  }
   foreach (`$n in @($movesLit)) {
+    if (`$n -eq 'world' -and `$w.Driver -eq 'mongodb') { continue }
     `$p = Join-Path `$r `$n
     if (-not (Test-Path `$p)) { 'NONE|' + `$n; continue }
     `$b = 0; `$c = 0
@@ -290,6 +304,7 @@ $nameOf = @{}
 foreach ($l in $lines) {
   $bits = "$l" -split '\|'
   if ($bits[0] -eq 'NAME') { $nameOf[$bits[1]] = $bits[2] }
+  if ($bits[0] -eq 'WORLDERR') { Die "The world of the server at $($bits[1]) could not be counted ($($bits[2])), so it is not known what a wipe would take. Nothing was wiped." }
   if ($bits[0] -eq 'NAMEERR') {
     # Unreadable settings could be the server asked for, so -Server stops
     # rather than leave it; with no -Server every folder goes anyway.
@@ -396,9 +411,27 @@ Head 'Moving the old storage aside'
 $moved = Remote @"
 `$ErrorActionPreference = 'Continue'
 $ThornswoodReleaseList
+$ThornswoodWorld
 foreach (`$r in @($rootsLit)) {
 `$failed = `$false
+# A world in MongoDB (#6237) is read out into world-before-<stamp>\changeForms,
+# the folder a file world is renamed to, and only then taken out of the
+# database (World.ps1), so the set-aside world is in the same place either way.
+`$w = Open-ThornswoodWorld `$r '$stamp'
+if (`$w.Stop) { `$failed = `$true; 'FAILED ' + `$r + '  ' + `$w.Stop }
+elseif (`$w.Driver -eq 'mongodb') {
+  `$before = Join-Path `$r 'world-before-$stamp\changeForms'
+  try {
+    [void][IO.Directory]::CreateDirectory(`$before)
+    foreach (`$f in @(Get-ChildItem -LiteralPath `$w.Forms -Filter *.json -File)) { Move-Item -LiteralPath `$f.FullName -Destination (Join-Path `$before `$f.Name) -EA Stop }
+    `$saved = Save-ThornswoodWorld `$w
+    if (`$saved -like 'STOP|*') { throw `$saved.Substring(5) }
+    Remove-Item -LiteralPath (Split-Path -Parent `$w.Forms) -Recurse -Force
+    'moved  ' + `$w.Db + ' in MongoDB  ->  ' + `$before + ' (' + `$saved + ')'
+  } catch { `$failed = `$true; 'FAILED ' + `$w.Db + ' in MongoDB  ' + `$_.Exception.Message }
+}
 foreach (`$n in @($movesLit)) {
+  if (`$n -eq 'world' -and `$w.Driver -eq 'mongodb') { continue }
   `$p = Join-Path `$r `$n
   if (-not (Test-Path `$p)) { continue }
   `$leaf = Split-Path -Leaf `$p
@@ -420,11 +453,11 @@ foreach (`$n in @($movesLit)) {
 if (`$failed) { 'RELEASENOTE|' + `$r + ': no release list, because the move did not finish' }
 else {
   `$cf = Join-Path `$r 'world-before-$stamp\changeForms'
-  `$files = @()
-  if (Test-Path -LiteralPath `$cf) {
-    `$files = @(Get-ChildItem -LiteralPath `$cf -Filter *.json -File | Where-Object { `$_.BaseName -match '^[0-9]+`$' } | ForEach-Object { `$_.FullName })
-  }
-  `$found = Get-ThornswoodCharacterIds `$files
+  # The characters by the one rule (#5168): a runtime form's hex name and a
+  # profileId above 0, so 1f.json is named as 12.json is.
+  `$chars = Get-ThornswoodCharacterForms `$cf
+  `$chars.notes
+  `$found = Get-ThornswoodCharacterIds `$chars.files
   `$found.notes
   # The lists set aside are carried: the requests, and what a server took and
   # had not finished (deleted-characters.taken.json, #4920), or was taking.
@@ -446,8 +479,16 @@ foreach ($l in $moved) {
   else { Say "  $l" 'Green' }
 }
 if ($bad) {
-  Say '  The server is stopped. Start it again from the panel or re-run once' 'Yellow'
-  Say '  whatever is holding those files has let go.' 'Yellow'
+  # A half-moved world never starts (#4196). Started, it came up with the
+  # characters gone and the other registers still the old world's, and a run
+  # again moved that fresh world aside too. So the servers stay stopped and
+  # held, the lines above say what moved and what did not, and the run ends 1.
+  $didMove = @($moved | Where-Object { "$_" -match '^moved  ' }).Count
+  $didNot = @($moved | Where-Object { "$_" -match '^FAILED' }).Count
+  Say ("  {0} moved aside and {1} not, so the servers are left stopped and held: none is started on a half-moved world." -f $didMove, $didNot) 'Red'
+  Say '  Put back what moved (each moved line above says where it went), let go of' 'Yellow'
+  Say '  whatever holds the files that failed, and run this again.' 'Yellow'
+  Die 'The move did not finish, so no server was started.'
 }
 
 Head 'Starting them again'

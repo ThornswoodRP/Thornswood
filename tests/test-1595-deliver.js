@@ -42,7 +42,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -59,7 +59,7 @@ const prop = slice(gm, '// ==== thornswood property ====', '// ==== end thornswo
 const SOCIAL = slice(gm, '// ==== thornswood social:', '// ==== end thornswood social ====');
 const character = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
 yes('the property, social and character blocks are in the gamemode', !!prop && !!SOCIAL && !!character);
-if (!prop || !SOCIAL || !character) { done(); }
+if (!prop || !SOCIAL || !character) { done(); return; }
 
 function fn(name) {
   const head = '\n  function ' + name + '(';
@@ -90,7 +90,7 @@ const seeding = (function () {
 const chargenLine = gm.split('\n').find(function (l) { return l.indexOf('const CHARGEN = ') === 0; });
 const PASSAGES = chargenLine ? JSON.parse(chargenLine.slice('const CHARGEN = '.length).replace(/;$/, '')).towns : null;
 yes('the fees, the ledgers, the seeding and the town table read', !!fees && !!holds && !!COMPANY && !!reads && !!seeding && !!PASSAGES);
-if (missing.length || !fees || !holds || !COMPANY || !reads || !seeding || !PASSAGES) { done(); }
+if (missing.length || !fees || !holds || !COMPANY || !reads || !seeding || !PASSAGES) { done(); return; }
 
 const GOLD = 15;
 const TAMRIEL = '3c:Skyrim.esm';
@@ -378,7 +378,7 @@ attempt('Write a letter', function () {
   const longest = ('/letter "' + 'x'.repeat(60) + '" ' + 'y'.repeat(300)).length;
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
   yes('B4 the longest line the form can send fits what the chat socket carries for a command (' + cap + ')',
-      /String\(msg\.text == null \? '' : msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
+      /pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
   // Run the branch: what it sends for a name with quotes and spaces in it.
   if (branch) {
     const sent = [];

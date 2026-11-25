@@ -1,17 +1,38 @@
 {
   "issue": 2841,
-  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180). 'reads' names the files and folders (a folder ends in /) of main that decide what the verb does on the box beyond its script, such as the keys Grant-BoxKey puts there: auto-merge holds a change to any of them for Patrick as it holds the script (scripts/ops/Auto-Merge.js, #5726).",
+  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180). 'reads' names the files and folders (a folder ends in /) of main that decide what the verb does on the box beyond its script, such as the keys Grant-BoxKey puts there: auto-merge holds a change to any of them for Patrick as it holds the script (scripts/ops/Auto-Merge.js, #5726). 'reads' names every file of code the verb's script runs as well, as scripts/ops/Verb-Files.js finds them: node scripts/ops/Verb-Files.js --write puts them in, and tests/test-6184-verb-files.js fails when a verb runs a file its reads does not name (#6184). 'onlyReads': true marks a verb that changes nothing on the box and only reads it: the broker's read lane runs it beside whatever else runs, from a checkout of its own, so a deploy or a content build never holds up a ping or a read (#6231); every other verb runs one at a time.",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+-]{0,159}$",
   "verbs": {
+    "Stage-MainGameplayPolicies": {
+      "script": "scripts/ops/Stage-MainGameplayPolicies.ps1",
+      "reads": [
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/ops/MainGameplayPolicies.ps1"
+      ],
+      "timeoutMinutes": 2,
+      "build": true,
+      "fixed": [],
+      "params": {}
+    },
     "Update-Gate": {
       "script": "scripts/vps/gate/Update-Gate.ps1",
+      "reads": [
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 5,
       "fixed": [],
       "params": {}
     },
     "Get-Logs": {
       "script": "scripts/vps/Get-Logs.ps1",
+      "reads": [
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 15,
+      "onlyReads": true,
       "fixed": ["-NoPause"],
       "out": "-Out",
       "params": {
@@ -22,6 +43,83 @@
     },
     "Deploy-DevGamemode": {
       "script": "scripts/deploy/Deploy-DevGamemode.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/Deploy-Server.ps1",
+        "scripts/deploy/DeployedBuild.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/GamemodeId.ps1",
+        "scripts/deploy/LastPluginOnBox.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/Reload.ps1",
+        "scripts/deploy/Remirror-Site-Feed.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerOrder.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Make-LastPlugin.py",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Discord-Hook.ps1",
+        "scripts/ops/Publish-Discord.ps1",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/BuildStamp.ps1",
+        "scripts/release/Feed-Json.ps1",
+        "scripts/release/Feed-News.ps1",
+        "scripts/release/Feed-Rules.ps1",
+        "scripts/release/Feed-Store.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Note-Repeats.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1",
+        "tools/ReleaseNotes/NoteRules.cs"
+      ],
       "timeoutMinutes": 45,
       "fixed": [],
       "params": {
@@ -37,11 +135,36 @@
         "Wait": "^[0-9]{1,4}$",
         "PutBack": "switch",
         "Restart": "switch",
-        "ShipFollows": "switch"
+        "ShipFollows": "switch",
+        "OrderOnly": "switch",
+        "At": "^[0-9a-f]{40}$"
       }
     },
     "Deploy-Docs": {
       "script": "scripts/deploy/Deploy-Docs.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/DocsPasswordFile.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/SiteConfigSet.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 45,
       "fixed": [],
       "params": {
@@ -54,6 +177,28 @@
     },
     "Install-Bot": {
       "script": "scripts/deploy/Install-Bot.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/Bot-Code.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Bot-Service.ps1",
+        "scripts/vps/BotService.cs",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/Write-BotToken.ps1",
+        "tools/ReleaseNotes/NoteRules.cs"
+      ],
       "timeoutMinutes": 30,
       "fixed": ["-CodeOnly", "-NoPause"],
       "params": {
@@ -63,6 +208,19 @@
     },
     "Install-AdminService": {
       "script": "scripts/deploy/Install-AdminService.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Bot-Service.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/admin.js"
+      ],
       "timeoutMinutes": 15,
       "fixed": ["-NoPause"],
       "params": {
@@ -72,6 +230,10 @@
     },
     "Deploy-Release": {
       "script": "scripts/deploy/Deploy-Release.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 40,
       "fixed": ["-NoPause"],
       "params": {
@@ -81,6 +243,13 @@
     },
     "Install-DeployAgent": {
       "script": "scripts/deploy/Install-DeployAgent.ps1",
+      "reads": [
+        "launcher/app/Signature.cs",
+        "launcher/app/Updater.cs",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 15,
       "fixed": ["-NoPause"],
       "params": {
@@ -95,6 +264,29 @@
     },
     "Install-Voice": {
       "script": "scripts/deploy/Install-Voice.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/deploy/VoiceSite.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 30,
       "fixed": ["-NoPause"],
       "params": {
@@ -104,8 +296,45 @@
         "PutBack": "switch"
       }
     },
+    "Set-DevVoiceSite": {
+      "script": "scripts/deploy/Install-Voice.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/deploy/VoiceSite.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
+      "timeoutMinutes": 10,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Root", "C:\\Thornswood-Voice-Dev", "-TaskName", "Thornswood Dev Voice", "-Port", "7789", "-Site", "http://127.0.0.1:3001", "-TaskOnly", "-NoPause"],
+      "params": {}
+    },
     "Request-Restart": {
       "script": "scripts/vps/Request-Restart.ps1",
+      "reads": [
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": [],
       "params": {
@@ -119,6 +348,13 @@
     },
     "Watch-Services": {
       "script": "scripts/vps/Watch-Services.ps1",
+      "reads": [
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-say-staff.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
@@ -127,6 +363,13 @@
     },
     "Watch-Load": {
       "script": "scripts/vps/Watch-Load.ps1",
+      "reads": [
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Read-Load.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-load.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
@@ -135,6 +378,12 @@
     },
     "Keep-RunnerLogs": {
       "script": "scripts/vps/Keep-RunnerLogs.ps1",
+      "reads": [
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-runner-logs.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
@@ -143,6 +392,11 @@
     },
     "Forecast-Storage": {
       "script": "scripts/vps/Forecast-Storage.ps1",
+      "reads": [
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
@@ -152,6 +406,11 @@
     },
     "Hold-Server": {
       "script": "scripts/vps/Hold-Server.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
       "fixed": ["-NoPause"],
       "params": {
@@ -165,6 +424,7 @@
     "Read-LauncherStarts": {
       "script": "scripts/vps/Read-LauncherStarts.ps1",
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [],
       "params": {
         "Days": "^[0-9]{1,3}$"
@@ -172,6 +432,21 @@
     },
     "Load-Test": {
       "script": "scripts/bot/Load-Box.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/bot/Bot-Pass.js",
+        "scripts/bot/Load-Test.js",
+        "scripts/bot/New-LoadServer.js",
+        "scripts/bot/bot.js",
+        "scripts/bot/character.js",
+        "scripts/bot/load-bots.js",
+        "scripts/bot/load-proxy.js",
+        "scripts/bot/load-sampler.js",
+        "scripts/bot/relay.js",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 45,
       "fixed": [],
       "out": "-Out",
@@ -180,18 +455,27 @@
         "Shape": "^(crowd|spread)$",
         "Steps": "^[0-9]{1,3}(,[0-9]{1,3}){0,7}$",
         "Hold": "^[0-9]{2,3}$",
-        "Play": "^(fight|host|trade)(,(fight|host|trade)){0,2}$"
+        "Play": "^(fight|host|trade|quest)(,(fight|host|trade|quest)){0,3}$"
       }
     },
     "Read-Online": {
       "script": "scripts/vps/Read-Online.ps1",
+      "reads": [
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
     "Check-LiveGamemode": {
       "script": "scripts/vps/Check-LiveGamemode.ps1",
+      "reads": [
+        "scripts/deploy/GamemodeId.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [
         "-NoPause"
       ],
@@ -199,7 +483,15 @@
     },
     "Check-ProdParity": {
       "script": "scripts/vps/Check-ProdParity.ps1",
+      "reads": [
+        "scripts/vps/Get-ProdFacts.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 15,
+      "onlyReads": true,
       "fixed": [
         "-Collect"
       ],
@@ -208,12 +500,20 @@
     },
     "Check-ServiceOwners": {
       "script": "scripts/vps/Check-ServiceOwners.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 20,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
     "Read-ServerHolders": {
       "script": "scripts/vps/Read-ServerHolders.ps1",
+      "reads": [
+        "scripts/deploy/StopAndMove.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": [],
       "params": {
@@ -226,6 +526,7 @@
     "Read-Availability": {
       "script": "scripts/vps/Read-Availability.ps1",
       "timeoutMinutes": 10,
+      "onlyReads": true,
       "fixed": [
         "-NoPause"
       ],
@@ -235,6 +536,11 @@
     },
     "Check-Site": {
       "script": "scripts/vps/Check-Site.ps1",
+      "reads": [
+        "launcher/app/Config.cs",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": [
         "-NoPause"
@@ -243,6 +549,19 @@
     },
     "Install-Bridge": {
       "script": "scripts/deploy/Install-Bridge.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/bridge/bridge.js",
+        "scripts/vps/bridge/ws.js"
+      ],
       "timeoutMinutes": 15,
       "fixed": [
         "-NoPause"
@@ -255,6 +574,15 @@
     },
     "Setup-Domain": {
       "script": "scripts/deploy/Setup-Domain.ps1",
+      "reads": [
+        "scripts/deploy/CloudflareRanges.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 20,
       "fixed": [],
       "params": {
@@ -264,6 +592,83 @@
     },
     "Publish-Server": {
       "script": "scripts/release/Publish-ServerOnBox.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/Deploy-Server.ps1",
+        "scripts/deploy/DeployedBuild.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/GamemodeId.ps1",
+        "scripts/deploy/Install-ThornswoodServer.ps1",
+        "scripts/deploy/LastPluginOnBox.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/Remirror-Site-Feed.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerOrder.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Make-LastPlugin.py",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/BuildStamp.ps1",
+        "scripts/release/EngineArtifact.ps1",
+        "scripts/release/Export-ServerPayload.ps1",
+        "scripts/release/Feed-Json.ps1",
+        "scripts/release/Feed-News.ps1",
+        "scripts/release/Feed-Rules.ps1",
+        "scripts/release/Feed-Store.ps1",
+        "scripts/release/ForkEngineBuild.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-EngineArtifact.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Publish-Server.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 45,
       "fixed": ["-Channel", "dev"],
       "params": {
@@ -275,6 +680,66 @@
     },
     "Deploy-Server": {
       "script": "scripts/deploy/Deploy-Server.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/DeployedBuild.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/GamemodeId.ps1",
+        "scripts/deploy/LastPluginOnBox.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerOrder.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Make-LastPlugin.py",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/BuildStamp.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 45,
       "build": true,
       "fixed": [],
@@ -293,6 +758,83 @@
     },
     "Publish-Server-Main": {
       "script": "scripts/release/Publish-ServerOnBox.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/Deploy-Server.ps1",
+        "scripts/deploy/DeployedBuild.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/GamemodeId.ps1",
+        "scripts/deploy/Install-ThornswoodServer.ps1",
+        "scripts/deploy/LastPluginOnBox.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/Remirror-Site-Feed.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/deploy/ServerOrder.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/Swap.ps1",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Make-LastPlugin.py",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/BuildStamp.ps1",
+        "scripts/release/EngineArtifact.ps1",
+        "scripts/release/Export-ServerPayload.ps1",
+        "scripts/release/Feed-Json.ps1",
+        "scripts/release/Feed-News.ps1",
+        "scripts/release/Feed-Rules.ps1",
+        "scripts/release/Feed-Store.ps1",
+        "scripts/release/ForkEngineBuild.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-EngineArtifact.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Publish-Server.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Name.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Server-Log.js",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 45,
       "build": true,
       "fixed": ["-Channel", "main"],
@@ -305,12 +847,30 @@
     },
     "Wipe-Dev": {
       "script": "scripts/ops/Wipe-Saves.ps1",
+      "reads": [
+        "scripts/deploy/World.ps1",
+        "scripts/ops/Release-List.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 15,
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
       "params": {}
     },
     "Reset-Npcs-Dev": {
       "script": "scripts/ops/Reset-Npcs.ps1",
+      "reads": [
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/ops/NpcReset.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 15,
       "afterDeploy": ["dev"],
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
@@ -320,6 +880,16 @@
     },
     "Reset-Npcs-Main": {
       "script": "scripts/ops/Reset-Npcs.ps1",
+      "reads": [
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/ops/NpcReset.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 15,
       "build": true,
       "fixed": ["-Server", "main", "-Yes", "-NoPause"],
@@ -327,20 +897,209 @@
         "Survey": "switch"
       }
     },
-    "Rebuild-ContentTables": {
-      "script": "scripts/mods/Rebuild-OnBox.ps1",
+    "Move-World-Dev": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Move-World-Main": {
+      "script": "scripts/ops/Move-World.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerReadyWait.ps1",
+        "scripts/deploy/StopAndMove.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/world.js"
+      ],
+      "timeoutMinutes": 40,
+      "build": true,
+      "fixed": ["-Server", "main", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Build-Content": {
+      "script": "scripts/mods/Build-ContentOnBox.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/dev/Build-CastTable.py",
+        "scripts/dev/Build-DoorTable.py",
+        "scripts/dev/Build-NpcPopulation.py",
+        "scripts/dev/Build-StationSites.py",
+        "scripts/dev/Build-WoodworkingBenches.py",
+        "scripts/dev/MerchantRoster.py",
+        "scripts/dev/OwnPlugins.ps1",
+        "scripts/dev/bsa.py",
+        "scripts/dev/gamemode_tables.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/Rebuild-ContentTables.ps1",
+        "scripts/mods/Run-OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 45,
       "fixed": [],
       "out": "-Out",
       "params": {
         "Server": "^(dev|main)$",
-        "Pull": "^[1-9][0-9]{0,5}$",
-        "Head": "^[0-9a-f]{40}$",
         "Stations": "switch"
       }
     },
     "Ship-Dev": {
       "script": "scripts/release/Ship-OnBox.ps1",
+      "reads": [
+        "launcher/app/Signature.cs",
+        "launcher/app/Updater.cs",
+        "launcher/app/VortexProfileState.cs",
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/Remirror-Site-Feed.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/dev/Check-Secrets.ps1",
+        "scripts/dev/Check-Words.ps1",
+        "scripts/dev/Close-Launcher.ps1",
+        "scripts/dev/OwnPlugins.js",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Audit-ModMenus.js",
+        "scripts/mods/Build-Generated.ps1",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/Check-SkyUIMenus.js",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Generated.ps1",
+        "scripts/mods/LoadOrder.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Discord-Hook.ps1",
+        "scripts/ops/Publish-Discord.ps1",
+        "scripts/ops/Read-Board.ps1",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Assert-PublishSigned.ps1",
+        "scripts/release/Build-Front.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Check-ShipReady.ps1",
+        "scripts/release/Close-ShippedIssues.ps1",
+        "scripts/release/CollectionRevision.ps1",
+        "scripts/release/Dev-News.ps1",
+        "scripts/release/EngineArtifact.ps1",
+        "scripts/release/Feed-Json.ps1",
+        "scripts/release/Feed-News.ps1",
+        "scripts/release/Feed-Rules.ps1",
+        "scripts/release/Feed-Store.ps1",
+        "scripts/release/ForkEngineBuild.ps1",
+        "scripts/release/Front.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-EngineArtifact.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/Go.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/New-FeedRoot.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/NexusPublished.ps1",
+        "scripts/release/Note-Repeats.ps1",
+        "scripts/release/Publish-PostShip.ps1",
+        "scripts/release/Publish-Update.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Refresh-DevNews.ps1",
+        "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Manifest.ps1",
+        "scripts/release/Release-Name.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/Setup-ShipMachine.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Ship-Rules.ps1",
+        "scripts/release/Ship.ps1",
+        "scripts/release/ShippedBytes.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Sign-OnGitHub.ps1",
+        "scripts/release/Sign-ReleaseCatalog.ps1",
+        "scripts/release/Source-Notice.ps1",
+        "scripts/release/Sync-Client.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Update-ShipRoot.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1",
+        "tools/ReleaseNotes/NoteRules.cs"
+      ],
       "timeoutMinutes": 45,
       "fixed": ["-Channel", "dev"],
       "params": {
@@ -352,6 +1111,108 @@
     },
     "Ship-Main": {
       "script": "scripts/release/Ship-OnBox.ps1",
+      "reads": [
+        "launcher/app/Signature.cs",
+        "launcher/app/Updater.cs",
+        "launcher/app/VortexProfileState.cs",
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/CollectionPlugins.ps1",
+        "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/Fresh-Checkout.ps1",
+        "scripts/deploy/LastPluginRecipe.ps1",
+        "scripts/deploy/MaxOnline.ps1",
+        "scripts/deploy/Remirror-Site-Feed.ps1",
+        "scripts/deploy/ServerArtifact.ps1",
+        "scripts/deploy/ServerBuild.ps1",
+        "scripts/deploy/ServerContent.ps1",
+        "scripts/dev/Check-Secrets.ps1",
+        "scripts/dev/Check-Words.ps1",
+        "scripts/dev/Close-Launcher.ps1",
+        "scripts/dev/OwnPlugins.js",
+        "scripts/dev/bsa.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Audit-ModMenus.js",
+        "scripts/mods/Build-Generated.ps1",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/Check-SkyUIMenus.js",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/Generated.ps1",
+        "scripts/mods/LoadOrder.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/ops/Discord-Hook.ps1",
+        "scripts/ops/Publish-Discord.ps1",
+        "scripts/ops/Read-Board.ps1",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/Set-Ref.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Assert-PublishSigned.ps1",
+        "scripts/release/Build-Front.ps1",
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Check-ShipReady.ps1",
+        "scripts/release/Close-ShippedIssues.ps1",
+        "scripts/release/CollectionRevision.ps1",
+        "scripts/release/Dev-News.ps1",
+        "scripts/release/EngineArtifact.ps1",
+        "scripts/release/Feed-Json.ps1",
+        "scripts/release/Feed-News.ps1",
+        "scripts/release/Feed-Rules.ps1",
+        "scripts/release/Feed-Store.ps1",
+        "scripts/release/ForkEngineBuild.ps1",
+        "scripts/release/Front.ps1",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-EngineArtifact.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/Go.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/New-FeedRoot.ps1",
+        "scripts/release/Nexus-Run.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/NexusPublished.ps1",
+        "scripts/release/Note-Repeats.ps1",
+        "scripts/release/Publish-PostShip.ps1",
+        "scripts/release/Publish-Update.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Refresh-DevNews.ps1",
+        "scripts/release/Release-Baseline.ps1",
+        "scripts/release/Release-Manifest.ps1",
+        "scripts/release/Release-Name.ps1",
+        "scripts/release/RepoPlugins.ps1",
+        "scripts/release/Setup-ShipMachine.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Ship-Rules.ps1",
+        "scripts/release/Ship.ps1",
+        "scripts/release/ShippedBytes.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Sign-OnGitHub.ps1",
+        "scripts/release/Sign-ReleaseCatalog.ps1",
+        "scripts/release/Source-Notice.ps1",
+        "scripts/release/Sync-Client.ps1",
+        "scripts/release/Update-Checkout.ps1",
+        "scripts/release/Update-ShipRoot.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/Request-Restart.ps1",
+        "scripts/vps/Restart-Server.ps1",
+        "scripts/vps/RestartNotice.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1",
+        "tools/ReleaseNotes/NoteRules.cs"
+      ],
       "timeoutMinutes": 45,
       "build": true,
       "fixed": ["-Channel", "main"],
@@ -364,6 +1225,9 @@
     },
     "Send-Backups": {
       "script": "scripts/vps/Send-Backups.ps1",
+      "reads": [
+        "scripts/vps/Restore-Backup.ps1"
+      ],
       "timeoutMinutes": 30,
       "fixed": ["-NoPause"],
       "params": {
@@ -380,16 +1244,36 @@
     },
     "Rehearse-Restore": {
       "script": "scripts/vps/Rehearse-OnBox.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/bot/Check-Character.js",
+        "scripts/bot/bot.js",
+        "scripts/bot/character.js",
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServerOrder.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/vps/Restore-Backup.ps1",
+        "scripts/vps/Restore-Server.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 40,
       "fixed": ["-NoPause"],
       "params": {
         "Which": "^(live|dev)$",
-        "ProfileId": "^[0-9]{1,10}$"
+        "ProfileId": "^[0-9]{1,10}$",
+        "Reorder": "switch"
       },
       "out": "-Out"
     },
     "Set-InboundRules": {
       "script": "scripts/vps/Set-InboundRules.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-firewall-policy.ps1",
+        "scripts/vps/vps-inbound-rules.ps1"
+      ],
       "timeoutMinutes": 15,
       "fixed": ["-NoPause"],
       "params": {
@@ -399,6 +1283,13 @@
     },
     "Setup-Discord": {
       "script": "scripts/deploy/Setup-Discord.ps1",
+      "reads": [
+        "scripts/ops/Discord-Hook.ps1",
+        "scripts/vps/Remote.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 20,
       "fixed": ["-OnBox"],
       "params": {
@@ -408,23 +1299,44 @@
     },
     "Renew-BoxKey": {
       "script": "scripts/vps/Renew-BoxKey.ps1",
+      "reads": [
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
-        "Which": "^(desk|notices)$"
+        "Which": "^desk$"
       }
     },
     "Grant-BoxKey": {
       "script": "scripts/vps/Grant-BoxKey.ps1",
       "timeoutMinutes": 5,
       "fixed": ["-NoPause"],
-      "reads": ["scripts/vps/box-keys/"],
+      "reads": [
+        "scripts/vps/box-keys/",
+        "scripts/vps/Vps.ps1"
+      ],
       "params": {
         "Name": "^[a-z0-9][a-z0-9-]{0,31}$"
       }
     },
     "Install-Runner": {
       "script": "scripts/deploy/Install-Runner.ps1",
+      "reads": [
+        "scripts/vps/BoxFirewall.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/admin/ShipAccess.ps1",
+        "scripts/vps/admin/admin.js",
+        "scripts/vps/admin/ops-access.js",
+        "scripts/vps/admin/ship-access.js"
+      ],
       "timeoutMinutes": 45,
       "fixed": ["-FromGate", "-AllowHost", "pypi.org,files.pythonhosted.org,registry.npmjs.org", "-NoPause"],
       "params": {
@@ -434,8 +1346,32 @@
         "NetworkOnly": "switch"
       }
     },
+    "Install-Mongo": {
+      "script": "scripts/deploy/Install-Mongo.ps1",
+      "reads": [
+        "scripts/deploy/Mongo.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/mongo-users.js"
+      ],
+      "timeoutMinutes": 30,
+      "fixed": ["-FromGate", "-NoPause"],
+      "params": {
+        "Status": "switch"
+      }
+    },
     "Install-Backup": {
       "script": "scripts/deploy/Install-Backup.ps1",
+      "reads": [
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/deploy/World.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-nightly-backup.ps1",
+        "scripts/vps/world.js"
+      ],
       "timeoutMinutes": 20,
       "fixed": ["-FromGate", "-NoPause"],
       "params": {
@@ -456,13 +1392,21 @@
     },
     "Check-Roster": {
       "script": "scripts/ops/Check-Roster.ps1",
+      "reads": [
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
     "Chargen-Log": {
       "script": "scripts/ops/Chargen-Log.ps1",
+      "reads": [
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {
         "Lines": "^[0-9]{1,4}$"
@@ -470,32 +1414,70 @@
     },
     "Check-Load": {
       "script": "scripts/vps/Check-Load.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": ["-NoPause"],
       "params": {}
     },
     "Check-ServerPriority": {
       "script": "scripts/vps/Check-ServerPriority.ps1",
+      "reads": [
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 5,
+      "onlyReads": true,
       "fixed": [],
       "params": {}
     },
     "Rotate-ServerPassword": {
       "script": "scripts/deploy/Rotate-ServerPassword.ps1",
+      "reads": [
+        "scripts/deploy/SiteConfigSet.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-Yes"],
       "params": {}
     },
     "Set-WebFirewall": {
       "script": "scripts/vps/Set-WebFirewall.ps1",
+      "reads": [
+        "scripts/deploy/CloudflareRanges.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/vps-web-firewall.ps1"
+      ],
       "timeoutMinutes": 10,
       "fixed": ["-OnTheBox", "-NoPause"],
       "params": {
-        "Check": "switch"
+        "Check": "switch",
+        "Close": "switch"
       }
     },
     "Install-Tunnel": {
       "script": "scripts/deploy/Install-Tunnel.ps1",
+      "reads": [
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/ops/Sealed.ps1",
+        "scripts/ops/WorkflowRun.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LogHandBack.ps1",
+        "scripts/vps/Box-Run.ps1",
+        "scripts/vps/Seal.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/ServerHold.ps1",
+        "scripts/vps/Vps.ps1",
+        "scripts/vps/gate/Gate.ps1",
+        "scripts/vps/gate/GateBroker.ps1",
+        "scripts/vps/gate/GateRules.ps1"
+      ],
       "timeoutMinutes": 15,
       "fixed": ["-NoPause"],
       "params": {

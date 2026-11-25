@@ -35,7 +35,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function throws(f, re) {
   try { f(); return false; } catch (e) { return re.test(String(e && e.message)); }
@@ -116,7 +116,7 @@ const DAY = 86400000;
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 let stallBlock = slice(gm, '// ==== thornswood market stalls ====', '// ==== end thornswood market stalls ====');
 yes('the property block and the market stalls block are in the gamemode', !!propBlock && !!stallBlock);
-if (!propBlock || !stallBlock) { done(); }
+if (!propBlock || !stallBlock) { done(); return; }
 const TABLE = [
   { id: 'whiterun-1', hold: 'whiterun', place: 'Whiterun market', world: '3c:Skyrim.esm', pos: [0, 0, 0], reach: 200 },
   { id: 'riften-1', hold: 'riften', place: 'Riften market', world: '3c:Skyrim.esm', pos: [100000, 0, 0], reach: 200 }
@@ -453,13 +453,20 @@ yes('W4 the front plugin loads the panel, lets its focus go, and puts the line u
     /'thornswood-stall\.js'/.test(front) && /stall: 'thornswoodStall'/.test(front) && /what === 'stall:opened'/.test(front) &&
     /what === 'stall:closed'/.test(front) && /return lockKeyRef\(\) \|\| stallNow\(\);/.test(front) && /verb: 'stall open'/.test(front));
 const table = JSON.parse(read(path.join(REPO_DIR, 'game', 'data', 'market-stalls.json'))).stalls;
-const spots = /const STALL_SPOTS = \[([\s\S]*?)\];/.exec(front);
-yes('W5 the front plugin\'s stalls are the table\'s, row for row', !!spots &&
-    (spots[1].match(/\[/g) || []).length === table.length &&
-    table.every(function (t) { return spots[1].indexOf(JSON.stringify(t.id)) >= 0; }));
-let bundled = '';
-try { bundled = require('child_process').execFileSync(process.execPath, [path.join(REPO_DIR, 'scripts', 'dev', 'Build-MarketStallsGamemode.js'), '--check'], { encoding: 'utf8' }); }
-catch (e) { bundled = String(e.stdout || '') + String(e.message || ''); }
-yes('W6 the bundle in the gamemode and both tables are not stale', /^PASS/.test(bundled));
+// The stalls are the client table STALL_SPOTS since #5191, a plugin of its
+// own (scripts/dev/ClientTables.js) that stallAt reads as clientTable().
+let spots = null;
+try { spots = require('../scripts/dev/ClientTables.js').read('STALL_SPOTS'); } catch (e) { spots = null; }
+yes('W5 the front plugin\'s stalls are the table\'s, row for row', Array.isArray(spots) &&
+    /const STALL_SPOTS = clientTable\('STALL_SPOTS'\);/.test(front) &&
+    spots.length === table.length &&
+    table.every(function (t, i) { return spots[i][0] === t.id; }));
+// The bundle is game code and the tables are content, built apart (#6195).
+function checked(tool) {
+  try { return require('child_process').execFileSync(process.execPath, [path.join(REPO_DIR, 'scripts', 'dev', tool), '--check'], { encoding: 'utf8' }); }
+  catch (e) { return String(e.stdout || '') + String(e.message || ''); }
+}
+yes('W6 the bundle in the gamemode is not stale', /^PASS/.test(checked('Build-MarketStallsGamemode.js')));
+yes('W7 both stall tables are not stale', /^PASS/.test(checked('Build-MarketStallTables.js')));
 
 done();
