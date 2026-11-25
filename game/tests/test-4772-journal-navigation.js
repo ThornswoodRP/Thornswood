@@ -67,6 +67,7 @@ for(const change of ['text','identity']){
  yes('matching live words with an uncertain save remain guarded',p.field('text').value==='NEWER-B'&&!p.button('leave-choice').hidden);
  const before=p.sent.length;p.state.journalSave.status='saved';p.feed();
  yes('a matching accepted save cancels the choice without navigating or sending again',p.field('text').value==='NEWER-B'&&p.button('leave-choice').hidden&&p.sent.length===before);
+ yes('a save that closes the focused choice returns focus to the current page editor',p.doc.activeElement===p.field('text'));
 }
 {
  const p=rig(),saveButton=p.doc.querySelector('[data-do="save"]'),staleSave=saveButton.onclick,before=p.sent.length;
@@ -85,12 +86,26 @@ for(const [verb,prefix]of [['newpage','/journal-write-v1 '],['dropbook','/journa
  const p=rig(),before=p.sent.length;p.choose('[data-new="1"]');
  yes('new journal waits for an explicit discard before its existing command',p.sent.length===before&&!p.button('leave-choice').hidden);
  p.button('discard').click();yes('new journal uses its original command and throttle once',p.sent.length===before+1&&p.sent.at(-1)==='/journal new Journal'&&p.field('text').value==='SAVED-ONE');
+ p.type('Later draft','LATER DRAFT');p.choose('[data-new="1"]');p.button('discard').click();
+ yes('a throttle that declines a second journal creation leaves its draft intact',p.sent.length===before+1&&p.field('text').value==='LATER DRAFT');
+}
+for(const selector of ['[data-new="1"]','[data-do="newpage"]','[data-do="dropbook"]']){
+ const p=rig();p.win.thornswoodNet={say:()=>false,state:()=>({queued:0})};
+ p.choose(selector);p.button('discard').click();
+ yes('an unsent command preserves the draft and its editor focus ('+selector+')',p.field('text')&&p.field('text').value.startsWith('DRAFT')&&p.doc.activeElement===p.field('text'));
 }
 {
  const p=rig();p.state.journals[0].pages.shift();p.feed();
  yes('a removed source page keeps its draft readable even when the book remains',p.field('text').value.startsWith('DRAFT'));
  p.choose('[data-book="j1"]');p.button('discard').click();p.choose('[data-page="p2"]');
  yes('the remaining book can be revisited after explicit discard of its removed page',p.field('text').value==='SAVED-TWO');
+}
+{
+ const p=rig(),body=p.field('text');body.focus();
+ const removed=p.state.journals[0].pages.shift();p.feed();
+ yes('a withdrawn page disables Save while keeping the draft',p.doc.querySelector('[data-do="save"]').disabled&&p.field('text').value.startsWith('DRAFT'));
+ p.state.journals[0].pages.unshift(removed);p.feed();
+ yes('a returned page restores Save and leaves the same draft focused',!p.doc.querySelector('[data-do="save"]').disabled&&p.field('text').value.startsWith('DRAFT')&&p.doc.activeElement===p.field('text'));
 }
 {
  const p=rig(),title=p.field('ptitle');title.focus();p.fire(title,'focusin','');

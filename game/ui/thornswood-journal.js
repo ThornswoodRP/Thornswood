@@ -314,19 +314,19 @@
     openGroup = '';
     var now = Date.now();
     if (newQueued) {
-      if (queued() > 0) { return; }
+      if (queued() > 0) { return false; }
       // It has left since the last press: wait for its answer from now.
       newQueued = false;
       newAt = now;
-      return;
+      return false;
     }
-    if (newAt && now - newAt < NEW_WAIT_MS) { return; }
+    if (newAt && now - newAt < NEW_WAIT_MS) { return false; }
     newAt = now;
     newFrom = books().length;
     var went = net('/journal new Journal');
     if (went === 'queued') { newQueued = true; }
     else if (!went) { newAt = 0; }
-    return;
+    return !!went;
   }
 
   function rememberEditor(ev) {
@@ -359,9 +359,12 @@
     }
   }
 
-  function leavePage(run, valid) {
+  function leavePage(run, valid, submit) {
     leaveNotice = '';
-    if (!pageDraft) { if (!valid || valid()) run(); return; }
+    if (!pageDraft) {
+      if ((!valid || valid()) && (!submit || submit()) && run) run();
+      return;
+    }
     var field = root.querySelector('#' + ID + '-' + lastEdit);
     var selection = field && typeof field.selectionStart === 'number' ?
       {start:field.selectionStart,end:field.selectionEnd,direction:field.selectionDirection} : null;
@@ -374,7 +377,11 @@
       if (intent.valid && !intent.valid()) {
         cancelLeave(true); leaveNotice = 'That destination changed. Your unsaved page is still here. '; drawJournalFoot(); return;
       }
-      cancelLeave(false); pageDraft = null; draw(); intent.run();
+      if (submit && !submit()) {
+        cancelLeave(true); leaveNotice = 'Could not continue yet. Your unsaved page is still here. '; drawJournalFoot(); return;
+      }
+      cancelLeave(false); pageDraft = null; draw();
+      if (intent.run) intent.run();
       if (shown) {
         var target = root.querySelector('#' + ID + '-' + lastEdit) || root.querySelector('button[data-page]') || root.querySelector('#' + ID + '-main');
         if (target) { if (!typing(target) && target.tagName !== 'BUTTON') target.tabIndex = -1; target.focus(); }
@@ -444,7 +451,7 @@
             renamed on the panel, which is one more click and cannot strand
             anybody.
           */
-          leavePage(newJournal);
+          leavePage(null, null, newJournal);
           return;
         }
         if (this.getAttribute('data-shared') !== null) {
@@ -934,7 +941,11 @@
     var book = bookOf(pageDraft.journalId), page = book && pageOf(book, pageDraft.pageId);
     if (answer && answer.status === 'saved' && answer.journalId === pageDraft.journalId &&
         answer.pageId === pageDraft.pageId && answer.title === pageDraft.title && answer.text === pageDraft.text &&
-        page && page.title === pageDraft.title && page.text === pageDraft.text) { pageDraft = null; cancelLeave(false); }
+        page && page.title === pageDraft.title && page.text === pageDraft.text) {
+      if (pendingLeave) cancelLeave(leaveChoice.contains(document.activeElement));
+      pageDraft = null;
+      if (shown) drawJournalFoot();
+    }
   }
 
   function drawJournalFoot() {
@@ -963,7 +974,8 @@
       return;
     }
     if (verb === 'newpage') {
-      leavePage(function () { net('/journal-write-v1 ' + JSON.stringify([book.id, '', 'New page', ''])); }, function () { return !!bookOf(book.id); });
+      leavePage(null, function () { return !!bookOf(book.id); },
+        function () { return !!net('/journal-write-v1 ' + JSON.stringify([book.id, '', 'New page', ''])); });
       return;
     }
     if (verb === 'save') {
@@ -985,7 +997,9 @@
       return;
     }
     if (verb === 'dropbook') {
-      leavePage(function () { net('/journal drop ' + book.id); openBook = ''; draw(); }, function () { return !!bookOf(book.id); }); return;
+      leavePage(function () { openBook = ''; draw(); }, function () { return !!bookOf(book.id); },
+        function () { return !!net('/journal drop ' + book.id); });
+      return;
     }
     if (verb === 'sharebook') {
       if (!who) { sayNeedFriend(); return; }
@@ -1068,9 +1082,9 @@
       draw();
     },
     setData: function (d) {
+      var sourceWasMissing = draftSourceMissing();
       data = d || null;
       reconcileDraft();
-      if (shown && draftSourceMissing()) { drawMain(); drawJournalFoot(); }
       // The new journal has arrived, so New answers the next press again.
       if ((newAt || newQueued) && books().length !== newFrom) { newAt = 0; newFrom = -1; newQueued = false; }
       /*
@@ -1080,6 +1094,7 @@
         while it has focus.
       */
       if (!shown) { return; }
+      if (sourceWasMissing || draftSourceMissing()) { draw(); return; }
       var el = document.activeElement;
       if (el && root && root.contains && root.contains(el) && typing(el)) { return; }
       draw();

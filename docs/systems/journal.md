@@ -26,7 +26,8 @@ checked or saved it; a matching live copy alone is not a save receipt.
 Before leaving an unsaved page for another page, book, shared book, group or
 board, the panel asks whether to Keep editing or Discard and continue. Keep
 editing returns to the draft and its cursor. Typing cancels a pending discard
-choice; a changed destination must be chosen again. Nothing is saved or sent
+choice. A changed destination or a command that could not be sent leaves the
+draft intact. Nothing is saved or sent
 again by this choice.
 
 Closing and reopening the panel keeps the current draft in the same browser.
