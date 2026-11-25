@@ -77,12 +77,16 @@ bot.OPEN_TICKETS = os.path.join(TMP, 'open-tickets.json')
 # bot/README.md say it. A command or a button that is not in here fails below.
 STAFF = 'staff'                    # is_staff: STAFF_ROLES, by id or name
 TASKS = 'test task poster'         # is_task_poster: TEST_TASK_ROLES
+FORUM = 'test forum reader'        # Discord forum View Channel and Read Message History
 ANYBODY = 'anybody'                # somebody's own button, with its own limits
 GATED = (STAFF, TASKS)
 
 COMMANDS = {
     'close': STAFF,
     'test-task': TASKS,
+    # Read-only. The real callback's permitted and refused viewers are
+    # exercised alongside forum setup in test-testing-channels.py.
+    'test-queue': FORUM,
 }
 
 # Persistent buttons and menus, by their custom_id. One ending in a colon is
