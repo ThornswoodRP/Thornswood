@@ -44,7 +44,11 @@
         window.thornswoodNet.say(line);
         return true;
       }
-    } catch (e) { }
+    } catch (e) {
+      // The bridge may have queued the line before another callback threw.
+      // Delivery is unknown, so a deposit must still await its own receipt.
+      return null;
+    }
     return false;
   }
 
@@ -244,7 +248,7 @@
       goldPending = pending;
       goldNotice = '';
       draw(); // Feedback precedes the send, including a synchronous bridge reply.
-      if (!net('/dropbox gold ' + amount + ' ' + pending.request)) {
+      if (net('/dropbox gold ' + amount + ' ' + pending.request) === false) {
         goldPending = null;
         goldNotice = 'The gold request could not be sent. Please try again.';
         draw();

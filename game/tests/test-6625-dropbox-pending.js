@@ -86,6 +86,10 @@ for(const key of ['Enter',' ']){
   yes('a queued transport result still waits because false can mean queued',p.sent.length===1&&p.waiting());
 }
 {
+  const p=rig();p.win.thornswoodNet.say=line=>{p.sent.push(line);throw Error('notification failed after queuing');};p.click();p.click();
+  yes('a transport exception after accepting a line cannot permit another deposit',p.sent.length===1&&p.waiting());
+}
+{
   const p=rig(),input=p.doc.getElementById('ts-box-gold');
   p.fire(input,'keydown','Enter');p.fire(input,'keydown','Enter',{repeat:true});
   yes('Enter in the amount field shares the same single pending deposit',p.sent.length===1&&p.waiting());
