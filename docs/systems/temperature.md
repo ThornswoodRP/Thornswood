@@ -246,7 +246,11 @@ or a server restart.
 
 ## Water
 
-Only while swimming or wading.
+Only while swimming or wading. Wading follows a placed water plane's actual
+rotation and scale. Its surface must be above the feet and less than 70 game
+units above them; standing beside its transformed edge or above its surface
+is dry. A reference whose current transform cannot be read supplies no guessed
+water footprint.
 
 | Class | On top of the water place |
 | --- | --- |
