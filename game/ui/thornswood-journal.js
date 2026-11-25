@@ -48,6 +48,8 @@
   var editing = false;
   var pageDraft = null; // only the currently selected owned page
   var pendingLeave = null, leaveChoice = null, lastEdit = 'text', leaveNotice = '';
+  var destructiveArm = null, destructiveTimer = 0, destructiveHeld = '';
+  var DESTRUCTIVE_ARM_MS = 5000; // The same second-press window as Office.
   var readingShared = -1;
   var openGroup = '';
   var onBoards = false;  // the Boards tab is what the right side shows (issue 1627)
@@ -247,6 +249,27 @@
     leaveChoice = root.querySelector('#' + ID + '-leave-choice'); leaveChoice.hidden = true;
     root.addEventListener('focusin', rememberEditor);
     root.addEventListener('focusout', rememberEditor);
+    root.addEventListener('input', resetDestructive);
+    root.addEventListener('click', function (ev) {
+      if (destructiveArm && ev.target !== destructiveArm.button) resetDestructive();
+    }, true);
+    root.addEventListener('keydown', function (ev) {
+      if (shown && destructiveHeld && (ev.key === 'Enter' || ev.key === ' ')) {
+        ev.preventDefault(); ev.stopPropagation(); return;
+      }
+      var button = ev.target;
+      if (!shown || !button || button.tagName !== 'BUTTON' ||
+          (button.getAttribute('data-do') !== 'dropbook' && button.getAttribute('data-g') !== 'disband' &&
+           button.id !== ID + '-discard') || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.repeat || destructiveHeld) return;
+      destructiveHeld = ev.key;
+      button.click();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (ev.key === destructiveHeld) { destructiveHeld = ''; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', function () { destructiveHeld = ''; resetDestructive(); });
     root.querySelector('#' + ID + '-close').onclick = close;
     // Help, beside Close (#1633): the help panel on its People topic, which
     // has journals and group books, and this one put down; the help opens
@@ -273,6 +296,7 @@
       if (ev.key === 'Escape') {
         ev.preventDefault();
         if (ev.repeat) return;
+        if (destructiveArm) { resetDestructive(); return; }
         if (pendingLeave) cancelLeave(true); else close();
         return;
       }
@@ -340,6 +364,32 @@
     }
   }
 
+  function resetDestructive() {
+    if (destructiveArm) destructiveArm.button.textContent = destructiveArm.text;
+    destructiveArm = null;
+    if (destructiveTimer) clearTimeout(destructiveTimer);
+    destructiveTimer = 0;
+  }
+
+  // A mounted control and an unchanged authoritative view, never a cached
+  // command alone. A redraw or changed ownership cannot inherit an arm.
+  function confirmDestructive(button, current, wording, send) {
+    if (!shown || !root.contains(button)) return;
+    var target = current();
+    if (!target) { resetDestructive(); return; }
+    var snapshot = JSON.stringify(target);
+    var again = destructiveArm && destructiveArm.button === button &&
+      destructiveArm.snapshot === snapshot && Date.now() < destructiveArm.until;
+    resetDestructive();
+    if (again) { send(); return; }
+    var armed = {button:button,text:button.textContent,snapshot:snapshot,until:Date.now()+DESTRUCTIVE_ARM_MS};
+    destructiveArm = armed;
+    button.textContent = 'Press again to ' + wording;
+    destructiveTimer = setTimeout(function () {
+      if (destructiveArm === armed) resetDestructive();
+    }, DESTRUCTIVE_ARM_MS);
+  }
+
   function cancelLeave(focus) {
     var intent = pendingLeave;
     pendingLeave = null;
@@ -359,7 +409,7 @@
     }
   }
 
-  function leavePage(run, valid, submit) {
+  function leavePage(run, valid, submit, destructiveTitle) {
     leaveNotice = '';
     if (!pageDraft) {
       if ((!valid || valid()) && (!submit || submit()) && run) run();
@@ -371,6 +421,9 @@
     var intent = {draft:pageDraft,run:run,valid:valid,editor:lastEdit,selection:selection};
     pendingLeave = intent; leaveChoice.hidden = false;
     var keep = root.querySelector('#' + ID + '-keep'), discard = root.querySelector('#' + ID + '-discard');
+    root.querySelector('#' + ID + '-leave-title').textContent = destructiveTitle ?
+      'Throw away "' + destructiveTitle + '" and its unsaved changes?' : 'Discard unsaved page changes before leaving this page?';
+    discard.textContent = destructiveTitle ? 'Throw away journal and unsaved changes' : 'Discard and continue';
     keep.onclick = function () { if (pendingLeave === intent) cancelLeave(true); };
     discard.onclick = function () {
       if (pendingLeave !== intent || pageDraft !== intent.draft) return;
@@ -763,7 +816,14 @@
       net('/book rename ' + book.id + ' ' + next);
       return;
     }
-    if (verb === 'disband') { net('/book disband ' + book.id); openGroup = ''; return; }
+    if (verb === 'disband') {
+      confirmDestructive(this, function () {
+        var current = groupBook(); return current && current.id === book.id && current.owner ? current : null;
+      }, 'disband "' + book.name + '"', function () {
+        if (net('/book disband ' + book.id)) { openGroup = ''; draw(); }
+      });
+      return;
+    }
     if (verb === 'price') {
       var item = gval('price-name');
       if (!item) { return; }
@@ -912,7 +972,7 @@
     }
     var acts = main.querySelectorAll('button[data-do]');
     for (var r = 0; r < acts.length; r++) {
-      acts[r].onclick = function () { act(this.getAttribute('data-do'), book); };
+      acts[r].onclick = function () { act(this.getAttribute('data-do'), book, this); };
     }
     if (page) {
       var titleField = root.querySelector('#' + ID + '-ptitle');
@@ -964,7 +1024,7 @@
     return el ? String(el.value || '') : '';
   }
 
-  function act(verb, book) {
+  function act(verb, book, button) {
     book = book && bookOf(book.id);
     if (!book || (verb === 'save' && !pageOf(book, openPage))) { drawJournalFoot(); return; }
 
@@ -997,8 +1057,19 @@
       return;
     }
     if (verb === 'dropbook') {
-      leavePage(function () { openBook = ''; draw(); }, function () { return !!bookOf(book.id); },
-        function () { return !!net('/journal drop ' + book.id); });
+      if (!shown || !root.contains(button)) return;
+      var snapshot = JSON.stringify(book);
+      var current = function () { return openBook === book.id ? bookOf(book.id) : null; };
+      var send = function () { return !!net('/journal drop ' + book.id); };
+      if (pageDraft) {
+        resetDestructive();
+        leavePage(function () { openBook = ''; draw(); }, function () { return JSON.stringify(current()) === snapshot; },
+          send, book.title);
+      } else {
+        confirmDestructive(button, current, 'throw away "' + book.title + '"', function () {
+          if (send()) { openBook = ''; draw(); }
+        });
+      }
       return;
     }
     if (verb === 'sharebook') {
@@ -1026,6 +1097,7 @@
 
   function drawContents() {
     if (!root || !shown) { return; }
+    resetDestructive();
     drawSide();
     drawMain();
     drawJournalFoot();
@@ -1044,6 +1116,7 @@
 
   function close() {
     if (!shown) { return; }
+    resetDestructive(); destructiveHeld = '';
     shown = false; cancelLeave(false);
     if (root) { root.className = ''; }
     tell('closed');
@@ -1082,6 +1155,7 @@
       draw();
     },
     setData: function (d) {
+      resetDestructive();
       var sourceWasMissing = draftSourceMissing();
       data = d || null;
       reconcileDraft();
