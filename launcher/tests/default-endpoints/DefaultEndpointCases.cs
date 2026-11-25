@@ -50,7 +50,7 @@ static unsafe class DefaultEndpointCases {
   hr=((delegate* unmanaged[MemberFunction]<void*,int,int,char*,int>)retainedVtable[6])((void*)retained,VoiceCom.eRender,VoiceCom.eConsole,null);
   Check("Windows can still call the stopped callback after failed detach",hr==0&&retry.Changes.Version(VoiceCom.eRender)==stoppedVersion);
   retry.Dispose();Check("a failed detach retries with the original pointer",attempts==2&&samePointer);
-  Console.WriteLine(pass+" passed, "+fail+" failed");return fail==0?0:1;
+  Console.WriteLine(pass+" passed, "+fail+" failed");return fail + VoiceEndpointWorkerCases.Run() == 0 ? 0 : 1;
  }
  static uint ReferenceCount(nint pointer){void** table=*(void***)pointer;uint count=((delegate* unmanaged[MemberFunction]<void*,uint>)table[1])((void*)pointer);((delegate* unmanaged[MemberFunction]<void*,uint>)table[2])((void*)pointer);return count;}
 }

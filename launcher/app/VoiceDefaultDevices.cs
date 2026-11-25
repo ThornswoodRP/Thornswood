@@ -126,4 +126,83 @@ namespace Thornswood
             if (p != 0) ComInterfaceMarshaller<IVoiceEndpointNotifications>.Free((void*)p);
         }
     }
+
+    interface IVoiceEndpoint : IDisposable
+    {
+        string Id { get; }
+        IVoiceEndpointStream Start(out int result);
+    }
+
+    interface IVoiceEndpointStream : IDisposable
+    {
+        WaitHandle Ready { get; }
+        int Process();
+    }
+
+    // Runs on a single capture or playback thread. Open a replacement while
+    // the old stream is still valid and switch only after Windows starts it.
+    static class VoiceEndpointWorker
+    {
+        // Some invalidated streams stop signaling before returning the error.
+        const int ProbeMilliseconds = 200;
+        const int RetryMilliseconds = 500;
+
+        public static int Run(int flow, WaitHandle stopping, DefaultEndpointChanges changes,
+            Func<IVoiceEndpoint> select, Action<int> replacementFailed)
+        {
+            long seen = changes?.Version(flow) ?? 0, attempted = seen, retryAt = 0;
+            IVoiceEndpointStream active = null;
+            try
+            {
+                string activeId;
+                using (var initial = select())
+                {
+                    if (initial == null || stopping.WaitOne(0)) return 0;
+                    activeId = initial.Id;
+                    active = initial.Start(out int result);
+                    if (active == null) return result;
+                }
+                WaitHandle[] signals = { stopping, active.Ready };
+                while (WaitHandle.WaitAny(signals, ProbeMilliseconds) != 0 && !stopping.WaitOne(0))
+                {
+                    long newest = changes?.Version(flow) ?? seen;
+                    long now = Environment.TickCount64;
+                    if (newest != seen && (newest != attempted || now >= retryAt))
+                    {
+                        IVoiceEndpoint replacement = null;
+                        bool newAttempt = newest != attempted;
+                        attempted = newest;
+                        retryAt = now + RetryMilliseconds;
+                        try
+                        {
+                            if (changes.ShouldReopen(flow, ref seen, activeId, delegate
+                            {
+                                replacement = select();
+                                return string.IsNullOrEmpty(replacement?.Id) ? null : replacement.Id;
+                            }, out long openedVersion) && !stopping.WaitOne(0))
+                            {
+                                var next = replacement.Start(out int error);
+                                if (next != null)
+                                {
+                                    var previous = active;
+                                    active = next;
+                                    activeId = replacement.Id;
+                                    signals[1] = next.Ready;
+                                    seen = openedVersion;
+                                    previous.Dispose();
+                                }
+                                else if (newAttempt && !stopping.WaitOne(0)) replacementFailed(error);
+                            }
+                        }
+                        finally { replacement?.Dispose(); }
+                    }
+                    if (stopping.WaitOne(0)) break;
+                    int status = active.Process();
+                    if (status != 0) return status;
+                }
+                return 0;
+            }
+            finally { active?.Dispose(); }
+        }
+    }
 }
