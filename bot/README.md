@@ -416,6 +416,25 @@ whole file at once.
 
 ### Staff
 
+**Report and action copies.** The report and moderation watchers keep their
+confirmed message IDs in `data\report-posts.json` and
+`data\moderation-posts.json`. Unacknowledged input from while the bot was down
+is delivered on the next pass. A burst can share one summary message; its
+copy stays until the last retained source item expires.
+
+Before sending, each watcher saves a pending attempt with an opaque copy
+reference. That reference is the small footer on the staff message, without
+account or report IDs. A failed receipt save or an uncertain network answer
+is recovered by finding that exact bot-owned reference in its original
+channel. Empty, inaccessible or incomplete history never permits a blind
+resend. An unresolved attempt holds newer copies from that source and names
+the reference in the log for review. A final Discord refusal can follow a
+retry of an accepted send, so it leaves the attempt pending. Missing channel
+access detected before a send leaves the copy eligible for a later pass.
+Unreadable indexes expose counts only, and unreadable or incomplete source
+files cannot remove saved private copies. The local regression is
+`bot\tests\test-4247-staff-copy-receipts.py`.
+
 `#staff-news` (the staff `#news` until #3317, then staff-announcements
 until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
 `#council-decisions`, `#staff-updates` (dev server restarts, the staff side of

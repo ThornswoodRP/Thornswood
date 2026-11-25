@@ -194,7 +194,12 @@ ok('answer 5: a haul pays the company\'s haul fee, apart from the board\'s job f
 });
 
 ok('the trade block refuses a sale when the terms are not loaded', () => {
-  assert.ok(/var cuts = pr\.saleCuts\(price\);\s*\n\s*if \(!cuts\) \{ return refuse\(/.test(modeLf));
+  const terms = modeLf.indexOf('function currentSaleCuts(t)');
+  const finalCheck = modeLf.lastIndexOf('var cuts = currentSaleCuts(t);');
+  const swap = modeLf.indexOf('var sold = saleById(', finalCheck);
+  assert.ok(terms >= 0 && finalCheck > terms && swap > finalCheck);
+  assert.match(modeLf.slice(terms, finalCheck), /if \([^\n]*typeof pr\.saleCuts !== 'function'\) \{ return null; \}/);
+  assert.match(modeLf.slice(finalCheck, swap), /if \(!cuts \|\| !sameSaleCuts\(cuts, t\.saleCuts\)\) \{[\s\S]*?return 'The company payout changed or is unavailable\./);
 });
 
 const api = fixture.companyApi(mode);

@@ -36,6 +36,11 @@ Chips along the top narrow the list to one group, and a find box
 narrows it by name. The type is the same size as the rest of the K
 panel, large enough to read at the distance the window sits.
 
+At most 200 matching pack lines are shown at once. A notice gives
+the shown and matching counts when the list is longer; Find and the
+category chips can narrow it to a later item. A search with no hits
+says there are no matches.
+
 Each piece you are holding is its own line, under its own name. Two
 pieces of one thing that differ are two lines: a key to Breezehome and
 a key to Honeyside, a sword at 85% and a plain one. An enchantment, a
@@ -53,6 +58,13 @@ count is more than one, and Take back for the whole line. Gold has
 Set for the amount in the box, All for every coin you are holding,
 and None.
 
+Unsent gold amounts and row counts stay in their boxes through updates
+to the same trade, with the editing cursor kept in place. Set, All and
+None submit the amount; later server views show what is actually offered,
+including after a refusal. Closing the trade or starting another one
+clears its drafts, search and category. A draft never carries to another
+trade, even when the person has the same name.
+
 ## What goes on the table
 
 The buttons on the panel put a thing up, with a count, and Set puts
@@ -61,7 +73,10 @@ sees it on the table under the same name. You cannot put up more gold
 than you are holding. Each side can put up 24 lines. A person uses
 the buttons; nobody types a command for any of it.
 
-Both press Agree. Any change to either pile clears both
+Both press Agree. Agree applies only to the offer shown when it was pressed.
+If a change crosses that press, the window is refreshed and you are asked to
+read both piles and press Agree again. A change to the company's payout in
+a sale also asks both of you to read the trade again. Any change to either pile clears both
 confirmations. One side does not get to swap a sword for a worse one
 after the other has already agreed.
 
@@ -98,5 +113,7 @@ minutes, the gold check, and the piece put up crossing as it is are
 in the server. H and Trade under Near you on P offer it. Accept and
 Refuse on that prompt are what a person presses. So are Agree, Walk
 away and Buy for the company. The key and the buttons send the server
-the lines `/trade` and its verbs once were, and nobody is told to type
-them.
+the `/trade` commands. Agree sends `/trade agree <offer-version>` for
+the displayed offer. Legacy `/trade ok` requests refresh the window
+and ask for a fresh click. The separate verb also keeps a versioned
+click from becoming an approval if the server returns to older code.
