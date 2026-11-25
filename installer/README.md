@@ -75,6 +75,7 @@ is gone, or says another workflow than they give.
 | Test | What it holds | Runs on |
 |---|---|---|
 | `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
+| `launcher/tests/test-4180-fresh-payload.ps1` | Runs setup against scratch Steam and package folders to verify a fresh payload drops stale files and leaves a linked folder's target alone | Pull request and nightly |
 | `launcher/tests/test-4459-setup-keys.ps1` | The install window works from the keyboard: focus starts on its first control, Esc closes it as Not now does, Enter on a tick box starts the install, and focus follows what the install says, run on the real window on Avalonia's headless platform | Pull request and nightly |
 | `launcher/tests/test-4496-install-closing-steps.js` | The setup log lists Downgrade, the collection, Connect Discord and Play in order, with Downgrade shown only when the game build check fails | Pull request and nightly |
 | `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names a size typed in by hand | Pull request and nightly |
