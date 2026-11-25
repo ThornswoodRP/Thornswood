@@ -1,8 +1,7 @@
 # Fisher
 
-A pole in the pack, then press E at the water. The fishing mod can
-be replaced. Its scripts do not fire, and three poles plus fifteen
-pieces of water are not a class.
+A fishing pole in the pack, then press E at the water. Thornswood
+handles the catch and the wait.
 
 The poles are remade as our own records when that mod goes: Crude,
 Fine, and Master. A woodwright still makes them. The master pole
@@ -15,19 +14,14 @@ water. A pole under the water's rank is refused. When it breaks, a
 woodwright makes the next one. A new fisher is handed a crude pole,
 the same way a miner is handed a pick.
 
-Salmon staying on eight spots, ten minutes apart, is on purpose.
-Those eight are not the class. The other water that stands today is
-three clams, one small pearl, one pearl, one horker, and one egg.
-That is the whole of a new fisher's evening, and it is not enough to
-climb.
+The server has 21 water records. The [fisher's list](../lists/fisher.md)
+shows each catch, its rank and how many records give it. Salmon wait
+ten minutes between catches at each of their eight spots.
 
-The table in [lists/fisher.md](../lists/fisher.md) is that current
-book.
+## Planned waters
 
-## The water this server places
-
-Each of the nine mainland holds gets water on the river or the coast
-it actually has. A hold with no sea does not grow a sea fish.
+The plan adds water on the rivers and coasts of the nine mainland holds.
+A hold with no sea does not grow a sea fish.
 Solstheim does not get these counts. Solstheim stays scarce.
 
 | Per mainland hold | Spots | What they are |
@@ -137,9 +131,8 @@ The egg nest is yours.
 
 ## Where this is
 
-The fifteen records, the waits, the yields and the season's quarter
-on them are in the server. The
-wait is kept on the water, shared by everyone who fishes it and kept
+The server tracks the water, the waits, the yields and the season's effect.
+The wait is kept on the water, shared by everyone who fishes it and kept
 through a restart (#1413), and a fished-out water says how long is left
 in minutes and hours (#1826). Until 5 October this page said the wait
 was kept per person and cleared by a restart, which it was before #1413
