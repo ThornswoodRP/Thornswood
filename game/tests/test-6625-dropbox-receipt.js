@@ -2,6 +2,8 @@
 // Whole queued command path over the stand-in server. The token is correlation
 // metadata only; the ordinary gold/rent transaction remains authoritative.
 const standIn=require('../../tests/stand-in-server.js');
+const fs=require('fs'),path=require('path');
+const makePage=require('../../tests/fixtures/panel-page.js');
 const t=standIn.checks(),yes=t.yes;
 const w=standIn.world({name:'dropbox-receipt'});
 const city='1691d:Skyrim.esm',spot=[134265.1,35842.3,-12397.5];
@@ -38,4 +40,20 @@ w.moveTo(actor,city,[spot[0]+10000,spot[1],spot[2]]);
 w.say(actor,'/dropbox gold 1 box-request-away');
 yes('out-of-reach refusal closes the stale panel with the exact receipt',view().open===false&&view().goldRequest==='box-request-away');
 yes('out-of-reach refusal moves no gold',w.count(actor,0xf)===before);
+// The actual page's single send now crosses the whole command queue, then
+// receives that command's owner view. Delivery is delayed until after clicks.
+w.moveTo(actor,city,spot);w.say(actor,'/dropbox open');
+const page=makePage(),queued=[];
+page.win.thornswoodNet.say=line=>{queued.push(line);return true;};
+for(const file of ['thornswood-bridge.js','thornswood-box.js'])page.run(file,fs.readFileSync(path.join(__dirname,'../ui',file),'utf8'));
+const panel=page.win.thornswoodBox;panel.setData(view());
+page.doc.getElementById('ts-box-gold').value='7';
+const button=page.doc.querySelector('[data-do="gold"]');
+button.onclick.call(button);button.onclick.call(button);
+yes('two actual page clicks queue one real deposit',queued.length===1);
+const carried=w.count(actor,0xf);
+for(const line of queued)w.say(actor,line);
+yes('the queued page press removes the requested gold once',w.count(actor,0xf)===carried-7);
+panel.setData(view());
+yes('its actual authoritative owner view restores the page control',!page.doc.querySelector('[data-do="gold"]').hasAttribute('disabled'));
 t.done(w);
