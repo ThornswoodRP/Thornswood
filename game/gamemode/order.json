@@ -69,6 +69,7 @@
     "stuck.ts",
     "command-tools.ts",
     "staff.ts",
+    "staff-heal.ts",
     "take-back.ts",
     "staff-crafting.ts",
     "shared-resource-stock.ts",
