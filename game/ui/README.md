@@ -13,6 +13,7 @@ overlays into that one page:
 - the chat (`thornswood-chat.js`, which holds the one socket to the voice service),
 - the emote wheel (`thornswood-emotes.js`),
 - voice (`thornswood-voice.js`),
+- profession guides (generated as `thornswood-profession-guides.js`),
 - the character panel and character creation behind K (`thornswood-skills.js`),
 - the party menu behind P (`thornswood-party.js`),
 - journals behind J (`thornswood-journal.js`),
@@ -74,8 +75,10 @@ only while the game runs, and Keep puts its copy back at Play, so Go.ps1 makes
 what it installs the kept copy and a file copied in by hand is undone. A new
 overlay has to be called `thornswood-*.js`, like every other file of ours under
 `Data\Platform`, and named in the `OVERLAYS` list at the top of
-`thornswood-front.js`, or nothing loads it. There is no build step; the
-`tests\test-*.js` harnesses read several of these files and check them.
+`thornswood-front.js`, or nothing loads it. Authored overlays are copied
+directly. The content-table build runs `scripts\dev\Build-ProfessionGuides.js`
+to generate the profession guides overlay. The `tests\test-*.js` harnesses read
+several of these files and check them.
 
 ## Where it runs
 

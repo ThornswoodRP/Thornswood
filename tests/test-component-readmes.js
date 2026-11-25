@@ -61,6 +61,11 @@ const ROOT = REPO_DIR;
 const CR = String.fromCharCode(13);
 // A backslash, built rather than typed, so no tool on the way can eat it.
 const BS = String.fromCharCode(92);
+const contentBuildSteps = require('../scripts/mods/content-tables.json').steps;
+const generatedUi = contentBuildSteps
+  .filter(step => exists(step.tool))
+  .flatMap(step => step.writes || [])
+  .filter(rel => rel.startsWith('game/ui/') && ignored(rel));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -211,9 +216,10 @@ SIX.forEach(function (d) {
     return s.replace(/`/g, '');
   }));
   const nowhere = ours.filter(function (n) {
-    return !exists('game/plugins/' + n) && !exists('game/ui/' + n);
+    const ui = 'game/ui/' + n;
+    return !exists('game/plugins/' + n) && !exists(ui) && !generatedUi.includes(ui);
   });
-  yes(name + ': every plugin or overlay file it names exists (' + ours.length + ' named)' +
+  yes(name + ': every plugin or overlay file it names exists or is generated (' + ours.length + ' named)' +
       (nowhere.length ? ', missing ' + nowhere.join(', ') : ''), nowhere.length === 0);
 });
 
@@ -313,23 +319,19 @@ SIX.forEach(function (d) {
   const zip = tracked('local/thornswood-front.zip');
   yes('overlays: and that zip is not in git, as the README says', zip === false);
 
-  // Issue #4473: game/ui/README.md matches Go.ps1 and names every overlay and copied file type
-  const mOverlays = /const OVERLAYS = \[([\s\S]*?)\];/.exec(front);
-  const frontOverlays = mOverlays ? (mOverlays[1].match(/'thornswood-[\w-]+\.js'/g) || []).map(function (s) { return s.slice(1, -1); }) : [];
-  const existingOverlays = frontOverlays.filter(function (f) { return exists('game/ui/' + f); });
-  const missingOverlays = existingOverlays.filter(function (f) { return t.indexOf('`' + f + '`') < 0 && t.indexOf(f) < 0; });
-  yes('overlays: game/ui/README.md names every overlay (' + existingOverlays.length + ' overlays' +
+  // Include generated overlays from the loader list even in a clean checkout (#4473).
+  const overlayList = /const OVERLAYS = \[([\s\S]*?)\];/.exec(front);
+  const names = overlayList ? Array.from(overlayList[1].matchAll(/'([^']+\.js)'/g), m => m[1]) : [];
+  const missingOverlays = names.filter(f => !t.includes('`' + f + '`'));
+  yes('overlays: game/ui/README.md names every overlay (' + names.length + ' overlays' +
       (missingOverlays.length ? ', missing: ' + missingOverlays.join(', ') : '') + ')',
-      missingOverlays.length === 0);
+      names.length > 0 && missingOverlays.length === 0);
 
-  const copiedTypes = ['.js', '.mp3', '.webp', 'index.html'];
-  const missingTypes = copiedTypes.filter(function (ext) { return t.indexOf(ext) < 0; });
-  yes('overlays: game/ui/README.md names every file type Go.ps1 copies from game/ui (' +
-      copiedTypes.join(', ') + (missingTypes.length ? ', missing: ' + missingTypes.join(', ') : '') + ')',
-      missingTypes.length === 0);
-
+  const menuArtPairs = Array.from(go.matchAll(/@\('([^']+)', '(thornswood-menu\.[^']+)'\)/g),
+    m => [m[1], m[2]]);
   yes('overlays: game/ui/README.md describes Build-Front, banner names, and what fails the run (#4473)',
-      t.indexOf('Build-Front') >= 0 && t.indexOf('banner.webm') >= 0 && t.indexOf('thornswood-menu.webm') >= 0 &&
+      t.includes('Build-Front') && t.includes('front-build.json') && menuArtPairs.length > 0 &&
+      menuArtPairs.every(pair => pair.every(name => t.includes('`' + name + '`'))) &&
       /fails the run|fails and stops Ship/i.test(t));
 }
 
@@ -412,6 +414,14 @@ SIX.forEach(function (d) {
   yes('Go.ps1 lists the overlays and the plugins only through filters (' +
       filters.ui.join(' ') + ' and ' + filters.pl.join(' ') + ')',
       filters.ui.length > 0 && filters.pl.length > 0 && bare === 0);
+  const setup = ((readme['ts-ui'] || '').split('## On your machine')[1] || '').split('\n## ')[0];
+  const installDescription = (setup.split('```')[2] || '').trim().split('\n\n')[0];
+  const copiedTypes = filters.ui.map(f => f.replace(/^\*/, ''));
+  copiedTypes.push(...Array.from(go.matchAll(/Join-Path \$uiSrc '([^']+)'/g), m => m[1]));
+  const missingTypes = copiedTypes.filter(f => !installDescription.includes('`' + f + '`'));
+  yes('overlays: game/ui/README.md names the files and types Go.ps1 copies from game/ui (' +
+      copiedTypes.join(', ') + (missingTypes.length ? ', missing: ' + missingTypes.join(', ') : '') + ')',
+      copiedTypes.length > 0 && missingTypes.length === 0);
   // The filters are read right only if they still take what they are for.
   yes('those filters, read as globs, take the overlays and the plugins they are for',
       filters.ui.some(function (f) { return glob(f).test('thornswood-chat.js'); }) &&
