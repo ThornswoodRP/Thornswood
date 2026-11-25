@@ -52,6 +52,9 @@
               trade carts block, #3158)
     books     members, their book chat, books they own, when they last left
               (the books)
+    restraints target profile's active freeze/silence; actor-only resets keep
+              them. Explicit wipe IDs clear only freeze/pending anchors, once,
+              leaving timed silences. The same private book keeps receipts.
     merchants the guild traders' supply waits, commission promises and a
               trade still waiting on the character, in the ledger and in
               each trader's own saved copy, retired traders' too (the purse
@@ -120,7 +123,11 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     }
     var v = null;
     try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
-    return valid(v) ? { list: v } : { bad: v, file: p };
+    var wipes = v && v.freezeWipeIds;
+    var wipesOk = v && (v.clearFreezes === undefined || typeof v.clearFreezes === 'boolean') &&
+      (wipes === undefined || (Array.isArray(wipes) && wipes.every(function (id) { return typeof id === 'string' && /^[0-9a-f]{32}$/.test(id); }) && new Set(wipes).size === wipes.length)) &&
+      (v.clearFreezes === true ? Array.isArray(wipes) && wipes.length > 0 : !wipes || wipes.length === 0);
+    return valid(v) && wipesOk ? { list: v } : { bad: v, file: p };
   }
   function ids(a, b) {
     var seen = {}, out = [];
@@ -146,6 +153,9 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
   });
   var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  function pendingWipes(v) { return v.clearFreezes === true && !(v.done && v.done.restraints) ? v.freezeWipeIds : []; }
+  var wipes = ids(pendingWipes(was), pendingWipes(taking.list)).sort();
+  if (wipes.length) { list.clearFreezes = true; list.freezeWipeIds = wipes; }
   try {
     fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
     fs.renameSync(TAKEN + '.tmp', TAKEN);
@@ -160,7 +170,7 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
 (function () {
   'use strict';
   var g = (typeof globalThis !== 'undefined' ? globalThis : this);
-  var PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
+  var PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'restraints', 'merchants'];
   var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   // Into thornswood.log with the rest of the gamemode's own lines (log, at the top of the file).
   function rlog(line) {
@@ -262,10 +272,12 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
       file: file,
       profiles: list.profiles.slice(),
       actors: (list.actors || []).slice(),
+      freezeWipeIds: list.clearFreezes === true && !(list.done && list.done.restraints) ? list.freezeWipeIds.slice() : [],
       done: list.done ? Object.assign({}, list.done) : {},
       who: {
         profile: function (n) { n = Number(n) || 0; return n > 0 && has(P, n); },
-        actor: function (n) { n = Number(n) || 0; return isFormId(n) && has(A, n); }
+        actor: function (n) { n = Number(n) || 0; return isFormId(n) && has(A, n); },
+        freezeWipeIds: function () { return st.freezeWipeIds.slice(); }
       }
     };
     /*
@@ -309,7 +321,9 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
         rlog('every part is done, and the list is gone');
         return;
       }
-      fs.writeFileSync(st.file + '.tmp', JSON.stringify({ profiles: st.profiles, actors: st.actors, done: st.done }));
+      var list = { profiles: st.profiles, actors: st.actors, done: st.done };
+      if (st.freezeWipeIds.length) { list.clearFreezes = true; list.freezeWipeIds = st.freezeWipeIds; }
+      fs.writeFileSync(st.file + '.tmp', JSON.stringify(list));
       fs.renameSync(st.file + '.tmp', st.file);
     } catch (e) {
       rlog('the list could not be marked (' + ((e && e.code) || e) + '), so the parts that ran run again at the next start');
@@ -327,6 +341,7 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
       return;
     }
     st.done[part] = Date.now();
+    if (part === 'restraints') { st.freezeWipeIds = []; }
     var out = [];
     for (var k in r.counts) { if (has(r.counts, k) && r.counts[k]) { out.push(k + ' ' + r.counts[k]); } }
     rlog(part + ': ' + (out.length ? out.join(', ') : 'nothing of theirs'));

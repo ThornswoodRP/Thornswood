@@ -414,7 +414,11 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     }
     var v = null;
     try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
-    return valid(v) ? { list: v } : { bad: v, file: p };
+    var wipes = v && v.freezeWipeIds;
+    var wipesOk = v && (v.clearFreezes === undefined || typeof v.clearFreezes === 'boolean') &&
+      (wipes === undefined || (Array.isArray(wipes) && wipes.every(function (id) { return typeof id === 'string' && /^[0-9a-f]{32}$/.test(id); }) && new Set(wipes).size === wipes.length)) &&
+      (v.clearFreezes === true ? Array.isArray(wipes) && wipes.length > 0 : !wipes || wipes.length === 0);
+    return valid(v) && wipesOk ? { list: v } : { bad: v, file: p };
   }
   function ids(a, b) {
     var seen = {}, out = [];
@@ -440,6 +444,9 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
   });
   var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  function pendingWipes(v) { return v.clearFreezes === true && !(v.done && v.done.restraints) ? v.freezeWipeIds : []; }
+  var wipes = ids(pendingWipes(was), pendingWipes(taking.list)).sort();
+  if (wipes.length) { list.clearFreezes = true; list.freezeWipeIds = wipes; }
   try {
     fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
     fs.renameSync(TAKEN + '.tmp', TAKEN);
@@ -523,7 +530,7 @@ function worldPeople(settings, op, profiles) {
   }
 }
 
-const RELEASE_PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
+const RELEASE_PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'restraints', 'merchants'];
 
 function startDeletions(dir, now) {
   const out = [];
@@ -653,7 +660,7 @@ function startDeletions(dir, now) {
         if (RELEASE_PARTS.every((k) => has(done, k))) {
           try { fs.unlinkSync(listFile); say('saves: ' + said() + '; every part is done, and the list is gone'); }
           catch (e) { say('saves: ' + said() + '; the list could not be deleted (' + e.code + ')'); }
-        } else if (writeFile(listFile, JSON.stringify({ profiles: list.profiles, actors: list.actors || [], done }))) {
+        } else if (writeFile(listFile, JSON.stringify(Object.assign({}, list, { profiles: list.profiles, actors: list.actors || [], done })))) {
           say('saves: ' + said() + '; the gamemode lets go of the registers as it loads');
         } else {
           say('saves: ' + said() + '; the list could not be marked, so this part runs again at the next start');

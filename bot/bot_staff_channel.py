@@ -63,27 +63,25 @@ async def watch_say(text):
 
 def _clock(ms):
     """
-    A unix-ms stamp as 'HH:MM on D Month', in this box's own time.
+    A unix-ms stamp as 'HH:MM UTC on D Month YYYY'.
 
-    The site stamps a session's start, end and a log's arrival with the same
-    clock the server log uses, so a time named here reads the same as the
-    lines on the sessions page.     fromtimestamp is local time, which is what the
-    box runs on. %-d is not on Windows, where this runs, so the day is built by
-    hand and carries no leading zero. Anything that is not a number, and 0
+    The sessions page uses the same explicit UTC clock, independent of the
+    staff member's or bot host's zone. %-d is not on Windows, so the day is
+    built by hand and carries no leading zero. Anything that is not a number, and 0
     itself (the site's stamp for a start or end it never saw), gives '', so a
     row without these fields drops the phrase rather than naming 1970.
     """
     try:
         n = int(ms)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return ''
     if not n:
         return ''
     try:
-        t = datetime.datetime.fromtimestamp(n / 1000)
+        t = datetime.datetime.fromtimestamp(n / 1000, datetime.timezone.utc)
     except (OSError, OverflowError, ValueError):
         return ''
-    return '%02d:%02d on %d %s' % (t.hour, t.minute, t.day, t.strftime('%B'))
+    return '%02d:%02d UTC on %d %s %d' % (t.hour, t.minute, t.day, t.strftime('%B'), t.year)
 
 
 # A log that arrives within this long of the session ending is the launcher's

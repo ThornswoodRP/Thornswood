@@ -551,7 +551,7 @@ namespace $ns
         $text = [IO.File]::ReadAllText($log)
         Yes 'Note adds to the log and keeps what was there' ($text -match 'a line that was already there')
         Yes 'Note writes a stamped line naming the place and the exception' (
-            $text -match '(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d  Swallowed in Config\.Save, writing C:\\somewhere\\config\.json: System\.IO\.IOException: There is not enough space on the disk\.')
+            $text -match '(?m)^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  Swallowed in Config\.Save, writing C:\\somewhere\\config\.json: System\.IO\.IOException: There is not enough space on the disk\.')
         Yes 'Note carries the stack, so the line says where it was thrown' ($text -match '\bat SwallowTest\.Door\.Fail')
         Yes 'Note with no exception still writes, and says so' ($text -match 'Swallowed in Keep\.Unpark: no exception given')
 

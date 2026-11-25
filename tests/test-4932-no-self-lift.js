@@ -51,7 +51,7 @@ function world() {
       [A_SERA]: { desc: 'Markarth:4', pos: [9, 9, 9], rot: [0, 0, 0] },
       [A_BJORN]: { desc: 'Riften:2', pos: [5000, 6000, 700], rot: [0, 0, 10] }
     },
-    staff: { [AELA]: true, [SERA]: true }, said: [], records: [], queue: [], timers: [], set: []
+    staff: { [AELA]: true, [SERA]: true }, said: [], records: [], queue: [], timers: [], set: [], files: {}
   };
 }
 
@@ -71,6 +71,8 @@ function load(w) {
       if (key === 'locationalData') { w.where[id] = { desc: v.cellOrWorldDesc, pos: v.pos.slice(), rot: v.rot.slice() }; }
     },
     getServerSettings: function () { return { privDir: 'private' }; },
+    // WholeFileWrite.h: a successful call places the complete encoded book.
+    writeFileWhole: function (file, text) { w.files[file] = text; },
     getUserByActor: function (a) { return w.online.indexOf(a) >= 0 ? 70 + w.online.indexOf(a) : -1; },
     kick: function () { }, place: function () { return 0; }, makeProperty: function () { },
     callPapyrusFunction: function () { }, getDescFromId: function (id) { return id.toString(16) + ':Skyrim.esm'; },
@@ -100,8 +102,13 @@ function load(w) {
     }
   };
   const fakeFs = {
-    readFileSync: function () { throw new Error('not here'); },
-    existsSync: function () { return false; },
+    readFileSync: function (file, encoding) {
+      if (Object.prototype.hasOwnProperty.call(w.files, file)) {
+        return encoding ? w.files[file] : Buffer.from(w.files[file], 'utf8');
+      }
+      const e = new Error('not here'); e.code = 'ENOENT'; throw e;
+    },
+    existsSync: function (file) { return Object.prototype.hasOwnProperty.call(w.files, file); },
     appendFileSync: function (p, text) { w.records.push(String(text)); },
     mkdirSync: function () { }, writeFileSync: function () { }, unlinkSync: function () { }
   };

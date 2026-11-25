@@ -1,6 +1,6 @@
 # NPC population catalogue
 
-Generated from the winning records in the 106-plugin load order.
+Generated from the winning records in the 107-plugin load order.
 These are source policies and counts. Release proof is recorded separately.
 
 14,668 placements inspected; 4,883 retained; 9,785 excluded.
@@ -108,7 +108,7 @@ and six of each other animal species per tile. Cave and dungeon caps are shared 
 | Morthal | Hjaalmarch | city |  | 9 | 20, 45, 360 |
 | Karthwasten | the Reach | city |  | 5 | 20 |
 | Old Hroldan | the Reach | wilderness |  | 1 | 20 |
-| Whiterun | Whiterun | city |  | 12 | 20, 45, 360 |
+| Whiterun | Whiterun | city |  | 13 | 20, 45, 360 |
 | Windhelm | Eastmarch | city |  | 9 | 45, 360 |
 | Riften | the Rift | city |  | 11 | 20, 45, 360 |
 | Markarth | the Reach | city |  | 13 | 20, 45, 360 |
@@ -327,7 +327,6 @@ and six of each other animal species per tile. Cave and dungeon caps are shared 
 | Oakwood | Falkreath | city |  | 3 | 20 |
 | Movarth's Lair | Hjaalmarch | dungeon | 1 | 8 | 30 |
 | Ansilvund | Eastmarch | dungeon | 1 | 8 | 30 |
-| Warmaiden's | Whiterun | dungeon | 1 | 1 | 360 |
 | open ground in DLC1HunterHQWorld | no hold | wilderness |  | 1 | 20 |
 | Apocrypha | no hold | dungeon | 3 | 14 | 60 |
 | POIBlackreach07 | no hold | wilderness |  | 1 | 45 |

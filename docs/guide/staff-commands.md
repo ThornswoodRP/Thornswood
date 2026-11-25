@@ -155,11 +155,17 @@ Staff.
 | Command | What it does |
 | --- | --- |
 | `/warn <person> <why>` | Tells them that staff have warned them, why, and that the next step is being removed from the world |
-| `/freeze <person> [why]` | Holds them where they stand, across a reconnect |
+| `/freeze <person> [why]` | Holds them where they stand, across reconnects, reloads and server restarts |
 | `/unfreeze <person>` | Lets them go |
 | `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
+
+Freezes and timed silences are saved before a command reports success. A restart does not renew a silence: its original deadline still applies. A profile number works for `/unfreeze` and `/unsilence` while that person is offline; you cannot release your own restraint.
+
+Moving a frozen character with `/bring` or `/tp` saves the new frozen position. If a move or its save cannot be confirmed, staff are told it may already have happened. Only that character's session is ended and its next login is refused until staff repair the storage problem and explicitly `/unfreeze <profile>`. The server does not retry the move or return them to the old position.
+
+The private `staff-restraints.json` is the control authority. An unreadable or invalid book refuses new logins and restraint changes; a reload keeps the last validated controls for people already online. Repair that book rather than replacing it with an empty file. Normal character resets keep profile controls. Person deletion removes the target's active controls; a world wipe clears frozen positions while retaining timed silences. Opaque wipe receipts stay in the same book to prevent an unacknowledged old wipe from clearing a newer freeze. Historical moderation records are unchanged.
 
 ## Rename a character
 

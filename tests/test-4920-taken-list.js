@@ -46,7 +46,7 @@ function put(p, v) { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writ
 
 const P1 = 5001, P2 = 5002;
 const A1 = 0xff000a01, A2 = 0xff000a02;
-const PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
+const PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'restraints', 'merchants'];
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4920-'));
 const home = process.cwd();
 

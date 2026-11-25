@@ -80,7 +80,11 @@
   characters that no longer exist, and with the embassy rolls pointing at
   form ids the new world hands to new characters.
 
-  TWO STAY. private\mod-settings.json is each person's mod menu choices,
+  THREE STAY. private\staff-restraints.json keeps timed silences. The wipe's
+  explicit release request clears only freeze/pending anchors at next start,
+  with a durable request receipt so a failed acknowledgement cannot clear a
+  later freeze. An unreadable book refuses that release and new admissions.
+  private\mod-settings.json is each person's mod menu choices,
   not the world, and a profile keeps its id through a wipe, so the menu
   stays as they set it. private\merchant-ledger.json is the guild traders'
   purses and shelves, and the merchant code refuses to start without it
@@ -96,8 +100,8 @@
   part, is not among them, because mod-settings.json stays; it takes only
   what a profile holds, so Release-List marks it done when the list names
   no profile, which is so unless a deletion still waiting was carried over.
-  So only the merchant ledger waits on it, and the first start lets go and
-  deletes it. The fresh world hands those form ids to new characters, which
+  The merchant ledger and the explicit freeze-only clear wait on it; the
+  first start commits both before deleting it. The fresh world hands those form ids to new characters, which
   is why it is written before that start and not left to chance. A server
   whose move did not finish gets no list. Season, the benches and the door
   are the server's, not anybody's, and so are the world stage
@@ -461,7 +465,7 @@ else {
   `$found.notes
   # The lists set aside are carried: the requests, and what a server took and
   # had not finished (deleted-characters.taken.json, #4920), or was taking.
-  Write-ThornswoodReleaseList -Root `$r -Actors `$found.ids -Carry @((Join-Path `$r 'private\deleted-characters-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taken-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taking-before-$stamp.json')) -Done @($wipeDoneLit)
+  Write-ThornswoodReleaseList -Root `$r -Actors `$found.ids -Carry @((Join-Path `$r 'private\deleted-characters-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taken-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taking-before-$stamp.json')) -Done @($wipeDoneLit) -ClearFreezes
 }
 }
 "@
