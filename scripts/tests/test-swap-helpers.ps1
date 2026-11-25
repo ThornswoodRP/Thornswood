@@ -111,6 +111,35 @@ try {
         Set-StandInSsh 'hostname play.example'
         Check '  an ssh that names none gives the user''s own' ((Get-ThornswoodKnownHostsPath -Address 'play.example') -eq (Join-Path (Join-Path $HOME '.ssh') 'known_hosts'))
     } finally { $env:PATH = $savedPath }
+
+    # ----------------------------------------------------------- Show-SwapResult
+    # On a failed swap where the box may not be as it was, Show-SwapResult prints
+    # the folder holding what was replaced (the worst-case else branch).
+    # On a normal swap that is .prev-<stamp>; on a failed put-back it is .undone-<stamp> (#4386).
+    $failLines = @('something failed', 'could not start')
+    $resText = $(Show-SwapResult $failLines 'C:\Thornswood\.undone-20261122-120000' 6>&1) -join "`n"
+    Check 'Show-SwapResult: failed put-back text says the replaced files are in .undone' (
+        $resText -match 'The files the swap replaced are in C:\\Thornswood\\\.undone-20261122-120000')
+
+    # Verify that Install-Voice, Install-Bot, Deploy-DevGamemode, and Deploy-Docs
+    # pass the .undone folder to Show-SwapResult when the put-back pick ran (#4386).
+    $voiceSrc = Get-Content (Join-Path $root 'scripts\deploy\Install-Voice.ps1') -Raw
+    $botSrc = Get-Content (Join-Path $root 'scripts\deploy\Install-Bot.ps1') -Raw
+    $devSrc = Get-Content (Join-Path $root 'scripts\deploy\Deploy-DevGamemode.ps1') -Raw
+    $docsSrc = Get-Content (Join-Path $root 'scripts\deploy\Deploy-Docs.ps1') -Raw
+
+    Check 'Install-Voice passes .undone to Show-SwapResult on -PutBack' (
+        $voiceSrc -match 'Show-SwapResult\s+\$swapOut\s+(\$prevWhere|\(?if\s*\(\$PutBack\))' -and
+        $voiceSrc -match '\.undone-<stamp>')
+    Check 'Install-Bot passes .undone to Show-SwapResult on -PutBack' (
+        $botSrc -match 'Show-SwapResult\s+\$out\s+(\$prevWhere|\(?if\s*\(\$PutBack\))' -and
+        $botSrc -match '\.undone-<stamp>')
+    Check 'Deploy-DevGamemode passes .undone to Show-SwapResult on put-back/recover' (
+        $devSrc -match 'Show-SwapResult\s+\$swapOut\s+(\$prevWhere|\(?if\s*\(\$PutBack)' -and
+        $devSrc -match '\.undone-<stamp>')
+    Check 'Deploy-Docs passes .undone to Show-SwapResult on -PutBack' (
+        $docsSrc -match 'Show-SwapResult\s+\$swapOut\s+(\$prevWhere|\(?if\s*\(\$PutBack\))' -and
+        $docsSrc -match '\.undone-<stamp>')
 } finally {
     $env:THORNSWOOD_VPS_LOCAL = $savedLocal
     $env:LOCALAPPDATA = $savedApp
