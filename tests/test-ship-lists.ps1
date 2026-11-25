@@ -326,9 +326,9 @@ $rows = @(
     # The client runtime is ours only when its bytes are the recorded build
     # now (entry 128), which a made up file cannot be, so they have their own
     # checks below the removal side.
-    # Nemesis's output, generated from the collection's own patches (#1178).
-    @('Data\meshes\actors\character\behaviors\0_master.hkx', 'ship', 'ship'),
-    @('Data\Scripts\FNIS.pex',                                'ship', 'ship'),
+    # Generated on each computer (#3715, #3919); packs carried them before.
+    @('Data\meshes\actors\character\behaviors\0_master.hkx', 'ship', 'out'),
+    @('Data\Scripts\FNIS.pex',                                'ship', 'out'),
     # The folder names count only straight under Data, and BStarData only at
     # the top: a folder of the same name deeper down is not those rules'. Until
     # #1178 that made these three ours; they are loose files of somebody's
