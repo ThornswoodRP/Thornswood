@@ -5898,6 +5898,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -6120,6 +6122,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {
@@ -31319,6 +31323,8 @@ module.exports = {
       pos: [stop.pos[0], stop.pos[1], stop.pos[2]],
       rot: [0, 0, stop.rot]
     });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   function answer(line, from, went) {
@@ -46118,6 +46124,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
         });
+        var stuck = globalThis.__thornswoodStuck;
+        if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
       } catch (e) {
         toProfile(profileId, 'That did not work: ' + e);
         return;
@@ -61230,8 +61238,10 @@ module.exports = {
 
   THE TRAIL. Every 3 seconds, for each character in the world who is alive
   and not still being made: a new point when they are 200 units or more from
-  the last one, or in another cell, 10 kept. A sample that dropped more than
-  300 units since the last one is a fall and never becomes a point, so
+  the last one, or in another cell, at most 10 kept for one minute. A death,
+  carriage ride or server teleport starts this trail over (#4838).
+  A sample that dropped more than 300 units since the last one is a fall
+  and never becomes a point, so
   somebody who fell through the world is not sent back into the air.
 
   WHICH POINT. The newest one at least 256 units from where they are now (any
@@ -61272,6 +61282,7 @@ module.exports = {
   var TICK_MS = 1000;
   var TRAIL_MS = 3000;            // between trail samples
   var TRAIL_KEEP = 10;
+  var TRAIL_MAX_MS = 60000;       // only the last minute's steps are recent
   var TRAIL_STEP = 200;           // units from the last point before a new one
   var SAME_PLACE = 256;           // units: closer than this is the same place
   var FALL = 300;                 // units dropped between samples: a fall
@@ -61402,6 +61413,16 @@ module.exports = {
     return state.chars[k];
   }
 
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
+
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
     var seen = g.__thornswoodPassSeen;
@@ -61425,7 +61446,8 @@ module.exports = {
   /* One character, every few seconds: the trail. */
   function trailOne(actorId, now) {
     var c = charOf(actorId);
-    if (isDead(actorId) || inCreation(actorId)) { c.last = null; return; }
+    if (isDead(actorId) || inCreation(actorId)) { resetTrail(actorId); return; }
+    expireTrail(c, now);
     var here = placeOf(actorId);
     if (!here) { return; }
     var falling = !!(c.last && c.last.desc === here.desc && c.last.pos[2] - here.pos[2] > FALL);
@@ -61476,6 +61498,7 @@ module.exports = {
   /* The spot a few steps back, or null. */
   function backSpot(actorId, here) {
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     var before = state.used[hex(actorId)];
     // Still where the last /stuck put them: that spot is the stuck place.
     if (before && before.to && samePlace(before.to, here)) { return null; }
@@ -61493,6 +61516,7 @@ module.exports = {
     var f = frameOf(here.desc);
     if (f) { return { frame: f, x: here.pos[0], y: here.pos[1] }; }
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     for (var i = c.trail.length - 1; i >= 0; i--) {
       var tf = frameOf(c.trail[i].desc);
       if (tf) { return { frame: tf, x: c.trail[i].pos[0], y: c.trail[i].pos[1] }; }
@@ -61740,6 +61764,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    resetTrail: resetTrail,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -62126,6 +62151,8 @@ module.exports = {
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   // ------------------------------------------------------------ silence --
