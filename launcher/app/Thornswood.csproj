@@ -53,10 +53,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <GlobalAnalyzerConfigFiles Include="Unused.globalconfig" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.6" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
@@ -118,4 +114,8 @@
     <XmlPoke XmlInputPath="$(ApplicationManifest)" Query="/asm:assembly/asm:assemblyIdentity/@version" Value="$(ThornswoodVersionFour)"
              Namespaces="&lt;Namespace Prefix='asm' Uri='urn:schemas-microsoft-com:asm.v1' /&gt;" />
   </Target>
+
+  <ItemGroup>
+    <GlobalAnalyzerConfigFiles Include="Unused.globalconfig" />
+  </ItemGroup>
 </Project>
