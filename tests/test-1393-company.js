@@ -1,3 +1,4 @@
+const observedOfferVersion = require('./fixtures/trade-version');
 // test-1393-company.js
 //
 // #1393. The Free Skyrim Trading Company, as docs/systems/trading-company.md,
@@ -190,7 +191,7 @@ function world() {
 function sandbox(w, roles) {
   const said = [];
   const ctx = {
-    mp: w.mp, JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, Math: Math, Date: Date,
+    mp: w.mp, require: require, JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, Math: Math, Date: Date,
     isFinite: isFinite, parseInt: parseInt, isNaN: isNaN,
     console: { log: function () { }, error: function () { } },
     guard: function (name, f) { return f; },
@@ -737,7 +738,7 @@ attempt('a company sale', function () {
   const everybody = [WORKER, SELLER, OTHER, ADMIN, MATE];
   const before = total(w, s, everybody);
   function view(p) { const t = tr.tradeOf(p.actor); return t ? tr.view(t, p.actor) : null; }
-  function agree(a, b) { const one = tr.confirm(a.actor); const two = tr.confirm(b.actor); EVERY_LINE.push(one, two); return one + two; }
+  function agree(a, b) { const one = tr.confirm(a.actor, observedOfferVersion(tr, a.actor)); const two = tr.confirm(b.actor, observedOfferVersion(tr, b.actor)); EVERY_LINE.push(one, two); return one + two; }
   function heard(p) { return s.heard(p); }
 
   yes('S1 somebody the company has not taken on is not offered Buy for the company, and cannot press it',
@@ -751,7 +752,7 @@ attempt('a company sale', function () {
       view(WORKER).sale === null);
   tr.add(SELLER.actor, 'Iron Sword', 1);
   tr.gold(WORKER.actor, 120);
-  tr.confirm(SELLER.actor);
+  tr.confirm(SELLER.actor, observedOfferVersion(tr, SELLER.actor));
   yes('S3 pressing it makes it a sale and takes both agreements back',
       tr.sale(WORKER.actor) === '' && tr.tradeOf(WORKER.actor).sale === WORKER.actor &&
       view(SELLER).iAgreed === false && view(WORKER).iAgreed === false);

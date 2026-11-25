@@ -466,12 +466,13 @@ function createSettlement(deps) {
       return all;
     } catch(error) {active=false;throw error;}
   }
-  function admitted(human, reference, reserveCapacity) {
+  function admitted(human, reference, reserveCapacity, recipientKey) {
     var pending = records(), key = humanKey(human);
     if (!key || reserveCapacity!==false && pending.length >= MAX_PENDING) return false;
     return pending.every(function (record) {
       var other = record.state.pending.human;
-      return humanKey(other) && humanKey(other) !== key && record.reference !== reference;
+      var otherKey = humanKey(other);
+      return otherKey && otherKey !== key && otherKey !== recipientKey && record.reference !== reference;
     });
   }
   function save(id, state, next, intentId, caller) {
@@ -705,20 +706,38 @@ function createSettlement(deps) {
       return changed;
     } finally { busy = false; }
   }
-  function withInventoryMutation(actorId,change) {
+  function inventoryMutationLease(actorId,change,recipientId) {
     if(!available() || busy)return {ok:false,why:'unavailable'};
     busy=true;
     var leased=true;
     try {
       var human=transfer.identity(actorId);
-      if(!human || !admitted(human,'',false))return {ok:false,why:'waiting'};
+      var recipient, recipientKey;
+      if (recipientId !== undefined) {
+        recipient = transfer.identity(recipientId);
+        recipientKey = humanKey(recipient);
+        if (!recipientKey || recipientKey === humanKey(human)) return {ok:false,why:'waiting'};
+      }
+      if(!human || !admitted(human,'',false,recipientKey))return {ok:false,why:'waiting'};
       if(transfer.saved(actorId)!==transfer.receipt(actorId))return {ok:false,why:'waiting'};
+      if(recipient && transfer.saved(recipientId)!==transfer.receipt(recipientId))return {ok:false,why:'waiting'};
       if(!active)return {ok:false,why:'unavailable'};
-      var result=change(human,function(){return active && leased;});
+      var alive = function(){return active && leased;};
+      var result = recipient ? change(human,alive,recipient) : change(human,alive);
       // Unknown receipts revoke all writers until a reload reads durable state.
       if(result && result.uncertain)active=false;
       return result;
     } finally {leased=false;busy=false;}
+  }
+  function withInventoryMutation(actorId,change) {
+    return inventoryMutationLease(actorId,change);
+  }
+  // A saved receipt alone does not prove that the next sequence is free.
+  // Hold both identities against the same pending-record check and lease.
+  function withPairedInventoryMutation(actorId,recipientId,change) {
+    if (!Number.isInteger(recipientId) || recipientId <= 0 || recipientId > 0xffffffff || recipientId === actorId)
+      return {ok:false,why:'unavailable'};
+    return inventoryMutationLease(actorId,change,recipientId);
   }
   function canInventoryMutation(actorId) {
     if(!available() || busy)return false;
@@ -762,7 +781,8 @@ function createSettlement(deps) {
     return how;
   }
   return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
-    withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
+    withInventoryMutation:withInventoryMutation,withPairedInventoryMutation:withPairedInventoryMutation,
+    canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 
 module.exports = {createSettlement:createSettlement,stockRows:stockRows,inventory:inventory,takeEntries:takeEntries,
@@ -1239,7 +1259,7 @@ function createQuestTransactions(deps) {
   function identity(actor) {
     return active ? actorIdentity(mp,actor) : null;
   }
-  function commit(actor,expectedRecord,nextRecord,changes,admission) {
+  function commit(actor,expectedRecord,nextRecord,changes,admission,abandoned) {
     if(!available())return {ok:false,why:'unavailable'};
     try {
       var token=identity(actor);
@@ -1247,6 +1267,17 @@ function createQuestTransactions(deps) {
       // Match the addon's JSON boundary, including omitted optional fields.
       nextRecord=JSON.parse(JSON.stringify(nextRecord));
       if(!Array.isArray(changes))throw new Error('Invalid quest goods.');
+      var collecting=changes.some(function(change){return change && change.upTo!==undefined;});
+      if(collecting || abandoned!==undefined) {
+        if(!collecting || !abandoned || typeof abandoned!=='object' || Array.isArray(abandoned) ||
+            Object.keys(abandoned).sort().join(',')!=='quest,until' ||
+            typeof abandoned.quest!=='string' || !/^[a-z][a-z0-9-]{0,127}$/.test(abandoned.quest) ||
+            abandoned.until!==null && (!Number.isSafeInteger(abandoned.until) || abandoned.until<=0) ||
+            !expectedRecord || !expectedRecord.open || !Object.prototype.hasOwnProperty.call(expectedRecord.open,abandoned.quest) ||
+            !nextRecord.open || Object.prototype.hasOwnProperty.call(nextRecord.open,abandoned.quest) ||
+            !changes.length || changes.some(function(change){return !change || change.count>=0 || change.upTo!==true;}))
+          throw new Error('Invalid quest abandonment.');
+      }
       if(changes.length===0) {
         var metadataOwner=JSON.parse(token);
         if(!available() || identity(actor)!==token)return {ok:false,why:'identity'};
@@ -1290,14 +1321,31 @@ function createQuestTransactions(deps) {
           sequence=oldReceipt.sequence+1;
         }
         if(!Number.isSafeInteger(sequence))throw new Error('Quest inventory receipt sequence is exhausted.');
-        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before;
+        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before,short=false;
         changes.forEach(function(change){
           if(!Number.isSafeInteger(change.count) || change.count===0)throw new Error('Invalid quest goods.');
+          if(change.upTo!==undefined && (change.upTo!==true || change.count>0))throw new Error('Invalid quest collection.');
           var baseId=mp.getIdFromDesc(change.item);
           if(!Number.isInteger(baseId) || baseId<=0 || baseId>0xffffffff)throw new Error('Quest goods are unavailable.');
-          next=change.count<0?inventoryTools.takeEntries(next,baseId,-change.count).inventory:
-            inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
+          if(change.count<0) {
+            var amount=-change.count;
+            // Only abandonment requests up-to collection. Plan it from this
+            // locked snapshot; the final CAS fences both goods and quest.
+            if(change.upTo===true) {
+              amount=Math.min(amount,next.entries.reduce(function(n,row){return row.baseId===baseId?n+row.count:n;},0));
+              if(amount < -change.count)short=true;
+            }
+            if(amount>0)next=inventoryTools.takeEntries(next,baseId,amount).inventory;
+          } else next=inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
         });
+        if(short) {
+          if(!abandoned || abandoned.until===null || !nextRecord.cool || typeof nextRecord.cool!=='object' || Array.isArray(nextRecord.cool))
+            throw new Error('The normal quest cooldown is unavailable.');
+          var previous=nextRecord.cool[abandoned.quest];
+          if(previous!==undefined && (!Number.isSafeInteger(previous) || previous<0))throw new Error('The quest cooldown cannot be verified.');
+          nextRecord.cool[abandoned.quest]=Math.max(previous || 0,abandoned.until);
+          if(Buffer.byteLength(JSON.stringify(nextRecord),'utf8')>16384)throw new Error('The quest record is too large.');
+        }
         var nextReceipt=JSON.stringify({actor:human.desc,profile:human.profileId,sequence:sequence});
         if(!stillActive() || !available() || identity(actor)!==token)return {ok:false,why:'identity'};
         if(admission!==undefined && (typeof admission!=='function' || admission()!==true))return {ok:false,why:'session'};
@@ -2804,7 +2852,7 @@ function createMerchantTrading(deps) {
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
-      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what you drew and leave the work.') :
+      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
         reasons[result.why] || 'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
@@ -2980,6 +3028,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;

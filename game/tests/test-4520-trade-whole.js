@@ -1,3 +1,4 @@
+const observedOfferVersion = require('../../tests/fixtures/trade-version');
 // test-4520-trade-whole.js
 //
 // #4520. A trade moves both sides or neither, and a failure says what
@@ -134,9 +135,9 @@ function tradeWorld(company) {
   // port that is not a whole number (ERR_SOCKET_BAD_PORT).
   const sayThrows = {};
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('../../tests/fixtures/ordinary-quest-items') + TRADE)(
-    g, mp, { log: function (s) { logged.push(String(s)); } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function (s) { logged.push(String(s)); } }, function () { return 1; }, function () { },
     function (n, f) { return f; },
     function (id, line) {
       if (sayThrows[id]) { throw new RangeError('Port should be >= 0 and < 65536. Received type number (7778.5).'); }
@@ -171,8 +172,8 @@ attempt('A: the second side\'s gold would pass a stack\'s limit', function () {
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
-  const r = w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('A1 the trade is refused: "' + r + '"', r !== '');
   yes('A2 the first side\'s sword did not move: both packs are as they were',
       w.pack(A) === packA && w.pack(B) === packB);
@@ -193,8 +194,8 @@ attempt('B: a sale whose share would pass the seller\'s gold stack', function ()
   yes('B0 the worker buys for the company', w.trade.sale(A) === '');
   w.trade.add(B, '#' + w.line(B, 'Leek').p, 1);
   w.trade.gold(A, 50);
-  w.trade.confirm(A);
-  const r = w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('B1 the sale is refused: "' + r + '"', r !== '');
   yes('B2 both packs are as they were', w.pack(A) === packA && w.pack(B) === packB && w.writes.length === 0);
   yes('B3 the message says why', /a stack holds at most 4294967295\. Nothing was taken\.$/.test(r));
@@ -208,9 +209,9 @@ attempt('C: the second pack is written and its send throws', function () {
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.throwAfter[B] = true;
-  const r = w.trade.confirm(B);
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('C1 the trade is done: "' + r + '"', r === '' && !w.trade.tradeOf(A));
   yes('C2 both packs hold the trade',
       w.count(A, GOLD) === 50 && w.count(A, SWORD) === 0 && w.count(B, SWORD) === 1 && w.count(B, GOLD) === 0);
@@ -228,9 +229,9 @@ attempt('D: the first pack is written, its send throws, the second never is', fu
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.throwAfter[A] = true;
-  const r = w.trade.confirm(B);
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('D1 it does not say nothing was taken: "' + r + '"', r !== '' && !/Nothing was taken/.test(r));
   yes('D2 it says whose pack was written and whose was not',
       r === 'The trade went only half through: Aldis\'s pack was written and Sera\'s was not. ' +
@@ -250,8 +251,8 @@ attempt('E: both piles move, one write per person', function () {
   w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
   w.trade.add(B, '#' + w.line(B, 'Leek').p, 2);
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
-  yes('E1 it trades', w.trade.confirm(B) === '' && !w.trade.tradeOf(A));
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
+  yes('E1 it trades', w.trade.confirm(B, observedOfferVersion(w.trade, B)) === '' && !w.trade.tradeOf(A));
   yes('E2 each pack holds its new things',
       w.count(A, GOLD) === 55 && w.count(A, LEEK) === 2 && w.count(A, SWORD) === 0 &&
       w.count(B, SWORD) === 1 && w.count(B, LEEK) === 1 && w.count(B, GOLD) === 0);
@@ -266,10 +267,10 @@ attempt('F: half a trade, and say throws for the first person', function () {
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.throwAfter[A] = true;
   w.sayThrows[A] = true;
-  const r = w.trade.confirm(B);
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('F1 the second person is still told', w.said.some(function (s) { return s[0] === B && s[1] === r; }));
   yes('F2 the server log names who was not told, the line, and the error',
       w.logged.some(function (l) {
@@ -287,10 +288,10 @@ attempt('G: half a sale, and say throws for the seller', function () {
   w.trade.sale(A);
   w.trade.add(B, '#' + w.line(B, 'Leek').p, 1);
   w.trade.gold(A, 50);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.throwAfter[B] = true;
   w.sayThrows[B] = true;
-  const r = w.trade.confirm(B);
+  const r = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('G1 it is half a sale, said as it is: "' + r + '"', /^The sale went only half through: Thora's pack was written and Brenna's was not\./.test(r));
   yes('G2 the worker is still told', w.said.some(function (s) { return s[0] === A && s[1] === r; }));
   yes('G3 the server log names the seller as not told, with the error',

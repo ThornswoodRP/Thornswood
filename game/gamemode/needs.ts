@@ -1063,6 +1063,14 @@
     if (testingSnapshot[actorId]) { return Object.assign({}, testingSnapshot[actorId]); }
     now = now || Date.now();
     var n = read(actorId);
+    // Pausing the clock at its source preserves the actual meters. It does
+    // not fill them, and disabling the mode cannot charge the skipped time.
+    if (ignoresNeeds(actorId)) {
+      if (!n) { n = fresh(); }
+      n.at = now;
+      if (!write(actorId,n)) { throw new Error('The paused needs clock could not be saved.'); }
+      return n;
+    }
     var arriving = !here[actorId] && onlineNow(actorId);
     if (arriving) { here[actorId] = true; }
     /*
@@ -1228,15 +1236,19 @@
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = environment.warmthTarget(n);
-      // Winter out under the sky cools a quarter faster (#3144), so its half
-      // life is the cooling one cut by that share. Warming is left alone.
-      var half = (target > n.temp)
-        ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / environment.outdoorCooling(n);
-      var k = 1 - Math.pow(0.5, (hours * 60) / half);
-      if (k > 1) { k = 1; }
-      if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+      var end = n.at + hours * 3600000;
+      var fireFrom = Number(environment.burningFrom) || 0;
+      var fireEnd = Number(environment.burningUntil) || 0;
+      var cursor = n.at;
+      function temperatureTo(until, onFire) {
+        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        cursor = until;
+      }
+      // The environment supplies the interval. No runtime state is read by
+      // projection, and a refused pre-fire save cannot heat earlier time.
+      if (fireFrom > cursor) { temperatureTo(Math.min(end, fireFrom), false); }
+      if (cursor < end && fireFrom <= cursor && fireEnd > cursor) { temperatureTo(Math.min(end, fireEnd), true); }
+      if (cursor < end) { temperatureTo(end, false); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
@@ -1267,10 +1279,13 @@
   }
 
   function projectionEnvironment(actorId, savedOnly) {
+    var fireEnd = burningUntil(actorId, savedOnly);
     return {
       workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
       restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
-      warmthTarget: function (n) { return warmthTarget(actorId, n, savedOnly); },
+      warmthTarget: function (n, onFire) { return warmthTarget(actorId, n, savedOnly, onFire ? NEEDS.fire.at : 0); },
+      burningFrom: fireEnd ? burnStarts[actorId] : 0,
+      burningUntil: fireEnd,
       outdoorCooling: outdoorCooling
     };
   }
@@ -1365,11 +1380,19 @@
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n, savedOnly) {
+  function approachTemperature(n, target, ms, coolingShare) {
+    // The same documented half-gap curve, including winter cooling.
+    var half = target > n.temp ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
+      : NEEDS.settleMinutes / coolingShare;
+    var k = Math.min(1, 1 - Math.pow(0.5, ms / (half * 60000)));
+    if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+  }
+
+  function warmthTarget(actorId, n, savedOnly, bodyFireWorth) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly, bodyFireWorth) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -1433,7 +1456,7 @@
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId, savedOnly) {
+  function nearbyFireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
@@ -1441,6 +1464,19 @@
     if (d >= reach) { return 0; }
     var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
+  }
+
+  function burningUntil(actorId, savedOnly, identity) {
+    if (!burning || !Object.prototype.hasOwnProperty.call(burning, actorId)) { return 0; }
+    // A new profile, runtime or life can read needs before the burn tick.
+    // Only the actor that reported the fire can bank its elapsed warmth.
+    if ((identity || burnIdentity(actorId, savedOnly)) !== burnIdentities[actorId]) { return 0; }
+    return burning[actorId] + NEEDS.burn.every * 3;
+  }
+
+  function fireWarmth(n, actorId, savedOnly, bodyFireWorth) {
+    var body = bodyFireWorth === undefined ? (burningUntil(actorId) > Date.now() ? NEEDS.fire.at : 0) : bodyFireWorth;
+    return Math.max(nearbyFireWarmth(n, actorId, savedOnly), body);
   }
 
   /*
@@ -2384,6 +2420,7 @@
   */
   function effects(actorId, n) {
     var out = {};
+    if (ignoresNeeds(actorId)) { return out; }
     if (!n) { return out; }
     function add(cost) {
       for (var av in cost) {
@@ -2477,7 +2514,8 @@
       tempTarget: Math.round(warmthTarget(actorId, n)),
       roof: !!n.roof, night: !!n.night,
       fireAway: (typeof n.fire === 'number' && n.fire >= 0) ? Math.round(n.fire) : -1,
-      fireWorth: Math.round(fireWarmth(n, actorId)),
+      fireWorth: Math.round(nearbyFireWarmth(n, actorId)),
+      burning: burningUntil(actorId) > Date.now(),
       exposure: Math.round(weathered(actorId, n)),
       // How much slower a storm makes you right now, 0 when not in one (#3176).
       storm: stormy(n) ? NEEDS.weather.storm : 0,
@@ -3009,6 +3047,18 @@
     return true;
   }
 
+  // Staff's scene tool changes the source state, not just the screen effect.
+  // Keep food, drink, rest, temperature, tea, injuries and diseases intact.
+  function clearIntoxication(actorId) {
+    var n = read(actorId);
+    if (!n) { throw new Error('The needs record is unavailable.'); }
+    n.ale = 0; n.aleAt = null; n.aleHelpUntil = 0; n.drunk = false;
+    n.drugUntil = 0; n.drugCrash = 0; n.drugged = false; n.doses = [];
+    n.withdrawalUntil = 0; n.hangoverUntil = 0; n.look = '';
+    if (!write(actorId,n)) { throw new Error('The cleared effects could not be saved.'); }
+    pushEffects(actorId); hangoverCare(actorId);
+  }
+
   /* The injury block's line and look prompt row, for a hangover (careOf). */
   function hangoverCare(actorId) {
     var hurtC = g.__thornswoodHurt;
@@ -3044,6 +3094,7 @@
     to matter is worth being told about and every swing before that is not.
   */
   function worked(actorId, key) {
+    if (ignoresNeeds(actorId)) { return ''; }
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
@@ -3158,6 +3209,7 @@
 
   /** Too tired to make anything. See CRAFT_REST. */
   function tooTiredToCraft(actorId) {
+    if (ignoresNeeds(actorId)) { return false; }
     var n = settle(actorId);
     return n.rest < CRAFT_REST;
   }
@@ -3173,6 +3225,17 @@
     if (!tooTiredToCraft(actorId)) { return ''; }
     return 'You are too tired to make anything: your Rest is under ' + CRAFT_REST + '. ' +
            'Sit down, or lie down in a bed, first.';
+  }
+
+  function ignoresNeeds(actorId) {
+    try { return mp.get(actorId,'isGodMode') === true; }
+    catch (e) { return false; }
+  }
+
+  function godmodeChanged(actorId) {
+    var hurt = g.__thornswoodHurt;
+    if (hurt && hurt.clearFireExposure) { hurt.clearFireExposure(actorId); }
+    pushEffects(actorId);
   }
 
   /*
@@ -3693,8 +3756,9 @@
   var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
+  var burnStarts = {};     // actual start, independent of whether needs saved
 
-  function burnIdentity(actorId) {
+  function burnIdentity(actorId, savedOnly) {
     try {
       var state = mp.getNpcAIState(actorId);
       var runtime = mp.getActorRuntimeIdentity(actorId);
@@ -3702,7 +3766,11 @@
           !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
           typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
       return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
-    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+    } catch (e) {
+      if (savedOnly) { throw e; }
+      nlog('could not read the burning actor identity:', e);
+      return '';
+    }
   }
 
   function publishBurnVisual(actorId, on) {
@@ -3712,18 +3780,37 @@
   }
 
   function clearBurning(actorId) {
-    delete burning[actorId];
-    delete burnIdentities[actorId];
-    publishBurnVisual(actorId, false);
+    var hadFire = Object.prototype.hasOwnProperty.call(burning, actorId);
+    var online = onlineNow(actorId);
+    // Bank heat only for the original actor. An offline character keeps the
+    // saved reading, and their next settle is an arrival.
+    var bankHeat = hadFire && online && burningUntil(actorId) > 0;
+    try {
+      if (bankHeat) { settle(actorId); }
+    } finally {
+      // Closing the fire is independent of saving this temperature sample.
+      if (hadFire && !online) { delete here[actorId]; }
+      delete burning[actorId];
+      delete burnIdentities[actorId];
+      delete burnStarts[actorId];
+      publishBurnVisual(actorId, false);
+    }
+    if (bankHeat) { pushEffects(actorId); }
   }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
     var identity = on ? burnIdentity(actorId) : '';
     if (on && identity) {
+      var wasBurning = burningUntil(actorId, false, identity) > Date.now();
+      // A new fire cannot warm the time before the report. A heartbeat also
+      // banks the old interval before extending its deadline.
+      settle(actorId);
+      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
+      if (!wasBurning) { pushEffects(actorId); }
     } else { clearBurning(actorId); }
   }
 
@@ -3938,7 +4025,8 @@
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
-    hungOver: hungOver, soberUp: soberUp,
+    hungOver: hungOver, soberUp: soberUp, clearIntoxication: clearIntoxication,
+    ignoresNeeds: ignoresNeeds, godmodeChanged: godmodeChanged,
     // What logging out now would do, in the Body page's words (#2246).
     awayWords: awayWords
   };

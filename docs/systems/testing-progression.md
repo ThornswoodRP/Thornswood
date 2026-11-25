@@ -11,6 +11,8 @@ Both uses need a proven chat connection and the launcher's current pass.
 | `/rankup profession destruction` | A mage's chosen Destruction school |
 | `/rankup class for Dagny Iron Hand` | An admin advances that character's current class |
 | `/rankup profession restoration for Dagny Iron Hand` | An admin advances that mage's chosen Restoration school |
+| `/setclass hunter` | Replace your gathering class with Hunter at Novice |
+| `/setclass farmer for Dagny Iron Hand` | An admin replaces that character's gathering class |
 
 A class has one rank. A non-mage profession has a chosen half whose rank
 advances; the sister half and taught outside trades are left alone. A mage
@@ -29,3 +31,16 @@ The saved rank and its unlocks survive restarting the server.
 
 This is an explicit testing exception to progression through ordinary work.
 It does not change who may use the staff crafting tools.
+
+## Changing class
+
+A replacement class starts at Novice with no work toward the next rank. The
+old class rank and its work are removed. Spent skill points, free earned
+points, the profession and its school or half ranks, and carried equipment
+stay. Starting tools and seeds are not handed out again.
+
+The points placed by the old choices are rebuilt from the current choices
+through the normal allocation rules. This removes the old class's bonus,
+adds the new class's bonus, and keeps spent points under the same caps.
+Switching back and forth does not stack bonuses or award skill points.
+Gathering gates and the character panel use the new class immediately.

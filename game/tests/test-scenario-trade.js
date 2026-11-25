@@ -112,7 +112,7 @@ yes('C3 and 10 goes up (' + win(CORVIN).theirGold + ')', win(CORVIN).theirGold =
 
 // ----------------------------------------------------------- D. agreeing --
 heardAt = w.heard(CORVIN).length;
-say(BRENNA, '/trade ok');
+say(BRENNA, '/trade agree ' + win(BRENNA).offerVersion);
 yes('D1 she agrees, and Corvin is told (' + w.heardSince(CORVIN, heardAt).join(' | ') + ')',
   win(BRENNA).iAgreed === true && win(CORVIN).theyAgreed === true &&
   w.heardSince(CORVIN, heardAt).indexOf('Brenna has agreed. Agree on the trade when you are ready.') !== -1);
@@ -121,10 +121,10 @@ yes('D2 Corvin putting up two ore takes her agreement back (' + JSON.stringify(w
   win(BRENNA).iAgreed === false && (win(BRENNA).theirs || []).length === 1 && win(BRENNA).theirs[0].c === 2);
 
 // -------------------------------------------------------------- E. traded --
-say(BRENNA, '/trade ok');
+say(BRENNA, '/trade agree ' + win(BRENNA).offerVersion);
 heardAt = w.heard(BRENNA).length;
 const corvinHeard = w.heard(CORVIN).length;
-say(CORVIN, '/trade ok');
+say(CORVIN, '/trade agree ' + win(CORVIN).offerVersion);
 yes('E1 both agree: traded, and each is told what went each way (' + w.heardSince(BRENNA, heardAt).join(' | ') + ' || ' +
   w.heardSince(CORVIN, corvinHeard).join(' | ') + ')',
   w.heardSince(BRENNA, heardAt).some(function (l) { return /^Traded\. You gave .*Iron Sword \(90%\).* and got .*Iron Ore.*\.$/.test(l); }) &&
@@ -177,7 +177,7 @@ EVERYONE.forEach(w.arrive);
 w.run(30000);
 yes('H1 and coming back sends both windows shut, the piles not remembered (#5464) (' + JSON.stringify([win(BRENNA).open, win(CORVIN).open]) + ')',
   win(BRENNA).open === false && win(CORVIN).open === false);
-say(BRENNA, '/trade ok');
+say(BRENNA, '/trade agree ' + win(BRENNA).offerVersion);
 yes('H1 Agree has no trade to agree to, and nothing moved (' + last(BRENNA) + ')',
   last(BRENNA) === 'You are not trading.' && gold(BRENNA) === 30 && gold(CORVIN) === 50);
 

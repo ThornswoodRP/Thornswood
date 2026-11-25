@@ -299,6 +299,14 @@ straight after each post, and a post is matched back by its title among the
 bot's own, so neither a restart nor a crash between a post and its save posts
 twice.
 
+If the GitHub token is unavailable or that saved index cannot be read, the
+existing watcher pauses and checks again at its usual interval. It logs the
+blocking reason and attempts one staff warning per episode. Repairing the
+prerequisite resumes forum and public-list updates without restarting the
+bot. Broken JSON and nonobject indexes are never treated as empty, and a
+readability probe never replaces unsaved live metadata. The local recovery
+checks are in `bot\tests\test-5514-forum-prerequisite-recovery.py`.
+
 **Report a problem** (Patrick, 21 Oct, #3155). Testers file a problem on the
 board themselves, from two places, and each one becomes an issue in
 `ThornswoodRP/Thornswood` labelled `Tester report` and `area: triage`
@@ -322,6 +330,10 @@ board themselves, from two places, and each one becomes an issue in
   playtesters (`TESTER_ROLES`, Playtester by default) and staff may use it,
   five an hour each. The bot files the issue at once and answers only them.
   The pin needs Manage Threads, which the bot has through Administrator.
+  If the forum requires a tag, the panel uses its first available tag. A
+  required-tag forum with no available tag gets a repair message in the log
+  and no post. `bot\tests\test-5241-problem-panel-tag.py` checks creation,
+  restart reuse, Discord refusals and the library's tag-ID serialization.
 
 The logs are never copied into the issue. They reach the site from the
 launcher when the game closes, as they always have, and the issue links the
@@ -403,6 +415,25 @@ whole file at once.
   made the folder yet.
 
 ### Staff
+
+**Report and action copies.** The report and moderation watchers keep their
+confirmed message IDs in `data\report-posts.json` and
+`data\moderation-posts.json`. Unacknowledged input from while the bot was down
+is delivered on the next pass. A burst can share one summary message; its
+copy stays until the last retained source item expires.
+
+Before sending, each watcher saves a pending attempt with an opaque copy
+reference. That reference is the small footer on the staff message, without
+account or report IDs. A failed receipt save or an uncertain network answer
+is recovered by finding that exact bot-owned reference in its original
+channel. Empty, inaccessible or incomplete history never permits a blind
+resend. An unresolved attempt holds newer copies from that source and names
+the reference in the log for review. A final Discord refusal can follow a
+retry of an accepted send, so it leaves the attempt pending. Missing channel
+access detected before a send leaves the copy eligible for a later pass.
+Unreadable indexes expose counts only, and unreadable or incomplete source
+files cannot remove saved private copies. The local regression is
+`bot\tests\test-4247-staff-copy-receipts.py`.
 
 `#staff-news` (the staff `#news` until #3317, then staff-announcements
 until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),

@@ -1556,24 +1556,28 @@
       /*
         A trade that is already open takes verbs rather than a name.
 
-        add, remove, gold, ok and cancel, and the panel sends exactly the same
-        lines, the same way the J panel sends /journal. One way in.
+        add, remove, gold, agree and cancel, and the panel sends exactly the
+        same lines. Agree names a version with a verb older servers never
+        interpret as an approval.
       */
       if (word === '/trade') {
         var tr2 = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTrade;
         if (!tr2) { toProfile(profileId, 'Trading is not running on this server.'); return true; }
-        if (String(parts[1] || '').toLowerCase() === 'refresh') {
+        var verb = String(parts[1] || '').toLowerCase();
+        if (verb === 'refresh' || verb === 'ok') {
           tr2.refresh(actorId);
+          if (verb === 'ok') {
+            toProfile(profileId, 'The trade window is out of date. Close the game, let the launcher update, then rejoin before trading.');
+          }
           return true;
         }
         var live = tr2.tradeOf(actorId);
-        var verb = String(parts[1] || '').toLowerCase();
-        if (live || verb === 'cancel' || verb === 'ok' || verb === 'add' ||
+        if (live || verb === 'cancel' || verb === 'agree' || verb === 'add' ||
             verb === 'remove' || verb === 'gold' || verb === 'pack' || verb === 'sale') {
           if (!live) { toProfile(profileId, 'You are not trading.'); return true; }
           var out = '';
           if (verb === 'cancel') { out = tr2.cancel(actorId); }
-          else if (verb === 'ok') { out = tr2.confirm(actorId); }
+          else if (verb === 'agree') { out = tr2.confirm(actorId, parts.length === 3 ? parts[2] : undefined); }
           else if (verb === 'gold') { out = tr2.gold(actorId, parts[2]); }
           // The panel's Buy for the company (#1393). Never typed.
           else if (verb === 'sale') { out = tr2.sale(actorId); }

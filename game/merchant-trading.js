@@ -568,7 +568,7 @@ function createMerchantTrading(deps) {
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
-      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what you drew and leave the work.') :
+      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
         reasons[result.why] || 'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
@@ -744,6 +744,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;
