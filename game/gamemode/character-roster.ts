@@ -442,7 +442,7 @@
   if (globalThis.__thornswoodRoster) {
     try { clearInterval(globalThis.__thornswoodRoster); } catch (e) { }
   }
-  globalThis.__thornswoodRoster = setInterval(function () {
+  function refresh() {
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
 
@@ -493,7 +493,9 @@
 
     // Still dirty when the write was refused: the file is behind the book.
     if (dirty) { dirty = !write(); }
-  }, EVERY_MS);
+  }
+  globalThis.__thornswoodRefreshRoster = refresh;
+  globalThis.__thornswoodRoster = setInterval(refresh, EVERY_MS);
 
   console.log('[thornswood] character roster published at ' + FILE);
 })();

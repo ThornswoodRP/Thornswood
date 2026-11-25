@@ -68,6 +68,7 @@
     "asking-staff.ts",
     "stuck.ts",
     "command-tools.ts",
+    "staff-rename.ts",
     "staff.ts",
     "staff-progression.ts",
     "take-back.ts",

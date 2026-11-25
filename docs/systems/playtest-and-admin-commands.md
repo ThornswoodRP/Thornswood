@@ -24,7 +24,7 @@ These tools are for testing and administration. Ordinary play keeps its existing
 | rank-up | Advance an existing class or profession track through its progression rules | command-access, canonical progression | #6736 |
 | change-class | Change a class and keep saved state and unlocks consistent | command-access, canonical progression | #6737 |
 | change-profession | Change a profession and keep crafting access consistent | command-access, canonical progression | #6738 |
-| rename | Admin-only persistent rename of yourself or another character | command-access, authoritative appearance | #6739 |
+| rename | Admin-only persistent rename of yourself or another character; refresh the roster and nearby names | command-access, authoritative appearance and roster | #6739 |
 
 Build order: command-access, then command-help and the independent tools. Engine work may proceed beside the utilities. Each tool has its own acceptance checks and does not become available merely because it is described here.
 
