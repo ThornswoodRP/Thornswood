@@ -16,8 +16,8 @@ These tools are for testing and administration. Ordinary play keeps its existing
 | --- | --- | --- | --- |
 | command-access | Existing role, connection, pass and character ownership checks | Existing command router and staff helpers | #6628 foundation |
 | command-help | Route registered tools and show role-appropriate syntax and examples | command-access | #6731 |
-| movement-and-god-mode | Flight, phase, god mode, invisibility, effect clearing and bounded cleanup | command-access, authoritative engine behavior | #6628 |
 | person-teleport | Move only yourself to an online person; preserve restraints and combat/cooldown history | command-access, canonical location and stuck state | #6757 |
+| movement-and-god-mode | Flight, phase, god mode, invisibility, effect clearing and bounded cleanup | command-access, authoritative engine behavior | #6628 |
 | inspect | Read your current character, or another character for an admin | command-access | #6732 |
 | restore-vitals | Restore health, magicka and stamina without reversing permanent decisions | command-access | #6733 |
 | set-needs | Set controlled hunger, thirst, rest and temperature values | command-access, canonical needs state | #6734 |
