@@ -94,7 +94,12 @@ if (w.loaded()) {
   ownerFire(); const dead = observer(); dead.run(); w.die(actor, 0, null); dead.run();
   yes('a dead remote actor immediately loses its observer shader', dead.stops() === 1);
   w.run(2500); yes('death cleanup clears saved observer state', value() && value().on === false);
-  w.row(actor).isDead = false; ownerFire(); w.leave(actor); w.run(2500);
+  w.row(actor).isDead = false; ownerFire();
+  w.die(actor, 0, null); w.row(actor).isDead = false;
+  const revived = observer(); revived.run();
+  yes('death followed by immediate revival cannot replay the old fire before the next burn tick',
+    value() && value().on === false && revived.plays() === 0);
+  ownerFire(); w.leave(actor); w.run(2500);
   yes('disconnect cleanup clears the old observer state', value() && value().on === false);
   w.arrive(actor); w.run(1500); ownerFire(); const beforeRestart = value();
   yes('the restart fixture holds a genuinely active fire', beforeRestart && beforeRestart.on === true);
@@ -117,6 +122,6 @@ if (w.loaded()) {
   try { ownerFire(); w.run(2500); } finally { w.mp().set = setter; }
   yes('a visual publication failure does not disable the existing canonical close-range spread',
     (w.prop(other, 'thornswoodBurn') || {}).at > caughtBefore);
-  yes('observer scripts never report an API or shader error', [a, b, late, renewal, quiet, expired, life, dead, returned, reloaded].every(o => !o.calls.some(row => row[0] === 'error')));
+  yes('observer scripts never report an API or shader error', [a, b, late, renewal, quiet, expired, life, dead, revived, returned, reloaded].every(o => !o.calls.some(row => row[0] === 'error')));
 }
 t.done(w);

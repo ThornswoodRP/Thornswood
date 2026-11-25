@@ -1227,6 +1227,8 @@
   */
   function died(actorId) {
     delete fires[actorId];
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
     var any = false;
     for (var i = 0; i < rec.wounds.length; i++) {
