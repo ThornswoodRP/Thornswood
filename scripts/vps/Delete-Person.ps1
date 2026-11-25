@@ -471,10 +471,23 @@ function mergeList(lf, P, A) {
     stop(lf.p + ' holds form ids in the old shape, from a build before #2870, and is not read; docs\\GAMEMODE.md says what to do. Nothing was changed');
   }
   const was = lf.missing ? {} : lf.value;
+  if (was.done && Object.prototype.hasOwnProperty.call(was.done, 'restraints') &&
+      (!Number.isSafeInteger(was.done.restraints) || was.done.restraints <= 0)) {
+    stop(lf.p + ' has an invalid restraint acknowledgement; nothing was changed');
+  }
+  const wipeIds = was.freezeWipeIds;
+  if ((was.clearFreezes !== undefined && typeof was.clearFreezes !== 'boolean') ||
+      (wipeIds !== undefined && (!Array.isArray(wipeIds) || wipeIds.some((x) => typeof x !== 'string' || !/^[0-9a-f]{32}$/.test(x)) || new Set(wipeIds).size !== wipeIds.length)) ||
+      (was.clearFreezes === true ? !Array.isArray(wipeIds) || !wipeIds.length : wipeIds && wipeIds.length)) {
+    stop(lf.p + ' has an invalid freeze-wipe request; nothing was changed');
+  }
   const ids = (xs) => (Array.isArray(xs) ? xs : []).map(Number).filter((x) => Number.isSafeInteger(x) && x > 0);
   const profiles = Array.from(new Set(ids(was.profiles).concat(Array.from(P)))).sort((x, y) => x - y);
   const actors = Array.from(new Set(ids(was.actors).concat(Array.from(A)))).sort((x, y) => x - y);
   lf.value = { profiles, actors };
+  if (was.clearFreezes === true && !(was.done && was.done.restraints)) {
+    lf.value.clearFreezes = true; lf.value.freezeWipeIds = wipeIds.slice();
+  }
 }
 /*
   Where each service finds the requests it takes at its next start (#2758):
@@ -940,7 +953,7 @@ for (const person of people) {
         left: the old copies in data.
       */
       const LIST = 'deleted-characters.json';
-      const RELEASED = /^(property|law|beds|farm-claims|embassy|books|dungeon-rewards-ledger|trade-cargo|market-stalls|trade-carts|merchant-ledger)\.json$/i;
+      const RELEASED = /^(property|law|beds|farm-claims|embassy|books|dungeon-rewards-ledger|trade-cargo|market-stalls|trade-carts|merchant-ledger|staff-restraints)\.json$/i;
       handled.add(path.join(priv, LIST).toLowerCase());
       // The server's own taken list and one half taken (#4920): requests, not registers.
       handled.add(path.join(priv, 'deleted-characters.taken.json').toLowerCase());

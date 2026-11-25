@@ -84,7 +84,7 @@ function world() {
       [A_SERA]: { desc: 'Markarth:4', pos: [9, 9, 9], rot: [0, 0, 0] }
     },
     staff: {}, kicked: [], set: [], said: [], silencedPosts: [], logged: [], records: [],
-    queue: [], timers: [], timeouts: [], placed: [], given: []
+    queue: [], timers: [], timeouts: [], placed: [], given: [], files: {}
   };
   w.staff[STAFFER] = true;
   return w;
@@ -107,6 +107,8 @@ function load(w) {
         w.where[id] = { desc: v.cellOrWorldDesc, pos: v.pos.slice(), rot: v.rot.slice() };
       }
     },
+    // Pinned WholeFileWrite.h: successful return places these complete bytes.
+    writeFileWhole: function (file, text) { w.files[file] = text; },
     getServerSettings: function () { return { privDir: 'private' }; },
     getUserByActor: function (a) { return w.online.indexOf(a) >= 0 ? 70 + w.online.indexOf(a) : -1; },
     kick: function (u) { w.kicked.push(u); },
@@ -143,8 +145,13 @@ function load(w) {
     }
   };
   const fakeFs = {
-    readFileSync: function () { throw new Error('not here'); },
-    existsSync: function () { return false; },
+    readFileSync: function (file, encoding) {
+      if (Object.prototype.hasOwnProperty.call(w.files, file)) {
+        return encoding ? w.files[file] : Buffer.from(w.files[file], 'utf8');
+      }
+      const e = new Error('not here'); e.code = 'ENOENT'; throw e;
+    },
+    existsSync: function (file) { return Object.prototype.hasOwnProperty.call(w.files, file); },
     appendFileSync: function (p, text) { w.records.push({ path: p, text: text }); },
     mkdirSync: function (p) { (w.dirs = w.dirs || []).push(p); },
     writeFileSync: function () { }, unlinkSync: function () { }
