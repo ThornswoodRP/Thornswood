@@ -40,7 +40,8 @@
       var cls = String(choice[0]).toLowerCase();
       var changed = P.setClassForTesting(s, cls);
       if (!changed.ok) { return refuse(changed.why); }
-      C.writeState(target.actorId, changed.state, true);
+      try { C.writeState(target.actorId, changed.state, true); }
+      catch (e) { return refuse('The class change could not be saved.'); }
       if (C.stateOf(target.actorId).cls !== cls) { return refuse('The class change could not be saved.'); }
       staff.tell(target.pid, 'Your class is now ' + C.nameOf(cls) + ' at Novice.');
       if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s class to ' + C.nameOf(cls) + '.'); }

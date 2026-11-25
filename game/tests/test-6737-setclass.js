@@ -99,6 +99,14 @@ for (const server of ['dev', 'main']) {
   };
   try { yes(server + ': a failed saved-property write leaves the class and audit unchanged', denied(tester, '/setclass hunter', tester)); }
   finally { box.mp.set = set; }
+  const write = C.writeState;
+  C.writeState = function () { throw new Error('fixture: atomic history save refused'); };
+  try {
+    const heard = w.heard(tester).length;
+    yes(server + ': a thrown history save is refused before class feedback or audit',
+      denied(tester, '/setclass hunter', tester) &&
+      w.heardSince(tester, heard).some(line => /could not be saved/.test(line)));
+  } finally { C.writeState = write; }
 
   let mage = P.pickClass(P.fresh(), 'miner').state;
   mage = P.pickProfession(mage, 'mage', ['destruction', 'restoration']).state;
