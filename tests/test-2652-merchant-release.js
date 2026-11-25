@@ -82,10 +82,10 @@ yes('S4 the parts still waiting are said once, after the NPC startup',
     waitAt > gm.indexOf('// NPC SERVER STARTUP END') && gm.indexOf('globalThis.__thornswoodReleaseWaiting();', waitAt + 1) < 0);
 yes('S5 the purse service answers release beside compareAndCommit', /return \{prepare,read,commit,compareAndCommit,pendingRecords,ledgerStates,release,/.test(purseSrc));
 const dp = fs.readFileSync(path.join(REPO, 'scripts', 'vps', 'Delete-Person.ps1'), 'utf8');
-const releasedPattern = /const RELEASED = \/([^\r\n]+)\/i;/.exec(dp);
-const releasedFile = releasedPattern ? new RegExp(releasedPattern[1], 'i') : null;
-yes('S6 Delete-Person counts the merchant ledger as released', !!releasedFile &&
-    releasedFile.test('merchant-ledger.json') && !releasedFile.test('merchant-ledger.json.bak'));
+const released = /const RELEASED = \/([^\n]+)\/i;/.exec(dp);
+const releasedFile = released && new RegExp(released[1], 'i');
+yes('S6 Delete-Person counts the merchant ledger as released',
+    !!releasedFile && releasedFile.test('merchant-ledger.json') && !releasedFile.test('merchant-ledger-copy.json') && !releasedFile.test('merchant-ledger.json.bak'));
 yes('S6a the same release-file rule includes active staff controls', !!releasedFile && releasedFile.test('staff-restraints.json'));
 // S7, that the deletion runbook says the ledger is let go, left with
 // WEBSITE-OPERATIONS.md for the private ops repo (#3693), whose

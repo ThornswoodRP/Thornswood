@@ -29,7 +29,7 @@ function fresh() {
     runtime: '12345', life: 0, targetProfile: TARGET, guid: 'target-connection' };
 }
 function boot(w, prior) {
-  const r = prior ? prior.__testRig : { posts: [], told: [], logs: [], kicked: [], timers: [], ends: [], order: [] };
+  const r = prior ? prior.__testRig : { posts: [], told: [], logs: [], kicked: [], timers: [], sessionEvents: [] };
   class Clock extends Date { static now() { return w.now; } }
   function request(opts, cb) {
     const req = { on() { return req; }, destroy() {}, end(body) {
@@ -69,8 +69,8 @@ function boot(w, prior) {
       if (w.noticeFault && pid === (w.noticeFaultPid || PID)) throw new Error('injected notice transport failure');
       r.told.push({ pid, text });
     },
-    __thornswoodSayLine: (pid, line) => {
-      r.ends.push({ pid, line }); r.order.push('end ' + pid);
+    __thornswoodSayLine: (pid, message) => {
+      r.sessionEvents.push(['line', pid, message.end]);
       if (w.afterEnd) w.afterEnd();
     },
     mp: {
@@ -114,7 +114,7 @@ function boot(w, prior) {
       getUserGuid: id => id === 2 ? w.guid : 'staff-connection',
       getActorRuntimeIdentity: id => { assert.equal(id, B); return w.runtime; },
       getNpcAIState: id => { assert.equal(id, B); return { profileId: w.targetProfile, lifeGeneration: w.life, isHuman: true, isConnected: true }; },
-      kick: id => { r.kicked.push(id); r.order.push('kick ' + id); }
+      kick: id => { r.kicked.push(id); r.sessionEvents.push(['kick', id]); }
     }
   };
   if (!prior) vm.createContext(box);
@@ -350,6 +350,8 @@ try {
       one.box.__thornswoodStaff.freezeTick();
       assert.equal(w.moves.length, 1, 'no movement replay or rollback');
       assert.deepEqual(one.kicked, [2]);
+      assert.deepEqual(one.sessionEvents.map(event => event.slice(0, 2)), [['line', TARGET], ['kick', 2]]);
+      assert.match(one.sessionEvents[0][2], /staff move could not be confirmed and saved.*frozen character/i);
       const two = boot(w);
       assert.equal(two.box.mp.onThornswoodLogin({ userId: 2, profileId: TARGET, proof: null }), 0);
       assert.equal(two.box.mp.onThornswoodLogin({ userId: 1, profileId: PID, proof: null }), PID);
@@ -366,6 +368,7 @@ try {
       w.afterMove = () => { w.fault = 'before'; w[fence] = typeof w[fence] === 'number' ? w[fence] + 1 : w[fence] + '1'; };
       one.command('/bring ' + TARGET);
       assert.deepEqual(one.kicked, []);
+      assert.deepEqual(one.sessionEvents, []);
       assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
     });
   }
@@ -374,13 +377,10 @@ try {
     w.afterMove = () => { w.fault = 'before'; w.noticeFault = true; };
     assert.doesNotThrow(() => one.command('/bring ' + TARGET));
     assert.deepEqual(one.kicked, [2]);
-    assert.equal(one.ends.length, 1);
-    assert.equal(one.ends[0].pid, TARGET);
-    assert.match(one.ends[0].line.end, /staff.*resolve|resolve.*frozen/i);
-    assert.deepEqual(one.order, ['end ' + TARGET, 'kick 2']);
     assert.equal(w.moves.length, 1);
     assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
     assert.equal(one.box.mp.onThornswoodLogin({ userId: 1, profileId: PID, proof: null }), PID);
+    assert.deepEqual(one.sessionEvents.map(event => event.slice(0, 2)), [['line', TARGET], ['kick', 2]]);
     assert.ok(one.logs.some(x => /notice|notification/.test(x) && /failed|could not/.test(x)));
   });
   test('pending termination rechecks the connection life after sending its end sentence', () => {
@@ -388,7 +388,7 @@ try {
     w.afterMove = () => { w.fault = 'before'; };
     w.afterEnd = () => { w.life++; };
     one.command('/bring ' + TARGET);
-    assert.deepEqual(one.order, ['end ' + TARGET]);
+    assert.deepEqual(one.sessionEvents.map(event => event.slice(0, 2)), [['line', TARGET]]);
     assert.deepEqual(one.kicked, []);
     assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
   });

@@ -354,7 +354,8 @@ let DEV = '';
 //
 // Each place that ends a session on purpose says { end } before its kick;
 // test-1157-session-ends.js runs the load order, join pass, seats and staff
-// ones and this file runs the door's. A restart's kick does not, on purpose:
+// ones, test-4488-restraints-persist.js runs the unresolved frozen-move end,
+// and this file runs the door's. A restart's kick does not, on purpose:
 // that reconnect is wanted. A kick anywhere else is new and needs the same.
 (function () {
   const found = [];
@@ -374,8 +375,6 @@ let DEV = '';
     'join pass: refuseLater',
     'seats: endLater',
     'chat commands: clearTheServer',
-    // The identity-fenced uncertain staff move sends its session-end packet
-    // before its kick; test-4488-restraints-persist exercises the real path.
     'staff: holdPendingMovement',
     'staff: endLater',
     'staff: command'
