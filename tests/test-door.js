@@ -172,6 +172,32 @@ function rig(enforce, profiles) {
 const A = 0xff000101, B = 0xff000202, C = 0xff000303;
 
 if (block !== null) {
+  // 4484: response arrival is not snapshot freshness. A pre-ban request can
+  // finish after that ban was made; its start must survive the late response.
+  {
+    const r = rig(true, [101]);
+    r.advance(60000);
+    r.answer(200, { profiles: [101], bans: [] });
+    const first = JSON.parse(r.files[ALLOWED]);
+    yes('4484 the door records request start separately from delayed commit',
+        Date.parse(first.bansRequestedAt) === 1000000 && Date.parse(first.at) === 1060000);
+    r.advance(10000);
+    r.refresh();
+    r.advance(30000);
+    r.answer(200, { profiles: [101], bans: [] });
+    const next = JSON.parse(r.files[ALLOWED]);
+    yes('4484 each refresh carries its own request start',
+        Date.parse(next.bansRequestedAt) === 1070000 && Date.parse(next.at) === 1100000);
+    for (const broken of [{ bansBroken: true }, { stateBroken: true }, {}]) {
+      r.refresh();
+      r.advance(10000);
+      r.answer(200, Object.assign({ profiles: [] },
+          Object.keys(broken).length ? { bans: [] } : {}, broken));
+      yes('4484 broken or missing upstream bans cannot claim a fresh ban snapshot',
+          !JSON.parse(r.files[ALLOWED]).bansRequestedAt);
+    }
+  }
+
   // S1: somebody on the list is let in and stays.
   {
     const r = rig(true, [101]);

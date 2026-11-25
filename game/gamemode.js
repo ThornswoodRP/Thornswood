@@ -13629,6 +13629,7 @@ log('gamemode loaded:',
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -13745,6 +13746,10 @@ log('gamemode loaded:',
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
               bans: Array.isArray(doc.bans) ? doc.bans : [],
+              // A late response to an old request cannot retire a newer local
+              // game ban. Only a readable upstream ban list proves freshness.
+              bansRequestedAt: (Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken)
+                ? new Date(requestedAt).toISOString() : '',
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],
@@ -63216,6 +63221,7 @@ module.exports = {
   // Bans made here, until the door's next list carries them; and who is
   // already on their way out, so the sweep tells them once.
   if (!state.banned) { state.banned = {}; }
+  var bansLoadedAt = Date.now();  // old hot-reload overlays have no acknowledgement time
   if (!state.ending) { state.ending = {}; }
   // Characters killed for good here (#1010), until the door's list carries them.
   if (!state.pk) { state.pk = {}; }
@@ -63637,17 +63643,28 @@ module.exports = {
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0;
+    var list = [], pk = [], written = 0, bansRequested = 0;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
       if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
+      if (doc && Array.isArray(doc.bans)) {
+        bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
+      }
     } catch (e) { list = []; pk = []; }
     bansRead.list = list;
     bansRead.pk = pk;
     bansRead.written = written;
+    // The site's confirmed newer request now owns these bans, including a
+    // lift made on the site. A late older request or unreadable list does not.
+    if (bansRequested > 0 && bansRequested <= written) {
+      for (var b in state.banned) {
+        if (Object.prototype.hasOwnProperty.call(state.banned, b) &&
+            bansRequested > (Number(state.banned[b].at) || bansLoadedAt)) { delete state.banned[b]; }
+      }
+    }
     // A lift the door's list has caught up with needs remembering no longer.
     for (var k in state.lifted) {
       if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
@@ -63786,8 +63803,8 @@ module.exports = {
         if (!ok) { tell(pid, 'The site did not take the ban, so nothing changed: ' + v + '.'); return; }
         var until = Number(v.until) || 0;
         var covers = whole && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
-        var ban = { why: why, until: until, scope: whole ? 'account' : 'character' };
         var now = Date.now();
+        var ban = { why: why, until: until, scope: whole ? 'account' : 'character', at: now };
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }

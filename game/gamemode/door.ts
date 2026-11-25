@@ -792,6 +792,7 @@
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -908,6 +909,10 @@
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
               bans: Array.isArray(doc.bans) ? doc.bans : [],
+              // A late response to an old request cannot retire a newer local
+              // game ban. Only a readable upstream ban list proves freshness.
+              bansRequestedAt: (Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken)
+                ? new Date(requestedAt).toISOString() : '',
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],
