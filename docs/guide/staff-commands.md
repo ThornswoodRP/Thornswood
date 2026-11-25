@@ -30,6 +30,14 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 
 Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
 
+## Set needs for testing
+
+Playtesters, staff and admins can use `/setneeds <hunger|thirst|rest|temperature> <value>` on themselves on both Dev and Main. Admins can add `for <person>` to change another character. An unambiguous explicit self target also works for a playtester.
+
+Use a decimal number from 0 to 100, including both bounds. Hunger, thirst and rest are full at 100; temperature is comfortable at 50, colder below and hotter above. For example, `/setneeds thirst 25` sets your drink meter to 25, while `/setneeds temperature 50 for Aldis` sets Aldis to comfortable warmth.
+
+The other needs first account for their elapsed time. The selected value is then saved exactly, its penalties and displays refresh, and the change is recorded. Injuries, carried items and ongoing effects retain their ordinary rules. Existing invalid needs are refused; a character with no needs record starts with the ordinary full meters and comfortable temperature before the requested change.
+
 ## For yourself
 
 | Command | What it does |
