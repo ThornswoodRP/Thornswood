@@ -221,7 +221,12 @@
 */
 mp.onReadBook = guard('onReadBook', function (actorId, bookBaseId) {
   const tomes = globalThis.__thornswoodTomes;
-  const r = tomes ? tomes.read(actorId, bookBaseId) : null;
+  let r;
+  try { r = tomes ? tomes.read(actorId, bookBaseId) : null; }
+  catch (e) {
+    log('spell tomes: reading or saving failed for ' + Number(actorId).toString(16) + ': ' + String(e));
+    r = { refused: true, line: 'The spell could not be learned safely. You keep the tome and your spell points.' };
+  }
   if (r && r.line) {
     notify(actorId, r.line);
     say(actorId, r.line);

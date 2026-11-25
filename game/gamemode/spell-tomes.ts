@@ -248,7 +248,7 @@
       if (outsider) {
         var again = S.learn(P, s, staffDesc);
         if (again.ok) {
-          C.writeState(actorId, again.state);
+          C.writeTomeState(actorId, again.state);
           var gone = spendTome(actorId, bookBaseId);
           return { refused: false, line: 'You know ' + spell.name + ' already, and the tome unlocks it for staves: ' +
                    'you can bind it into a staff at a staff enchanter now.' + (gone ? ' The tome is spent.' : '') };
@@ -273,7 +273,7 @@
             It is not written into their spell book, so it takes none of the
             places a Master mage's teaching gives.
           */
-          C.writeState(actorId, st.state);
+          C.writeTomeState(actorId, st.state);
           tlog(Number(actorId).toString(16), 'unlocked', spell.name, spell.desc, 'for staves from a tome');
           return { refused: false, line: 'The tome unlocks ' + spell.name + ' for staves: you can bind it into a staff ' +
                    'at a staff enchanter now. It took one of your ' + P.TABLE.limits.outsiderSpells +
@@ -299,7 +299,7 @@
         staffLine = ' It is not unlocked for staves: you need ' + joinNeeds(st2.missing || [{ why: st2.why }]) + '.';
       }
     }
-    C.writeState(actorId, next);
+    C.writeTomeState(actorId, next);
     var raised = C.raiseLines ? C.raiseLines(actorId, r) : null;
     tlog(Number(actorId).toString(16), 'learned', spell.name, spell.desc, 'from a tome');
     return { refused: false, line: 'The tome teaches you ' + spell.name + ', ' + word(spell.rank) + ' ' +

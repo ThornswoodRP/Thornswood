@@ -101,7 +101,7 @@ const ENGINE_METHODS = [
   'destroyActor', 'setRaceMenuOpen', 'getActorsByProfileId', 'getUnreadableChangeForms', 'setEnabled',
   'createBot', 'getUserByActor', 'getUserIp', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
   'makeProperty', 'makeEventSource', 'get', 'set', 'compareAndSetInventory',
-  'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'getInventoryReceipt',
+  'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'compareAndSetActorPropertyAndSpells', 'getInventoryReceipt',
   'getSavedInventoryReceipt', 'place', 'lookupEspmRecordById', 'getEspmLoadOrder',
   'getNeighborsByPosition', 'getAllForms', 'loadNpcBatch', 'prepareNpcLoad', 'setNpcServerControlled',
   'setNpcDifficultyTier', 'updateNpcMovement', 'stopNpcMovement', 'getNavmeshRecords', 'getNpcAIState',
@@ -450,6 +450,7 @@ function world(opts) {
   let occupant = new Map();
   let made = new Set();          // custom properties made with makeProperty, this process
   let madeVisible = new Set();   // those of them the owner or the neighbours see
+  let madeNeighbors = new Set();
   let online = [];               // actor ids, by user id order
   let users = new Map();         // actor -> user id
   let nextUser = 0;
@@ -626,6 +627,7 @@ function world(opts) {
       }
       made.add(name);
       if (options.isVisibleByOwner || options.isVisibleByNeighbors) { madeVisible.add(name); }
+      if (options.isVisibleByNeighbors) { madeNeighbors.add(name); }
     },
     makeEventSource: function () { },
     getDescFromId: function (id) { return w.descOf(id); },
@@ -752,6 +754,42 @@ function world(opts) {
       if (!sameInventory(now, property.expected === undefined ? null : property.expected)) { return false; }
       row[property.name] = copy(property.replacement);
       saw(id, 'set', property.name, copy(property.replacement));
+      return true;
+    },
+    // #6738: one actor snapshot commits progression and active learned spells.
+    compareAndSetActorPropertyAndSpells: function (id, profile, property) {
+      id = inventoryActorId(id);
+      const runtimeAtEntry = runtimeIdentity(id);
+      if (!Number.isInteger(profile) || profile <= 0 || profile > 2147483647) throw new Error('Actor profile must be positive int32');
+      if (!property || typeof property !== 'object') throw new Error('property must be an object');
+      const name = property.name, runtime = property.expectedRuntimeIdentity, life = property.expectedLifeGeneration;
+      const expected = copy(property.expected === undefined ? null : property.expected), replacement = copy(property.replacement);
+      function spells(value) {
+        if (!Array.isArray(value) || value.length > 4096) throw new Error('Invalid spell array');
+        const list = value.slice();
+        for (const spell of list) {
+          const record = Number.isInteger(spell) && spell > 0 && spell < 0xff000000 ? records.get(spell) : null;
+          if (!record || record.type !== 'SPEL' || list.indexOf(spell) !== list.lastIndexOf(spell)) throw new Error('Invalid spell form');
+        }
+        return list.sort((a, b) => a - b);
+      }
+      const before = spells(property.expectedSpells), next = spells(property.replacementSpells);
+      if (typeof name !== 'string' || !name || name.length > 128 || name[0] === '_' || BUILT_IN.includes(name) ||
+          !made.has(name) || madeNeighbors.has(name)) throw new Error('Progression needs a registered non-neighbor custom property');
+      if (typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !Number.isSafeInteger(life) || life < 0)
+        throw new Error('Invalid actor identity');
+      if (Buffer.byteLength(JSON.stringify(expected)) > 1048576 || Buffer.byteLength(JSON.stringify(replacement)) > 1048576)
+        throw new Error('Character property is too large');
+      const row = actorRow(id);
+      if (runtimeIdentity(id) !== runtimeAtEntry || row.profileId !== profile || runtime !== String(runtimeIdentity(id)) ||
+          life !== (Number(row._skympNpcLifeGeneration) || 0) ||
+          !sameInventory(row[name] === undefined ? null : row[name], expected) ||
+          JSON.stringify((row.learnedSpells || []).slice().sort((a, b) => a - b)) !== JSON.stringify(before)) return false;
+      row[name] = replacement;
+      row.learnedSpells = next;
+      row._skympAuthoritativeSpells = true;
+      saw(id, 'set', name, copy(replacement));
+      saw(id, 'spells', 'replace', next.slice());
       return true;
     },
     getInventoryReceipt: function (id) {
@@ -978,6 +1016,7 @@ function world(opts) {
       ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
+    madeNeighbors = new Set();
     madeVisible = new Set();
     savedReceipts = new Map();      // a new WorldState remembers no saved receipt
     runtimeIds = new Map();         // and every actor it loads is a new runtime object

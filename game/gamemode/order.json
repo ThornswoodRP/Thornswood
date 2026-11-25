@@ -51,6 +51,7 @@
     "strength-weapons.ts",
     "alchemy.ts",
     "staff-spells.ts",
+    "character-knowledge.ts",
     "chat-commands.ts",
     "teleport.ts",
     "cpu-profile-on-request.ts",
