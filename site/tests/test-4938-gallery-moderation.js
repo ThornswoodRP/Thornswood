@@ -20,6 +20,11 @@ function preload() {
   const https = require('node:https'), fs = require('node:fs'), path = require('node:path');
   const { EventEmitter } = require('node:events');
   const rename = fs.renameSync.bind(fs), copy = fs.copyFileSync.bind(fs);
+  const prototype = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
+  Object.defineProperty(Object.prototype, '__proto__', { ...prototype, set(value) {
+    fs.appendFileSync(path.join(__dirname, 'prototype-writes.txt'), 'prototype setter used\n');
+    prototype.set.call(this, value);
+  } });
   function refuse(file) {
     const name = String(fs.readFileSync(path.join(__dirname, 'refuse.txt'), 'utf8'));
     if (name && path.basename(String(file)) === name) throw Object.assign(Error('fixture refused save'), { code: 'EACCES' });
@@ -186,6 +191,30 @@ function recorded(before, did, name, actor) {
     result = await act('DELETE', '/api/gallery/approved', { name: retryImage });
     yes('unreadable evidence state cannot authorize deleting the stored upload',
       result.status === 500 && fs.existsSync(path.join(dir, 'uploads', retryImage)) && audit().length === before);
+    write('uploads/uploads.json', { unrelated: { marker: 'keep unrelated metadata' } });
+    fs.writeFileSync(path.join(dir, 'prototype-writes.txt'), '');
+    for (const special of ['__proto__', 'constructor', 'prototype']) {
+      fs.writeFileSync(path.join(dir, 'prototype-writes.txt'), '');
+      seed(special, [{ id: 'special-' + special, name: special, why: 'Reserved-key evidence' }]);
+      fs.writeFileSync(path.join(dir, 'uploads', special), 'owned special-key file');
+      result = await act('DELETE', '/api/gallery/approved', { name: special });
+      const metadata = read('uploads/uploads.json');
+      yes(special + ' is an own retained metadata key without an inherited lookup', result.status === 200 && result.body.heldForReport === true
+        && Object.prototype.hasOwnProperty.call(metadata, special) && metadata[special].heldUntil > Date.now()
+        && metadata[special].heldReports[0].why === 'Reserved-key evidence'
+        && metadata.unrelated.marker === 'keep unrelated metadata' && Object.getPrototypeOf(metadata) === Object.prototype
+        && fs.existsSync(path.join(dir, 'uploads', special)));
+      yes(special + ' does not invoke the prototype setter', fs.readFileSync(path.join(dir, 'prototype-writes.txt'), 'utf8') === '');
+    }
+    const outside = path.join(dir, 'outside-gallery.txt'); fs.writeFileSync(outside, 'owned outside sentinel');
+    fs.writeFileSync(path.join(dir, 'prototype-writes.txt'), '');
+    const metadataBeforePath = fs.readFileSync(path.join(dir, 'uploads/uploads.json'), 'utf8');
+    seed('../outside-gallery.txt');
+    result = await act('DELETE', '/api/gallery/approved', { name: '../outside-gallery.txt' });
+    yes('a traversal name cannot affect a file or metadata outside the canonical upload boundary', result.body.fileDeleted === false
+      && fs.readFileSync(outside, 'utf8') === 'owned outside sentinel'
+      && fs.readFileSync(path.join(dir, 'uploads/uploads.json'), 'utf8') === metadataBeforePath
+      && fs.readFileSync(path.join(dir, 'prototype-writes.txt'), 'utf8') === '');
     yes('owned site remains running and blocks every unrecognized provider route', child.exitCode === null && !stderr.includes('fixture blocks external request'));
   } catch (e) { fail++; console.error(e.stack || e); }
   finally {
