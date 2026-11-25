@@ -165,17 +165,31 @@ namespace Thornswood
                     break;
                 case "hear":
                 {
-                    if (c.TryGetProperty("fresh", out JsonElement fresh) && fresh.GetBoolean())
-                        VoiceAudio.Last.WaitForFreshPlayback();
-                    var levels = new List<KeyValuePair<string, double>>();
+                    bool fresh = c.TryGetProperty("fresh", out JsonElement read) && read.GetBoolean();
+                    var names = new List<string>();
+                    var tones = new List<double>();
                     foreach (JsonElement t in c.GetProperty("tones").EnumerateArray())
-                        levels.Add(new KeyValuePair<string, double>(t.GetRawText(), VoiceAudio.Last == null ? 0 : VoiceAudio.Last.Hear(t.GetDouble())));
+                    {
+                        names.Add(t.GetRawText());
+                        tones.Add(t.GetDouble());
+                    }
+                    string status = null;
+                    VoiceAudio audio = VoiceAudio.Last;
+                    double[] levels = audio == null ? new double[tones.Count] : audio.Hear(tones.ToArray(), fresh, out status);
                     Emit(w =>
                     {
                         w.WriteString("ev", "heard");
                         w.WriteStartObject("levels");
-                        foreach (var kv in levels) w.WriteNumber(kv.Key, kv.Value);
+                        for (int i = 0; i < names.Count; ++i) w.WriteNumber(names[i], levels[i]);
                         w.WriteEndObject();
+                        if (status != null)
+                        {
+                            using (var capture = JsonDocument.Parse(status))
+                            {
+                                w.WritePropertyName("capture");
+                                capture.RootElement.WriteTo(w);
+                            }
+                        }
                     });
                     break;
                 }

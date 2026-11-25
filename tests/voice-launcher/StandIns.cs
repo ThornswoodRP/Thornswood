@@ -44,7 +44,9 @@ namespace Thornswood
         // The last half second, each ear on its own: left, right, left, ...
         readonly float[] heard = new float[VoiceMix.Rate];
         int at;
-        long renderedFrames;
+        int captureFrames, captureStart;
+        float[] captureSamples;
+        string captureStatus;
         readonly object gate = new object();
         volatile bool stop;
         Thread thread;
@@ -80,8 +82,13 @@ namespace Thornswood
                         heard[at] = stereo[i];
                         at = (at + 1) % heard.Length;
                     }
-                    renderedFrames += VoiceMix.Frame;
-                    Monitor.PulseAll(gate);
+                    if (captureFrames > 0 && (captureFrames -= VoiceMix.Frame) <= 0)
+                    {
+                        Array.Copy(heard, captureSamples, heard.Length);
+                        captureStart = at;
+                        captureStatus = mix.AudioSummary(0);
+                        Monitor.PulseAll(gate);
+                    }
                 }
                 n++;
                 long due = n * 20 - clock.ElapsedMilliseconds;
@@ -89,24 +96,42 @@ namespace Thornswood
             }
         }
 
-        // Wait on rendered frames, so the rolling window contains only
-        // output produced after the caller observed the desired mix.
-        public void WaitForFreshPlayback()
+        public string MixStatus() { return mix.AudioSummary(0); }
+
+        public double[] Hear(double[] tones, bool fresh, out string status)
         {
-            var elapsed = Stopwatch.StartNew();
+            float[] copy = new float[heard.Length];
+            int start;
+            status = null;
             lock (gate)
             {
-                long end = renderedFrames + heard.Length / 2;
-                while (renderedFrames < end)
+                if (fresh)
                 {
-                    int remaining = 10000 - (int)elapsed.ElapsedMilliseconds;
-                    if (remaining <= 0) throw new TimeoutException("No fresh launcher playback window");
-                    Monitor.Wait(gate, remaining);
+                    // Measure only samples rendered after this capture began.
+                    // The per-peer decoded totals use that same time window.
+                    mix.AudioSummary(0);
+                    captureSamples = copy;
+                    captureFrames = copy.Length / 2;
+                    var elapsed = Stopwatch.StartNew();
+                    while (captureFrames > 0)
+                    {
+                        int remaining = 10000 - (int)elapsed.ElapsedMilliseconds;
+                        if (remaining <= 0) throw new TimeoutException("No fresh launcher playback window");
+                        Monitor.Wait(gate, remaining);
+                    }
+                    status = captureStatus;
+                    start = captureStart;
+                    captureSamples = null;
+                    captureStatus = null;
+                }
+                else
+                {
+                    Array.Copy(heard, copy, heard.Length);
+                    start = at;
                 }
             }
+            return Array.ConvertAll(tones, hz => Hear(hz, copy, start));
         }
-
-        public string MixStatus() { return mix.AudioSummary(0); }
 
         /// <summary>
         /// How loud each pitch plays: the tone's amplitude in each 40 ms of
@@ -138,11 +163,8 @@ namespace Thornswood
         /// tone's phase (a drop or a refill), so the parts either side of a
         /// jump cannot cancel over the whole half second.
         /// </summary>
-        public double Hear(double hz)
+        static double Hear(double hz, float[] copy, int start)
         {
-            float[] copy = new float[heard.Length];
-            int start;
-            lock (gate) { Array.Copy(heard, copy, heard.Length); start = at; }
             // 40 ms, whose bins are 25 Hz apart: the harnesses' tones are 60 Hz or
             // more apart, outside each other's main lobe through the window.
             const int Block = VoiceMix.Rate / 25;
