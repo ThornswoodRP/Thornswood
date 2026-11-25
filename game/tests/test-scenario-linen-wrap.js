@@ -1,8 +1,11 @@
 'use strict';
-// Scenario: systems/professions/tailor.md
-// Real compiled recipe/bench tables and the actual CraftService event order.
+/*
+  Scenario: systems/professions.md
+  The Tailor's linen recipe uses the compiled recipe and bench tables and
+  runs in the actual CraftService event order.
+*/
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
-const standIn = require('../../tests/stand-in-server'), tables = require('../../tests/gamemode-tables');
+const standIn = require('../../tests/stand-in-server.js'), tables = require('../../tests/gamemode-tables');
 const t = standIn.checks(), yes = t.yes;
 const DESC = '154c8:Thornswood-Content.esp';
 const recipes = JSON.parse(fs.readFileSync(path.join(standIn.REPO_DIR, 'game/data/recipes.json'), 'utf8')).recipes;
