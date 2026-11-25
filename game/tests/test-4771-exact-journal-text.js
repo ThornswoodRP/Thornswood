@@ -75,5 +75,7 @@ if(w.loaded()){
  yes('a valid existing journal state can exceed the metadata CAS limit',Buffer.byteLength(JSON.stringify(stored()),'utf8')>16384);
  const large=page(book.id,pid);large.type('Full-size edit','  exact :: full-size\\n\n  body');say(large.save());
  yes('the canonical full-size writer retains existing allowed journal capacity',stored().journals[0].pages[0].text==='  exact :: full-size\\n\n  body'&&stored().journals[0].pages.length===3);
+ yes('a new server process loads the journal change forms',w.restart().loaded);w.arrive(a);w.run(30000);
+ yes('the complete large journal survives the process restart and JSON change-form round trip',stored().journals[0].pages.length===3&&stored().journals[0].pages[0].text==='  exact :: full-size\\n\n  body');
 }
 t.done(w);

@@ -3120,6 +3120,13 @@ server.on('upgrade', (req, socket, head) => {
       // A slash line that is not speech (/me, /do, /w, /s and /ooc are) is a
       // command, and keeps up to COMMAND_CHARS. Everything said keeps 400.
       const rawCommand = pageText(msg.text);
+      // This private opcode is never speech, including a malformed outer prefix.
+      // Refuse before either logging or broadcasting; leave the JSON untouched.
+      if (/^\s+\/journal-write-v1(?:\s|$)/i.test(rawCommand)) {
+        ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
+          text:'That page command has an invalid prefix. It was not sent; keep your unsaved draft.'});
+        return;
+      }
       const exactJournal = /^\/journal-write-v1(?: |$)/.test(rawCommand);
       if (exactJournal && rawCommand.length > JOURNAL_COMMAND_CHARS) {
         ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),

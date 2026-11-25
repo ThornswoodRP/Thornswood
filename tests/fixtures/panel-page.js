@@ -88,7 +88,7 @@ function makePage() {
       set(h) {
         this._html = String(h);
         this._text = '';
-        this.children.forEach(function (c) { c.parentNode = null; });
+        this.childNodes.forEach(function (c) { c.parentNode = null; });
         this.children = [];
         const self = this;
         this.kids = parse(this._html);

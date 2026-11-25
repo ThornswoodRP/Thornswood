@@ -42,5 +42,17 @@ if(w.loaded()){
  yes('the existing board-location gate still refuses without spending or posting',JSON.stringify(rows())===before&&w.count(a,15)===gold);
  w.moveTo(a,CITY,[SPOT[0]+100,SPOT[1],SPOT[2]]);p.feed();
  yes('a refused post retains the exact editor draft',p.doc.getElementById('ts-board-title').value===title&&p.doc.getElementById('ts-board-text').value===text);
+ const newer=compose('Same title','Older body A',false),olderLine=newer.send();
+ const field=newer.doc.getElementById('ts-board-text');field.value='Newer body B';newer.fire(field,'input');say(olderLine);newer.feed();
+ yes('an older accepted board post cannot clear a newer same-title draft',newer.doc.getElementById('ts-board-text')?.value==='Newer body B');
+ if(newer.doc.getElementById('ts-board-text')){
+  say(newer.send());newer.feed();
+  yes('the exact current posted draft can still settle its form',rows().at(-1).text==='Newer body B'&&!newer.doc.getElementById('ts-board-text'));
+ }else yes('the exact current posted draft can still settle its form',false);
+ const invalidBefore=JSON.stringify(rows()),invalidGold=w.count(a,15);
+ for(const payload of[null,{},['notice',0,'title'],['notice',0,'title','body','extra'],['unknown',0,'title','body'],['notice',1,'title','body'],['job',0,'title','body'],['job',1.5,'title','body'],['notice',0,'T'.repeat(61),'body'],['notice',0,'title','x'.repeat(601)]]){
+  say('/board-post-v1 '+JSON.stringify(payload));
+  yes('malformed post schema or bound is refused before any fee or post',JSON.stringify(rows())===invalidBefore&&w.count(a,15)===invalidGold);
+ }
 }
 t.done(w);

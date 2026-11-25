@@ -180,10 +180,16 @@
 
   function isUp(b) {
     if (!pending) { return false; }
+    if (pending.hold !== b.hold || draft.title !== pending.title || draft.body !== pending.body ||
+        draft.kind !== pending.kind || (pending.kind === 'job' && Number(draft.reward) !== pending.reward)) return false;
     var wall = (b && b.wall) || [];
     for (var i = 0; i < wall.length; i++) {
       var r = wall[i];
-      if (r.mine && !r.letter && !r.haul && r.title === pending.title && Number(r.n) > pending.top) { return true; }
+      // Match the complete published text, not merely a newer same-title row.
+      // An older accepted post must not erase what is being written now.
+      if (r.mine && !r.letter && !r.haul && r.title === pending.title && r.text === pending.body &&
+          !!r.job === (pending.kind === 'job') && (!r.job || Number(r.reward) === pending.reward) &&
+          Number(r.n) > pending.top) { return true; }
     }
     return false;
   }
@@ -473,7 +479,7 @@
       rewardValue = Number(reward);
     }
     var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text]);
-    pending = { title: title, top: topN(b) };
+    pending = {hold:b.hold,title:title,body:text,kind:draft.kind,reward:rewardValue,top:topN(b)};
     say('Putting it up. If it cannot go up, the chat says why.');
     net(line);
   }

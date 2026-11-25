@@ -60278,7 +60278,7 @@ module.exports = {
     // The public list can fail or omit a face still loading. Only a successful
     // raw online read retires outcomes; an unknown read is not a disconnect.
     var saveOnline = null;
-    try { saveOnline = mp.get(0, 'onlinePlayers'); } catch (eSaveOnline) { }
+    try { saveOnline = mp.get(0, 'onlinePlayers'); } catch (eSaveOnline) { saveOnline = null; /* Unknown presence retains the private save outcome. */ }
     if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
       if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
     }

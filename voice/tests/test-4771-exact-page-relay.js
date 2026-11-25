@@ -12,7 +12,7 @@ let pass=0,fail=0;
 function yes(name,ok){console.log((ok?'PASS ':'FAIL ')+name);ok?pass++:fail++;}
 const w=standIn.world({name:'4771-real-relay',settings:{thornswoodServer:'main'}});
 const a=w.person(0xff004773,{profileId:1000,name:'Brenna',cell:'3c:Skyrim.esm',pos:[0,0,0]});
-let loud,quiet;
+let loud,quiet,legacyWorld;
 (async()=>{
  try{
   yes('the whole gamemode loads',w.boot());w.arrive(a);w.run(30000);
@@ -37,10 +37,30 @@ let loud,quiet;
    const saved=w.prop(a,'thornswoodSocial').journals[0].pages[0];
    yes(label+' is saved exactly by the whole gamemode after the actual relay',saved.title===title&&saved.text===text);
   }
+  if(process.env.LEGACY_GM){
+   legacyWorld=standIn.world({name:'4771-legacy-target',gm:process.env.LEGACY_GM,settings:{thornswoodServer:'main'}});
+   const oldActor=legacyWorld.person(0xff004774,{profileId:1000,name:'Brenna',cell:'3c:Skyrim.esm',pos:[0,0,0]});
+   yes('the exact old server bundle loads for the compatibility counterfactual',legacyWorld.boot());legacyWorld.arrive(oldActor);legacyWorld.run(30000);
+   const oldSocial=legacyWorld.box().__thornswoodSocial,oldBook=oldSocial.newJournal(oldActor,'Old notebook').journal;
+   oldSocial.writePage(oldActor,oldBook.id,'','Before','Before');const oldPage=legacyWorld.prop(oldActor,'thornswoodSocial').journals[0].pages[0].id;
+   const oldEditor=editor({journalId:oldBook.id,pageId:oldPage,view:()=>{oldSocial.push(oldActor);return legacyWorld.prop(oldActor,'thornswoodSocialView');}});
+   oldEditor.win.thornswoodNet.say=line=>{oldEditor.sent.push(line);loud.ws.send(JSON.stringify({t:'chat',text:line,press:true}));return true;};
+   const before=JSON.stringify(legacyWorld.prop(oldActor,'thornswoodSocial').journals);
+   oldEditor.type('New :: title','SECRET-4771-OLD-SERVER\n  literal\\n');oldEditor.save();
+   const received=await commands();if(received[0])legacyWorld.relayCommand(received[0]);legacyWorld.run(2100);oldEditor.feed();
+   yes('a new exact save cannot be mistaken for a raw-text write by the old server',JSON.stringify(legacyWorld.prop(oldActor,'thornswoodSocial').journals)===before);
+   yes('the old-server refusal leaves the new editor draft intact',oldEditor.field('ptitle').value==='New :: title'&&oldEditor.field('text').value==='SECRET-4771-OLD-SERVER\n  literal\\n');
+  }
   const quietBefore=quiet.chat.length;
   loud.ws.send(JSON.stringify({t:'chat',text:'/journal-write-v1 '+JSON.stringify([book.id,pid,'Private','SECRET-4771-TYPED']),press:false}));
   await commands();await h.settle(quiet);
   yes('private page commands are never broadcast to another peer',quiet.chat.length===quietBefore);
+  for(const [prefix,press]of[[' ',false],[' ',true],['\n',false],['\r\n\t',true]]){
+   const before=quiet.chat.length;
+   loud.ws.send(JSON.stringify({t:'chat',text:prefix+'/journal-write-v1 '+JSON.stringify([book.id,pid,'Private','SECRET-4771-PREFIX-'+JSON.stringify(prefix)]),press}));
+   const malformed=await commands();await h.settle(quiet);
+   yes('a malformed private outer prefix is refused before queuing or public speech '+JSON.stringify(prefix)+' pressed='+press,malformed.length===0&&quiet.chat.length===before&&loud.chat.some(m=>/page command.*not sent/i.test(m.text)));
+  }
   loud.ws.send(JSON.stringify({t:'chat',text:'/journal-write-v1 '+'x'.repeat(25000),press:true}));
   const oversized=await commands();
   yes('an over-limit versioned request is refused without queuing a truncated command',oversized.length===0&&loud.chat.some(m=>/too long.*not sent|too long.*not.*server/i.test(m.text)));
@@ -49,11 +69,11 @@ let loud,quiet;
   await h.shut(loud);loud=null;await h.shut(quiet);quiet=null;
   h.server().kill();await h.closed();
   const logs=fs.existsSync(h.chatDir)?fs.readdirSync(h.chatDir).filter(n=>n.endsWith('.jsonl')).map(n=>fs.readFileSync(path.join(h.chatDir,n),'utf8')).join(''):'';
-  yes('pressed and typed private prose is absent from the actual chat and process logs',!logs.includes('SECRET-4771-PRIVATE-PROSE')&&!logs.includes('SECRET-4771-TYPED')&&!h.log().includes('SECRET-4771'));
+  yes('pressed and typed private prose is absent from the actual chat and process logs',!logs.includes('SECRET-4771')&&!h.log().includes('SECRET-4771'));
   yes('the private command log retains only its masked action',logs.includes('/journal-write-v1 [private page]'));
  }finally{
   if(loud)loud.ws.close();if(quiet)quiet.ws.close();if(h.server()&&h.server().exitCode===null){h.server().kill();await h.closed();}
-  w.done();
+  if(legacyWorld)legacyWorld.done();w.done();
   const owned=path.resolve(h.dir),temporary=path.resolve(os.tmpdir());
   assert(owned.startsWith(temporary+path.sep+'thornswood-chatlimit-')&&owned!==temporary,'cleanup stays in the relay fixture folder');
   fs.rmSync(owned,{recursive:true,force:true});
