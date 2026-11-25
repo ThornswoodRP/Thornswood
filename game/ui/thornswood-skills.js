@@ -1953,6 +1953,7 @@
   }
 
   function drawBody() {
+    resetOfficeArm();
     elBody.textContent = '';
     progRows = [];   // whatever was on the page is gone with it
     progKey = '';
@@ -2205,11 +2206,12 @@
       ' 50 is comfortable.'));
     var fire = (Number(v.fireAway) >= 0)
       ? 'a fire ' + Number(v.fireAway) + ' away, worth ' + (Number(v.fireWorth) || 0)
-      : 'no fire in reach';
+      : (v.burning ? 'no nearby fire in reach' : 'no fire in reach');
     card.appendChild(el('div', 'inn',
       'You are ' + (PLACE_WORDS[v.place] || 'somewhere the server does not know yet') +
       (v.roof ? ', under a roof' : ', with no roof') + (v.night ? ', at night' : '') + ', with ' + fire + '. ' +
       'Weather and height are worth ' + (Number(v.exposure) || 0) + '. ' +
+      (v.burning ? 'You are on fire. It counts as a fire at your feet. ' : '') +
       // A blizzard or a heavy storm (#3176), the server's own number.
       (Number(v.storm) > 0 ? 'The storm slows you by ' + Number(v.storm) + ' per cent while you are out in it. ' : '') +
       'What you are wearing covers ' + (Number(v.cover) || 0) + ' per cent of you.'));
@@ -2549,13 +2551,27 @@
     return card;
   }
 
-  /* A button on the Office page. With twice, the first press only says what the second does. */
+  var OFFICE_ARM_MS = 5000;
+  var officeArmed = null;
+  function resetOfficeArm() {
+    if (officeArmed) { officeArmed.button.textContent = officeArmed.text; }
+    officeArmed = null;
+  }
+
+  /* Only one Office action may await its second press, for five seconds. */
   function officeButton(text, line, twice) {
     var b = el('span', 'stop', text);
-    var armed = false;
     b.onclick = function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (twice && !armed) { armed = true; b.textContent = twice; return; }
+      var again = officeArmed && officeArmed.button === b && Date.now() < officeArmed.until;
+      resetOfficeArm();
+      if (twice && !again) {
+        var armed = { button: b, text: text, until: Date.now() + OFFICE_ARM_MS };
+        officeArmed = armed;
+        b.textContent = twice;
+        setTimeout(function () { if (officeArmed === armed) resetOfficeArm(); }, OFFICE_ARM_MS);
+        return;
+      }
       var said = typeof line === 'function' ? line() : line;
       if (said) officeSay(said);
     };
@@ -4444,6 +4460,7 @@
       if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
+      resetOfficeArm();
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)

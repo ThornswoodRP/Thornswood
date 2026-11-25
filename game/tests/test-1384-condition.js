@@ -874,8 +874,9 @@ yes('/repair is a word the server answers for the key and the panel, and nobody 
     /if \(word === '\/repair'\) \{[\s\S]*?wear\.panel\(actorId, parts\.slice\(1\)\)/.test(code));
 {
   // Every string literal in the gamemode that a person could read: none of
-  // them names /repair. The WORDS list and the router compare against it.
-  const lits = (gm.match(/'(?:[^'\\\n]|\\.)*'/g) || []).filter(function (l) { return l.indexOf('/repair') !== -1; });
+  // them names the exact internal /repair word. The separate privileged
+  // /repairgear tool does not advertise the ordinary kit panel's wire word.
+  const lits = (gm.match(/'(?:[^'\\\n]|\\.)*'/g) || []).filter(function (l) { return /\/repair(?![a-z])/i.test(l); });
   yes('no line a person reads tells them to type /repair', lits.length === 2 &&
       lits.every(function (l) { return l === "'/repair'"; }));
 }

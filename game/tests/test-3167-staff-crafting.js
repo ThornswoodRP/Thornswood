@@ -498,6 +498,9 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
         lines.length === 0 && /Say why/.test(status.textContent));
     ins[3].value = 'lost in the crash';
     if (give) { give.onclick({}); }
+    yes('U6 a refused empty reason needs two fresh presses after correction',
+        lines.length === 0 && /Press again/.test(give.textContent));
+    if (give) { give.onclick({}); }
     yes('U6 with a reason it sends the item, the count and the reason (' + lines.join(' | ') + ')',
         lines.join() === '/craftstaff give ' + BJORN + ' 2 iron ore | lost in the crash');
     run(w2, STAFFER, '/craftstaff pick ' + STAFFER);
