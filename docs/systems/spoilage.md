@@ -74,6 +74,22 @@ the food inside when it is next opened, before what is in it is
 shown. Opening it again never resets the clock. Every container
 counts, a shop chest, a house chest and a cave's chest alike.
 
+**A guild trader's shelf uses the chest clock too.** Its clock and stock are
+saved together in the private merchant ledger before an offer is shown or
+a purchase begins. The same snowy-place and winter rules below apply at the
+trader's location. A transfer waiting for its saved inventory receipt keeps
+its snapshots unchanged; the shelf catches up after that transfer finishes.
+Food that expires becomes Spoiled Food kept privately, never a fresh offer.
+
+Older trader food may have no recorded clock. Its age cannot be reconstructed
+from a name such as "2 days left". Such entries are kept exactly, marked
+`ageUnknown` in the private ledger, and excluded from sale. Ordinary goods
+and newly supplied food still trade; new food never merges with an entry of
+unknown age. A new clock records verified intake from then on. Staff must
+reconcile older entries from evidence, rather than guessing an age or making
+them fresh. A damaged or future clock refuses the aging operation without
+changing goods, the purse or the clock.
+
 A day comes off when its place's day turns. A steak put in a chest an
 hour before that chest's day turns loses that day. A day is always a
 whole day, never a share of one.
