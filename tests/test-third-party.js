@@ -1153,9 +1153,10 @@ if (polyHere) {
     : 'no fork here to read ___systemPolyfill.js\'s source commit in');
 }
 
-// Vortex's copy of the mod. The newest one Vortex holds is the one read; an
-// older upload than the notices describe is a machine that has not caught up,
-// and says SKIP, while a newer one fails until the notices describe it.
+// Vortex's copy of the mod. The newest one Vortex holds is the one read.
+// Any version mismatch fails: an older upload cannot prove today's notices.
+// A missing default Vortex folder means this is not that machine; a folder
+// that exists, or one explicitly selected, must supply a readable runtime.
 const VORTEX_MODS = process.env.THORNSWOOD_VORTEX_MODS ||
   path.join(process.env.APPDATA || '', 'Vortex', 'skyrimse', 'mods');
 function versionOf(s) { return String(s).split('.').map(function (x) { return parseInt(x, 10) || 0; }); }
@@ -1166,7 +1167,10 @@ function compareVersions(a, b) {
   }
   return 0;
 }
-let runtimeDir = null, runtimeVer = null;
+function runtimeAmount(n, unit) {
+  return new RegExp('(?:^|[^0-9,])' + commas(n) + ' ' + unit + '\\b').test(runtimeFlat);
+}
+let runtimeDir = null, runtimeVer = null, runtimeReadError = null;
 try {
   fs.readdirSync(VORTEX_MODS).forEach(function (n) {
     const m = new RegExp('^Thornswood Client Runtime ' + RUNTIME_ID + ' (\\d+(?:\\.\\d+)*) ').exec(n);
@@ -1174,20 +1178,24 @@ try {
       runtimeVer = m[1]; runtimeDir = path.join(VORTEX_MODS, n);
     }
   });
-} catch (e) { runtimeDir = null; }
+} catch (e) { runtimeReadError = e; }
 const notedVer = (/version (\d+(?:\.\d+)*), file \d+/.exec(runtimeFlat) || [])[1] || null;
 yes('the Client Runtime section gives the version and file it describes', !!notedVer);
-// The one decision every check on the installed runtime goes by: a machine
-// whose Vortex holds an older upload than the notices describe has not caught
-// up, and its files are not held to the section. The files.txt comparison
-// below reads the same older runtime, as the launcher installed it from
-// Vortex, so it asks this too (#4160).
+// An installed profile from an older upload cannot be checked against the
+// current notices (#4160). Both comparisons fail with the same version
+// mismatch instead of silently dropping the audit (#4233).
 const runtimeOlder = !!runtimeDir && !!notedVer && compareVersions(runtimeVer, notedVer) < 0;
 const runtimeOlderWhy = runtimeOlder ? 'Vortex here holds the Client Runtime ' + runtimeVer + ', older than the ' + notedVer + ' THIRD-PARTY.md describes' : '';
 if (!runtimeDir) {
-  skip('no copy of the Thornswood Client Runtime in ' + VORTEX_MODS + ', so its files were not read');
+  const why = 'no copy of the Thornswood Client Runtime in ' + VORTEX_MODS +
+    (runtimeReadError ? ': ' + runtimeReadError.message : '');
+  if (process.env.THORNSWOOD_VORTEX_MODS || !runtimeReadError || runtimeReadError.code !== 'ENOENT') {
+    yes(why, false);
+  } else {
+    skip(why + ', so its files were not read');
+  }
 } else if (runtimeOlder) {
-  skip(runtimeOlderWhy);
+  yes(runtimeOlderWhy, false);
 } else {
   yes('THIRD-PARTY.md describes the Client Runtime Vortex holds here, ' + runtimeVer,
       !!notedVer && compareVersions(runtimeVer, notedVer) === 0);
@@ -1196,8 +1204,8 @@ if (!runtimeDir) {
   const rel = function (p) { return path.relative(dist, p).split(path.sep).join('\\'); };
   let bytes = 0;
   modFiles.forEach(function (p) { bytes += fs.statSync(p).size; });
-  yes('the section gives the file count, ' + modFiles.length + ' files', runtimeFlat.indexOf(modFiles.length + ' files') >= 0);
-  yes('the section gives the size, ' + commas(bytes) + ' bytes', runtimeFlat.indexOf(commas(bytes) + ' bytes') >= 0);
+  yes('the section gives the file count, ' + modFiles.length + ' files', runtimeAmount(modFiles.length, 'files'));
+  yes('the section gives the size, ' + commas(bytes) + ' bytes', runtimeAmount(bytes, 'bytes'));
   const locales = modFiles.filter(function (p) { return /^CEF\\locales\\[^\\]+\.pak$/i.test(rel(p)); });
   yes('the section counts the language packs, ' + locales.length + ' `CEF\\locales\\*.pak`',
       runtimeFlat.indexOf(locales.length + ' `CEF\\locales\\*.pak`') >= 0);
@@ -1236,6 +1244,7 @@ if (!runtimeDir) {
   const icuText = (function () {
     try { return fs.readFileSync(path.join(docs, 'licences', 'ICU-LICENSE.txt')); } catch (e) { return null; }
   })();
+  yes('the mod carries a readable ICU-LICENSE.txt', icuText !== null);
   if (icuText !== null) {
     const icuSha = crypto.createHash('sha256').update(icuText).digest('hex');
     yes('the section gives the sha256 of the mod\'s ICU-LICENSE.txt, ' + icuSha.slice(0, 16), runtimeFlat.indexOf(icuSha) >= 0);
@@ -1264,16 +1273,17 @@ if (!runtimeDir) {
 const PROFILE = process.env.THORNSWOOD_PROFILE || 'C:\\Thornswood\\Profile';
 const filesTxt = read(path.join(PROFILE, 'OwnGame', 'files.txt'));
 if (filesTxt === null) {
-  skip('no ' + path.join(PROFILE, 'OwnGame', 'files.txt') + ' here, so where the game files came from was not read');
+  const why = 'no ' + path.join(PROFILE, 'OwnGame', 'files.txt') + ' here, so where the game files came from was not read';
+  if (process.env.THORNSWOOD_PROFILE || fs.existsSync(PROFILE)) { yes(why, false); } else { skip(why); }
 } else {
   const fromCollection = filesTxt.split('\n').map(function (l) { return l.split('|'); })
     .filter(function (f) { return f.length >= 5 && f[1] === 'V'; })
     .map(function (f) { return f.slice(4).join('|'); })
     .filter(function (r) { return /^Data\\Platform\\Distribution\\/i.test(r); });
   if (fromCollection.length === 0) {
-    skip('files.txt here gives the collection no file under Data\\Platform\\Distribution');
+    yes('files.txt here gives the collection no file under Data\\Platform\\Distribution', false);
   } else if (runtimeOlder) {
-    skip('the ' + fromCollection.length + ' files files.txt gives the collection under Data\\Platform\\Distribution were not held to the section: ' + runtimeOlderWhy);
+    yes('the ' + fromCollection.length + ' files files.txt gives the collection under Data\\Platform\\Distribution were not held to the section: ' + runtimeOlderWhy, false);
   } else {
     const loose = fromCollection.filter(function (r) {
       if (/\\CEF\\locales\\[^\\]+\.pak$/i.test(r)) { return runtimeSec.indexOf('`CEF\\locales\\*.pak`') < 0; }
@@ -1283,7 +1293,7 @@ if (filesTxt === null) {
     yes('every file the collection puts under Data\\Platform\\Distribution is in the Client Runtime section (' +
         fromCollection.length + ')', loose.length === 0);
     yes('the section says ' + fromCollection.length + ' files, as files.txt does',
-        runtimeFlat.indexOf(fromCollection.length + ' files') >= 0);
+        runtimeAmount(fromCollection.length, 'files'));
   }
 }
 

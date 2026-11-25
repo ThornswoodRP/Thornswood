@@ -602,7 +602,7 @@
       reflex. The server parses it again and does not trust this: this is here
       so a typo is answered in the same breath instead of a round trip later.
     */
-    return count === 1 ? String(sides) : (count + 'x' + sides);
+    return count === 1 ? String(sides) : (sides + 'x' + count);
   }
 
   /* A queued line is its text, or { text, press } for one a key sent (#2251). */
