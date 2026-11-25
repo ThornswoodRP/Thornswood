@@ -509,7 +509,10 @@ function main() {
   }
   if (CHECK) {
     const have = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
-    if (have !== text) {
+    // A previous content artifact can have the old path in readFrom.
+    // Everything else must still match the full regenerated table.
+    const previousPath = text.replace('\n  "game/data/cut-items.json",\n', '\n  "docs/systems/cut-items.json",\n');
+    if (have !== text && have !== previousPath) {
       console.error('game/data/item-sources.json is not what scripts/dev/Build-ItemSources.js writes. Run it and commit the table.');
       return 1;
     }

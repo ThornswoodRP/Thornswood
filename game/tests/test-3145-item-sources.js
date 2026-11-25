@@ -188,23 +188,32 @@ yes('N5 each hair dye\'s inputs and the water bottle\'s empty bottle are asked b
 // ---------------------------------------------------------------- P
 function copyRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'item-sources-'));
-  const files = table.readFrom.concat(['scripts/dev/Build-ItemSources.js', 'game/data/item-sources.json']);
+  const files = table.readFrom.map(function (rel) {
+    return rel === 'docs/systems/cut-items.json' ? 'game/data/cut-items.json' : rel;
+  }).concat(['scripts/dev/Build-ItemSources.js', 'game/data/item-sources.json']);
   files.forEach(function (rel) {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.copyFileSync(path.join(REPO, rel), path.join(dir, rel));
   });
   return dir;
 }
-function build(dir) {
-  return spawnSync(process.execPath, [path.join(dir, 'scripts', 'dev', 'Build-ItemSources.js'), '--root', dir], { encoding: 'utf8' });
+function build(dir, ...options) {
+  return spawnSync(process.execPath, [path.join(dir, 'scripts', 'dev', 'Build-ItemSources.js'), '--root', dir, ...options], { encoding: 'utf8' });
 }
 (function () {
   const dir = copyRoot();
   try {
+    const tablePath = path.join(dir, 'game/data/item-sources.json');
+    const original = fs.readFileSync(tablePath, 'utf8');
+    const oldPath = original.replace('\n  "game/data/cut-items.json",\n', '\n  "docs/systems/cut-items.json",\n');
+    fs.writeFileSync(tablePath, oldPath);
+    yes('P1 the prior artifact still passes a full comparison after the path move', build(dir, '--check').status === 0);
+    fs.writeFileSync(tablePath, oldPath.replace('"issue": 3145', '"issue": 0'));
+    yes('P1 a separate change to the prior artifact still fails the full comparison', build(dir, '--check').status !== 0);
     const plain = build(dir);
-    yes('P1 the copy builds clean, and writes the table that is checked in',
-        plain.status === 0 && fs.readFileSync(path.join(dir, 'game/data/item-sources.json'), 'utf8') ===
-        fs.readFileSync(path.join(REPO, 'game/data/item-sources.json'), 'utf8'));
+    yes('P1 the rebuilt table records the new path and can be checked', plain.status === 0 &&
+        JSON.parse(fs.readFileSync(tablePath, 'utf8')).readFrom.includes('game/data/cut-items.json') &&
+        build(dir, '--check').status === 0);
     const cutPath = path.join(dir, 'game/data/cut-items.json');
     const copy = JSON.parse(fs.readFileSync(cutPath, 'utf8'));
     copy.items.push({ id: 'cc842:Skyrim.esm', name: 'Ancient Nord Amulet', plugin: '', half: '', owner: '', family: '', rank: '', fires: true, disposition: 'cut', why: 'a harness row' });

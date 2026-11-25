@@ -36,6 +36,17 @@ def input_bundle():
             {name: hashlib.sha256(data).hexdigest() for name, data in contents.items()})
 
 
+def source_hashes_match(stored, current):
+    # Older verified content builds record this input at its previous path.
+    # The same exact bytes must be present at the new path.
+    previous = 'docs/systems/cut-items.json'
+    current_path = 'game/data/cut-items.json'
+    if previous in stored and current_path not in stored:
+        stored = {current_path if name == previous else name: digest
+                  for name, digest in stored.items()}
+    return stored == current
+
+
 def public(row):
     return row.get('owner') in ROLES and row.get('fires') is True and row.get('book') != 'cut' and not row.get('roll')
 
@@ -297,7 +308,7 @@ def main():
     inputs, input_hashes = input_bundle()
     if args.check:
         payload = load(OUT)
-        if payload['version'] != 1 or payload['active'] is not False or payload['sources'] != input_hashes:
+        if payload['version'] != 1 or payload['active'] is not False or not source_hashes_match(payload['sources'], input_hashes):
             raise ValueError('Role-table source evidence is stale')
         validate_provenance(payload)
         tables, evidence = derive(*inputs, payload['records'])
