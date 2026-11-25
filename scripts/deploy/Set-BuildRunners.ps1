@@ -2,8 +2,10 @@
   Set-BuildRunners.ps1
 
   Makes the labels on GitHub's VPS runners match the runner records on main
-  (records\<name>-runners.json): records\build-runners.json caps how many
-  builds run on the box at once. A label of our own that no record names
+  (every records\<name>-runners.json), and with -AppRepos lists the repositories
+  where the box's App is installed. The records include build-runners.json,
+  which caps concurrent builds, and pr-build-runners.json, which names the
+  pull request build runners. A label of our own that no record names
   comes off every runner, so taking a record off main takes its label off
   too (#4033). From One, a developer's PC or a cloud thread.
 

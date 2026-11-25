@@ -45,6 +45,7 @@ function yes(what, cond) {
 
     yes('and answers with a SPEC rather than a result', f('20') === '20');
     yes('several dice keep their shape', f('6x3') === '6x3');
+    yes('count-d-sides notation becomes sides-by-count', f('1d20') === '20' && f('3d6') === '6x3');
     yes('a leading d is dropped, because people type it on reflex', f('d20') === '20');
     yes('nothing at all is twenty', f('') === '20');
     yes('nonsense is refused here so a typo is answered at once', f('fish') === null);
@@ -159,6 +160,10 @@ function yes(what, cond) {
       ['/r d6*3', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
       ['/roll 1000x5', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
       ['/roll 1x100', 'Bjorn rolls 100x1: 100'],
+      ['/roll 1d20', 'Bjorn rolls 20: 11'],
+      ['/r 3D6', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['/roll 5d1000', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
+      ['/roll 100d1', 'Bjorn rolls 100x1: 100'],
       ['/roll', 'Bjorn rolls 20: 11']
     ]) {
       socket.chat = null;
@@ -170,11 +175,26 @@ function yes(what, cond) {
         sent && out.some(s => s.pid === 11 && s.line === expected) &&
         out.some(s => s.pid === 12 && s.line === expected));
     }
-    for (const typed of ['/roll 1001x3', '/roll 6x101', '/roll 0x3', '/roll 6x0', '/roll 6.5x3']) {
+    for (const typed of ['/roll 1001x3', '/roll 6x101', '/roll 0x3', '/roll 6x0', '/roll 6.5x3',
+      '/roll 1d1001', '/roll 101d6', '/roll 0d20', '/roll 1d0', '/roll 1.5d6', '/roll 1d20x3']) {
       socket.chat = null;
       const before = notes.length;
       yes('typed ' + typed + ' is refused before a frame is sent',
         win.thornswoodNet.typed(typed) === false && socket.chat === null && notes.length === before + 1);
+    }
+    for (const [spec, expected] of [
+      ['1d20', 'Bjorn rolls 20: 11'],
+      ['3D6', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['5d1000', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
+      ['100d1', 'Bjorn rolls 100x1: 100']
+    ]) {
+      const out = roll(spec, { random: half });
+      yes('the server independently accepts ' + spec, out.some(s => s.pid === 11 && s.line === expected));
+    }
+    for (const spec of ['1d1001', '101d6', '0d20', '1d0', '1.5d6', '1d20x3']) {
+      const out = roll(spec, { random: half });
+      yes('the server independently refuses ' + spec,
+        out.length === 1 && out[0].pid === 11 && /^The number is the sides/.test(out[0].line));
     }
 
     {

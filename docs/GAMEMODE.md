@@ -71,8 +71,9 @@ design, the loader's limits read from the fork and the stages still to come
 are [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
 
 A handler returns `false` to block an event and anything else to let it
-through. Every handler is wrapped in `guard()` (`gamemode.js:guard`), so a throw
-is logged and the event goes on. Form ids cross the boundary as descriptors,
+through. Most handlers are wrapped in `guard()` (`gamemode.js:guard`), so a throw
+is logged and the event goes on, though the login handler (`mp.onThornswoodLogin`)
+and the flora pick wrapper around `mp.onActivate` are not wrapped in `guard()`. Form ids cross the boundary as descriptors,
 `"<low 24 bits in hex>:<plugin>"`, never as load order positions.
 
 ## How the blocks find each other
@@ -100,7 +101,7 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Class and profession gates | `classGate`, `halfGate`, `creditWork`, `rankStep`. |
 | Starting tools, mining, chopping, charcoal | `TOOLS` and tool wear; salt (`mineSalt`); the swing animation; ore deposits (`DEPOSIT_SIZE`); `mineOre`; chopping blocks (3342-3549, `chopWood`). The kiln is a bench since #2337, answered by nothing here. |
 | Character creation (chargen) | See "Character creation" below. |
-| Event handlers | `mp.onDeath`, `mp.onRespawn`. `ensureProperties()` and `startChargenTimer()` run at load here. |
+| Event handlers | `mp.onDying`, `mp.onDeath`, `mp.onRespawn`. `ensureProperties()` and `startChargenTimer()` run at load here. |
 | Scripted activators, harvesting, fishing, hunting | The generated `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE`, `HUNTS_BY_BASE` blocks; `harvest`, `fish`, `game`, `loot` for carcasses, `farmActivate`; `mp.onActivate`, which routes every press; `publishServerBases`. |
 | Crafting | `RECIPES_BY_ID`, `isRecipe`, `professionName`. |
 | Property doors | `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT`. |
@@ -108,9 +109,9 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | `mp.onCraft` | How long a craft takes at the bench (`CRAFT_WORK_MS`, `craftSize`, `mp.onCraftWork`, which the engine asks first and holds the craft for, #3161), key recipe, the handler, and the "gamemode loaded" line. |
 | Voice feed | Positions to the voice service; the `online.json` writer. |
 | Character roster | `private\characters.json`, sent to the site. |
-| The door | The allowed list. See "The door". |
+| The door | The allowed list, and `mp.onThornswoodLogin`. See "The door". |
 | Server manifest | `data\manifest.json`, `publish`. |
-| Progression | The rulebook: `RANKS`, `SPELL_IDS`, `TUNING`, state, rules, the spell book, `TABLE`, `canDo`. |
+| Progression | The rulebook: `RANKS`, `SPELL_IDS`, `TUNING`, state, rules, the spell book, `TABLE`, `canDo`, and `mp.onSpellCast`. |
 | Farming | Plots, rank and time, the land, claims in `private\farm-claims.json`, pressing, commands `/plant`, `/claim`, `/plot`. |
 | Property | See "Property, offices and rent". |
 | Spoils | Nothing the world placed is handed over: a container starts empty (`forbiddenBaseContainer` in the server settings, #3078) and nothing lies on the floor (Thornswood-Last.esp, #3077); where gold comes from (`purse`). |

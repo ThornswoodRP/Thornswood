@@ -128,14 +128,17 @@ with one of those words.
 Every script in this folder is a harness, run by a workflow step, used by
 another script, or listed here with the command that runs it;
 `test-4195-every-test-script-runs.ps1` fails on one that is none of those
-(#4195). These two check the merchant code against a built server addon and
+(#4195). These check code against a built server addon, installed records and
 the game's own plugins, which no gate or nightly machine has, so they are run
-by hand on a machine that has both. Neither connects to Main or Dev: each
+by hand on a machine that has them. None connects to Main or Dev: each
 starts an offline server of its own on a port the system picks.
 
 ```
 node tests/native-merchant-settlement.js <built addon .node> <installed record .json>
 node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> <scratch folder> [mammoth|orchard]
+node game/tests/test-npc-merchant-native.js <built addon .node> <installed record .json>
+node game/tests/test-npc-runtime-native.js <built addon .node> <installed record .json>
+node game/tests/test-npc-shared-native.js <built addon .node> <installed record .json>
 ```
 
 - `native-merchant-settlement.js` runs merchant sales and a quest payment
@@ -151,6 +154,12 @@ node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> 
   with a write and read back of the orchard plots. Each plugin must match
   its pinned sha256, and the scratch folder must be inside `temp` two
   folders above the repository.
+- `test-npc-merchant-native.js` loads NPC population data and tests merchant
+  purses and stock initialization against the built server addon.
+- `test-npc-runtime-native.js` checks NPC server runtime message queue, tick,
+  and state updates against the built server addon.
+- `test-npc-shared-native.js` verifies shared NPC runtime population batches,
+  callback limits, and memory usage against the built server addon.
 
 ## A harness that runs box code, or needs Windows
 

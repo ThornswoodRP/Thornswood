@@ -1,6 +1,8 @@
 <#
-  Rebuild-ContentTables.ps1
+.SYNOPSIS
+  Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed.
 
+.DESCRIPTION
   Rebuilds every table that is read out of the plugins of the load order, in
   the order they read each other, after a change to one of Thornswood's own
   plugins in game\content, and says what changed. Issue #2923.

@@ -4,14 +4,74 @@ What people send in on the site's public report page.
 Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
+import hashlib
 import json
+import os
 import traceback
 
 import discord
 
-from bot_core import (REPORTS_AT_ONCE, REPORTS_EVERY, REPORTS_FILE, as_typed,
-    client, log)
+from bot_core import (DATA_DIR, REPORTS_AT_ONCE, REPORTS_EVERY, REPORTS_FILE,
+    _state_write, as_typed, client, log)
 from bot_staff_channel import _trouble_channel
+
+REPORT_POSTS = os.path.join(DATA_DIR, 'report-posts.json')
+
+
+def copy_key(value):
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+
+def source_key(kind, path):
+    return copy_key(kind + '\n' + os.path.normcase(os.path.abspath(path)))
+
+
+def copy_state(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        log('staff copies: cannot read %s (%s)' % (path, type(e).__name__))
+        return None
+    if not isinstance(state, dict) or not all(
+            isinstance(posts, dict) and all(
+                isinstance(post, dict) and all(
+                    type(post.get(field)) is int and post[field] > 0
+                    for field in ('channel', 'message'))
+                for post in posts.values())
+            for posts in state.values()):
+        log('staff copies: invalid message index in %s' % path)
+        return None
+    return state
+
+
+def remember_copy(state, source, key, msg):
+    state.setdefault(source, {})[key] = {'channel': msg.channel.id, 'message': msg.id}
+
+
+async def forget_copies(state, source, present, client):
+    """Act only on saved IDs for this source, never on channel history."""
+    posts = state.get(source, {})
+    changed = False
+    for key in posts.keys() - present:
+        post = posts[key]
+        ch = client.get_channel(post['channel'])
+        if ch is None:
+            continue
+        try:
+            await ch.get_partial_message(post['message']).delete()
+        except discord.NotFound:
+            log('staff copies: linked message already removed')
+        except Exception as e:
+            log('staff copies: message removal failed (%s)' % type(e).__name__)
+            continue
+        del posts[key]
+        changed = True
+    if changed and not posts:
+        del state[source]
+    return changed
 
 
 def report_text(row):
@@ -67,8 +127,8 @@ async def report_say(text):
     if ch is None:
         return
     try:
-        await ch.send(text[:1900], suppress_embeds=True,
-                      allowed_mentions=discord.AllowedMentions.none())
+        return await ch.send(text[:1900], suppress_embeds=True,
+                             allowed_mentions=discord.AllowedMentions.none())
     except Exception:
         log('reports: could not post in #%s:\n' % getattr(ch, 'name', '?')
             + traceback.format_exc())
@@ -96,12 +156,12 @@ async def watch_reports():
     """
     await client.wait_until_ready()
 
-    def read_all():
+    def read_all(missing=None):
         try:
             with open(REPORTS_FILE, encoding='utf-8') as f:
                 rows = json.load(f)
         except FileNotFoundError:
-            return []
+            return missing
         except Exception:
             return None
         return rows if isinstance(rows, list) else None
@@ -113,10 +173,11 @@ async def watch_reports():
                 and row.get('kind') not in ('ticket', 'problem'))
 
     loop = asyncio.get_running_loop()
-    rows = await loop.run_in_executor(None, read_all)
+    source = source_key('reports', REPORTS_FILE)
+    rows = await loop.run_in_executor(None, read_all, [])
     while rows is None:
         await asyncio.sleep(5)
-        rows = await loop.run_in_executor(None, read_all)
+        rows = await loop.run_in_executor(None, read_all, [])
     said = set(row['id'] for row in rows if public(row))
     ch = _trouble_channel()
     log('reports: watching %s every %ds, speaking in %s, %d already there and '
@@ -128,19 +189,28 @@ async def watch_reports():
     while not client.is_closed():
         try:
             rows = await loop.run_in_executor(None, read_all)
+            state = copy_state(REPORT_POSTS) if rows is not None else None
+            if state is not None and all(isinstance(r, dict) and r.get('id') for r in rows):
+                present = {copy_key(str(r['id'])) for r in rows}
+                if await forget_copies(state, source, present, client):
+                    _state_write(REPORT_POSTS, state)
             fresh = [r for r in (rows or []) if public(r) and r['id'] not in said]
             for r in fresh:
                 said.add(r['id'])
-            if len(fresh) > REPORTS_AT_ONCE:
+            if fresh and (state is None or len(fresh) > REPORTS_AT_ONCE):
                 await report_say(
-                    '**%d reports came in, from the site and the game,** since the '
-                    'last look, which is more than people send and more than '
-                    'this channel should carry one at a time. They are in the '
-                    'inbox on the site.' % len(fresh))
-            else:
+                    '**%d report%s came in, from the site and the game,** since the '
+                    'last look. Open the site inbox for details.'
+                    % (len(fresh), '' if len(fresh) == 1 else 's'))
+            elif state is not None:
                 # The file is newest first; the channel reads oldest first.
                 for r in reversed(fresh):
-                    await report_say(report_text(r))
+                    key = copy_key(str(r['id']))
+                    if key not in state.get(source, {}):
+                        msg = await report_say(report_text(r))
+                        if msg is not None:
+                            remember_copy(state, source, key, msg)
+                            _state_write(REPORT_POSTS, state)
         except Exception:
             log('reports: the check itself failed, carrying on:\n'
                 + traceback.format_exc())

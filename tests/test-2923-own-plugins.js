@@ -164,7 +164,7 @@ if (food.status !== 0) { console.log(food.stdout + food.stderr); }
 const builders = [];
 for (const dir of ['scripts/dev', 'scripts/mods']) {
   for (const n of fs.readdirSync(path.join(ROOT, dir))) {
-    if (/^(Build|Write|Audit)-.*\.(js|ps1|py)$/.test(n)) { builders.push(dir + '/' + n); }
+    if (/^(Build|Write|Audit|Measure)-.*\.(js|ps1|py)$/.test(n)) { builders.push(dir + '/' + n); }
   }
 }
 // A builder that reads a load order names a plugin list or the load order a
