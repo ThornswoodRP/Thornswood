@@ -1,4 +1,7 @@
 'use strict';
+/*
+  Scenario: systems/testing-progression.md
+*/
 // #6736: real progression, character storage and role/proof checks over the
 // whole gamemode. A test rank grants the same rewards as normal progression.
 const standIn = require('../../tests/stand-in-server.js');
