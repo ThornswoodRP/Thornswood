@@ -69,6 +69,28 @@ function expire(id, roles, fault) {
   offset += 61000; fs.writeFileSync(path.join(dir, 'clock.txt'), String(offset));
   write('mode.json', { id, roles, fault });
 }
+function waitForRoleBootstrap(site) {
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const finish = error => {
+      clearTimeout(timer);
+      site.stdout.off('data', onData);
+      site.off('exit', onExit);
+      site.off('error', finish);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onData = chunk => {
+      output += chunk;
+      if (/\[thornswood-docs\] 3 roles visible to the bot\r?\n/.test(output)) finish();
+    };
+    const onExit = code => finish(new Error('Fixture site exited before loading Discord roles (exit ' + code + ').\n' + output));
+    const timer = setTimeout(() => finish(new Error('Fixture site did not load Discord roles within 30 seconds.\n' + output)), 30000);
+    site.stdout.on('data', onData);
+    site.once('exit', onExit);
+    site.once('error', finish);
+  });
+}
 async function get(route, id, method = 'GET') {
   fs.writeFileSync(path.join(dir, 'reads.jsonl'), '');
   const start = performance.now();
@@ -104,7 +126,10 @@ const routes = ['/api/signins', '/api/all', '/api/staff/records', '/api/deploys'
         THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'), THORNSWOOD_DEV_CHAT_DIR: path.join(dir, 'chat') }
     });
     let stderr = ''; child.stderr.on('data', data => { stderr += data; });
-    port = (await siteFiles.listening(child)).port;
+    // The socket listens before the startup reads and role discovery finish.
+    // Keep startup time out of the individual requests' response deadlines.
+    const [listening] = await Promise.all([siteFiles.listening(child), waitForRoleBootstrap(child)]);
+    port = listening.port;
     {
       const id = mode(['admin']);
       for (const route of routes) {
