@@ -48,19 +48,10 @@ The other needs first account for their elapsed time. The selected value is then
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
-| `/fly [on|off]` | Toggles collision-free flight for yourself. Frozen, cuffed or locked-jail movement remains refused |
-| `/phase` | Moves you 256 units forward in the same cell, unless frozen, cuffed or held in a locked jail |
-| `/godmode [on|off]` | Toggles flight, damage protection, lethal validated attacks and paused hunger, thirst, Rest and temperature. Existing needs values resume on exit; dead characters cannot enable it |
-| `/invisible [on|off]` | Hides or shows your rendered body and nearby/party name tags; NPC perception stays as it was |
-| `/cleareffects` | Clears your alcohol and drug effects, pending crashes, hangover and withdrawal. Existing injuries, disease and unrelated magic remain |
 | `/tpto <person>` | Teleports your own living character to an unambiguous online person, by name, prefix, profile or character id. Playtesters may use it on Dev and Main; frozen, cuffed and locked-jail movement is refused. It never moves the other person |
 
 The count is the last word, and only when it is a number with a name in front of it.
 
-These scene tools work for Playtesters on Dev and Main. Modes end when the
-session loses its current pass or role, or the actor's authority changes.
-They accept no other person's name. [Staff scene tools](../systems/staff-tools.md)
-describes their native dependency, lifecycle and game acceptance checks.
 ## Restore vitals for testing
 
 | Command | Who | What it does |
@@ -100,6 +91,26 @@ Staff.
 | Command | What it does |
 | --- | --- |
 | `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
+
+## Scene tools
+
+These scene tools work for Playtesters on Dev and Main. Modes end when the
+session loses its current pass or role, or the actor's authority changes.
+They accept no other person's name. [Staff scene tools](../systems/staff-tools.md)
+describes their native dependency, lifecycle and game acceptance checks.
+
+| Command | What it does |
+| --- | --- |
+| `/fly [on\|off]` | Toggles collision-free flight for yourself. Frozen, cuffed or locked-jail movement remains refused |
+| `/phase` | Moves you 256 units forward in the same cell, unless frozen, cuffed or held in a locked jail |
+| `/godmode [on\|off]` | Toggles flight, damage protection, lethal validated attacks and paused hunger, thirst, Rest and temperature. Existing needs values resume on exit; dead characters cannot enable it |
+| `/invisible [on\|off]` | Hides or shows your rendered body and nearby/party name tags; NPC perception stays as it was |
+| `/cleareffects` | Clears your alcohol and drug effects, pending crashes, hangover and withdrawal. Existing injuries, disease and unrelated magic remain |
+
+The cleanup command requires the Admin role.
+
+| Command | What it does |
+| --- | --- |
 | `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes people and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
 
 ## Buildings, stalls and carts

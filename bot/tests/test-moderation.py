@@ -388,14 +388,14 @@ try:
     # Scene tools record the invoking character as both actor and subject,
     # including automatic revocation when that character's authority ends.
     scene_cases = (
-        ('fly', 'on', 'changed flight for Aela (profile 1001): on'),
-        ('phase', 'Forward in the same cell.', 'moved Aela (profile 1001) forward: Forward in the same cell.'),
-        ('godmode', 'off', 'changed god mode for Aela (profile 1001): off'),
-        ('invisible', 'on', 'changed visibility for Aela (profile 1001): on'),
+        ('fly', 'on', 'changed their flight mode: on'),
+        ('phase', 'Forward in the same cell.', 'used /phase: Forward in the same cell.'),
+        ('godmode', 'off', 'changed their invulnerability: off'),
+        ('invisible', 'on', 'changed their visibility: on'),
         ('cleareffects', 'Alcohol and drug effects cleared.',
-         'cleared alcohol and drug effects from Aela (profile 1001): Alcohol and drug effects cleared.'),
+         'used /cleareffects: Alcohol and drug effects cleared.'),
         ('killall', 'Nearby hostile NPCs only.',
-         'used /killall beside Aela (profile 1001): Nearby hostile NPCs only.'),
+         'used /killall: Nearby hostile NPCs only.'),
         ('tools-off', 'The staff session or its authority ended.',
          'ended scene tools for Aela (profile 1001): The staff session or its authority ended.'),
     )
@@ -407,6 +407,12 @@ try:
     yes('scene tools and automatic revocation reach the watcher with their real self target',
         ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
                        for _, _, words in scene_cases]])
+    no_hostiles = json.loads(row('killall', who='Aela', why='Nearby hostile NPCs only.',
+        killed=[], failed=[], limit=40))
+    no_hostiles['who'] = 1001
+    yes('a cleanup with zero eligible targets reports only that the command was used',
+        bot.moderation_text('dev', no_hostiles) ==
+        '**Staff on the dev server:** Aela (profile 1001) used /killall: Nearby hostile NPCs only.')
     scene_source = open(os.path.join(HERE, '..', 'game', 'gamemode', 'staff-tools.ts'), encoding='utf-8').read()
     scene_words = re.findall(r"'/([a-z]+)'", re.search(r'var WORDS = \[([^]]+)\]', scene_source).group(1))
     scene_reports = re.findall(r"report\('/([a-z-]+)'", scene_source)
