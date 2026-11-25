@@ -2,10 +2,8 @@
 
 Clothes, robes, and the dress of a faction.
 
-- [Liverywright](tailor/liverywright.md). 102 recipes, all of them
-  reach the server. Robes and faction dress.
-- [Haberdasher](tailor/haberdasher.md). 231 recipes, 227 reach the
-  server. Common and fine clothing. 4 are an armour table and do not.
+- [Liverywright](tailor/liverywright.md) makes robes and faction dress. See the [Liverywright recipe list](../lists/tailor-liverywright.md).
+- [Haberdasher](tailor/haberdasher.md) makes common and fine clothing. See the [Haberdasher recipe list](../lists/tailor-haberdasher.md).
 
 The loom opens for a Tailor, either half, from novice. The tanning rack
 opens for a Haberdasher from novice and a Liverywright at advanced. The

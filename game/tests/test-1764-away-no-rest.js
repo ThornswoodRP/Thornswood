@@ -32,13 +32,13 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 const a = gm.indexOf('// ==== thornswood needs: hunger, thirst and exhaustion ====');
 const b = gm.indexOf('// ==== end thornswood needs ====');
 const needsBlock = a < 0 || b < 0 ? null : gm.slice(a, b);
 yes('the needs block is in the gamemode', !!needsBlock);
-if (!needsBlock) { done(); }
+if (!needsBlock) { done(); } else {
 
 const HOUR = 3600000;
 const MIN = 60000;
@@ -171,3 +171,4 @@ function want(kind, ms) {
 }
 
 done();
+}

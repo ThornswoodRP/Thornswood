@@ -83,10 +83,13 @@ const discord = http.createServer((req, res) => {
                       roles: m === 'play' ? ['r1'] : (m === 'banned' ? ['r2'] : []) });
   };
   if (mode === 'hang') { held.add(res); return; }
-  if (mode === 'slow') { setTimeout(answer, SLOW_MS); return; }
+  if (mode === 'slow') { const t = setTimeout(() => { waiting.delete(t); answer(); }, SLOW_MS); waiting.add(t); return; }
   answer();
 });
 const sockets = new Set();
+// A slow answer still waiting when the harness is done is dropped with the
+// rest, so node can end as soon as the harness does (#6036).
+const waiting = new Set();
 discord.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
 
 // ------------------------------------------------------- the scratch site --
@@ -294,9 +297,10 @@ function pageChecks() {
     try { site.kill(); } catch (e) { }
     held.forEach((res) => { try { res.destroy(); } catch (e) { } });
     sockets.forEach((s) => { try { s.destroy(); } catch (e) { } });
+    waiting.forEach(clearTimeout);
     discord.close();
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -166,7 +166,7 @@ if ($paid.Count) {
 Write-Host ''
 Write-Host ('  ' + ('=' * 68)) -ForegroundColor DarkGray
 if ($bad) {
-  Say '  The load order needs the paid Anniversary upgrade.' 'Red'
+  Write-Output '  The load order needs the paid Anniversary upgrade.'
   Write-Host ''
   Say '  The download page says Special Edition is enough and that the' 'Yellow'
   Say '  Anniversary Edition is not required and never will be. One of those' 'Yellow'
@@ -180,7 +180,7 @@ if ($bad) {
   exit 1
 }
 
-Say '  Special Edition is enough for everything in this load order.' 'Green'
+Write-Output '  Special Edition is enough for everything in this load order.'
 Write-Host ''
 Say '  What this does NOT check:' 'DarkGray'
 Say '    a plugin pointing at a Creation Club record without declaring a master:' 'DarkGray'

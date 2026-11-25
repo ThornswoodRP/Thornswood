@@ -203,8 +203,9 @@ yes('5 the recipe table takes the never-copied plugins from the last plugin\'s p
     "game\\data\\last-plugin-policy.json" in table and '.notCopiedFrom' in table)
 yes('5 it keeps the perk tests only of a never-copied plugin whose row does not copy its perk recipes',
     '$row.perkRecipesCopied -ne $true' in table)
-yes('5 it reads a recipe\'s conditions from below Thornswood-Last.esp',
-    '$pl -eq $LAST_PLUGIN -and $recipes.Contains($desc)' in table and '$condList = $recipes[$desc].Conditions' in table)
+yes('5 it never reads Thornswood-Last.esp, so a recipe\'s conditions are the ones its mod gave it (#5191)',
+    '$order.RemoveAll([Predicate[string]] { param($p) $p -ieq $LAST_PLUGIN })' in table and
+    '$pl -eq $LAST_PLUGIN' not in table)
 yes('5 a condition that comes off with the perks is not one of a row\'s needs',
     '$perkDrops = if ($perksOff) { PerkDropsOf $r } else { @{} }' in table and
     'if ($perkDrops.ContainsKey($at)) { continue }' in table)

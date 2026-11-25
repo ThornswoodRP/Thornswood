@@ -157,7 +157,10 @@ It lives on the site, so it can't go stale in here.
 **<https://thornswood.net/roadmap>** what's being built
 **<https://thornswood.net/credits>** who made what
 
-Say hello in <#GENERAL>.
+Questions before you apply go in <#QUESTIONS>, where staff answer them: react
+to the rules in <#RULES> for the Member role, and you can ask there and apply.
+You can read <#GENERAL> now, and talk there once your playtest application is
+accepted.
 """
 
 # The bot's own message in this channel, which starts "React here for the
@@ -371,7 +374,7 @@ Everything in one place: the installer, help, what is broken, what is coming.
 **What is broken right now** https://thornswood.net/known
 **What is coming** https://thornswood.net/roadmap
 **Report something** https://thornswood.net/report
-**Send a screenshot or a log** https://thornswood.net/uploads
+**Submit a screenshot** https://thornswood.net/gallery
 
 ## Built on
 
@@ -546,6 +549,72 @@ at the same time.
 by the Owner, the Co-Owner and the staff leads.
 """
 
+# Kept to docs/systems/classes.md, professions.md and gold.md. These rules
+# also hold at the source of Main's current release; no planned feature is
+# presented as something already available.
+ECONOMY = """
+# Server progression and economy
+
+**Your choices.** Take one gathering class and one profession, then a
+sub-profession. They are independent: a Miner who is a Smith can gather
+ore; a Smith who is a Hunter needs somebody else's ore. Press K for your
+choices, progress and recipe book. Gathering supplies materials;
+professions turn them into goods. Trade for what you cannot gather or
+make.
+
+**Earning rank.** Work takes you from novice to advanced, expert and
+master. The count starts again at each rank: 100 pieces, then 250, then
+600, for 950 in all. Each new rank gives a skill-tree point. Gold does
+not buy a class, profession, rank or skill point. Work costs rest, and
+tools wear out, so keep suitable tools and recover your rest.
+
+**The Merchant's Guild.** This is the NPC traders of the holds. It is
+not a guild people can join: there are no membership dues or discounts.
+Each trader starts with 250 gold once and no items in stock. Buying from
+people reduces its purse and fills its shelves; selling those goods
+increases its purse and reduces its stock. An empty purse cannot buy,
+and an empty shelf cannot sell. Neither gold nor stock resets at login.
+
+**Prices belong to the hold.** Businesses and factions submit their
+ledger prices to that specific hold. Its traders use the average of the
+submitted buy prices and the average of the submitted sell prices for
+each item. A line needs both prices to count; zero is a valid price. An
+item with no complete submitted price in any hold is not traded by the
+guild. Averages round to the nearest gold, with halves rounded up. Holds
+can charge different prices. With no complete local price, other holds'
+submitted buy and sell prices are used together, never one side alone.
+Two people trading directly agree their own price.
+
+**NPC quests and new gold.** When a trader offers a retrieval or kill
+quest, it pays the stated reward as newly created gold on completion.
+That payment does not come from the trader's purse and is not limited by
+what it can afford to buy. Guild commissions also pay newly created
+gold, separately from the purse. Follow the named target and place, and
+return any required quest item. Each quest has its own personal cooldown
+after completion.
+
+**Goods and scarce resources.** A supply request buys five goods at that
+hold's buy price from the trader's purse, like a sale. Its purse must
+cover the goods. After completing it, that character waits six hours for
+the same supply from that trader. This differs from a quest's new-gold
+reward.
+
+Some quests open a named scarce-resource site. Meet its gates and return
+the required amount; only then is the allowed extra yours. Leaving
+unfinished returns the draw and closes the site, without starting a
+cooldown. Check the offer's class, profession, rank and other
+requirements.
+
+**Your money and trade.** A new character receives 40 gold once, not on
+every login. Gathering, making goods, trading and the work NPCs offer
+support each other. In a trade between two people, both put an offer on
+the table and both agree before anything changes hands. Travel, board
+postings and other services spend gold; earning it does not buy rank.
+
+Discuss progression and the economy here. Put ideas in <#SUGGESTIONS>
+and problems in <#RESULTS>, after checking <#KNOWN>.
+"""
+
 # The sixteen factions of 4E 252 (#3317): lore/factions.md, which Patrick
 # approved on 22 Oct, read out of the file so #factions and the repository
 # cannot disagree. Setup-Discord -OnBox sends the file with this one.
@@ -556,6 +625,7 @@ with open(_FACTIONS_MD, encoding='utf-8') as _f:
 
 # Every channel the build writes, by its key in PLAN: its words.
 DOCS = {
+    'ECONOMY': ECONOMY,
     'RULES': RULES,
     'WELCOME': WELCOME,
     'START': START,
@@ -573,8 +643,7 @@ DOCS = {
 }
 
 # Waiting on their lead's and Patrick's approval (#3317, 10d). Never posted.
-DRAFTS = ('TESTERRULES', 'DEVRULES', 'LORERULES', 'MODRULES',
-          'CONTENTRULES', 'SUPPORTRULES')
+DRAFTS = ()
 
 # THE CHANGELOGS (#3317, Patrick, 22 Oct: "any of the rules and documentation
 # in the discord needs a proper changelog so poeple can easily see what
@@ -586,6 +655,28 @@ DRAFTS = ('TESTERRULES', 'DEVRULES', 'LORERULES', 'MODRULES',
 # write is the one the refusal prints (Build-Discord.py, check_docs), and
 # the pull request's build prints it too (tests/test-3457-doc-change-lines.py).
 CHANGES = {
+    'ECONOMY': [
+        ('2026-11-17', 'The progression and economy guide is restored from the documented game rules, with a maintained copy and change history.', '3d28ca99767a'),
+        ('2026-11-17', 'The guide explains NPC quest rewards, the Merchant\'s Guild, starting purses and stock, and the prices each hold takes from submitted business and faction ledgers.', 'e8d0b9aa4390'),
+    ],
+    'DEVRULES': [
+        ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'a0a7157c0e1f'),
+    ],
+    'LORERULES': [
+        ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', '98b8ef0f6914'),
+    ],
+    'MODRULES': [
+        ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'b104eaeb805d'),
+    ],
+    'CONTENTRULES': [
+        ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', 'df8376798b3e'),
+    ],
+    'SUPPORTRULES': [
+        ('2026-11-17', 'The staff rules are now available: responsibilities, access, council decisions and changes to these rules.', '007495f541b6'),
+    ],
+    'TESTERRULES': [
+        ('2026-11-17', 'The playtesting rules are now available: where to find test tasks, report problems and join sessions.', '149088876c87'),
+    ],
     'RULES': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Bugs now go in #test-findings, since #bugs is gone.', '8c8eaaa1c0c2'),
         ('2026-10-22', 'The application that asks whether you accept these is in its own channel now.', 'a61e1b4d9c57'),
@@ -599,6 +690,7 @@ CHANGES = {
         ('2026-11-11', 'What happens to your own Skyrim now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', '575fb40b672c'),
         ('2026-11-12', 'The first step to getting in is reacting to the rules, which gives you the Member role.', '336327ab9a7a'),
         ('2026-11-12', "What happens to your own Skyrim: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking.", 'f303cd7c00ca'),
+        ('2026-11-16', 'Questions before you apply go in #travelers-questions, where staff answer them; reacting to the rules gives you the Member role, which lets you ask there and apply. You can read #general-chat before your playtest application is accepted, and talk there once it is.', '932e5a437039'),
     ],
     'START': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Logs and crash files now go in #test-findings, since #logs-and-crashes is gone.', '8a49f1c3335b'),
@@ -613,6 +705,8 @@ CHANGES = {
         ('2026-11-11', 'Step 4: Connect Discord is at the bottom of the launcher\'s left sidebar, above Settings, not on the Play page as an earlier line here said.', 'c83d73acfb09'),
         ('2026-11-12', "What you need: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking; unticked, Thornswood's files go into your Steam copy until it does.", '461c6ab34d74'),
         ('2026-11-15', 'Step 3: a new Nexus account has two stops before Vortex can start: turn on adult content in your Nexus Mods settings, since some of the collection\'s mods are marked adult, and on a free account press Slow download on each file\'s page.', 'ff7eb4e2df85'),
+        ('2026-11-15', 'Step 5: the first time you press Play, and again after the collection changes, the launcher builds Thornswood\'s animation and body files before the game starts, which takes a few minutes. If that build stops, a box says why, the game does not start, and the launcher log on the Diagnostics page has each step it took.', '90ae36cc69dd'),
+        ('2026-11-17', 'The collection installs one additional scripting dependency, bringing it to 121 files from 112 mods.', '9005318bcb94'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),

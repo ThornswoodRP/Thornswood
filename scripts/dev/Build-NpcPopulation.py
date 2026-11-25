@@ -2,6 +2,11 @@
 
 Uses the same record, string and template reader as Build-CastTable.py.
 The optional installed settings input is used only for its loadOrder paths.
+
+Thornswood-Last.esp is made from this catalogue, so none of its records is
+read here: the places it gives a hold come from its policy's placeHolds, as
+in Build-CastTable.py (#5191, Patrick's B on q-5191-last-plugin-loop). Its
+row in the load order holds the bytes of the file the folder has.
 """
 import argparse
 import collections
@@ -329,7 +334,13 @@ def read_details(plugin, tables):
     walk(24+plugin.header, len(buf))
 
 
-def build(paths, strings_dir=None):
+def place_rules(policy):
+    """The policy's placeHolds: the places Thornswood-Last.esp gives a hold."""
+    with open(policy, encoding='utf-8') as fh:
+        return json.load(fh).get('placeHolds') or {}
+
+
+def build(paths, strings_dir=None, policy=C.POLICY):
     order = [os.path.basename(p) for p in paths]
     if len({p.lower() for p in order}) != len(order):
         raise ValueError('Duplicate plugins in the load order')
@@ -346,25 +357,17 @@ def build(paths, strings_dir=None):
         # would make every cut actor "Deleted or initially switched off", and
         # a rule changed later (keep the guards again, say) could never bring
         # one back. So it is in the load order the gamemode checks, by name
-        # and sha256, and its actors are not read.
+        # and sha256, and none of its records is read.
         #
-        # Its places are (#2551): the location records it gives a hold and
-        # the rooms it gives a location come from its policy, never from this
-        # catalogue, and without them a kept animal in Dayspring Canyon would
-        # be in no hold here while the game puts it in the Rift. So its
-        # locations are read over the ones before it, and of its cells only
-        # the location: every other field of a cell there is the winner's own
-        # copy, which read_details has already read with more than C.read
-        # gives. Its actors go into a table nobody reads.
-        if name == LAST_PLUGIN:
+        # Nor its places (#5191, Patrick's B on q-5191-last-plugin-loop): the
+        # locations it gives a hold and the rooms it gives a location (#2551)
+        # are given here from the policy's placeHolds it is made from
+        # (place_holds, below the loop), as Build-CastTable.py gives them.
+        # Read out of the plugin, the box's build read them from the plugin
+        # of the build before, which its catalogue run, ahead of the chain,
+        # finds in the server's folder.
+        if name.lower() == LAST_PLUGIN.lower():
             sources.append({'name': name, 'sha256': hashlib.sha256(plugin.buf).hexdigest()})
-            plugin.masters = [canon.get(m.lower(), m) for m in plugin.masters]
-            places = {tag: {} for tag in tables}
-            places[b'LCTN'] = tables[b'LCTN']
-            C.read(plugin, places)
-            for desc, row in places[b'CELL'].items():
-                if row.get('location') and desc in tables[b'CELL']:
-                    tables[b'CELL'][desc]['location'] = row['location']
             continue
         plugin.masters = [canon.get(m.lower(), m) for m in plugin.masters]
         if plugin.localised:
@@ -372,6 +375,9 @@ def build(paths, strings_dir=None):
         C.read(plugin, tables)
         read_details(plugin, tables)
         sources.append({'name': name, 'sha256': hashlib.sha256(plugin.buf).hexdigest()})
+    stop = C.place_holds(tables, place_rules(policy))
+    if stop:
+        raise SystemExit('STOP. ' + stop + '. Nothing was written.')
     context = C.Cast(tables)
     rows = []
     for ref, actor in sorted(tables[b'ACHR'].items()):
@@ -476,6 +482,8 @@ def main():
     parser.add_argument('--out', default=str(HERE.parent.parent / 'game/data/npc-population.json'))
     parser.add_argument('--write-runtime', action='store_true')
     parser.add_argument('--strings-dir', help='Installed archive directory for localized record names')
+    parser.add_argument('--policy', default=C.POLICY,
+                        help='The Last plugin policy, whose placeHolds give places their hold (#5191)')
     args = parser.parse_args()
     if not args.settings and not args.data:
         args.data = os.environ.get('THORNSWOOD_DATA') or r'C:\Thornswood\Game\Data'
@@ -485,7 +493,7 @@ def main():
     else:
         with open(args.out, encoding='utf-8') as source:
             paths = [own_plugins.plugin_path(args.data, row['name']) for row in json.load(source)['loadOrder']]
-    payload = activate_guild(build(paths, args.strings_dir))
+    payload = activate_guild(build(paths, args.strings_dir, args.policy))
     with open(args.out, 'w', encoding='utf-8', newline='\n') as output:
         json.dump(payload, output, ensure_ascii=False, separators=(',', ':'))
         output.write('\n')

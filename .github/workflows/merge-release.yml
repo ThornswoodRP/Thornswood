@@ -159,6 +159,8 @@ on:
       - 'scripts/release/Build-Front.ps1'
       - 'scripts/release/Build-Launcher.ps1'
       - 'scripts/release/Build-SetupFiles.ps1'
+      - 'scripts/release/Reference-List.ps1'
+      - 'scripts/release/RepoPlugins.ps1'
       - 'scripts/release/Source-Notice.ps1'
       - 'scripts/release/Go.ps1'
       - 'scripts/release/MergeRelease.ps1'
@@ -201,7 +203,8 @@ jobs:
       found: ${{ steps.find.outputs.found }}
       key: ${{ steps.find.outputs.key }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Find the build, or ask the box for it
@@ -210,11 +213,203 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Ask
+      # The build, held to its key, for the content checks below: a job of
+      # theirs could list the draft only with a token that writes Contents.
+      - name: Take the build for the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-taken'
+      - name: Hand the build to the content checks
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-taken
+          path: |
+            ${{ runner.temp }}/content-taken/content.zip
+            ${{ runner.temp }}/content-taken/content-build.json
+          if-no-files-found: error
+          # Read by this run's content checks, minutes later, and by nothing
+          # after it.
+          retention-days: 1
+
+  # THE CONTENT CHECKS (#5191, stage 4). Every gate harness a new content
+  # build can affect, as main's nightly map says (scripts\dev\Run-Gate.ps1
+  # -Content), run over the box's build of this merge before any release
+  # carries it, in shares as the gate runs: a red one stops the release, and
+  # the build is not kept as content-dev, so no checkout or pull request
+  # lays a build whose checks failed. A pull request that changes a content
+  # input runs these here and not in its own checks, where only an older
+  # build is there to run them over (Run-Gate.ps1 -Content says why).
+  checks-pick:
+    name: Pick the content checks
+    needs: content
+    if: ${{ needs.content.outputs.found == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Main's nightly gate map, an artifact of gate-map.yml.
+      actions: read
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      shares: ${{ steps.pick.outputs.shares }}
+      linux_shares: ${{ steps.pick.outputs.linux_shares }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Run-Gate checks generated table order before it hands out shares.
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Pick and split the content checks
+        id: pick
+        shell: pwsh
+        env:
+          GATE_MAP_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Pick 5 -LinuxShares 4 -Content
+          exit $LASTEXITCODE
+
+  checks:
+    name: Content checks (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.shares != '[]' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.shares) }}
+    steps:
+      # As build.yml's gate shares, which say why each step is there.
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Put .NET and NuGet's packages on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
+
+  checks-linux:
+    name: Content checks on Linux (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [content, checks-pick]
+    if: ${{ needs.checks-pick.outputs.linux_shares != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.checks-pick.outputs.linux_shares) }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the content build taken
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-taken
+          path: ${{ runner.temp }}/content-taken
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs.content.outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-taken') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.checks-pick.outputs.plan }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 1200
+          exit $LASTEXITCODE
 
   release:
     name: Build, sign and release the merge
-    needs: content
-    if: ${{ needs.content.outputs.found == 'yes' }}
+    needs: [content, checks-pick, checks, checks-linux]
+    # The content checks passed, or had nothing to run on a platform.
+    if: ${{ !cancelled() && needs.content.outputs.found == 'yes' && needs.checks-pick.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.checks-linux.result == 'success' || needs.checks-linux.result == 'skipped') }}
     runs-on: windows-latest
     # ONE AT A TIME, NEVER CANCELLED (#6008). A run that has started runs to
     # its end; a newer merge waits, and GitHub keeps only the newest one waiting,
@@ -258,7 +453,8 @@ jobs:
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -401,6 +597,24 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("list=" + (Join-Path $out 'game-files.json'))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("sha=" + (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant())
 
+      # What the install reads beside the game files on the first start
+      # (Build-SetupFiles.ps1), from the record the game files were built
+      # over, once for each channel's package: config.json and applied.txt
+      # are the channel's own. Built on every run, before the launcher step,
+      # because a change to them alone is a new package (MergeRelease.ps1,
+      # THE FILES BESIDE GAME; #6298).
+      - name: Build the files the install reads beside the game files
+        id: setup
+        shell: pwsh
+        run: |
+          foreach ($ch in 'dev', 'main') {
+            $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
+            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
+          }
+
       # Built whenever a Velopack package is made (header, WHAT A RELEASE
       # CARRIES; MergeRelease.ps1, ONE NUMBER), with the package's version.
       - name: The launcher, built and signed or carried from the Release before
@@ -414,6 +628,7 @@ jobs:
           GAME_SHA: ${{ steps.game.outputs.sha }}
           PREVIOUS: ${{ steps.names.outputs.previous }}
           PREVIOUS_MANIFEST: ${{ steps.names.outputs.previous_manifest }}
+          SETUP_DEV_LIST: ${{ steps.setup.outputs.dev_list }}
         run: |
           . ./scripts/release/LauncherVersion.ps1
           . ./scripts/release/MergeRelease.ps1
@@ -438,6 +653,35 @@ jobs:
               $build = $true
               $repack = $true
               Write-Host "main's newest launcher package, before $($env:PREVIOUS) or from it, has no main tag and can never go out, so this merge makes the package again"
+            }
+          }
+          # The files beside Game (the setup step) against those in the
+          # package dev's launchers are on, its list held to its manifest:
+          # a new reference load order alone is a new package
+          # (MergeRelease.ps1, THE FILES BESIDE GAME; #6298).
+          if (-not $build) {
+            try { $on = Get-MergeReleaseDevPackage -Releases @(Get-MergeReleaseList) }
+            catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+            $setupBefore = $null
+            if ($on -and @($on.assets | Where-Object name -eq 'setup-files.dev.json').Count) {
+              $sdir = Join-Path $env:RUNNER_TEMP 'setup-before'
+              New-Item -ItemType Directory -Force -Path $sdir | Out-Null
+              gh release download ([string]$on.tag_name) -R $env:GITHUB_REPOSITORY -p 'manifest.json' -p 'setup-files.dev.json' -D $sdir --clobber
+              if ($LASTEXITCODE -ne 0) { Write-Host "::error::the manifest and setup-files.dev.json of $($on.tag_name) could not be downloaded"; exit 1 }
+              $om = Get-Content -LiteralPath (Join-Path $sdir 'manifest.json') -Raw | ConvertFrom-Json
+              $ol = @($om.parts.PSObject.Properties | Where-Object Name -eq 'velopack' | ForEach-Object { $_.Value } | Where-Object { $_.name -eq 'setup-files.dev.json' })
+              if ($ol.Count -ne 1) { Write-Host "::error::the velopack part of $($on.tag_name) lists no setup-files.dev.json"; exit 1 }
+              $sl = Join-Path $sdir 'setup-files.dev.json'
+              if ((Get-FileHash -LiteralPath $sl -Algorithm SHA256).Hash.ToLowerInvariant() -ne ([string]$ol[0].sha256).ToLowerInvariant()) { Write-Host "::error::setup-files.dev.json of $($on.tag_name) is not the one its manifest names"; exit 1 }
+              $setupBefore = Get-Content -LiteralPath $sl -Raw | ConvertFrom-Json
+            }
+            $setupNow = Get-Content -LiteralPath $env:SETUP_DEV_LIST -Raw | ConvertFrom-Json
+            try { $setupMoved = Test-MergeReleaseSetupChanged -SetupFiles $setupNow -Before $setupBefore }
+            catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+            if ($setupMoved) {
+              $build = $true
+              $repack = $true
+              Write-Host ("the files beside Game differ from those in " + $(if ($on) { "$($on.tag_name)'s package" } else { 'any package' }) + ", so this merge makes the package again")
             }
           }
           if (-not $build) {
@@ -539,7 +783,11 @@ jobs:
           $tables = Join-Path $out 'gamemode-tables.zip'
           ./scripts/release/App-Part.ps1 -Part tables -Out $tables
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host ('gamemode tables are git tree ' + (git rev-parse "$($env:GITHUB_SHA):game/gamemode-tables"))
+          # The tables are the box's build taken above, never committed
+          # (#5191, stage 4e), so their tree is worked out from the folder,
+          # as the gamemode logs it when it loads (GamemodeId.ps1).
+          . .\scripts\deploy\GamemodeId.ps1
+          Write-Host ('gamemode tables are git tree ' + (Get-ThornswoodTablesTree (Resolve-Path 'game\gamemode-tables').Path))
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $launcher = @(Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { 'launcher=' + $_.FullName })
           $adds = $launcher + @("game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
@@ -547,6 +795,10 @@ jobs:
           # The steps after a deploy and the verbs they are held to (#5186).
           $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
           $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          # The collection's modlist the launcher installs from, its sha256 in
+          # this signed record (#6244); test-6244-collection-modlist.ps1 holds
+          # it to the revision collection-plugins.json names.
+          $adds += @('modlist=' + (Resolve-Path 'records\collection-modlist.wabbajack').Path)
           Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
@@ -555,10 +807,11 @@ jobs:
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
           $changed = @(Get-MergeReleaseChanged -Manifest $m -Previous $prev)
-          # A launcher built again for main's package (the launcher step:
-          # the newest one had no main tag) is a new launcher, though its
-          # sources are the same: it goes out, and the package with it.
-          if ($env:LAUNCHER_REPACK -eq 'yes' -and $changed -notcontains 'launcher') { $changed = @($changed) + @('launcher'); Write-Host 'the launcher was built again for a main package that can go out' }
+          # A launcher built again for a new package (the launcher step: the
+          # newest one had no main tag, or the files beside Game changed) is
+          # a new launcher, though its sources are the same: it goes out, and
+          # the package with it.
+          if ($env:LAUNCHER_REPACK -eq 'yes' -and $changed -notcontains 'launcher') { $changed = @($changed) + @('launcher'); Write-Host 'the launcher was built again for a new package (the launcher step says why)' }
           Remove-Item -LiteralPath $probe -Recurse -Force
           if ($changed.Count -eq 0) {
             Write-Host 'no part changed since the Release before, so nothing is released'
@@ -582,23 +835,6 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("gamemode=" + $gm)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("stamp=" + $stamp)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("tables=" + $tables)
-
-      # What the install reads beside the game files on the first start
-      # (Build-SetupFiles.ps1), from the record the game files were built
-      # over, once for each channel's package: config.json and applied.txt
-      # are the channel's own.
-      - name: Build the files the install reads beside the game files
-        id: setup
-        if: ${{ steps.changed.outputs.velopack == 'yes' }}
-        shell: pwsh
-        run: |
-          foreach ($ch in 'dev', 'main') {
-            $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
-            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
-            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
-            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
-          }
 
       # One package for each channel, from the same launcher and game files
       # (header, WHAT A RELEASE CARRIES): dev's goes out with this Release,
@@ -684,15 +920,14 @@ jobs:
             # full package anyway.
             $delta = 'None'
             if ($ch -eq 'dev') {
-              $before = @($rels | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count } |
-                          Sort-Object { $_.published_at } -Descending)
-              $was = $(if ($before.Count) { Get-VelopackFullOf -Release $before[0] -Channel dev } else { $null })
+              $on = Get-MergeReleaseDevPackage -Releases $rels
+              $was = $(if ($on) { Get-VelopackFullOf -Release $on -Channel dev } else { $null })
               if ($was -and [version]$was.Version -lt [version]$env:VERSION) {
-                Invoke-Said "taking the full package of $($before[0].tag_name) for a delta" { gh release download ([string]$before[0].tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out }
+                Invoke-Said "taking the full package of $($on.tag_name) for a delta" { gh release download ([string]$on.tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out }
                 if ($LASTEXITCODE -ne 0) { exit 1 }
                 $delta = 'BestSpeed'
-                Write-Host "dev: a delta from $($before[0].tag_name), $($was.Version)"
-              } elseif ($was) { Write-Host "dev: $($before[0].tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
+                Write-Host "dev: a delta from $($on.tag_name), $($was.Version)"
+              } elseif ($was) { Write-Host "dev: $($on.tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
               else { Write-Host 'dev: the first Velopack release, a full package and no delta' }
             } else { Write-Host 'main: a full package, held for the approval' }
             # packTitle is the name Windows shows in Apps and on the

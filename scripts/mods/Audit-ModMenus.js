@@ -4,6 +4,9 @@
 //     node scripts\mods\Audit-ModMenus.js -v        every setting of every menu, one line each
 //     node scripts\mods\Audit-ModMenus.js --data <a Data folder> --plugins <its plugins.txt>
 //
+// With no --plugins it reads Profile\Default\plugins.txt of the install --data
+// is in (two folders up from Data).
+//
 // Entry 299 on the To Do List: "Mod settings menus reset every session,
 // because a character lives on the server and there is no save for a mod to
 // write into". Known Issues, help.md, tests.md and the board all say it, and the

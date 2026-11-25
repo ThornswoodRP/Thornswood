@@ -63,7 +63,7 @@ function done() {
   if (dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function slice(start, end) {
@@ -74,7 +74,7 @@ function slice(start, end) {
 }
 const propBlock = slice('// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('P0 the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 // The records the block names, read out of it rather than copied.
 function recordOf(name) {
@@ -92,7 +92,7 @@ const HOUSE = '16778:Skyrim.esm';
 const holdM = /"16778:Skyrim\.esm":"([a-z]+)"/.exec(propBlock);
 const HOLD = holdM ? holdM[1] : null;
 yes('P0 the building table files the test house under a hold (' + HOLD + ')', !!HOLD);
-if (!DEED_DESC || !KEY_DESC || !MASTER_DESC || !HOLD) { done(); }
+if (!DEED_DESC || !KEY_DESC || !MASTER_DESC || !HOLD) { done(); } else {
 
 // ================================================================ the server
 const HOUR = 3600000, DAY = 24 * HOUR;
@@ -228,7 +228,7 @@ function to(pid, line) { told.push({ a: pid, line: line }); }
 let box = boot();
 let W = box.__thornswoodProperty;
 yes('P1 the property block boots and publishes itself', !!W && typeof W.command === 'function' && typeof W.claims === 'function');
-if (!W || typeof W.command !== 'function') { done(); }
+if (!W || typeof W.command !== 'function') { done(); } else {
 
 function open(p, door) { inDir(function () { W.touched(p.a, door); }); }
 function word(p, w, args) {
@@ -368,3 +368,4 @@ W = box.__thornswoodProperty;
 yes('W13 a third boot finds Honeyside free: a lapse survives a restart too',
     !Object.prototype.hasOwnProperty.call(W.claims(), HOUSE));
 done();
+}}}

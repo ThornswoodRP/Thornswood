@@ -18,7 +18,12 @@
     the bot folder              whole: its config, bot.log and joins.json
     the voice server folder     whole: its config, voice.log and the chat\
                                 day files, every line typed in the game
-    the game server             server-settings.json, gamemode.js and the
+    the game servers            live (C:\Thornswood-Server, as game) and dev
+                                (C:\Thornswood-Server-Dev, as game-dev), the
+                                names Restore-Server.ps1 reads. Nothing else
+                                with a server-settings.json: not the kept
+                                .prev copies, not a restore rehearsal (#4209).
+                                For each, server-settings.json, gamemode.js and the
                                 gamemode-tables it reads (#5191), and the
                                 data, world and private folders next to it.
                                 world is the characters: every person who plays
@@ -41,6 +46,13 @@
     node_modules, and anything over 200 MB. The installer under the website's
     public folder is the big one, and it is already on GitHub and rebuildable
     from the repo. Taking it would turn a two minute backup into a long one.
+
+  What it could not copy: a file the server holds open, or one it may not
+  read, is said on the box by name with why (NOT TAKEN, in red here), and is
+  not counted as taken. The rest is still brought down, since it may be the
+  only copy, and the run ends 1 (#4209). Until then each copy's error was
+  silenced and the file counted either way, so a locked world file was
+  missing from the zip with nothing said.
 
   The zip has the bot token, the Discord client secret and the server password
   in it, because a backup without them is not a backup, and the site's
@@ -150,20 +162,24 @@ function Grab(`$from, `$asName) {
     # Listed from the long path. `$from may be a short 8.3 path, and
     # FullName is not (issue #1156).
     `$listed = (Get-Item -LiteralPath `$from).FullName
-    foreach (`$f in (Get-ChildItem -LiteralPath `$listed -Recurse -File -EA SilentlyContinue)) {
+    # A file not copied (one the server holds open, one this may not read)
+    # is said by name with why, and only what was copied is counted (#4209).
+    `$listErr = `$null
+    foreach (`$f in @(Get-ChildItem -LiteralPath `$listed -Recurse -File -EA SilentlyContinue -ErrorVariable listErr)) {
       if (`$f.FullName -like '*\node_modules\*') { continue }
       if (`$f.Length -gt 200MB) { continue }
       `$rel = `$f.FullName.Substring(`$listed.Length).TrimStart('\')
       `$dest = Join-Path `$to `$rel
       `$null = New-Item -ItemType Directory -Path (Split-Path -Parent `$dest) -Force -EA SilentlyContinue
-      Copy-Item `$f.FullName `$dest -Force -EA SilentlyContinue
-      `$n = `$n + 1
+      try { Copy-Item -LiteralPath `$f.FullName -Destination `$dest -Force -ErrorAction Stop; `$n = `$n + 1 }
+      catch { 'NOT TAKEN ' + `$f.FullName + '   ' + `$_.Exception.Message }
     }
+    foreach (`$e in @(`$listErr)) { 'NOT TAKEN ' + `$e.TargetObject + '   ' + `$e.Exception.Message }
     'took      ' + `$asName + '   ' + `$n + ' file(s)'
   }
   else {
-    Copy-Item `$from `$to -Force -EA SilentlyContinue
-    'took      ' + `$asName
+    try { Copy-Item -LiteralPath `$from -Destination `$to -Force -ErrorAction Stop; 'took      ' + `$asName }
+    catch { 'NOT TAKEN ' + `$from + '   ' + `$_.Exception.Message }
   }
 }
 
@@ -175,21 +191,18 @@ foreach (`$f in @('server.js','package.json','package-lock.json','config.json'))
 Grab 'C:\Thornswood-Bot' 'bot'
 Grab 'C:\Thornswood-Voice' 'voice'
 
-# The game server moves around between builds, so it gets found rather than
-# assumed. Anything with a server-settings.json beside it counts.
-`$found = @()
-foreach (`$d in (Get-ChildItem 'C:\' -Directory -EA SilentlyContinue)) {
-  foreach (`$hit in (Get-ChildItem `$d.FullName -Recurse -Filter 'server-settings.json' -Depth 4 -File -EA SilentlyContinue)) {
-    `$found += `$hit.DirectoryName
-  }
-}
-`$found = `$found | Select-Object -Unique
-if (`$found.Count -eq 0) { 'missing   the game server (no server-settings.json anywhere under C:\)' }
-`$i = 0
-foreach (`$root in `$found) {
-  `$i = `$i + 1
-  `$tag = if (`$i -eq 1) { 'game' } else { 'game-' + `$i }
-  'game at   ' + `$root
+# The two game servers, by the folders every other script names them by
+# (Restore-Server.ps1, the nightly), and under the names Restore-Server.ps1
+# reads them from: game for live, game-dev for dev. Until #4209 every
+# folder on C: with a server-settings.json in it, four levels down, was
+# taken and named game, game-2, ... in the order it was found, so the kept
+# copies an install leaves (Thornswood-Server.prev-<stamp>) and a restore
+# rehearsal's folder went in too, and any of them could be the one named game.
+foreach (`$g in @(@{ Root = 'C:\Thornswood-Server'; Tag = 'game' }, @{ Root = 'C:\Thornswood-Server-Dev'; Tag = 'game-dev' })) {
+  `$root = `$g.Root
+  `$tag = `$g.Tag
+  if (-not (Test-Path (Join-Path `$root 'server-settings.json'))) { 'missing   ' + `$tag + ' (no server-settings.json in ' + `$root + ')'; continue }
+  'game at   ' + `$root + '   as ' + `$tag
   Grab (Join-Path `$root 'server-settings.json') (`$tag + '\server-settings.json')
   if (Test-Path (Join-Path `$root 'gamemode.js')) { Grab (Join-Path `$root 'gamemode.js') (`$tag + '\gamemode.js') }
   if (Test-Path (Join-Path `$root 'gamemode-tables')) { Grab (Join-Path `$root 'gamemode-tables') (`$tag + '\gamemode-tables') }
@@ -332,9 +345,10 @@ try {
     $c = 'Gray'
     if ("$l" -match '^missing') { $c = 'Yellow' }
     if ("$l" -match '^zip') { $c = 'Green' }
-    if ("$l" -match '^STOP') { $c = 'Red' }
+    if ("$l" -match '^(STOP|NOT TAKEN)') { $c = 'Red' }
     Say "  $l" $c
   }
+  $notTaken = @($lines | Where-Object { "$_" -match '^NOT TAKEN' }).Count
   if (-not ($lines | Where-Object { "$_" -match '^zip' })) {
     Die 'The server did not finish making the zip. Nothing has been brought down.'
   }
@@ -349,6 +363,14 @@ if (-not (Test-Path -LiteralPath $localZip)) { Die "scp did not leave a file at 
 $mb = [math]::Round((Get-Item -LiteralPath $localZip).Length / 1MB, 1)
 Say "  $localZip   $mb MB" 'Green'
 
+# Brought down all the same, since the rest of it is still the only copy,
+# but the run ends 1 so nobody takes it for whole (#4209).
+if ($notTaken) {
+  Write-Host ''
+  Say ("  $notTaken file(s) could not be copied on the server and are not in this backup.") 'Red'
+  Say '  Each is named above in red, with why. Run this again when the server is not writing them.' 'Red'
+}
+
 Head 'Keep this somewhere sensible'
 Say '  It is encrypted with the backup passphrase. Restore-Backup.ps1 opens it.' 'DarkGray'
 Say '  Fetch-Backups.ps1 deletes it here 30 days after it was taken, as the' 'DarkGray'
@@ -356,3 +378,5 @@ Say '  privacy page says of every copy on this machine.' 'DarkGray'
 
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+if ($notTaken) { exit 1 }
+exit 0

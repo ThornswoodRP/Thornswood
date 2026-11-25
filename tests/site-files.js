@@ -63,6 +63,8 @@ function files(p) {
     const rel = 'lib/' + m[1] + '.js';
     if (out.indexOf(rel) < 0) out.push(rel);
   }
+  // News uses the same image code on the server and in the browser.
+  if (fs.existsSync(path.join(w.app, 'public/news-pictures.js'))) out.push('public/news-pictures.js');
   return out;
 }
 

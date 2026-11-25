@@ -36,7 +36,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const KEY = 'test-2887-key-not-a-real-one';
@@ -52,7 +52,7 @@ function mint(o) {
 const a = src.indexOf('// ==== thornswood join pass ====');
 const b = src.indexOf('// ==== end thornswood join pass ====');
 yes('the join pass block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 const BLOCK = src.slice(a, b);
 
 const PRIV = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-2887-'));
@@ -257,3 +257,4 @@ yes('the seats block says a seat is an account\'s', /A SEAT IS AN ACCOUNT'S, NOT
 }
 
 done();
+}

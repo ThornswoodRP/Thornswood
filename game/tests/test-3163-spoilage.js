@@ -90,8 +90,8 @@ yes('B the block hands over its factory', typeof create === 'function');
 if (typeof create !== 'function') {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // ------------------------------------------------------------- the world --
 const VENISON = 0x65c99, SALMON = 0x106e1b, APPLE = 0x64b2f, ALE = 0x34c5e, HONEY = 0x0;
@@ -467,4 +467,5 @@ yes('J3 the page, the block and the panel never say player', words.length === 0)
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

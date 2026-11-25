@@ -995,4 +995,4 @@ if (missingGm.length === 0 && KEY_DESC && MOLD_DESC && DEED_DESC && RECIPE_DESC 
 Date.now = realNow;
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

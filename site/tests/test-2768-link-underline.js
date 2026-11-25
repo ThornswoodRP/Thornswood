@@ -72,4 +72,4 @@ yes('the hub base rule does not take the underline off',
     hub.filter(r => r.selectors.length === 1 && r.selectors[0] === 'a').every(r => !offRe.test(r.body)));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

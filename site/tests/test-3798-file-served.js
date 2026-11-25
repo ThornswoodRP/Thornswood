@@ -236,10 +236,10 @@ async function main() {
   try { fs.rmSync(FILES, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 main().catch((e) => {
   console.log('FAIL  ' + (e && e.stack || e));
-  process.exit(1);
+  process.exitCode = 1;
 });

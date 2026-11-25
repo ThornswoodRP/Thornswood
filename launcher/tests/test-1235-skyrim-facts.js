@@ -117,4 +117,4 @@ yes('test-own-folder-first.ps1 runs the rule chosen and not made, made, chosen o
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

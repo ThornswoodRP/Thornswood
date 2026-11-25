@@ -15,7 +15,8 @@ const a = text.indexOf('// ==== thornswood signin ageing ====');
 const b = text.indexOf('// ==== end thornswood signin ageing ====');
 if (a < 0 || b < 0) {
   console.error('the ageing block markers are not in server.js');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 eval(text.slice(a, b));
 
@@ -84,4 +85,4 @@ freshSignIns(before, NOW);
 check('the array handed in is left alone', before.length, 2);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -232,7 +232,8 @@ check('no anti-debug call', not re.search(r'IsDebuggerPresent|CheckRemoteDebugge
 
 # A copy that fails stops, naming both folders (#2201).
 check('a file that will not copy stops the install, naming both',
-      re.search(r'throw Die\("Could not copy " \+ from \+ " to " \+ dest', steps) is not None)
+      re.search(r'throw CopyFailed\(from, dest, e\)', steps) is not None
+      and re.search(r'Die\("Could not copy " \+ from \+ " to " \+ dest', steps) is not None)
 check('a hard-linked name in a made folder comes off before the copy (#1233)',
       steps.find('RemoveSharedNames(payload, files, gameDir)') != -1
       and steps.find('RemoveSharedNames(payload, files, gameDir)') < steps.find('CopyPayload(payload, files, gameDir)'))
@@ -346,7 +347,7 @@ else:
     try:
         proj = tmp / 'runner'
         proj.mkdir()
-        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs', 'Failure.cs'])
+        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs', 'Failure.cs', 'PathFence.cs'])
         write(proj / 'runner.csproj', f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>

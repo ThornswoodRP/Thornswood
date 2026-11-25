@@ -27,6 +27,7 @@ const { gameStatus, mostOnlineFallback, seatsFull, worldFull } = require('./game
 const { docVersion, INBOX, jsonFile, noteRules, putJson, readDoc,
   readLists, RESULTS, RULES_OK, writeDoc } = require('./store');
 const { NEWS } = require('./news');
+const newsPictures = require('../public/news-pictures');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses } = require('./limits');
@@ -53,6 +54,9 @@ const { LINKED, post } = require('./discord');
 const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
+const { searchLedger, takeLedger } = require('./ledger');
+const { askTakeBack, cleanTakeBackAsk, takeBackRows, takeBackTurn } = require('./takeback');
+const { notePc, pcsSharedBy, withSharedPcs } = require('./pcs');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
   putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
@@ -156,6 +160,12 @@ function errorAnswer(req, res, status, plain, headers, lines) {
 
   An unhandled rejection is different: the process is still defined, so it is
   logged and the site keeps answering.
+
+  The exit is process.abort(), not node's exit function: that one tears V8
+  down first and can hang on Node 24 (#6036), which would leave a dead site
+  holding its port. abort ends at once with no teardown, as an unknown state
+  wants. On Windows it ends with code 134 and no dialog (node's
+  ABORT_NO_BACKTRACE), after node writes the stack it was on to the log.
 */
 process.on('unhandledRejection', (e) => {
   console.error('[thornswood-docs] unhandled rejection, carrying on: ' +
@@ -164,7 +174,7 @@ process.on('unhandledRejection', (e) => {
 process.on('uncaughtException', (e) => {
   console.error('[thornswood-docs] uncaught exception, exiting: ' +
                 (e && e.stack ? e.stack : e));
-  process.exit(1);
+  process.abort();
 });
 
 /*
@@ -833,6 +843,36 @@ async function handle(req, res) {
     server was told by the client, a claim rather than a proof, and the row
     says so in words staff read.
   */
+  /*
+    A game server's turn at the take-back asks (#6271), keyed with the door's
+    key in a header like /api/report/game: it hands back what it did and gets
+    what still waits for it. Each finished ask is one line in moderation.log
+    for the bot's staff channel.
+  */
+  if ((route === '/api/takeback' || route === '/dev/api/takeback') && req.method === 'POST') {
+    if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
+    if (!sameSecret(String(req.headers['x-thornswood-key'] || ''), String(cfg.botKey))) {
+      return sendJson(res, 401, { error: 'no' });
+    }
+    let o;
+    try { o = JSON.parse(await body(req, 256 * 1024)) || {}; }
+    catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+    const srv = route.indexOf('/dev/') === 0 ? 'dev' : 'main';
+    const turn = takeBackTurn(srv, o.done, Date.now());
+    if (!turn.saved) return sendJson(res, 500, { error: 'could not save' });
+    for (const r of turn.finished) {
+      const what = r.name === 'gold' ? 'gold' : r.name;
+      const said = r.state === 'done'
+        ? r.took + ' of the ' + r.count + ' ' + what + ' asked, on the ' + srv + ' server' +
+          (r.answer ? ' (' + r.answer + ')' : '') + ': ' + r.why
+        : r.count + ' ' + what + ' on the ' + srv + ' server: ' + (r.answer || 'no reason given') +
+          '. Asked because: ' + r.why;
+      modLog({ did: r.state === 'done' ? 'takeback' : 'takebackfailed', byName: r.byName,
+               whoName: r.whoName || ('profile ' + r.pid), who: r.pid, why: said });
+    }
+    return sendJson(res, 200, { ok: true, server: srv, waiting: turn.waiting });
+  }
+
   if ((route === '/api/report/game' || route === '/dev/api/report/game') && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     if (!sameSecret(String(req.headers['x-thornswood-key'] || ''), String(cfg.botKey))) {
@@ -1069,7 +1109,8 @@ async function handle(req, res) {
       launcher: feed.launcher || '',
       news: (feed.news || []).slice(0, 60).map((n) => ({
         date: n.date, title: n.title, body: n.body || '',
-        details: asList(n.details), files: asList(n.files).length
+        details: asList(n.details), files: asList(n.files).length,
+        image: newsPictures.valid(n.image) ? n.image : null
       }))
     });
   }
@@ -1127,7 +1168,9 @@ async function handle(req, res) {
     const st = fs.statSync(file);
     const shotKind = {
       'content-type': KIND[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'cache-control': 'public, max-age=86400',
+      // Staff can remove approval for the original and every width at once.
+      // A later request must reach this approval check, not a cached picture.
+      'cache-control': 'no-store',
       'x-content-type-options': 'nosniff'
     };
     // Byte range when asked: a recording will not play in Safari/iOS without it,
@@ -1834,7 +1877,7 @@ async function handle(req, res) {
       hub asked it as a second question and the launcher never sent it, so
       the same removal kept or deleted the file depending on the button.
       Either way the file is marked removed while it is on disk, which
-      /up/<name> refuses, so a removed submission is not served to anybody.
+      /up/<name> refuses, so the site does not serve it on a new request.
       A delete that fails is said, never answered ok: the entry is still off
       both lists, the file is marked removed so it is not served, the answer
       and the site's log say it is still there, and the retention timer
@@ -2538,6 +2581,23 @@ async function handle(req, res) {
     return sendJson(res, 200, { ok: true, server: srv, days: Object.keys(kept.days).length });
   }
 
+  /*
+    A game server's gold and trade rows (#6270), with the door key, the
+    economy's way: the dev server's arrive on /dev/api/ledger and are kept
+    apart. A write that fails answers 500, so the game server keeps the rows
+    for its next push rather than losing them.
+  */
+  if ((route === '/api/ledger' || route === '/dev/api/ledger') && req.method === 'POST') {
+    if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
+    let o = {};
+    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
+    const n = takeLedger(srv, o.rows, Date.now());
+    if (n < 0) return sendJson(res, 500, { error: 'could not save' });
+    return sendJson(res, 200, { ok: true, server: srv, kept: n });
+  }
+
   if (p === '/api/play/roster' && req.method === 'POST') {
     let o = {};
     try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
@@ -2896,6 +2956,10 @@ async function handle(req, res) {
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link', message:
       'This copy is not linked to a Discord account yet.' });
+    // The PC it asks from, before any refusal, so a banned account's PC is
+    // known too (pcs.js). A write that fails is said there and lets the
+    // pass go on: who shares a PC is for staff, not a door.
+    notePc(t.d, o.pc, Date.now());
     const pid = Number(o.profileId) || 0;
     if (!(pid > 0) || Math.floor(pid) !== pid) return sendJson(res, 400, { ok: false, why: 'profile', message:
       'No character was named.' });
@@ -3117,7 +3181,9 @@ async function handle(req, res) {
         // can do it), so the accounts and the records go to staff (w.dev,
         // which folds admin in). Notes, bans and PKs are staff's to read and
         // nobody else's: a hub member without a staff role gets none.
-        linked: w.dev ? Object.values(jsonFile(LINKED, {})) : [],
+        // With each account, the other accounts seen on one of its PCs in
+        // the last 30 days (pcs.js), for staff only like the rest.
+        linked: w.dev ? withSharedPcs(Object.values(jsonFile(LINKED, {})), pcsSharedBy(Date.now())) : [],
         records: w.dev ? staffRecords(Date.now()) : { bans: {}, notes: {}, pk: {}, names: {} },
         sessions: w.admin ? sessionRows() : [],
         inbox: w.admin ? trimInbox(jsonFile(INBOX, []), Date.now()) : []
@@ -3128,6 +3194,16 @@ async function handle(req, res) {
     if (p === '/api/economy' && req.method === 'GET') {
       if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
       return sendJson(res, 200, { keepDays: ECONOMY_KEEP_DAYS, servers: economyNow(Date.now()) });
+    }
+
+    /* The hub's Gold and trades page (#6270): staff, the same as the page.
+       ?q= an account, a profile or a name; ?server= main or dev; ?flagged=1. */
+    if (p === '/api/ledger' && req.method === 'GET') {
+      if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
+      const u = new URL(req.url, 'http://x');
+      const found = searchLedger(String(u.searchParams.get('q') || '').slice(0, 64),
+        String(u.searchParams.get('server') || ''), u.searchParams.get('flagged') === '1', Date.now());
+      return sendJson(res, 200, found);
     }
 
     if (p === '/api/results' && req.method === 'PUT') {
@@ -3165,6 +3241,27 @@ async function handle(req, res) {
       goes to moderation.log for the bot to say in the staff channel; the
       game's /ban and /note are said from the game server's own log.
     */
+    /*
+      Take-back asks (#6271): the admin role's, the same as the play sessions,
+      because it changes what somebody owns. GET lists them, POST asks one.
+    */
+    if (p === '/api/staff/takeback' && req.method === 'GET') {
+      if (!w.admin) return sendJson(res, 403, { error: 'admins only' });
+      return sendJson(res, 200, { rows: takeBackRows(Date.now()) });
+    }
+    if (p === '/api/staff/takeback' && req.method === 'POST') {
+      if (!w.admin) return sendJson(res, 403, { error: 'admins only', message: 'Only an admin can take things back.' });
+      let o;
+      try { o = JSON.parse(await body(req, 8000)) || {}; }
+      catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+      const ask = cleanTakeBackAsk(o);
+      if (ask.error) return sendJson(res, 400, { error: ask.error });
+      const whoName = String(((jsonFile(ROSTER, { who: {} }).who || {})[String(ask.pid)] || {}).name || '').slice(0, 60);
+      const row = askTakeBack(ask, w, whoName, Date.now());
+      if (!row) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, row });
+    }
+
     if (p === '/api/staff/records' && req.method === 'GET') {
       if (!w.dev) return sendJson(res, 403, { error: 'staff only' });
       return sendJson(res, 200, staffRecords(Date.now()));

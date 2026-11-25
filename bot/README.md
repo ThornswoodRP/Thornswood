@@ -475,7 +475,7 @@ Trial Gamemaster and Loremaster.
 To the bot, staff is the `STAFF_ROLES` roles in `bot.env.json` (Owner,
 Co-Owner, Lead Dev, Lead Gamemaster, Lead Loremaster, Lead Moderator, Lead
 Content Creator, Lead Support, Gamemaster, Dev, Loremaster and Moderator by
-default), matched by id or name, and nothing else. Closing a ticket, with
+default), as set in `bot_core.py`, matched by id or name, and nothing else. Closing a ticket, with
 `/close` or the Close ticket button, and skipping the one open ticket rule
 and the cooldown take one of them. Trial Gamemaster, Support and Content
 Creator are not in it. Faction Leader tickets are pulled to the role IDs in
@@ -563,7 +563,10 @@ Then the person picks a hold.
 1. **Turn on Community.** Server Settings, Enable Community. Without it there
    are no forum channels, no announcement channel and no rules screen. Run
    `Setup-Discord.ps1` again afterwards and the text channels standing in for
-   forums are replaced with real ones.
+   forums are replaced with real ones. That takes `-Prune`, and only an empty
+   one is replaced: the forum is made first and the text channel deleted
+   after, so a forum Discord refuses leaves the channel. One with a message
+   or an open thread in it stays, named with why (#4492).
 
 2. **Point the rules screen at the rules.** Community, then Safety Setup. That
    is what makes people accept the rules before they can type.
@@ -575,9 +578,12 @@ Then the person picks a hold.
 
 ## Changing the words later
 
-`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1`
-again, and the posts are rewritten in place. It deletes what the bot wrote last
-time rather than adding a second copy, so the rules never end up posted twice.
+`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1 -Posts`
+again, and the posts are rewritten in place. A plain run leaves the posts alone
+unless `-Posts` is given, so a routine run does not touch existing messages. To
+rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
+lore,factions -Posts`, issue #3656). It deletes what the bot wrote last time
+rather than adding a second copy, so the rules never end up posted twice.
 
 `Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
 it asks for nothing: the build runs on the VPS with the token the running bot
@@ -622,8 +628,9 @@ all of it, `harness_bot.source()`, `tests\bot-files.js` or `tests\BotFiles.ps1`.
 
 ## Running the bot's tests
 
-The bot and its tests need Python 3.11 or newer (Pillow 13 needs it, #1401),
-and the bot runs on 3.12.
+The bot and its tests support Python 3.11 and 3.12. Use 3.12 to match the
+live bot and cloud test setup. On 3.13 and newer, `discord.py` needs
+`audioop-lts`, which is not in the hash-locked requirements.
 On a Windows PC with more than one Python installed, plain `python` is
 whichever comes first on PATH (on One that is 3.9), so run them with the
 launcher:

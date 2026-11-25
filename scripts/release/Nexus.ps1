@@ -109,22 +109,12 @@ function Get-NexusBase {
   return $s.TrimEnd('/')
 }
 
-# The 7-Zip that unpacks and packs the collection's archives, for
-# Install-NexusRevision.ps1 and New-NexusRevision.ps1 alike. Off Windows,
-# 7-Zip's own build that Get-SevenZip.ps1 puts in place comes first: Ubuntu's
-# cannot unpack RAR (#2969). Each script had its own copy of this until
-# 21 Oct, and New-NexusRevision's asked for 7z before 7zz, so a cloud session
-# with Ubuntu's 7z installed stopped on the first RAR plugin it had to patch
-# ("Unsupported Method", LSFX-SSE-Audiosettings.esp).
-function Find-SevenZip {
-  if ($env:ProgramFiles) { $p = Join-Path $env:ProgramFiles '7-Zip\7z.exe'; if (Test-Path -LiteralPath $p) { return $p } }
-  if (-not $IsWindows) {
-    $own = & (Join-Path $script:NexusHere 'Get-SevenZip.ps1') -Check 6>$null
-    if ($LASTEXITCODE -eq 0 -and $own) { return [string]$own }
-  }
-  foreach ($n in '7zz', '7z', '7za') { $g = Get-Command $n -ErrorAction SilentlyContinue; if ($g) { return $g.Source } }
-  return ''
-}
+# The 7-Zip that unpacks and packs the collection's archives, for every Nexus
+# script: SevenZip.ps1's Find-SevenZip, the one rule LoadOrder.ps1 and the
+# Add scripts use too (#4424). Off Windows, 7-Zip's own build that
+# Get-SevenZip.ps1 puts in place comes before any 7z on PATH: Ubuntu's cannot
+# unpack RAR (#2969).
+. (Join-Path $script:NexusHere 'SevenZip.ps1')
 
 function Test-NexusStandIn { return [bool]$env:THORNSWOOD_NEXUS_STANDIN }
 

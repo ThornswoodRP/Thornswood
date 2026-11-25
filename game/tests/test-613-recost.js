@@ -37,7 +37,7 @@ const LAST = path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py');
 
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
-function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
+function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0; }
 function python(args, input) {
   for (const exe of ['python', 'py', 'python3']) {
     const p = spawnSync(exe, args, { encoding: 'utf8', input: input, maxBuffer: 1 << 26,
@@ -131,6 +131,52 @@ yes('T9 no re-costed recipe is a plugin\'s the last plugin never copies from (#2
     (table.notCopied || []).length === table.counts.notCopied &&
     (table.notCopied || []).every((r) => blocked.has(ownerOf(r)) && /notCopiedFrom/.test(r.whyNot || '')));
 
+// ------------------------------------------------------- settles in one re-run
+// The box's chain starts from no recost.json: Build-Recost.py measures the
+// recipe table as the mods have it, the recipe table reads the counts back
+// and is built again, and Build-Recost.py runs once more, which must give
+// the same file (Rebuild-ContentTables.ps1 stops on a second change). A row's
+// rank is read off the counts it is asked: an Immersive Weapons forge recipe
+// whose coins came out went from expert to advanced, so the second run wrote
+// a new rank and every content build after f7dd2d1 stopped (#6351).
+const TWICE = String.raw`
+import copy, importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('rc', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+INGOT, COIN = {'item': '5ace5:Skyrim.esm', 'name': 'Steel Ingot', 'type': 'MISC'}, {'item': 'f:Skyrim.esm', 'name': 'Gold', 'type': 'MISC'}
+def row(out, rank, ingots, coins=0, family='Swords'):
+    ins = [dict(INGOT, count=ingots)] + ([dict(COIN, count=coins)] if coins else [])
+    return {'owner': 'Smith', 'benchName': 'CraftingSmithingForge', 'fires': True, 'out': out, 'family': family,
+            'rank': rank, 'editorId': 'R' + out, 'name': 'Sword ' + out, 'plugin': 'Mod.esp', 'inputItems': ins}
+recipes = {'recipes': {}}
+for i, (rank, n, coins) in enumerate([('advanced', 2, 0), ('advanced', 2, 0), ('advanced', 2, 0), ('advanced', 9, 0),
+                                       ('expert', 2, 20)]):
+    out = '%x:Mod.esp' % (0x900 + i)
+    recipes['recipes']['%x:Mod.esp' % (0x800 + i)] = row(out, rank, n, coins)
+    recipes['recipes']['%x:Mod.esp' % (0xa00 + i)] = {'owner': 'Smith', 'benchName': 'CraftingSmithingSharpeningWheel',
+                                                      'out': out, 'inputItems': [dict(INGOT, count=1)]}
+first = m.build(recipes, None, {})
+# The recipe table again, with the counts read back: the coins come off the
+# last row, and with nothing unplaced holding it up its rank falls.
+again = copy.deepcopy(recipes)
+for r in first['recipes']:
+    again['recipes'][r['recipe']]['inputItems'] = [dict(INGOT if i['item'] == INGOT['item'] else COIN, count=i['to'])
+                                                  for i in r['inputs'] if i['to'] > 0]
+again['recipes']['804:Mod.esp']['rank'] = 'advanced'
+second = m.build(again, first, {})
+print(json.dumps({'same': m.dump(first) == m.dump(second),
+                  'listed': sorted(r['recipe'] for r in first['recipes']),
+                  'coinRank': [r['rank'] for r in second['recipes'] if r['recipe'] == '804:Mod.esp']}))
+`;
+const twice = python(['-', TOOL], TWICE);
+let tw = null;
+try { tw = JSON.parse(twice.stdout); } catch (e) { tw = null; }
+yes('T10 from no recost.json, the run after the recipe table reads it back gives the same file' +
+    (tw ? '' : ' (' + (twice ? twice.stderr.slice(-300) : 'no python') + ')'),
+    !!tw && tw.same && JSON.stringify(tw.listed) === JSON.stringify(['803:Mod.esp', '804:Mod.esp']));
+yes('T10 and a listed row keeps the rank it was first measured at, though its rank moved with its coins taken out',
+    !!tw && JSON.stringify(tw.coinRank) === JSON.stringify(['expert']));
+
 // ------------------------------------------------------------------ the builder
 const RIG = String.raw`
 import importlib.util, json, os, struct, sys, tempfile
@@ -201,7 +247,7 @@ const run = python(['-', LAST], RIG);
 let r = null;
 try { r = JSON.parse(run.stdout.trim().split('\n').pop()); } catch (e) { r = null; }
 yes('L0 the builder runs over two small plugins written here' + (r ? '' : ' (' + (run ? run.stderr.slice(-400) : 'no python') + ')'), !!r);
-if (!r) { done(); }
+if (!r) { done(); } else {
 yes('L1 the re-costed recipe is one override in a COBJ group of a light plugin', r.records === 1 &&
     r.groups[0] === 'GRUP' && r.groups[1] === 'COBJ' && r.light);
 yes('L2 it asks the table\'s counts, each input in the new plugin\'s numbering (' + JSON.stringify(r.cnto) + ')',
@@ -226,3 +272,4 @@ yes('W1 the builder reads game/data/recost.json, puts COBJ first among its group
     /re-costed by recost\.json, won by/.test(tool));
 
 done();
+}

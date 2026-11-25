@@ -180,16 +180,31 @@ foreach ($e in $r.files) {
 # whatever is not listed; one that shows up afterwards is a door nobody wrote
 # down. The row names a rule by its DisplayName: a Name can be a long run of
 # letters and dashes that the secret scan below refuses.
+# A rule from the local store opens nothing while every profile it covers
+# ignores local rules (Set-InboundRules.ps1 -Own, #3896): Edge's updater still
+# adds one, and the active store still lists it. Facts from before the
+# collector said each rule's store are judged as they were.
+$ignoresLocal = @{}
+foreach ($p in @($f.firewallProfiles)) { if ($p) { $ignoresLocal[[string]$p.name] = ([string]$p.allowLocalRules -eq 'False') } }
+function Test-RuleIgnored($Rule) {
+    if (-not ($Rule.PSObject.Properties.Name -contains 'store') -or [string]$Rule.store -ne 'Local') { return $false }
+    $covers = @(([string]$Rule.profiles -split ',\s*') | Where-Object { $_ })
+    if (-not $covers.Count -or $covers -contains 'Any') { $covers = @('Domain', 'Private', 'Public') }
+    foreach ($c in $covers) { if (-not $ignoresLocal[$c]) { return $false } }
+    return $true
+}
 if ($f.PSObject.Properties.Name -contains 'inboundRules') {
     $listed = @($r.inboundRules | ForEach-Object { [string]$_.rule })
     foreach ($e in @($r.inboundRules | Where-Object { $_.required })) {
-        $on = @($f.inboundRules | Where-Object { $_.name -eq $e.rule -or $_.displayName -eq $e.rule })
+        $on = @($f.inboundRules | Where-Object { ($_.name -eq $e.rule -or $_.displayName -eq $e.rule) -and -not (Test-RuleIgnored $_) })
         Row 'firewall' $e.rule 'on (required)' $(if ($on) { 'on' } else { 'off, or not on the box' }) ([bool]$on)
     }
     foreach ($x in @($f.inboundRules)) {
         if ($listed -contains [string]$x.name -or $listed -contains [string]$x.displayName) { continue }
         $ports = if (@($x.ports).Count) { @($x.ports) -join ',' } else { 'Any' }
-        Row 'firewall' $x.displayName 'not listed in the record' ('on, ' + $x.protocol + ' ' + $ports + ' from ' + (@($x.remote) -join ',')) $false
+        $what = $x.protocol + ' ' + $ports + ' from ' + (@($x.remote) -join ',')
+        if (Test-RuleIgnored $x) { Row 'firewall' $x.displayName 'not listed in the record, or ignored' ('ignored: a local rule, ' + $what) $true; continue }
+        Row 'firewall' $x.displayName 'not listed in the record' ('on, ' + $what) $false
     }
 } else { Row 'firewall' 'inbound rules' 'collected' 'facts from before #3807 carry none' $false }
 

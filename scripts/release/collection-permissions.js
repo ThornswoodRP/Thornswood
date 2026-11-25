@@ -271,9 +271,19 @@ function text(record) {
 
 module.exports = { RECORD, COLLECTIONS, OTHER_TYPES, readRecord, ruled, shapeProblems, refusals, otherRefusals, collectionModIds, otherEntries, updated, text };
 
+// A stop says why and ends with code 2. cli throws or returns one rather
+// than calling node's exit function, which can hang on Node 24 (#6036).
+class Stop extends Error { }
 if (require.main === module) {
+  try {
+    process.exitCode = cli();
+  } catch (e) {
+    if (e instanceof Stop) { process.stderr.write(e.message + '\n'); process.exitCode = 2; } else { console.error(e && e.stack || e); process.exitCode = 1; }
+  }
+}
+function cli() {
   const a = process.argv.slice(2);
-  const die = m => { process.stderr.write(m + '\n'); process.exit(2); };
+  const die = m => { throw new Stop(m); };
   const opt = n => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
   // What is left once each --name and its value are taken out.
   const pos = a.filter((x, i) => !x.startsWith('--') && !(i > 0 && a[i - 1].startsWith('--')));
@@ -294,7 +304,7 @@ if (require.main === module) {
     if (ids !== null && (!ids.length || ids.some(n => !Number.isInteger(n) || n < 1))) die('no mod numbers to check');
     const r = (ids ? refusals(record, ids) : []).concat(others);
     for (const x of r) console.log(x.modId + '\t' + (x.name || '') + '\t' + x.why);
-    process.exit(r.length ? 1 : 0);
+    return r.length ? 1 : 0;
   }
   if (pos[0] === 'update') {
     const rev = Number(opt('--revision'));
@@ -303,7 +313,7 @@ if (require.main === module) {
     fs.writeFileSync(recordFile, text(next));
     const unread = next.mods.filter(m => m.ours !== true && m.reading === null).length;
     console.log(next.mods.length + ' mods written to ' + recordFile + ', ' + unread + ' with no reading yet');
-    process.exit(0);
+    return 0;
   }
   die('say check or update');
 }

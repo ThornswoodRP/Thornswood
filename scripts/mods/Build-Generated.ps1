@@ -98,7 +98,7 @@ function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Ho
 function Leave([int]$code) { Write-Host ''; if (-not $NoPause) { [void](Read-Host 'Enter to exit') }; exit $code }
 function Die([string]$m, [int]$code = 1) {
     Write-Host ''
-    Write-Host "STOP. $m" -ForegroundColor Red
+    Write-Output "STOP. $m"
     Leave $code
 }
 

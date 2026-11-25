@@ -98,7 +98,7 @@ if (process.argv[2] === '--emit') {
   fs.writeFileSync(path.join(process.argv[4], 'version.json'), v.body);
   if (v.settings) fs.writeFileSync(path.join(process.argv[4], 'settings.json'), v.settings);
   fs.rmSync(ROOT, { recursive: true, force: true });
-  process.exit(0);
+  return;
 }
 
 ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-feed-split-'));
@@ -265,6 +265,6 @@ async function main() {
   fs.rmSync(ROOT, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack)); process.exit(1); });
+main().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack)); process.exitCode = 1; });

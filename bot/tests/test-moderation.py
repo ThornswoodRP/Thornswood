@@ -26,6 +26,7 @@ import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #227
 import asyncio
 import inspect
 import json
+import re
 import shutil
 import tempfile
 
@@ -189,16 +190,37 @@ try:
     else:
         yes('M7 the words are the house words', True)
 
-    # M8: every action the gamemode writes has words here.
+    # Match the staff recorder and its forwarding calls in the shipped
+    # gamemode, not a second list of action names that can go stale.
     gm = open(os.path.join(HERE, '..', 'game', 'gamemode.js'), encoding='utf-8').read()
-    dids = ['kick', 'freeze', 'unfreeze', 'bring', 'goto', 'silence', 'unsilence', 'warn',
-            'give', 'spawn', 'tp', 'ban', 'unban', 'note',
-            # One character or the whole account, and PK (#1010).
-            'banaccount', 'unbanaccount', 'pk',
-            # An admin undoing a PK made by mistake (#1010, 29 September).
-            'unpk']
-    yes('M8 every action the staff block records has a sentence here',
-        all(("record('%s'" % d) in gm and d in bot._MOD_DID for d in dids))
+    emitted = set(re.findall(r'''\b(?:record|staffRecord)\s*\(\s*['"]([a-z][a-z0-9]*)['"]\s*,''', gm))
+    yes('M8 finds staff, crafting, property and company emitters',
+        {'kick', 'craftrank', 'evict', 'companyconfirm'} <= emitted)
+    missing = sorted(d for d in emitted if not bot.moderation_text('live', json.loads(row(d))))
+    yes('M8 every emitted staff record formats' + (': missing ' + ', '.join(missing) if missing else ''),
+        not missing)
+
+    # Match the row shapes the five commands actually write. The despawn
+    # target is in why, while the company's terms take the place of a name.
+    cases = (
+        ('despawn', '', 0, 'kept wolf ff000001', 'despawned a creature: kept wolf ff000001'),
+        ('hurt', 'Bjorn', 2002, 'wound for the scene',
+         'used /hurt on Bjorn (profile 2002): wound for the scene'),
+        ('companypropose', "the company's terms", 0, 'fee to 20',
+         "proposed changes to the company's terms: fee to 20"),
+        ('companydrop', "the company's terms", 0, 'from Aela: fee to 20',
+         "dropped proposed changes to the company's terms: from Aela: fee to 20"),
+        ('companyconfirm', "the company's terms", 0, 'from Aela: fee to 20',
+         "confirmed changes to the company's terms: from Aela: fee to 20"),
+    )
+    put(LIVE, [])
+    put(DEV, [])
+    records = [json.dumps(dict(json.loads(row(d, who=name, why=why, n=i)), who=pid))
+               for i, (d, name, pid, why, _) in enumerate(cases)]
+    ticks = drive([lambda: put(DEV, records)])
+    yes('M8 the staff watcher says all five actions with their actor and details',
+        ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
+                       for _, _, _, _, words in cases]])
     # The site is server.js over its modules in site/lib since #5357; the hub's
     # writes are in those modules.
     site_dir = os.path.join(HERE, '..', 'site')
@@ -261,6 +283,32 @@ try:
         '@everyone' not in idle_ping and '<@&111111111111111111>' not in idle_ping)
     yes('M12 no em dash and never the forbidden word',
         chr(0x2014) not in idle and ('pla' + 'yer') not in idle.lower())
+
+    # M15: a big move of gold, flagged by the gold and trade log (#6270),
+    # says the server and the gamemode's sentence, and pings nobody.
+    gold = bot.moderation_text('live', {
+        'did': 'gold', 'by': 2002, 'byName': 'Bjorn', 'who': 2002, 'whoName': 'Bjorn',
+        'why': 'Aela (profile 1001) handed 5000 gold to Bjorn (profile 2002) in a trade.'})
+    yes('M15 a gold flag says the server and the sentence the gamemode wrote',
+        gold == '**Gold flagged on the live server:** Aela (profile 1001) handed 5000 gold to '
+                'Bjorn (profile 2002) in a trade.')
+    yes('M15 the gamemode writes it', "did: 'gold'" in gm and 'gold' in bot._MOD_DID)
+    gold_ping = bot.moderation_text('dev', {'did': 'gold', 'why': '@everyone <@&111111111111111111>'})
+    yes('M15 nothing in it pings anybody',
+        '@everyone' not in gold_ping and '<@&111111111111111111>' not in gold_ping)
+
+    # M16: an admin taking gold back from the hub (#6271), done by the game
+    # server and written by the site.
+    tb = bot.moderation_text('site', {
+        'did': 'takeback', 'byName': 'Patrick', 'who': 102, 'whoName': 'Bjorn',
+        'why': '4200 of the 5000 gold asked, on the main server (they held 4200): duped'})
+    yes('M16 a take back says the admin, whose character, what was taken of what was asked, and why',
+        tb == '**Staff on the site:** Patrick took back from Bjorn (profile 102): '
+              '4200 of the 5000 gold asked, on the main server (they held 4200): duped')
+    tbf = bot.moderation_text('site', {'did': 'takebackfailed', 'byName': 'Patrick', 'who': 7, 'whoName': 'profile 7',
+                                       'why': '1 Iron Sword on the dev server: no such character. Asked because: x'})
+    yes('M16 one the game server could not do says so',
+        tbf is not None and tbf.startswith('**Staff on the site:** Patrick could not take back from profile 7'))
 
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the

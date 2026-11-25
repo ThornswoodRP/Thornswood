@@ -330,14 +330,17 @@ let voicePortCached = 0;
 function voicePort() {
   if (voicePortCached) { return voicePortCached; }
   let n = 0;
+  let fallback = 7778;
   try {
-    n = Number(JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8')).thornswoodVoicePort) || 0;
+    const cfg = JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8'));
+    if (cfg.thornswoodServer === 'dev') { fallback = 7789; }
+    n = Number(cfg.thornswoodVoicePort) || 0;
   } catch (e) {
     n = 0;
   }
-  // Anything absent or nonsensical falls back to the live port, which is what
-  // every deployment did before this existed.
-  voicePortCached = (n > 0 && n < 65536) ? n : 7778;
+  // Keep Dev traffic on Dev even when its configured port is invalid. Without
+  // an explicit Dev identity, retain the existing live-port default.
+  voicePortCached = (Number.isInteger(n) && n > 0 && n < 65536) ? n : fallback;
   if (voicePortCached !== 7778) {
     log('voice service port is ' + voicePortCached + ', from server-settings.json');
   }
@@ -11672,19 +11675,20 @@ log('gamemode loaded:',
 
   function send(payload) {
     if (inFlight) return;           // never queue: a late position is worthless
-    inFlight = true;
-
     var body = JSON.stringify(payload);
-    var req = http.request({
-      host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
-    }, function (res) {
-      res.resume();
-      res.on('end', function () { inFlight = false; failures = 0; complained = false; });
-    });
+    inFlight = true;
+    var finished = false;
+    var deadline;
+    var req;
 
-    req.on('error', function () {
+    function finish(ok) {
+      // A truncated response can emit both error and close. Its late events
+      // must not release the slot held by a newer request.
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
       inFlight = false;
+      if (ok) { failures = 0; complained = false; return; }
       failures++;
       // Once, then quiet. Nobody needs this five times a second for an hour.
       if (failures === 25 && !complained) {
@@ -11692,9 +11696,31 @@ log('gamemode loaded:',
         console.log('[thornswood] voice service is not answering on ' + VOICE_PORT +
                     '. Proximity voice is off; everything else is unaffected.');
       }
-    });
-    req.setTimeout(1000, function () { try { req.destroy(); } catch (e) { } });
-    req.end(body);
+    }
+
+    try {
+      req = http.request({
+        host: '127.0.0.1', port: VOICE_PORT, path: '/positions', method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+      }, function (res) {
+        res.on('end', function () { finish(res.statusCode >= 200 && res.statusCode < 300); });
+        res.on('error', function () { finish(false); });
+        res.on('close', function () { finish(false); });
+        res.resume();
+      });
+      req.on('error', function () { finish(false); });
+      req.on('close', function () { finish(false); });
+      // Bound the whole exchange, including a body that keeps trickling in.
+      deadline = setTimeout(function () {
+        finish(false);
+        req.destroy();
+      }, 1000);
+      req.end(body);
+    } catch (error) {
+      finish(false);
+      if (req) req.destroy();
+      throw error;
+    }
   }
 
   /*
@@ -13806,6 +13832,297 @@ log('gamemode loaded:',
 })();
 // ==== end thornswood door ====
 
+// ==== thornswood ledger ====
+/*
+  ============================================================================
+  THE GOLD AND TRADE LOG (#6270).
+
+  Sura the Mad, an auditor, 15 Nov 2026: their server logged every time
+  somebody moved a suspicious amount of gold, and Patrick the same evening:
+  "With trade logs you can just delete ill gotten gold instead of having to
+  wipe or let your economy get fucked". Before this, a trade and gold taken
+  or dropped were lines in thornswood.log by character name only: no
+  Discord account, no flag, nothing staff could search.
+
+  WHAT IS LOGGED. Every finished trade and company sale, both sides, gold
+  and things (the trading block calls trade()), and every move of gold
+  through the engine's own events: taken out of a container or off a body,
+  dropped, and put into a container (cuffs.ts's onTakeItem, onDropItem and
+  onPutItem call gold()). Each row names who it came from and who it went
+  to by profile, character name and Discord account (the door's list,
+  __thornswoodAccountOf), and where.
+
+  FLAGGED. A row that hands 1000 gold or more (FLAG_GOLD) to somebody is
+  flagged on the site and said in the staff channel through moderation.log,
+  the way the staff log reaches the bot. Gold taken out of a container is
+  flagged unless the last gold put into that container on this run was the
+  same person's: a person's own stash coming back out is not a hand-off.
+  Gold dropped on the ground is flagged at the drop, because a pickup off
+  the ground reaches the gamemode as an activation with no count (#6272).
+
+  WHAT IT COSTS THE SERVER. A row is a few property reads and an array push.
+  Nothing is written on the game server's loop: the rows go to the site in
+  one request every 15 seconds (EVERY_MS), and the site appends them to its
+  day files. Only a flagged row touches a file here, one line in
+  moderation.log. Measured in the load test (#6270).
+
+  WHEN THE SITE IS DOWN. The rows stay in memory and go with the next push
+  the site takes, so a restart of the site loses nothing. At most HOLD_MOST
+  are held; past that the oldest go, and how many is said once in
+  thornswood.log, so a long outage costs memory it can count rather than
+  memory it cannot.
+  ============================================================================
+*/
+(function () {
+  'use strict';
+  var g = (typeof globalThis !== 'undefined') ? globalThis : this;
+  var fs = null, path = null, https = null;
+  try { fs = require('fs'); path = require('path'); https = require('https'); } catch (e) { /* no fs or https here: push() and sayFlag() check for them and do nothing */ }
+
+  var FLAG_GOLD = 1000;
+  var EVERY_MS = 15000;
+  var PUSH_MOST = 5000;
+  var HOLD_MOST = 50000;
+  var GOLD = 0x0000000F;
+
+  function llog() {
+    var a = ['[thornswood ledger]'];
+    // Each part on one line: a name or a site's answer cannot start a
+    // line of its own in the server log.
+    for (var i = 0; i < arguments.length; i++) { a.push(String(arguments[i]).replace(/[\u0000-\u001f\u007f]/g, ' ')); }
+    try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
+  }
+
+  // On globalThis, so a hot reload keeps the rows not yet sent and who
+  // last put gold in each container.
+  if (!g.__thornswoodLedgerState) { g.__thornswoodLedgerState = { rows: [], lost: 0, putBy: {}, sending: false }; }
+  var state = g.__thornswoodLedgerState;
+
+  function settings() {
+    try { return mp.getServerSettings() || {}; } catch (e) { return {}; }
+  }
+  function serverName() {
+    return String(settings().thornswoodServer || '').trim().toLowerCase() === 'dev' ? 'dev' : 'main';
+  }
+  function profileOf(refrId) {
+    try { return Number(mp.get(refrId, 'profileId')) || 0; } catch (e) { return 0; }
+  }
+  function nameOf(actorId) {
+    try {
+      var ap = mp.get(actorId, 'appearance');
+      var n = String((ap && ap.name) || '');
+      if (n) { return n; }
+    } catch (e) { /* no appearance yet: the name stays empty and the profile still says who */ }
+    return '';
+  }
+  function cellOf(actorId) {
+    try { return String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return ''; }
+  }
+  function descOf(baseId) {
+    try { return String(mp.getDescFromId(Number(baseId) || 0) || ''); } catch (e) { return ''; }
+  }
+
+  /* Who, as the site keeps them: profile, character name, Discord account. */
+  function person(actorId) {
+    var pid = profileOf(actorId);
+    if (!pid) { return null; }
+    var acct = '';
+    var of = g.__thornswoodAccountOf;
+    try { acct = typeof of === 'function' ? String(of(pid) || '') : ''; } catch (e) { acct = ''; }
+    return { pid: pid, name: nameOf(actorId), account: acct };
+  }
+  function who(p) {
+    if (!p) { return 'nobody'; }
+    return (p.name || 'somebody') + ' (profile ' + p.pid + (p.account ? ', account ' + p.account : '') + ')';
+  }
+
+  /* The staff channel, through moderation.log, the staff log's own way. */
+  function sayFlag(row, sentence) {
+    if (!fs || !path) { return; }
+    var s = settings();
+    var to = row.to || row.from || { pid: 0, name: '' };
+    var line = { at: new Date(row.at).toISOString(), server: row.server, did: 'gold',
+                 by: to.pid, byName: to.name, who: to.pid, whoName: to.name, why: sentence.slice(0, 600) };
+    var dir = String(s.forBotDir || path.join(path.dirname(String(s.privDir || 'private')), 'for-bot'));
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(path.join(dir, 'moderation.log'), JSON.stringify(line) + '\n');
+    } catch (e) {
+      llog('could not write moderation.log, so the staff channel will not hear of this flag:', String(e));
+    }
+  }
+
+  function add(row) {
+    row.at = Date.now();
+    row.server = serverName();
+    state.rows.push(row);
+    if (state.rows.length > HOLD_MOST) {
+      var over = state.rows.length - HOLD_MOST;
+      state.rows.splice(0, over);
+      if (!state.lost) { llog('the site has not taken the log for a while: holding the newest', HOLD_MOST, 'rows, and the oldest go'); }
+      state.lost += over;
+    }
+    return row;
+  }
+
+  function thingsOf(list) {
+    var out = [];
+    for (var i = 0; i < (list || []).length && i < 48; i++) {
+      var t = list[i];
+      if (!t || !(Number(t.c) > 0)) { continue; }
+      out.push({ n: String(t.n || ''), desc: descOf(t.id), c: Number(t.c) });
+    }
+    return out;
+  }
+  function goldWords(n) { return n + ' gold'; }
+
+  /*
+    A finished trade between two people, or a sale to the company. kind is
+    'trade', 'halftrade' (only one pack took its write) or 'sale'. a and b
+    are the actor ids; aGave and bGave are { gold, items } with items the
+    trading block's pieces ({ id, c, n }).
+  */
+  function trade(kind, a, b, aGave, bGave) {
+    if (['trade', 'halftrade', 'sale'].indexOf(kind) < 0) { return null; }
+    var ga = Math.max(0, Number(aGave && aGave.gold) || 0), gb = Math.max(0, Number(bGave && bGave.gold) || 0);
+    var row = add({ kind: kind, from: person(a), to: person(b),
+                    gold: ga, things: thingsOf(aGave && aGave.items),
+                    backGold: gb, backThings: thingsOf(bGave && bGave.items),
+                    source: '', where: cellOf(a), flagged: ga >= FLAG_GOLD || gb >= FLAG_GOLD || kind === 'halftrade' });
+    if (row.flagged) {
+      var big = ga >= gb ? [row.from, row.to, ga] : [row.to, row.from, gb];
+      sayFlag(row, kind === 'halftrade'
+        ? 'A trade went only half through between ' + who(row.from) + ' and ' + who(row.to) + ': ' +
+          goldWords(ga) + ' one way and ' + goldWords(gb) + ' the other. Check both packs; it is on the hub\'s Gold and trades page.'
+        : who(big[0]) + ' handed ' + goldWords(big[2]) + ' to ' + who(big[1]) + ' in a ' +
+          (kind === 'sale' ? 'sale to the company' : 'trade') + '. It is on the hub\'s Gold and trades page.');
+    }
+    return row;
+  }
+
+  /*
+    Gold moved by the engine's own events. how is 'take' (out of sourceRefrId,
+    a container or a body, into actorId), 'drop' (actorId to the ground) or
+    'put' (actorId into the container sourceRefrId). Only gold is logged
+    here; anything else returns null.
+  */
+  function gold(how, actorId, baseId, count, sourceRefrId) {
+    if ((Number(baseId) || 0) !== GOLD) { return null; }
+    var n = Math.floor(Number(count) || 0);
+    if (!(n > 0)) { return null; }
+    var me = person(actorId);
+    var src = Number(sourceRefrId) || 0;
+    var owner = src ? person(src) : null;          // a body is a person's
+    var base = '';
+    if (src && !owner) { try { base = String(mp.get(src, 'baseDesc') || ''); } catch (e) { base = ''; } }
+    var source = how === 'drop' ? 'the ground'
+      : owner ? 'the body of ' + (owner.name || 'somebody')
+      : '0x' + src.toString(16) + (base ? ' (' + base + ')' : '');
+    var row;
+    if (how === 'take') {
+      var stashed = !owner && me && state.putBy[src] === me.pid;
+      row = add({ kind: 'take', from: owner, to: me, gold: n, things: [], source: source,
+                  where: cellOf(actorId), flagged: n >= FLAG_GOLD && !stashed });
+      if (row.flagged) {
+        sayFlag(row, who(me) + ' took ' + goldWords(n) + ' from ' + (owner ? 'the body of ' + who(owner) : 'container ' + source) +
+          ' in ' + row.where + '. It is on the hub\'s Gold and trades page.');
+      }
+    } else if (how === 'put') {
+      if (me) { state.putBy[src] = me.pid; }
+      row = add({ kind: 'put', from: me, to: null, gold: n, things: [], source: source,
+                  where: cellOf(actorId), flagged: false });
+    } else if (how === 'drop') {
+      row = add({ kind: 'drop', from: me, to: null, gold: n, things: [], source: source,
+                  where: cellOf(actorId), flagged: n >= FLAG_GOLD });
+      if (row.flagged) {
+        sayFlag(row, who(me) + ' dropped ' + goldWords(n) + ' on the ground in ' + row.where +
+          '. Whoever picks it up is not logged yet. It is on the hub\'s Gold and trades page.');
+      }
+    } else { return null; }
+    return row;
+  }
+
+  /*
+    Gold or a thing an admin took back out of a character (#6271, the take
+    back block), so a search of the person shows it beside what it undid.
+    Gold is told by the base id the take back resolved, as every other row
+    here tells it (GOLD), so any spelling of gold's record counts as gold.
+  */
+  function takeBack(actorId, record, count, byName, baseId) {
+    var n = Math.floor(Number(count) || 0);
+    if (!(n > 0)) { return null; }
+    var isGold = (Number(baseId) || 0) === GOLD;
+    return add({ kind: 'takeback', from: person(actorId), to: null, gold: isGold ? n : 0,
+                 things: isGold ? [] : [{ n: String(record || ''), desc: String(record || ''), c: n }],
+                 source: 'staff' + (byName ? ': ' + byName : ''), where: cellOf(actorId), flagged: false });
+  }
+
+  /* To the site: door.json names it and the key, the dev server's with /dev. */
+  /*
+    A server with no site to send to: the load test's copy of dev (#4623,
+    New-LoadServer.js), which has no door to the site on purpose. It builds
+    the push it would send, so the copy pays what dev pays for it, and says
+    the size in its log, which the load run keeps: that line is how a crowd
+    run measures the log (#6270). The rows then go, as a push that was taken
+    would take them: a server with no site has nowhere they could ever be
+    sent, and holding them would make the copy's memory unlike dev's.
+  */
+  function noSite() {
+    var batch = state.rows.slice(0, PUSH_MOST);
+    var t0 = Date.now();
+    var bytes = Buffer.byteLength(JSON.stringify({ server: serverName(), rows: batch }));
+    llog('no site in door.json to send to: a push would be', batch.length, 'rows,', bytes, 'bytes, built in',
+         Date.now() - t0, 'ms; they are not kept');
+    state.rows.splice(0, batch.length);
+  }
+
+  function push() {
+    if (state.sending || !state.rows.length || !fs || !path || !https) { return; }
+    var conf = null;
+    var privDir = String(settings().privDir || 'private');
+    try { conf = JSON.parse(fs.readFileSync(path.join(privDir, 'door.json'), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { conf = null; /* no door.json: said below, as a server with no site */ }
+    if (!conf || !conf.site || !conf.key) { noSite(); return; }
+    var u = null;
+    try { u = new URL(String(conf.site).replace(/\/+$/, '') + '/api/ledger'); } catch (e) { return; }
+    var batch = state.rows.slice(0, PUSH_MOST);
+    var body = JSON.stringify({ key: String(conf.key), server: serverName(), rows: batch });
+    state.sending = true;
+    function done(ok, why) {
+      state.sending = false;
+      if (ok) {
+        // Only what was sent goes; rows added meanwhile stay for the next.
+        state.rows.splice(0, batch.length);
+        if (state.lost) { llog('the site takes the log again;', state.lost, 'rows were lost while it did not'); state.lost = 0; }
+        if (state.said) { state.said = ''; }
+      } else if (why !== state.said) {
+        llog('the site did not take', batch.length, 'rows; they are kept for the next push:', why);
+        state.said = why;
+      }
+    }
+    try {
+      var req = https.request({
+        host: u.hostname, port: u.port || 443, path: u.pathname, method: 'POST', timeout: 10000,
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+      }, function (resp) {
+        resp.resume();
+        if (resp.statusCode === 200) { done(true, ''); } else { done(false, 'it answered ' + resp.statusCode); }
+      });
+      req.on('error', function (e) { if (state.sending) { done(false, String((e && e.message) || e)); } });
+      req.on('timeout', function () { req.destroy(new Error('no answer in 10 s')); });
+      req.end(body);
+    } catch (e) { done(false, String((e && e.message) || e)); }
+  }
+
+  if (g.__thornswoodLedgerPush) { try { clearInterval(g.__thornswoodLedgerPush); } catch (e) { /* nothing to stop: an earlier load's timer is already gone */ } }
+  state.sending = false;
+  g.__thornswoodLedgerPush = setInterval(push, EVERY_MS);
+
+  g.__thornswoodLedger = { trade: trade, gold: gold, takeBack: takeBack, push: push, FLAG_GOLD: FLAG_GOLD, EVERY_MS: EVERY_MS,
+                           pending: function () { return state.rows.length; } };
+  llog('ready: trades and gold moves go to the site every', EVERY_MS / 1000, 's, and', FLAG_GOLD, 'gold or more is flagged');
+})();
+// ==== end thornswood ledger ====
 // ==== thornswood keeping times ====
 /*
   HOW LONG THE GAME SERVER'S OWN RECORDS OF PEOPLE ARE KEPT (#2353).
@@ -21213,8 +21530,10 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     mayCharter(who)  game/trading-company.js mayCharter(who, terms) over the
                      terms in force (#511, #2700 builds on it)
     freightFor()     { gold, to } for one load into a ship hold
-  The property block posts and pays hauls by these, and the trade block
-  splits a sale by them. Nothing loads a ship yet; that is #2700's.
+  The property block posts and pays hauls by these, the trade block splits a
+  sale by them, and the trade ship dock asks mayCharter before every load
+  and sail (#2700). Nothing calls freightFor yet, so no freight is charged
+  on a load.
 
   THE STAFF CARD ON THE OFFICE PAGE OF K, the same way as #2685's world
   card: the server proposes, staff confirm, and nothing is typed. Staff see
@@ -21252,8 +21571,13 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
   #1393, #1646). Its hauls, its tenth and its sales out of the world are in the
   property block of gamemode.js. This file is the company's terms as data staff
   can change, and the arithmetic that reads them. It never touches the world, a
-  pack, a ledger, a purse or a price, and it is not wired in yet: the design and
-  Patrick's questions are on #512 (issuecomment-6245906394).
+  pack, a ledger, a purse or a price. The gamemode reads it through
+  globalThis.__thornswoodCompany (game/gamemode/company-terms.ts): the property
+  block posts and pays hauls by it, the trade block splits sales out of the
+  world by it, and the trade ship dock asks mayCharter before every load and
+  sail (#2700). Nothing calls freightFor yet, so no freight is charged on a
+  load. The design and Patrick's questions are on #512
+  (issuecomment-6245906394).
 
   THE TERMS are one object, kept in game/data/trading-company.json:
 
@@ -30353,7 +30677,7 @@ module.exports = {
         /remnant add <person>         onto the remnant roll, after the application
         /remnant remove <person>      off it
   */
-  function command(word, parts, actorId, profileId, toProfile) {
+  function command(word, parts, actorId, profileId, toProfile, cmd) {
     var roll = word === '/remnant' ? 'remnant' : 'embassy';
     var verb = String((parts && parts[1]) || '').toLowerCase();
     var rest = (parts || []).slice(2);
@@ -30363,6 +30687,14 @@ module.exports = {
       return true;
     }
     if (!verb) { toProfile(profileId, listing(roll)); return true; }
+
+    if (verb === 'add' || verb === 'arm' || verb === 'disarm' || verb === 'remove') {
+      var staffLog = g.__thornswoodStaff;
+      if (staffLog && typeof staffLog.unproven === 'function') {
+        var unp = staffLog.unproven(cmd, profileId);
+        if (unp) { toProfile(profileId, unp); return true; }
+      }
+    }
 
     var armed = false;
     if (roll === 'embassy' && verb === 'add' && rest.length > 1 &&
@@ -32465,6 +32797,8 @@ var GOLD_BASE = 15;
 var MAX_COUNT = 2147483647;
 var MAX_LINES_DEFAULT = 24;
 var MAX_STATE_BYTES = 512 * 1024;
+/* Patrick, 22 Oct 2026 (#4576): the cargo register keeps a closed line for 30 days. */
+var KEEP_CLOSED_MS = 30 * 24 * 60 * 60 * 1000;
 var ID_RE = /^[a-z0-9][a-z0-9:_.-]{0,63}$/;
 var HOWS = { delivered: 1, left: 1, returned: 1, taken: 1 };
 
@@ -32892,6 +33226,53 @@ function createTradeCargo(opts) {
     });
   }
 
+  /*
+    WHAT IS KEPT, AND FOR HOW LONG (#4576; Patrick, 22 Oct 2026: a closed
+    line is kept for 30 days). A line is closed when nothing of it is aboard
+    and nothing of it is being handed out, and it closed at its last out.
+    Once that is keepMs (30 days unless given) before now, the line goes,
+    with its outs and the receipts only it used. A line with anything aboard
+    or pending is never dropped, however old, so the audit still adds up for
+    every line kept. The blocks call this where they write the register.
+    Answers how many lines went; when none is due nothing is changed.
+  */
+  function forget(state, now, keepMs) {
+    if (!time(now)) { throw new Error('The time cannot be verified.'); }
+    var keep = keepMs === undefined ? KEEP_CLOSED_MS : keepMs;
+    if (!time(keep)) { throw new Error('How long a closed line is kept cannot be verified.'); }
+    function due(h) {
+      var closedAt = {}, pending = {};
+      Object.keys(h.lines).forEach(function (k) { if (h.lines[k].aboard === 0) { closedAt[k] = 0; } });
+      h.outs.forEach(function (o) {
+        var k = String(o.line);
+        if (o.receipt === null) { pending[k] = true; }
+        if (has(closedAt, k) && o.at > closedAt[k]) { closedAt[k] = o.at; }
+      });
+      return Object.keys(closedAt).filter(function (k) { return !pending[k] && closedAt[k] + keep <= now; });
+    }
+    var any = Object.keys(state.holds).some(function (id) { return due(state.holds[id]).length > 0; });
+    if (!any) { return 0; }
+    return change(state, function (s) {
+      var gone = 0;
+      Object.keys(s.holds).forEach(function (id) {
+        var h = s.holds[id];
+        var drop = {};
+        due(h).forEach(function (k) { drop[k] = true; });
+        Object.keys(drop).forEach(function (k) {
+          delete s.receipts[h.lines[k].receipt];
+          delete h.lines[k];
+          gone++;
+        });
+        h.outs = h.outs.filter(function (o) {
+          if (!drop[String(o.line)]) { return true; }
+          delete s.receipts[o.receipt];
+          return false;
+        });
+      });
+      return gone;
+    });
+  }
+
   /* What is aboard a hold now, line by line, for a panel. */
   function aboard(state, id) {
     var h = holdOf(state, id);
@@ -32924,6 +33305,7 @@ function createTradeCargo(opts) {
   return {
     empty: empty, audit: audit, open: open, load: load, depart: depart, amend: amend, arrive: arrive, pullIn: pullIn,
     begin: begin, finish: finish, undo: undo, release: release, aboard: aboard, save: save, parse: load_,
+    forget: forget,
     uncollected: uncollected, nextUncollected: nextUncollected,
     used: function (state, id) { return inUse(holdOf(state, id)); },
     PORTS: Object.keys(ports), MAX_LINES: maxLines, DRIVEN: driven
@@ -33573,6 +33955,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -33737,12 +34121,23 @@ return module.exports;
     var SESSION_MS = 10 * 60 * 1000;   // a dock panel left open this long asks for the crate again
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a dock crate, the same as a hold's box
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0, timer = null;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, timer = null;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return kind + ':' + RUN + ':' + (++receiptN); }
+    /*
+      A RECEIPT'S NAME is kind:RUN:n (#4928). RUN is the server's run, kept on
+      globalThis, which a gamemode reload keeps, and the register on disk keeps
+      every name used. So n is kept on globalThis beside the run: a reload
+      carries on counting where the last load stopped, and a restart, a new
+      run, starts again at 1 under a run no name has used yet.
+    */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodShipReceiptN) || 0) + 1;
+      g.__thornswoodShipReceiptN = n;
+      return kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -33968,13 +34363,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);
@@ -35381,6 +35783,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -35457,12 +35861,17 @@ return module.exports;
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a stop's crate, the same as a dock's
     var RAID_REACH = 700;              // how close a raider stands to the driver: a trade's 10 metres
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return 'cart-' + kind + ':' + RUN + ':' + (++receiptN); }
+    /* A cart receipt's name is cart-kind:RUN:n, n kept on globalThis beside the run, as the ships keep theirs (#4928). */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodCartReceiptN) || 0) + 1;
+      g.__thornswoodCartReceiptN = n;
+      return 'cart-' + kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -40813,8 +41222,9 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   the character is not in it, because the server does not see those. The
   moment it ends is kept on the character, so a relog or a restart does not
   end it early. Waiting the 30 minutes clears it. The page's other clear, a
-  cooked meal and a bed, waits for the cooked meal (#1382), which the server
-  does not know yet.
+  cooked meal and a bed, is not built here: the needs block has known a
+  cooked meal since #1382 (NEEDS.foodGroup.cooked), and nothing in this
+  block ends withered on one and a rest in a bed yet (#6239).
 */
 (function () {
   'use strict';
@@ -42543,6 +42953,111 @@ function thornswoodBooks(env) {
 
   loadStore();
 
+  /*
+    THE GUILD'S REWARD PRICES (#6180). Patrick, 15 Nov 2026, on the page
+    (q-6180-guild-prices): "Guild work should be set by staff, give them all
+    starting reward prices. The NPCs still wont buy or sell until ledgers are
+    submitted". A guild commission pays each good it asks for at the good's
+    reward price, never at a hold's ledger price; the ledgers above still set
+    what a trader buys and sells. Every good a commission asks for has a
+    starting price in the gamemode table COMMISSION_REWARD_PRICES
+    (Build-MerchantTables.js says how it is worked out). Staff change one in
+    the game with /book reward, and what they set is kept here, in the
+    private folder beside the books, by the good's record; a good staff
+    never changed pays its starting price.
+  */
+  // The gamemode hands the table in when it starts the books; a harness that
+  // runs the books block alone gives none, and no good has a reward price.
+  var REWARD_START = env.rewardPrices || { version: 1, items: [] };
+  var rewardStart = {};
+  var rewardOrder = [];
+  (function () {
+    var items = (REWARD_START && Array.isArray(REWARD_START.items)) ? REWARD_START.items : null;
+    if (!items) { throw new Error('The guild\'s starting reward prices cannot be verified.'); }
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      if (!row || typeof row.item !== 'string' || !/^[0-9a-f]{1,8}:[^:]+$/i.test(row.item) ||
+          typeof row.name !== 'string' || !row.name.trim() || !validGold(row.gold) || row.gold === null ||
+          Object.prototype.hasOwnProperty.call(rewardStart, row.item.toLowerCase())) {
+        throw new Error('The guild\'s starting reward prices cannot be verified.');
+      }
+      rewardStart[row.item.toLowerCase()] = { item: row.item, name: row.name, gold: row.gold };
+      rewardOrder.push(row.item.toLowerCase());
+    }
+  })();
+  var rewardSet = {};
+  function rewardsFile() { return path.join(privDir, 'commission-rewards.json'); }
+  (function loadRewards() {
+    if (!fs.existsSync(rewardsFile())) { return; }
+    var doc;
+    try { doc = JSON.parse(fs.readFileSync(rewardsFile(), 'utf8').replace(/^\uFEFF/, '')); }
+    catch (e) { throw new Error('Saved guild reward prices cannot be verified: ' + e.message); }
+    if (!doc || doc.version !== 1 || !doc.items || typeof doc.items !== 'object' || Array.isArray(doc.items)) {
+      throw new Error('Saved guild reward prices cannot be verified.');
+    }
+    for (var key in doc.items) {
+      if (!Object.prototype.hasOwnProperty.call(doc.items, key)) { continue; }
+      // A good no commission asks for any more is kept, so a price staff set
+      // is never lost, and asked for by nothing.
+      if (!/^[0-9a-f]{1,8}:[^:]+$/i.test(key) || key !== key.toLowerCase() ||
+          !validGold(doc.items[key]) || doc.items[key] === null) {
+        throw new Error('Saved guild reward prices cannot be verified.');
+      }
+      rewardSet[key] = doc.items[key];
+    }
+  })();
+
+  function rewardPrice(desc) {
+    var key = String(desc || '').toLowerCase();
+    if (!active || !Object.prototype.hasOwnProperty.call(rewardStart, key)) { return null; }
+    var start = rewardStart[key];
+    var gold = Object.prototype.hasOwnProperty.call(rewardSet, key) ? rewardSet[key] : start.gold;
+    return { item: start.item, name: start.name, gold: gold, start: start.gold };
+  }
+
+  // The good a staff member named: by its name or its record, whole, any case.
+  function rewardGood(words) {
+    var said = words.join(' ').trim().toLowerCase();
+    if (!said) { return null; }
+    if (Object.prototype.hasOwnProperty.call(rewardStart, said)) { return rewardStart[said]; }
+    var hit = null;
+    for (var i = 0; i < rewardOrder.length; i++) {
+      var row = rewardStart[rewardOrder[i]];
+      if (row.name.toLowerCase() === said) {
+        if (hit) { return 'two'; }
+        hit = row;
+      }
+    }
+    return hit;
+  }
+
+  function reward(pid, words) {
+    var r = rolesOf(pid);
+    if (!r.staff && !r.dev) { return 'Only staff set what guild work pays.'; }
+    var last = String(words[words.length - 1] || '').toLowerCase();
+    var setting = words.length >= 2 && (/^(0|[1-9][0-9]{0,9})$/.test(last) || last === 'start');
+    var good = rewardGood(setting ? words.slice(0, -1) : words);
+    if (!good) {
+      return 'Name a good guild work asks for to read its price; add a price in gold to set it, ' +
+             'or start to put it back on its starting price.';
+    }
+    if (good === 'two') { return 'Two goods have that name. Name it by its record instead.'; }
+    var key = good.item.toLowerCase();
+    if (!setting) {
+      var now = rewardPrice(key);
+      return good.name + ' pays ' + now.gold + ' gold each in guild work (it started at ' + now.start + ').';
+    }
+    var gold = last === 'start' ? null : Number(last);
+    if (gold !== null && !validGold(gold)) { return 'That is not a price in gold.'; }
+    var next = JSON.parse(JSON.stringify(rewardSet));
+    if (gold === null || gold === good.gold) { delete next[key]; } else { next[key] = gold; }
+    try { writeJson(rewardsFile(), { version: 1, items: next }); }
+    catch (e) { return 'The server could not save the reward price. Nothing changed.'; }
+    rewardSet = next;
+    return good.name + ' now pays ' + rewardPrice(key).gold + ' gold each in guild work. ' +
+           'Work already taken keeps the pay it was taken at.';
+  }
+
   function byId(id) {
     var want = String(id || '');
     for (var i = 0; i < store.length; i++) {
@@ -43247,6 +43762,7 @@ function thornswoodBooks(env) {
       }
       return said;
     }
+    if (sub === 'reward') { return reward(pid, words); }
     if (sub === 'leave') { return leave(pid, words); }
     if (sub === 'invite') { return invite(actorId, pid, words); }
     if (sub === 'say') { return sayLine(pid, actorId, words); }
@@ -43472,6 +43988,7 @@ function thornswoodBooks(env) {
     books: function () { return active ? JSON.parse(JSON.stringify(store)) : []; },
     guildPrice: guildPrice,
     catalog: catalog,
+    rewardPrice: rewardPrice,
     ledgers: function () { return active ? JSON.parse(JSON.stringify(ledgers)) : {}; }
   };
 }
@@ -43495,7 +44012,7 @@ function thornswoodBooks(env) {
       var cfg = JSON.parse(fs.readFileSync('server-settings.json', 'utf8'));
       if (cfg && cfg.privDir) { privDir = String(cfg.privDir); }
     } catch (e) { }
-    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir });
+    var api = thornswoodBooks({ fs: fs, path: path, privDir: privDir, rewardPrices: table('COMMISSION_REWARD_PRICES') });
     g.__thornswoodBooks = api;
     if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('books', api.release); }
     g.__thornswoodBooksTimer = setInterval(function () {
@@ -44910,7 +45427,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -44964,7 +45481,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -45562,6 +46079,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -45586,6 +46108,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
@@ -45656,6 +46182,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 
@@ -46212,6 +46743,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and
@@ -47435,8 +47967,15 @@ mp.onPutItem = guard('onPutItem', function (containerRefrId, actorId, baseId, co
   // The pair locked on a prisoner's wrists stays there (#2573).
   var cuffsPut = globalThis.__thornswoodCuffs;
   if (cuffsPut && !cuffsPut.mayLetGo(actorId, baseId, count)) { return false; }
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerPut = globalThis.__thornswoodLedger;
+  if (ledgerPut && typeof ledgerPut.gold === 'function') {
+    try { ledgerPut.gold('put', actorId, baseId, count, containerRefrId); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a put: ' + String((e && e.message) || e)); }
+  }
   return;
 });
+
 
 /*
   WHAT A CLIENT CAN ASK THIS SERVER, AND WHAT IT IS TOLD.
@@ -47764,6 +48303,12 @@ mp.onTakeItem = guard('onTakeItem', function (sourceRefrId, actorId, baseId, cou
   }
   log('take:', auditPerson(actorId), 'took', Number(count) || 0, auditItem(baseId),
       'from', auditSource(sourceRefrId), 'in', auditCell(actorId));
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerTake = globalThis.__thornswoodLedger;
+  if (ledgerTake && typeof ledgerTake.gold === 'function') {
+    try { ledgerTake.gold('take', actorId, baseId, count, sourceRefrId); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a take: ' + String((e && e.message) || e)); }
+  }
 });
 
 mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
@@ -47773,6 +48318,12 @@ mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
   if (cuffsDrop && !cuffsDrop.mayLetGo(actorId, baseId, count)) { return false; }
   log('drop:', auditPerson(actorId), 'dropped', Number(count) || 0, auditItem(baseId),
       'in', auditCell(actorId));
+  // Gold into the gold and trade log (#6270), which keeps it by account.
+  var ledgerDrop = globalThis.__thornswoodLedger;
+  if (ledgerDrop && typeof ledgerDrop.gold === 'function') {
+    try { ledgerDrop.gold('drop', actorId, baseId, count, 0); }
+    catch (e) { console.log('[thornswood] the gold and trade log would not take a drop: ' + String((e && e.message) || e)); }
+  }
   // The engine puts the piece's extra, its condition in the name included,
   // on the dropped reference and gives it back on the pickup (#1719).
 });
@@ -58796,6 +59347,14 @@ module.exports = {
 
   var TRADE_PROPERTY = 'thornswoodTrade';
 
+  /* Into the gold and trade log (#6270), which keeps it by account for staff. */
+  function ledger(kind, a, b, aGave, bGave) {
+    var l = g.__thornswoodLedger;
+    if (!l || typeof l.trade !== 'function') { tlog('the gold and trade log is not loaded, so this', kind, 'is only in this log'); return; }
+    try { l.trade(kind, a, b, aGave, bGave); }
+    catch (e) { tlog('the gold and trade log would not take this', kind + ':', String((e && e.message) || e)); }
+  }
+
   var TRADE = {
     // How far apart two people can be and still be trading. A trade that
     // carries on across Skyrim is a post office.
@@ -59308,6 +59867,7 @@ module.exports = {
                  nameOf(not) + '\'s was not. Tell staff, it is in the server log.';
       tellEach([t.a, t.b], line);
       tlog('HALF A TRADE:', nameOf(got), 'was written and', nameOf(not), 'was not, trading', whatA, 'for', whatB);
+      ledger('halftrade', t.a, t.b, { gold: t.goldA, items: t.offerA }, { gold: t.goldB, items: t.offerB });
       close(t, '');
       return line;
     }
@@ -59316,6 +59876,7 @@ module.exports = {
       say(t.b, 'Traded. You gave ' + whatB + ' and got ' + whatA + '.');
     } catch (e) { }
     tlog(nameOf(t.a), 'and', nameOf(t.b), 'traded:', whatA, 'for', whatB);
+    ledger('trade', t.a, t.b, { gold: t.goldA, items: t.offerA }, { gold: t.goldB, items: t.offerB });
     close(t, '');
     return '';
   }
@@ -59365,6 +59926,7 @@ module.exports = {
                  nameOf(other(t, sold)) + '\'s was not. Tell staff, it is in the server log.';
       tellEach([seller, worker], half);
       tlog('HALF A SALE:', nameOf(sold), 'was written and', nameOf(other(t, sold)), 'was not');
+      ledger('halftrade', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
       close(t, '');
       return half;
     }
@@ -59381,6 +59943,7 @@ module.exports = {
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
             : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
+    ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
          cuts.worker, 'to the worker,', cuts.gone, 'destroyed, and the things left the world');
     close(t, '');
@@ -60536,7 +61099,7 @@ module.exports = {
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -60943,9 +61506,15 @@ module.exports = {
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -60966,22 +61535,22 @@ module.exports = {
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
@@ -61087,7 +61656,7 @@ module.exports = {
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -61306,6 +61875,24 @@ module.exports = {
     return '';
   }
 
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
+    return '';
+  }
+
   /*
     One line in thornswood.log and one in moderation.log for the bot. extra,
     when given, is more of the same row: the property block's staff presses
@@ -61462,6 +62049,10 @@ module.exports = {
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -61932,6 +62523,10 @@ module.exports = {
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way
@@ -62017,9 +62612,15 @@ module.exports = {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
       state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
       pushSilenced();
@@ -62122,6 +62723,7 @@ module.exports = {
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
@@ -62131,6 +62733,175 @@ module.exports = {
 })();
 // ==== end thornswood staff ====
 
+// ==== thornswood take back ====
+/*
+  ============================================================================
+  TAKING GOLD OR A THING BACK OUT OF A CHARACTER (#6271).
+
+  Patrick, 16 Nov 2026: "With trade logs you can just delete ill gotten gold
+  instead of having to wipe or let your economy get fucked". The gold and
+  trade log (#6270) says who holds gold gained by cheating. An admin asks on
+  the hub's Gold and trades page, and this server does it.
+
+  WHY HERE AND NOT IN THE STORE. This server read the whole world into
+  memory when it started and writes each changed character back to its
+  store (the files today, MongoDB after #6237) as it changes. An edit made
+  in the store behind its back is written over the next time that character
+  changes here, and lost at the next start if it does not. The engine keeps
+  every character in memory whether its owner is connected or not, so the
+  change is made here, on the character, and saved like any other.
+
+  THE TURN. Every 30 seconds (EVERY_MS) this asks the site POST
+  /api/takeback (the door's __thornswoodAskSite: door.json's site, which is
+  /dev for the dev server, and the door key in a header) with what it did
+  with the asks it had, and gets the ones still waiting for it. Each ask
+  is { id, pid, record, count, why, byName }.
+
+  TAKEN ONCE. An ask done is marked on the character itself (TAKEN_PROPERTY,
+  the last MARKS_KEPT ask ids), in the same save as the pack it changed. So
+  an answer that never reached the site, or a restart before it did, finds
+  the mark and answers done again instead of taking a second time.
+
+  WHAT IS TAKEN is what the character holds of that record, up to the count
+  asked and never more: things not worn first, then worn ones. The answer
+  says how many were taken, and the site's line in the staff channel says
+  so beside how many were asked. A character this server does not hold, or
+  a record it does not know, is answered as not done, with why.
+
+  The take goes in the gold and trade log too, as a take back, so a search
+  of the person shows it beside what it undid.
+  ============================================================================
+*/
+(function () {
+  'use strict';
+  var g = (typeof globalThis !== 'undefined') ? globalThis : this;
+  var EVERY_MS = 30000;
+  var MARKS_KEPT = 200;
+  var TAKEN_PROPERTY = 'thornswoodTakenBack';
+
+  function tblog() {
+    var a = ['[thornswood take back]'];
+    // Each part on one line: an admin's reason or a site's answer cannot
+    // start a line of its own in the server log.
+    for (var i = 0; i < arguments.length; i++) { a.push(String(arguments[i]).replace(/[\u0000-\u001f\u007f]/g, ' ')); }
+    try { console.log(a.join(' ')); } catch (e) { /* nowhere to say it: the console itself failed */ }
+  }
+
+  try {
+    mp.makeProperty(TAKEN_PROPERTY, { isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: '' });
+  } catch (e) {
+    // Made already by an earlier load of this block: a hot reload.
+  }
+
+  // On globalThis, so a hot reload keeps the answers not yet handed back.
+  if (!g.__thornswoodTakeBackState) { g.__thornswoodTakeBackState = { done: [], asking: false }; }
+  var state = g.__thornswoodTakeBackState;
+
+  function actorOf(pid) {
+    var got = null;
+    try { got = mp.getActorsByProfileId(Number(pid) || 0); } catch (e) { got = null; }
+    return (got && got.length) ? Number(got[0]) || 0 : 0;
+  }
+  function marksOf(actorId) {
+    var m = null;
+    try { m = mp.get(actorId, TAKEN_PROPERTY); } catch (e) { m = null; }
+    return (m && Array.isArray(m.asks)) ? m.asks : [];
+  }
+
+  /*
+    One ask, done on the character: { id, ok, took, why }. Never throws: a
+    write that fails is an answer that says so, and nothing was taken.
+  */
+  function doAsk(ask) {
+    var id = String(ask.id || '');
+    var count = Math.floor(Number(ask.count) || 0);
+    if (!id || !(count > 0)) { return { id: id, ok: false, took: 0, why: 'the ask had no id or no count' }; }
+    var actorId = actorOf(ask.pid);
+    if (!actorId) { return { id: id, ok: false, took: 0, why: 'this server holds no character with profile ' + ask.pid }; }
+    var marks = marksOf(actorId);
+    for (var m = 0; m < marks.length; m++) {
+      if (marks[m] && marks[m].id === id) { return { id: id, ok: true, took: Number(marks[m].took) || 0, why: 'already done' }; }
+    }
+    var baseId = 0;
+    try { baseId = Number(mp.getIdFromDesc(String(ask.record || ''))) || 0; } catch (e) { baseId = 0; }
+    if (!baseId) { return { id: id, ok: false, took: 0, why: 'this server does not know the record ' + ask.record }; }
+    var inv = null;
+    try { inv = mp.get(actorId, 'inventory') || { entries: [] }; } catch (e) { return { id: id, ok: false, took: 0, why: 'the pack could not be read' }; }
+    var entries = (inv.entries || []).slice();
+    var left = count;
+    // Not worn first, then worn.
+    for (var pass = 0; pass < 2 && left > 0; pass++) {
+      for (var k = 0; k < entries.length && left > 0; k++) {
+        var e = entries[k];
+        if (!e || Number(e.baseId) !== baseId) { continue; }
+        if ((pass === 0) === !!e.worn) { continue; }
+        var had = Number(e.count) || 1;
+        var take = Math.min(left, had);
+        var rest = {};
+        for (var f in e) { if (Object.prototype.hasOwnProperty.call(e, f)) { rest[f] = e[f]; } }
+        rest.count = had - take;
+        entries[k] = rest;
+        left -= take;
+      }
+    }
+    var took = count - left;
+    var keep = [];
+    for (var j = 0; j < entries.length; j++) { if (entries[j] && (Number(entries[j].count) || 0) > 0) { keep.push(entries[j]); } }
+    var mark = { id: id, took: took, at: Date.now() };
+    var newMarks = marks.concat([mark]).slice(-MARKS_KEPT);
+    try {
+      if (took > 0) { mp.set(actorId, 'inventory', { entries: keep }); }
+      mp.set(actorId, TAKEN_PROPERTY, { asks: newMarks });
+    } catch (e2) {
+      return { id: id, ok: false, took: 0, why: 'the pack could not be written: ' + String((e2 && e2.message) || e2) };
+    }
+    var name = '';
+    try { var ap = mp.get(actorId, 'appearance'); name = String((ap && ap.name) || ''); } catch (e3) { name = ''; }
+    tblog(String(ask.byName || 'an admin'), 'took back', took, 'of', count, ask.record, 'from', (name || 'somebody'),
+          '(profile ' + ask.pid + '):', String(ask.why || ''));
+    var l = g.__thornswoodLedger;
+    if (took > 0 && l && typeof l.takeBack === 'function') {
+      try { l.takeBack(actorId, ask.record, took, String(ask.byName || ''), baseId); }
+      catch (e4) { tblog('the gold and trade log would not take the take back:', String((e4 && e4.message) || e4)); }
+    }
+    return { id: id, ok: true, took: took, why: took < count ? 'they held ' + took : '' };
+  }
+
+  function turn() {
+    if (state.asking) { return; }
+    var ask = g.__thornswoodAskSite;
+    if (typeof ask !== 'function') { return; }
+    var handing = state.done.slice();
+    state.asking = true;
+    ask('/api/takeback', { done: handing }, function (why, doc) {
+      state.asking = false;
+      if (why) {
+        if (why !== state.said) { tblog('the site was not asked:', why, '; the answers are kept for the next turn'); state.said = why; }
+        return;
+      }
+      state.said = '';
+      // The site has the answers it was handed.
+      state.done.splice(0, handing.length);
+      var waiting = (doc && Array.isArray(doc.waiting)) ? doc.waiting : [];
+      for (var i = 0; i < waiting.length; i++) {
+        var already = false;
+        for (var d = 0; d < state.done.length; d++) { if (state.done[d].id === waiting[i].id) { already = true; } }
+        if (!already) { state.done.push(doAsk(waiting[i])); }
+      }
+    });
+  }
+
+  if (g.__thornswoodTakeBackTimer) { try { clearInterval(g.__thornswoodTakeBackTimer); } catch (e) { /* nothing to stop: an earlier load's timer is already gone */ } }
+  state.asking = false;
+  g.__thornswoodTakeBackTimer = setInterval(function () {
+    try { turn(); } catch (e) { state.asking = false; tblog('the turn threw:', String((e && e.message) || e)); }
+  }, EVERY_MS);
+
+  g.__thornswoodTakeBack = { doAsk: doAsk, turn: turn, EVERY_MS: EVERY_MS, TAKEN_PROPERTY: TAKEN_PROPERTY,
+                             answers: function () { return state.done.slice(); } };
+  tblog('ready: asks from the hub are taken every', EVERY_MS / 1000, 's');
+})();
+// ==== end thornswood take back ====
 // ==== thornswood staff crafting ====
 /*
   STAFF CRAFTING TOOLS, ON THE OFFICE PAGE OF K (#3167). Patrick, 22 Oct
@@ -64712,10 +65483,14 @@ function read(raw) {
  return copy(raw);
 }
 function reserved(raw){return Object.values(read(raw).held).reduce((sum,row)=>sum+row.gold,0);}
+// A commission's pay is new gold, never the trader's (#6180, Patrick, 16 Nov
+// 2026: "no dont make it come out of the purse", "othwerwise the economy would
+// have like 0 gold people only start with 40"), so work taken holds none of
+// the purse back and the whole purse is the trader's to trade with.
 function spendable(state) {
- const promised=reserved(state.commissions);
- if(!integer(state.purse,0,MAX_GOLD)||promised>state.purse)throw Error('Commission promises exceed the merchant purse.');
- return state.purse-promised;
+ reserved(state.commissions);
+ if(!integer(state.purse,0,MAX_GOLD))throw Error('The merchant purse cannot be verified.');
+ return state.purse;
 }
 function openCount(states,human) {
  const who=owner(human);if(!who)throw Error('Commission owner cannot be verified.');
@@ -64727,7 +65502,7 @@ function prepare(raw,at) {
  for(const name of Object.keys(next.cool))if(at-cooldownAt(next.cool[name])>=cooldownWait(next.cool[name]))delete next.cool[name];
  return next;
 }
-function reserve(raw,human,id,terms,at,purse) {
+function reserve(raw,human,id,terms,at) {
  const next=prepare(raw,at),name=key(human,id);
  if(!name)return {ok:false,why:'session'};
  const bundle=terms&&owns(terms,'goods');
@@ -64739,7 +65514,6 @@ function reserve(raw,human,id,terms,at,purse) {
  if(owns(next.cool,name))return {ok:false,why:'cooldown'};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
- if(spendable({purse,commissions:next})<gold)return {ok:false,why:'purse'};
  const token=++next.serial;
  if(bundle){next.v=2;next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,goods:copy(terms.goods),hours:terms.hours,gold,at};}
  else next.held[name]={token,owner:owner(human),job:id,hash:terms.hash,item:copy(terms.item),count:terms.count,unit:terms.unit,gold,at};
@@ -65016,7 +65790,12 @@ function createSettlement(deps) {
     var moved=pending.kind==='buy'?difference(stockRows(previous.stock),stockRows(next.stock),true):
       difference(stockRows(next.stock),stockRows(previous.stock),true);
     if(!moved.length || moved.some(function(row) {return row.entry.baseId===15;})) throw new Error('Merchant goods cannot be verified.');
-    var gold=pending.kind==='buy'?next.purse-previous.purse:previous.purse-next.purse;
+    // A commission's pay is new gold (#6180): the trader's purse stays as it
+    // was, and the person is paid the promise's gold. A turn-in saved before
+    // that took the pay from the purse, and it finishes as it was saved.
+    var gold=pending.kind==='buy'?next.purse-previous.purse:pending.kind==='commission'?goldCount(credit):previous.purse-next.purse;
+    if(pending.kind==='commission'&&next.purse!==previous.purse&&next.purse!==previous.purse-gold)
+      throw new Error('Merchant transfer does not conserve goods and gold.');
     if(gold<0 || gold>MAX_COUNT || (pending.kind==='buy'?
       goldCount(removed)!==gold || goodsDigest(credit)!==goodsDigest(moved):
       removed.some(function(row) {return row.entry.baseId===15;}) || goodsDigest(removed)!==goodsDigest(moved) || goldCount(credit)!==gold))
@@ -65357,7 +66136,7 @@ function createSettlement(deps) {
       if(!equal(canonical(prior),canonical(replacement))||!action||!['reserve','cancel'].includes(action.kind)||
         !Number.isSafeInteger(action.at)||action.at<=0||action.at>now())throw new Error('Commission metadata action cannot be verified.');
       var changed=action.kind==='reserve'?
-        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at,state.purse):
+        COMMISSION_STATE.reserve(state.commissions,human,action.job,action.terms,action.at):
         COMMISSION_STATE.cancel(state.commissions,human,action.job,action.token,action.at);
       if(!changed.ok||!equal(canonical(changed.next),canonical(next.commissions)))
         throw new Error('Commission metadata transition cannot be verified.');
@@ -65677,19 +66456,15 @@ function createCommissions(deps) {
     new Set(all.map(row=>row.reference)).size!==size)throw Error('The complete commission ledger cannot be verified.');
   return all.filter(row=>row.state!==null).map(row=>{STATE.spendable(row.state);return row.state;});
  }
+ // The staff's reward price for the good (#6180, Patrick, 15 Nov 2026,
+ // q-6180-guild-prices): guild work is set by staff, every good it asks for has
+ // a starting reward price, and staff change it in the game. The hold ledgers
+ // (deps.prices) set only what the trader itself buys and sells.
  function quoteGood(row,good) {
-  const catalog=deps.prices.catalog(row.bookHold)||[],matches=[];
-  for(const item of catalog) {
-   const resolved=deps.resolve(item.name);
-   if(resolved&&!resolved.error&&resolved.baseId===good.itemId) {
-    const price=deps.prices.quote(row.bookHold,item.name);
-    if(price&&Number.isSafeInteger(price.buy)&&price.buy>=0&&price.buy<=2147483647&&
-      Number.isSafeInteger(price.buy*good.count)&&price.buy*good.count<=2147483647)
-     matches.push({unit:price.buy,name:resolved.name||item.name});
-   }
-  }
-  // Ambiguous names or two aliases are never a guess at an accepted promise.
-  return matches.length===1?matches[0]:null;
+  const price=deps.rewards&&typeof deps.rewards.price==='function'?deps.rewards.price(good.itemDesc):null;
+  if(!price||!Number.isSafeInteger(price.gold)||price.gold<0||price.gold>2147483647||
+    !Number.isSafeInteger(price.gold*good.count)||price.gold*good.count>2147483647||typeof price.name!=='string'||!price.name)return null;
+  return {unit:price.gold,name:price.name};
  }
  function quoted(row) {
   const parts=row.deliveryVersion===2?row.goods:[row],goods=[];
@@ -65734,12 +66509,10 @@ function createCommissions(deps) {
    const activeCool=Object.keys(jobs.cool).filter(key=>at-STATE.cooldownAt(jobs.cool[key])<STATE.cooldownWait(jobs.cool[key])).length;
    const room=jobs.serial<Number.MAX_SAFE_INTEGER&&Object.keys(jobs.held).length<STATE.MAX_HELD&&
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
-   const funds=quote&&STATE.spendable(state)>=quote.gold;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'No submitted buy price is available for this work.':
-     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':
-     !open&&!funds?'The trader cannot reserve this payment.':'';
+     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
     state:open?'open':cooldown?'cooldown':!gate?'locked':reason?'unavailable':'available',
@@ -65775,7 +66548,7 @@ function createCommissions(deps) {
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
      {hash:row.sourceHash,...quote.goods[0]},at=now();
-   const accepted=STATE.reserve(jobs,human,id,terms,at,state.purse);
+   const accepted=STATE.reserve(jobs,human,id,terms,at);
    if(!accepted.ok)return accepted;
    const next=Object.assign({},state,{commissions:accepted.next});
    const saved=deps.settlement.changeCommissions(merchant,state,next,human,()=>current(true,quote),{kind:'reserve',job:id,terms,at});
@@ -65800,7 +66573,8 @@ function createCommissions(deps) {
     debit=outgoing.inventory;stock=deps.addStock(stock,outgoing.entries,good.item.name);
    }
   }catch(error){return {ok:false,why:'short'};}
-  const next={purse:state.purse-held.gold,stock,supply:copy(state.supply||{}),commissions:completed.next};
+  // The pay is new gold: the trader's purse is the same after (#6180).
+  const next={purse:state.purse,stock,supply:copy(state.supply||{}),commissions:completed.next};
   const moved=deps.settlement.begin({merchantId:merchant,humanId:actor,profileId:human.profileId,kind:'commission',
    previous:state,next,expected,debit,credit:held.gold?[{baseId:15,count:held.gold}]:[],caller:()=>current(false)});
   // A turn-in finishes once the save storage acknowledges it, a later tick (#5419): the trader says it then.
@@ -67026,8 +67800,8 @@ function createMerchantTrading(deps) {
   var settlement = SETTLEMENT.createSettlement({purses:purses,transfer:transfer,world:deps.namespace || purses.namespace,log:deps.log,now:now});
   var retirementRequired=deps.retirementRequired===true;
   var active = deps.suspended !== true && !retirementRequired, closed = false;
-  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,prices:prices,
-    resolve:deps.resolve,eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
+  var commissions=COMMISSIONS.createCommissions({rows:deps.commissions||[],purses:purses,transfer:transfer,rewards:deps.rewards,
+    eligible:deps.commissionEligible,settlement:settlement,addStock:addStock,now:now});
 
   function placeOf(reference) {
     return places[reference] || null;
@@ -67412,8 +68186,8 @@ function createMerchantTrading(deps) {
         unbound:'This work has no appointed place yet.',unwritten:'The work could not be committed just now.',
         unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',
         allowance:'Your new scene work has reached its shared daily gold allowance.',
-        price:'The submitted price changed or is missing. Choose the work again.',
-        purse:'This trader cannot reserve the quoted payment.',capacity:'This trader cannot accept more work yet.',
+        price:'The reward price changed or is missing. Choose the work again.',
+        capacity:'This trader cannot accept more work yet.',
         counter:'This trader cannot accept more work yet.',waiting:'The transfer is waiting for its saved inventory.',
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
@@ -67493,7 +68267,7 @@ function createMerchantTrading(deps) {
       var last = lastSupply(state, completedSupplyKey, itemName);
       if (last && now() - last < SUPPLY_WAIT) return fail('That supply is not due.');
     }
-    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay from its unreserved purse.');
+    if (npcBuys && COMMISSION_STATE.spendable(state) < gold) return fail('The trader cannot pay that much from its purse.');
     if (!npcBuys && gold > 0 && world.carry(actorId, GOLD_BASE) < gold) return fail('You cannot pay.');
     if (npcBuys && world.carry(actorId, resolved.baseId) < asked.count) return fail('You are not carrying that.');
     if (!settlement.available()) {
@@ -67699,6 +68473,15 @@ function installMerchantTrading(env) {
     places: doc.byRef || {},
     roleTables: env.roleTables,
     commissions: env.commissions,
+    // What a commission pays for each good: the staff's reward prices, kept
+    // with the books (#6180).
+    rewards: {
+      price: function (desc) {
+        var books = g.__thornswoodBooks;
+        if (!books || typeof books.rewardPrice !== 'function') return null;
+        return books.rewardPrice(desc);
+      }
+    },
     commissionEligible:function(actor,gate) {
       var progression=g.__thornswoodProgression,character=g.__thornswoodCharacter;
       if(!progression||!character||!character.PROPERTY)return false;

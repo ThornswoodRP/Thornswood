@@ -46,6 +46,7 @@ namespace Thornswood
         const double RolloffFactor = 0;
 
         const int Quantum = HrtfPanner.Quantum;
+        public readonly VoiceMeter Meter = new VoiceMeter();
 
         sealed class Source
         {
@@ -54,6 +55,8 @@ namespace Thornswood
             public bool Primed;
             public bool Audible = true;
             public float Gain = 1, GainTarget = 1;
+            public double Metres;
+            public string Reason = "unplaced";
             // Where the page's PannerNode starts: at the listener, which is
             // straight ahead.
             public double Azimuth, Elevation;
@@ -98,12 +101,13 @@ namespace Thornswood
             {
                 Source s = At(id);
                 if (silent) { s.Gain = 0; s.GainTarget = 0; }
+                Meter.Add(id, silent);
             }
         }
 
         public void Remove(int id)
         {
-            lock (gate) sources.Remove(id);
+            lock (gate) { sources.Remove(id); Meter.Remove(id); }
         }
 
         /// <summary>Decoded audio from one person, mono at 48 kHz.</summary>
@@ -112,8 +116,9 @@ namespace Thornswood
             lock (gate)
             {
                 Source s;
-                if (!sources.TryGetValue(id, out s) || !s.Audible) return;
+                if (!sources.TryGetValue(id, out s) || !s.Audible) { Meter.Decoded(id, pcm, 0); return; }
                 int n = Math.Min(pcm.Length, s.Ring.Length);
+                Meter.Decoded(id, pcm, n);
                 for (int i = 0; i < n; i++)
                 {
                     s.Ring[(s.Read + s.Count) % s.Ring.Length] = pcm[i];
@@ -130,13 +135,18 @@ namespace Thornswood
         }
 
         /// <summary>The gain node's value, approached as setTargetAtTime approached it.</summary>
-        public void SetLevel(int id, double level)
+        public void SetLevel(int id, double level, string reason = "in-range")
         {
             lock (gate)
             {
                 Source s;
-                if (sources.TryGetValue(id, out s)) s.GainTarget = (float)level;
+                if (sources.TryGetValue(id, out s)) { s.GainTarget = (float)level; s.Reason = reason; }
             }
+        }
+
+        public void Explain(int id, string reason)
+        {
+            lock (gate) { Source s; if (sources.TryGetValue(id, out s)) s.Reason = reason; }
         }
 
         /// <summary>
@@ -174,6 +184,7 @@ namespace Thornswood
                 s.Azimuth = azimuth;
                 s.Elevation = elevation;
                 s.Distance = d;
+                s.Metres = Math.Sqrt(x * x + y * y + z * z);
             }
         }
 
@@ -203,6 +214,18 @@ namespace Thornswood
                 stereo[2 * i] = l > 1 ? 1 : l < -1 ? -1 : l;
                 stereo[2 * i + 1] = r > 1 ? 1 : r < -1 ? -1 : r;
             }
+            Meter.Rendered(stereo.Slice(0, frames * 2));
+        }
+
+        public string AudioSummary(long intervalMs)
+        {
+            lock (gate)
+                foreach (var kv in sources)
+                {
+                    Source s = kv.Value;
+                    Meter.State(kv.Key, s.GainTarget, s.Audible, System.Threading.Volatile.Read(ref s.Gain), s.Metres, s.Reason);
+                }
+            return Meter.Summary(intervalMs);
         }
 
         /// <summary>
