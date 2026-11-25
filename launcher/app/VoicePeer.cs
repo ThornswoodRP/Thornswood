@@ -97,7 +97,7 @@ namespace Thornswood
         volatile bool closed;
         volatile bool dtlsInputClosed;
         int dtlsStarted;
-        volatile DtlsTransport dtls;
+        volatile SharpSRTP.DTLS.IDtlsTransport dtls;
         string remoteFingerprint = "";
         string remoteSetup = "";
         ushort seq;
@@ -246,7 +246,7 @@ namespace Thornswood
             bool server = DtlsServerRole();
             SrtpSessionContext got = null;
             string error;
-            DtlsTransport tr;
+            SharpSRTP.DTLS.IDtlsTransport tr;
             var io = new Datagrams(this);
             try
             {
@@ -321,7 +321,7 @@ namespace Thornswood
             public void Close() { }
         }
 
-        sealed class CheckedClient : DtlsSrtpClient
+        sealed class CheckedClient : BcDtlsSrtpClient
         {
             readonly Func<Certificate, bool> check;
             public CheckedClient(Certificate c, AsymmetricKeyParameter k, Func<Certificate, bool> check)
@@ -342,7 +342,7 @@ namespace Thornswood
             public TlsCredentials GetClientCredentials(CertificateRequest certificateRequest) { return inner.GetClientCredentials(certificateRequest); }
         }
 
-        sealed class CheckedServer : DtlsSrtpServer
+        sealed class CheckedServer : BcDtlsSrtpServer
         {
             readonly Func<Certificate, bool> check;
             public CheckedServer(Certificate c, AsymmetricKeyParameter k, Func<Certificate, bool> check)
