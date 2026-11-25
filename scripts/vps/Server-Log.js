@@ -25,10 +25,9 @@
                                  (Install-Voice.ps1, vps-dev-instance.ps1), so
                                  voice.log is rolled at midnight and at 4 MB and
                                  kept to 90 days rather than held open by cmd's
-                                 >> and rolled only at a start. Voice's lines carry
-                                 no time of their own, so --stamp puts this
-                                 process's in front of each one, which is what
-                                 lets a line be aged at all.
+                                 >> and rolled only at a start. Every child line
+                                 now gets this process's UTC receipt time;
+                                 --stamp remains accepted by existing tasks.
 
   WHY (#2349). The engine writes the address of every connection into its
   console ("Connecting a user N with ip ...", skymp5-server ts/systems/login.ts),
@@ -56,10 +55,17 @@
   the millisecond (server.log.20261012235959123). Nothing is renumbered, so a
   roll is one rename and no reader holding an older file can stop it.
 
-  THE 30 DAYS. Every line the engine writes starts with its local time,
-  "[2026-10-12 21:40:03.155]" (the site's serverLogSlice reads the same
-  stamp); a line without one belongs to the line above it, which is what a
-  stack trace is. At a start, at every roll and once an hour, each rolled file
+  THE CLOCK (#4948). Every child line starts with this writer's UTC receipt
+  time, "[2026-11-01T08:25:00.000Z]". The engine's original event text stays
+  after it, including any local timestamp. Receipt time is when output reaches
+  this process, not a reconstruction of the embedded event clock. Split pipe
+  chunks get one prefix per line, and a final fragment is kept at shutdown.
+  This distinguishes the two occurrences of an hour when clocks go back.
+
+  THE 30 DAYS. The site and retention read that UTC prefix first. Older local
+  stamps such as "[2026-10-12 21:40:03.155]" remain readable; their repeated
+  hour has no offset to recover. An unstamped continuation belongs to its
+  stamped line. At a start, at every roll and once an hour, each rolled file
   loses every line from before 30 days ago, with the unstamped lines that
   belong to them, and a file with nothing left is deleted. So no line older
   than 30 days and an hour is ever on disk, and the files Roll-Log.ps1 left
@@ -70,8 +76,8 @@
   "2026-10-12 21:40:03 [thornswood] ...", the gamemode's, counts too.
 
   WHAT IS SAID. Each roll that deletes or cuts anything, and every failure, is
-  a line in server.log itself, "[<time>] [server-log] ...", stamped like the
-  engine's. A file that could not be cut or deleted is named with the error,
+  a line in server.log itself, "[<UTC time>] [server-log] ...". A file that
+  could not be cut or deleted is named with the error,
   and the next hourly pass is the next try (another program holding a file is
   the one failure here outside our control). A write that fails is said on
   stderr at once and in server.log as soon as a write works again, with how
@@ -103,11 +109,12 @@ const STAMP = /^\[?(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
 
 function pad(n, w) { return String(n).padStart(w || 2, '0'); }
 function stampOf(d) {
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
-    pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + pad(d.getMilliseconds(), 3);
+  return d.toISOString();
 }
 function dayKey(t) { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
 function lineTime(text) {
+  const utc = /^\[?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/.exec(text);
+  if (utc) { const at = Date.parse(utc[1]); return Number.isFinite(at) ? at : null; }
   const m = STAMP.exec(text);
   return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : null;
 }
@@ -135,7 +142,7 @@ function rolledName(log, at) {
 function firstStamp(buf) {
   let at = 0;
   while (at < buf.length) {
-    const t = lineTime(buf.toString('latin1', at, Math.min(buf.length, at + 24)));
+    const t = lineTime(buf.toString('latin1', at, Math.min(buf.length, at + 40)));
     if (t !== null) return t;
     const nl = buf.indexOf(10, at);
     if (nl < 0) break;
@@ -166,7 +173,7 @@ function trimFile(file, cutoff) {
   const buf = (head.length < HEAD_BYTES) ? head : fs.readFileSync(file);
   let at = 0, cut = -1, stamped = false;
   while (at < buf.length) {
-    const t = lineTime(buf.toString('latin1', at, Math.min(buf.length, at + 24)));
+    const t = lineTime(buf.toString('latin1', at, Math.min(buf.length, at + 40)));
     if (t !== null) {
       stamped = true;
       if (t >= cutoff) { cut = at; break; }
@@ -855,10 +862,10 @@ function run(o) {
     if (!rolled) state.day = wasDay;
     for (const l of lines.concat(sweep(log, now, o.days), ageAlsos(o, now))) say(l);
   }
-  // --stamp: this process's time in front of every line, for a program whose
-  // lines carry none, so each can be aged (#2166).
+  // Every child line gets this process's UTC receipt time (#4948). Keep the
+  // embedded event text intact. --stamp remains accepted for existing tasks.
   function stamped(buf) {
-    if (!o.stamp || !buf.length) return buf;
+    if (!buf.length) return buf;
     const parts = [];
     let at = 0, lineStart = state.atLineStart;
     while (at < buf.length) {
