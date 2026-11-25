@@ -15,6 +15,9 @@ At any bench the door is whether you may make one of its recipes, so
 a master line in the forge table does not keep a novice out of the
 forge; the recipe's rank refuses them that row.
 
+At novice, a Haberdasher makes one Linen Wrap from one Tundra Cotton at the
+loom. This is the ordinary material used by clothing recipes.
+
 ## Master Weaver
 
 At master. Clothing they make carries hidden armour, or keeps the
