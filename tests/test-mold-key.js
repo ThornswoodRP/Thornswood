@@ -557,6 +557,8 @@ const PIECES_GM = {
   holdsMold: liftLine(gm, 'function holdsMold(actorId, building) {'),
   holdsDeed: liftLine(gm, 'function holdsDeed(actorId, building) {'),
   giveNamed: liftFrom(gm, 'function giveNamed(actorId, baseDesc, label) {', '  '),
+  handMold: liftFrom(gm, 'function handMold(actorId, profileId, owner, building) {', '  '),
+  blankMoldAfter: liftFrom(gm, 'function blankMoldAfter(inv) {', '  '),
   holderOf: liftFrom(gm, 'function holderOf(building) {', '  '),
   nameOf: liftFrom(gm, 'function nameOf(building) {', '  '),
   placeOf: liftFrom(gm, 'function placeOf(building) {', '  '),
@@ -697,6 +699,7 @@ function engine(opt) {
       return arr;
     }
   };
+  E.native = require('./mold-inventory-fixture')(E);
   return E;
 }
 
@@ -722,7 +725,8 @@ function boot(E, claims, smiths) {
   ];
   for (const k in PIECES_GM) { body.push(PIECES_GM[k]); }
   body.push('return { moldHere: moldHere, mold: mold };');
-  const api = new Function('mp', 'claims', 'smiths', body.join('\n'))(E.mp, claims, smiths || []);
+  const api = new Function('mp', 'claims', 'smiths', 'globalThis', body.join('\n'))(
+    E.mp, claims, smiths || [], {__thornswoodMerchantTrade:E.native.merchants});
   api.say = function (p, word, arg) {
     const told = {};
     const to = function (pid, m) { (told[pid] = told[pid] || []).push(m); };

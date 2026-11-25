@@ -24137,6 +24137,115 @@ module.exports = {
     return true;
   }
 
+  // The blank and named mold may belong to different people. Every write
+  // compares the actual inventory and receipt; a publication exception is
+  // classified by readback, never assumed to mean the write was refused.
+  function handMold(actorId, profileId, owner, building) {
+    var merchants = globalThis.__thornswoodMerchantTrade;
+    var untouched = 'The mold could not be handed over. Your blank was not spent.';
+    var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
+    var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
+      'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
+        !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
+      return {ok:false,why:untouched};
+    }
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    function identity(s) {
+      return Number(mp.get(s.actor, 'profileId')) === s.profile &&
+        mp.getActorRuntimeIdentity(s.actor) === s.runtime;
+    }
+    function read(actor) {
+      var profile = Number(mp.get(actor, 'profileId')), runtime = mp.getActorRuntimeIdentity(actor);
+      var desc = mp.getDescFromId(actor), receipt = mp.getInventoryReceipt(actor);
+      var inventory = mp.get(actor, 'inventory');
+      if (!Number.isSafeInteger(profile) || profile <= 0 || typeof runtime !== 'string' ||
+          !/^[1-9][0-9]{0,19}$/.test(runtime) || typeof desc !== 'string' || !desc ||
+          typeof receipt !== 'string' || mp.validateInventoryTransaction(inventory) !== true) {
+        throw new Error('Mold inventory is unavailable');
+      }
+      var old = JSON.parse(receipt), sequence = old === null ? 1 : old.sequence + 1;
+      if (old !== null && (!old || Object.keys(old).length !== 3 || old.actor !== desc ||
+          old.profile !== profile || !Number.isSafeInteger(old.sequence) || old.sequence < 1) ||
+          !Number.isSafeInteger(sequence)) { throw new Error('Mold receipt is unavailable'); }
+      var s = {actor:actor,profile:profile,runtime:runtime,desc:desc,receipt:receipt,sequence:sequence,
+        inventory:JSON.parse(JSON.stringify(inventory))};
+      if (!identity(s)) { throw new Error('Mold actor changed'); }
+      return s;
+    }
+    function matches(s) {
+      return identity(s) && mp.getInventoryReceipt(s.actor) === s.receipt &&
+        same(mp.get(s.actor, 'inventory'), s.inventory);
+    }
+    function replace(s, next, alive) {
+      try {
+        if (!alive() || !matches(s) || mp.validateInventoryTransaction(next) !== true) {
+          return {state:'unknown'};
+        }
+        try {
+          mp.compareAndSetInventory(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile);
+        } catch (e) {
+          plog('mold inventory write needs readback for', s.actor.toString(16));
+        }
+        var committed = Object.assign({}, s, {inventory:next,sequence:s.sequence+1,
+          receipt:JSON.stringify({actor:s.desc,profile:s.profile,sequence:s.sequence})});
+        if (alive() && matches(committed)) { return {state:'committed',snapshot:committed}; }
+        if (alive() && matches(s)) { return {state:'unchanged'}; }
+      } catch (e) { /* Unknown writes are never replayed or compensated. */ }
+      return {state:'unknown'};
+    }
+    try {
+      var entered = false;
+      function handover(human, alive, recipient) {
+        entered = true;
+        var source, target, debit, named;
+        try {
+          source = read(actorId);
+          target = self ? source : read(owner.actorId);
+          if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
+              target.profile !== owner.profileId ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
+              mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
+              mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
+            return {ok:false,why:untouched};
+          }
+          debit = blankMoldAfter(source.inventory);
+          if (!debit) { return {ok:false,why:untouched}; }
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
+          named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
+          if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
+            return {ok:false,why:untouched};
+          }
+        } catch (e) { return {ok:false,why:untouched}; }
+        if (self) {
+          var converted = replace(source, named, alive);
+          return converted.state === 'committed' ? {ok:true} :
+            {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
+              uncertain:converted.state === 'unknown'};
+        }
+        var taken = replace(source, debit, alive);
+        if (taken.state !== 'committed') {
+          return {ok:false,why:taken.state === 'unchanged' ? untouched : unknown,
+            uncertain:taken.state === 'unknown'};
+        }
+        var handed = replace(target, named, alive);
+        if (handed.state === 'committed') { return {ok:true}; }
+        if (handed.state !== 'unchanged') { return {ok:false,why:unknown,uncertain:true}; }
+        var restored = replace(taken.snapshot, source.inventory, alive);
+        return restored.state === 'committed' ?
+          {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
+          {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
+            uncertain:restored.state === 'unknown'};
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
+      return entered ? result : {ok:false,why:untouched};
+    } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
+  }
+
   /*
     May this person walk through that building's doors.
 
@@ -24409,13 +24518,17 @@ module.exports = {
       over by hand, which is the point: the switch is the plugin.
     */
     if (blankMoldsExist()) {
-      if (!takeBlankMold(actorId)) {
+      if (!carriesBlankMold(actorId)) {
         toProfile(profileId, 'You are carrying no blank key mold. Forge one at a forge, one iron ' +
                              'ingot, then bring it back to this door.');
         return true;
       }
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
+      var stamped = handMold(actorId, profileId, owner, building);
+      if (!stamped.ok) {
+        toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
+        return true;
+      }
+    } else if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
       toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
       return true;
     }
@@ -24543,13 +24656,9 @@ module.exports = {
                            'from that one.');
       return true;
     }
-    if (!takeBlankMold(actorId)) {
-      toProfile(profileId, 'You are carrying no blank key mold. A smith forges one at a forge ' +
-                           'out of one iron ingot.');
-      return true;
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
-      toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
+    var stamped = handMold(actorId, profileId, owner, building);
+    if (!stamped.ok) {
+      toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
       return true;
     }
     plog('a mold for', nameOf(building), 'was pressed at the door for', held.name);
@@ -24938,17 +25047,26 @@ module.exports = {
     if (!baseId) { return false; }
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { return false; }
-    var entries = (inv && inv.entries) || [];
+    var next = blankMoldAfter(inv);
+    if (!next) { return false; }
+    try { mp.set(actorId, 'inventory', next); } catch (e2) { return false; }
+    return true;
+  }
+
+  /** A replacement which spends one blank, retaining every other entry. */
+  function blankMoldAfter(inv) {
+    var baseId = idOf(MOLD);
+    if (!baseId || !inv || !Array.isArray(inv.entries)) { return null; }
+    var next = JSON.parse(JSON.stringify(inv)), entries = next.entries;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (!e || !(e.count > 0) || e.baseId !== baseId) { continue; }
       if (e.name) { continue; }
       if (e.count > 1) { e.count = e.count - 1; }
       else { entries.splice(i, 1); }
-      try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return false; }
-      return true;
+      return next;
     }
-    return false;
+    return null;
   }
 
   /** The building whose mold is in this pack, or null. One at a time is enough. */
@@ -68032,12 +68150,13 @@ function createSettlement(deps) {
       return all;
     } catch(error) {active=false;throw error;}
   }
-  function admitted(human, reference, reserveCapacity) {
+  function admitted(human, reference, reserveCapacity, recipientKey) {
     var pending = records(), key = humanKey(human);
     if (!key || reserveCapacity!==false && pending.length >= MAX_PENDING) return false;
     return pending.every(function (record) {
       var other = record.state.pending.human;
-      return humanKey(other) && humanKey(other) !== key && record.reference !== reference;
+      var otherKey = humanKey(other);
+      return otherKey && otherKey !== key && otherKey !== recipientKey && record.reference !== reference;
     });
   }
   function save(id, state, next, intentId, caller) {
@@ -68271,20 +68390,38 @@ function createSettlement(deps) {
       return changed;
     } finally { busy = false; }
   }
-  function withInventoryMutation(actorId,change) {
+  function inventoryMutationLease(actorId,change,recipientId) {
     if(!available() || busy)return {ok:false,why:'unavailable'};
     busy=true;
     var leased=true;
     try {
       var human=transfer.identity(actorId);
-      if(!human || !admitted(human,'',false))return {ok:false,why:'waiting'};
+      var recipient, recipientKey;
+      if (recipientId !== undefined) {
+        recipient = transfer.identity(recipientId);
+        recipientKey = humanKey(recipient);
+        if (!recipientKey || recipientKey === humanKey(human)) return {ok:false,why:'waiting'};
+      }
+      if(!human || !admitted(human,'',false,recipientKey))return {ok:false,why:'waiting'};
       if(transfer.saved(actorId)!==transfer.receipt(actorId))return {ok:false,why:'waiting'};
+      if(recipient && transfer.saved(recipientId)!==transfer.receipt(recipientId))return {ok:false,why:'waiting'};
       if(!active)return {ok:false,why:'unavailable'};
-      var result=change(human,function(){return active && leased;});
+      var alive = function(){return active && leased;};
+      var result = recipient ? change(human,alive,recipient) : change(human,alive);
       // Unknown receipts revoke all writers until a reload reads durable state.
       if(result && result.uncertain)active=false;
       return result;
     } finally {leased=false;busy=false;}
+  }
+  function withInventoryMutation(actorId,change) {
+    return inventoryMutationLease(actorId,change);
+  }
+  // A saved receipt alone does not prove that the next sequence is free.
+  // Hold both identities against the same pending-record check and lease.
+  function withPairedInventoryMutation(actorId,recipientId,change) {
+    if (!Number.isInteger(recipientId) || recipientId <= 0 || recipientId > 0xffffffff || recipientId === actorId)
+      return {ok:false,why:'unavailable'};
+    return inventoryMutationLease(actorId,change,recipientId);
   }
   function canInventoryMutation(actorId) {
     if(!available() || busy)return false;
@@ -68328,7 +68465,8 @@ function createSettlement(deps) {
     return how;
   }
   return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
-    withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
+    withInventoryMutation:withInventoryMutation,withPairedInventoryMutation:withPairedInventoryMutation,
+    canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 
 module.exports = {createSettlement:createSettlement,stockRows:stockRows,inventory:inventory,takeEntries:takeEntries,
@@ -70574,6 +70712,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;
