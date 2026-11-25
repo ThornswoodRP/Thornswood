@@ -219,7 +219,7 @@ function createMerchantTrading(deps) {
   function inReach(humanId, merchantId) {
     var human = world.actor(humanId);
     var merchant = world.actor(merchantId);
-    if (!human || !merchant || !human.pos || !merchant.pos) {
+    if (!human || !merchant) {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     if (human.isHuman !== true || !(human.profileId > 0)) {
@@ -228,7 +228,10 @@ function createMerchantTrading(deps) {
     if (merchant.isHuman || merchant.profileId > 0) {
       return { ok: false, reason: 'That is not a guild trader.' };
     }
-    if (String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
+    if (merchant.isDead !== false || merchant.isDisabled !== false) {
+      return { ok: false, reason: 'This guild trader is unavailable.' };
+    }
+    if (!human.pos || !merchant.pos || String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     var d = Math.hypot(
@@ -814,8 +817,15 @@ function installMerchantTrading(env) {
     transfer: createNativeMerchantTransfer(mp),
     world: {
       actor: function (id) {
-        var ai = null;
-        try { ai = mp.getNpcAIState(id); } catch (e) { ai = null; }
+        var ai = null, desc = null, runtimeIdentity = null;
+        try {
+          ai = mp.getNpcAIState(id);
+          // Only the player's session is pinned to a runtime identity.
+          if (ai && ai.isHuman) {
+            desc = mp.getDescFromId(id);
+            runtimeIdentity = mp.getActorRuntimeIdentity(id);
+          }
+        } catch (e) { ai = null; }
         var pos = ai && Array.isArray(ai.pos) ? ai.pos.slice(0, 3) : null;
         var cell = ai ? (ai.cellOrWorld || ai.cell || null) : null;
         try {
@@ -831,9 +841,11 @@ function installMerchantTrading(env) {
         return {
           pos: pos,
           cell: cell,
-          desc: mp.getDescFromId(id),
+          desc: desc,
           lifeGeneration: ai && ai.lifeGeneration,
-          runtimeIdentity: mp.getActorRuntimeIdentity(id),
+          runtimeIdentity: runtimeIdentity,
+          isDead: ai && ai.isDead,
+          isDisabled: ai && ai.isDisabled,
           profileId: ai && ai.profileId || 0,
           isHuman: !!(ai && ai.isHuman)
         };
