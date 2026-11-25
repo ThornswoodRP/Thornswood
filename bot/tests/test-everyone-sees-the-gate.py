@@ -1,10 +1,11 @@
 """
 test-everyone-sees-the-gate.py
 
-Somebody who has just joined sees #rules and #welcome-travelers and talks in
-neither. Reacting to the rules gives Member (bot_rules_gate.py, #5841), and
-Member reads the welcome, about, ticket and application channels. Playtester
-opens the rest.
+Somebody who has just joined reads Start Here, Information, the Roleplay
+Guide, #welcome-travelers, #general-chat and #travelers-questions, and talks
+in none of them (Patrick, 16 Nov 2026). Reacting to the rules gives Member
+(bot_rules_gate.py, #5841), and Member reads the ticket and application
+channels and asks in #travelers-questions. Playtester opens the rest.
 
 Measured on the live server on 10 Nov 2026 (Setup-Discord -OnBox -Audit):
 @everyone held no View Channels server wide. Every read channel's overwrite
@@ -25,9 +26,10 @@ So this checks:
      holds beyond it, changes nothing under -Check, and asks nothing when
      nothing is missing. The audit names what is missing.
   3. After it, by the plan's own modes: a newcomer sees and cannot post in
-     #rules and #welcome-travelers and sees nothing else of the gate; a
-     Member sees and cannot post in the welcome, about, ticket and
-     application channels and #disboard, and still not #general-chat; nobody
+     Start Here, Information, the Roleplay Guide, #welcome-travelers,
+     #general-chat and #travelers-questions, and sees no ticket or
+     application channel; a Member sees and cannot post in those; a Member
+     reads #general-chat and posts in #travelers-questions; nobody
      but the bot posts in #welcome-travelers; in #disboard a Member and a
      Playtester run no command and staff talk and run commands. #disboard is
      #say-hello renamed.
@@ -157,13 +159,15 @@ for catname, specs in B.PLAN:
             continue
         places['#' + s['name']] = B.spec_overwrites(guild, s, roles)
 
-GATE = ['Start Here', '#rules', '#welcome-travelers']
-MEMBERS_READ = ['Tickets', 'Applications', 'Information', 'Roleplay Guide',
-                '#welcome', '#start-here', '#get-help', '#report-someone',
-                '#apply-to-playtest', '#apply-for-a-seat', '#apply-for-staff',
-                '#news', '#updates', '#faq', '#game-rules', '#lore',
-                '#factions', '#disboard']
-BEHIND = ['#general-chat', '#media', '#choose-your-hold', '#suggestions']
+# Patrick, 16 Nov 2026: "keep those avaialble but than lock the #apply
+# channels untill they accept the rules and get the #member role".
+GATE = ['Start Here', 'Information', 'Roleplay Guide', '#rules', '#welcome',
+        '#start-here', '#disboard', '#news', '#updates', '#faq', '#game-rules',
+        '#lore', '#factions', '#welcome-travelers', '#general-chat',
+        '#travelers-questions']
+MEMBERS_READ = ['Tickets', 'Applications', '#get-help', '#report-someone',
+                '#apply-to-playtest', '#apply-for-a-seat', '#apply-for-staff']
+BEHIND = ['#media', '#choose-your-hold', '#suggestions']
 
 # ------------------------------------------------------ 1. the problem --
 yes('as the audit read it, a newcomer sees neither #rules nor #welcome-travelers',
@@ -248,6 +252,29 @@ for p in BEHIND:
     yes('a Member still does not see %s, which is Playtester\'s' % p,
         not resolve(everyone, member, places[p]).view_channel)
     yes('  and a Playtester does', resolve(everyone, tester, places[p]).view_channel)
+
+# Patrick, 16 Nov 2026: everybody reads #general-chat and
+# #travelers-questions; a Member asks in #travelers-questions, and only an
+# approved application opens talk in #general-chat.
+got = resolve(everyone, member, places['#general-chat'])
+yes('a Member reads #general-chat and cannot post or answer in a thread there',
+    got.view_channel and got.read_message_history and not got.send_messages
+    and not got.send_messages_in_threads and not got.create_public_threads)
+got = resolve(everyone, member, places['#travelers-questions'])
+yes('a Member asks in #travelers-questions',
+    got.view_channel and got.read_message_history and got.send_messages)
+for p in ('#general-chat', '#travelers-questions'):
+    for who, m in (('a Playtester', tester), ('staff (Support)', support),
+                   ('a Playtester who is a Member as well',
+                    Member([roles['Member'], roles['Playtester']]))):
+        got = resolve(everyone, m, places[p])
+        yes('%s talks in %s, answers in a thread and runs a command there' % (who, p),
+            got.view_channel and got.send_messages and got.send_messages_in_threads
+            and got.create_public_threads and got.use_application_commands)
+got = resolve(everyone, newcomer, places['#general-chat'])
+yes('a newcomer runs no command and answers in no thread in #general-chat',
+    not got.use_application_commands and not got.send_messages_in_threads)
+yes('#travelers-questions is never deleted by a prune', 'travelers-questions' in B.KEEP)
 
 hello = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'disboard']
 yes('#disboard is #say-hello renamed in Start Here, so its id and history go '

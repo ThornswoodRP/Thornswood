@@ -138,6 +138,36 @@ yes('TEST_TASK_ROLES digit token matches role.id; name token still matches',
     and bot._role_hit(Role(3, 'Dev'), ls_id_ids, ls_id_names)
     and ls_id_ids == {999001} and ls_id_names == {'dev'})
 
+# Drive the registered command with real role matching and fake Discord I/O.
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+import bot_testing
+
+role_id = 999001
+
+def task_interaction(role):
+    return SimpleNamespace(guild=object(), user=SimpleNamespace(roles=[role]),
+                           response=SimpleNamespace(is_done=lambda: False,
+                                                    send_message=AsyncMock(), defer=AsyncMock()),
+                           followup=SimpleNamespace(send=AsyncMock()))
+
+with patch.object(bot_testing, 'TASK_ROLE_NAMES', [str(role_id)]), \
+     patch.object(bot_testing, 'post_test_task', AsyncMock(return_value=(None, 'Posted'))) as post:
+    denied = task_interaction(Role(999002, 'Renamed Dev'))
+    asyncio.run(bot_testing.test_task_cmd.callback(denied, 'Title', 'Body', 'Dev'))
+    reply = denied.response.send_message.await_args
+    yes('ID-configured denial tells the member to ask staff without exposing the role ID',
+        reply is not None and 'ask staff' in reply.args[0].lower()
+        and str(role_id) not in reply.args[0] and reply.kwargs.get('ephemeral') is True)
+    yes('the same name with the wrong ID is denied without posting or deferring',
+        post.await_count == 0 and denied.response.defer.await_count == 0)
+    allowed = task_interaction(Role(role_id, 'Renamed Dev'))
+    asyncio.run(bot_testing.test_task_cmd.callback(allowed, 'Title', 'Body', 'Dev'))
+    yes('the configured ID still posts after a rename',
+        post.await_count == 1 and post.await_args.args == (allowed.guild, 'Title', 'Body', 'Dev')
+        and allowed.response.defer.await_count == 1 and allowed.followup.send.await_count == 1)
+
 # An unmigrated bot.env.json with LIVE_SMOKE_ADMIN_ROLES keeps its role ids.
 import subprocess  # noqa: E402
 env = dict(os.environ, LIVE_SMOKE_ADMIN_ROLES='111,222')

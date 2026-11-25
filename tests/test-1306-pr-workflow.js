@@ -102,4 +102,4 @@ yes('the pull request build does not use always() either', code(pr).indexOf('alw
 yes('main waits for the build in progress, one group a ref', /\nconcurrency:\n(?:#.*\n)*  group: build-\$\{\{ github\.ref \}\}\n  cancel-in-progress: false\n/.test(build));
 yes('a pull request cancels its older run', /\nconcurrency:\n(?:#.*\n)*  group: build-pr-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n/.test(pr));
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

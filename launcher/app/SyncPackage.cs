@@ -62,6 +62,32 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// Every game-relative path owned by the installed version's signed
+        /// package, even before the first sync and after files.txt lost its
+        /// entries (#6457). Null for a launcher not installed by Velopack.
+        /// Reads only; a list that cannot be authenticated stops a refresh
+        /// before it could discard the package's files as somebody else's.
+        /// </summary>
+        static List<string> InstalledReleaseFiles()
+        {
+            if (!Velo.Installed) return null;
+            string said;
+            VeloRecord.GameList game = VeloRecord.Game(VeloRecord.Get(Velo.Locator.CurrentlyInstalledVersion, out said));
+            string root = Path.GetFullPath(Paths.Game);
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (VeloRecord.GameFile f in game.Files)
+            {
+                if (f == null || string.IsNullOrEmpty(f.Path))
+                    throw new Exception("The installed package's game list names a file without a path.");
+                string full = Path.GetFullPath(Path.Combine(root, f.Path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)));
+                if (!PathFence.Inside(full, root))
+                    throw new Exception("The installed package's game list names a file outside the game folder.");
+                files.Add(Path.GetRelativePath(root, full).Replace(Path.DirectorySeparatorChar, '\\'));
+            }
+            return new List<string>(files);
+        }
+
+        /// <summary>
         /// A NEW SHIP ROOT (scripts\release\ShipRoot, #2019): Thornswood's own
         /// files of the release <paramref name="channel"/> is on now, put into
         /// the game folder (Profile\Payload, in a new root) out of that

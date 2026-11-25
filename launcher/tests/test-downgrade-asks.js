@@ -154,4 +154,4 @@ yes('the log line for No is plain words too', noLine.length > 0 && !/player/i.te
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

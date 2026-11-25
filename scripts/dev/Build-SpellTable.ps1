@@ -582,7 +582,7 @@ $jsonEol = $Eol
 $docLines = New-Object 'System.Collections.Generic.List[string]'
 $docLines.Add('{')
 $docLines.Add('  "builtBy": ' + (JsonStr 'scripts\dev\Build-SpellTable.ps1') + ',')
-$docLines.Add('  "source": ' + (JsonStr ('the SPEL records of ' + ($Plugins -join ', '))) + ',')
+$docLines.Add('  "source": ' + (JsonStr ('the SPEL records of ' + (Get-LoadOrderName $Plugins))) + ',')
 $docLines.Add('  "language": ' + (JsonStr $LANGUAGE) + ',')
 $docLines.Add('  "count": ' + $table.Count + ',')
 $docLines.Add('  "spells": {')

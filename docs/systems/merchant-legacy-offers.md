@@ -32,7 +32,22 @@ Regressions reproduce duplicate offers and a late callback changing standing,
 and confirm zero writes on refusal, original compatible recovery and the ten
 exact roster/role bindings.
 
-The six other scarce resources and seven retrievals remain unbound in this
-section. Their interaction, source and dedicated-item work must be completed
-separately before activation. The 241 parcel commissions and four expanded
-combat offers retain their immutable appointed references and terms.
+The other six scarce works are bound the same way, one appointed
+specialist each, so all ten scarce works have their offer:
+
+| Scarce work | Offering specialist | Exact reference | Its page |
+| --- | --- | --- | --- |
+| Pearl bed | Solstheim Enchanter | `177da:Dragonborn.esm` | [Pearl-bed work](merchant-pearl-bed.md) |
+| Longfin | Haafingar Alchemist | `198d2:Skyrim.esm` | [Longfin work](merchant-longfin-work.md) |
+| Crimson | Winterhold Alchemist | `1c1aa:Skyrim.esm` | [Crimson work](merchant-crimson-work.md) |
+| Geode | Winterhold Enchanter | `1e7d6:Skyrim.esm` | [Geode work](merchant-geode-work.md) |
+| Mammoth ground | Whiterun Cook | `1a66e:Skyrim.esm` | [The mammoth ground](merchant-mammoth-work.md) |
+| Orchard | Whiterun Cook | `1a66e:Skyrim.esm` | [Orchard work](merchant-orchard-work.md) |
+
+All seven retrievals are bound too, each to one hold's trade: the satchel
+to Whiterun's Woodworker, the ledger to its Enchanter, the signet to its
+Smith, the case to its Tailor, the dispatch to its Cook and the seal to its
+Alchemist, and the locket to Falkreath's Tailor
+([Merchant retrieval work](merchant-retrieval-work.md)). The 241 parcel
+commissions and four expanded combat offers retain their immutable
+appointed references and terms.

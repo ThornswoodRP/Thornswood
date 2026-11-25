@@ -65,10 +65,10 @@ function done() {
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 yes('S0 the purse service, the release block and the NPC startup are where this looks', !!purseSrc && !!releaseSrc && !!startup);
-if (!purseSrc || !releaseSrc || !startup) { done(); }
+if (!purseSrc || !releaseSrc || !startup) { done(); return; }
 
 // ---------------------------------------------------------------- S
 const ask = "globalThis.__thornswoodRelease('merchants',merchants.release)";

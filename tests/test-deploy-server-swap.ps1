@@ -378,11 +378,12 @@ const root = process.argv[2];
 fs.appendFileSync(process.argv[3], process.pid + '\n');
 function log(m) { fs.appendFileSync(path.join(root, 'server.log'), m + '\n'); }
 const gm = fs.readFileSync(path.join(root, 'gamemode.js'), 'utf8');
-if (gm.indexOf('will-not-start') >= 0) { log('Error: this gamemode will not start'); process.exit(1); }
+if (gm.indexOf('will-not-start') >= 0) { log('Error: this gamemode will not start'); process.exitCode = 1; return; }
 const s = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
 const res = s.port === 7777 ? 3000 : s.port + 1;
-dgram.createSocket('udp4').bind(s.port, '127.0.0.1');
-if (gm.indexOf('udp-only') < 0) { net.createServer(function (c) { c.end(); }).listen(res, '127.0.0.1'); }
+const udp = dgram.createSocket('udp4');
+udp.bind(s.port, '127.0.0.1');
+const tcp = gm.indexOf('udp-only') < 0 ? net.createServer(function (c) { c.end(); }).listen(res, '127.0.0.1') : null;
 log('listening on ' + s.port + (gm.indexOf('udp-only') < 0 ? ' and ' + res : ' only'));
 // Gone when the harness clears its scratch folder, and after ten minutes
 // whatever happens, so a harness that is killed part way leaves nothing.
@@ -390,8 +391,10 @@ log('listening on ' + s.port + (gm.indexOf('udp-only') < 0 ? ' and ' + res : ' o
 // harness on a busy machine the other server's stub was gone before the good
 // deploy ran, with only one 'stopped pid' line from the stop, so the deploy
 // had not touched it and the timer is what ended it.
-setInterval(function () { if (!fs.existsSync(root)) { process.exit(0); } }, 1000);
-setTimeout(function () { process.exit(0); }, 600000);
+// It ends by closing what it listens on, so node ends by itself (#6036).
+function end() { clearInterval(watch); clearTimeout(life); udp.close(); if (tcp) tcp.close(); }
+const watch = setInterval(function () { if (!fs.existsSync(root)) end(); }, 1000);
+const life = setTimeout(end, 600000);
 '@
 
 try {

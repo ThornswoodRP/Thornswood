@@ -64,4 +64,4 @@ yes('P every repository path in backticks is in the tree' + (missing.length ? ' 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

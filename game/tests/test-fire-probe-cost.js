@@ -53,8 +53,8 @@ yes('the walk has its own frame handler', /sp\.on\('update', guard\('fire walk',
 yes('the place tick no longer walks the cell whole (no refsInCell)', src.indexOf('refsInCell(') === -1);
 if (walk === null || fires === null) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // A native call, at the audit's measured cost.
 const CALL_MS = 1 / 3;
@@ -234,4 +234,5 @@ function frame(h, x, stats) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

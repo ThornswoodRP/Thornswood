@@ -180,10 +180,16 @@ function build(src) {
   return head + body;
 }
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const want = build(fs.readFileSync(SRC, 'utf8'));
   const have = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8').split('\r\n').join('\n') : '';
   if (process.argv.indexOf('--check') >= 0) {
-    if (have !== want) { console.error('build-pr.yml is stale: run node scripts/dev/Build-PrWorkflow.js'); process.exit(1); }
+    if (have !== want) { console.error('build-pr.yml is stale: run node scripts/dev/Build-PrWorkflow.js'); return 1; }
     console.log('build-pr.yml matches build.yml');
   } else {
     fs.writeFileSync(OUT, want);

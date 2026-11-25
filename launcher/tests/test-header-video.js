@@ -44,7 +44,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 /* From the opening brace at or after `from` to its matching closing brace. */
@@ -68,11 +68,11 @@ function method(src, signature) {
 // ---- the video's decide, lifted and run ---------------------------------------
 const start = method(SHELL, 'static void StartHeaderVideo()');
 yes('StartHeaderVideo is in Shell.cs', start.length > 0);
-if (!start) done();
+if (!start) { done(); return; }
 
 const decideAt = start.indexOf('Action decide = delegate');
 yes('StartHeaderVideo still has its decide delegate', decideAt > 0);
-if (decideAt < 0) done();
+if (decideAt < 0) { done(); return; }
 const decideSrc = braces(start, decideAt).inner;
 
 // C# to JavaScript, for this one delegate only. It is a few lines of
@@ -89,7 +89,7 @@ try {
   console.log('      ' + e.message);
 }
 yes('the decide delegate reads as a function the stand-ins can run', decideFn !== null);
-if (!decideFn) done();
+if (!decideFn) { done(); return; }
 
 /* A stand-in for seenNow, the ManualResetEventSlim the decoding thread waits
    on: set, the thread decodes and puts up frames; reset, it waits on the frame

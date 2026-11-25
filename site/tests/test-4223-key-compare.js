@@ -98,4 +98,4 @@ const raw = SERVE.split('\n').filter((l) => /sameSecret\(o\.key, String\(cfg\.bo
 yes('the ticket, roster, economy and ledger routes compare o.key itself (' + raw.length + ')', raw.length === 4);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

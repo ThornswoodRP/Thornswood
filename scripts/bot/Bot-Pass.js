@@ -937,7 +937,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().then((code) => process.exit(code), (e) => { console.log('BOT PASS FAILED: ' + (e && e.stack || e)); process.exit(1); });
+  main().then((code) => { process.exitCode = code; }, (e) => { console.log('BOT PASS FAILED: ' + (e && e.stack || e)); process.exitCode = 1; });
 }
 
 module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME,

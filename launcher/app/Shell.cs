@@ -1155,6 +1155,11 @@ namespace Thornswood
             else if (i == PageNews) BuildNews();
             else if (i == PageDiag) BuildDiag();
             else if (i == PageGallery) BuildGalleryPage();
+            else if (i == PageSettings)
+            {
+                BuildMicrophoneSettings();
+                BuildOutputSettings();
+            }
 
             // The Play spotlight turns only on the Play page, so a page
             // change starts or stops it, the way the title video follows
@@ -1343,7 +1348,7 @@ namespace Thornswood
             try
             {
                 double vol = Math.Max(0, Math.Min(100, cfg.MusicVolume)) / 100.0;
-                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp);
+                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp, cfg.AudioOutputId);
                 MusicDecide();
                 win.StateChanged += delegate { MusicDecide(); };
             }

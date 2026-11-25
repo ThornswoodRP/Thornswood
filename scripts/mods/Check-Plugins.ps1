@@ -41,12 +41,12 @@ $extra   = @($have | Where-Object { $want -notcontains $_ })
 $missing = @($want | Where-Object { $have -notcontains $_ })
 
 Write-Host ""
-Write-Host ("EXTRA, enabled but not part of the build ({0}):" -f $extra.Count) -ForegroundColor Yellow
-if ($extra.Count -eq 0) { Write-Host "  none" -ForegroundColor DarkGray } else { $extra | ForEach-Object { Write-Host "  $_" } }
+Write-Output ("EXTRA, enabled but not part of the build ({0}):" -f $extra.Count)
+if ($extra.Count -eq 0) { Write-Output '  none' } else { $extra | ForEach-Object { Write-Output "  $_" } }
 
-Write-Host ""
-Write-Host ("MISSING, part of the build but not enabled ({0}):" -f $missing.Count) -ForegroundColor Yellow
-if ($missing.Count -eq 0) { Write-Host "  none" -ForegroundColor DarkGray } else { $missing | ForEach-Object { Write-Host "  $_" } }
+Write-Output ''
+Write-Output ("MISSING, part of the build but not enabled ({0}):" -f $missing.Count)
+if ($missing.Count -eq 0) { Write-Output '  none' } else { $missing | ForEach-Object { Write-Output "  $_" } }
 Write-Host ""
 
 # What it found is the exit code (#4760). Until then this always exited 0, so

@@ -53,7 +53,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function block(name) {
   const a = src.indexOf('// ==== thornswood ' + name + ' ====');
@@ -347,14 +347,14 @@ const TAIL = '    if (now - afkLastInput >= AFK_MS) { afkAsk(now); }\n  }));\n';
 const fa = front.indexOf(HEAD);
 const fb = front.indexOf(TAIL, fa);
 yes('the idle block is in thornswood-front.js where this expects it', fa >= 0 && fb > fa);
-if (!(fa >= 0 && fb > fa)) { done(); }
+if (!(fa >= 0 && fb > fa)) { done(); } else {
 const idle = front.slice(fa, fb + TAIL.length);
 yes('sessionEnded sits in it beside afkOut', /function sessionEnded\(sentence\) \{/.test(idle));
 const RA = '  function relogAs(id) {';
 const ra = front.indexOf(RA);
 const rb = ra < 0 ? -1 : front.indexOf('\n  }\n', ra);
 yes('relogAs, the only way back in from the choice, is in thornswood-front.js', ra >= 0 && rb > ra);
-if (!(ra >= 0 && rb > ra)) { done(); }
+if (!(ra >= 0 && rb > ra)) { done(); } else {
 const relog = front.slice(ra, rb + 4);
 
 /*
@@ -541,3 +541,4 @@ function pageRun(list) {
 }
 
 done();
+}}

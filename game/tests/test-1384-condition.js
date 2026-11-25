@@ -59,8 +59,8 @@ yes('the block hands over its factory and its kits', typeof create === 'function
 if (typeof create !== 'function') {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // ------------------------------------------------------------------ records --
 
@@ -1025,4 +1025,5 @@ yes("the engine's hook before a character is handed over is the block's", /g\.__
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

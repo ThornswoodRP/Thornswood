@@ -98,7 +98,8 @@ function read(name, dir) {
 // each in flags stands alone. Anything else stops the builder before it
 // reads or writes, naming the word: an option a builder does not know was
 // once dropped without a word, and the run wrote the repository's own table
-// in place of the folder the caller named (#5191).
+// in place of the folder the caller named (#5191). It answers null then,
+// with process.exitCode 2, and the builder stops by returning (#6036).
 function options(argv, valued, flags) {
   const out = {};
   const all = valued.concat(flags || []);
@@ -107,7 +108,8 @@ function options(argv, valued, flags) {
     if (valued.indexOf(a) >= 0 && i + 1 < argv.length) { out[a] = argv[++i]; continue; }
     if ((flags || []).indexOf(a) >= 0) { out[a] = true; continue; }
     console.error(a + (valued.indexOf(a) >= 0 ? ' needs a value after it' : ' is not an option this takes') + '; it takes ' + all.join(', '));
-    process.exit(2);
+    process.exitCode = 2;
+    return null;
   }
   return out;
 }

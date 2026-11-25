@@ -75,7 +75,7 @@ function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-headers-'));
   made.push(dir);
   siteFiles.copy(dir);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   ['home.html','home.js','home.css'].forEach(function (f) {
     fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));
   });
@@ -111,7 +111,7 @@ function stop(run) {
     if (!run || run.exited) { ok(); return; }
     run.child.once('exit', function () { ok(); });
     try { run.child.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 
@@ -190,5 +190,5 @@ function stop(run) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

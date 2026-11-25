@@ -502,4 +502,4 @@ yes('and reads nothing but Thornswood.ini, the client settings and the session n
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

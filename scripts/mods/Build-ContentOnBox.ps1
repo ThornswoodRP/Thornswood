@@ -141,7 +141,7 @@ function Invoke-BuildGit([string[]]$Words) {
     try { $o = @(& git -C $repo @Words 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
     return [pscustomobject]@{ Out = $o; Code = $LASTEXITCODE }
 }
-function Stop-Build([string]$Why) { Write-Host ('STOP. ' + $Why) -ForegroundColor Red; exit 1 }
+function Stop-Build([string]$Why) { Write-Output ('STOP. ' + $Why); exit 1 }
 # Every way this ends 1 says why on a STOP line, which the deploy agent puts
 # in the Deployment's status (ContentBuild.cs). An error nothing here caught,
 # such as a throw from Run-OnBox.ps1 before it reaches the box, ended the

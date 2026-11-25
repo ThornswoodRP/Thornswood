@@ -45,4 +45,4 @@ yes('Solstheim and Apocrypha, the WRLD records Dragonborn.esm defines, are liste
   ws.indexOf('800:Dragonborn.esm') >= 0 && ws.indexOf('1c0b2:Dragonborn.esm') >= 0);
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

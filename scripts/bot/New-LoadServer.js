@@ -409,7 +409,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().then((c) => process.exit(c), (e) => { console.log('NEW LOAD SERVER FAILED: ' + (e && e.message || e)); process.exit(1); });
+  main().then((c) => { process.exitCode = c; }, (e) => { console.log('NEW LOAD SERVER FAILED: ' + (e && e.message || e)); process.exitCode = 1; });
 }
 
 module.exports = { build, copyGame, fromInstalled, startPoints, checkMaster, MASTERS, WHITERUN, TRADERS_ROOM, GAMEPLAY_KEYS };

@@ -193,7 +193,7 @@ module.exports = { cases };
 
 if (require.main === module) {
   const folder = process.argv[2];
-  if (!folder) { console.error('say which folder'); process.exit(2); }
+  if (!folder) { console.error('say which folder'); process.exitCode = 2; return; }
   fs.mkdirSync(path.join(folder, 'in'), { recursive: true });
   fs.mkdirSync(path.join(folder, 'out'), { recursive: true });
   for (const c of cases) {

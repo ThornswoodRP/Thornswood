@@ -33,7 +33,7 @@ const siteFiles = require('../../tests/site-files');
 const text = siteFiles.source();
 const a = text.indexOf('function makeLog(dir, name, maxBytes, keep, opts) {');
 const b = text.indexOf('// Four megabytes is a few days');
-if (a < 0 || b < 0) { console.error('the site log block is not in server.js the way this expects'); process.exit(1); }
+if (a < 0 || b < 0) { console.error('the site log block is not in server.js the way this expects'); process.exitCode = 1; return; }
 
 let pass = 0, fail = 0;
 function yes(what, c) { if (c) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); } }
@@ -128,5 +128,5 @@ const LINE = 'x'.repeat(40);
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

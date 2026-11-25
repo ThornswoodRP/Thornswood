@@ -27,7 +27,7 @@ physicker or a temple until you are master. At master, Master
 Chemist is the double batch. The master treatment of a crooked bone
 is the injury page, and it is not a separate recipe.
 
-Your recipes are two, made at the alchemy lab Thornswood places: the
+Your fixed recipes include the
 poultice at novice and the remedy at advanced. Everything else you
 make is brewed.
 

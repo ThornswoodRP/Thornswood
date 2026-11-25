@@ -32,7 +32,7 @@ const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function yes(what, ok) { if (ok) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); } }
 function readJson(rel) { return JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/^\ufeff/, '')); }
-function finish() { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
+function finish() { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0; }
 
 // ---- 1. the kept page ---------------------------------------------------------
 const pageRel = 'records/collection-page.json';
@@ -44,7 +44,7 @@ try { lib = require(path.join(ROOT, libRel)); } catch (e) { /* named below */ }
 yes('1. ' + libRel + ' is there and loads', lib !== null);
 const have = lib && ['problems', 'render', 'marks', 'sendable'].every(f => typeof lib[f] === 'function');
 yes('1. it gives problems, render, marks and sendable', !!have);
-if (!page || !have) finish();
+if (!page || !have) { finish(); return; }
 
 const record = readJson('records/collection.json');
 yes('1. the page keeps a summary, a description and install steps',

@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const PAGES = ['terms', 'privacy', 'rules'];
 const EXPECT = {
   terms: '2026-10-26',
-  privacy: '2026-11-16',
+  privacy: '2026-11-18',
   rules: '2026-10-26'
 };
 const MONTHS = [null, 'January', 'February', 'March', 'April', 'May', 'June',
@@ -61,7 +61,8 @@ for (const name of PAGES) {
   const bySha = {};
   rows.forEach(function (row) { bySha[row.sha256] = row.changed; });
   [false, true].forEach(function (open) {
-    [raw, raw.replace(/\r\n/g, '\n')].forEach(function (text) {
+    const lf = raw.replace(/\r\n/g, '\n');
+    (name === 'privacy' ? [lf, lf.replace(/\n/g, '\r\n')] : [raw, lf]).forEach(function (text) {
       const digest = sha(forMode(text, open));
       const which = open ? 'open' : 'alpha';
       yes(name + ' as served (' + which + ') is listed as ' + day, bySha[digest] === day);
@@ -81,4 +82,4 @@ yes('an unknown hash is absent', JSON.stringify(list).indexOf('00000000000000000
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
