@@ -57,7 +57,7 @@ _MOD_DID = {
     'godmode': 'changed god mode for %s',
     'invisible': 'changed visibility for %s',
     'cleareffects': 'cleared alcohol and drug effects from %s',
-    'killall': 'ended nearby hostile NPCs beside %s',
+    'killall': 'used /killall beside %s',
     'tools-off': 'ended scene tools for %s',
     # The creature is named in why, not in the character fields.
     'despawn': 'despawned a creature',

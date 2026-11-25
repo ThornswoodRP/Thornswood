@@ -386,7 +386,7 @@ try:
         ('cleareffects', 'Alcohol and drug effects cleared.',
          'cleared alcohol and drug effects from Aela (profile 1001): Alcohol and drug effects cleared.'),
         ('killall', 'Nearby hostile NPCs only.',
-         'ended nearby hostile NPCs beside Aela (profile 1001): Nearby hostile NPCs only.'),
+         'used /killall beside Aela (profile 1001): Nearby hostile NPCs only.'),
         ('tools-off', 'The staff session or its authority ended.',
          'ended scene tools for Aela (profile 1001): The staff session or its authority ended.'),
     )
