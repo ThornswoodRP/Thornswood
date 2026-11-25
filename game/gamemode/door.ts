@@ -882,8 +882,15 @@
 
           // A failed or late request can still refresh unrelated role fields,
           // but it cannot replace the last readable ban list or advance its clock.
-          var previousBansRequestedAt = Array.isArray(had.bans) ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequestedAt = (Array.isArray(had.bans) &&
+            had.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }))
+            ? String(had.bansRequestedAt || '') : '';
           var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var previousBansWritten = new Date(String(had.at || '')).getTime() || 0;
+          // Corrupt metadata cannot put every healthy future refresh behind
+          // a floor that was never a valid saved snapshot.
+          if (!(previousBansRequested > 0 && previousBansRequested <= previousBansWritten &&
+                previousBansWritten <= Date.now())) { previousBansRequested = 0; }
           var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
             doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
             requestedAt > previousBansRequested && requestedAt <= Date.now();

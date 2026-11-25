@@ -509,6 +509,50 @@ if (block !== null) {
         r.kicked.length === kicks && r.kicked.indexOf(3) < 0);
   }
 
+  // An invalid saved clock is not an ordering floor. The last ban remains
+  // while a request fails, then a healthy response can establish fresh proof.
+  for (const badCommit of [1000000, 2000001, 'unreadable']) {
+    const r = rig(true, [101]);
+    const originalBans = [{ profiles: [202], scope: 'account', until: 0, why: 'held ban' }];
+    r.answer(200, { profiles: [101], bans: originalBans });
+    const damaged = JSON.parse(r.files[ALLOWED]);
+    damaged.bansRequestedAt = new Date(2000000).toISOString();
+    damaged.at = typeof badCommit === 'number' ? new Date(badCommit).toISOString() : badCommit;
+    r.files[ALLOWED] = JSON.stringify(damaged);
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [] });
+    const recovered = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a healthy response recovers a future marker with invalid request/commit/clock ordering',
+        recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1010000);
+  }
+  {
+    const r = rig(true, [101]);
+    const originalBans = [{ profiles: [202], scope: 'account', until: 0, why: 'held ban' }];
+    r.answer(200, { profiles: [101], bans: originalBans });
+    const damaged = JSON.parse(r.files[ALLOWED]);
+    damaged.bansRequestedAt = new Date(2000000).toISOString();
+    r.files[ALLOWED] = JSON.stringify(damaged);
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [], bansBroken: true });
+    yes('4484 a bad new response preserves the existing ban despite damaged old metadata',
+        JSON.stringify(JSON.parse(r.files[ALLOWED]).bans) === JSON.stringify(originalBans));
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [] });
+    yes('4484 the next healthy response recovers after both old metadata and a failed refresh',
+        JSON.parse(r.files[ALLOWED]).bans.length === 0);
+  }
+
+  {
+    const r = rig(true, [101]);
+    r.files[ALLOWED] = JSON.stringify({ enforce: true, profiles: [101], bans: [null],
+      bansRequestedAt: new Date(1005000).toISOString(), at: new Date(1006000).toISOString() });
+    r.advance(9000); // still inside the actual request's ten-second bound
+    r.answer(200, { profiles: [101], bans: [] });
+    const recovered = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a malformed saved ban list cannot supply an otherwise well-ordered floor',
+        recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1000000);
+  }
+
   // Every tick runs inside a try that notes "tick failed". None of the above
   // may have taken that path, or a pass above could be a crash that kicked
   // nobody by accident.
