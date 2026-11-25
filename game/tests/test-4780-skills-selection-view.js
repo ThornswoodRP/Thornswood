@@ -9,6 +9,14 @@ let pass = 0, fail = 0;
 function yes(label, ok) { console.log((ok ? 'PASS ' : 'FAIL ') + label); ok ? pass++ : fail++; }
 function rig(patch) {
   const p = makePage(), scrolled = [];
+  let now = 100000;
+  const timers = [];
+  p.win.Date = class extends Date { static now() { return now; } };
+  p.win.setTimeout = (fn, ms) => { timers.push({ fn, at: now + ms }); return timers.length; };
+  p.advance = ms => {
+    now += ms;
+    for (const timer of timers) { if (!timer.done && timer.at <= now) { timer.done = true; timer.fn(); } }
+  };
   const create = p.doc.createElement;
   p.doc.createElement = tag => { const node = create(tag); node.scrollIntoView = options => scrolled.push({node, options}); return node; };
   p.run('bridge', fs.readFileSync(path.join(root, 'game/ui/thornswood-bridge.js'), 'utf8'));
@@ -49,6 +57,17 @@ for (const section of [{name:'Skill tree', selector:'.skill'}, {name:'Spell book
   yes('Enter still spends the highlighted skill through the actual bridge', first.length === 1 && first[0] === q.told.filter(x => x.includes('skills:pick spend '))[0]);
   p.key('Enter', {repeat:true});
   yes('held Enter still cannot send a second spend', p.told.filter(x => x.includes('skills:pick spend ')).length === 1);
+}
+{
+  const p = rig(); p.nav('Skill tree');
+  p.key('Enter');
+  yes('a pending spend disables the plus controls', p.body.querySelectorAll('.plus').every(n => n.classList.contains('off')));
+  p.advance(30001);
+  p.key('ArrowDown');
+  p.advance(50);
+  const plus = p.body.querySelectorAll('.skill')[1].querySelector('.plus');
+  yes('moving the highlight before the spend timeout redraw still releases the plus controls',
+      !plus.classList.contains('off') && plus.parentNode.classList.contains('at'));
 }
 {
   const p = rig(); p.nav('Skill tree'); p.key('ArrowDown');

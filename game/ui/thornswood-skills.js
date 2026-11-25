@@ -640,6 +640,7 @@
   var closing = false;     // creation is over and the panel is on its way shut
   var tableGen = 0;        // bumped when a table arrives from the server, so a redraw is forced
   var drawnKey = '';       // JSON of what head, nav and body were last drawn from
+  var drawnRow = -1;       // tracked separately so an arrow only updates the rendered highlight
   var footKey = '';        // the same for the foot
   var keyName = 'K';       // SkillsKey as bound, until the front says otherwise (#1919)
   var progRows = [];       // the value half of each progress line on the page, in order
@@ -1694,7 +1695,7 @@
   function viewKey() {
     var v = null;
     if (mine) { v = {}; for (var k in mine) if (!NOT_DRAWN[k]) v[k] = mine[k]; }
-    return JSON.stringify([tableGen, sections, section, rowAt, picked, later, marked, markedStaff, v, progressShape(),
+    return JSON.stringify([tableGen, sections, section, picked, later, marked, markedStaff, v, progressShape(),
                            candidate, endArmed, dyeTarget, guideAt, section === 'tree' && pickInFlight('tree')]);
   }
 
@@ -1762,8 +1763,9 @@
     if (rowAt >= n) rowAt = n ? n - 1 : 0;
     if (rowAt < 0) rowAt = 0;
     var key = viewKey();
-    if (key !== drawnKey) {
+    if (key !== drawnKey || rowAt !== drawnRow) {
       drawnKey = key;
+      drawnRow = rowAt;
       drawHead();
       drawNav();
       drawBody();
@@ -4338,9 +4340,9 @@
     }
     var nodes = elBody.querySelectorAll(selector);
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('at', i === rowAt);
-    // A repeated owner view must not rebuild the rows merely because the
-    // keyboard already moved their highlight since the last server update.
-    drawnKey = viewKey();
+    // An arrow paints only the selection. The next draw still checks whether
+    // the rest of the view changed, including if a pending spend expired.
+    drawnRow = rowAt;
     if (nodes[rowAt]) nodes[rowAt].scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
