@@ -1,8 +1,10 @@
 """Population policy against small winning-record tables, without game files."""
 import copy
 import importlib.util
+import json
 import pathlib
 import sys
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -361,7 +363,14 @@ class PopulationTests(unittest.TestCase):
         cell.update(edid="WhiterunCatacombs", location=self.catalogue.locations["city"])
         ref, actor = self.catalogue.placement("bandit", "dungeon")
         actor["location"] = self.catalogue.locations["city"]
-        result = self.population.classify(CAST.Cast(self.catalogue.tables), ref, actor)
+        context = CAST.Cast(self.catalogue.tables)
+        (ROOT/'temp').mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='npc-catacomb-', dir=ROOT/'temp') as folder:
+            path = pathlib.Path(folder)/'habitats.json'
+            path.write_text(json.dumps({'version':1,'places':[{'form':actor['cell'],'recordType':'CELL',
+                'habitat':'dungeon','reason':'Explicit fixture catacomb below the city.'}]}),encoding='utf8')
+            context.habitat_annotations = self.population.read_habitat_annotations(path,context)
+        result = self.population.classify(context, ref, actor)
         self.assertTrue(result["keep"], result)
         self.assertEqual(result["habitat"], "dungeon")
 

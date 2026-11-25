@@ -1280,7 +1280,7 @@ ref,name,base,hold,locationName,location,habitat,role,species,tier,cap,returnMin
 1a66d:Skyrim.esm,Alchemist,13ba4:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,imperial,,,360,512,165b6:Skyrim.esm,,-520.0,-248.0,64.0
 1a66e:Skyrim.esm,Cook,13ba3:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,nord,,,360,512,1605e:Skyrim.esm,,336.0,-416.0,64.0
 1a672:Skyrim.esm,Enchanter,13ba1:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,breton,,,360,512,165b3:Skyrim.esm,,119.512451171875,-23.152530670166016,69.51840209960938
-1a67c:Skyrim.esm,Smith,13bb9:Skyrim.esm,Whiterun,Warmaiden's,1db4e:Skyrim.esm,dungeon,trader,imperial,1,,360,1536,1db4e:Skyrim.esm,,-16.0,128.0,64.0
+1a67c:Skyrim.esm,Smith,13bb9:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,imperial,,,360,512,1db4e:Skyrim.esm,,-16.0,128.0,64.0
 1a681:Skyrim.esm,Woodworker,13b9e:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,woodelf,,,360,512,165b7:Skyrim.esm,,-16.498863220214844,-1200.2633056640625,80.0
 1a684:Skyrim.esm,Tailor,13b9c:Skyrim.esm,Whiterun,Whiterun,18a56:Skyrim.esm,city,trader,elder,,,360,512,165b2:Skyrim.esm,,-800.0,-320.0,320.0
 1a6b5:Skyrim.esm,Alchemist,13614:Skyrim.esm,the Pale,Dawnstar,18a50:Skyrim.esm,city,trader,elder,,,360,512,13a86:Skyrim.esm,,1088.7137451171875,-91.87908172607422,2.565845489501953

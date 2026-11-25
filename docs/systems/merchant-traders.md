@@ -38,7 +38,7 @@ People cannot join. Exact guild relocation remains separate. These are source co
 | Whiterun | Alchemist | Whiterun | 1a66d:Skyrim.esm | whiterun |
 | Whiterun | Cook | Whiterun | 1a66e:Skyrim.esm | whiterun |
 | Whiterun | Enchanter | Whiterun | 1a672:Skyrim.esm | whiterun |
-| Whiterun | Smith | Warmaiden's | 1a67c:Skyrim.esm | whiterun |
+| Whiterun | Smith | Whiterun | 1a67c:Skyrim.esm | whiterun |
 | Whiterun | Tailor | Whiterun | 1a684:Skyrim.esm | whiterun |
 | Whiterun | Woodworker | Whiterun | 1a681:Skyrim.esm | whiterun |
 | Winterhold | Alchemist | Winterhold College | 1c1aa:Skyrim.esm | winterhold |
