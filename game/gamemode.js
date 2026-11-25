@@ -63107,7 +63107,7 @@ module.exports = {
   function shutdown() {
     var failures = [];
     Object.keys(active).forEach(function(id) {
-      try { revoke(id,active[id],'The staff tools reloaded.'); }
+      try { revoke(Number(id),active[id],'The staff tools reloaded.'); }
       catch (e) { failures.push(e); log('staff tools: could not withdraw actor '+id+' during reload: '+e); }
     });
     // One destroyed/unreadable actor cannot leave every other mode enabled.
