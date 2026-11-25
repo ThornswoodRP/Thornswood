@@ -57,6 +57,10 @@ for (const server of ['dev', 'main']) {
   yes(server + ': inventory is unchanged, with no repeat starter kit', JSON.stringify(w.row(tester).inventory) === inventory);
   yes(server + ': gathering permissions follow the new class immediately',
     P.canDo(state(tester), 'loot') && !P.canDo(state(tester), 'mine'));
+  const roleHelp = box.__thornswoodCommandTools;
+  yes(server + ': playtest help lists self setclass, and admin help adds targeting',
+    roleHelp.help('playtester').filter(h => h.word === '/setclass').every(h => !h.syntax.includes('for <person>')) &&
+    roleHelp.help('admin').some(h => h.word === '/setclass' && h.syntax.includes('for <person>')));
   command(tester, '/setclass miner');
   command(tester, '/setclass hunter');
   command(tester, '/setclass miner');
