@@ -52364,6 +52364,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function settle(actorId, now) {
     now = now || Date.now();
     var n = read(actorId);
+    // Pausing the clock at its source preserves the actual meters. It does
+    // not fill them, and disabling the mode cannot charge the skipped time.
+    if (ignoresNeeds(actorId)) {
+      if (!n) { n = fresh(); }
+      n.at = now;
+      write(actorId,n);
+      return n;
+    }
     var arriving = !here[actorId] && onlineNow(actorId);
     if (arriving) { here[actorId] = true; }
     /*
@@ -53643,6 +53651,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   */
   function effects(actorId, n) {
     var out = {};
+    if (ignoresNeeds(actorId)) { return out; }
     if (!n) { return out; }
     function add(cost) {
       for (var av in cost) {
@@ -54268,6 +54277,18 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return true;
   }
 
+  // Staff's scene tool changes the source state, not just the screen effect.
+  // Keep food, drink, rest, temperature, tea, injuries and diseases intact.
+  function clearIntoxication(actorId) {
+    var n = read(actorId);
+    if (!n) { throw new Error('The needs record is unavailable.'); }
+    n.ale = 0; n.aleAt = null; n.aleHelpUntil = 0; n.drunk = false;
+    n.drugUntil = 0; n.drugCrash = 0; n.drugged = false; n.doses = [];
+    n.withdrawalUntil = 0; n.hangoverUntil = 0; n.look = '';
+    if (!write(actorId,n)) { throw new Error('The cleared effects could not be saved.'); }
+    pushEffects(actorId); hangoverCare(actorId);
+  }
+
   /* The injury block's line and look prompt row, for a hangover (careOf). */
   function hangoverCare(actorId) {
     var hurtC = g.__thornswoodHurt;
@@ -54303,6 +54324,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     to matter is worth being told about and every swing before that is not.
   */
   function worked(actorId, key) {
+    if (ignoresNeeds(actorId)) { return ''; }
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
@@ -54417,6 +54439,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
   /** Too tired to make anything. See CRAFT_REST. */
   function tooTiredToCraft(actorId) {
+    if (ignoresNeeds(actorId)) { return false; }
     var n = settle(actorId);
     return n.rest < CRAFT_REST;
   }
@@ -54432,6 +54455,17 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (!tooTiredToCraft(actorId)) { return ''; }
     return 'You are too tired to make anything: your Rest is under ' + CRAFT_REST + '. ' +
            'Sit down, or lie down in a bed, first.';
+  }
+
+  function ignoresNeeds(actorId) {
+    try { return mp.get(actorId,'isGodMode') === true; }
+    catch (e) { return false; }
+  }
+
+  function godmodeChanged(actorId) {
+    var hurt = g.__thornswoodHurt;
+    if (hurt && hurt.clearFireExposure) { hurt.clearFireExposure(actorId); }
+    pushEffects(actorId);
   }
 
   /*
@@ -55105,7 +55139,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
-    hungOver: hungOver, soberUp: soberUp,
+    hungOver: hungOver, soberUp: soberUp, clearIntoxication: clearIntoxication,
+    ignoresNeeds: ignoresNeeds, godmodeChanged: godmodeChanged,
     // What logging out now would do, in the Body page's words (#2246).
     awayWords: awayWords
   };
@@ -56349,7 +56384,7 @@ module.exports = {
       sitting, 20 an hour"), with no roof and not indoors. Or an hour at spent
       cold. Each clock starts again once it has caught.
     */
-    if (n && N) {
+    if (n && N && !(N.ignoresNeeds && N.ignoresNeeds(actorId))) {
       var open = n.resting === 'sit' && !n.roof && !!n.place && n.place !== 'indoors';
       if (open) {
         if (!rec.ground) { rec.ground = now; changed = true; }
@@ -56367,6 +56402,9 @@ module.exports = {
           rec.cold = now; changed = true;
         }
       } else if (rec.cold) { rec.cold = 0; changed = true; }
+    } else if (n && N && N.ignoresNeeds && N.ignoresNeeds(actorId)) {
+      // God mode cannot accrue an hour of cold exposure for a later tick.
+      if (rec.ground || rec.cold) { rec.ground = 0; rec.cold = 0; changed = true; }
     }
 
     /*
@@ -56558,6 +56596,7 @@ module.exports = {
   if (!g.__thornswoodHurtFires) { g.__thornswoodHurtFires = {}; }
   var fires = g.__thornswoodHurtFires;
   var FIRE_GAP_MS = 6000;  // the needs block lets go of a silent client after three of its beats
+  function clearFireExposure(actorId) { delete fires[actorId]; }
 
   /*
     A FIRE NOBODY PUT OUT STILL BURNT (#2260). The burn used to be written
@@ -56567,6 +56606,10 @@ module.exports = {
     hurt tick for somebody who never came back to send one.
   */
   function burning(actorId, on, now) {
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.ignoresNeeds && needs.ignoresNeeds(actorId)) {
+      clearFireExposure(actorId); return '';
+    }
     now = now || Date.now();
     var f = has(fires, actorId) ? fires[actorId] : null;
     if (on) {
@@ -57644,6 +57687,7 @@ module.exports = {
     read: read, write: write, step: step, tick: tick, bleedTick: bleedTick, bleedRate: bleedRate,
     stageOf: stageOf, lines: lines, chanceFor: chanceFor,
     forNeeds: forNeeds, burntWear: burntWear, wound: wound, burning: burning, settleQuietFires: settleQuietFires,
+    clearFireExposure: clearFireExposure,
     healed: healed, cast: cast, hit: hit, swallowed: swallowed, rite: rite,
     exposed: exposed, craftRefusal: craftRefusal, died: died, scarOf: scarOf, staff: staff,
     BITERS: BITERS, TREAT: TREAT, TREAT_REACH: TREAT_REACH,
@@ -57966,7 +58010,9 @@ module.exports = {
       // prompt's Tend their wounds.
       var care = false;
       try { care = !!(g.__thornswoodHurt && g.__thornswoodHurt.careOf && g.__thornswoodHurt.careOf(id)); } catch (eCare) { care = false; }
-      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care });
+      var tools = g.__thornswoodStaffTools;
+      var invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
+      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care, invisible: invisible });
     }
 
     var reach = SOCIAL.nearReach * SOCIAL.nearReach;
@@ -58005,7 +58051,7 @@ module.exports = {
           p: them.pid,
           f: s.friends[them.pid] ? 1 : 0,
           m: s.muted[them.pid] ? 1 : 0,
-          h: (s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
+          h: (them.invisible || s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
           y: (party && party.members.indexOf(them.pid) !== -1) ? 1 : 0,
           s: (beds && beds.mark) ? beds.mark(me.pid, them.pid, me.cell) : 0
         };
@@ -58104,6 +58150,8 @@ module.exports = {
           p: mp.get(id, 'pos') || [0, 0, 0],
           c: String(mp.get(id, 'worldOrCellDesc') || '')
         };
+        var tools = g.__thornswoodStaffTools;
+        at[profileOf(id)].invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
       } catch (e) { }
     }
 
@@ -58121,7 +58169,7 @@ module.exports = {
           if (!row) { continue; }             // in the party and not online
           list.push({ a: row.a, n: row.n, p: row.p, c: row.c,
                       l: pid === p.leader ? 1 : 0,
-                      h: (viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
+                      h: (row.invisible || viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
         }
       }
 
@@ -62812,6 +62860,255 @@ module.exports = {
 })();
 // ==== end thornswood staff ====
 
+// ==== thornswood staff scene tools (#6628) ====
+// The contract, trust boundary and real-game checks are in
+// docs/systems/staff-tools.md. Only server-owned properties reach natives.
+(function () {
+  'use strict';
+  var g = globalThis;
+  if (!g.__thornswoodCommandTools || !g.__thornswoodCommandTools.register) {
+    throw new Error('Staff scene tools require the registered command catalog.');
+  }
+  var WORDS = ['/fly', '/phase', '/godmode', '/invisible', '/cleareffects', '/killall'];
+  var OWNER = 'thornswoodStaffTools', VISIBLE = 'thornswoodStaffVisible';
+  var REACH = 1500, MOST = 40, PHASE = 256;
+  var active = {}, serial = Number(g.__thornswoodStaffToolsSerial) || 0;
+  var RUN = serverRunId();
+
+  function tell(pid, text) { if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, text); } }
+  function report(word, pid, actor, why, extra) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.record) { staff.record(word.slice(1), pid, nameOf(actor), pid, nameOf(actor), why, 0, extra); }
+  }
+  function nameOf(actor) {
+    try { var appearance = mp.get(actor, 'appearance'); return String(appearance && appearance.name || 'staff'); }
+    catch (e) { return 'staff'; }
+  }
+  function pass(pid) { var seen = g.__thornswoodPassSeen; return seen && seen.passes && seen.passes[pid]; }
+  function permitted(cmd, word, pid, actor) {
+    var staff = g.__thornswoodStaff;
+    if (!staff || !staff.authorizeTool || staff.authorizeTool(cmd,pid,actor,word === '/killall' ? 'admin' : 'playtester')) { return false; }
+    return mp.get(actor, 'isDead') === false;
+  }
+  function vec(v) { return Array.isArray(v) && v.length === 3 && v.every(Number.isFinite); }
+  function place(actor) {
+    var out = {desc: mp.get(actor, 'worldOrCellDesc'), pos: mp.get(actor, 'pos'), rot: mp.get(actor, 'angle')};
+    if (typeof out.desc !== 'string' || !out.desc || !vec(out.pos) || !vec(out.rot)) { throw new Error('actor location is unavailable'); }
+    return out;
+  }
+  function movementRefusal(pid, actor) {
+    if (g.__thornswoodStaffState && g.__thornswoodStaffState.frozen && g.__thornswoodStaffState.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    var cuffs = g.__thornswoodCuffs, property = g.__thornswoodProperty;
+    if (!cuffs || !cuffs.cuffedBy || !property || !property.lockedJailHere) { return 'The restraint checks are unavailable.'; }
+    if (cuffs.cuffedBy(actor)) { return 'Your hands are cuffed.'; }
+    if (property.lockedJailHere(actor, pid)) { return 'A guard has a cell locked here.'; }
+    return '';
+  }
+  function publish(actor, row) {
+    var seq = ++serial; g.__thornswoodStaffToolsSerial = serial;
+    row.flight = (row.fly === true || row.godmode === true) && !movementRefusal(row.pid,Number(actor));
+    var current = pass(row.pid), until = current ? Number(current.x) : 0;
+    row.until = until;
+    mp.set(actor, OWNER, {fly: row.flight, godmode: row.godmode === true, seq: seq,run:RUN,until:until});
+    mp.set(actor, VISIBLE, {invisible: row.invisible === true, seq: seq,run:RUN,until:until});
+  }
+  function revoke(actor, row, why) {
+    if (row.godmode) {
+      var needs = g.__thornswoodNeeds;
+      try { if (needs && needs.settle) { needs.settle(Number(actor)); } }
+      catch (e) { log('staff tools: needs could not settle before revocation: ' + e); }
+      mp.set(actor, 'isGodMode', false);
+      try { if (needs && needs.godmodeChanged) { needs.godmodeChanged(Number(actor)); } }
+      catch (e) { log('staff tools: needs could not redraw after revocation: ' + e); }
+    }
+    publish(actor, {});
+    delete active[actor];
+    report('/tools-off', row.pid, Number(actor), why);
+  }
+  function tick() {
+    Object.keys(active).forEach(function (key) {
+      var row = active[key], actor = Number(key);
+      try {
+        var current = pass(row.pid), roles = g.__thornswoodCommandRoles;
+        var online = mp.get(0, 'onlinePlayers');
+        if (!Array.isArray(online) || online.indexOf(actor) < 0 ||
+            Number(mp.get(actor, 'profileId')) !== row.pid || mp.get(actor, 'isDead') !== false ||
+            mp.getActorRuntimeIdentity(actor) !== row.life ||
+            !current || !(Number(current.x) > Date.now()) || !roles || !roles.playtester || !roles.playtester(row.pid) ||
+            (row.godmode && mp.get(actor, 'isGodMode') !== true)) {
+          revoke(actor, row, 'The staff session or its authority ended.'); return;
+        }
+        if (Number(current.x) !== row.until) { publish(actor,row); }
+        var restrained = movementRefusal(row.pid, actor);
+        if (row.flight && restrained) {
+          row.fly = false; publish(actor, row);
+          report('/fly', row.pid, actor, 'off: movement is restrained');
+          tell(row.pid, 'Flight ended because movement is restrained.');
+        }
+        else if (!row.flight && (row.fly || row.godmode) && !restrained) { publish(actor,row); }
+      } catch (e) {
+        // Failure to read authority must revoke, never renew, a privilege.
+        try { revoke(actor, row, 'Staff authority could not be checked.'); }
+        catch (failure) { log('staff tools: could not revoke actor ' + actor + ': ' + failure); }
+      }
+    });
+  }
+  function toggle(words, current) {
+    if (!words.length) { return !current; }
+    if (words.length !== 1 || (words[0] !== 'on' && words[0] !== 'off')) { return null; }
+    return words[0] === 'on';
+  }
+  function killable(id, cell, origin) {
+    var population = g.__thornswoodNpcPopulation;
+    if (!population || !population.staffKillable || !population.staffKillable(id)) { return false; }
+    // This native answer establishes actor type, ownership and authored NPC
+    // flags. A missing field is not evidence that an actor is safe to kill.
+    var s = mp.getNpcAIState(id);
+    if (!s || !Number.isInteger(s.profileId) || s.profileId >= 0 ||
+        s.isHuman !== false || s.isConnected !== false || s.isServerControlled !== true ||
+        s.isEssential !== false || s.isProtected !== false || s.isUnique !== false ||
+        s.isDead !== false || s.isDisabled !== false || !Number.isInteger(s.aggression) ||
+        s.aggression < 2 || s.aggression > 3 || s.cellOrWorld !== cell || !vec(s.pos)) { return false; }
+    return Math.hypot(s.pos[0]-origin[0], s.pos[1]-origin[1], s.pos[2]-origin[2]) <= REACH;
+  }
+  function killall(pid, actor) {
+    var here = place(actor), cell = mp.getIdFromDesc(here.desc);
+    if (!Number.isInteger(cell) || cell <= 0) { throw new Error('cell identity is unavailable'); }
+    var nearby = mp.getNeighborsByPosition(cell, here.pos);
+    if (!Array.isArray(nearby)) { throw new Error('nearby actors are unavailable'); }
+    var candidates = [], seen = {}, failed = [], killed = [];
+    nearby.forEach(function (id) {
+      if (!Number.isInteger(id) || id <= 0 || id === actor || seen[id]) { return; }
+      seen[id] = true;
+      try {
+        if (!killable(id, cell, here.pos)) { return; }
+        var pos = mp.getNpcAIState(id).pos;
+        candidates.push({id:id, distance:Math.hypot(pos[0]-here.pos[0],pos[1]-here.pos[1],pos[2]-here.pos[2])});
+      } catch (e) { /* An unreadable actor is excluded, never presumed an NPC. */ }
+    });
+    candidates.sort(function (a,b) { return a.distance-b.distance || a.id-b.id; });
+    candidates.slice(0,MOST).forEach(function (target) {
+      try {
+        // Recheck immediately before the write, including all identity flags.
+        if (!killable(target.id,cell,here.pos)) { failed.push(target.id); return; }
+        mp.set(target.id,'isDead',true);
+        if (mp.get(target.id,'isDead') === true) { killed.push(target.id); }
+        else { failed.push(target.id); }
+      } catch (e) { failed.push(target.id); }
+    });
+    tell(pid, 'Ended ' + killed.length + ' nearby hostile NPCs. ' + failed.length + ' could not be ended. People and protected NPCs were excluded.');
+    report('/killall',pid,actor,'Nearby hostile NPCs only.',{killed:killed,failed:failed,limit:MOST,reach:REACH});
+  }
+  function command(cmd, word, words, pid, actor) {
+    if (WORDS.indexOf(word) === -1) { return false; }
+    try {
+      if (!permitted(cmd,word,pid,actor)) { tell(pid,'That tool needs your proven playtest or admin session and its current living character.'); return true; }
+      var key = word.slice(1), row = active[actor] || {pid:pid,fly:false,godmode:false,invisible:false};
+      if (key === 'fly' || key === 'godmode' || key === 'invisible') {
+        var actorRuntime = mp.getActorRuntimeIdentity(actor);
+        if (typeof actorRuntime !== 'string' || !actorRuntime) {
+          throw new Error('actor runtime authority is unavailable');
+        }
+        if (row.life && row.life !== actorRuntime) {
+          revoke(actor,row,'Actor runtime authority changed.');
+          row = {pid:pid,fly:false,godmode:false,invisible:false};
+        }
+        row.life = actorRuntime;
+        var on = toggle(words,row[key]);
+        if (on === null) { tell(pid,'Use ' + word + ' on or ' + word + ' off.'); return true; }
+        if (key === 'fly' && on) {
+          var refusal = movementRefusal(pid,actor);
+          if (refusal) { tell(pid,refusal + ' Flight is unavailable.'); return true; }
+        }
+        if (key === 'godmode') {
+          if (typeof mp.get(actor,'isGodMode') !== 'boolean') { throw new Error('the server damage-protection API is unavailable'); }
+          var modeNeeds = g.__thornswoodNeeds;
+          if (!modeNeeds || !modeNeeds.settle || !modeNeeds.godmodeChanged) { throw new Error('the needs mode API is unavailable'); }
+          modeNeeds.settle(actor);
+          mp.set(actor,'isGodMode',on);
+        }
+        row[key] = on; active[actor] = row; publish(actor,row);
+        if (key === 'godmode') { modeNeeds.godmodeChanged(actor); }
+        tell(pid,word + ' is ' + (on ? 'on.' : 'off.') +
+          (key === 'fly' && !on && row.godmode ? ' God mode still enables flight while movement is unrestricted.' : ''));
+        report(word,pid,actor,on ? 'on' : 'off');
+        if (!row.fly && !row.godmode && !row.invisible) { delete active[actor]; }
+        return true;
+      }
+      if (words.length) { tell(pid,word + ' takes no target or other arguments.'); return true; }
+      if (key === 'phase') {
+        var noMove = movementRefusal(pid,actor);
+        if (noMove) { tell(pid,noMove + ' Phasing is unavailable.'); return true; }
+        var here = place(actor), heading = here.rot[2] * Math.PI / 180;
+        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]];
+        mp.set(actor,'locationalData',{cellOrWorldDesc:here.desc,pos:pos,rot:here.rot.slice()});
+        report(word,pid,actor,'Forward in the same cell.',{from:here.pos,to:pos});
+        tell(pid,'Moved a short distance forward.'); return true;
+      }
+      if (key === 'cleareffects') {
+        var needs = g.__thornswoodNeeds;
+        if (!needs || !needs.clearIntoxication) { throw new Error('intoxication state is unavailable'); }
+        needs.clearIntoxication(actor);
+        report(word,pid,actor,'Alcohol and drug effects cleared.');
+        tell(pid,'Your alcohol and drug effects are cleared.'); return true;
+      }
+      killall(pid,actor); return true;
+    } catch (e) {
+      if (active[actor]) {
+        try { revoke(actor,active[actor],'The tool could not be applied.'); }
+        catch (revokeError) { log('staff tools: could not revoke after tool failure: ' + revokeError); }
+      }
+      tell(pid,'The staff tool could not complete. The server log says why.');
+      log('staff tools: ' + word + ' for profile ' + pid + ' failed: ' + e);
+      return true;
+    }
+  }
+  function ownerScript() {
+    return [
+      '(function(){',
+      'var sp=ctx.sp,v=ctx.value||{};if(!sp){return;}',
+      'var store=sp.storage;if(!store){sp.printConsole("staff tools: native mode storage unavailable");return;}',
+      'var allowed=v.run==='+JSON.stringify(RUN)+'&&Number(v.until)>Date.now();',
+      'var signature=String(v.seq)+"|"+allowed;if(ctx.state.thornswoodToolAttempt===signature){return;}ctx.state.thornswoodToolAttempt=signature;',
+      'try {',
+      ' var fly=allowed&&v.fly===true,god=allowed&&v.godmode===true;',
+      ' if((store.thornswoodStaffFlight===true)!==fly){sp.Debug.toggleCollisions();store.thornswoodStaffFlight=fly;}',
+      ' if(store.thornswoodStaffGod!==god){sp.Debug.setGodMode(god);store.thornswoodStaffGod=god;}',
+      '}catch(e){sp.printConsole("staff tools: could not apply native mode: "+e);}',
+      '})();'
+    ].join('\n');
+  }
+  function visibilityScript() {
+    return [
+      '(function(){var v=ctx.value||{},a=ctx.sp.Actor.from(ctx.refr);if(!a){return;}',
+      'var invisible=v.run==='+JSON.stringify(RUN)+'&&Number(v.until)>Date.now()&&v.invisible===true;if(ctx.state.thornswoodStaffInvisible===invisible){return;}',
+      'try{a.setAlpha(invisible?0:1,false);ctx.state.thornswoodStaffInvisible=invisible;}',
+      'catch(e){ctx.sp.printConsole("staff tools: could not apply visibility: "+e);}})();'
+    ].join('\n');
+  }
+  mp.makeProperty(OWNER,{isVisibleByOwner:true,isVisibleByNeighbors:false,updateOwner:ownerScript(),updateNeighbor:''});
+  mp.makeProperty(VISIBLE,{isVisibleByOwner:true,isVisibleByNeighbors:true,updateOwner:visibilityScript(),updateNeighbor:visibilityScript()});
+  // The loader clears property registrations on reload. Re-register before
+  // the old module withdraws its values, or its writes would be refused.
+  if (g.__thornswoodStaffTools) { g.__thornswoodStaffTools.shutdown(); }
+  if (g.__thornswoodStaffToolsTimer) { clearInterval(g.__thornswoodStaffToolsTimer); }
+  g.__thornswoodStaffToolsTimer = setInterval(guard('staffToolAuthority',tick),1000);
+  g.__thornswoodStaffTools = {words:WORDS,command:command,tick:tick,ownerScript:ownerScript,visibilityScript:visibilityScript,
+    isInvisible:function(actor){var row=active[actor];return !!(row && row.invisible && pass(row.pid) && Number(pass(row.pid).x)>Date.now());},
+    shutdown:function(){Object.keys(active).forEach(function(id){revoke(id,active[id],'The staff tools reloaded.');});}};
+  g.__thornswoodCommandTools.register('scene-tools',{
+    command:function(cmd,word,parts,pid,actor){return command(cmd,word,parts.slice(1),pid,actor);},
+    help:[
+      {word:'/fly',role:'playtester',syntax:'/fly [on|off]',text:'Toggle collision-free flight for yourself; restraints still apply.'},
+      {word:'/phase',role:'playtester',syntax:'/phase',text:'Move a short distance forward within this cell; restraints still apply.'},
+      {word:'/godmode',role:'playtester',syntax:'/godmode [on|off]',text:'Toggle flight, damage protection, lethal valid attacks and paused needs for yourself.'},
+      {word:'/invisible',role:'playtester',syntax:'/invisible [on|off]',text:'Hide or show your character.'},
+      {word:'/cleareffects',role:'playtester',syntax:'/cleareffects',text:'Clear your alcohol and drug effects without removing injuries or disease.'},
+      {word:'/killall',role:'admin',syntax:'/killall',text:'End up to 40 nearby ordinary hostile NPCs; people and protected actors are excluded.'}
+    ]
+  });
+})();
+// ==== end thornswood staff scene tools ====
 // ==== thornswood take back ====
 /*
   ============================================================================
@@ -64154,6 +64451,14 @@ function createNpcPopulation(api,data,plugins,merchants,options) {
     // A spawn staff did not keep (#2623): removed when it dies.
     const entry=configured.get(id);
     return !!(entry && entry.rule.commanded && !entry.rule.keep);
+  },staffKillable:id=>{
+    const entry=configured.get(id);
+    if(!entry || !entry.rule || !entry.rule.row) return false;
+    // Hostile encounters and staff spawns only. Town residents, traders,
+    // transport, farms and ambient creatures are never mass-kill targets.
+    return entry.rule.commanded===true || typeof entry.rule.patrol==='string' ||
+      (entry.rule.row[6]==='enemy' &&
+        ['dungeon','wilderness','cave','bandit-camp','sewer','giant-camp'].includes(entry.rule.row[7]));
   },spawned:()=>{
     // Every creature a spawn command made that is still held here, kept or
     // not, alive or dead: what staff's /despawn chooses from (#2623).

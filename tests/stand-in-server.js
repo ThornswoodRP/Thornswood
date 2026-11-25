@@ -111,9 +111,14 @@ const ENGINE_METHODS = [
   'getPacketHistory', 'clearPacketHistory', 'requestPacketHistoryPlayback', 'findFormsByPropertyValue',
   'getPrometheusMetrics'
 ];
-/* The built-in keys (PropertyBindingFactory.cpp). Everything else is custom. */
+/* The built-in keys (PropertyBindingFactory.cpp). Everything else is custom.
+   #6628 paired native API: ThornswoodRP/skymp#175, 17ca822f8747b75c384f26266aa3ebb3f9f92d9a:
+   cpp/addon/property_bindings/IsGodModeBinding.cpp (strict boolean),
+   cpp/server_guest_lib/MpActor.cpp (runtime-bound getter/dead-enable refusal),
+   cpp/addon/ScampServer.cpp GetNpcAIState (NPC safety flags).
+   This models that compiled addon, not availability in an older engine pin. */
 const BUILT_IN = ['actorNeighbors', 'angle', 'appearance', 'baseDesc', 'craftOutput', 'craftStock', 'craftWork',
-  'dyingHealth', 'eatItemScale', 'equipment', 'inventory', 'isDead', 'isDisabled', 'isOnline', 'isOpen',
+  'dyingHealth', 'eatItemScale', 'equipment', 'inventory', 'isDead', 'isGodMode', 'isDisabled', 'isOnline', 'isOpen',
   'locationalData', 'neighbors', 'onlinePlayers', 'percentages', 'pos', 'profileId', 'spawnPoint',
   'spellCastDurationMult', 'type', 'worldOrCellDesc', 'idx', 'consoleCommandsAllowed', 'spawnDelay',
   'templateChain', 'lastAnimEvent', 'respawnPercentages'];
@@ -574,6 +579,9 @@ function world(opts) {
       switch (k) {
         case 'locationalData': return { cellOrWorldDesc: row.worldOrCellDesc, pos: copy(row.pos), rot: copy(row.angle) };
         case 'isOnline': return online.indexOf(id) >= 0;
+        // IsGodModeBinding / MpActor::IsGodMode: runtime authority, not a
+        // persisted custom flag. Reloading an actor cannot inherit the grant.
+        case 'isGodMode': return row.godModeRuntime === runtimeIdentity(id) && row.isGodMode === true;
         case 'isOpen': return !!row.isOpen;
         case 'craftWork': return craftWorkFor && craftWorkFor.actor === id ? { ms: craftWorkFor.ms } : undefined;
         case 'craftOutput': return craftOutputFor && craftOutputFor.actor === id ? copy(craftOutputFor.out) : undefined;
@@ -594,6 +602,13 @@ function world(opts) {
         return;
       }
       switch (k) {
+        case 'isGodMode':
+          // SetGodMode and NapiHelper::ExtractBoolean refuse malformed input
+          // and enabling protection on the dead, rather than coercing either.
+          if (typeof v !== 'boolean') { throw new Error('isGodMode must be boolean'); }
+          if (v && row.isDead) { throw new Error('Cannot protect a dead actor'); }
+          row.isGodMode = v; row.godModeRuntime = v ? runtimeIdentity(id) : 0;
+          return;
         case 'locationalData': row.worldOrCellDesc = v.cellOrWorldDesc; row.pos = copy(v.pos); row.angle = copy(v.rot); return;
         case 'craftWork':
           if (!craftWorkFor || craftWorkFor.actor !== id) { fault('craftWork set on ' + id.toString(16) + ' outside its own onCraftWork'); return; }
@@ -694,6 +709,8 @@ function world(opts) {
         profileId: typeof row.profileId === 'number' ? row.profileId : -1, pos: row.pos.slice(), rot: row.angle.slice(),
         cellOrWorld: w.idOf(row.worldOrCellDesc), isDead: !!row.isDead, isDisabled: !!row.isDisabled,
         isHuman: row.profileId >= 0, isConnected: online.indexOf(id >>> 0) >= 0, isServerControlled: !!row.serverControlled,
+        // ScampServer::GetNpcAIState exposes these authored NPC safety flags.
+        isEssential: row.isEssential === true, isProtected: row.isProtected === true, isUnique: row.isUnique === true,
         lifeGeneration: Number(row._skympNpcLifeGeneration) || 0, runtimeLifeIdentity: String(runtimeIdentity(id >>> 0)),
         difficultyTier: row.difficultyTier || 0, aggression: ai[0], confidence: ai[1],
         meleeReach: 0, meleeAllowance: 16, canSwim: false, canFly: false, immobile: false, combatTarget: 0, factions: []
@@ -1057,7 +1074,12 @@ function world(opts) {
   w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
   /* The gamemode deployed again while the server runs: same process, same mp. */
-  w.reload = function () { proc.err = null; load(); return w.loaded(); };
+  w.reload = function () {
+    // gamemodeLoad.ts calls recorder.clear() before reloading, which clears
+    // native property definitions while retaining saved character values.
+    made = new Set(); madeVisible = new Set();
+    proc.err = null; load(); return w.loaded();
+  };
   /* The server stopped and started: a new process, the change forms through JSON. */
   w.restart = function () {
     store = new Map(JSON.parse(JSON.stringify(Array.from(store.entries()))));

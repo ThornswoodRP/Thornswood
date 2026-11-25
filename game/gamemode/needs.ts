@@ -1002,6 +1002,14 @@
   function settle(actorId, now) {
     now = now || Date.now();
     var n = read(actorId);
+    // Pausing the clock at its source preserves the actual meters. It does
+    // not fill them, and disabling the mode cannot charge the skipped time.
+    if (ignoresNeeds(actorId)) {
+      if (!n) { n = fresh(); }
+      n.at = now;
+      write(actorId,n);
+      return n;
+    }
     var arriving = !here[actorId] && onlineNow(actorId);
     if (arriving) { here[actorId] = true; }
     /*
@@ -2281,6 +2289,7 @@
   */
   function effects(actorId, n) {
     var out = {};
+    if (ignoresNeeds(actorId)) { return out; }
     if (!n) { return out; }
     function add(cost) {
       for (var av in cost) {
@@ -2906,6 +2915,18 @@
     return true;
   }
 
+  // Staff's scene tool changes the source state, not just the screen effect.
+  // Keep food, drink, rest, temperature, tea, injuries and diseases intact.
+  function clearIntoxication(actorId) {
+    var n = read(actorId);
+    if (!n) { throw new Error('The needs record is unavailable.'); }
+    n.ale = 0; n.aleAt = null; n.aleHelpUntil = 0; n.drunk = false;
+    n.drugUntil = 0; n.drugCrash = 0; n.drugged = false; n.doses = [];
+    n.withdrawalUntil = 0; n.hangoverUntil = 0; n.look = '';
+    if (!write(actorId,n)) { throw new Error('The cleared effects could not be saved.'); }
+    pushEffects(actorId); hangoverCare(actorId);
+  }
+
   /* The injury block's line and look prompt row, for a hangover (careOf). */
   function hangoverCare(actorId) {
     var hurtC = g.__thornswoodHurt;
@@ -2941,6 +2962,7 @@
     to matter is worth being told about and every swing before that is not.
   */
   function worked(actorId, key) {
+    if (ignoresNeeds(actorId)) { return ''; }
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
@@ -3055,6 +3077,7 @@
 
   /** Too tired to make anything. See CRAFT_REST. */
   function tooTiredToCraft(actorId) {
+    if (ignoresNeeds(actorId)) { return false; }
     var n = settle(actorId);
     return n.rest < CRAFT_REST;
   }
@@ -3070,6 +3093,17 @@
     if (!tooTiredToCraft(actorId)) { return ''; }
     return 'You are too tired to make anything: your Rest is under ' + CRAFT_REST + '. ' +
            'Sit down, or lie down in a bed, first.';
+  }
+
+  function ignoresNeeds(actorId) {
+    try { return mp.get(actorId,'isGodMode') === true; }
+    catch (e) { return false; }
+  }
+
+  function godmodeChanged(actorId) {
+    var hurt = g.__thornswoodHurt;
+    if (hurt && hurt.clearFireExposure) { hurt.clearFireExposure(actorId); }
+    pushEffects(actorId);
   }
 
   /*
@@ -3743,7 +3777,8 @@
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
-    hungOver: hungOver, soberUp: soberUp,
+    hungOver: hungOver, soberUp: soberUp, clearIntoxication: clearIntoxication,
+    ignoresNeeds: ignoresNeeds, godmodeChanged: godmodeChanged,
     // What logging out now would do, in the Body page's words (#2246).
     awayWords: awayWords
   };
