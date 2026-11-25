@@ -1572,7 +1572,8 @@ try {
   $swapOut = @(Remote ((SwapVars $Root $Task $stageName $prevName $Wait $hashes $readBackKeys) + $pick + $swapBlock) |
                ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
 } finally { $ErrorActionPreference = $eap }
-$swapped = Show-SwapResult $swapOut "$rootWin\.prev-<stamp>"
+$prevWhere = if ($PutBack -or $outcome -eq 'recover') { "$rootWin\.undone-<stamp>" } else { "$rootWin\.prev-<stamp>" }
+$swapped = Show-SwapResult $swapOut $prevWhere
 }
 
 Write-Host ''
