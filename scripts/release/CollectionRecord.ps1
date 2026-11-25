@@ -82,6 +82,10 @@ function Test-CollectionPluginName($Name) { return ($Name -is [string]) -and ($N
 
 # The record read from its file. Throws a sentence naming the file.
 function Read-CollectionRecord([string]$Path) {
+    if ([IO.Path]::GetFileName($Path) -ieq 'collection-plugins.json') {
+        . (Join-Path $PSScriptRoot 'RecordShape.ps1')
+        return (Read-ThornswoodRecord -Path $Path -Kind collection-plugins)
+    }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "There is no collection record at $Path." }
     try { return (([IO.File]::ReadAllText($Path) -replace ('^' + [char]0xFEFF), '') | ConvertFrom-Json) }
     catch { throw ("$Path does not read as JSON: " + ($_.Exception.Message -replace '\s+', ' ')) }

@@ -98,6 +98,7 @@ const want = [
   ['the #staff-news webhook', /#staff-news webhook/i],
   ['the voice join token key', /voice/i],
   ['the backup passphrase', /backup passphrase/i],
+  ['the join pass key', /join pass/i],
   ['GitHub access', /github/i],
   ['VPS access', /vps access/i],
   ['code signing', /signing/i]
