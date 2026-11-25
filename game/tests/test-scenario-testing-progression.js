@@ -143,6 +143,14 @@ for (const server of ['dev', 'main']) {
       unchanged(tester, '/rankup class', tester) &&
       w.heardSince(tester, heard).some(line => /could not be saved/.test(line)));
   } finally { box.mp.set = set; }
+  const write = C.writeState;
+  C.writeState = function () { throw new Error('fixture: atomic history CAS refused'); };
+  try {
+    const heard = w.heard(tester).length;
+    yes(server + ': a thrown history save is refused before rank feedback or audit',
+      unchanged(tester, '/rankup class', tester) &&
+      w.heardSince(tester, heard).some(line => /could not be saved/.test(line)));
+  } finally { C.writeState = write; }
 
   seed(tester, 'mage', ['destruction', 'restoration']);
   yes(server + ': mage profession without a school is refused', unchanged(tester, '/rankup profession', tester));

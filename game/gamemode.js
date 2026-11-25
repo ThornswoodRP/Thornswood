@@ -62884,7 +62884,8 @@ module.exports = {
     if (!r.ok || !r.raised || r.raised.key !== key || r.raised.to !== P.TABLE.ranks[rung + 1]) {
       return refuse((r && r.why) || 'That rank cannot advance.');
     }
-    C.writeState(target.actorId, r.state, true);
+    try { C.writeState(target.actorId, r.state, true); }
+    catch (e) { return refuse('The new rank could not be saved.'); }
     // writeState logs a refused engine write; do not report or audit success
     // unless the single saved character property contains the new rank.
     if (P.rankOf(C.stateOf(target.actorId), key) !== r.raised.to) {
