@@ -12,7 +12,7 @@
 // scripts/dev/Build-RecipeTable.ps1 moves a row to its trade's home bench
 // (#3120), and scripts/mods/Build-LastPlugin.py carries that move in
 // Thornswood-Last.esp, but the loop passed over a cut row
-// (docs/systems/cut-items.json), so a cut row kept the forge its mod put it
+// (game/data/cut-items.json), so a cut row kept the forge its mod put it
 // at, and the forge still listed it.
 //
 // This holds the loop: it moves a cut row with the rest. The tables it builds
