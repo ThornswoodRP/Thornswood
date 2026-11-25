@@ -3,6 +3,22 @@
 One meter. 0 is freezing. 100 is as hot as it goes. 50 is comfortable.
 It moves both ways, toward whatever the place is worth.
 
+## Contents
+
+- [What you see](#what-you-see)
+- [What it costs](#what-it-costs)
+- [How fast it moves](#how-fast-it-moves)
+- [The place](#the-place)
+- [Weather, wind, night, height](#weather-wind-night-height)
+- [Storms on the road](#storms-on-the-road)
+- [The season and the sky](#the-season-and-the-sky)
+- [On the map](#on-the-map)
+- [Fire](#fire)
+- [Water](#water)
+- [Clothing](#clothing)
+- [A meal](#a-meal)
+- [Where this is](#where-this-is)
+
 ## What you see
 
 | Reading | Word |
