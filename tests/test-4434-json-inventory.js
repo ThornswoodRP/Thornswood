@@ -181,4 +181,4 @@ yes('the records that must say their version are all named as such' + (unsaid.le
     !!sayPara && unsaid.length === 0);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

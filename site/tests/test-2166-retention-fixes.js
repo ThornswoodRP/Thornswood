@@ -139,7 +139,7 @@ async function trouble() {
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 
@@ -182,5 +182,5 @@ function cookie() {
   await trouble();
   cookie();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -6,7 +6,7 @@ Everything in the world has a recipe except named uniques and quest items (Patri
 
 What the world hands out and who makes it both come from [Where every item comes from](lists/item-sources.md) (`game/data/item-sources.json`). A maker is a recipe in the open book (not cut and not tempering), a class that gathers the item, or the scarce work or rare seam a class works. A bottle the alchemy lab brews is a new form, not a record, so the lab is the maker of no record. The build fails when the world hands out something with no maker that `scripts/dev/Check-Makers.waiting.json` does not name with the issue that will give it one.
 
-288 items handed out. 169 have a maker. 119 have none yet.
+288 items handed out. 172 have a maker. 116 have none yet.
 
 ## Contents
 
@@ -31,9 +31,6 @@ What the world hands out and who makes it both come from [Where every item comes
 | Ancient Nord Sword | Dungeon exclusive | 0 | exempt | The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524. |
 | Ancient Nord War Axe | Dungeon exclusive | 0 | exempt | The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524. |
 | Gold | Asked for by a recipe | 1 | #4625 | a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may |
-| Drum | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
-| Flute | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
-| Lute | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
 | Unenchanted Conjuration Staff | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
 | Unenchanted Destruction Staff | Asked for by a recipe | 10 | #4644 | Woodwright work with no recipe yet |
 | Unenchanted Restoration Staff | Asked for by a recipe | 2 | #4644 | Woodwright work with no recipe yet |
@@ -163,7 +160,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Tailor/Liverywright | 85 |  |
 | Tailor/Haberdasher | 171 |  |
 | Woodworker/Charburner | 5 |  |
-| Woodworker/Woodwright | 46 |  |
+| Woodworker/Woodwright | 49 |  |
 | Farmer | 14 |  |
 | Fisher | 12 |  |
 | Gatherer | 48 |  |
@@ -221,9 +218,11 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Deer Hide | Asked for by a recipe | Hunter, novice | `d284d:Skyrim.esm` |
 | Dog Meat | Asked for by a recipe | Hunter, novice | `edb2e:Skyrim.esm` |
 | Dragon's Tongue | Asked for by a recipe | Gatherer, advanced | `889a2:Skyrim.esm` |
+| Drum | Asked for by a recipe | Woodworker/Woodwright, novice | `daba9:Skyrim.esm` |
 | Dwarven Metal Ingot | Asked for by a recipe | Anybody | `db8a2:Skyrim.esm` |
 | Elves Ear | Asked for by a recipe | Gatherer, expert | `34d31:Skyrim.esm` |
 | Firewood | Asked for by a recipe | Anybody | `6f993:Skyrim.esm` |
+| Flute | Asked for by a recipe | Woodworker/Woodwright, novice | `daba7:Skyrim.esm` |
 | Frost Mirriam | Asked for by a recipe | Gatherer, novice | `34d32:Skyrim.esm` |
 | Fur Plate | Asked for by a recipe | Anybody | `da0bf1:Update.esm` |
 | Giant Lichen | Asked for by a recipe | Gatherer, advanced | `7e8c1:Skyrim.esm` |
@@ -239,6 +238,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Jug of Milk | Asked for by a recipe | Farmer, novice | `3534:HearthFires.esm` |
 | Juniper Berries | Asked for by a recipe | Gatherer, novice | `5076e:Skyrim.esm` |
 | Leather | Asked for by a recipe | Smith/Platewright, novice | `db5d2:Skyrim.esm` |
+| Lute | Asked for by a recipe | Woodworker/Woodwright, novice | `dabab:Skyrim.esm` |
 | Malachite Ore | Asked for by a recipe | Miner, expert | `5ace1:Skyrim.esm` |
 | Mammoth Snout | Asked for by a recipe | Hunter, master; Hunter, master, only while the mammoth work is open | `669a4:Skyrim.esm` |
 | Moonstone Ore | Asked for by a recipe | Miner, expert | `5ace0:Skyrim.esm` |

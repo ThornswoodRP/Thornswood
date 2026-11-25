@@ -55,7 +55,7 @@ function done() {
   temps.forEach(function (d) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { console.log('      could not remove ' + d + ': ' + e.message); } });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(text, start, end) {
   const a = text.indexOf(start);
@@ -68,7 +68,7 @@ const BLOCKS = ['season', 'farming', 'property', 'furniture'];
 const block = {};
 BLOCKS.forEach(function (n) { block[n] = slice(gm, '// ==== thornswood ' + n + ' ====', '// ==== end thornswood ' + n + ' ===='); });
 yes('0 the season, farming, property and furniture blocks are in the gamemode', BLOCKS.every(function (n) { return !!block[n]; }));
-if (!BLOCKS.every(function (n) { return !!block[n]; })) { done(); }
+if (!BLOCKS.every(function (n) { return !!block[n]; })) { done(); } else {
 
 // ------------------------------------------------------------ 1. one path
 const BEGIN = '  // -- store: read and write (#4529), begin --';
@@ -250,3 +250,4 @@ if (b1 && b1.W) {
 }
 
 done();
+}

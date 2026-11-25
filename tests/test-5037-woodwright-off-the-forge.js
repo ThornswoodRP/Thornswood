@@ -39,4 +39,4 @@ yes('Build-RecipeTable.ps1 has its move loop', loop.indexOf('MovedFromName') >= 
 yes('the move loop does not pass over a cut row', !!loop && !/Book\s+-eq\s+'cut'/.test(loop));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -23,5 +23,5 @@ It is not the only way to hurt somebody with a bottle. That is
 
 ## Where this is
 
-These 21 names are the server's book for this school. Learning them
+The book above shows every name and whether the server has an id for it. Learning them
 spends a point and adds 5 work in Destruction.

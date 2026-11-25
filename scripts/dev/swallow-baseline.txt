@@ -237,7 +237,7 @@ scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Fix-Icons.ps1 1
 scripts\dev\Start-Thornswood.ps1 3
 scripts\dev\Watch-Foreground.ps1 1
-scripts\mods\Check-CollectionRules.ps1 1
+scripts\mods\Check-CollectionRules.ps1 0
 scripts\mods\Check-Manifest.ps1 1
 scripts\mods\LoadOrder.ps1 3
 scripts\oneoff\Undo-DiscordBuild.ps1 3
@@ -374,7 +374,7 @@ game\gamemode\the-three-starting-tools.ts 18
 game\gamemode\trade-carts-bundle.ts 6
 game\gamemode\trade-dock-bundle.ts 6
 game\gamemode\trade.ts 15
-game\gamemode\voice-feed.ts 8
+game\gamemode\voice-feed.ts 7
 game\gamemode\warrior-maneuvers.ts 3
 game\gamemode\world-stage.ts 7
 game\merchant-trading.js 6

@@ -140,10 +140,16 @@ module.exports = {
 };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const arg = process.argv[2];
   if (!arg) {
     process.stderr.write('Usage: node where.js <Place|Folder>\n');
-    process.exit(2);
+    return 2;
   }
   process.stdout.write(where(arg) + '\n');
 }

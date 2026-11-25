@@ -24,7 +24,7 @@ a dremora. Dremora is not a people you can pick. See
 
 ## Where this is
 
-These 20 names are the server's book.
+The book above shows every name and whether the server has an id for it.
 
 The server refuses Dead Thrall on a person's body, and every other
 spell that raises the dead: Raise Zombie, Reanimate Corpse, Revenant,

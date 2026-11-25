@@ -99,6 +99,7 @@ namespace Thornswood
         string remotePwd = "";
 
         readonly bool controlling;
+        readonly Func<long> clock;
         readonly ulong tiebreaker;
         readonly Socket sock;
         readonly int port;
@@ -174,8 +175,11 @@ namespace Thornswood
         int gathering;            // STUN and TURN requests still out
         readonly List<string> hostIps = new List<string>();
 
-        public VoiceIce(bool controlling)
+        public VoiceIce(bool controlling) : this(controlling, () => Environment.TickCount64) { }
+
+        internal VoiceIce(bool controlling, Func<long> clock)
         {
+            this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.controlling = controlling;
             Span<byte> t = stackalloc byte[8];
             RandomNumberGenerator.Fill(t);
@@ -210,7 +214,7 @@ namespace Thornswood
             return Convert.ToBase64String(b).TrimEnd('=');
         }
 
-        static long Now() { return Environment.TickCount64; }
+        long Now() { return clock(); }
 
         // ------------------------------------------------------- gathering
 
@@ -415,7 +419,9 @@ namespace Thornswood
                 {
                     relayed = addr;
                     relay = new Local { Type = "relay", Priority = Prio(0, 65535), Relay = true };
-                    turnRefreshAt = Now() + Math.Max(30, (long)life - 60) * 1000;
+                    // Permissions expire after 300s even when the allocation
+                    // lasts longer (RFC 8656 9). Refresh both within four minutes.
+                    turnRefreshAt = Now() + Math.Min(240, Math.Max(30, (long)life - 60)) * 1000;
                     foreach (Remote r in remotes) { AddPair(relay, r); askFor.Add(r.Addr); }
                     line = Line("3", relay.Priority, addr.Address.ToString(), addr.Port, "relay",
                                 mapped == null ? "0.0.0.0" : mapped.Address.ToString(), mapped == null ? 0 : mapped.Port);
@@ -476,14 +482,16 @@ namespace Thornswood
         /// for as soon as both the relay and the candidate are known, and
         /// again every four minutes, inside the five a permission lasts.
         /// </summary>
-        void Permit(IPEndPoint peer)
+        void Permit(IPEndPoint peer, bool renew = false)
         {
             string ip = peer.Address.ToString();
             lock (gate)
             {
                 if (relayed == null) return;
                 long at;
-                if (permissions.TryGetValue(ip, out at) && Now() - at < 240000) return;
+                // A scheduled renewal must not depend on the permission
+                // having been created at exactly the allocation's timestamp.
+                if (!renew && permissions.TryGetValue(ip, out at) && Now() - at < 240000) return;
                 permissions[ip] = Now();
             }
             ThreadPool.QueueUserWorkItem(delegate
@@ -711,12 +719,14 @@ namespace Thornswood
                     {
                         turnRefreshAt = now + 240000;
                         refresh = true;
-                        foreach (Remote r in remotes) permit.Add(r.Addr);
+                        var seen = new HashSet<IPAddress>();
+                        foreach (Remote r in remotes)
+                            if (seen.Add(r.Addr.Address)) permit.Add(r.Addr);
                     }
                 }
             }
             catch (Exception ex) { Swallow.Note("VoiceIce.Tick", ex); }
-            if (refresh) { RefreshRelay(600); foreach (IPEndPoint r in permit) Permit(r); }
+            if (refresh) { RefreshRelay(600); foreach (IPEndPoint r in permit) Permit(r, true); }
             if (to != null) SetState(to);
         }
 

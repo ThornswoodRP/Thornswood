@@ -99,4 +99,4 @@ const front = fs.readFileSync(FRONT, 'utf8');
 yes('F1 the front plugin no longer opens gates on a timer', !/openTheGates|TOWN_GATES|GATE_EVERY_MS/.test(front));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

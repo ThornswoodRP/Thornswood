@@ -62,7 +62,7 @@ try {
     .toString('utf8').split('\0').filter(Boolean);
 } catch (e) {
   console.log('SKIP  git ls-files did not answer, so there is nothing to read: ' + e.message);
-  process.exit(0);
+  return;
 }
 const KEPT_AS_THEY_CAME = 'records/client-licences/';
 const text = files.filter(function (f) { return TEXT.test(f) && f.indexOf(KEPT_AS_THEY_CAME) !== 0; });
@@ -106,4 +106,4 @@ yes('no tracked text file carries a stray control character', bad.length === 0);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

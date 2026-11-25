@@ -88,7 +88,7 @@ function listening(srv, port) {
   ('close', which comes after 'exit'), rather than for a guessed time, so
   each service is let go before the next part starts (#1960). Node frees
   the process and pipe handles a moment after even that, which is why the
-  harness ends by setting process.exitCode and not by process.exit().
+  harness ends by setting process.exitCode and not by calling node's exit.
 */
 function stopped(srv) {
   return new Promise((ok) => {
@@ -304,13 +304,14 @@ async function main() {
     Ended rather than exited (#1960). Measured with process._getActiveHandles()
     at this line: the last voice service's ChildProcess (killed, SIGTERM) and
     a destroyed pipe were still listed, node still letting go of them, gone
-    1 to 2 ms later. process.exit() in that moment tripped libuv's
+    1 to 2 ms later. Calling node's exit in that moment tripped libuv's
     "!(handle->flags & UV_HANDLE_CLOSING)" (src\win\async.c:76, exit 127) on
     node 24 on Windows in 5 of 5 runs after all checks had passed, and so
     test-1703-test-ports.js, which runs three copies, failed all three. So
     the code is set and node leaves once everything is let go. The catch
-    below still exits, because after a throw a service may be left running.
+    below sets it too: each service is stopped in its own finally, so a
+    throw leaves none running (#6036).
   */
   process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exit(1); });
+main().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exitCode = 1; });

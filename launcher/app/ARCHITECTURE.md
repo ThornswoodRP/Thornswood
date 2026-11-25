@@ -108,7 +108,13 @@ has been drawn, and `StateChanged`. So:
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
   ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
-  ShellVortexWatch.cs, Waiting.cs and Stall.cs.
+  ShellVortexWatch.cs, ShellAudioSettings.cs, Waiting.cs and Stall.cs.
+
+  Opening Settings also refreshes the active recording-input list through
+  `Mics.All`. `AudioDevicePicker` keeps an unavailable saved input selected;
+  only an explicit selection saves `Config.MicrophoneName` through the usual
+  config save path. It does not replace a running audio worker. The choice
+  applies after restarting the launcher.
 
 Message boxes are Windows' own, through Ask.cs (MessageBoxW): Avalonia has
 none, and every caller waits for the answer on its next line. They work

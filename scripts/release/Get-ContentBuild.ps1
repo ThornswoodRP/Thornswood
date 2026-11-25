@@ -46,6 +46,19 @@
   no share holds a token. -BuildKey holds the build to that key, as the
   merge release's content checks lay the one it took.
 
+  IN A WORKFLOW (#6359) the build comes down through GitHub's own download
+  step, never this script's: .github/actions/lay-content runs -Newest -Find,
+  which names the newest kept build and writes artifact= and run= to -Output,
+  then actions/download-artifact takes it, and -Newest -ArtifactDir lays it.
+  On 16 Nov 2026 the script's own single request to GitHub's artifact store
+  (an Azure storage account many of GitHub's customers share) was answered
+  503 "Egress is over the account limit" twice, while every job that took the
+  build through download-artifact had it. So under GITHUB_ACTIONS the script
+  refuses to download a build itself; its own download is for a developer's
+  or a cloud session's checkout.
+
+      pwsh scripts/release/Get-ContentBuild.ps1 -Newest -Find
+
   -Keep <folder> keeps the two files TAKE took there, for the artifact.
 
   KEPT. On the box, the build Build-ContentOnBox.ps1 keeps for the key, with
@@ -73,6 +86,7 @@ param(
     [switch]$Take,
     [switch]$Ask,
     [switch]$Newest,
+    [switch]$Find,
     [string]$Keep = '',
     [string]$Repo = '',
     [string]$Commit = 'HEAD',
@@ -177,6 +191,25 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]
 }
 
 # ---- the newest build main took, for a harness or a developer's checkout ----
+# The newest content-<server> build a run on main kept, from the list of
+# artifacts: the merge release keeps it 90 days; newest first, main only.
+function Get-NewestContentArtifact {
+    $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
+    if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
+    $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
+    if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
+    return $list[0]
+}
+
+if ($Find) {
+    if (-not $Newest -or $Take -or $Ask -or $Kept -or $ArtifactDir -or $Keep -or $BuildKey) { Stop-Take '-Find goes with -Newest alone: it names the newest kept build for actions/download-artifact and lays nothing' }
+    $a = Get-NewestContentArtifact
+    Write-Host "NEWEST artifact $($a.id) of run $($a.workflow_run.id)"
+    Say-Output "artifact=$($a.id)"
+    Say-Output "run=$($a.workflow_run.id)"
+    exit 0
+}
+
 if ($Newest) {
     if ($Take -or $Ask -or $Kept) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take, -Ask and -Kept' }
     # This checkout's key, from git, before anything is written over it.
@@ -193,13 +226,10 @@ if ($Newest) {
     try {
         if ($ArtifactDir) { foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $ArtifactDir $n) -Destination (Join-Path $work $n) }; $from = "the folder $ArtifactDir" }
         else {
-            # The merge release keeps what it took as the artifact
-            # content-<server>, kept 90 days; newest first, from main only.
-            $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
-            if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
-            $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
-            if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
-            $a = $list[0]
+            $a = Get-NewestContentArtifact
+            # A workflow takes it through actions/download-artifact (IN A
+            # WORKFLOW, above, #6359); this download is for a checkout.
+            if ($env:GITHUB_ACTIONS -eq 'true') { Stop-Take "in a workflow the content build comes down through actions/download-artifact, not this script: lay it with the action .github/actions/lay-content (#6359)" }
             $zip = Join-Path $work 'artifact.zip'
             # GitHub answers with a redirect to its file store, and
             # Invoke-WebRequest drops the token when it leaves the host. A

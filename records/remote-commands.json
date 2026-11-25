@@ -377,7 +377,7 @@
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodSecretRemote",
-                      "anchor":  "Invoke-ThornswoodSecretRemote -Target \"$User@$Vps\" -SshArgs $ssh -Secret $newPassword -Script ($setHead + \"`n\" + $setTail) | ForEach-Object { \"  $_\" }",
+                      "anchor":  "$said = Invoke-ThornswoodSecretRemote -Target \"$User@$Vps\" -SshArgs $ssh -Secret $newPassword -Script ($setHead + \"`n\" + $setTail)",
                       "does":  "writes a new site password into config.json",
                       "class":  "admin",
                       "reason":  "writes a secret; no gate verb covers secrets"
@@ -593,10 +593,10 @@
                       "script":  "scripts/deploy/Install-Backup.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "Unregister-ScheduledTask -TaskName \u0027$TaskName\u0027 -Confirm:`$false -EA SilentlyContinue",
-                      "does":  "install-time or outside-the-gate work",
+                      "anchor":  "Unregister-ScheduledTask -TaskName \u0027$TaskName\u0027 -TaskPath \u0027\\\u0027 -Confirm:`$false",
+                      "does":  "removes the named backup task and verifies it is absent",
                       "class":  "admin",
-                      "reason":  "sends register-ScheduledTask"
+                      "reason":  "unregisters a scheduled task outside the gate"
                   },
                   {
                       "script":  "scripts/deploy/Install-Backup.ps1",
@@ -665,8 +665,8 @@
                       "script":  "scripts/deploy/Install-Backup.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "Start-ScheduledTask -TaskName \u0027$TaskName\u0027",
-                      "does":  "runs the backup task once and reads its log",
+                      "anchor":  "Start-ScheduledTask @task",
+                      "does":  "runs the backup task once and reads its result and log",
                       "class":  "task-start-stop",
                       "reason":  "start of a named task"
                   },

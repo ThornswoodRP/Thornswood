@@ -54,7 +54,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 const EM = String.fromCharCode(0x2014);
 const FORBIDDEN = new RegExp('pla' + 'yer', 'i');
@@ -67,7 +67,7 @@ const TAIL = '    if (now - afkLastInput >= AFK_MS) { afkAsk(now); }\n  }));\n';
 const fa = front.indexOf(HEAD);
 const fb = front.indexOf(TAIL, fa);
 yes('the idle check is in thornswood-front.js where this expects it', fa >= 0 && fb > fa);
-if (!(fa >= 0 && fb > fa)) done();
+if (!(fa >= 0 && fb > fa)) { done(); return; }
 const check = front.slice(fa, fb + TAIL.length);
 
 function game() {
@@ -299,7 +299,7 @@ const sa = src.indexOf('// ==== thornswood seats ====');
 const sb = src.indexOf('// ==== end thornswood idle ====');
 const ia = src.indexOf('// ==== thornswood idle ====');
 yes('the idle block follows the seats block in gamemode.js', sa >= 0 && ia > sa && sb > ia);
-if (!(sa >= 0 && ia > sa && sb > ia)) done();
+if (!(sa >= 0 && ia > sa && sb > ia)) { done(); return; }
 const blocks = src.slice(sa, sb);
 const ACTOR = 0xff000000;
 // private in a scratch folder of its own, so the staff log lands in for-bot beside it (#2321).

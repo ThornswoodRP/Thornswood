@@ -142,6 +142,12 @@ function Copy-Tool([string]$name, [string]$to) {
     # fails on what it says below rather than on the copy.
     $lib = Under $Repo @('scripts', 'dev', 'Leftovers.ps1')
     if (Test-Path -LiteralPath $lib) { Copy-Item -LiteralPath $lib -Destination (Under $to @('scripts', 'dev', 'Leftovers.ps1')) }
+    $steamLib = Under $Repo @('scripts', 'mods', 'SteamLibrary.ps1')
+    if (Test-Path -LiteralPath $steamLib) {
+        $dst = Under $to @('scripts', 'mods', 'SteamLibrary.ps1')
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+        Copy-Item -LiteralPath $steamLib -Destination $dst
+    }
     return (Under $to @('scripts', 'dev', $name))
 }
 # A made-up machine: its install, its home folder and its local app data.

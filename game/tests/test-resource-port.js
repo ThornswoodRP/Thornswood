@@ -40,7 +40,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function between(start, end) {
@@ -72,7 +72,7 @@ yes('the probe, its settings and the bases ask are in the plugin', consts !== nu
 yes('checkServer and onStrike are in the plugin', server !== null);
 yes('the quit in the update tick is in the plugin', tick !== null);
 yes("the line's client is in the plugin", lineClient !== null);
-if (!(settings && sayFn && noteFn && consts && probeAndBases && server && tick && lineClient)) { done(); }
+if (!(settings && sayFn && noteFn && consts && probeAndBases && server && tick && lineClient)) { done(); } else {
 
 const LIVE = 'http://server.invalid:3000';
 const DEV = 'http://server.invalid:7788';
@@ -214,3 +214,4 @@ function harness(port, up) {
 }
 
 done();
+}

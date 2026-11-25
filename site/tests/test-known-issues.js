@@ -149,4 +149,4 @@ yes('and no board.json to hold a known or roadmap board', read(path.join('data',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

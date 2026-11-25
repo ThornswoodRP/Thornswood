@@ -25,4 +25,4 @@ Muffle does not change how far voice carries. Voice distances are on
 
 ## Where this is
 
-These 15 names are the server's book.
+The book above shows every name and whether the server has an id for it.

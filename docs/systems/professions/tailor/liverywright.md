@@ -1,28 +1,9 @@
 # Liverywright
 
-Robes and faction dress. 102 recipes, all of them reach the server.
-None are tempering.
+Robes and faction dress. The [Liverywright recipe list](../../lists/tailor-liverywright.md)
+gives the counts by rank and shows each recipe's bench and race.
 
-The full table: [lists/tailor-liverywright.md](../../lists/tailor-liverywright.md).
-
-| Rank | Recipes |
-| --- | --- |
-| Novice | 82 |
-| Advanced | 10 |
-| Expert | 6 |
-| Master | 4 |
-
-| Kind | Recipes |
-| --- | --- |
-| Robes and body wear | 56 |
-| Other armour and clothing | 20 |
-| Hats and hoods | 16 |
-| Shoes and light boots | 7 |
-| Gloves | 3 |
-
-Benches: loom 76, forge 16, tanning rack 10. Worth from 1 to 2000 gold.
-
-Race locks: Dark Elf 2, Riekling 6. Thalmor robes are not a race lock.
+Thalmor robes are not a race lock.
 Forsworn is not a race lock. A people can wear them. Wearing Thalmor
 dress in a hold is the hostile marker on [The Thalmor](../../thalmor.md),
 which is not a crafting gate.
@@ -36,7 +17,7 @@ semester at the College.
 The half places 1 in Efficiency, on top of the tailor profession's
 Efficiency. Two points, and still nothing if you hold no school.
 
-A Haberdasher may make your novice 82 as their sister half.
+A Haberdasher may make your novice work as their sister half.
 
 ## Master Weaver on this half
 
@@ -49,5 +30,5 @@ Every recipe, by rank and with its id: [tailor-liverywright](../../lists/tailor-
 
 ## Where this is
 
-All 102 rows are gated by owner and rank. The warmth and the hidden
+The server gates crafts by owner and rank. The warmth and the hidden
 armour are not.

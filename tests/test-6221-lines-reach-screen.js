@@ -101,4 +101,4 @@ yes('every notify() line is also said in chat' + (alone.length ? ': ' + alone.jo
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
