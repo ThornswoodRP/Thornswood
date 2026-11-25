@@ -234,8 +234,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
   is not Authenticode Valid under `ExpectedSigner`; the release workflow signs
   the launcher, which is also the setup program since #4824, on GitHub. A local
   `Build-Launcher` may still print "not signing" and leave an unsigned
-  intermediate; that soft skip must not reach the site or the feed. The live main launcher
-  on the feed (2026.1102.716.1) is signed.
+  intermediate. Ship checks the signature before publishing to the site or feed.
 - Every pull request gets the build check, `.github/workflows/build-pr.yml`,
   and every push to main gets the same steps from
   `.github/workflows/build.yml`. build-pr.yml is generated from build.yml:
