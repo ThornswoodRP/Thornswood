@@ -52542,7 +52542,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
       if (pidHere !== Number(pid)) { continue; }
       if (typeof notify === 'function') {
-        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not log a line to', hex(online[i]) + ':', e3); }
+      }
+      if (typeof say === 'function') {
+        try { say(online[i], line); } catch (e4) { plog('furniture: could not say a line to', hex(online[i]) + ':', e4); }
       }
       return;
     }
@@ -53949,7 +53952,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var fireEnd = Number(environment.burningUntil) || 0;
       var cursor = n.at;
       function temperatureTo(until, onFire) {
-        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        var target = environment.warmthTarget(n, onFire);
+        var coolingShare = target > n.temp ? 1 : environment.outdoorCooling(n);
+        approachTemperature(n, target, until - cursor, coolingShare);
         cursor = until;
       }
       // The environment supplies the interval. No runtime state is read by
