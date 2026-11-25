@@ -7,6 +7,11 @@ The tree decides what a point in the body is worth.
 Five points fill a sub-skill. Filling it grants its perk. Points past
 five in one sub-skill are refused.
 
+In K, the up and down arrows move the highlighted skill and scroll it
+into view. Enter spends a point on that skill. Moving the highlight
+keeps the rows and their controls in place. The spell book follows the
+same arrows; Enter marks the highlighted spell there.
+
 ## What one point is worth
 
 | Sub-skill | One point | Filled, the perk |

@@ -309,7 +309,9 @@
       // prompt's Tend their wounds.
       var care = false;
       try { care = !!(g.__thornswoodHurt && g.__thornswoodHurt.careOf && g.__thornswoodHurt.careOf(id)); } catch (eCare) { care = false; }
-      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care });
+      var tools = g.__thornswoodStaffTools;
+      var invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
+      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care, invisible: invisible });
     }
 
     var reach = SOCIAL.nearReach * SOCIAL.nearReach;
@@ -348,7 +350,7 @@
           p: them.pid,
           f: s.friends[them.pid] ? 1 : 0,
           m: s.muted[them.pid] ? 1 : 0,
-          h: (s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
+          h: (them.invisible || s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
           y: (party && party.members.indexOf(them.pid) !== -1) ? 1 : 0,
           s: (beds && beds.mark) ? beds.mark(me.pid, them.pid, me.cell) : 0
         };
@@ -447,6 +449,8 @@
           p: mp.get(id, 'pos') || [0, 0, 0],
           c: String(mp.get(id, 'worldOrCellDesc') || '')
         };
+        var tools = g.__thornswoodStaffTools;
+        at[profileOf(id)].invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
       } catch (e) { }
     }
 
@@ -464,7 +468,7 @@
           if (!row) { continue; }             // in the party and not online
           list.push({ a: row.a, n: row.n, p: row.p, c: row.c,
                       l: pid === p.leader ? 1 : 0,
-                      h: (viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
+                      h: (row.invisible || viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
         }
       }
 

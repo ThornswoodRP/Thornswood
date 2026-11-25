@@ -70,6 +70,7 @@
     "command-tools.ts",
     "staff-rename.ts",
     "staff.ts",
+    "staff-repair.ts",
     "staff-progression.ts",
     "take-back.ts",
     "staff-heal.ts",
@@ -83,6 +84,7 @@
     "npc-population-data.ts",
     "npc-server-runtime.ts",
     "merchant-trading-bundle.ts",
+    "staff-tools.ts",
     "npc-server-startup.ts",
     "custom-quests.ts",
     "thalmor-patrols.ts"
