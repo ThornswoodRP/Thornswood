@@ -63,11 +63,11 @@ const cmd = String(process.argv[process.argv.length - 1]);
 const said = Buffer.from(cmd.slice(cmd.lastIndexOf(' ') + 1), 'base64').toString('utf16le');
 const m = /offbox\.txt' -Value '([^']+)'/.exec(said);
 if (m) {
-  if (process.env.FAKE_MARK_REFUSE) { process.exit(1); }
+  if (process.env.FAKE_MARK_REFUSE) { process.exitCode = 1; return; }
   const at = /-LiteralPath '([^']+)'/.exec(said);
   fs.writeFileSync(process.env.FAKE_MARK, (at ? at[1] : said) + '\r\n' + m[1] + '\r\n', 'ascii');
   process.stdout.write('MARKED\n');
-  process.exit(0);
+  return;
 }
 process.stdout.write(fs.readFileSync(process.env.FAKE_LIST));
 '@
@@ -88,7 +88,7 @@ const a = process.argv.slice(2);
 const src = String(a[a.length - 2]), dst = String(a[a.length - 1]);
 const name = src.slice(src.lastIndexOf('/') + 1);
 const from = path.join(process.env.FAKE_SRC, name);
-if (!fs.existsSync(from)) { process.exit(1); }
+if (!fs.existsSync(from)) { process.exitCode = 1; return; }
 let b = fs.readFileSync(from);
 if (process.env.FAKE_SHORT === name) { b = b.subarray(0, parseInt(process.env.FAKE_SHORT_BYTES, 10)); }
 fs.writeFileSync(dst, b);

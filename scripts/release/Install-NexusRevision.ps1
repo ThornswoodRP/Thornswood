@@ -224,7 +224,7 @@ function Invoke-Tool([string]$exe, [string[]]$arguments) {
 $script:SevenZip = ''
 function Use-SevenZip {
   if (-not $script:SevenZip) { $script:SevenZip = Find-SevenZip }
-  if (-not $script:SevenZip) { throw '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and Vortex unpacks every archive with it.' }
+  if (-not $script:SevenZip) { throw ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and Vortex unpacks every archive with it.') }
 }
 # A scratch folder and everything under it. 7-Zip keeps an archive's
 # read-only attribute on the files it unpacks, and on Windows
@@ -927,6 +927,7 @@ if ($Record) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
   }
+  Say '  Next: for a draft, compare the layout with the collection record before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
@@ -1023,6 +1024,7 @@ Remove-Tree $script:Work; $script:Work = ''
 Head 'Done'
 Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files (' + $linked + ' linked from the unpacked archives, ' + $copied + ' copied), ' + $order.Count + ' plugins') 'Green'
 Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt')
+Say '  Next: check a draft on Dev before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
 exit 0

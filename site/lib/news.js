@@ -9,6 +9,7 @@ const { DATA } = require('./base');
 const path = require('path');
 const { feedFile, newestSetup, readJsonQuiet, releaseNotes } = require('./feed');
 const { putJson } = require('./store');
+const newsPictures = require('../public/news-pictures');
 
 /* The site's News page, /api/public's news and the Downloads page's launcher
    number read this file, and the site writes it itself. Before #5187,
@@ -95,19 +96,23 @@ function newsDate(published) {
 function noteOf(body, published) {
   let text = String(body || '');
   if (!text.trim() || NEWS_WAS_NOTHING.test(text)) text = NEWS_QUIET;
-  let title = '';
+  let title = '', image = null;
   const details = [], lines = [];
-  for (const raw of text.replace(/\r/g, '').split('\n')) {
+  for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
     const line = raw.trim();
     if (!line) continue;
     const bullet = line.startsWith('- ');
     const said = bullet ? line.slice(2).trim() : line;
     if (!said) continue;
+    const picture = bullet && title && !image ? newsPictures.parse(said) : null;
+    if (picture) { image = picture; continue; }
     if (!title) title = said;
     else if (bullet) details.push(said);
     else lines.push(said);
   }
-  return { date: newsDate(published), title, body: lines.join('\n'), details };
+  const note = { date: newsDate(published), title, body: lines.join('\n'), details };
+  if (image) note.image = image;
+  return note;
 }
 // The notes of the build Releases at or before on, newest first, at most
 // NEWS_KEEP, as ReleaseNews.cs NewsOf picks them: published, a build tag, and

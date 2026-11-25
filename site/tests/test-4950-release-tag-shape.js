@@ -59,4 +59,4 @@ for (const tag of ['release/main/20261101-1810Z', 'release/main/20261113-010203z
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

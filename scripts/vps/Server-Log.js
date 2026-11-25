@@ -902,7 +902,8 @@ function run(o) {
 
   if (!o.program.length) {
     say('nothing to run: server-log.js was started with no program after its own switches');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const child = cp.spawn(process.execPath, o.program, { cwd: process.cwd(), stdio: ['inherit', 'pipe', 'pipe'], windowsHide: true });
@@ -918,41 +919,56 @@ function run(o) {
     else for (const l of sweep(log, t, o.days).concat(ageAlsos(o, t))) say(l);
     for (const l of ageAside(process.cwd(), t)) say(l);
   }, SWEEP_MS);
+  // Node ends by itself once the server has and the sweep is stopped: it sets
+  // process.exitCode rather than calling node's exit function, which can hang
+  // on Node 24 (#6036). A program that never started says so once, not
+  // again as a server that ended.
+  let started = true;
   child.on('error', (e) => {
+    started = false;
     say('could not start ' + o.program.join(' ') + ': ' + (e.code || e.message));
     clearInterval(tick);
-    process.exit(1);
+    process.exitCode = 1;
   });
   child.on('close', (code, signal) => {
     clearInterval(tick);
+    if (!started) return;
     if (!state.atLineStart) raw(Buffer.from('\n'));
     say('the server ended, ' + (signal ? 'stopped by ' + signal : 'exit code ' + code));
-    process.exit(code === null ? 1 : code);
+    process.exitCode = code === null ? 1 : code;
   });
 }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+} else {
+  module.exports = { WORLD_PEOPLE_JS, worldPeople, KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
+}
+
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   // --people <ids, by commas>: run beside a server, in its folder, by
   // Delete-Person.ps1 (above, A WORLD IN MONGODB). Exit 0 with the lines,
   // 1 with WORLD FAILED, 2 when the folder's world is not in MongoDB.
   if (process.argv[2] === '--people') {
     const profiles = String(process.argv[3] || '').split(',').map(Number);
-    if (!profiles.length || !profiles.every((n) => Number.isSafeInteger(n) && n > 0)) { console.log('WORLD FAILED: --people takes profile ids, by commas'); process.exit(1); }
+    if (!profiles.length || !profiles.every((n) => Number.isSafeInteger(n) && n > 0)) { console.log('WORLD FAILED: --people takes profile ids, by commas'); return 1; }
     let settings;
     try { settings = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'server-settings.json'), 'utf8').replace(/^\uFEFF/, '')); }
-    catch (e) { console.log('WORLD FAILED: server-settings.json will not read: ' + (e.code || e.message)); process.exit(1); }
-    if (!settings || settings.databaseDriver !== 'mongodb') { console.log('NOT MONGODB'); process.exit(2); }
+    catch (e) { console.log('WORLD FAILED: server-settings.json will not read: ' + (e.code || e.message)); return 1; }
+    if (!settings || settings.databaseDriver !== 'mongodb') { console.log('NOT MONGODB'); return 2; }
     const r = worldPeople(settings, 'people', profiles);
-    if (r.error) { console.log('WORLD FAILED: ' + r.error); process.exit(1); }
+    if (r.error) { console.log('WORLD FAILED: ' + r.error); return 1; }
     for (const l of r.lines) console.log(l);
-    process.exit(r.lines.some((l) => /^PEOPLE\|\d+$/.test(l)) ? 0 : 1);
+    return r.lines.some((l) => /^PEOPLE\|\d+$/.test(l)) ? 0 : 1;
   }
   const o = parseArgs(process.argv.slice(2));
   if (o.roll) {
     for (const l of rollNow(o.log, Date.now(), o)) console.log(l);
-    process.exit(0);
+    return 0;
   }
   run(o);
-} else {
-  module.exports = { WORLD_PEOPLE_JS, worldPeople, KEEP_DAYS, ALSO_DAYS, MAX_BYTES, rolledFiles, trimFile, sweep, rollFile, rollAtStart, rollNow, lineTime, parseArgs, ageAlso, startDeletions, RELEASE_PARTS, ASIDE_DAYS, ageAside };
+  return undefined;
 }

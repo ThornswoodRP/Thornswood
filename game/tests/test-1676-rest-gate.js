@@ -35,7 +35,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -50,7 +50,7 @@ const cutKeySrc = slice('  function cutKey(actorId, profileId, toProfile, parts)
 const gateSrc = slice('function unfitToMake(actorId, workbenchId) {', '\n}\n');
 yes('the needs block, the craft gate, mp.onCraft and cutKey are in the gamemode',
     !!needsBlock && !!gateSrc && !!onCraftSrc && !!cutKeySrc);
-if (!needsBlock || !gateSrc || !onCraftSrc || !cutKeySrc) { done(); }
+if (!needsBlock || !gateSrc || !onCraftSrc || !cutKeySrc) { done(); } else {
 
 /* The real craft gate (#1733), over whatever globals the road is given. */
 function gateFor(G) { return new Function('globalThis', gateSrc + '\nreturn unfitToMake;')(G); }
@@ -86,7 +86,7 @@ function needsAt(rest) {
   const N = needsAt(100);
   yes('N1 the gate is 15, the page\'s number', N.CRAFT_REST === 15);
   yes('N1 the needs block hands out the line every craft asks', typeof N.craftRefusal === 'function');
-  if (typeof N.craftRefusal !== 'function') { done(); }
+  if (typeof N.craftRefusal === 'function') {
   yes('N2 at 15 nothing is refused', needsAt(15).craftRefusal(ME) === '' && needsAt(15).tooTiredToCraft(ME) === false);
   yes('N2 at 100 nothing is refused', needsAt(100).craftRefusal(ME) === '');
   const line = needsAt(14.9).craftRefusal(ME);
@@ -95,7 +95,9 @@ function needsAt(rest) {
   yes('N3 at 0 too', needsAt(0).craftRefusal(ME) === line);
   yes('N3 the line tells nobody to type anything, and says no banned word',
       !/\//.test(line) && !/player/i.test(line) && line.indexOf(String.fromCharCode(0x2014)) === -1);
+  }
 }
+if (typeof needsAt(100).craftRefusal !== 'function') { done(); } else {
 
 // --------------------------------------------------- a bench's own menu --
 
@@ -208,3 +210,4 @@ function keyAt(rest) {
 }
 
 done();
+}}

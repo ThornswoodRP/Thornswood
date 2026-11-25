@@ -93,7 +93,7 @@ const parts = {
   waiting: slice('// NPC SERVER STARTUP END', '// ==== thornswood custom quests ====')
 };
 for (const k of Object.keys(parts)) { yes('R0 ' + k + ' is in gamemode.js where this harness looks', !!parts[k]); }
-if (Object.keys(parts).some(function (k) { return !parts[k]; })) { done(); }
+if (Object.keys(parts).some(function (k) { return !parts[k]; })) { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; } else {
 
 // The release block comes before the first register block, and every block asks it.
 yes('R1 the release block loads before farming, the first register block',
@@ -400,7 +400,7 @@ function done() {
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 try {
@@ -724,3 +724,4 @@ try {
   yes('the harness ran to the end: ' + (e && e.stack || e), false);
 }
 done();
+}

@@ -73,7 +73,8 @@ yes('mp.onDeath, creditWork and withManeuvers are in the gamemode', !!onDeath &&
 if (!(progression && maneuvers && killTable && kills.every(Boolean) && hunts && racesLine && onDeath && credit && withManeuvers)) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 const RACES = JSON.parse(racesLine[1]);
 function raceDesc(edid) {
@@ -1417,4 +1418,4 @@ for (const field of ['life','runtime']) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

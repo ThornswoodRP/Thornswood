@@ -247,7 +247,7 @@ try {
     if (Get-Command node -ErrorAction SilentlyContinue) {
         $check = Join-Path $tmp 'read.js'
         Put $check ("const lv = process.argv[3];`n" + "const j = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));`n" +
-                    "process.exit(j.channel === 'main' && j.launcherVersion === lv && j.gamemodeMatchesCommit === true ? 0 : 3);`n")
+                    "process.exitCode = j.channel === 'main' && j.launcherVersion === lv && j.gamemodeMatchesCommit === true ? 0 : 3;`n")
         & node $check $out $lv
         Yes 'saved: node reads it with JSON.parse, as the gamemode will' ($LASTEXITCODE -eq 0)
     } else {

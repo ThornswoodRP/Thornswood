@@ -120,4 +120,4 @@ yes('the CODEOWNERS note above the rules is a few lines (' + note.length + ')', 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

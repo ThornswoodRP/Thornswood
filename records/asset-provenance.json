@@ -729,6 +729,19 @@
       "approved": "Patrick, 27 Oct 2026, on the report page (q-3688-unrecorded-art, A): Djinn made it",
       "evidence": "docs/guide/tools.md, H. Dev Build.",
       "status": "ours"
+    },
+    {
+      "path": "site/public/news-creation-panel-20261117-6ee8d406.png",
+      "sha256": "6ee8d406864965d805d4494acc000f6b81703c32c83aca81bf19215a9b4eb5f3",
+      "what": "An unedited in-game screenshot of the creation K panel with Starting Location and bottom-right Back, disabled Next and Close Skyrim.",
+      "published": "The website, Discord News and launcher News, as a captioned screenshot.",
+      "source": "Captured from Dev build1.3.92 on17November2026 during fresh-character acceptance;2560by1600pixels,2936753bytes.",
+      "creator": "Capture and interface: Thornswood. The scene includes Skyrim by Bethesda Game Studios and the collection's mods.",
+      "licence": "Project capture under the contributor terms in LICENSING.md. Underlying game and mod artwork keep their own rights; this registers the screenshot, not a right to redistribute those assets separately.",
+      "attribution": "Thornswood interface; Skyrim and its underlying artwork remain Bethesda's.",
+      "approved": "Patrick,17November2026: include a screenshot of the new K panel in the next News and verify its handling in Discord, the website and the app.",
+      "evidence": "The owner's screenshot request for #6455 and the in-game capture on Dev build1.3.92; its bytes are held by the sha256 in this entry.",
+      "status": "ours"
     }
   ],
   "notInRepo": [

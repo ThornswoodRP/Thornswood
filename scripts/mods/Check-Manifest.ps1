@@ -66,7 +66,10 @@ $ssh = @('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes')
 # apart, and they are compared with that light list (#4128).
 . (Join-Path $PSScriptRoot 'LoadOrder.ps1')
 
-function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
+function Say($m, $c = 'Gray') {
+  if ($m -match '^\s*(POSITION BY POSITION:|LIGHT PLUGINS, IN ORDER:|No (?:dev server|server-settings\.json|plugins\.txt))') { Write-Output $m }
+  else { Write-Host $m -ForegroundColor $c }
+}
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
 
 function Remote($script) {

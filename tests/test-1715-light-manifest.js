@@ -141,4 +141,4 @@ yes("and puts a plugin list into the whole order when there is a light list",
 
 console.log("");
 console.log(pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

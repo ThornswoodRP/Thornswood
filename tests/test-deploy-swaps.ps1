@@ -486,18 +486,18 @@ $siteJs = @'
 const http = require('http'), fs = require('fs'), path = require('path');
 const VERSION = '@@V@@';
 try { fs.appendFileSync(process.env.TS_PIDLOG, process.pid + '\n'); } catch (e) { }
-if (VERSION.indexOf('will-not-start') >= 0) { console.error('this site will not start'); process.exit(1); }
+if (VERSION.indexOf('will-not-start') >= 0) { console.error('this site will not start'); process.exitCode = 1; return; }
 const port = Number(fs.readFileSync(path.join(__dirname, 'port.txt'), 'utf8'));
-http.createServer(function (q, r) { r.end(VERSION); }).listen(port, '127.0.0.1');
-setTimeout(function () { process.exit(0); }, 600000);
+const site = http.createServer(function (q, r) { r.end(VERSION); }).listen(port, '127.0.0.1');
+setTimeout(function () { site.closeAllConnections(); site.close(); }, 600000);
 '@
 $voiceJs = @'
 const http = require('http'), fs = require('fs');
 const BUILD = '@@V@@';
 try { fs.appendFileSync(process.env.TS_PIDLOG, process.pid + '\n'); } catch (e) { }
-if (BUILD.indexOf('will-not-start') >= 0) { console.error('this voice will not start'); process.exit(1); }
+if (BUILD.indexOf('will-not-start') >= 0) { console.error('this voice will not start'); process.exitCode = 1; return; }
 const port = Number(process.env.THORNSWOOD_VOICE_PORT);
-http.createServer(function (q, r) {
+const voice = http.createServer(function (q, r) {
   if (q.url === '/health') { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ build: BUILD, bind: process.env.THORNSWOOD_VOICE_BIND, auth: process.env.THORNSWOOD_VOICE_AUTH, chatRange: 0, turn: '' })); return; }
   // /token as the real service answers a ticket nobody holds (#4467): 403
   // ticket when it has a site to ask, 503 when it has none.
@@ -509,7 +509,7 @@ http.createServer(function (q, r) {
   }
   r.end('voice');
 }).listen(port, '127.0.0.1');
-setTimeout(function () { process.exit(0); }, 600000);
+setTimeout(function () { voice.closeAllConnections(); voice.close(); }, 600000);
 '@
 $botPy = @'
 import os, sys, time
@@ -532,11 +532,12 @@ const fs = require('fs'), path = require('path'), dgram = require('dgram'), net 
 const root = process.argv[2];
 try { fs.appendFileSync(process.env.TS_PIDLOG, process.pid + '\n'); } catch (e) { }
 const gm = fs.readFileSync(path.join(root, 'gamemode.js'), 'utf8');
-if (gm.indexOf('will-not-start') >= 0) { fs.appendFileSync(path.join(root, 'server.log'), 'Error: this gamemode will not start\n'); process.exit(1); }
+if (gm.indexOf('will-not-start') >= 0) { fs.appendFileSync(path.join(root, 'server.log'), 'Error: this gamemode will not start\n'); process.exitCode = 1; return; }
 const s = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
-dgram.createSocket('udp4').bind(s.port, '127.0.0.1');
-net.createServer(function (c) { c.end(); }).listen(s.port === 7777 ? 3000 : s.port + 1, '127.0.0.1');
-setTimeout(function () { process.exit(0); }, 600000);
+const udp = dgram.createSocket('udp4');
+udp.bind(s.port, '127.0.0.1');
+const tcp = net.createServer(function (c) { c.end(); }).listen(s.port === 7777 ? 3000 : s.port + 1, '127.0.0.1');
+setTimeout(function () { udp.close(); tcp.close(); }, 600000);
 '@
 $gameStub = Join-Path $work 'game-stub.js'
 Put $gameStub $gameJs

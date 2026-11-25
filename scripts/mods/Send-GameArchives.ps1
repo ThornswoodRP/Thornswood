@@ -124,7 +124,7 @@ foreach ($n in $want.Keys) {
     Say ("  ok    {0}  {1:N0} bytes" -f $n, $len)
 }
 if ($bad.Count) {
-    foreach ($b in $bad) { Say "  STOP  $b" 'Red' }
+    foreach ($b in $bad) { Write-Output "  STOP  $b" }
     throw ('These are not the files records\skyrim-files.json, records\game-strings.json and records\papyrus-scripts.json name, so nothing was sent. Point -Data at the game''s own Data folder, and -ScriptPack at the pack New-ScriptPack.py made.')
 }
 
@@ -160,7 +160,7 @@ if ($Check) { Say ''; Say '-Check, so nothing was sent.'; exit 0 }
 if (($needs -contains $ThornswoodScriptPack) -and -not $want[$ThornswoodScriptPack].From) {
     throw ("the box needs $ThornswoodScriptPack and -ScriptPack names no pack. Make it with: python scripts\mods\New-ScriptPack.py --out <folder>, then run this with -ScriptPack <folder>\$ThornswoodScriptPack. Nothing was sent.")
 }
-if (-not $needs.Count) { Say ''; Say 'The box already holds every file, so nothing was sent.' 'Green'; exit 0 }
+if (-not $needs.Count) { Say ''; Write-Output 'The box already holds every file, so nothing was sent.'; exit 0 }
 
 $storeFar = $store.Replace('\', '/')
 foreach ($n in $needs) {
@@ -192,4 +192,4 @@ Set-ThornswoodArchiveReadOnly `$to
     Say "  placed, read only" 'Green'
 }
 Say ''
-Say ("The box holds all {0} files in {1}." -f $want.Count, $store) 'Green'
+Write-Output ("The box holds all {0} files in {1}." -f $want.Count, $store)

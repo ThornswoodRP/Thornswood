@@ -104,6 +104,14 @@ yes('T1 #tickets-and-applications is in the plan no more',
 
 # ------------------------------------------------------------------ T2 --
 bot.set_open(False)
+staff_options = bot.TicketPanel('apply-for-staff').children[0].options
+yes('Support is offered at the staff desk and asks for its staff role',
+    any(o.value == 'support' and o.label == 'Apply: Support' for o in staff_options)
+    and bot.ROLE_FOR.get('support') == 'Support'
+    and bot.desk_of('support') == 'apply-for-staff')
+yes('Support asks the three required staff-job questions',
+    len(bot.QUESTIONS.get('support', [])) == 3
+    and all(required for _, _, required in bot.QUESTIONS.get('support', [])))
 for desk, kinds in bot.TICKET_DESKS:
     picker = bot.TicketPanel(desk).children
     yes('T2 #%s offers only %s' % (desk, ', '.join(kinds)),

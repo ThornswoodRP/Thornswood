@@ -1,8 +1,9 @@
 # scripts/oneoff
 
-Scripts that did one job once, kept rather than deleted. Nothing in the
-repository calls any of them, and none of them is part of a release, a deploy
-or a test. They were parked here on 25 September from `tools\`, after the
+Scripts that did one job once, kept rather than deleted. Apart from
+`make-join-card.py`, which `bot/tests/test-join-card.py` runs (#4551), nothing in
+the repository calls any of them, and none of them is part of a release, a
+deploy or a test. They were parked here on 25 September from `tools\`, after the
 audit of that day found nothing still using them. The nine retired installers
 from `scripts\mods` joined them for #4740; tests\test-hand-install-retired.ps1
 and tests\test-bodies-retired.ps1 hold each one to its refusal.
@@ -39,7 +40,7 @@ set up today. Read the header before running anything.
 | `Copy-ReleaseAssets-ToSite.ps1` | Copies every download both live feeds name from Thornswood-Releases to the site's `/feed[-dev]/assets/<sha256>`, checking each against the feed's sha256, so updates come from thornswood.net (issue #897). | Made on 28 September to be run once, by Patrick; `-Check` first. It never writes a version.json: the next Ship on each channel, or `Repair-Manifest.ps1 -MoveToSite` and the remirror, moves the urls. `site\tests\test-site-assets.ps1` runs it against a local copy of the site. |
 | `Move-FeedStore-ToVps.ps1` | Copies each channel's release baseline (`published.json`) and every launcher version its history named from the Thornswood-Releases clones to the VPS store beside the feed (`C:\Thornswood-Docs\feed` and `feed-dev`), reads them back byte for byte, and saves the whole repository as a git bundle under `%LOCALAPPDATA%\Thornswood\feed`, so Thornswood-Releases can be deleted (issue #907). | Made on 28 September to be run once, by Patrick, after the last Ship made with the clone-based scripts; `-Check` first. It refuses when the site's feed is not the clone's, the clone has anything uncommitted or unpushed, or the VPS already holds a different baseline. It never writes a clone or a version.json. `tests\test-feed-store.ps1` runs it against scratch clones. |
 | `Move-LightFormIds.ps1` | Moves the light plugin form ids a world stored under each client's own light order (the head parts measured in docs\LIGHT-ORDER-DRIFT.md) to the server's light order, by plugin and local id (issue #1715). | Made on 5 October to be run once, by Patrick, on a copy of each world taken with its server stopped, after the engine that loads light plugins is deployed; a dry run first, `-Write` keeps every record it changes as it was. It refuses a server's own folder and moves only the ids its plan lists, so a second run moves nothing twice. `tests\test-move-light-form-ids.ps1` runs it on scratch copies. |
-| `make-join-card.py` | Builds `bot/assets/join-card.png` from `bot/invite-splash-1920x1080.jpg`. | One-shot art generator; was parked in `bot/` and moved here so bot sweeps do not treat it as runtime. |
+| `make-join-card.py` | Builds `bot/assets/join-card.png` from `bot/invite-splash-1920x1080.jpg`. | One-shot art generator, run by `bot/tests/test-join-card.py`; was parked in `bot/` and moved here so bot sweeps do not treat it as runtime (#4551). |
 | `GourmetFishingVanilla.pas` | The xEdit script that repointed Gourmet's fishing ingredients at vanilla ones (docs\GOURMET-FISHING-PATCH.md). | Applied once; the patched plugin is what ships. |
 | `Remove-DeadRecords.ps1` | Deleted the sixteen Writs of the old trade system, and then the rank manuals, from Thornswood-Content.esp on 21 September. | Nothing in the plugin matches its prefix any more (12 November), and its proof that nothing points at a record read the content plugin alone, not the gamemode's form id keys or the plugins that master it. **It refuses to run** (#4811). |
 | `Remove-DeadConditions.py` | Took the three charcoal recipes' conditions on the rank manuals out of Thornswood-Content.esp, so Remove-DeadRecords.ps1 could delete them. | Nothing in the plugin matches its prefixes any more (12 November), and its default folder for the plugin was its own. **It refuses to run** (#4811). |

@@ -185,11 +185,11 @@ async function join(svc, profileId, name) {
     ws.onmessage = (ev) => {
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'welcome') { ok = true; svc.socks.push(c); done(c); }
+      if (m.t === 'welcome') { ok = true; svc.socks.push(c); clearTimeout(late); done(c); }
       if (m.t === 'caption') { c.caps.push(m); }
     };
     ws.onerror = () => { if (!ok) { failed(new Error('socket error joining ' + name)); } };
-    setTimeout(() => { if (!ok) { failed(new Error('no welcome for ' + name)); } }, 4000);
+    const late = setTimeout(() => { if (!ok) { failed(new Error('no welcome for ' + name)); } }, 4000);
   });
 }
 const send = (c, m) => c.ws.send(JSON.stringify(m));
@@ -449,5 +449,5 @@ async function settings() {
   await settings();
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  ' + (e && e.stack || e)); process.exitCode = 1; });

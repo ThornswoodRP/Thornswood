@@ -128,4 +128,4 @@ for (const f of ['Enable-MCM.ps1', 'Fix-QuickLoot.ps1']) {
 }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -49,7 +49,7 @@ function skip(what) { console.log('SKIP  ' + what); }
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function between(start, end) {
@@ -62,7 +62,7 @@ function between(start, end) {
 // The claims, the menu questions and applyFocus, as test-f6-focus.js takes them.
 const arbiter = between('  const claims = {};', '  /*\n    WHEN EACH CLAIM WENT UP');
 yes('the focus arbiter is in the plugin', arbiter !== null);
-if (!arbiter) { done(); }
+if (!arbiter) { done(); } else {
 
 const SHIFT = 42;
 const P = 25;
@@ -287,3 +287,4 @@ function rig(client) {
 }
 
 done();
+}

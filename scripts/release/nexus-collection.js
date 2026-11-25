@@ -26,8 +26,10 @@
 // mapping reads it, so every file_size goes as null. The size is still in
 // collection.json inside the archive, where Vortex reads it on install.
 //
-// WHAT IT REFUSES. A swap changes an entry's file, version, md5, size and
-// file name. That is the whole of what Vortex records for a mod only when the
+// WHAT IT REFUSES. A swap changes an entry's file, version, md5, size, file
+// name and reference tag. Vortex accepts an equal tag before checking the
+// archive hash, so retaining the old tag would accept the old file (#6449).
+// That is the whole of what Vortex records for a mod only when the
 // entry carries nothing worked out from the archive's contents. So it refuses
 // an entry that has hashes (the files Vortex checks after install), choices
 // (an installer's answers) or fileOverrides. Those need Vortex on One, where
@@ -77,9 +79,9 @@
 //     "name": "KS Hairdos Lite SE - KS Hairdos Lite SE NoNPCs",
 //     "author": "...", "category": "Body, Face, and Hair",
 //     "plugins": [{ "name": "KS_Hairdo's_Lite_NoNPCs.esp", "after": ["Playable Rieklings.esp"] }] }
-// Each plugin goes on the end of the plugin list, switched on, and its
-// "after" becomes a plugin rule, lower case as Vortex keeps them, so Vortex
-// and LOOT put it where the list does. Every "after" has to be a plugin the
+// Each plugin goes at the end of its master or regular group, switched on.
+// Its rule must name that group's existing tail, when there is one. Masters
+// cannot load after regular plugins. Every "after" has to be a plugin the
 // list already has, one added before it, or one the revision installs off
 // its list ("unlisted" below). It refuses a file the revision
 // already carries and a plugin the list already names. The tag Vortex gives
@@ -165,9 +167,12 @@
 'use strict';
 const fs = require('fs');
 
+// A stop says why and ends with code 1. It is thrown, and the program's end
+// below says it, rather than calling node's exit function, which can hang on
+// Node 24 (#6036).
+class Stop extends Error { }
 function stop(msg) {
-  process.stderr.write(msg + '\n');
-  process.exit(1);
+  throw new Stop(msg);
 }
 
 // ------------------------------------------- Vortex's mapping, as it is ---
@@ -308,9 +313,24 @@ function setMasters(collection, swaps) {
   }
   MASTERS.set(collection, map);
 }
-// An entry that only says something about the revision ("unlisted",
-// "masters") and changes nothing by itself.
-function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'page'); }
+// Header master facts from the collection record. A light flag on an ESP
+// alone does not make it a master. ESM and ESL extensions do.
+const MASTER_FLAGS = new WeakMap();
+function isMaster(name, flag) { return /\.(esm|esl)$/i.test(name) || flag === true; }
+function setMasterFlags(collection, swaps) {
+  const flags = new Map();
+  for (const sw of swaps) {
+    if (!sw || sw.masterFlags === undefined) continue;
+    if (!sw.masterFlags || typeof sw.masterFlags !== 'object' || Array.isArray(sw.masterFlags)) stop('"masterFlags" must map plugin names to booleans.');
+    for (const [name, flag] of Object.entries(sw.masterFlags)) {
+      if (!/^[^\\/]+\.es[mpl]$/i.test(name) || typeof flag !== 'boolean') stop('"masterFlags" has no boolean master fact for ' + name + '.');
+      flags.set(name.toLowerCase(), flag);
+    }
+  }
+  MASTER_FLAGS.set(collection, flags);
+}
+// An entry that only says something about the revision changes nothing by itself.
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -332,6 +352,7 @@ function applySwaps(collection, swaps) {
   if (!Array.isArray(collection.mods)) stop('collection.json has no mods list, so it is not a collection Vortex wrote.');
   setUnlisted(collection, swaps);
   setMasters(collection, swaps);
+  setMasterFlags(collection, swaps);
   for (const sw of swaps) {
     if (onlyContext(sw)) continue;
     if (sw.add === true) { applyAdd(collection, sw, lines); continue; }
@@ -339,6 +360,7 @@ function applySwaps(collection, swaps) {
     if (sw.rule === true) { applyRule(collection, sw, lines); continue; }
     if (sw.remove === true) { applyRemove(collection, sw, lines); continue; }
     if (sw.answers === true) { applyAnswers(collection, sw, lines); continue; }
+    if (sw.refreshTag === true) { applyTagRefresh(collection, sw.modId, lines); continue; }
     for (const k of ['modId', 'fileId', 'version', 'md5', 'fileSize', 'logicalFilename']) {
       if (sw[k] === undefined || sw[k] === null || sw[k] === '') stop('A swap has no ' + k + '.');
     }
@@ -368,12 +390,14 @@ function applySwaps(collection, swaps) {
       lines.push([e.name, label, String(was), String(val)].join('\t'));
     };
     movePatches(collection, e, sw, lines);
-    moveRules(collection, e, sw, lines);
+    const tag = uniqueTag(collection);
+    moveRules(collection, e, sw, lines, tag);
     set(e, 'version', String(sw.version), 'version');
     set(e.source, 'fileId', Number(sw.fileId), 'source.fileId');
     set(e.source, 'md5', String(sw.md5), 'source.md5');
     set(e.source, 'fileSize', Number(sw.fileSize), 'source.fileSize');
     set(e.source, 'logicalFilename', String(sw.logicalFilename), 'source.logicalFilename');
+    set(e.source, 'tag', tag, 'source.tag');
   }
   return lines;
 }
@@ -428,7 +452,7 @@ function sideNames(side, entry) {
   return !!s.logicalFilename && side.logicalFileName === s.logicalFilename;
 }
 
-function moveRules(collection, e, sw, lines) {
+function moveRules(collection, e, sw, lines, tag) {
   const s = e.source;
   const oldVersion = coerce(e.version);
   const newVersion = coerce(sw.version);
@@ -444,6 +468,7 @@ function moveRules(collection, e, sw, lines) {
         side[key] = val;
       };
       if (side.fileMD5 !== undefined) put('fileMD5', String(sw.md5));
+      if (side.tag !== undefined) put('tag', tag);
       if (side.fileExpression !== undefined) {
         if (!sw.fileExpression) stop('Mod rule ' + i + ' (' + says + ') names ' + e.name + ' by its file name on Nexus, and the swap gives no fileExpression for the new one. .\\scripts\\release\\New-NexusRevision.ps1 -Mod ' + sw.modId + ' reads that name from Nexus; run the move through it.');
         put('fileExpression', String(sw.fileExpression));
@@ -466,6 +491,81 @@ function newTag() {
   return t;
 }
 
+function uniqueTag(collection) {
+  let tag;
+  do { tag = newTag(); } while (collection.mods.some(m => m.source && m.source.tag === tag));
+  return tag;
+}
+
+// Repair an already-published identity without moving its archive (#6449).
+function applyTagRefresh(collection, modId, lines, chosenTag) {
+  if (!/^[1-9][0-9]{0,8}$/.test(String(modId))) stop('An identity refresh has no valid mod number.');
+  const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(modId));
+  if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for mod ' + modId + ', so there is no one entry to refresh.');
+  const e = hits[0], was = e.source.tag, tag = chosenTag || uniqueTag(collection);
+  if (typeof was !== 'string' || !was || collection.mods.some(m => m !== e && m.source && m.source.tag === was)) {
+    stop(e.name + ' has no unique existing reference tag to refresh.');
+  }
+  for (const r of collection.modRules || []) {
+    for (const key of ['source', 'reference']) {
+      if (r[key] && r[key].tag === was) r[key].tag = tag;
+    }
+  }
+  e.source.tag = tag;
+  lines.push([e.name, 'source.tag', was, tag].join('\t'));
+}
+
+// The publisher checks the actual draft archive before publishing a repair.
+// Only the selected identities and their tagged ordering references may differ.
+function checkRefreshedTags(before, after, ids) {
+  if (!Array.isArray(ids) || !ids.length || new Set(ids.map(String)).size !== ids.length) stop('Say distinct mod numbers to check.');
+  const expected = JSON.parse(JSON.stringify(before));
+  if (!Array.isArray(expected.mods) || !Array.isArray(after.mods)) stop('A tag check needs two collection mod lists.');
+  const oldTags = new Set(expected.mods.map(m => m.source && m.source.tag).filter(Boolean));
+  const fresh = new Set();
+  for (const id of ids) {
+    if (!/^[1-9][0-9]{0,8}$/.test(String(id))) stop('An identity check has an invalid mod number.');
+    const matches = c => c.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(id));
+    const old = matches(expected), next = matches(after);
+    if (old.length !== 1 || next.length !== 1) stop('The tag check has no one entry for mod ' + id + '.');
+    const tag = next[0].source.tag;
+    if (!/^[A-Za-z0-9_-]{10}$/.test(String(tag)) || oldTags.has(tag) || fresh.has(tag)) stop('Mod ' + id + ' has no fresh unique reference tag in the draft.');
+    applyTagRefresh(expected, id, [], tag);
+    fresh.add(tag);
+  }
+  // The page text is independently supplied by the page record.
+  if (expected.info && after.info) {
+    for (const key of ['summary', 'description', 'installInstructions']) {
+      if (Object.prototype.hasOwnProperty.call(after.info, key)) expected.info[key] = after.info[key];
+      else delete expected.info[key];
+    }
+  }
+  if (JSON.stringify(expected) !== JSON.stringify(after)) stop('The identity repair changed files, choices, plugins or unrelated metadata.');
+}
+
+function checkRepairFiles(before, after) {
+  const path = require('path'), crypto = require('crypto');
+  function inventory(root) {
+    const rows = [];
+    function walk(rel) {
+      const full = path.join(root, rel);
+      for (const e of fs.readdirSync(full, { withFileTypes: true })) {
+        const name = rel ? rel + '/' + e.name : e.name;
+        if (e.isSymbolicLink()) stop('An identity repair archive contains a symbolic link.');
+        if (e.isDirectory()) { rows.push([name, 'directory']); walk(name); }
+        else if (e.isFile()) {
+          if (name !== 'collection.json') rows.push([name, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, name))).digest('hex')]);
+        } else stop('An identity repair archive contains a non-file entry.');
+      }
+    }
+    walk('');
+    return rows.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  }
+  if (JSON.stringify(inventory(before)) !== JSON.stringify(inventory(after))) {
+    stop('The identity repair changed archive entries outside collection.json.');
+  }
+}
+
 function applyAdd(collection, add, lines) {
   for (const k of ['modId', 'fileId', 'version', 'md5', 'fileSize', 'logicalFilename', 'name', 'author', 'category']) {
     if (add[k] === undefined || add[k] === null || add[k] === '') stop('A mod to add has no ' + k + '.');
@@ -485,15 +585,38 @@ function applyAdd(collection, add, lines) {
   // game read a plugin's name in any case, so two that differ only in case
   // are one file in Data (#4200).
   const own = new Set();
+  const ruleNames = new Set(collection.pluginRules.plugins.map(r => String(r.name).toLowerCase()));
+  const flags = new Map(MASTER_FLAGS.get(collection));
+  const tails = new Map();
+  for (const p of collection.plugins) {
+    const low = String(p.name).toLowerCase();
+    if (p.enabled !== false) tails.set(isMaster(low, flags.get(low)), p.name);
+  }
   for (const p of plugins) {
     if (!p || !p.name || !/\.es[mpl]$/i.test(p.name)) stop('A plugin of ' + add.name + ' has no plugin name (.esm, .esp or .esl).');
     const low = String(p.name).toLowerCase();
     if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data. ' + bringsNext(collection, low, p.name, add.name));
     if (own.has(low)) stop(add.name + ' names ' + low + ' twice, in names that differ only in case, and Data holds one file by that name.');
+    if (ruleNames.has(low)) stop('The plugin rule list already names ' + p.name + ', so adding it would write a second rule.');
     own.add(low);
+    const recordedMaster = flags.get(low);
+    if (recordedMaster !== undefined && p.master !== undefined && p.master !== recordedMaster) {
+      stop(p.name + ' has a master flag that conflicts with the collection record.');
+    }
+    const master = isMaster(low, recordedMaster ?? p.master);
     const after = Array.isArray(p.after) ? p.after : [];
     if (!after.length) stop(p.name + ' says nothing to load after, so Vortex and LOOT would place it where they liked.');
-    for (const a of after) if (!known.has(String(a).toLowerCase())) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
+    for (const a of after) {
+      const target = String(a).toLowerCase();
+      if (!known.has(target)) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
+      if (master && !isMaster(target, flags.get(target))) stop(p.name + ' loads as a master and ' + a + ' does not, so that load-after rule would make a cycle.');
+    }
+    const tail = tails.get(master);
+    if (tail && !after.some(a => String(a).toLowerCase() === String(tail).toLowerCase())) {
+      stop(p.name + ' must name the tail ' + tail + ' in its load-after rules; a rule to an earlier plugin does not hold the end of the list.');
+    }
+    flags.set(low, master);
+    tails.set(master, p.name);
     known.add(low);
   }
   if (add.choices !== undefined && add.choices !== null) checkChoices(add);
@@ -519,10 +642,14 @@ function applyAdd(collection, add, lines) {
   entry.author = String(add.author);
   entry.details = { category: String(add.category), type: '' };
   entry.phase = 0;
+  MASTER_FLAGS.set(collection, flags);
   collection.mods.push(entry);
   lines.push([String(add.name), 'added', '', 'file ' + add.fileId].join('\t'));
   for (const p of plugins) {
-    collection.plugins.push({ name: String(p.name), enabled: true });
+    const name = String(p.name);
+    const master = flags.get(name.toLowerCase());
+    const at = master ? collection.plugins.findLastIndex(q => isMaster(String(q.name), flags.get(String(q.name).toLowerCase()))) + 1 : collection.plugins.length;
+    collection.plugins.splice(at, 0, { name, enabled: true });
     collection.pluginRules.plugins.push({ name: String(p.name).toLowerCase(), after: p.after.map(a => String(a).toLowerCase()) });
     lines.push([String(p.name), 'plugin', '', 'after ' + p.after.join(', ')].join('\t'));
   }
@@ -704,6 +831,14 @@ function applyPage(collection, swaps) {
 }
 
 function main(argv) {
+  if (argv[0] === '--check-tags') {
+    if (argv.length !== 4) stop('usage: nexus-collection.js --check-tags <published folder> <draft folder> <mod numbers>');
+    const path = require('path');
+    checkRepairFiles(argv[1], argv[2]);
+    checkRefreshedTags(JSON.parse(fs.readFileSync(path.join(argv[1], 'collection.json'), 'utf8')), JSON.parse(fs.readFileSync(path.join(argv[2], 'collection.json'), 'utf8')), argv[3].split(','));
+    process.stdout.write('The draft refreshes only the requested identities.\n');
+    return;
+  }
   if (argv.length !== 4) stop('usage: node nexus-collection.js <collection.json> <swaps.json> <out collection.json> <out payload.json>');
   const [inPath, swapsPath, outPath, payloadPath] = argv;
   let collection, swaps;
@@ -720,5 +855,12 @@ function main(argv) {
   process.stdout.write(lines.join('\n') + (lines.length ? '\n' : ''));
 }
 
-if (require.main === module) main(process.argv.slice(2));
-module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, applyPage, filterInfo, toV3CollectionPayload };
+if (require.main === module) {
+  try {
+    main(process.argv.slice(2));
+  } catch (e) {
+    if (e instanceof Stop) process.stderr.write(e.message + '\n'); else console.error(e && e.stack || e);
+    process.exitCode = 1;
+  }
+}
+module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, applyPage, checkRefreshedTags, checkRepairFiles, filterInfo, toV3CollectionPayload };

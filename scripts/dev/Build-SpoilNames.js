@@ -35,7 +35,8 @@ const food = JSON.parse(fs.readFileSync(FOOD_FILE, 'utf8')).items;
 const spoil = groups.spoil;
 if (!spoil || typeof spoil !== 'object' || !spoil.days) {
   console.log('STOP. food-groups.json has no spoil block with days to read.');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
@@ -69,7 +70,8 @@ Array.from(wanted).sort().forEach(function (desc) {
 if (missing.length) {
   console.log('STOP. These foods spoil and food.json has no readable name for them: ' + missing.join(', '));
   console.log('Give them a name in food.json (Build-FoodTable.js), or a keep in the spoil block.');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 spoil.names = names;
@@ -86,7 +88,8 @@ for (let i = 0; i < lines.length; i++) {
 }
 if (at < 0) {
   console.log('STOP. game\\gamemode.js has no const FOOD_GROUPS line to write.');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 lines[at] = 'const FOOD_GROUPS = ' + text + ';';
 gamemodeSource.write(GAMEMODE, lines.join(eol));

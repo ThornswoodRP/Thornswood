@@ -102,7 +102,7 @@ function Population([string[]]$names) { '{"loadOrder":[' + ((@($masters) + $name
 # collection records name (ContentPaths.ps1, Get-ThornswoodContentOrder).
 function Put-Record([string]$root, [string[]]$names) {
     Put $root 'records/collection.json' '{"collection":"t","revision":1,"plugins":[]}'
-    Put $root 'records/collection-plugins.json' '{"collection":"t","revision":1,"plugins":[]}'
+    Put $root 'records/collection-plugins.json' ('{"version":1,"collection":"t","revision":1,"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     Put $root 'records/load-order.json' ('{"loadOrder":[' + ((@($masters) + $names | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']}')
 }
 
@@ -110,7 +110,9 @@ function New-Sandbox([string]$chainText = $chain, [string[]]$order = @('A.esp', 
     $root = Join-Path ([IO.Path]::GetTempPath()) ('ts-5191-wl-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     Put $root 'scripts/mods/Rebuild-ContentTables.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/Rebuild-ContentTables.ps1')))
     Put $root 'scripts/dev/OwnPlugins.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')))
-    Put $root 'scripts/mods/ContentPaths.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/ContentPaths.ps1')))
+    foreach ($helper in 'scripts/mods/ContentPaths.ps1', 'scripts/release/RecordShape.ps1', 'scripts/release/Read-JsonFile.ps1') {
+        Put $root $helper ([IO.File]::ReadAllText((Join-Path $Repo $helper)))
+    }
     Put $root 'scripts/mods/content-tables.json' $chainText
     Put $root 'scripts/dev/Before.js' $saysList.Replace('NAME', 'before')
     Put $root 'scripts/dev/After.js' $saysList.Replace('NAME', 'after')
@@ -157,6 +159,36 @@ try {
     Yes ("1 the step before Build-LastPlugin.py gets the order without Thornswood-Last.esp: {0}" -f $r.Before) ($r.Code -eq 0 -and $r.Ran -eq 'before,last,after' -and $r.Before -eq '*A.esp,*Thornswood-Content.esp,*B.esp')
     Yes '1   and the step after it the whole order' ($r.After -eq $whole)
     Yes '1   and the run says which steps read it without the Last plugin' ($r.Out -match 'steps 1 to 1, before scripts/mods/Build-LastPlugin\.py, read it without Thornswood-Last\.esp')
+
+    $proofChain = $chain.Replace('"steps": [', '"orderProof": {"game/data/proof.json": "phase"}, "steps": [').Replace('"writes": ["game/data/before.txt"]', '"writes": ["game/data/before.txt", "game/data/proof.json"]')
+    $p = New-Sandbox $proofChain
+    $roots += $p
+    . (Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')
+    $good = Get-LoadOrderName ($masters + @('A.esp', 'Thornswood-Content.esp', 'B.esp'))
+    $wrong = Get-LoadOrderName ($masters + @('B.esp', 'Thornswood-Content.esp', 'A.esp'))
+    Put $p 'game/data/proof.json' (@{ source = "fixture of $wrong" } | ConvertTo-Json)
+    $r = Invoke-Chain $p
+    Yes 'a table with the right count but a different order stops before the next builder' (
+        $r.Code -ne 0 -and $r.Ran -eq 'before' -and $r.Out -match 'game/data/proof\.json')
+    Remove-Item -LiteralPath (Join-Path $p 'run.log')
+    Put $p 'game/data/proof.json' (@{ source = "fixture of $good" } | ConvertTo-Json)
+    $r = Invoke-Chain $p
+    Yes 'the matching order lets the chain finish' ($r.Code -eq 0 -and $r.Ran -eq 'before,last,after')
+
+    foreach ($badSource in @('no order recorded', ($good -replace '^8 ', '9 '))) {
+        Remove-Item -LiteralPath (Join-Path $p 'run.log')
+        Put $p 'game/data/proof.json' (@{ source = $badSource } | ConvertTo-Json)
+        $r = Invoke-Chain $p
+        Yes "a table without the expected order proof stops: $badSource" (
+            $r.Code -ne 0 -and $r.Ran -eq 'before' -and $r.Out -match 'game/data/proof\.json')
+    }
+    $realProof = (Get-Content -LiteralPath (Join-Path $Repo 'scripts/mods/content-tables.json') -Raw | ConvertFrom-Json).orderProof
+    $expectedProofs = @('hunts', 'ores', 'harvests', 'races', 'food', 'spells', 'warmth', 'waters', 'weather', 'recipes')
+    $actualProofs = @($realProof.PSObject.Properties.Name)
+    Yes 'the listed tables have order proofs, with a five-master scope only for spells' (
+        $actualProofs.Count -eq $expectedProofs.Count -and @($expectedProofs | Where-Object {
+            $realProof.PSObject.Properties["game/data/$_.json"].Value -ne $(if ($_ -eq 'spells') { 'masters' } else { 'phase' })
+        }).Count -eq 0)
 
     $c = New-Sandbox
     $roots += $c

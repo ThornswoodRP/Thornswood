@@ -88,7 +88,7 @@ function asset(name, digestSha, size, extra) {
 }
 
 async function main() {
-  if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+  if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
   const mainDoc = { launcherVersion: '1.2.7', release: { id: '20261026-170000', channel: 'main', tag: TAG } };
 
   // ---- 1. a private repository, or no Release yet: the site sends the bytes
@@ -416,6 +416,6 @@ async function main() {
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  ' + (e && e.stack)); process.exit(1); });
+main().catch((e) => { console.log('FAIL  ' + (e && e.stack)); process.exitCode = 1; });

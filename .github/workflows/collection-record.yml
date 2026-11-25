@@ -39,6 +39,10 @@ on:
         description: 'Only say what would be drafted (New-NexusRevision -WhatIf); write nothing to Nexus'
         type: boolean
         default: true
+      refresh_tag:
+        description: 'Repair only these existing mod identities (comma-separated Nexus mod numbers); files must already match the record'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -84,10 +88,12 @@ jobs:
           THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
           RECORD_OUT: ${{ runner.temp }}/collection-record
           WHATIF: ${{ github.event_name == 'workflow_dispatch' && inputs.whatif }}
+          REFRESH_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_tag || '' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $a = @{ Out = $env:RECORD_OUT }
           if ($env:WHATIF -eq 'true') { $a.WhatIf = $true }
+          if ($env:REFRESH_TAG) { $a.RefreshTag = @($env:REFRESH_TAG.Split(',') | ForEach-Object { $_.Trim() }) }
           & (Join-Path $env:GITHUB_WORKSPACE 'scripts/release/Publish-CollectionRecord.ps1') @a
           exit $LASTEXITCODE
 

@@ -86,4 +86,4 @@ yes('and hands anything under whole to the engine as eatItemScale',
 yes('before the cure and the withered count', !!eat && eat.indexOf('effectScale') !== -1 && eat.indexOf('effectScale') < eat.indexOf('swallowed('));
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

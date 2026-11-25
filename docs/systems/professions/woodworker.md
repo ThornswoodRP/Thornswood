@@ -2,10 +2,8 @@
 
 Fire, handles, bows, and instruments.
 
-- [Charburner](woodworker/charburner.md). 5 recipes, all of them reach
-  the server. The kiln is closed to everyone else.
-- [Woodwright](woodworker/woodwright.md). 156 recipes. 86 reach the
-  server. 70 are a sharpening wheel and do not.
+- [Charburner](woodworker/charburner.md) works the kiln. See the [Charburner recipe list](../lists/woodworker-charburner.md).
+- [Woodwright](woodworker/woodwright.md) makes bows, arrows and other woodwork. See the [Woodwright recipe list](../lists/woodworker-woodwright.md).
 
 The tool is a woodcutter's axe in the pack, 50 uses, handed when the
 profession is picked. Chopping a block is this profession's work in

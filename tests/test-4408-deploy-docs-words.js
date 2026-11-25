@@ -86,4 +86,4 @@ yes('and not the box\'s own address on the port the script keeps shut',
   !/http:\/\/\$\{?Vps\}?/.test(last) && !/\$\{?Vps\}?:\$Port/.test(last));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

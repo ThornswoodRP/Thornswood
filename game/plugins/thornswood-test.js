@@ -19,10 +19,10 @@
 // event in Data/Platform/thornswood-test-results.jsonl, which the runner reads
 // as it grows. What only the runner can do, a screenshot of the whole window
 // (the game and our page over it) or a real key press through Windows, is an
-// "ask" line with a number; the runner does it and writes that number to
-// Data/Platform/thornswood-test-ack.txt, and the step is over when the number
-// is there. So a screenshot is of the screen the step before it reached, and
-// a key press has landed before the next step looks for what it did.
+// "ask" line with a number; the runner writes {n,ok,note} to
+// Data/Platform/thornswood-test-ack.txt. A rejected key fails its step.
+// Successful input means Windows accepted both events and focus checks
+// passed; the following menu, message or page check must prove its effect.
 //
 // The steps (tests\real-client\README.md has the long form):
 //   {"do":"wait","for":"menu","menu":"Main Menu","open":true}
@@ -137,20 +137,28 @@ function matches(args, want) {
 
 // --------------------------------------------------- asking the runner ----
 let askNo = 0;
-let ackSeen = 0;
+let ackSeen = null;
 let ackReadAt = 0;
 function ask(what, arg) {
   askNo++;
   write({ t: 'ask', n: askNo, do: what, arg: arg });
   return askNo;
 }
-function acked(n) {
+function readAck(n) {
   const now = Date.now();
-  if (ackSeen < n && now - ackReadAt >= 250) {
+  if ((!ackSeen || ackSeen.n !== n) && now - ackReadAt >= 250) {
     ackReadAt = now;
-    try { ackSeen = Number(String(fs.readFileSync(ACK, 'utf8')).trim()) || 0; } catch (e) { }
+    try {
+      const reply = JSON.parse(String(fs.readFileSync(ACK, 'utf8')).trim());
+      // Older runners write just the ask number. That can still finish a
+      // screenshot, but it says nothing about keyboard delivery.
+      ackSeen = typeof reply === 'number' ? { n: reply, legacy: true } : reply;
+    } catch (e) { }
   }
-  return ackSeen >= n;
+  return ackSeen && ackSeen.n === n ? ackSeen : null;
+}
+function acked(n) {
+  return !!readAck(n);
 }
 
 // ----------------------------------------------------------- the steps ----
@@ -175,6 +183,22 @@ function fail(note) {
   failing = true;
   waitingAsk = ask('shot', 'fail-' + at);
   stepAt = Date.now();
+}
+// A wait with "skip": n that does not see what it waits for in its time is
+// no failure: what it waits for happens only sometimes (creation, for a
+// character the server has not got), and the next n steps are the ones that
+// deal with it, so they are passed over and said so.
+function skipOn(note) {
+  const s = steps[at];
+  const n = Math.max(0, Math.floor(Number(s.skip) || 0));
+  write({ t: 'step', i: at, do: s.do, ok: true, ms: Date.now() - stepAt, note: note + ', so the next ' + n + ' step(s) are skipped' });
+  passed++;
+  next();
+  for (let k = 0; k < n && at < steps.length; k++) {
+    write({ t: 'step', i: at, do: steps[at].do, ok: true, ms: 0, note: 'skipped' });
+    passed++;
+    next();
+  }
 }
 function next() {
   at++;
@@ -228,7 +252,10 @@ sp.on('tick', function () {
         fail('no such wait: ' + s.for);
         return;
       }
-      if (late) { fail('waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world')); }
+      if (late) {
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world');
+        if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
+      }
       return;
     }
     case 'page': {
@@ -249,7 +276,13 @@ sp.on('tick', function () {
     case 'shot':
     case 'key': {
       if (!waitingAsk) { waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code)); return; }
-      if (acked(waitingAsk)) { pass(); return; }
+      const reply = readAck(waitingAsk);
+      if (reply) {
+        if (s.do === 'key' && reply.ok !== true) {
+          fail(reply.legacy ? 'the runner did not confirm keyboard delivery; update Run-RealClient.ps1' : String(reply.note || 'the runner could not deliver the key'));
+        } else { pass(reply.note); }
+        return;
+      }
       if (late) { fail('the runner did not answer ' + s.do + ' in ' + limit + ' ms'); }
       return;
     }

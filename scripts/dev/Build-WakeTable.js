@@ -354,4 +354,4 @@ function main(args) {
 module.exports = { readPlugin: readPlugin, tamrielFrame: tamrielFrame, buildTable: buildTable,
                    readLoadOrder: readLoadOrder, install: install, main: main };
 
-if (require.main === module) { process.exit(main(process.argv.slice(2))); }
+if (require.main === module) { process.exitCode = main(process.argv.slice(2)); }

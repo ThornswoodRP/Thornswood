@@ -109,7 +109,7 @@ function New-Tree([string]$name, $live, [bool]$named = $true) {
     $t = Join-Path $T $name
     foreach ($rel in 'scripts\deploy\Deploy-Gamemode.ps1', 'scripts\deploy\MaxOnline.ps1', 'scripts\deploy\ServerOrder.ps1', 'scripts\deploy\LastPluginRecipe.ps1',
                      'scripts\release\BuildStamp.ps1', 'scripts\release\Read-JsonFile.ps1', 'scripts\release\RecordShape.ps1',
-                     'scripts\mods\LoadOrder.ps1', 'records\most-online.json') {
+                     'scripts\mods\LoadOrder.ps1', 'scripts\release\SevenZip.ps1', 'records\most-online.json') {
         $from = Join-Path $Repo $rel
         if (-not (Test-Path -LiteralPath $from)) { continue }
         $to = Join-Path $t $rel

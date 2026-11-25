@@ -537,13 +537,14 @@ const net = require('net');
 try { fs.appendFileSync(process.env.TS_PIDLOG, process.pid + '\n'); } catch (e) { }
 const root = process.cwd();
 const gm = fs.readFileSync('gamemode.js', 'utf8');
-if (gm.indexOf('will-not-start') >= 0) { console.log('Error: this gamemode will not start'); process.exit(1); }
+if (gm.indexOf('will-not-start') >= 0) { console.log('Error: this gamemode will not start'); process.exitCode = 1; return; }
 const s = JSON.parse(fs.readFileSync('server-settings.json', 'utf8'));
 const res = s.port === 7777 ? 3000 : s.port + 1;
-dgram.createSocket('udp4').bind(s.port, '127.0.0.1');
-if (gm.indexOf('udp-only') < 0) { net.createServer(function (c) { c.end(); }).listen(res, '127.0.0.1'); }
+const udp = dgram.createSocket('udp4');
+udp.bind(s.port, '127.0.0.1');
+const tcp = gm.indexOf('udp-only') < 0 ? net.createServer(function (c) { c.end(); }).listen(res, '127.0.0.1') : null;
 console.log('listening on ' + s.port);
-setTimeout(function () { process.exit(0); }, 600000);
+setTimeout(function () { udp.close(); if (tcp) tcp.close(); }, 600000);
 '@
 
 $script:zipN = 0

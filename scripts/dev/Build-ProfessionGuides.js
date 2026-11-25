@@ -346,18 +346,24 @@ function read(file) {
 }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const next = text();
   let now = null;
   try { now = fs.readFileSync(OUT, 'utf8'); } catch (e) { now = null; }
   if (process.argv.includes('--check')) {
     if (next !== now) {
       console.log('game/ui/thornswood-profession-guides.js is stale: run node scripts/dev/Build-ProfessionGuides.js');
-      process.exit(1);
+      return 1;
     }
     console.log('PASS the profession guides match game/data, the gamemode tables and game/gamemode.js');
-    process.exit(0);
+    return 0;
   }
-  if (next === now) { console.log('the profession guides are already up to date'); process.exit(0); }
+  if (next === now) { console.log('the profession guides are already up to date'); return 0; }
   fs.writeFileSync(OUT, next, 'utf8');
   console.log('wrote game/ui/thornswood-profession-guides.js');
 }

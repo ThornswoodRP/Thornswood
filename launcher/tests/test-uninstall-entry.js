@@ -253,7 +253,8 @@ for (const f of files) {
 yes('Run, Wire and DoUninstall are found in the Shell partial class', !!(shell.Run && shell.Wire && shell.DoUninstall));
 if (!shell.Run || !shell.Wire || !shell.DoUninstall) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 // ---- the switch -------------------------------------------------------------
@@ -432,4 +433,4 @@ yes('the Uninstall button still runs DoUninstall on the main build',
 console.log('');
 console.log('walked ' + un.order.length + ' methods opened to uninstall, ' + play.order.length + ' on a normal start, across ' + shellFiles.length + ' Shell files');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

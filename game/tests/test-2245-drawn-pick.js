@@ -21,7 +21,7 @@ const SRC = process.env.GM || path.join(__dirname, '..', '..', 'game', 'gamemode
 const src = fs.readFileSync(SRC, 'utf8').split(String.fromCharCode(13)).join('');
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
-function done() { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
+function done() { console.log(''); console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0; }
 
 const a = src.indexOf('function swingScript() {');
 const b = a < 0 ? -1 : src.indexOf('\n}\n', a);
@@ -31,7 +31,7 @@ const consts = {};
   consts[k] = m ? Number(m[1]) : undefined;
 });
 yes('S0 swingScript and SWING_SHEATHE_MS are in the gamemode', a >= 0 && b > a && consts.SWING_SHEATHE_MS > 0);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 const script = new Function('SWING_SHEATHE_MS', src.slice(a, b + 2) + '\nreturn swingScript();')(consts.SWING_SHEATHE_MS || 1000);
 const run = new Function('ctx', script);
 
@@ -115,3 +115,4 @@ const END = function (at) { return { at: at, end: true, stop: 'IdleChairExitStar
       /swing\(actorId, SWING_MINE, function \(\) \{ lands\(\); \}, \{ hold: true, tool: pick \}\)/.test(src));
   done();
 })();
+}

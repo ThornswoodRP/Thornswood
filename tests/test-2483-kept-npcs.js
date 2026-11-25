@@ -28,14 +28,16 @@ if (!fs.existsSync(client)) {
   // because a check that did not happen is not a pass.
   if (process.env.THORNSWOOD_FORK_REQUIRED === '1') {
     console.log('FAIL  engine/skymp is not checked out (THORNSWOOD_FORK_REQUIRED is set, so not having it is a failure)');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log('SKIP  engine/skymp is not checked out here; the nightly fetches it at the pin and runs this');
-  process.exit(0);
+  return;
 }
 if (!fs.existsSync(harness)) {
   console.log('FAIL  engine/skymp is checked out but its pin is older than the #2483 fix: ' + harness);
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 const r = spawnSync(process.execPath, [harness], { stdio: 'inherit' });
-process.exit(r.status === null ? 1 : r.status);
+process.exitCode = r.status === null ? 1 : r.status;

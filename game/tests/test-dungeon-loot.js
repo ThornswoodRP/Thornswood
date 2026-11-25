@@ -397,4 +397,4 @@ if (block) {
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');
-if (fail) process.exit(1);
+if (fail) process.exitCode = 1;

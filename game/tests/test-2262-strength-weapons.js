@@ -36,7 +36,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -47,7 +47,7 @@ function slice(src, start, end) {
 
 const block = slice(gm, '// ==== thornswood strength weapons ====', '// ==== end thornswood strength weapons ====');
 yes('the strength weapons block is in the gamemode', !!block);
-if (!block) { done(); }
+if (!block) { done(); } else {
 
 // ------------------------------------------------------------ the world --
 
@@ -290,3 +290,4 @@ yes('the build runs this harness (it is not in tests/gate-excluded.txt, #3009)',
 yes('no em dash in the block or this harness', block.indexOf('\u2014') < 0 && fs.readFileSync(__filename, 'utf8').indexOf('\u2014') < 0);
 
 done();
+}
