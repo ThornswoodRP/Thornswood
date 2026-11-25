@@ -44,7 +44,9 @@ for (const server of ['dev', 'main']) {
     command(actor, text, proof, callerActor);
     return JSON.stringify(state(target)) === before && audit() === count;
   }
-  seed(tester, 'enchanter', 'bladebinder');
+  const partial = seed(tester, 'enchanter', 'bladebinder');
+  partial.work.miner = 37;
+  C.writeState(tester, partial, true);
   seed(staff, 'smith', 'platewright');
   seed(admin, 'smith', 'platewright');
   seed(other, 'smith', 'platewright');
@@ -83,6 +85,12 @@ for (const server of ['dev', 'main']) {
 
   command(admin, '/rankup class for Dagny Iron Hand');
   yes(server + ': an admin can advance a named online character', state(other).ranks.miner === 'advanced');
+  command(admin, '/rankup profession for Dagny Iron Hand');
+  yes(server + ': an admin can advance that character\'s current profession half',
+    state(other).ranks.platewright === 'advanced');
+  w.leave(other);
+  yes(server + ': an offline target is refused', unchanged(admin, '/rankup class for Dagny Iron Hand', other));
+  w.arrive(other);
   command(tester, '/rankup class for Brenna');
   yes(server + ': naming yourself still uses self permission', state(tester).ranks.miner === 'expert');
   command(tester, '/rankup class');
@@ -103,6 +111,12 @@ for (const server of ['dev', 'main']) {
   yes(server + ': no profession cannot create a profession rank', unchanged(tester, '/rankup profession', tester));
   C.writeState(tester, P.fresh(), true);
   yes(server + ': no class cannot create a class rank', unchanged(tester, '/rankup class', tester));
+  const legacy = seed(tester);
+  delete legacy.ranks.miner;
+  C.writeState(tester, legacy, true);
+  command(tester, '/rankup class');
+  yes(server + ': a legacy class without standing uses the canonical novice migration',
+    state(tester).ranks.miner === 'advanced' && state(tester).points === 1);
 
   seed(tester, 'smith', 'platewright');
   const set = box.mp.set;
