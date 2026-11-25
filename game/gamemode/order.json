@@ -74,6 +74,7 @@
     "staff-crafting.ts",
     "staff-needs.ts",
     "shared-resource-stock.ts",
+    "staff-inspect.ts",
     "npc-merchant-purses.ts",
     "npc-population-policy.ts",
     "npc-population-data.ts",

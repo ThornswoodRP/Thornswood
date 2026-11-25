@@ -65,6 +65,15 @@ Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourse
 
 Somebody frozen stays frozen where another staff member sends them. Their own teleport commands are refused until they are released.
 
+## Inspect a character
+
+| Command | Who | What it shows |
+| --- | --- | --- |
+| `/inspect` | Playtesters, staff and admins, on Dev or Main | Your character's name and form id, location, vitals, last recorded needs, class, profession and ranks |
+| `/inspect for <person>` | Playtesters for their own unambiguous character; admins for somebody else | The same report for the selected character, using a name, unique name prefix, form id or profile number |
+
+The report reads gameplay state without advancing needs or migrating a character. Positions and percentages are rounded to one decimal place. Missing or invalid values say unavailable, including god mode when the engine does not expose its flag. Private account and Discord data are excluded. Each report uses several short chat lines, so all ranks fit.
+
 ## Spawned creatures
 
 Staff.
