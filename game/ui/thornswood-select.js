@@ -1084,6 +1084,8 @@
   function onKey(ev) {
     if (root.className === 'gone') return;
     if (introKey(ev)) return;
+    // Enter held through Continue must not turn into a character pick.
+    if (ev.key === 'Enter' && ev.repeat) { ev.preventDefault(); return; }
     if (!keysCount()) {
       ev.preventDefault();
       strayKey('the keys are going to another window, not the game');

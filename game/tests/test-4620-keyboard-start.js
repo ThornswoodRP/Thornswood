@@ -98,4 +98,15 @@ function rig() {
   p.node('.go').focus(); p.api.keys(true, p.ask());
   yes('a held checkbox key cannot activate a different control after focus changes', !p.continued() && !p.node('.skipnext').checked);
 }
+{
+  const p = rig(); p.api.keys(true); p.key('Enter'); p.key('Tab'); p.key('Enter');
+  const picks = p.pickCount();
+  p.key('Enter', { repeat: true });
+  p.advance(200); p.key('Enter', { repeat: true }); p.api.keys(true, p.ask());
+  yes('holding Continue Enter cannot play a character until Enter is pressed again',
+    p.continued() && p.pickCount() === picks);
+  p.api.keys(true); p.key('ArrowDown', { repeat: true }); p.key('Enter');
+  yes('repeated arrows and a fresh Enter still choose a character',
+    p.messages.some(m => m[1] === 'select:want 22'));
+}
 console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0;
