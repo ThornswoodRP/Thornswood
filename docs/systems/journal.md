@@ -36,6 +36,13 @@ panel immediately afterwards. If the source page disappears, its unsaved text
 stays available for copying and its former Save button cannot write it back.
 The draft is not a disk save.
 
+Throw away names the journal before deleting it. With no unsaved page, press
+it again within five seconds to confirm. Editing, a new owner update,
+redrawing or closing the panel cancels that first press. With an unsaved
+page, the existing Keep editing choice instead explicitly asks to throw
+away the journal and its unsaved changes; that choice is the confirmation.
+Nothing is saved automatically, and holding Enter or Space cannot confirm.
+
 ## Who else can read it
 
 Nobody, until you share a page. You can share with a friend, and with
@@ -58,6 +65,9 @@ account is staff. The book itself is on [Factions and businesses](factions.md).
 It does not use one of the 12 journals. Someone with Prices stands
 at that hold's notice board, which is the drop box, and leaves a
 copy from the board's panel. The list stays in the book.
+
+The owner's Disband also names the group and needs a second fresh press
+within five seconds. A changed book or ownership cancels that confirmation.
 
 ## Boards
 
