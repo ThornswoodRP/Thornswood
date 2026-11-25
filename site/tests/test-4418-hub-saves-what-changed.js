@@ -326,7 +326,6 @@ function press(hub, kind, id) {
                       'a save that names no copy');
     yes('a save that names no copy it was made from is refused (' + r.status + ')',
         r.status === 409 && readText(s.dir, 'data/tests.md') === 'what Aela wrote\n');
-
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   } finally {
