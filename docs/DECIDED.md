@@ -665,6 +665,42 @@ issue where the card did.
 - **#6303 stays on main though it merged without a card, at f89deec (main
   76efa6f).** (dec_Kj3jJAbKui_RnvHePqIDTA) 15 Nov 2026,
   [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191#issuecomment-6907671670).
+- **#6336 stays on main though it merged without a card, at 1922776 (main
+  37230a4).** (dec_paCpE8_e9rTYXz57jfzUOQ) 16 Nov 2026,
+  [#6244](https://github.com/ThornswoodRP/Thornswood/issues/6244#issuecomment-6920597580).
+- **#6344 stays on main though it merged without a card, at 89f8369 (main
+  79cc319).** (dec_NhPfeGBSgejHyFnI3obd2Q) 16 Nov 2026,
+  [#6244](https://github.com/ThornswoodRP/Thornswood/issues/6244#issuecomment-6920657770).
+- **#6345 stays on main though it merged without a card, at c3cc962 (main
+  67c120a).** (dec_s7QWg9duDZ4g7ryfsQ5C5Q) 16 Nov 2026,
+  [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191#issuecomment-6920676950).
+- **#6356 stays on main though it merged without a card, at 35483a1 (main
+  a1592b4).** (dec_Oll71lN1LK5hB9BhxiGxZQ) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920704425).
+- **#6357 stays on main though it merged without a card, at 3277f9b (main
+  c624015).** (dec_vyfm0ZfEocs1SylckE3UWg) 16 Nov 2026,
+  [#6346](https://github.com/ThornswoodRP/Thornswood/issues/6346#issuecomment-6920723524).
+- **#6358 stays on main though it merged without a card, at e68d3e8 (main
+  caa46f7).** (dec_YwaTmASCxplqbH9JzQ6KVw) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920742196).
+- **#6362 stays on main though it merged without a card, at c757522 (main
+  f90a3c3).** (dec_MVJGrt_wOt_yWIC2AL5ueQ) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920761975).
+- **#6360 stays on main though it merged without a card, at 6f2c732 (main
+  6bb92fd).** (dec_P7zd6VKnoaJsBmn3WbnpVA) 16 Nov 2026,
+  [#6346](https://github.com/ThornswoodRP/Thornswood/issues/6346#issuecomment-6920781699).
+- **#6361 stays on main though it merged without a card, at ab3a0d5 (main
+  d75edc7).** (dec_RDwkK-s8SJFE7jzafGCW7A) 16 Nov 2026,
+  [#6349](https://github.com/ThornswoodRP/Thornswood/issues/6349#issuecomment-6920803129).
+- **#6363 stays on main though it merged without a card, at e2092aa (main
+  f7dd2d1).** (dec_vH6i1HERcd4YCYytiBOnRQ) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920822552).
+- **#6372 stays on main though it merged without a card, at 7977cbe (main
+  80a834f).** (dec_Scvondc-t3I34a53YqtwQg) 16 Nov 2026,
+  [#6351](https://github.com/ThornswoodRP/Thornswood/issues/6351#issuecomment-6920880002).
+- **#6394 stays on main though it merged without a card, at bd19971 (main
+  367fbec).** (dec_VWpbidKGxPqQrR2NEW_32A) 16 Nov 2026,
+  [#6359](https://github.com/ThornswoodRP/Thornswood/issues/6359#issuecomment-6922076527).
 
 ### Languages and code
 
@@ -815,6 +851,10 @@ issue where the card did.
   answered: a moved or added collection entry is checked against the rest of
   the revision.** (dec_BtxAK7ZxWgqHFvPaheYEFQ) 12 Nov 2026,
   [#4200](https://github.com/ThornswoodRP/Thornswood/issues/4200#issuecomment-6840852921).
+- **#5645 closes unmerged: the collection's load order is made from the
+  record now, so its check has nothing left to catch.**
+  (dec_Nw0TPsxhjDPdE2nOtAfagQ) 16 Nov 2026,
+  [#6403](https://github.com/ThornswoodRP/Thornswood/issues/6403#issuecomment-6922564684).
 
 ### The launcher and updates
 

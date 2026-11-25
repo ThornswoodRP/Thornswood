@@ -46303,6 +46303,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -46380,18 +46382,19 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -46400,7 +46403,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -52405,9 +52408,26 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
+    var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    if (!projected.changed) { return projected.needs; }
+    write(actorId, projected.needs);
+    projectionEffects(actorId, projected);
+    return projected.needs;
+  }
+
+  /*
+    Stage the existing elapsed-time calculation without saving needs or sending
+    effects. The supplied environment owns all outside reads: the ordinary
+    path retains its existing character migration and bard-cache behavior.
+    Callers preparing a staff change must supply read-only context instead.
+    Helpers are asked at their original points, including warmth after crashes.
+    The input stays untouched; event flags are delivered only after a save.
+  */
+  function projectNeeds(before, now, arriving, environment) {
+    var n = Object.assign({}, before);
     var away = now - n.at;
     var hours = (now - n.at) / 3600000;
-    if (hours <= 0) { return n; }
+    if (hours <= 0) { return { needs: n, changed: false }; }
     // A session that has been away for a week does not starve to death twice
     // over; the meters bottom out at 0 anyway, and this keeps the arithmetic
     // sane for anything that reads the difference.
@@ -52436,7 +52456,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
     var restRate = NEEDS.drain.rest;
     if (n.worked && (now - n.worked) < NEEDS.workFor) {
-      restRate = restRate * workMultiplier(actorId);
+      restRate = restRate * environment.workMultiplier();
     }
     /*
       THE TIME AWAY GAINS NO REST (#1764). On an arrival n.resting is still
@@ -52448,7 +52468,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       may. The time away drains; the fill for the beds that give it is
       arrived(), below, and the beds' first sight of them gets them up.
     */
-    var gain = arriving ? 0 : restingGain(actorId, n);
+    var gain = arriving ? 0 : environment.restingGain(n);
     /*
       A DRUG HOLDS THE REST DRAIN AT ZERO while its window lasts (#1382), for
       the part of this stretch before drugUntil. Resting still gains.
@@ -52524,19 +52544,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = warmthTarget(actorId, n);
+      var target = environment.warmthTarget(n);
       // Winter out under the sky cools a quarter faster (#3144), so its half
       // life is the cooling one cut by that share. Warming is left alone.
       var half = (target > n.temp)
         ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / outdoorCooling(n);
+        : NEEDS.settleMinutes / environment.outdoorCooling(n);
       var k = 1 - Math.pow(0.5, (hours * 60) / half);
       if (k > 1) { k = 1; }
       if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
-    var slept = arriving ? arrived(actorId, n, away) : '';
+    var slept = arriving ? arrived(n, away) : '';
     var hungBefore = n.hangoverUntil > now;
     /*
       DRUNK WEARS OFF INTO A HANGOVER (#3153). n.drunk is still what the last
@@ -52558,7 +52578,22 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     n.drugged = n.drugUntil > now;
 
     n.at = now;
-    write(actorId, n);
+    return { needs: n, changed: true, hungBefore: hungBefore,
+             hung: hung, pulled: pulled, slept: slept };
+  }
+
+  function projectionEnvironment(actorId) {
+    return {
+      workMultiplier: function () { return workMultiplier(actorId); },
+      restingGain: function (n) { return restingGain(actorId, n); },
+      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      outdoorCooling: outdoorCooling
+    };
+  }
+
+  function projectionEffects(actorId, projected) {
+    var hungBefore = projected.hungBefore, hung = projected.hung;
+    var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
@@ -52583,7 +52618,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       notify(actorId, slept);
       say(actorId, slept);
     }
-    return n;
   }
 
   /*
@@ -54361,7 +54395,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     caller, and that call was never written; the first commit of this
     repository already has it without one.
   */
-  function arrived(actorId, n, away) {
+  function arrived(n, away) {
     if (!(away >= NEEDS.sleptFor)) { return ''; }
     var row = awayRow(n.resting);
     var rest = Number(row.rest) || 0, food = Number(row.food) || 0, drink = Number(row.drink) || 0;
@@ -55104,6 +55138,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // How a cook comes out, and the records it can come out as (#2906).
     cookedAs: cookedAs, fineOf: fineOf, isFine: isFine, burntMeal: burntMeal,
     settle: settle, view: view, effects: effects,
+    // Stage a needs snapshot; saving and delivery remain the caller's job.
+    project: projectNeeds,
     // The bars as a line of text, for /needs (#2267).
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
@@ -61324,6 +61360,16 @@ module.exports = {
     while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
   }
 
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
+
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
     var seen = g.__thornswoodPassSeen;
@@ -61874,7 +61920,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
