@@ -37350,14 +37350,16 @@ return module.exports;
       with no end: an actor whose form is gone (a name taken off the embassy
       roll after its character went) stopped the server.
     */
+    writeResults[actorId] = written;
     if (written) {
       // Twin Souls is a second enchantment slot in the menu (#1389). It lives
       // beside the craft gate, outside this block, the way spellOn does.
-      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      try { if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); } }
+      catch (eSlots) { clog('character saved but enchantment slots could not be published for', actorId.toString(16), eSlots); }
       // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+      try { if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); } }
+      catch (eRecipes) { clog('character saved but recipe visibility could not be published for', actorId.toString(16), eRecipes); }
     }
-    writeResults[actorId] = written;
     return s;
   }
 

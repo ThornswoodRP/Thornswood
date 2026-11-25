@@ -132,6 +132,23 @@ if (w.loaded()) {
   try { C.writeState(eighth, C.stateOf(eighth)); } catch (_) { unreadRefused = true; }
   yes('an unreadable unrelated spell refuses before knowledge or active membership changes',
     unreadRefused && JSON.stringify([C.stateOf(eighth), w.spellsOf(eighth)]) === unreadBefore);
+  const ninth = student(8), perks = P.perks;
+  let publicationThrown = false;
+  P.perks = function (s) {
+    if (!publicationThrown && C.stateOf(ninth).spells.known.includes('Flames')) {
+      publicationThrown = true;
+      throw new Error('injected post-save menu publication failure');
+    }
+    return perks(s);
+  };
+  let publishThrew = false;
+  let completedRead;
+  try { completedRead = w.readBook(ninth, w.idOf(book)); } catch (_) { publishThrew = true; }
+  finally { P.perks = perks; }
+  yes('a menu publication error after the saved book does not turn committed learning into refusal',
+    publicationThrown && !publishThrew && completedRead && completedRead.allowed !== false && completedRead.learned &&
+    w.count(ninth, w.idOf(book)) === 0 && C.stateOf(ninth).spells.points === 1 &&
+    w.spellsOf(ninth).includes(w.idOf(flames)) && C.writeSucceeded(ninth));
   yes('the off-book descriptor survives restart while its native membership stays absent',
     w.restart().loaded && w.prop(seventh, C.PROPERTY).spellHistory.otherSpells.includes(offbook) &&
     !w.spellsOf(seventh).includes(w.idOf(offbook)) && w.spellsOf(seventh).includes(w.idOf(ability)));
