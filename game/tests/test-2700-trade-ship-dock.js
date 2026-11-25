@@ -470,13 +470,19 @@ try {
   const WORDS = new Function('return ' + /const WORDS = (\[[\s\S]*?\]);/.exec(gm)[1])();
   const PW = /PLAYER_WORDS = (\[[\s\S]*?\]);/.exec(gm);
   yes('R2 /ship is a word, and not one a player is told to type', WORDS.indexOf('/ship') >= 0 && !!PW && PW[1].indexOf("'/ship'") < 0);
-  yes('R3 the word reaches the dock', /if \(word === '\/ship'\) \{[\s\S]{0,400}shipsApi\.command\(parts, actorId, profileId\)/.test(gm));
+  yes('R3 the word reaches the dock', /if \(word === '\/ship'\) \{[\s\S]{0,400}shipsApi\.command\(parts, actorId, profileId(?:,\s*cmd)?\)/.test(gm));
   const skills = fs.readFileSync(path.join(REPO, 'game', 'ui', 'thornswood-skills.js'), 'utf8');
   yes('R4 the Office page offers staff Ports and routes while the ships are on', /if \(o\.ships\) wrap\.appendChild\(officeShips\(\)\)/.test(skills) &&
       /officeButton\('Ports and routes', '\/ship staff'\)/.test(skills) && /ships: staff && !!\(g\.__thornswoodTradeShips && g\.__thornswoodTradeShips\.command\)/.test(gm));
   const front = fs.readFileSync(path.join(REPO, 'game', 'plugins', 'thornswood-front.js'), 'utf8');
   yes('R5 the front plugin loads the panel and lets its focus go', /'thornswood-ship\.js'[,\]]/.test(front) && /ship: 'thornswoodShip'/.test(front) &&
       /'ship:closed'\) \{ T\.claimFocus\('ship', false\)/.test(front));
+  const unprovenMsg = 'Staff commands need the chat to have proved who you are, and this connection has not. Close the game, open the Thornswood launcher and press Play.';
+  wx.box.__thornswoodStaff = { unproven: function (cmd) { return (!cmd || !cmd.proven) ? unprovenMsg : ''; } };
+  const unpDraft = wx.ts.command(['/ship', 'draft', 'reset'], ACT.staff, PID[ACT.staff], { proven: false });
+  const unpConfirm = wx.ts.command(['/ship', 'confirm', 'abc'], ACT.staff, PID[ACT.staff], { proven: false });
+  const unpAdd = wx.ts.command(['/ship', 'add', 'windhelm'], ACT.staff, PID[ACT.staff], { proven: false });
+  yes('R6 draft, confirm and add are refused when unproven', unpDraft === unprovenMsg && unpConfirm === unprovenMsg && unpAdd === unprovenMsg);
 
   // ================================================================== U
   const u = spawnSync(process.execPath, [path.join(REPO, 'scripts', 'dev', 'Build-TradeCargoGamemode.js'), '--check'], { encoding: 'utf8' });
