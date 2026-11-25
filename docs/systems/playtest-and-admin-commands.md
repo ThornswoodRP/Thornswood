@@ -34,6 +34,8 @@ Build order: command-access, then command-help and the independent tools. Engine
 
 The server catalog registers only implemented commands, with their syntax, description and minimum role. Registered handlers still enforce the shared authorization boundary for every call. The ordinary help list never advertises privileged tools. Modules publish their own help entries so the available commands and their descriptions do not become separate lists that drift.
 
+A module may document the same command once per role, for example a self-only form for playtesters and a targeting form for admins. Its route uses the lowest declared tier; the handler must still authorize the requested target. The help lists show each form only to its declared tier and above.
+
 The existing `/give`, `/spawn`, `/tp`, `/goto`, `/bring` and `/where` behavior is reused where it already meets the request. Other commands are added in their own issues rather than hidden in the help change.
 
 ## Verification and delivery
