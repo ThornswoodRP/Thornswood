@@ -2156,17 +2156,37 @@ saved_token = os.environ.pop('GITHUB_TOKEN', None)
 
 
 class Ready(object):
+    closed = False
     async def wait_until_ready(self):
         return None
+    def is_closed(self):
+        return self.closed
 
 
-real = bot.client
-bot.client = Ready()
+ready_client = Ready()
+slept, warned = [], []
+class OnePassAsyncio:
+    def __getattr__(self, name):
+        return getattr(asyncio, name)
+    async def sleep(self, seconds):
+        slept.append(seconds)
+        ready_client.closed = True
+
+
+async def warn_missing(text):
+    warned.append(text)
+
+
+real = (bot.client, bot.asyncio, bot.report_say)
+bot.client, bot.asyncio, bot.report_say = ready_client, OnePassAsyncio(), warn_missing
 del LOGGED[:]
-run(bot.watch_known_issues())
-bot.client = real
-yes('with no GitHub token, from the file or GITHUB_TOKEN, the watcher says so once and stops',
-    any('no GitHub token (GITHUB_TOKEN_FILE or GITHUB_TOKEN)' in l for l in LOGGED))
+try:
+    run(bot.watch_known_issues())
+finally:
+    bot.client, bot.asyncio, bot.report_say = real
+yes('with no GitHub token the watcher warns once and pauses at its normal cadence',
+    sum('known issues: updates paused: no GitHub token' in line for line in LOGGED) == 1
+    and len(warned) == 1 and slept == [bot.KNOWN_EVERY])
 yes('the poll is no more often than once a minute (default %ds)' % bot.KNOWN_EVERY,
     bot.KNOWN_EVERY >= 60)
 
