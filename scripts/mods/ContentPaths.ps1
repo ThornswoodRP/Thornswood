@@ -193,7 +193,8 @@ function Get-ThornswoodContentOrder {
     param([Parameter(Mandatory = $true)][string]$Repo)
     $read = { param($rel) [IO.File]::ReadAllText((Join-Path $Repo $rel)) | ConvertFrom-Json }
     $record = & $read 'records/collection.json'
-    $plugins = & $read 'records/collection-plugins.json'
+    . (Join-Path $PSScriptRoot '..\release\RecordShape.ps1')
+    $plugins = Read-ThornswoodRecord -Path (Join-Path $Repo 'records/collection-plugins.json') -Kind collection-plugins
     if ([string]$record.collection -ne [string]$plugins.collection -or [string]$record.revision -ne [string]$plugins.revision) {
         throw ('records\collection.json is collection ' + $record.collection + ' revision ' + $record.revision + ', and records\collection-plugins.json ' + $plugins.collection + ' revision ' + $plugins.revision + ': they move together, so there is no telling which load order is meant.')
     }

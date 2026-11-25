@@ -46739,6 +46739,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and
@@ -61094,7 +61095,7 @@ module.exports = {
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -61501,9 +61502,15 @@ module.exports = {
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -61524,22 +61531,22 @@ module.exports = {
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
@@ -61645,7 +61652,7 @@ module.exports = {
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -61861,6 +61868,24 @@ module.exports = {
              'you right now. Leave the Thornswood launcher open while you play; if it ' +
              'still says this in a minute, restart the game from the launcher.';
     }
+    return '';
+  }
+
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
     return '';
   }
 
@@ -62575,9 +62600,15 @@ module.exports = {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
       state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
       pushSilenced();
@@ -62680,6 +62711,7 @@ module.exports = {
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
