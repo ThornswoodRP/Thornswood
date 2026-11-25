@@ -407,6 +407,9 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
   const lines = [];
   function node(tag) {
     const n = { tag: tag, children: [], style: {}, className: '', _text: '', id: '', onclick: null, title: '' };
+    const attrs = {};
+    n.setAttribute = function (name, value) { attrs[name] = String(value); };
+    n.getAttribute = function (name) { return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null; };
     Object.defineProperty(n, 'textContent', {
       get: function () { return n._text + n.children.map(function (c) { return c.textContent; }).join(''); },
       set: function (x) { n._text = String(x); n.children = []; }

@@ -183,6 +183,53 @@ f.transfer.shutdown();assert.equal(f.transfer.commit(10,f.record(),next,[]).ok,f
   }
 }
 console.log('PASS quest atomic inventory/state, metadata, save admission, publication errors, refusal, revocation and source-only budget CAS composition');
+// Abandonment alone requests an up-to debit. Its cap is evaluated from the
+// locked inventory snapshot, without relaxing an ordinary exact turn-in.
+for(const requested of [2,6]) {
+  const bounded=fixture(),closed={v:1,open:{},cool:{}};
+  assert.equal(bounded.transfer.commit(10,bounded.record(),closed,[{item:'ore:Skyrim.esm',count:-requested,upTo:true}],undefined,{quest:'wolf',until:1000}).ok,true);
+  assert.equal(bounded.inventory().entries.find(row=>row.baseId===100)?.count || 0,Math.max(0,4-requested));
+  assert.equal(bounded.record().cool.wolf,requested>4?1000:undefined);
+}
+{
+  const empty=fixture();
+  assert.equal(empty.transfer.commit(10,empty.record(),next,[{item:'ore:Skyrim.esm',count:-4}]).ok,true); empty.save();
+  assert.equal(empty.transfer.commit(10,empty.record(),next,[{item:'ore:Skyrim.esm',count:-1,upTo:true}],undefined,{quest:'wolf',until:1000}).ok,false,
+    'a collection cannot name work already closed by the preceding transaction');
+  const reopened={...empty.record(),open:{wolf:{drawn:1}}};
+  assert.equal(empty.transfer.commit(10,empty.record(),reopened,[]).ok,true);
+  assert.equal(empty.transfer.commit(10,empty.record(),next,[{item:'ore:Skyrim.esm',count:-1,upTo:true}],undefined,{quest:'wolf',until:1000}).ok,true);
+  assert.equal(empty.calls(),3,'an empty collection still commits the quest alongside its current inventory snapshot');
+  assert.equal(empty.inventory().entries.some(row=>row.baseId===100),false);
+}
+for(const change of [
+  {item:'ore:Skyrim.esm',count:1,upTo:true},
+  {item:'ore:Skyrim.esm',count:-6,upTo:false},
+  {item:'ore:Skyrim.esm',count:-6,upTo:'true'}
+]) {
+  const malformed=fixture(),before=malformed.inventory(),old=malformed.record();
+  assert.equal(malformed.transfer.commit(10,old,next,[change]).ok,false);
+  assert.equal(malformed.calls(),0); assert.deepEqual(malformed.inventory(),before); assert.deepEqual(malformed.record(),old);
+}
+console.log('PASS up-to abandonment debits are bounded, validated and preserve exact debit/refusal contracts');
+for(const until of [null,1000]) for(const owed of [2,6]) {
+  const bounded=fixture(),closed={v:1,open:{},cool:{wolf:9000}},before=bounded.inventory(),old=bounded.record();
+  const result=bounded.transfer.commit(10,old,closed,[{item:'ore:Skyrim.esm',count:-owed,upTo:true}],undefined,{quest:'wolf',until});
+  assert.equal(result.ok,until!==null || owed<=4,'only a shortfall requires known normal cooldown terms');
+  if(result.ok)assert.equal(bounded.record().cool.wolf,9000,'a later existing cooldown is preserved');
+  else {assert.deepEqual(bounded.inventory(),before);assert.deepEqual(bounded.record(),old);assert.equal(bounded.calls(),0);}
+}
+for(const plan of [undefined,{quest:'missing',until:1000},{quest:'wolf',until:0},{quest:'wolf',until:1.5},{quest:'wolf',until:1000,other:true}]) {
+  const bounded=fixture(),before=bounded.inventory(),old=bounded.record();
+  assert.equal(bounded.transfer.commit(10,old,{v:1,open:{},cool:{}},[{item:'ore:Skyrim.esm',count:-6,upTo:true}],undefined,plan).ok,false);
+  assert.equal(bounded.calls(),0);assert.deepEqual(bounded.inventory(),before);assert.deepEqual(bounded.record(),old);
+}
+{
+  const bounded=fixture(),before=bounded.inventory(),old=bounded.record();bounded.mode('refuse');
+  assert.equal(bounded.transfer.commit(10,old,{v:1,open:{},cool:{}},[{item:'ore:Skyrim.esm',count:-6,upTo:true}],undefined,{quest:'wolf',until:1000}).ok,false);
+  assert.deepEqual(bounded.inventory(),before);assert.deepEqual(bounded.record(),old,'refused CAS cannot burn a cooldown or clear the open work');
+}
+console.log('PASS partial-abandon cooldown is atomic, tied to held work, validated and preserves later cooldowns');
 {
   let body='100',dead=false;
   const ai={isHuman:false,profileId:-1,lifeGeneration:0};

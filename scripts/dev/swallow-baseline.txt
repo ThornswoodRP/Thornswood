@@ -340,7 +340,7 @@ game\gamemode\durability.ts 4
 game\gamemode\embassy-and-remnant.ts 1
 game\gamemode\event-handlers.ts 1
 game\gamemode\farming.ts 4
-game\gamemode\furniture.ts 6
+game\gamemode\furniture.ts 5
 game\gamemode\gathering-stations.ts 2
 game\gamemode\hair-dye.ts 5
 game\gamemode\hold-economy.ts 5

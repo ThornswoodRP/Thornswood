@@ -2205,11 +2205,12 @@
       ' 50 is comfortable.'));
     var fire = (Number(v.fireAway) >= 0)
       ? 'a fire ' + Number(v.fireAway) + ' away, worth ' + (Number(v.fireWorth) || 0)
-      : 'no fire in reach';
+      : (v.burning ? 'no nearby fire in reach' : 'no fire in reach');
     card.appendChild(el('div', 'inn',
       'You are ' + (PLACE_WORDS[v.place] || 'somewhere the server does not know yet') +
       (v.roof ? ', under a roof' : ', with no roof') + (v.night ? ', at night' : '') + ', with ' + fire + '. ' +
       'Weather and height are worth ' + (Number(v.exposure) || 0) + '. ' +
+      (v.burning ? 'You are on fire. It counts as a fire at your feet. ' : '') +
       // A blizzard or a heavy storm (#3176), the server's own number.
       (Number(v.storm) > 0 ? 'The storm slows you by ' + Number(v.storm) + ' per cent while you are out in it. ' : '') +
       'What you are wearing covers ' + (Number(v.cover) || 0) + ' per cent of you.'));
@@ -2520,6 +2521,7 @@
         box.value = String(f.value);
         box.placeholder = f.kind === 'percent' ? 'percent' : 'gold';
       }
+      box.setAttribute('aria-label', String(f.label || f.key));
       inputs.push({ f: f, box: box });
       officeRow(card, String(f.label || f.key), f.kind === 'percent' ? String(f.value) + '%' : String(f.value), [box]);
     });
@@ -2749,6 +2751,7 @@
     rc.appendChild(el('div', 'desc', 'Type part of the name of what it makes. The server says whether ' + who +
       ' may make it, and why not, and whether their game lists it.'));
     var ask = document.createElement('input');
+    ask.setAttribute('aria-label', 'Recipe output name');
     ask.placeholder = 'what it makes';
     var check = officeButton('Check', function () {
       var w = String(ask.value || '').trim();
@@ -2791,10 +2794,13 @@
     gb.appendChild(el('div', 'desc', 'Nothing records what somebody lost, so you go on what they and the logs say. Name ' +
       'the item, how many, and why: the reason goes in the staff log with your name, and ' + who + ' is told.'));
     var item = document.createElement('input');
+    item.setAttribute('aria-label', 'Item to give back');
     item.placeholder = 'item';
     var count = document.createElement('input');
+    count.setAttribute('aria-label', 'Count to give back');
     count.placeholder = 'how many';
     var why = document.createElement('input');
+    why.setAttribute('aria-label', 'Reason for giving items back');
     why.placeholder = 'why: what they lost, and how';
     var give = officeButton('Give back', function () {
       var n = Number(String(count.value || '').trim());
@@ -2861,6 +2867,7 @@
     if (!d.by) return card;
     officeRow(card, '', '', [officeButton('Evict', '/evict', 'Press again to end ' + d.by + '\'s claim')]);
     var input = document.createElement('input');
+    input.setAttribute('aria-label', 'Weekly rent in gold');
     input.placeholder = 'gold';
     var set = officeButton('Set rent', function () {
       var n = Number(String(input.value || '').trim());
@@ -2885,6 +2892,7 @@
   /* An amount and Rent paid, for gold of rent somebody handed the steward (#3895). */
   function rentPaidButtons(o) {
     var input = document.createElement('input');
+    input.setAttribute('aria-label', 'Rent paid in gold');
     input.placeholder = String(Number(o.owed) || 0);
     var paid = officeButton('Rent paid', function () {
       var raw = String(input.value || '').trim();
@@ -3899,6 +3907,7 @@
       write.appendChild(el('div', 'name', 'A contract with ' + who.name));
       write.appendChild(el('div', 'desc', 'Write the terms in your own words. You sign it as you give it to them, and they sign or refuse it on their own K.'));
       var box = document.createElement('textarea');
+      box.setAttribute('aria-label', 'Contract terms');
       box.maxLength = chars;
       box.rows = 6;
       box.style.width = '100%';

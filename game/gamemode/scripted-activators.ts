@@ -2239,7 +2239,7 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
       */
       var dyeW = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodHairDye;
       var dLine = '';
-      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW) : ''; } catch (eDye) {
+      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW, refrId) : ''; } catch (eDye) {
         log('the hair dye at', refrId.toString(16), 'threw:', eDye);
       }
       if (dLine) { notify(casterRefrId, dLine); say(casterRefrId, dLine); answeredHere = true; }

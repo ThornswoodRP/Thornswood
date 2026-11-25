@@ -43,7 +43,7 @@ yes('the numbers are all found (page ' + pageChars + ', title ' + titleCut + ', 
 yes('the panel holds a page to the server\'s pageChars', panelPage === pageChars);
 yes('the panel holds a title to the server\'s title cut', panelTitle === titleCut);
 yes('the text box and the title box carry those maxlengths',
-    /'-text" maxlength="' \+ PAGE_CHARS \+ '"/.test(journal) && /'-ptitle" maxlength="' \+ TITLE_CHARS \+ '"/.test(journal));
+    /'-text"[^>]*maxlength="' \+ PAGE_CHARS \+ '"/.test(journal) && /'-ptitle"[^>]*maxlength="' \+ TITLE_CHARS \+ '"/.test(journal));
 
 // The longest line Save can send: the ids the server makes, the longest title, a page of all newlines.
 const jid = 'j' + (Math.pow(36, 9) - 1).toString(36) + (999).toString(36);
