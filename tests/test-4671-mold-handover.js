@@ -105,6 +105,18 @@ for(const route of ['/moldhere','/mold']) {
     const told=f.run();assert.equal(JSON.stringify(f.E.packs),JSON.stringify(f.before));
     assert.match(f.reply(told),/blank was not spent/);assert.equal(f.E.native.calls.length,0);
   });
+  check(route+' reserves a refund sequence before debiting for another holder',()=>{
+    const f=setup(route);
+    f.E.native.receipt[f.actor.actor]=JSON.stringify({actor:f.actor.actor.toString(16),profile:f.actor.pid,sequence:Number.MAX_SAFE_INTEGER-1});
+    f.E.native.ack();f.E.native.hook(call=>call.actor===h.ALICE.actor?false:undefined);
+    f.run();assert.equal(JSON.stringify(f.E.packs),JSON.stringify(f.before));assert.equal(f.E.native.calls.length,0);
+  });
+  check(route+' self conversion may use its final safe sequence without a refund slot',()=>{
+    const f=setup(route,true);
+    f.E.native.receipt[f.actor.actor]=JSON.stringify({actor:f.actor.actor.toString(16),profile:f.actor.pid,sequence:Number.MAX_SAFE_INTEGER-1});
+    f.E.native.ack();f.run();
+    assert.equal(f.E.blanks(f.actor),1);assert.equal(f.E.molds(h.ALICE,h.LABEL),1);assert.equal(f.E.native.calls.length,1);
+  });
 }
 check('legacy typed mold without a blank recipe retains its existing behavior',()=>{
   const f=setup('/mold',false,false);delete f.E.mp.compareAndSetInventory;

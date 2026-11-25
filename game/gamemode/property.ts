@@ -2008,6 +2008,7 @@
           target = actorId === owner.actorId ? source : read(owner.actorId);
           if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
               target.profile !== owner.profileId ||
+              actorId !== owner.actorId && !Number.isSafeInteger(source.sequence + 1) ||
               mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
               mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
             return {ok:false,why:untouched};
