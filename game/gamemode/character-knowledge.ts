@@ -11,19 +11,15 @@
     if (typeof mp.compareAndSetActorPropertyAndSpells !== 'function') {
       throw new Error('This engine cannot commit character progression and active spells together.');
     }
+    if (typeof mp.getActorLearnedSpells !== 'function') { throw new Error('This engine cannot read the full learned spell snapshot.'); }
     var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
     var runtime = mp.getActorRuntimeIdentity(actorId);
     var identity = mp.getNpcAIState(actorId);
-    var self = { type: 'form', desc: mp.getDescFromId(actorId) };
-    var count = Number(mp.callPapyrusFunction('method', 'Actor', 'GetSpellCount', self, []));
-    if (!Number.isInteger(count) || count < 0 || count > 4096) { throw new Error('The actor spell count cannot be read.'); }
-    var current = [];
-    for (var i = 0; i < count; i++) {
-      var spell = mp.callPapyrusFunction('method', 'Actor', 'GetNthSpell', self, [i]);
-      var id = spell && spell.desc ? mp.getIdFromDesc(spell.desc) : 0;
-      if (!Number.isInteger(id) || id <= 0 || current.indexOf(id) >= 0) { throw new Error('The actor spell set cannot be read.'); }
-      current.push(id);
-    }
+    var current = mp.getActorLearnedSpells(actorId);
+    if (!Array.isArray(current) || current.length > 4096 || current.some(function (id, i) {
+      return !Number.isInteger(id) || id <= 0 || id >= 0xff000000 || current.indexOf(id) !== i;
+    })) { throw new Error('The full learned spell snapshot cannot be read safely.'); }
+    current = current.slice();
     var managed = Object.keys(P.SPELL_IDS).map(function (name) { return P.SPELL_IDS[name]; })
       .concat(Object.keys(SS.STAFF_SPELLS)).map(function (desc) { return mp.getIdFromDesc(desc); });
     var college = g.__thornswoodCollege;

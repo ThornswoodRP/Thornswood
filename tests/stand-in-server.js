@@ -53,7 +53,8 @@
               it answered false, a spell tome teaches its spell and is spent
               (ReadBookEvent::OnFireSuccess).
     spells    PapyrusActor AddSpell, RemoveSpell, GetSpellCount and
-              GetNthSpell over the change form's learnedSpells.
+              GetNthSpell, excluding inherited entries. getActorLearnedSpells
+              returns the full change form list used by atomic knowledge CAS.
     death     MpActor: onDying, then onDeath, then onRespawn after the delay.
     animate   ActionListener: an animation the client sends for its own
               character is kept as lastAnimEvent (OnUpdateAnimation); a
@@ -105,7 +106,7 @@ const ENGINE_METHODS = [
   'getSavedInventoryReceipt', 'place', 'lookupEspmRecordById', 'getEspmLoadOrder',
   'getNeighborsByPosition', 'getAllForms', 'loadNpcBatch', 'prepareNpcLoad', 'setNpcServerControlled',
   'setNpcDifficultyTier', 'updateNpcMovement', 'stopNpcMovement', 'getNavmeshRecords', 'getNpcAIState',
-  'getActorRuntimeIdentity', 'getFactionReactions', 'serverNpcAttack', 'getLoadedFormCount',
+  'getActorRuntimeIdentity', 'getActorLearnedSpells', 'getFactionReactions', 'serverNpcAttack', 'getLoadedFormCount',
   'setNpcPlacementExclusions', 'getLoadedNpcIds', 'getDescFromId', 'getIdFromDesc',
   'callPapyrusFunction', 'registerPapyrusFunction', 'sendCustomPacket', 'setPacketHistoryRecording',
   'getPacketHistory', 'clearPacketHistory', 'requestPacketHistoryPlayback', 'findFormsByPropertyValue',
@@ -689,6 +690,8 @@ function world(opts) {
     getFactionReactions: function (list) { if (!Array.isArray(list)) { throw new Error('factionIds must be an array'); } return []; },
     getLoadedFormCount: function () { return store.size; },
     getActorRuntimeIdentity: function (id) { actorRow(id); return String(runtimeIdentity(id >>> 0)); },
+    // Full change-form list, including explicitly stored inherited entries.
+    getActorLearnedSpells: function (id) { return (actorRow(inventoryActorId(id)).learnedSpells || []).slice(); },
     getNpcAIState: function (id) {
       const row = actorRow(id);
       const ai = (records.get(baseOf(row)) || {}).ai || [0, 4];
@@ -896,18 +899,22 @@ function world(opts) {
     if (kind === 'method' && cls === 'Actor' && row && row.type === 'NPC_' &&
         (fn === 'AddSpell' || fn === 'RemoveSpell' || fn === 'GetSpellCount' || fn === 'GetNthSpell')) {
       const list = row.learnedSpells = row.learnedSpells || [];
-      if (fn === 'GetSpellCount') { return list.length; }
+      // PapyrusActor.cpp filters entries inherited from NPC_/RACE even when
+      // explicitly stored. This is intentionally not the full CAS snapshot.
+      const inherited = row.inheritedSpells || [];
+      const enumerable = list.filter(spell => !inherited.includes(spell));
+      if (fn === 'GetSpellCount') { return enumerable.length; }
       if (fn === 'GetNthSpell') {
         const n = Number(args[0]);
-        return n >= 0 && n < list.length ? { type: 'espm', desc: w.descOf(list[n]) } : undefined;
+        return n >= 0 && n < enumerable.length ? { type: 'espm', desc: w.descOf(enumerable[n]) } : undefined;
       }
       let spell = 0;
       try { spell = args[0] && args[0].desc !== undefined ? w.idOf(args[0].desc) : 0; } catch (e) { spell = 0; }
       const rec = spell ? records.get(spell) : null;
       if (!rec || rec.type !== 'SPEL') { return false; }
       const at = list.indexOf(spell);
-      if (fn === 'AddSpell') { if (at !== -1) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
-      if (at === -1) { return false; }
+      if (fn === 'AddSpell') { if (at !== -1 || inherited.includes(spell)) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
+      if (at === -1 || inherited.includes(spell)) { return false; }
       list.splice(at, 1); saw(id, 'spell', w.descOf(spell), false); return true;
     }
     // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).

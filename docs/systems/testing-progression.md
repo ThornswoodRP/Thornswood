@@ -79,6 +79,9 @@ Legacy ordinary spells outside the current book and staff catalogue stay in
 history by their form descriptors, with native membership removed. They do
 not become active unless current canonical rules allow them. An unreadable
 spell type refuses the entire change.
+The atomic writer reads the full learned set through the matching engine
+getter, including explicitly stored inherited abilities. Papyrus spell
+enumeration intentionally omits those entries and cannot supply that snapshot.
 
 Ordinary tome learning keeps the engine's existing book consumption path.
 Its requested eligible book and history save first; a failed read or save refuses the

@@ -149,6 +149,37 @@ if (w.loaded()) {
     publicationThrown && !publishThrew && completedRead && completedRead.allowed !== false && completedRead.learned &&
     w.count(ninth, w.idOf(book)) === 0 && C.stateOf(ninth).spells.points === 1 &&
     w.spellsOf(ninth).includes(w.idOf(flames)) && C.writeSucceeded(ninth));
+  const tenth = student(9), inheritedAbility = 'abc4:Skyrim.esm';
+  typedSpell(inheritedAbility, 4);
+  w.row(tenth).learnedSpells = [w.idOf(inheritedAbility)];
+  w.row(tenth).inheritedSpells = [w.idOf(inheritedAbility)];
+  const self = { type: 'form', desc: w.descOf(tenth) };
+  yes('Papyrus enumeration filters explicitly stored inherited entries while the full snapshot retains them',
+    box.mp.callPapyrusFunction('method', 'Actor', 'GetSpellCount', self, []) === 0 &&
+    box.mp.getActorLearnedSpells(tenth).includes(w.idOf(inheritedAbility)));
+  let inheritedSaved = false;
+  try {
+    C.writeState(tenth, P.setProfessionForTesting(C.stateOf(tenth), 'cook', 'hearthcook').state);
+    inheritedSaved = true;
+  } catch (_) { }
+  yes('profession switching preserves explicitly stored inherited abilities using the full CAS snapshot',
+    inheritedSaved && C.stateOf(tenth).prof === 'cook' && w.spellsOf(tenth).includes(w.idOf(inheritedAbility)));
+  const fullList = box.mp.getActorLearnedSpells;
+  const invalidLists = [null, {}, [0], [1.5], [0xff000001], [w.idOf(inheritedAbility), w.idOf(inheritedAbility)], new Array(4097).fill(w.idOf(inheritedAbility))];
+  for (let i = 0; i < invalidLists.length; i++) {
+    const beforeInvalid = JSON.stringify([C.stateOf(tenth), w.spellsOf(tenth)]);
+    box.mp.getActorLearnedSpells = function () { return invalidLists[i]; };
+    let invalidRefused = false;
+    try { C.writeState(tenth, C.stateOf(tenth)); } catch (_) { invalidRefused = true; }
+    finally { box.mp.getActorLearnedSpells = fullList; }
+    yes('malformed full spell snapshot ' + i + ' refuses without mutating either state',
+      invalidRefused && JSON.stringify([C.stateOf(tenth), w.spellsOf(tenth)]) === beforeInvalid);
+  }
+  box.mp.getActorLearnedSpells = undefined;
+  let missingListRefused = false;
+  try { C.writeState(tenth, C.stateOf(tenth)); } catch (_) { missingListRefused = true; }
+  finally { box.mp.getActorLearnedSpells = fullList; }
+  yes('a missing full-list binding refuses without a Papyrus fallback', missingListRefused);
   yes('the off-book descriptor survives restart while its native membership stays absent',
     w.restart().loaded && w.prop(seventh, C.PROPERTY).spellHistory.otherSpells.includes(offbook) &&
     !w.spellsOf(seventh).includes(w.idOf(offbook)) && w.spellsOf(seventh).includes(w.idOf(ability)));
