@@ -54,6 +54,8 @@ bot/moderation-posts.json.tmp
 # half of a write that has not been swapped in yet.
 bot/joins.json
 bot/joins.json.tmp
+bot/welcome-posts.json
+bot/welcome-posts.json.tmp
 
 # The bot's heartbeat for the watchdog (#449), rewritten every minute by
 # whichever bot is running; a copy here is some other run's.

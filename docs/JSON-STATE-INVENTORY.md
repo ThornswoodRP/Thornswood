@@ -62,6 +62,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `config.json` (the site's own folder) | by hand on the box; the site writes its secret and password into it once when they are missing | site | High: holds secrets, never in the repository | never written over while it will not read (`site/lib/config.js`) |
 | `from-bot/lists.json` | bot (the known issues and roadmap it reads from GitHub) | site (its Known issues and Roadmap pages) | Low | none |
 | `joins.json` | bot | bot, `bot\backfill.py`, `bot\redraw.py` | Medium: each member's join number | none |
+| `welcome-posts.json` | bot | bot | Medium: keyed by Discord message ID; each entry holds `guild` and `member` IDs, join `number`, and `channel` ID. No card contents. | The hourly join sweep checks saved links against readable join records. A saved card becomes eligible for deletion when its member no longer has that join number, after the existing 365-day leaving period or when a deletion request removes it. The link is dropped after deletion or if the post is already absent; other Discord errors leave it in place. Older cards without a saved link are not searched or removed. |
 | `open-tickets.json` | bot | bot | Medium | none |
 | `commands-synced.json` | bot | bot | Low | none |
 | `heartbeat.json` (the bot's data folder) | bot | Watch-Services.ps1 (the watchdog) | Medium: a bot that stops beating is said and restarted | none |
