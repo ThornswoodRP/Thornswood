@@ -86,7 +86,17 @@ try {
       w.heardSince(actor,failAt).some(line => /acknowledgement|unavailable|retained/.test(line)));
     writeFault = '';
     yes('the real ledger reopens after the refused writer is replaced', w.reload());
+    w.box().Date.now = () => now + 24 * 60 * 60 * 1000 + 1;
+    w.activate(trader, actor); w.run(500);
     w.box().Date.now = () => now + 2 * 24 * 60 * 60 * 1000 + 1;
+    // A quest response can publish a new offer before the periodic aging pass.
+    const questRefresh = w.box().__thornswoodMerchantTrade.command({actorId:actor,profileId:1000,
+      parts:['/merchant','quest','take','no-such-work']});
+    yes('a quest response applies expiration before publishing a fresh shelf view',
+      questRefresh.view && questRefresh.view.open && /no appointed place/.test(questRefresh.text) &&
+      !questRefresh.view.offers.some(x => x.name === 'Venison' && x.stock > 0) &&
+      w.readPrivate('merchant-ledger.json').entries[merchant.reference].spoilClock.days === 2 &&
+      JSON.stringify(w.row(actor).inventory) === pack);
     w.activate(trader, actor); w.run(500);
     say('/merchant buy 1 @3 Venison'); w.run(2000);
     yes('another stale buy cannot pay for or receive expired food', JSON.stringify(w.row(actor).inventory) === pack && view().purse === purse);

@@ -2921,7 +2921,15 @@ function createMerchantTrading(deps) {
           released:'Your inventory changed before the turn-in. Nothing moved. Turn the work in again.'});
       }
       if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
-      var questState=purses.prepare(merchantId),questPlace=questState && placeOf(questState.reference);
+      var questState;
+      try {
+        questState = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);});
+      } catch(error) {
+        if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
+        if (typeof deps.log === 'function') deps.log('Merchant shelf refresh failed after quest: ' + error);
+        return refuseSession(text + ' The shelf could not be refreshed. Open the trader panel again.');
+      }
+      var questPlace=questState && placeOf(questState.reference);
       var questResponse=questState && questPlace ? viewFor(merchantId,questState,questPlace,actorId,profileId,text,{session:originalSession,identity:originalSession.identity}) : closedView(actorId,profileId,originalSession);
       return questResponse && isCurrentView(actorId,questResponse) ? fail(text,questResponse) : {text:'',view:null};
     }
