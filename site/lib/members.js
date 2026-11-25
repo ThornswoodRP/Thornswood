@@ -71,7 +71,7 @@ async function memberOf(discordId) {
        the page limit rather than the whole guild, so it proves nothing about
        who is missing and the single lookup has to be asked. */
     if (Object.keys(all).length < 1000) {
-      return { ok: false, status: 404, body: null, why: 'not found' };
+      return { ok: false, status: 404, code: 10007, body: null, why: 'not found' };
     }
   }
   return await discordGet('/guilds/' + cfg.discord.guildId + '/members/' + discordId);
@@ -129,8 +129,8 @@ async function standing(discordId) {
         out.businessOwner = holdsNamedRole(out.roles, 'Business Owner');
         out.leads = leaderRoles(out.roles);
         out.devRole = holdsNamedRole(out.roles, 'Dev');
-      } else if (r.status !== 404) {
-        out.lookupFailed = r.why;
+      } else if (r.status !== 404 || r.code !== 10007) {
+        out.lookupFailed = r.why || 'Discord did not confirm membership';
       }
     }
     return out;
@@ -145,10 +145,10 @@ async function standing(discordId) {
   }
   const r = await memberOf(discordId);
   if (!r.ok) {
-    // A real 404 is the only one that means "not in the server". Everything
-    // else is the site's problem and has to say so, or somebody who IS in the
+    // Unknown Member (10007) is the absence proof. Every other 404 and failure
+    // is the site's problem and has to say so, or somebody who IS in the
     // server spends an evening being told they are not.
-    if (r.status !== 404) out.lookupFailed = r.why;
+    if (r.status !== 404 || r.code !== 10007) out.lookupFailed = r.why || 'Discord did not confirm membership';
     return out;
   }
   const m = r.body;
@@ -427,7 +427,7 @@ async function changeOffice(o, server) {
   if (!roleId) return { ok: false, said: 'There is no ' + role + ' role in the Discord yet. Staff make it with the Discord builder.' };
   const m = await memberOf(whoAcct);
   if (!m.ok) {
-    return { ok: false, said: m.status === 404 ? whoName + ' is not in the Discord, so the role has nobody to go to.'
+    return { ok: false, said: (m.status === 404 && m.code === 10007) ? whoName + ' is not in the Discord, so the role has nobody to go to.'
       : 'Discord could not be asked just now. Try again in a minute.' };
   }
   const has = (m.body.roles || []).map(String).indexOf(String(roleId)) >= 0;
@@ -470,8 +470,9 @@ async function changeOffice(o, server) {
   keep those ids for, and /api/play/join moves them to whoever checks in with
   one next. Left means all of these, and anything short of them is the safe
   side, still holding:
-    - Discord says the account is not in the server: a 404, which is the only
-      failure standing() takes as certain. A lookup that failed is not left.
+    - Discord says Unknown Member (10007), or a complete member list omits it.
+      These are the only absence proofs standing() takes as certain. A
+      lookup that failed is not left.
     - It is not banned in bans.json, which standing() reads before anything.
     - It is not on Discord's own ban list. A ban from inside Discord takes
       somebody out of the server as well, so it reads as a 404 here, and must
@@ -488,7 +489,7 @@ async function hasLeft(discordId) {
   if (!cfg.discord.botToken || !cfg.discord.guildId) return false;
   const ban = await discordGet('/guilds/' + cfg.discord.guildId + '/bans/' +
                                encodeURIComponent(String(discordId)));
-  return !!ban && !ban.ok && ban.status === 404;
+  return !!ban && !ban.ok && ban.status === 404 && ban.code === 10026;
 }
 
 /*
