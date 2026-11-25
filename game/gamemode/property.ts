@@ -3671,12 +3671,17 @@
     Every one answers by drawing the panel again, with what happened in it.
   */
   function dropboxCmd(parts, actorId, profileId, toProfile) {
+    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
+    // Optional correlation metadata for Put in, never a transaction key or
+    // authority. Old callers omit it; no other action can acknowledge it.
+    var goldRequest = sub === 'gold' && parts && typeof parts[3] === 'string' &&
+      /^[a-zA-Z0-9-]{1,80}$/.test(parts[3]) ? parts[3] : '';
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to use its drop box.');
+      if (goldRequest) { showBox(actorId, { open: false, goldRequest: goldRequest }); }
       return true;
     }
-    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
     var said = '';
     var records = false;
     if (sub === 'gold') {
@@ -3691,7 +3696,9 @@
     } else if (sub !== 'open') {
       said = 'The box does not know that.';
     }
-    showBox(actorId, boxView(actorId, profileId, hold, said, records));
+    var view = boxView(actorId, profileId, hold, said, records);
+    if (goldRequest) { view.goldRequest = goldRequest; }
+    showBox(actorId, view);
     return true;
   }
 
