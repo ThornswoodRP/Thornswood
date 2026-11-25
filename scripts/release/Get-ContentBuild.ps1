@@ -167,6 +167,16 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]
     # chain (#6195: builds before 6d2cf9d carry gamemode code), and laying it
     # would put that file back as it was.
     if ($null -ne $Only) {
+        # New previews still use the verified bytes of an older content build.
+        # Fresh builds already name the tables under game/data (#6296).
+        foreach ($name in 'FISHING-SPOTS.csv', 'HANGING-GAME-SPOTS.csv', 'HUNTING-SPOTS.csv') {
+            $fromPath = "docs/$name"
+            $toPath = "game/data/$name"
+            if ($Only -ccontains $toPath -and $got.Contains($fromPath) -and -not $got.Contains($toPath)) {
+                $got[$toPath] = $got[$fromPath]
+                $want[$toPath] = $want[$fromPath]
+            }
+        }
         $left = @($got.Keys | Where-Object { $n = $_; -not @($Only | Where-Object { $n -ceq $_ -or $n.StartsWith($_ + '/') }).Count })
         foreach ($n in $left) { $got.Remove($n) }
         if ($left.Count) { Write-Host ("left $($left.Count) file(s) of the build that this checkout's chain does not write: " + (@($left | Select-Object -First 5) -join ', ') + $(if ($left.Count -gt 5) { ', ...' } else { '' })) }
