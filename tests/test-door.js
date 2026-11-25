@@ -553,6 +553,29 @@ if (block !== null) {
         recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1000000);
   }
 
+  {
+    const r = rig(true, [101]);
+    const originalBans = [{ profiles: [202], scope: 'account', until: 0, why: 'held ban' }];
+    r.answer(200, { profiles: [101], bans: originalBans });
+    const damaged = JSON.parse(r.files[ALLOWED]);
+    damaged.bansRequestedAt = new Date(1006000).toISOString();
+    r.files[ALLOWED] = JSON.stringify(damaged);
+    r.advance(4000); r.refresh();
+    const earlierHealthy = r.pending.shift();
+    r.advance(1000); r.refresh();
+    r.advance(3000);
+    r.answer(200, { profiles: [101], bans: [], bansBroken: true });
+    const duringFailure = JSON.parse(r.files[ALLOWED]);
+    yes('4484 rewriting the role file must not make a corrupt ban stamp credible',
+        !Number.isFinite(Date.parse(duringFailure.bansRequestedAt)) &&
+          JSON.stringify(duringFailure.bans) === JSON.stringify(originalBans));
+    r.pending.unshift(earlierHealthy);
+    r.answer(200, { profiles: [101], bans: [] });
+    const recovered = JSON.parse(r.files[ALLOWED]);
+    yes('4484 an earlier healthy response can recover after a broken one rewrites roles',
+        recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1004000);
+  }
+
   // Every tick runs inside a try that notes "tick failed". None of the above
   // may have taken that path, or a pass above could be a crash that kicked
   // nobody by accident.
