@@ -38,6 +38,7 @@
   var shown = false;
   var root = null;
   var takedownArm = null, takedownTimer = 0, takedownHeld = '';
+  var haulFieldError = null;
 
   /*
     WHAT MAKE A POST KEEPS. The draft is kept here as it is typed, so a
@@ -165,6 +166,9 @@
       '<button class="shut" data-do="close">Close</button></div></div>';
     document.body.appendChild(root);
     root.addEventListener('input', resetTakedown);
+    function editHaul(ev) { if (haulFieldError && ev.target === haulFieldError.field) clearHaulFieldError(); }
+    root.addEventListener('input', editHaul);
+    root.addEventListener('change', editHaul);
     root.addEventListener('click', function (ev) {
       if (takedownArm && ev.target !== takedownArm.button) resetTakedown();
     }, true);
@@ -189,6 +193,47 @@
   function field(id) {
     var el = document.getElementById(id);
     return el ? String(el.value || '').trim() : '';
+  }
+
+  // Restore only this local missing-field error, preserving hints and newer errors.
+  function clearHaulFieldError() {
+    var error = haulFieldError;
+    if (!error) return;
+    haulFieldError = null;
+    var field = error.field;
+    var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
+    var newerError = field.validity.customError && !ownsValidity;
+    if (ownsValidity) field.setCustomValidity(error.custom);
+    if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
+      if (error.invalid == null) field.removeAttribute('aria-invalid');
+      else field.setAttribute('aria-invalid', error.invalid);
+    }
+    if (error.added) {
+      var now = field.getAttribute('aria-describedby');
+      var remaining = now === error.installed ? error.described :
+        String(now || '').split(/\s+/).filter(function (id) { return id && id !== ID + '-haul-reason'; }).join(' ');
+      if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
+      else field.setAttribute('aria-describedby', remaining);
+    }
+    var note = root.querySelector('#' + ID + '-haul-reason');
+    if (note) { note.textContent = ''; note.style.display = 'none'; }
+  }
+
+  function needHaulField(id, value, reason) {
+    var field = root.querySelector('#' + ID + '-' + id);
+    if (!field || !root.contains(field)) return false;
+    if (value) return true;
+    var described = field.getAttribute('aria-describedby');
+    var added = String(described || '').split(/\s+/).indexOf(ID + '-haul-reason') < 0;
+    var installed = added ? (described ? described + ' ' : '') + ID + '-haul-reason' : described;
+    haulFieldError = {field:field,reason:reason,custom:field.validity.customError ? field.validationMessage : '',
+      invalid:field.getAttribute('aria-invalid'),described:described,added:added,installed:installed};
+    var note = root.querySelector('#' + ID + '-haul-reason');
+    note.textContent = reason; note.style.display = 'block';
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', installed);
+    field.setCustomValidity(reason); field.focus(); field.reportValidity();
+    return false;
   }
 
   /* The newest number on the wall: what a post sent now will be above. */
@@ -225,6 +270,7 @@
 
   function drawContents() {
     resetTakedown();
+    clearHaulFieldError();
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -372,6 +418,7 @@
       out += '</select></div>';
       out += '<div class="line"><input id="' + ID + '-haul" aria-label="Haul cargo" placeholder="what it carries">' +
         '<button class="go" data-do="haul">Send a haul</button></div>';
+      out += '<div class="said" id="' + ID + '-haul-reason" role="status" aria-live="polite" style="display:none"></div>';
       out += '<div class="note">30 gold for the board, and the pay, both held with this hold. ' +
         'At the town it goes to, you or a steward confirm it on that board, and the hauler is paid. ' +
         'The company keeps a tenth of the pay, and nothing under 10. Handed back or taken down ' +
@@ -539,10 +586,15 @@
       return;
     }
     if (verb === 'haul') {
+      if (!shown || !root.contains(this)) return;
+      clearHaulFieldError();
       var pay = field(ID + '-pay').replace(/[^0-9]/g, '');
       var dest = field(ID + '-dest');
       var what = field(ID + '-haul');
-      if (pay && dest && what) { net('/haul ' + pay + ' ' + dest + ' ' + what); }
+      if (!needHaulField('pay', pay, 'Enter the haul pay in gold.') ||
+          !needHaulField('dest', dest, 'Choose the haul destination.') ||
+          !needHaulField('haul', what, 'Say what the haul carries.')) return;
+      net('/haul ' + pay + ' ' + dest + ' ' + what);
       return;
     }
     if (verb === 'done' && n) {
@@ -624,6 +676,7 @@
   function close() {
     if (!shown) { return; }
     resetTakedown(); takedownHeld = '';
+    clearHaulFieldError();
     shown = false;
     if (root) { root.className = ''; }
     tell('closed');
