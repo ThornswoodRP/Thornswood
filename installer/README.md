@@ -75,6 +75,7 @@ is gone, or says another workflow than they give.
 | Test | What it holds | Runs on |
 |---|---|---|
 | `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
+| `launcher/tests/test-4409-setup-look.ps1` | Runs the real setup window on Avalonia's headless platform to verify Windows contrast colours, text scaling and layout at several window sizes | Pull request and nightly |
 | `launcher/tests/test-4459-setup-keys.ps1` | The install window works from the keyboard: focus starts on its first control, Esc closes it as Not now does, Enter on a tick box starts the install, and focus follows what the install says, run on the real window on Avalonia's headless platform | Pull request and nightly |
 | `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names a size typed in by hand | Pull request and nightly |
 | `launcher/tests/test-4680-collection-load-order.ps1` | A missing plugin list is no failed check while the launcher's own folder is not made, since Vortex writes it with the collection, and is still one once the folder is made: the real InstallSteps, run with no plugin list in AppData | Pull request and nightly |
