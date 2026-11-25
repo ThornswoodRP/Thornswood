@@ -50,7 +50,7 @@ const w = standIn.world({ name: 'trade' });
 const WINDHELM = '3c:Skyrim.esm';
 const SWORD = '12eb7:Skyrim.esm', ORE = '71cf3:Skyrim.esm';
 w.record(SWORD, 'WEAP', { editorId: 'IronSword', fields: [{ type: 'DNAM', data: [1, 0, 0, 0] }] });
-w.record(ORE, 'MISC', { editorId: 'OreIron' });   // no readable name, so the window spaces the editor id: Ore Iron
+w.record(ORE, 'MISC', { editorId: 'OreIron' });   // shared decoded content names supply Iron Ore
 const id = w.idOf;
 const STREET = [130000, -9000, 9000];
 function at(dx, dy) { return [STREET[0] + dx, STREET[1] + dy, STREET[2]]; }
@@ -116,7 +116,7 @@ say(BRENNA, '/trade ok');
 yes('D1 she agrees, and Corvin is told (' + w.heardSince(CORVIN, heardAt).join(' | ') + ')',
   win(BRENNA).iAgreed === true && win(CORVIN).theyAgreed === true &&
   w.heardSince(CORVIN, heardAt).indexOf('Brenna has agreed. Agree on the trade when you are ready.') !== -1);
-say(CORVIN, '/trade add ' + line(CORVIN, 'Ore Iron') + ' 2');
+say(CORVIN, '/trade add ' + line(CORVIN, 'Iron Ore') + ' 2');
 yes('D2 Corvin putting up two ore takes her agreement back (' + JSON.stringify(win(BRENNA).theirs) + ')',
   win(BRENNA).iAgreed === false && (win(BRENNA).theirs || []).length === 1 && win(BRENNA).theirs[0].c === 2);
 
@@ -127,8 +127,8 @@ const corvinHeard = w.heard(CORVIN).length;
 say(CORVIN, '/trade ok');
 yes('E1 both agree: traded, and each is told what went each way (' + w.heardSince(BRENNA, heardAt).join(' | ') + ' || ' +
   w.heardSince(CORVIN, corvinHeard).join(' | ') + ')',
-  w.heardSince(BRENNA, heardAt).some(function (l) { return /^Traded\. You gave .*Iron Sword \(90%\).* and got .*Ore Iron.*\.$/.test(l); }) &&
-  w.heardSince(CORVIN, corvinHeard).some(function (l) { return /^Traded\. You gave .*Ore Iron.* and got .*Iron Sword \(90%\).*\.$/.test(l); }) &&
+  w.heardSince(BRENNA, heardAt).some(function (l) { return /^Traded\. You gave .*Iron Sword \(90%\).* and got .*Iron Ore.*\.$/.test(l); }) &&
+  w.heardSince(CORVIN, corvinHeard).some(function (l) { return /^Traded\. You gave .*Iron Ore.* and got .*Iron Sword \(90%\).*\.$/.test(l); }) &&
   !win(BRENNA).open && !win(CORVIN).open);
 yes('E2 the piece put up crosses as it was, and the plain sword stays (' + show(BRENNA) + ' / ' + show(CORVIN) + ')',
   named(CORVIN, 'Iron Sword (90%)') === 1 && named(BRENNA, 'Iron Sword (90%)') === 0 && named(BRENNA, '') === 1 && named(CORVIN, '') === 0);
@@ -158,7 +158,7 @@ w.moveTo(CORVIN, WINDHELM, at(200, 0));
 w.run(500);
 say(BRENNA, '/trade ' + hex(CORVIN));
 say(CORVIN, '/yes');
-say(CORVIN, '/trade add ' + line(CORVIN, 'Ore Iron') + ' 1');
+say(CORVIN, '/trade add ' + line(CORVIN, 'Iron Ore') + ' 1');
 before = show(BRENNA) + show(CORVIN);
 heardAt = w.heard(CORVIN).length;
 w.run(3 * 60000 + 5000);

@@ -792,9 +792,9 @@ function goldDescriptors(text) {
       And the drop box's names (#2298): itemName reads the two tables for the
       name the box's panel and records show, by the record a row already
       holds. It turns a record into a name, never a name into a thing, and
-      writes nothing.
+      writes nothing. The same decoded base lookup names Trade's pieces.
     */
-    const names = bodyOf('property/itemName') || '';
+    const names = (bodyOf('property/itemName') || '') + (bodyOf('property/baseItemName') || '');
     /*
       And the hold economy's names (#3164): recordNames reads the two tables
       to name a counted record on staff's page, the same one way round as the
