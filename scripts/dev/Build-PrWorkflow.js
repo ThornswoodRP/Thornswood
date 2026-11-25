@@ -90,6 +90,23 @@ function build(src) {
   if (body.split(launcherWaits).length !== 2) { fail('build.yml no longer has the launcher job waiting for the tested job, and on Linux when the pick\'s path rule says it has nothing to build'); }
   body = body.replace(launcherWaits, "    needs: pick\n    if: ${{ !cancelled() }}\n    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}\n");
   if (/needs\.tested|needs: \[?tested|^  tested:/m.test(code(body))) { fail('the pull request build still names the tested job'); }
+  // A derivation change can use the retained Dev measurements after checking
+  // their original catalogue. Only the PR gates need its ancestor commit.
+  const treeJob = /\n  checks:\n[\s\S]*?(?=\n  \w[\w-]*:\n|$)/.exec(body);
+  if (!treeJob) { fail('build.yml no longer has its tree checks job'); }
+  let tree = swap(treeJob[0], '          persist-credentials: false\n',
+    '          persist-credentials: false\n          fetch-depth: 0\n          filter: blob:none\n',
+    'the tree checkout without persisted credentials');
+  tree = swap(tree, '          & python tests/test-merchant-role-data.py\n',
+    '          & python tests/test-merchant-role-candidate.py\n' +
+    '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n' +
+    '          & python scripts/dev/Check-MerchantRoleCandidate.py --allow-candidate\n',
+    'the exact merchant role tests');
+  tree = swap(tree,
+    '          & python scripts/dev/Build-MerchantRoleTables.py --check\n' +
+    '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n',
+    '', 'the exact role catalogue check covered by the candidate checker');
+  body = body.replace(treeJob[0], () => tree);
   /*
     ONE OF THE THREE CHECKS MAIN'S RULESET REQUIRES (#3683, Patrick's A on
     q-3683-required-check, 27 Oct 2026; the other two are test-tasks.yml's
