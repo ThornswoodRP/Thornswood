@@ -408,12 +408,17 @@ exit 0
     # #4452: read tables already in the checkout, through the real pick.
     $null = New-Item -ItemType Directory -Force -Path $mods, (Join-Path $sr 'game/data')
     Copy-Item -LiteralPath (Join-Path $repo 'scripts/mods/ContentPaths.ps1') -Destination $mods
+    $releaseHelpers = Join-Path $sr 'scripts/release'
+    [void][IO.Directory]::CreateDirectory($releaseHelpers)
+    foreach ($helper in 'RecordShape.ps1', 'Read-JsonFile.ps1') {
+        Copy-Item -LiteralPath (Join-Path $repo "scripts/release/$helper") -Destination $releaseHelpers
+    }
     . (Join-Path $dev 'OwnPlugins.ps1')
     $masters = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm')
     $order = $masters + @('A.esp', 'B.esp', 'Thornswood-Last.esp')
     Set-Content -LiteralPath (Join-Path $sr 'records/load-order.json') -Value (@{loadOrder = $order} | ConvertTo-Json)
     Set-Content -LiteralPath (Join-Path $sr 'records/collection.json') -Value '{"collection":"test","revision":1,"plugins":[]}'
-    Set-Content -LiteralPath (Join-Path $sr 'records/collection-plugins.json') -Value '{"collection":"test","revision":1}'
+    Set-Content -LiteralPath (Join-Path $sr 'records/collection-plugins.json') -Value ('{"version":1,"collection":"test","revision":1,"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     Set-Content -LiteralPath (Join-Path $mods 'content-tables.json') -Value '{"orderProof":{"game/data/hunts.json":"phase"},"steps":[{"tool":"scripts/dev/must-not-run.ps1","writes":["game/data/hunts.json"]},{"tool":"scripts/mods/Build-LastPlugin.py"}]}'
     Set-Content -LiteralPath (Join-Path $sr 'game/data/npc-population.json') -Value (@{loadOrder = @($order | ForEach-Object { @{name = $_} })} | ConvertTo-Json)
     $table = Join-Path $sr 'game/data/hunts.json'
