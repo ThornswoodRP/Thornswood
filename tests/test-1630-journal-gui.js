@@ -267,11 +267,12 @@ function unesc(s) {
 }
 function makeEl(tag) {
   const e = {
-    tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '',
+    tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', parentNode: null,
     id: '', className: '', textContent: '', value: '', onclick: null,
     listeners: {},
     addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parentNode = this; this.children.push(c); return c; },
+    contains(node) { while (node) { if (node === this) return true; node = node.parentNode; } return false; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });
@@ -288,7 +289,7 @@ function makeEl(tag) {
   };
   Object.defineProperty(e, 'innerHTML', {
     get() { return this.html; },
-    set(h) { this.html = h; this.kids = parse(h); }
+    set(h) { this.html = h; this.kids.forEach(c => { c.parentNode = null; }); this.kids = parse(h); this.kids.forEach(c => { c.parentNode = this; }); }
   });
   return e;
 }
@@ -355,6 +356,9 @@ function parse(html) {
   J.open();
   const g = root.querySelector('#ts-journal-side').querySelectorAll('button[data-group]')[0];
   if (g) { g.onclick.call(g); }
+  yes('E0a: containment accepts the current group button, rejects the detached prior button and an outside node',
+      root.contains(root.querySelector('#ts-journal-side').querySelectorAll('button[data-group]')[0]) &&
+      !root.contains(g) && !root.contains(doc.head.children[0]));
   function main() { return root.querySelector('#ts-journal-main'); }
   function buttons(verb) {
     return main().querySelectorAll('button[data-g]').filter(function (b) { return b.getAttribute('data-g') === verb; });
