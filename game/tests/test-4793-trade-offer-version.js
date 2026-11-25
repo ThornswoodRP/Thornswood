@@ -134,6 +134,15 @@ if(w.loaded()){
   const sellerGold=w.count(a,15),workerGold=w.count(b,15),sellerItems=w.count(a,w.idOf(SWORD)),workerItems=w.count(b,w.idOf(SWORD)),zeroWrites=writes();
   const zeroAgreeA=click(zeroSellerA),zeroAgreeB=click(zeroSellerB);say(a,zeroAgreeA);say(b,zeroAgreeB);
   yes('two explicit approvals commit canonical zero proceeds without minting a zero-count gold row',!trade().tradeOf(a)&&writes()===zeroWrites+2&&w.count(a,15)===sellerGold&&w.row(a).inventory.entries.some(row=>row.baseId===15&&row.name==='Kept coin stack'&&row.count===7)&&w.count(b,15)===workerGold-40&&w.count(a,w.idOf(SWORD))===sellerItems-1&&w.count(b,w.idOf(SWORD))===workerItems&&[a,b].every(id=>w.row(id).inventory.entries.every(row=>row.count>0)));
+  const fullCommission=finalCompany.propose({...finalCompany.terms(),saleWorkerPercent:100,saleGonePercent:0},'Fixture staff');
+  yes('canonical terms also permit a full worker commission with zero net cost',fullCommission.ok&&finalCompany.confirm(fullCommission.pending.at,'Fixture reviewer').ok&&finalCompany.saleCuts(50).worker===50&&finalCompany.saleCuts(50).seller===0);
+  w.row(a).inventory.entries.push({baseId:w.idOf(SWORD),count:1,name:'Another sample'});
+  w.row(b).inventory.entries.find(row=>row.baseId===15).name='Worker coin metadata';
+  begin();say(a,'/trade add '+w.idOf(SWORD).toString(16)+' 1');say(b,'/trade gold 50');say(b,'/trade sale');
+  const commissionA=ui(view(a)),commissionB=ui(view(b)),workerPack=JSON.stringify(w.row(b).inventory),sellerGoldNow=w.count(a,15),commissionWrites=writes();
+  yes('the full-commission offer is displayed and can be explicitly approved',view(a).sale.available===true&&view(a).sale.cut===50&&view(a).sale.gone===0&&view(a).sale.seller===0&&!commissionA.doc.getElementById('ts-trade-ok').disabled);
+  const commissionAgreeA=click(commissionA),commissionAgreeB=click(commissionB);say(a,commissionAgreeA);say(b,commissionAgreeB);
+  yes('a zero debit preserves the worker pack and its exact coin metadata',!trade().tradeOf(a)&&writes()===commissionWrites+2&&JSON.stringify(w.row(b).inventory)===workerPack&&w.count(a,15)===sellerGoldNow&&w.count(a,w.idOf(SWORD))===0);
   finalProperty.inCompany=normalMembership;
 }
 t.done(w);
