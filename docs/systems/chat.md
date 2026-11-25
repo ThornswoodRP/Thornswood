@@ -40,8 +40,10 @@ enough, you are told.
 ## Dice
 
 `/roll` or `/r`, and the dice. The number is the sides: `/roll 20` is
-one twenty sided die, and `/roll 6x3` is three six sided ones. A
-leading `d` is fine. `/roll` alone is a twenty. Up to 1000 sides and
+one twenty sided die, and `/roll 6x3` is three six sided ones.
+Count-d-sides notation works too: `/roll 1d20` is one twenty sided die,
+and `/roll 3d6` is three six sided ones. A leading `d` is fine.
+`/roll` alone is a twenty. Up to 1000 sides and
 100 dice. The server rolls it, so nobody can make a number up, and
 the result goes to the same people `/ooc` reaches.
 
