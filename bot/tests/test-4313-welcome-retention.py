@@ -1,22 +1,26 @@
 """Use the real welcome and deletion paths with a stand-in channel and files."""
+import os
+import sys
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, HERE)
+import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
+
 import asyncio
 import io
 import json
-import os
 from pathlib import Path
-import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import _pyguard  # noqa: F401
 os.environ['DISCORD_TOKEN'] = 'not-a-real-token'
 
 import discord
 import bot_deletion
 import bot_joins
+import bot_tickets
 
 
 class WelcomeRetention(unittest.TestCase):
@@ -81,7 +85,7 @@ class WelcomeRetention(unittest.TestCase):
                 patch.object(bot_joins, 'asyncio', SimpleNamespace(
                     sleep=stop, get_running_loop=asyncio.get_running_loop)), \
                 patch.object(bot_deletion, 'DELETION_REQUESTS', str(request)), \
-                patch.object(bot_deletion, 'OPEN_TICKETS', str(root / 'tickets.json')):
+                patch.object(bot_tickets, 'OPEN_TICKETS', str(root / 'tickets.json')):
             for member in (first, first, second, third):
                 asyncio.run(bot_joins.on_member_join(member))
             self.assertEqual(set(posts), {99, 21, 22, 23, 24})

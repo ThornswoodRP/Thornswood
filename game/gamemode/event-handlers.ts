@@ -225,18 +225,30 @@ function killPieces(actorId) {
  * percentages, which only this handler can write. Anything else lets the death
  * go on to mp.onDeath below.
  *
- * Cheat Death answers first (#1385). Going down (#2681, docs/systems/injury.md)
- * is the second answer and is not built yet. Nothing here may ask
- * cheatDeath() about anything but this death: it spends its day when it says
- * yes.
+ * Cheat Death answers first (#1385). Going down (#4607, docs/systems/injury.md)
+ * is the second answer: a person is kept at the injury block's DOWN.keep and
+ * is down until somebody stands them up or the clock lets this death through.
+ * Nothing here may ask cheatDeath() about anything but this death: it spends
+ * its day when it says yes.
  */
-mp.onDying = guard('onDying', function (actorId) {
+mp.onDying = guard('onDying', function (actorId, killerId) {
   const perks = globalThis.__thornswoodPerks;
-  if (!perks || !perks.cheatDeath) { return undefined; }
-  const kept = perks.cheatDeath(actorId);
-  if (!(kept > 0)) { return undefined; }
-  mp.set(actorId, 'dyingHealth', kept);
-  return false;
+  if (perks && perks.cheatDeath) {
+    const kept = perks.cheatDeath(actorId);
+    if (kept > 0) {
+      mp.set(actorId, 'dyingHealth', kept);
+      return false;
+    }
+  }
+  const hurt = globalThis.__thornswoodHurt;
+  if (hurt && hurt.goDown) {
+    const down = hurt.goDown(actorId, killerId);
+    if (down > 0) {
+      mp.set(actorId, 'dyingHealth', down);
+      return false;
+    }
+  }
+  return undefined;
 });
 
 /**
@@ -249,6 +261,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -471,6 +485,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {

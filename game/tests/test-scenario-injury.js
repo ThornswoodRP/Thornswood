@@ -26,8 +26,10 @@
     D  A power attack with a mace breaks a limb. Corvin splints it; he
        cannot set it, Dagny the physicker can.
     E  A wolf's bite is a bite, and bleeds.
-    F  Left open, the bite bleeds her out: a death with no killer, the wake
-       at the temple, the wound still on her and the bleed stopped.
+    F  Left open, the bite bleeds her down, not dead (#4607): she bleeds no
+       further while down. Nobody stands her up, and after 3 minutes the
+       death goes through with no killer, the wake at the temple, the wound
+       still on her, the bleed stopped and the down over.
     G  Staff write an agreed scar; clearing her wounds does not clear it.
     H  With no bandage left Corvin is told so. The server restarts: her
        bandaged cut and the scar are as they were.
@@ -172,16 +174,24 @@ w.run(200);
 answer = last(BRENNA);
 yes('E1 a wolf\'s bite is a bite, and bleeds (' + answer + ')', answer === 'You are bitten and bleeding.' && wounds(BRENNA, 'bite')[0].bleed === true);
 
-// -------------------------------------------------------- F. bled out --
+// -------------------------------------------------------- F. bled down --
+function down(a) { return (w.prop(a, 'thornswoodDown') || {}).down === true; }
 const deathsBefore = w.logged(/\bdeath \S+ in /).length;
-for (let s = 0; s < 120 && !w.row(BRENNA).isDead; s++) { w.run(1000); }
+for (let s = 0; s < 120 && !down(BRENNA) && !w.row(BRENNA).isDead; s++) { w.run(1000); }
+yes('F1 left open, the bite bleeds her down, not dead (' + hp(BRENNA) + ', ' + JSON.stringify(rec(BRENNA).down) + ')',
+  down(BRENNA) && !w.row(BRENNA).isDead && !!rec(BRENNA).down && hp(BRENNA) > 0);
+const heldAt = hp(BRENNA);
+w.run(5000);
+yes('F2 she bleeds no further while down (' + heldAt + ' -> ' + hp(BRENNA) + ')', hp(BRENNA) === heldAt && !w.row(BRENNA).isDead);
+for (let s = 0; s < 240 && !w.row(BRENNA).isDead; s++) { w.run(1000); }
 const bledOut = w.logged(/\bdeath \S+ in /).slice(deathsBefore);
-yes('F1 left open, the bite bleeds her out: a death with no killer (' + bledOut.join(' | ') + ')',
+yes('F3 nobody stands her up, and after 3 minutes the death goes through with no killer (' + bledOut.join(' | ') + ')',
   w.row(BRENNA).isDead === true && bledOut.length === 1 && !/killer=/.test(bledOut[0]));
 w.run(26000);
-yes('F2 she wakes at the temple, the bite still on her and the bleed stopped (' + w.row(BRENNA).worldOrCellDesc + ', ' + JSON.stringify(wounds(BRENNA, 'bite')) + ')',
+yes('F4 she wakes at the temple, the bite still on her, the bleed stopped and the down over (' + w.row(BRENNA).worldOrCellDesc + ', ' + JSON.stringify(wounds(BRENNA, 'bite')) + ')',
   w.row(BRENNA).isDead === false && w.row(BRENNA).worldOrCellDesc === TEMPLE.desc &&
-  wounds(BRENNA, 'bite').length === 1 && wounds(BRENNA, 'bite')[0].bleed === false && wounds(BRENNA, 'break').length === 1);
+  wounds(BRENNA, 'bite').length === 1 && wounds(BRENNA, 'bite')[0].bleed === false && wounds(BRENNA, 'break').length === 1 &&
+  !down(BRENNA) && !rec(BRENNA).down);
 
 // -------------------------------------------------------- G. staff --
 answer = say(EIRIK, '/hurt Brenna agreed scar a burn across the jaw');

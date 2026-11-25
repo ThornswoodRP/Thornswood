@@ -114,7 +114,8 @@ The 40, the mark that stops a second purse, and trade between two
 people are in the server. The containers that start empty are in the
 server settings, and the coin and purses that no longer lie on the
 floor are switched off in Thornswood-Last.esp. A dungeon chest pays its tier's gold on that place's rest.
-A guild trader's 250 is not. A scene quest creates its gold when it is finished, and that
+A guild trader's 250 is in: the merchant ledger opens each trader with it
+the first time the server stands them up, and only then. A scene quest creates its gold when it is finished, and that
 gold is not taken from a trader's purse. Rank is not for sale. A weapon, armour or clothing in a chest or
 container in a claimed building loses 5% a day, written when the chest
 is next opened. See [Durability](durability.md). Notice fees, job fees, letter fees, and a haul's fee and pay are counted

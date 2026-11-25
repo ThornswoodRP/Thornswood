@@ -83,6 +83,10 @@ namespace Thornswood
     /// loses that name first, so the write does not go through to the other
     /// name.
     ///
+    /// A Profile\Payload an earlier install left is taken out before anything
+    /// is copied, whatever this run's shape, so only this build's files wait
+    /// there for the folder (#4180, DropOldPayload).
+    ///
     /// Bethesda's own files are never renamed or deleted.
     ///
     /// WHAT THE SCRIPT DID THAT THIS DOES NOT, and why. The script had a
@@ -330,6 +334,7 @@ namespace Thornswood
 
             // ------------------------------------------------- the files
             Head("Installing the mods");
+            DropOldPayload();
             List<string> files = PayloadFiles(payload);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
             CopyPayload(payload, files, gameDir);
@@ -363,6 +368,69 @@ namespace Thornswood
                 list.Add(Path.GetRelativePath(payload, f));
             list.Sort(StringComparer.OrdinalIgnoreCase);
             return list;
+        }
+
+        // ---- Profile\Payload holds this build's files and nothing else -----
+        //
+        // With Thornswood's own folder chosen and not made, its own files wait
+        // in Profile\Payload, and the launcher's Make takes every file in it
+        // into the folder as Thornswood's own (OwnGame.WithPayload). Its being
+        // there at all is what tells the launcher the folder was chosen
+        // (Paths.OwnFirst). A Root an earlier install used keeps its Profile
+        // when Velopack's own uninstall takes the launcher off (#5820), so an
+        // install can find an older Payload here. Copying over it kept every
+        // file the newer build no longer has, for Make to take into the game,
+        // and with the folder not chosen this time the launcher still ran from
+        // the old Payload (#4180). So it goes before anything is copied,
+        // whatever this run's shape, and only this build's files go back in.
+        //
+        // A link inside it is removed as a link and nothing it points at is
+        // touched (RemoveTree). Directory.Delete(dir, true) is not used: on
+        // Windows it asks DeleteVolumeMountPoint about every junction it meets,
+        // and a junction that is not a volume's answers "The parameter is
+        // incorrect", which stopped the whole removal.
+        void DropOldPayload()
+        {
+            string dir = Path.Combine(ProfileDir, "Payload");
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                RemoveTree(dir);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not take the older " + dir + " out of the way (" + Failure.Why("InstallSteps, the older Payload", e, dir) + "). " +
+                          "Close Skyrim, Vortex and the launcher, then run this again.");
+            }
+            Say("  An older " + dir + " was here from an earlier install and was taken out,");
+            Say("  so no file an older build had is left in it.");
+        }
+
+        /// <summary>
+        /// Removes a folder and everything in it. A link (a junction or a
+        /// symbolic link, to a file or a folder) loses only its own name; what
+        /// it points at is never opened. A read-only file or folder loses that
+        /// attribute first, as RemoveSharedNames does before a delete.
+        /// </summary>
+        static void RemoveTree(string dir)
+        {
+            FileAttributes self = File.GetAttributes(dir);
+            if ((self & FileAttributes.ReparsePoint) == 0)
+            {
+                foreach (string p in Directory.EnumerateFileSystemEntries(dir))
+                {
+                    FileAttributes at = File.GetAttributes(p);
+                    if ((at & FileAttributes.Directory) != 0 && (at & FileAttributes.ReparsePoint) == 0) { RemoveTree(p); continue; }
+                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(p, at & ~FileAttributes.ReadOnly);
+                    // A link to a folder is a directory entry on Windows and a
+                    // file name everywhere else; either way only the name goes.
+                    if ((at & FileAttributes.Directory) != 0 && OperatingSystem.IsWindows()) Directory.Delete(p);
+                    else File.Delete(p);
+                }
+            }
+            if ((self & FileAttributes.ReadOnly) != 0) File.SetAttributes(dir, self & ~FileAttributes.ReadOnly);
+            if ((self & FileAttributes.ReparsePoint) != 0 && !OperatingSystem.IsWindows()) File.Delete(dir);
+            else Directory.Delete(dir);
         }
 
         // ---- a record of what we put in somebody else's game ----------------
@@ -661,7 +729,7 @@ namespace Thornswood
         internal static readonly string[] LicenceFiles =
         {
             "GPL-3.0.txt", "AGPL-3.0.txt",
-            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "BouncyCastle-LICENSE.txt",
+            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "SharpDTLS-LICENSE.txt", "BouncyCastle-LICENSE.txt",
             "dotnet-LICENSE.txt", "dotnet-THIRD-PARTY-NOTICES.txt",
             "Avalonia-LICENSE.txt", "MicroCom-LICENSE.txt", "Tmds.DBus-LICENSE.txt",
             "SkiaSharp-LICENSE.txt", "SkiaSharp-THIRD-PARTY-NOTICES.txt", "ANGLE-LICENSE.txt",
@@ -723,13 +791,9 @@ namespace Thornswood
         // ---------------------------------------------------------------- config.json
 
         /// <summary>
-        /// config.json is merged rather than copied over. The one in the
-        /// package is deliberately blank where the credentials go, so a
-        /// straight copy would wipe a working install's password on every
-        /// upgrade. Anything the package does not name is left exactly as it
-        /// was, and a blank field in the package never overwrites a filled one
-        /// on the disk. The own folder card's answer is this run's, so it goes
-        /// over whatever was there.
+        /// The package owns only the channel and its feed fields. Everything
+        /// else comes from the existing install or the launcher's own defaults,
+        /// except for choices made on this setup's folder card.
         /// </summary>
         void MergeConfig(Dictionary<string, JsonNode> ownCard)
         {
@@ -745,10 +809,9 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The merge on its own: what was on the disk, then each field of the
-        /// package's that is not blank or not there yet, then the card's.
-        /// Blank is what PowerShell's "$value" made an empty string of: no
-        /// value, an empty string, or an empty list.
+        /// Keep disk settings, update the fields emitted by Build-SetupFiles,
+        /// then apply the folder card. The empty Channel string means Main;
+        /// other blank feed fields do not replace a value already on disk.
         /// </summary>
         internal static JsonObject Merge(JsonObject old, JsonObject neu, Dictionary<string, JsonNode> ownCard)
         {
@@ -758,7 +821,11 @@ namespace Thornswood
             {
                 foreach (KeyValuePair<string, JsonNode> kv in neu)
                 {
-                    if (!Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
+                    if (kv.Key is not ("ServerAddress" or "ServerPort" or "UpdateFeedUrl" or "VoicePort" or
+                        "VoiceUrl" or "DiscordAppId" or "SiteUrl" or "PresenceImage" or "CollectionUrl" or "Channel")) continue;
+                    bool mainChannel = kv.Key == "Channel" && kv.Value is JsonValue channel &&
+                        channel.TryGetValue<string>(out string name) && name == "";
+                    if (mainChannel || !Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
                         outObj[kv.Key] = kv.Value == null ? null : kv.Value.DeepClone();
                 }
             }
@@ -919,16 +986,23 @@ namespace Thornswood
                 Say(Bad + " check" + (Bad == 1 ? "" : "s") + " failed. Send staff a screenshot of this window in the Discord.");
                 return;
             }
-            if (Later > 0) Say("Installed. " + Later + " thing" + (Later == 1 ? "" : "s") + " still to come from the collection, which is the next step.");
-            else Say("Installed.");
+            Say("Installed.");
             Say("");
-            Say("Make a character named after yourself, save once, then connect.");
-            Say("");
-            Say("The launcher opens on the collection if your mods are not in yet.");
-            Say("Install it in Vortex and switch to the profile it makes. Without");
-            Say("that you have a launcher and no mods.");
+            // The same steps in the same order as the launcher, the help page
+            // and the join page (#4496): the launcher holds the collection
+            // card until Downgrade is done, so a wrong build is its own first
+            // step, never "the collection is next".
+            bool downgrade = !checks[0].Value;   // "Game 1.6.1170", read above
+            int step = 1;
+            Say("Next, in the launcher:");
+            if (downgrade)
+                Say("  " + step++ + ". Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.");
+            Say("  " + step++ + ". Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.");
+            Say("  " + step++ + ". Press Connect Discord at the bottom of the left sidebar.");
+            Say("  " + step + ". Press Play.");
             if (choice.MakeOwnGame)
             {
+                Say("");
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
                 Say("Skyrim folder by itself, then makes the rest from your game:");
                 Say("Thornswood-Last.esp, the plugin order, and the animation and body");

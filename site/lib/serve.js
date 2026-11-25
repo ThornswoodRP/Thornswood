@@ -1005,6 +1005,7 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'no Discord account holds that character, so ban the character' });
       }
       const minutes = banMinutes(o.minutes);
+      if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
       const until = minutes ? now + minutes * 60000 : 0;
       const whole = what === 'banaccount';
       const banKey = whole ? account : 'p:' + pid;
@@ -3229,7 +3230,7 @@ async function handle(req, res) {
         return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' });
       }
       marks[id] = { status: o.status, notes: String(o.notes == null ? '' : o.notes).slice(0, 1000),
-                    by: String(o.by == null ? '' : o.by).slice(0, 60), at: Date.now() };
+                    by: String(w.name || '').slice(0, 60), at: Date.now() };
       if (!putJson(RESULTS, marks)) return sendJson(res, 500, { error: 'could not save' });
       return sendJson(res, 200, { ok: true, results: marks });
     }
@@ -3326,6 +3327,7 @@ async function handle(req, res) {
         const why = String(o.why || '').trim().slice(0, 500);
         if (!why) return sendJson(res, 400, { error: 'a ban says why' });
         const minutes = banMinutes(o.minutes);
+        if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
         const until = minutes ? now + minutes * 60000 : 0;
         const row = { at: now, until, why, by: w.name, byId: w.id, from: 'the hub', account: id };
         const ok = pid

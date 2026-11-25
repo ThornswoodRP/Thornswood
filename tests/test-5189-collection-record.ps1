@@ -392,7 +392,33 @@ try {
     # ---------------------------------------------------------------- P ----
     $sources = @(Read-CollectionLastRecipeSources (Join-Path $Repo 'game/data/last-plugin.recipe'))
     $manifest = Read-CollectionRecord (Join-Path $Repo 'game/data/last-plugin.json')
-    Yes 'P1 the Last recipe''s sources read from the recipe are as many as last-plugin.json says' ($sources.Count -eq [int]$manifest.recipe.sources -and $sources[0].Name -eq 'Skyrim.esm' -and $sources[0].Sha256 -match '^[0-9a-f]{64}$')
+    # Recipe sources are registered on first use (last_recipe.make), not in
+    # plugin load order. An ALCH override can be read before vanilla records.
+    $skyrimSources = @($sources | Where-Object { $_.Kind -eq 'plugin' -and $_.Name -ceq 'Skyrim.esm' })
+    $invalidSources = @($sources | Where-Object { $_.Kind -notin @('plugin', 'table') -or -not $_.Name -or $_.Size -lt 0 -or $_.Sha256 -notmatch '^[0-9a-f]{64}$' })
+    Yes 'P1 the Last recipe source count matches its manifest and every named source has valid metadata' ($sources.Count -eq [int]$manifest.recipe.sources -and $skyrimSources.Count -eq 1 -and -not $invalidSources.Count)
+
+    # A deterministic source-order counterexample, independent of whichever
+    # winning plugin the current generated recipe happens to read first.
+    $recipeFixture = New-Object IO.MemoryStream
+    try {
+        $magic = [Text.Encoding]::ASCII.GetBytes('TSLR')
+        $recipeFixture.Write($magic, 0, $magic.Length); $recipeFixture.WriteByte(1)
+        $header = New-Object byte[] 36
+        $recipeFixture.Write($header, 0, $header.Length); $recipeFixture.WriteByte(2)
+        foreach ($entry in @(@{ Name = 'Mod.esp'; Size = 7; Hash = 170 }, @{ Name = 'Skyrim.esm'; Size = 9; Hash = 187 })) {
+            $nameBytes = [Text.Encoding]::UTF8.GetBytes($entry.Name)
+            $recipeFixture.WriteByte(0); $recipeFixture.WriteByte($nameBytes.Length)
+            $recipeFixture.Write($nameBytes, 0, $nameBytes.Length); $recipeFixture.WriteByte($entry.Size)
+            $hashBytes = [byte[]]@($entry.Hash) * 32
+            $recipeFixture.Write($hashBytes, 0, $hashBytes.Length)
+        }
+        $recipePath = Join-Path $tmp 'non-load-order.recipe'
+        [IO.File]::WriteAllBytes($recipePath, $recipeFixture.ToArray())
+    } finally { $recipeFixture.Dispose() }
+    $encountered = @(Read-CollectionLastRecipeSources $recipePath)
+    Yes 'P2 recipe source order follows recorded use and need not start with Skyrim.esm' ($encountered.Count -eq 2 -and $encountered[0].Name -ceq 'Mod.esp' -and $encountered[1].Name -ceq 'Skyrim.esm')
+    Yes 'P3 a non-load-order source list retains each exact kind, size and digest' ($encountered[0].Kind -eq 'plugin' -and $encountered[0].Size -eq 7 -and $encountered[0].Sha256 -ceq ('aa' * 32) -and $encountered[1].Kind -eq 'plugin' -and $encountered[1].Size -eq 9 -and $encountered[1].Sha256 -ceq ('bb' * 32))
 
     # ---------------------------------------------------------------- W ----
     $wfPath = Join-Path $Repo '.github/workflows/collection-record.yml'

@@ -41,7 +41,7 @@ def js_table(name):
 def write_csv(filename, rows, columns):
     # LF on every machine, as git stores it (#3029): a step of
     # scripts/mods/content-tables.json since #5191.
-    with (ROOT / 'docs' / filename).open('w', encoding='utf-8', newline='') as output:
+    with (ROOT / 'game' / 'data' / filename).open('w', encoding='utf-8', newline='') as output:
         writer = csv.DictWriter(output, fieldnames=columns, lineterminator='\n')
         writer.writeheader()
         writer.writerows({key: row.get(key, '') for key in columns} for row in rows)
@@ -55,7 +55,7 @@ def main():
                        '(its string tables too, unless --strings-dir says where)')
     parser.add_argument('--strings-dir')
     parser.add_argument('--hunting-only', action='store_true',
-        help='write docs/HUNTING-SPOTS.csv from npc-population.json and hunts.json, reading no plugin')
+        help='write game/data/HUNTING-SPOTS.csv from npc-population.json and hunts.json, reading no plugin')
     args = parser.parse_args()
     population = json.loads((ROOT / 'game/data/npc-population.json').read_text(encoding='utf-8'))
     if args.hunting_only:

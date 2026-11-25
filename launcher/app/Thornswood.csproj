@@ -47,12 +47,15 @@
          on a plain `dotnet build` too, not only when Build-Launcher.ps1
          publishes. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Unused members fail the build (#4632): the rules are in
+         Unused.globalconfig, and the IDE ones only run in a build with this. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.2.0" />
     <!-- Avalonia brings Avalonia.BuildServices, whose only part is a build
          step that starts a process to send Avalonia statistics about each
          build. Nothing of it is used: the launcher sends nothing nobody asked
@@ -60,7 +63,7 @@
          the build's own folder, which Windows then could not move or remove
          (the harness builds, 2 Nov 2026). Its version is the one Avalonia
          names. -->
-    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Avalonia.BuildServices" Version="12.0.0" ExcludeAssets="all" PrivateAssets="all" />
     <!-- The menu theme's MP3 decoder (MenuMusic.cs), MIT, THIRD-PARTY.md. -->
     <PackageReference Include="NLayer" Version="3.0.1" />
     <!-- DPAPI for the keys the launcher keeps on this PC (Secrets.cs); on
@@ -70,8 +73,8 @@
          BSD-3-Clause), and DTLS-SRTP (SharpSRTP, MIT) on BouncyCastle (MIT).
          All three rooted whole in a Native AOT publish give no trim or AOT
          warning (measured 1 Nov 2026). THIRD-PARTY.md has their notices. -->
-    <PackageReference Include="Concentus" Version="2.2.2" />
-    <PackageReference Include="SharpSRTP" Version="0.5.8" />
+    <PackageReference Include="Concentus" Version="2.2.3" />
+    <PackageReference Include="SharpSRTP" Version="0.6.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <!-- Installs and updates the launcher, and carries the game files on the
          same channel (#4825). The same version as the vpk that packs it in
@@ -111,4 +114,8 @@
     <XmlPoke XmlInputPath="$(ApplicationManifest)" Query="/asm:assembly/asm:assemblyIdentity/@version" Value="$(ThornswoodVersionFour)"
              Namespaces="&lt;Namespace Prefix='asm' Uri='urn:schemas-microsoft-com:asm.v1' /&gt;" />
   </Target>
+
+  <ItemGroup>
+    <GlobalAnalyzerConfigFiles Include="Unused.globalconfig" />
+  </ItemGroup>
 </Project>

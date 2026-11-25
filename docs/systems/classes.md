@@ -26,10 +26,10 @@ you may take out of the world.
 | Class | The verb | The list |
 | --- | --- | --- |
 | [Hunter](classes/hunter.md) | Loot an animal body | 92 names, 336 placed bodies |
-| [Fisher](classes/fisher.md) | A pole, then press E at the water | 15 spots stand today. The plan places a hold's worth |
+| [Fisher](classes/fisher.md) | A pole, then press E at the water | 21 water records stand today ([the list](lists/fisher.md)). The plan places a hold's worth |
 | [Gatherer](classes/gatherer.md) | Take a reagent | 46 names, 105 placed plants |
 | [Miner](classes/miner.md) | Swing a pickaxe at a seam | 18 names, 581 veins |
-| [Farmer](classes/farmer.md) | Sow and bring in a plot | 10 crops, 14 placed records |
+| [Farmer](classes/farmer.md) | Sow and bring in a plot | 10 crops across 20 plot forms |
 
 Eggs and a little wild food sit apart from a carcass:
 [lists/wild-food.md](lists/wild-food.md). Plants the harvest table

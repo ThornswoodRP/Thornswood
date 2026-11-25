@@ -493,6 +493,8 @@
       pos: [stop.pos[0], stop.pos[1], stop.pos[2]],
       rot: [0, 0, stop.rot]
     });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   function answer(line, from, went) {

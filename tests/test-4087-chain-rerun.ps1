@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\tests\test-4087-chain-rerun.ps1
 
-  #4087. Build-RecipeTable.ps1 reads docs\systems\cut-items.json back
+  #4087. Build-RecipeTable.ps1 reads game\data\cut-items.json back
   (readsBack in scripts\mods\content-tables.json), and Write-CutItems.js,
   later in the chain, writes it. Since #4087 the script sorts a row a new
   plugin added into that file, so the recipe build has to run again on it:
@@ -119,6 +119,23 @@ try {
     $r = Invoke-Chain $a
     Yes ("a writer that changes nothing: the chain runs once and ends 0 (ran {0})" -f $r.Ran) ($r.Code -eq 0 -and $r.Ran -eq 'reader,between,writer' -and $r.Out -notmatch 'runs again')
 
+
+    # Only the order at the root is authoritative. A nested copy cannot
+    # make an out-of-order or damaged catalogue pass the build preflight.
+    $invalid = New-Sandbox 'same' "kept`n"
+    $roots += $invalid
+    $ordered = $population.Substring(1, $population.Length - 2)
+    $wrong = $ordered.Replace('A.esp', 'B.esp')
+    Put $invalid 'game/data/npc-population.json' ('{"other":' + $population + ',' + $wrong + '}')
+    $r = Invoke-Chain $invalid
+    # PowerShell can colour and wrap exception text differently on each host.
+    Yes 'preflight rejects a wrong top-level order even with a matching nested order' (
+        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'B\.esp' -and $r.Out -match 'A\.esp')
+
+    Put $invalid 'game/data/npc-population.json' ('{' + $ordered + ',"npcs":[')
+    $r = Invoke-Chain $invalid
+    Yes 'preflight rejects truncated JSON after a correct order' ($r.Code -ne 0 -and $r.Ran -eq '')
+
     $b = New-Sandbox 'settle' "old`n"
     $roots += $b
     $r = Invoke-Chain $b
@@ -162,12 +179,12 @@ try {
     $real = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json
     $readerAt = -1; $writerAt = -1
     for ($i = 0; $i -lt $real.steps.Count; $i++) {
-        if (@($real.steps[$i].readsBack) -contains 'docs/systems/cut-items.json') { $readerAt = $i }
-        if (@($real.steps[$i].writes) -contains 'docs/systems/cut-items.json' -and $real.steps[$i].tool -eq 'scripts/dev/Write-CutItems.js') { $writerAt = $i }
+        if (@($real.steps[$i].readsBack) -contains 'game/data/cut-items.json') { $readerAt = $i }
+        if (@($real.steps[$i].writes) -contains 'game/data/cut-items.json' -and $real.steps[$i].tool -eq 'scripts/dev/Write-CutItems.js') { $writerAt = $i }
     }
     Yes 'content-tables.json has the recipe build read cut-items.json back before Write-CutItems.js writes it' ($readerAt -ge 0 -and $writerAt -gt $readerAt -and $real.steps[$readerAt].tool -eq 'scripts/dev/Build-RecipeTable.ps1')
     $writesKept = @($real.steps | Where-Object { $_.tool -eq 'scripts/dev/Write-CutItems.js' } | ForEach-Object { @($_.writes) })
-    Yes 'and Write-CutItems.js names cut-kept.json among what it writes' ($writesKept -contains 'docs/systems/cut-kept.json')
+    Yes 'and Write-CutItems.js names cut-kept.json among what it writes' ($writesKept -contains 'game/data/cut-kept.json')
     $recostAt = -1
     for ($i = 0; $i -lt $real.steps.Count; $i++) { if ($real.steps[$i].tool -eq 'scripts/dev/Build-Recost.py' -and @($real.steps[$i].writes) -contains 'game/data/recost.json') { $recostAt = $i } }
     Yes 'and has it read recost.json back before Build-Recost.py writes it (#5191)' (

@@ -234,8 +234,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
   is not Authenticode Valid under `ExpectedSigner`; the release workflow signs
   the launcher, which is also the setup program since #4824, on GitHub. A local
   `Build-Launcher` may still print "not signing" and leave an unsigned
-  intermediate; that soft skip must not reach the site or the feed. The live main launcher,
-  1.1.101, predates signing; the next main Ship is the first signed one.
+  intermediate. Ship checks the signature before publishing to the site or feed.
 - Every pull request gets the build check, `.github/workflows/build-pr.yml`,
   and every push to main gets the same steps from
   `.github/workflows/build.yml`. build-pr.yml is generated from build.yml:
@@ -244,12 +243,16 @@ The short form of the rules. The same decisions, with the dates they were made, 
   only; nothing is published. The job "Tree checks", on GitHub's Linux
   runner, scans for
   secrets, parses every PowerShell script and game script, checks the
-  writing rules (see Words), the ownership page (`tests\test-ownership.js`,
-  issue #752), the names that must stay out, that the engine is one commit and
+  writing rules (see Words), the names that must stay out, that the engine is one commit and
   the high-risk records, runs the voice service's health harness, checks our
   plugins are clean, that the Python names only what exists (ruff, issue
   #1343), the count of silent catches (#5292) and that the launcher touches
   its window only from the UI thread (`scripts\dev\Check-UiThread.py`). The
+  independent job "Bot harnesses" runs every top-level `bot/tests/test-*.py`
+  on every pull request and merge-queue build, using the same bounded runner
+  as nightly (`scripts/dev/Run-BotHarnesses.ps1`, #5958). Its failure, skip or
+  cancellation prevents "Build check result" from passing; same-tree reuse
+  also requires that bot job to have passed. The
   job "Launcher builds", on a Windows runner, publishes the native launcher
   the way every build does (`scripts\release\Build-Launcher.ps1`, red on a
   compile error or a trim or native code warning, issue #4823), checks the

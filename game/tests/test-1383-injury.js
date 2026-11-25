@@ -665,7 +665,7 @@ if (NEEDS_SRC && HURT_SRC && P) {
       /\(row\.c \? '<div/.test(FRONT) && /\|' \+ \(row\.c \|\| ''\)/.test(FRONT));
     yes('the near list carries the scar as c, never over the sleep key s',
       /w\[them\.id\.toString\(16\)\]\.c = them\.scar/.test(src) && !/\]\.s = them\.scar/.test(src));
-    yes('no line the block says calls anybody a player', !/player/i.test(HURT_SRC.replace(/'onlinePlayers'/g, '')));
+    yes('no line the block says calls anybody a player', !/player/i.test(HURT_SRC.replace(/'onlinePlayers'|\b(?:getPlayer|disablePlayerControls|enablePlayerControls)\b/g, '')));
     yes('no em dash in the block', HURT_SRC.indexOf('—') === -1);
   }
 }

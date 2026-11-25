@@ -54,7 +54,7 @@
   -DeployDocs, -InstallVoice and -SetupDomain read another copy of each, so
   the same test runs on the ones from before this change:
 
-      git show origin/main:scripts/deploy/Setup-Domain.ps1 > $env:TEMP\domain-before.ps1
+      git show 37b27546:scripts/deploy/Setup-Domain.ps1 > $env:TEMP\domain-before.ps1
       pwsh -NoProfile -File .\scripts\tests\test-service-task-priority.ps1 -SetupDomain $env:TEMP\domain-before.ps1
 
   Registers and removes one task at a time named Thornswood priority harness

@@ -65,6 +65,13 @@ the reward prices staff set, and the trader's purse is the same
 after it (#6180, [the quest catalogue](merchant-quest-catalogue.md#commission-pay)). A letter is not a quest of theirs. The sender pays the
 courier, on the notice board.
 
+The work menu shows offers the person can take now. Work whose rank or
+other requirements are not met, or whose cooldown is still running, stays
+out of the menu. If there is no new work, the trader says they have nothing
+for the person at the moment. Accepted work keeps its return and leave
+controls, including work that needs recovery. The server checks every
+request again; hiding an offer does not change who can accept it.
+
 ## Guild sites
 
 One spot a hold, taken from the notice-board seeds. Raven Rock's board
