@@ -172,6 +172,55 @@ function rig(enforce, profiles) {
 const A = 0xff000101, B = 0xff000202, C = 0xff000303;
 
 if (block !== null) {
+  // 4484: response arrival is not snapshot freshness. A pre-ban request can
+  // finish after that ban was made; its start must survive the late response.
+  {
+    const r = rig(true, [101]);
+    r.advance(60000);
+    r.answer(200, { profiles: [101], bans: [] });
+    const first = JSON.parse(r.files[ALLOWED]);
+    yes('4484 the door records request start separately from delayed commit',
+        Date.parse(first.bansRequestedAt) === 1000000 && Date.parse(first.at) === 1060000);
+    r.advance(10000);
+    r.refresh();
+    r.advance(30000);
+    const activeBan = { profiles: [202], scope: 'character', until: 0, why: 'test ban' };
+    r.answer(200, { profiles: [101], bans: [activeBan] });
+    const next = JSON.parse(r.files[ALLOWED]);
+    yes('4484 each refresh carries its own request start',
+        Date.parse(next.bansRequestedAt) === 1070000 && Date.parse(next.at) === 1100000);
+    for (const broken of [{ bansBroken: true }, { stateBroken: true }, {}]) {
+      r.refresh();
+      r.advance(10000);
+      r.answer(200, Object.assign({ profiles: [] },
+          Object.keys(broken).length ? { bans: [] } : {}, broken));
+      const retained = JSON.parse(r.files[ALLOWED]);
+      yes('4484 broken or missing upstream bans retain the previous list and its original freshness',
+          retained.bansRequestedAt === next.bansRequestedAt && JSON.stringify(retained.bans) === JSON.stringify(next.bans));
+    }
+    r.refresh();
+    r.advance(1);
+    r.answer(200, { profiles: [101], bans: [null] });
+    yes('4484 malformed ban entries cannot replace a readable ban snapshot',
+        JSON.parse(r.files[ALLOWED]).bansRequestedAt === next.bansRequestedAt);
+    r.refresh();
+    r.advance(1);
+    r.refresh();
+    const olderRequest = r.pending.shift();
+    r.answer(200, { profiles: [101], bans: [activeBan] });
+    const newest = JSON.parse(r.files[ALLOWED]);
+    r.pending.unshift(olderRequest);
+    r.advance(1);
+    r.answer(200, { profiles: [101], bans: [] });
+    const afterOlder = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a late old response cannot replace newer confirmed bans',
+        afterOlder.bansRequestedAt === newest.bansRequestedAt && afterOlder.bans.length === 1);
+
+    const cold = rig(true, [101]);
+    cold.answer(200, { profiles: [], bans: [], bansBroken: true });
+    yes('4484 a broken initial ban read proves no freshness', !JSON.parse(cold.files[ALLOWED]).bansRequestedAt);
+  }
+
   // S1: somebody on the list is let in and stays.
   {
     const r = rig(true, [101]);
@@ -458,6 +507,50 @@ if (block !== null) {
     r.later();
     yes('S16 and nothing more happens on the ticks after',
         r.kicked.length === kicks && r.kicked.indexOf(3) < 0);
+  }
+
+  // An invalid saved clock is not an ordering floor. The last ban remains
+  // while a request fails, then a healthy response can establish fresh proof.
+  for (const badCommit of [1000000, 2000001, 'unreadable']) {
+    const r = rig(true, [101]);
+    const originalBans = [{ profiles: [202], scope: 'account', until: 0, why: 'held ban' }];
+    r.answer(200, { profiles: [101], bans: originalBans });
+    const damaged = JSON.parse(r.files[ALLOWED]);
+    damaged.bansRequestedAt = new Date(2000000).toISOString();
+    damaged.at = typeof badCommit === 'number' ? new Date(badCommit).toISOString() : badCommit;
+    r.files[ALLOWED] = JSON.stringify(damaged);
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [] });
+    const recovered = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a healthy response recovers a future marker with invalid request/commit/clock ordering',
+        recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1010000);
+  }
+  {
+    const r = rig(true, [101]);
+    const originalBans = [{ profiles: [202], scope: 'account', until: 0, why: 'held ban' }];
+    r.answer(200, { profiles: [101], bans: originalBans });
+    const damaged = JSON.parse(r.files[ALLOWED]);
+    damaged.bansRequestedAt = new Date(2000000).toISOString();
+    r.files[ALLOWED] = JSON.stringify(damaged);
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [], bansBroken: true });
+    yes('4484 a bad new response preserves the existing ban despite damaged old metadata',
+        JSON.stringify(JSON.parse(r.files[ALLOWED]).bans) === JSON.stringify(originalBans));
+    r.advance(10000); r.refresh(); r.advance(1000);
+    r.answer(200, { profiles: [101], bans: [] });
+    yes('4484 the next healthy response recovers after both old metadata and a failed refresh',
+        JSON.parse(r.files[ALLOWED]).bans.length === 0);
+  }
+
+  {
+    const r = rig(true, [101]);
+    r.files[ALLOWED] = JSON.stringify({ enforce: true, profiles: [101], bans: [null],
+      bansRequestedAt: new Date(1005000).toISOString(), at: new Date(1006000).toISOString() });
+    r.advance(9000); // still inside the actual request's ten-second bound
+    r.answer(200, { profiles: [101], bans: [] });
+    const recovered = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a malformed saved ban list cannot supply an otherwise well-ordered floor',
+        recovered.bans.length === 0 && Date.parse(recovered.bansRequestedAt) === 1000000);
   }
 
   // Every tick runs inside a try that notes "tick failed". None of the above

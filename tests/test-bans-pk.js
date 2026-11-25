@@ -148,7 +148,7 @@ function request(port, method, where, headers, body) {
     (res) => {
       let buf = '';
       res.on('data', (d) => { buf += d; });
-      res.on('end', () => { let j = null; try { j = JSON.parse(buf); } catch (e) { } ok({ status: res.statusCode, j }); });
+      res.on('end', () => { let j = null; try { j = JSON.parse(buf); } catch (e) { } ok({ status: res.statusCode, j, headers: res.headers }); });
     });
     r.on('error', () => ok({ status: 0, j: null }));
     r.end(data);
@@ -213,18 +213,19 @@ function loadStaff(opts) {
       }
     }
   };
-  if (opts && opts.staffState) g.__thornswoodStaffState = opts.staffState;
   // The door's admins, when a part wants a staff member who is not one.
   if (opts && opts.isAdmin) g.__thornswoodIsAdmin = opts.isAdmin;
+  if (opts && opts.staffState) g.__thornswoodStaffState = opts.staffState;
   const run = new Function('mp', 'require', 'globalThis', 'console', 'URL', 'Buffer', 'log', 'guard',
-    'voicePort', 'setInterval', 'clearInterval', 'setTimeout', 'addItem', 'idOf', 'placeActors',
+    'voicePort', 'setInterval', 'clearInterval', 'setTimeout', 'addItem', 'idOf', 'placeActors', 'Date',
     STAFF_SRC + '\nreturn globalThis.__thornswoodStaff;');
   w.api = run(mp, require, g, { log() { } }, URL, Buffer,
     function () { w.logs.push(Array.prototype.join.call(arguments, ' ')); },
     function (n, fn) { return fn; }, function () { return 1; },
     function () { return 0; }, function () { },
     function (fn, ms) { w.timeouts.push({ fn, ms }); return 0; },
-    function () { return false; }, function () { return 0; }, function () { return { made: 0 }; });
+    function () { return false; }, function () { return 0; }, function () { return { made: 0 }; },
+    (opts && opts.clock) || Date);
   w.to = (pid) => w.said.filter((s) => s.pid === pid).map((s) => s.text);
   return w;
 }
@@ -784,6 +785,160 @@ async function adminRoleOnly() {
     const afterReload = loadStaff({ staffState: oldState }).api.bansNow(Date.now())[2002];
     yes('4637 a hot reload keeps the previous flat character receipt and account lift',
         afterReload && afterReload.scope === 'character' && afterReload.why === '4637 flat character');
+
+    // 4484: actual game ban -> actual signed hub lift -> authoritative list.
+    // No restart, and no in-game unban that could hide the stale local copy.
+    for (const whole of [false, true]) {
+      let clock = Date.now();
+      class StaffClock extends Date { static now() { return clock; } }
+      const person = whole ? 'Cara' : 'Bjorn';
+      const target = whole ? 4001 : 2002;
+      const covers = whole ? [4001, 4002] : [2002];
+      const account = whole ? CARA_D : BJORN_D;
+      const scope = whole ? 'account' : 'character';
+      w = loadStaff({ clock: StaffClock });
+      staffLine(w, (whole ? '/banaccount ' : '/ban ') + person + ' forever 4484 test');
+      yes('4484 game command confirms a forever ' + scope + ' ban',
+          await until(() => w.to(1001).some((t) => t.startsWith('Banned ') && t.includes('for good')))
+          && covers.every((pid) => w.api.state.banned[pid][scope].until === 0));
+      const created = clock;
+      const before = (await allowed()).j;
+      const lifted = await hub('unban', Object.assign({ id: account }, whole ? {} : { profileId: target }));
+      yes('4484 actual signed hub lifts the ' + scope + ' ban', lifted.status === 200 && lifted.j.was === true);
+      const response = await allowed();
+      const after = response.j;
+      yes('4484 the live authoritative ban response forbids caching',
+          response.status === 200 && /no-store/.test(response.headers['cache-control'] || ''));
+      yes('4484 actual site list no longer bans those profiles',
+          covers.every((pid) => !after.bans.some((ban) => ban.profiles.includes(pid))));
+      function snapshot(doc) {
+        clock += 11000; // the existing ten-second staff read cadence
+        fs.writeFileSync(path.join(PRIV, 'allowed.json'), typeof doc === 'string' ? doc : JSON.stringify(doc));
+        return w.api.bansNow(clock);
+      }
+      const stamp = (ms) => new Date(ms).toISOString();
+      for (const doc of [
+        Object.assign({}, after, { bansRequestedAt: stamp(created - 1), at: stamp(created - 1) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created), at: stamp(created) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created - 1), at: stamp(created + 1) }),
+        Object.assign({}, after, { at: stamp(created + 1) }),
+        Object.assign({}, after, { bansRequestedAt: 'not a date', at: stamp(created + 1) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created + 2), at: stamp(created + 1) }),
+        { bansRequestedAt: stamp(created + 1), at: stamp(created + 2) },
+        '{'
+      ]) {
+        const held = snapshot(doc);
+        yes('4484 old, equal, late old, legacy or broken list preserves local ' + scope + ' ban',
+            covers.every((pid) => held[pid] && w.api.state.banned[pid]));
+      }
+      const fresh = Object.assign({}, after, { bansRequestedAt: stamp(created + 1), at: stamp(clock + 1) });
+      const active = snapshot(fresh);
+      yes('4484 a genuinely newer snapshot retires every lifted local ' + scope + ' ban',
+          covers.every((pid) => !active[pid] && !w.api.state.banned[pid]));
+      w.said.length = 0;
+      const scheduled = w.timeouts.length;
+      w.api.banSweep();
+      w.timeouts.slice(scheduled).forEach((timer) => timer.fn());
+      yes('4484 no fresh ban-related end or kick follows the site lift',
+          covers.every((pid) => !w.to(pid).some((line) => /banned/.test(line))
+            && ((after.pk || []).includes(pid) || !w.kicked.includes(70 + pid))));
+      if (whole) yes("4484 the account lift preserves Dara's independent canonical PK",
+          w.to(4002).some((line) => /died for good/.test(line)) && w.kicked.includes(70 + 4002));
+      const reinstated = Object.assign({}, before, { bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) });
+      const still = snapshot(reinstated);
+      yes('4484 a current site ' + scope + ' ban still enforces after local retirement',
+          covers.every((pid) => still[pid] && still[pid].scope === scope));
+      const confirmedRequest = Date.parse(reinstated.bansRequestedAt);
+      const damaged = [
+        Object.assign({}, after, { bansRequestedAt: stamp(confirmedRequest - 1), at: stamp(clock + 1) }),
+        Object.assign({}, after, { bansRequestedAt: 'unreadable', at: stamp(clock + 2) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(clock + 60000), at: stamp(clock + 60001) }),
+        Object.assign({}, after, { bans: [null], bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }),
+        '{'
+      ];
+      for (const doc of damaged) {
+        const retained = snapshot(doc);
+        yes('4484 lost or regressing saved authority keeps the last good ' + scope + ' ban',
+            covers.every((pid) => retained[pid] && retained[pid].scope === scope));
+      }
+      w = loadStaff({ clock: StaffClock, staffState: w.api.state });
+      const duringReload = snapshot('{');
+      yes('4484 hot reload retains the last confirmed ' + scope + ' bans if the door file is broken',
+          covers.every((pid) => duringReload[pid] && duringReload[pid].scope === scope));
+      const freshLift = snapshot(Object.assign({}, after, { bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }));
+      yes('4484 the next good snapshot can still lift the last known ' + scope + ' ban',
+          covers.every((pid) => !freshLift[pid]));
+    }
+
+    // Paired 4484/4637: one authoritative request may begin between two
+    // acknowledged scopes. Hand back only the older scope, not the whole pid.
+    for (const olderScope of ['account', 'character']) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      let clock = Date.now();
+      class PairedClock extends Date { static now() { return clock; } }
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        profiles: [], bans: [], pk: [], at: new Date(clock).toISOString()
+      }));
+      w = loadStaff({ clock: PairedClock });
+      const newerScope = olderScope === 'account' ? 'character' : 'account';
+      const word = (scope) => scope === 'account' ? '/banaccount' : '/ban';
+      staffLine(w, word(olderScope) + ' Bjorn 30m paired older scope');
+      yes('paired scope: first actual game ban is acknowledged',
+          await until(() => w.to(1001).some((line) => line.startsWith('Banned '))));
+      const beforeSecond = (await allowed()).j;
+      const first = beforeSecond.bans.find((ban) => ban.scope === olderScope && ban.profiles.includes(2002));
+      const requestStarted = clock + 1000;
+      clock += 2000;
+      const messages = w.to(1001).length;
+      staffLine(w, word(newerScope) + ' Bjorn 60m paired newer scope');
+      yes('paired scope: second actual game ban is acknowledged after request start',
+          await until(() => w.to(1001).slice(messages).some((line) => line.startsWith('Banned '))));
+      clock += 11000;
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify(Object.assign({}, beforeSecond, {
+        bansRequestedAt: new Date(requestStarted).toISOString(), at: new Date(clock).toISOString(), pk: []
+      })));
+      w.api.bansNow(clock);
+      const held = w.api.state.banned[2002];
+      yes('paired scope: snapshot retires only the older scope and keeps the newer acknowledgement',
+          held && !held[olderScope] && held[newerScope] && held[newerScope].why === 'paired newer scope');
+      clock = first.until + 1;
+      const later = w.api.bansNow(clock)[2002];
+      yes('paired scope: the newer local ban remains effective after the older site ban expires',
+          later && later.scope === newerScope && later.why === 'paired newer scope');
+      w.said.length = 0;
+      w.api.state.ending[2002] = 0;
+      w.api.banSweep();
+      yes('paired scope: subsequent sweep still reports that remaining ban',
+          w.to(2002).length === 1 && w.to(2002)[0].includes('paired newer scope')
+          && (newerScope === 'account' ? w.to(2002)[0].startsWith('You are banned')
+                                      : w.to(2002)[0].startsWith('Staff have banned this character')));
+    }
+    await hub('unban', { id: BJORN_D });
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    // Hot reload keeps older local overlays that predate the timestamp field.
+    {
+      let clock = Date.now();
+      class ReloadClock extends Date { static now() { return clock; } }
+      const loaded = clock;
+      const oldState = { frozen: {}, silenced: {}, banned: {
+        2002: { why: 'legacy game ban', until: 0, scope: 'character' }
+      } };
+      w = loadStaff({ clock: ReloadClock, staffState: oldState });
+      function refresh(requested, written) {
+        clock += 11000;
+        fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+          bans: [], pk: [], at: new Date(written).toISOString(),
+          bansRequestedAt: new Date(requested).toISOString()
+        }));
+        return w.api.bansNow(clock);
+      }
+      yes('4484 an old hot-reload overlay waits for a request newer than module load',
+          !!refresh(loaded - 1, loaded + 1)[2002] && !!oldState.banned[2002]);
+      yes('4484 that legacy overlay retires once a fresh request confirms its lift',
+          !refresh(loaded + 1, loaded + 2)[2002] && !oldState.banned[2002]);
+    }
 
     w = loadStaff();
     staffLine(w, '/pk Sigrid fell to the dragon at Helgen');

@@ -792,6 +792,7 @@
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -879,6 +880,21 @@
                  (doc.lookupFailedWhy ? ': ' + doc.lookupFailedWhy : ''));
           }
 
+          // A failed or late request can still refresh unrelated role fields,
+          // but it cannot replace the last readable ban list or advance its clock.
+          var previousBansRequestedAt = (Array.isArray(had.bans) &&
+            had.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }))
+            ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var previousBansWritten = new Date(String(had.at || '')).getTime() || 0;
+          // Corrupt metadata cannot put every healthy future refresh behind
+          // a floor that was never a valid saved snapshot.
+          if (!(previousBansRequested > 0 && previousBansRequested <= previousBansWritten &&
+                previousBansWritten <= Date.now())) { previousBansRequested = 0; }
+          var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
+            doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
+            requestedAt > previousBansRequested && requestedAt <= Date.now();
+
           // Whole, never in place (#2740): Set-Door reads it on the box while
           // the server runs, and an in-place write read half way is no list.
           try {
@@ -907,7 +923,10 @@
               // Staff bans with why and until (#412), from the site's own
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
-              bans: Array.isArray(doc.bans) ? doc.bans : [],
+              bans: takeBans ? doc.bans : (Array.isArray(had.bans) ? had.bans : []),
+              // The request's start, never its response time, is the proof
+              // used when handing local game bans back to the site.
+              bansRequestedAt: takeBans ? new Date(requestedAt).toISOString() : previousBansRequestedAt,
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],

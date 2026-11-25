@@ -174,7 +174,7 @@ Names use 1 to 60 characters: Unicode letters and numbers, spaces, apostrophes, 
 
 ## Bans, PKs and notes
 
-Staff, apart from `/unpk`. These are kept on the site, on the staff pages at https://thornswood.net/hub, and a ban ends the session at once.
+Staff, apart from `/unpk`. These are kept on the site, on the staff pages at https://thornswood.net/hub, and a ban ends the session at once. A ban lifted there stops counting in the game once the door has fetched and read a newer ban list.
 
 | Command | What it does |
 | --- | --- |
