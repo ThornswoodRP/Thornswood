@@ -31,6 +31,8 @@ function preload() {
     if (host === 'discord.com' && route === '/api/v10/guilds/fixture/roles') answer = { status: 200, body: [{ id: 'play', name: 'Playtester' }] };
     if (host === 'discord.com' && route === '/api/v10/guilds/fixture/members?limit=1000') {
       answer = mode.bulk === 'complete' ? { status: 200, body: [member(mode.caller)] }
+        : mode.bulk === 'malformed' ? { status: 200, body: [member(mode.caller), { user: {} }] }
+        : mode.bulk === 'duplicate' ? { status: 200, body: [member(mode.caller), member(mode.caller)] }
         : mode.bulk === 'full' ? { status: 200, body: [member(mode.caller), ...Array.from({ length: 999 }, (_, i) => member(String(300000000000000000n + BigInt(i))))] }
         : { status: 403, body: { code: 50001, message: 'Fixture list unavailable' } };
     }
@@ -127,6 +129,8 @@ const invalid = [
       ['ban string Unknown Ban', { ownerError: error(10007), banError: { status: 404, body: { code: '10026' } } }],
       ['actual Discord ban', { ownerError: error(10007) }],
       ['still a member', { banError: error(10026) }],
+      ['a malformed member page cannot prove departure', { bulk: 'malformed', banError: error(10026) }],
+      ['a duplicate row cannot prove a member page complete', { bulk: 'duplicate', banError: error(10026) }],
       ['complete list but unknown ban lookup', { bulk: 'complete', banError: error(10004) }],
       ['full page is not proof of departure', { bulk: 'full', ownerError: error(10004), banError: error(10026) }]
     ];

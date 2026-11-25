@@ -53,8 +53,16 @@ async function guildMembers() {
     membersCache = { at: Date.now(), byId: null };
     return null;
   }
-  const byId = {};
-  r.body.forEach(function (m) { if (m && m.user && m.user.id) byId[String(m.user.id)] = m; });
+  const byId = Object.create(null);
+  for (const member of r.body) {
+    const id = member?.user?.id;
+    if (typeof id !== 'string' || !id || byId[id]) {
+      // An incomplete page cannot prove that an account left the guild.
+      membersCache = { at: Date.now(), byId: null };
+      return null;
+    }
+    byId[id] = member;
+  }
   membersCache = { at: Date.now(), byId: byId };
   return byId;
 }
