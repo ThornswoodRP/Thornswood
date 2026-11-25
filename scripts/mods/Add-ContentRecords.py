@@ -496,7 +496,7 @@ CONTENTS = (
     # feasts and brews (#3152) share one row, which keeps the description
     # under its 512.
     (r'(ALCH ThornswoodFood|COBJ ThornswoodRecipe)(Tea|Feast|Brew)\w+$|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled)$'
-     r'|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
+     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
     (r'IMAD Thornswood(Drunk|High|Hangover|Withdrawal)Imod$', 'own', 'the screen looks'),
     (r'BOOK ThornswoodPassage\w+$', 'own', 'starting town passages'),
@@ -635,6 +635,11 @@ RECIPE_BANDAGE = 0x50154C4
 RECIPE_SPLINT = 0x50154C5
 RECIPE_POULTICE = 0x50154C6
 RECIPE_REMEDY = 0x50154C7
+# Leave C8 for the linen recipe (#4647). Decanting discards the milk;
+# it does not drink it or grant its effects (#4652).
+RECIPE_EMPTY_BOTTLE = 0x50154C9
+MILK_JUG = 0x03003534                         # HearthFires.esm, fourth master
+EMPTY_WINE_BOTTLE = 0x000F2012                # the existing water-bottle container
 
 # THE PHYSICKER'S POTIONS (#3470). Patrick, 26 Oct 2026, A+B on the report
 # page: the dungeon pile pays ingredients instead of Skyrim's ten potion
@@ -1929,6 +1934,8 @@ def thornswood_records(clam, scrap):
              POULTICE, ALCHEMY_KEYWORD),
         cobj(RECIPE_REMEDY, 'ThornswoodRecipeRemedy', [(MUDCRAB_CHITIN, 1), (BLUE_MOUNTAIN_FLOWER, 1)],
              REMEDY, ALCHEMY_KEYWORD),
+        cobj(RECIPE_EMPTY_BOTTLE, 'ThornswoodRecipeEmptyBottleFromMilk', [(MILK_JUG, 1)],
+             EMPTY_WINE_BOTTLE, COOKPOT_KEYWORD),
     ] + [
         cobj(fid, edid, [(globals()[name], 1) for name in inputs], potion, ALCHEMY_KEYWORD)
         for fid, edid, potion, inputs in POTION_RECIPES

@@ -41,6 +41,15 @@ herbs are on [Food](food.md), "Seasonal food".
 
 ## Water
 
+A novice Hearthcook can make an Empty Wine Bottle at a cooking pot from one
+Jug of Milk. This pours the milk away: it gives no food, thirst or drink
+effects. The existing empty bottle is the container used for water; the milk
+jug does not introduce another bottle model. A novice Farmer can milk a
+living cow in any season, with the usual wait between milkings, so the first
+container does not depend on already having water. The normal Cook rules
+and ladle still apply, including Grand Chef's doubled yield for an eligible
+Master Cook. Fill the empty bottle at a well or water bucket.
+
 | Source | Thirst | Risk |
 | --- | --- | --- |
 | Well, inn, a filled skin | 20 | None |
