@@ -39,6 +39,7 @@ Each list requires the proven chat connection, a current launcher pass and your 
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
+| `/tpto <person>` | Teleports your own living character to an unambiguous online person, by name, prefix, profile or character id. Playtesters may use it on Dev and Main; frozen, cuffed and locked-jail movement is refused. It never moves the other person |
 
 The count is the last word, and only when it is a number with a name in front of it.
 
