@@ -206,6 +206,16 @@
       return true;
     }
   }
+  function shutdown() {
+    var failures = [];
+    Object.keys(active).forEach(function(id) {
+      try { revoke(id,active[id],'The staff tools reloaded.'); }
+      catch (e) { failures.push(e); log('staff tools: could not withdraw actor '+id+' during reload: '+e); }
+    });
+    // One destroyed/unreadable actor cannot leave every other mode enabled.
+    // Still fail the reload visibly and retain the old authority timer.
+    if (failures.length) { throw failures[0]; }
+  }
   function ownerScript() {
     return [
       '(function(){',
@@ -238,7 +248,7 @@
   g.__thornswoodStaffToolsTimer = setInterval(guard('staffToolAuthority',tick),1000);
   g.__thornswoodStaffTools = {words:WORDS,command:command,tick:tick,ownerScript:ownerScript,visibilityScript:visibilityScript,
     isInvisible:function(actor){var row=active[actor];return !!(row && row.invisible && pass(row.pid) && Number(pass(row.pid).x)>Date.now());},
-    shutdown:function(){Object.keys(active).forEach(function(id){revoke(id,active[id],'The staff tools reloaded.');});}};
+    shutdown:shutdown};
   g.__thornswoodCommandTools.register('scene-tools',{
     command:function(cmd,word,parts,pid,actor){return command(cmd,word,parts.slice(1),pid,actor);},
     help:[

@@ -197,4 +197,15 @@ test('saved modes from another server run and expired passes cannot grant native
   ctx.value.until=1;
   vm.runInNewContext(w.properties.thornswoodStaffTools.updateOwner,{ctx});assert.deepEqual(calls,[false,'flight',true,'flight',false]);
 });
+test('reload withdraws every reachable mode before surfacing an unreadable actor', () => {
+  const w=setup();
+  w.rows.set(20,{profileId:456,pos:[0,0,0],angle:[0,0,0],worldOrCellDesc:'3c:Skyrim.esm',
+    isDead:false,isGodMode:false,npc:{runtimeLifeIdentity:'actor-20-life-1'}});
+  w.context.__thornswoodPassSeen.passes[456]={x:Date.now()+60000};
+  w.run('/godmode',['on']);w.run('/godmode',['on'],{proven:true},456,20);
+  assert.equal(w.rows.get(20).isGodMode,true);
+  w.rows.delete(10);
+  assert.throws(()=>w.tools.shutdown());
+  assert.equal(w.rows.get(20).isGodMode,false);
+});
 console.log(checks + ' behavioral checks passed');
