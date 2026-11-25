@@ -128,6 +128,30 @@ for (const server of ['main', 'dev']) {
   w.mp().get = function(actor,property) {if(actor === TESTER && property === 'thornswoodNeeds') throw new Error('fixture read failed'); return get(actor,property);};
   yes('failed read is not mistaken for an absent record', /could not read/i.test(refused(TESTER,'/setneeds rest 12')));
   w.mp().get = get;
+  seed(TESTER);
+  const needs = w.box().__thornswoodNeeds, runtimeIdentity = w.mp().getActorRuntimeIdentity;
+  needs.setBurning(TESTER, true);
+  yes('strict context fixture started a canonical body fire', w.prop(TESTER,'thornswoodBurnVisual').on === true);
+  w.box().Date.now = () => dateNow() + 3000;
+  w.mp().getActorRuntimeIdentity = function (actor) {
+    if (actor === TESTER) throw new Error('fixture burning runtime read failed');
+    return runtimeIdentity(actor);
+  };
+  try {
+    yes('failed burning identity refuses the staged change instead of dropping live warmth',
+      /could not read the needs context/i.test(refused(TESTER,'/setneeds rest 27')));
+  } finally {
+    w.mp().getActorRuntimeIdentity = runtimeIdentity;
+  }
+  try {
+    reply = ask(TESTER,'/setneeds rest 27');
+    yes('a readable active fire banks its warmth in the single staged save',
+      w.prop(TESTER,'thornswoodNeeds').rest === 27 && w.prop(TESTER,'thornswoodNeeds').temp > 51 &&
+      reply.sets.filter(d => d[3] === 'thornswoodNeeds').length === 1);
+  } finally {
+    needs.clearBurning(TESTER);
+    w.box().Date.now = dateNow;
+  }
   const api = w.box().__thornswoodStaffNeeds;
   if (api) {
     const n = w.heard(ADMIN).length, previous = JSON.stringify(w.row(ADMIN));

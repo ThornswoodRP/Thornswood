@@ -1271,7 +1271,7 @@
   }
 
   function projectionEnvironment(actorId, savedOnly) {
-    var fireEnd = burningUntil(actorId);
+    var fireEnd = burningUntil(actorId, savedOnly);
     return {
       workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
       restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
@@ -1458,11 +1458,11 @@
     return at * (1 - (d / reach));
   }
 
-  function burningUntil(actorId, identity) {
+  function burningUntil(actorId, savedOnly, identity) {
     if (!burning || !Object.prototype.hasOwnProperty.call(burning, actorId)) { return 0; }
     // A new profile, runtime or life can read needs before the burn tick.
     // Only the actor that reported the fire can bank its elapsed warmth.
-    if ((identity || burnIdentity(actorId)) !== burnIdentities[actorId]) { return 0; }
+    if ((identity || burnIdentity(actorId, savedOnly)) !== burnIdentities[actorId]) { return 0; }
     return burning[actorId] + NEEDS.burn.every * 3;
   }
 
@@ -3724,7 +3724,7 @@
   var burnIdentities = {}; // actorId -> profile, current runtime and life
   var burnStarts = {};     // actual start, independent of whether needs saved
 
-  function burnIdentity(actorId) {
+  function burnIdentity(actorId, savedOnly) {
     try {
       var state = mp.getNpcAIState(actorId);
       var runtime = mp.getActorRuntimeIdentity(actorId);
@@ -3732,7 +3732,11 @@
           !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
           typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
       return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
-    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+    } catch (e) {
+      if (savedOnly) { throw e; }
+      nlog('could not read the burning actor identity:', e);
+      return '';
+    }
   }
 
   function publishBurnVisual(actorId, on) {
@@ -3764,7 +3768,7 @@
   function setBurning(actorId, on) {
     var identity = on ? burnIdentity(actorId) : '';
     if (on && identity) {
-      var wasBurning = burningUntil(actorId, identity) > Date.now();
+      var wasBurning = burningUntil(actorId, false, identity) > Date.now();
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
