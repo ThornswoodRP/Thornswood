@@ -45,7 +45,7 @@ the menu's loop with one of Thornswood's hints over it, from
 this folder: Go.ps1 writes it from `site\data\site\lines.md`, the one copy
 of the hints (#3130, #3147).
 
-## Dialogs when opening
+### Dialogs when opening
 
 The journal, board, party, character, trade, drop box, ride, wounds, repair,
 furniture, maneuvers, help, merchant and ship panels call
