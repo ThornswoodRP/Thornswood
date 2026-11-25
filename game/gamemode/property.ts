@@ -6195,7 +6195,19 @@
     };
   }
 
-  function post(parts, actorId, profileId, toProfile, isJob) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
+    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+        (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
+      toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
+      return true;
+    }
+    // Same authoritative location, size, fee, reward and pack-first landing.
+    // Only the legacy command boundary unescapes or normalizes text.
+    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
+                kind === 'job', {title:title,body:body,hold:expectedHold});
+  }
+
+  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
     /*
       AT THE BOARD, because that is what makes it a board rather than a
       command. It is the same rule as claiming at a door: the place is the
@@ -6205,6 +6217,10 @@
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -6225,9 +6241,9 @@
       }
       from = 2;
     }
-    var words = postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
+    var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
     var what = isJob ? 'the job' : 'the notice';
-    if (!words.title) {
+    if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
     }
@@ -6236,7 +6252,7 @@
                 words.title.length + '. Nothing was taken.');
       return true;
     }
-    if (!words.body) {
+    if (!words.body.trim()) {
       toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
                                  : 'Say what the notice says. Nothing was taken.');
       return true;
@@ -8663,7 +8679,7 @@
     notices: function () { return notices; }, takedown: takedown,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
-    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel,
+    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,

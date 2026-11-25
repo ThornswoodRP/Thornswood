@@ -405,8 +405,8 @@ attempt('the panels', function () {
   yes('U3 and the line that counts the older ones', /var older = Number\(b\.older\) \|\| 0;/.test(page) &&
       /older ones are/.test(page));
   yes('U4 the panel still posts, takes and takes down with its buttons',
-      page.indexOf("line = '/notice ' + slashTitle(title)") !== -1 &&
-      page.indexOf("line = '/job ' + Number(reward) + ' ' + slashTitle(title)") !== -1 && page.indexOf('net(line);') !== -1 &&
+      page.indexOf("var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text, b.hold]);") !== -1 &&
+      page.indexOf('rewardValue = Number(reward);') !== -1 && page.indexOf('net(line);') !== -1 &&
       page.indexOf("net('/take ") !== -1 && page.indexOf("net('/unpin ") !== -1);
   yes('U5 J lists the towns under Boards and picking one sends /board and the town',
       /'<h3>Boards<\/h3>'/.test(journal) && /data-board="/.test(journal) &&

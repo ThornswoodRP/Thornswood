@@ -6,8 +6,8 @@ quest log. Vanilla quests do not run.
 ## How many
 
 12 journals. 60 pages in one journal. 4000 characters on a page. A
-page title is 60 characters. Past that, the rest is cut off rather
-than refused as a second page.
+page title is 60 characters. Save refuses a page or title past its
+limit instead of cutting it short. The unsaved draft stays in the editor.
 
 J opens the panel, and everything on this page is done there. New
 journal starts one, and Rename gives it its title. Nothing here is
@@ -16,6 +16,12 @@ typed into the chat.
 The title, a page's title, and the page itself can be typed. While
 the panel is open the keyboard stays in it, including in those
 fields.
+
+Saving a page keeps literal backslashes, colons, repeated spaces, indentation,
+Unicode and line breaks as written. An update about an older save does
+not replace newer text. If a save is refused or cannot be confirmed,
+the current page stays marked Unsaved. Keep that draft until you have
+checked or saved it; a matching live copy alone is not a save receipt.
 
 ## Who else can read it
 
