@@ -230,12 +230,14 @@ class Interaction(object):
 
 
 def held_push(gate, events, calls):
-    """bot.push, standing in for a site that takes its time."""
+    """bot.push, standing in for a site that takes its time and then keeps
+       the ticket, answering True as the real push does then (#4230)."""
     def fake(*a):
         calls.append(a)
         events.append('site push starts')
         gate.wait(HOLD)
         events.append('site push finished')
+        return True
     return fake
 
 
@@ -394,18 +396,23 @@ yes('T2 the reply says it went to staff, somewhere only staff can read it',
 yes('T2 the site copy still goes, once', pushed_once(r))
 yes('T2 nothing raised', r['raised'] is None)
 
-# T3: no tickets channel and no staff channel at all. The person gets a
-#     message, then the reply.
+# T3: no tickets channel and no staff channel at all, so Discord holds no
+#     copy and the site's inbox is the only one. Here the reply WAITS for the
+#     site (#4230): it may say the ticket is in the staff inbox only once the
+#     site has said it kept it. test-4230-ticket-site-ack.py holds the site
+#     refusing it. The other cases above and below still answer at once.
 r = submit('nowhere')
 ev = r['events']
+yes('T3 nobody is told anything until the site has kept it',
+    before(ev, 'site push finished', 'direct message')
+    and before(ev, 'site push finished', 'acknowledged'))
 yes('T3 the direct message goes before the reply',
     before(ev, 'direct message', 'acknowledged'))
-yes('T3 THE REPLY GOES OUT BEFORE THE SITE HAS ANSWERED',
-    before(ev, 'acknowledged', 'site push finished'))
-yes('T3 the reply says the answer comes by message',
+yes('T3 the reply says it is in the staff inbox and the answer comes by message',
     r['followup'].said
-    and r['followup'].said[0][0].startswith('Sent to staff.'))
-yes('T3 the site copy still goes, once', pushed_once(r))
+    and r['followup'].said[0][0].startswith('Sent to staff.')
+    and 'staff inbox' in r['followup'].said[0][0])
+yes('T3 the site copy goes, once', pushed_once(r))
 
 # T4: Discord refuses the reply itself. The site copy was the one place this
 #     ticket reached before the reply was tried, and it must still get there.

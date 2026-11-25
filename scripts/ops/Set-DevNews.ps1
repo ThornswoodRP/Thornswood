@@ -75,7 +75,7 @@ function Ask($url) {
     try { $resp = $r.GetResponse() }
     catch [Net.WebException] {
       $resp = $_.Exception.Response
-      if (-not $resp) { $out.why = $_.Exception.Message; return $out }
+      if (-not $resp) { $out.why = 'Discord request failed (' + $_.Exception.Status + ')'; return $out }
       $code = [int]$resp.StatusCode
       $out.why = "Discord answered $code" + $(if ($code -eq 401 -or $code -eq 404) {
         ' (that webhook does not exist any more, or the URL is not complete)' } else { '' })
@@ -89,13 +89,25 @@ function Ask($url) {
     if ($o.PSObject.Properties['channel_id']) { $out.channel = [string]$o.channel_id }
     if ($o.PSObject.Properties['name'])       { $out.name    = [string]$o.name }
     if ($o.PSObject.Properties['guild_id'])   { $out.guild   = [string]$o.guild_id }
-  } catch { $out.why = $_.Exception.Message }
+  } catch { $out.why = 'Discord request failed (' + $_.Exception.GetType().Name + ')' }
   return $out
 }
 
 # ------------------------------------------------------------------- check
 if ($Check) {
-  $url = [string](& (Join-Path $Here 'Discord-Hook.ps1') -Name dev | Select-Object -First 1)
+  try {
+    $hookLines = @(& (Join-Path $Here 'Discord-Hook.ps1') -Name dev 2>&1)
+    $readHook = $?
+    if ($hookLines | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) { $readHook = $false }
+  } catch {
+    # Transport diagnostics can contain the webhook address.
+    $readHook = $false
+  }
+  if (-not $readHook) {
+    Say 'Could not reach the server for the dev webhook.' 'Red'
+    Done; exit 1
+  }
+  $url = [string]($hookLines | Where-Object { $_ -is [string] } | Select-Object -First 1)
   if (-not $url) {
     Say 'No dev webhook set, on the VPS or here. A dev release tells nobody in Discord.' 'Yellow'
     Say 'Run .\scripts\ops\Set-DevNews.ps1 to point it at #staff-news.' 'DarkGray'
