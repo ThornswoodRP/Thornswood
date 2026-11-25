@@ -1,3 +1,4 @@
+const observedOfferVersion = require('./fixtures/trade-version');
 // test-one-mint.js
 //
 // Authorized coin sources are explicit and bounded. A character gets forty
@@ -939,9 +940,9 @@ function tradeWorld() {
     }
   });
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('./fixtures/ordinary-quest-items') + tradeBlock)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function () { } }, function () { return 1; }, function () { },
     function (n, f) { return f; }, function () { }, function () { });
   return {
     trade: g.__thornswoodTrade,
@@ -964,8 +965,8 @@ if (tradeBlock !== null) {
     w.trade.gold(A, 40);
     w.trade.gold(B, 5);
     w.trade.add(B, 'Leek', 3);
-    w.trade.confirm(A);
-    w.trade.confirm(B);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin going both ways in one trade lands where it was sent',
         w.gold(A) === 65 && w.gold(B) === 40);
     yes('and there is exactly as much gold after the trade as before it',
@@ -978,9 +979,9 @@ if (tradeBlock !== null) {
     w.trade.begin(A, B);
     w.trade.gold(A, 40);
     w.trade.add(B, 'Leek', 1);
-    w.trade.confirm(A);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
     w.store[A].inventory = { entries: [{ baseId: GOLD, count: 10 }] };   // spent it meanwhile
-    w.trade.confirm(B);
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin that is gone by the time both agree moves nothing at all',
         w.gold(A) === 10 && w.gold(B) === 0);
   });
@@ -1022,8 +1023,8 @@ if (tradeBlock !== null) {
     const opened = w.trade.begin(A, A) === '';
     if (opened) {
       w.trade.gold(A, 40);
-      w.trade.confirm(A);
-      w.trade.confirm(A);
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
     }
     yes('a trade with yourself can never have both sides agreed, so nothing moves',
         w.gold(A) === 100 && (!opened || !!w.trade.tradeOf(A)));

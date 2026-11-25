@@ -61,7 +61,10 @@ sees it on the table under the same name. You cannot put up more gold
 than you are holding. Each side can put up 24 lines. A person uses
 the buttons; nobody types a command for any of it.
 
-Both press Agree. Any change to either pile clears both
+Both press Agree. Agree applies only to the offer shown when it was pressed.
+If a change crosses that press, the window is refreshed and you are asked to
+read both piles and press Agree again. A change to the company's payout in
+a sale also asks both of you to read the trade again. Any change to either pile clears both
 confirmations. One side does not get to swap a sword for a worse one
 after the other has already agreed.
 
@@ -98,5 +101,7 @@ minutes, the gold check, and the piece put up crossing as it is are
 in the server. H and Trade under Near you on P offer it. Accept and
 Refuse on that prompt are what a person presses. So are Agree, Walk
 away and Buy for the company. The key and the buttons send the server
-the lines `/trade` and its verbs once were, and nobody is told to type
-them.
+the `/trade` commands. Agree sends `/trade agree <offer-version>` for
+the displayed offer. Legacy `/trade ok` requests refresh the window
+and ask for a fresh click. The separate verb also keeps a versioned
+click from becoming an approval if the server returns to older code.

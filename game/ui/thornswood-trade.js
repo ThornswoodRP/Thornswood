@@ -157,7 +157,6 @@
     root.querySelector('#' + ID + '-cancel').onclick = function () { net('/trade cancel'); };
     // A sale out of Skyrim (#1393): only a company worker sees it.
     root.querySelector('#' + ID + '-sale').onclick = function () { net('/trade sale'); };
-    root.querySelector('#' + ID + '-ok').onclick = function () { net('/trade ok'); };
     /*
       Escape outside an editing field WALKS AWAY rather than hiding the panel.
       A trade you cannot see is a trade you have forgotten you are in, holding
@@ -205,14 +204,17 @@
   */
   function saleLine(s) {
     if (!s) { return ''; }
-    var split = s.cut
+    var split = s.available !== true
+      ? (s.price ? 'The company payout is unavailable. Read the trade again before agreeing.'
+                 : (s.mine ? 'Put the price up as gold.' : 'No price is up yet.'))
+      : (s.cut || s.gone)
       ? (s.mine
         ? 'Of ' + s.price + ' gold, ' + esc(data.them) + ' receives ' + s.seller + ', ' + s.cut +
           ' stays with you for handling it, and ' + s.gone + ' leaves the world.'
         : 'Of ' + s.price + ' gold, you receive ' + s.seller + ', ' + s.cut + ' is ' + esc(s.worker) +
           '\'s for handling it, and ' + s.gone + ' leaves the world.')
       : (s.price
-        ? 'Under 10 gold nothing is cut: the whole ' + s.price + ' goes to ' + (s.mine ? esc(data.them) : 'you') + '.'
+        ? 'Nothing is cut: the whole ' + s.price + ' goes to ' + (s.mine ? esc(data.them) : 'you') + '.'
         : (s.mine ? 'Put the price up as gold.' : 'No price is up yet.'));
     return '<div class="sale">' + (s.mine
       ? 'You are buying for the Free Skyrim Trading Company. What ' + esc(data.them) +
@@ -321,13 +323,22 @@
     }
     theirs.innerHTML = th;
 
+    var offerVersion = data.offerVersion;
+    var versioned = typeof offerVersion === 'string' && /^[0-9a-f]{48}$/.test(offerVersion);
     root.querySelector('#' + ID + '-state').textContent =
-      data.iAgreed && data.theyAgreed ? 'Swapping...'
+      !versioned ? 'Waiting for a current trade offer.'
+      : data.iAgreed && data.theyAgreed ? 'Swapping...'
       : (data.iAgreed ? 'Waiting for ' + data.them + '.'
                       : 'Changing either side takes both agreements back.');
     var okBtn = root.querySelector('#' + ID + '-ok');
     okBtn.className = data.iAgreed ? 'off' : 'go';
     okBtn.textContent = data.iAgreed ? 'Agreed' : 'Agree';
+    var payoutAvailable = !data.sale || data.sale.available === true;
+    okBtn.disabled = !versioned || !payoutAvailable || !!data.iAgreed;
+    // Capture this draw, rather than reading whichever data arrives after a
+    // click. The server checks it again before recording any agreement.
+    var canAgree = versioned && payoutAvailable && !data.iAgreed;
+    okBtn.onclick = function () { if (canAgree) { net('/trade agree ' + offerVersion); } };
 
     var find = root.querySelector('#' + ID + '-find');
     if (find) {

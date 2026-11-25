@@ -37,7 +37,10 @@ yes('other specialists still exclude Hammer',Object.entries(stage.tables).filter
 function say(actor,line){w.say(actor,line);w.run(300);}
 function view(actor){return w.prop(actor,'thornswoodTrade')||{};}
 function start(){say(a,'/trade '+b.toString(16));say(b,'/yes');}
-function finish(){say(a,'/trade ok');say(b,'/trade ok');}
+function finish(){
+  say(a,'/trade agree '+view(a).offerVersion);
+  say(b,'/trade agree '+view(b).offerVersion);
+}
 function count(actor,name){return w.row(actor).inventory.entries.filter(e=>e.baseId===id(HAMMER)&&(e.name||'')===name).reduce((n,e)=>n+e.count,0);}
 start();
 let pack=view(a).pack||[];

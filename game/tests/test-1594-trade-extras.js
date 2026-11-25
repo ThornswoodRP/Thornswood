@@ -1,3 +1,4 @@
+const observedOfferVersion = require('../../tests/fixtures/trade-version');
 // test-1594-trade-extras.js
 //
 // #1594. A trade moves each piece with everything the engine keeps on it
@@ -106,9 +107,9 @@ function tradeWorld() {
   };
   const said = [];
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('../../tests/fixtures/ordinary-quest-items') + TRADE)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function () { } }, function () { return 1; }, function () { },
     function (n, f) { return f; }, function (id, line) { said.push([id, line]); }, function () { });
   return {
     trade: g.__thornswoodTrade,
@@ -151,8 +152,8 @@ attempt('a named key, an enchanted piece and a piece at 85% traded for gold', fu
   yes('the dagger goes on the table', w.trade.add(A, 'Steel Dagger', 1) === '');
   yes('the sword goes on the table', w.trade.add(A, 'Iron Sword', 1) === '');
   yes('the gold goes on the table', w.trade.gold(B, 60) === '');
-  w.trade.confirm(A);
-  yes('both agree and it swaps', w.trade.confirm(B) === '' && !w.trade.tradeOf(A));
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
+  yes('both agree and it swaps', w.trade.confirm(B, observedOfferVersion(w.trade, B)) === '' && !w.trade.tradeOf(A));
   const got = w.pack(B);
   yes('the key arrives with its house on it', !!entry(got, KEY_HOME));
   yes('the enchanted dagger arrives with its name, enchantment, charge and charge left', !!entry(got, ENCHANTED));
@@ -178,7 +179,7 @@ attempt('part of a stack is traded', function () {
   w.trade.add(A, 'Iron Arrow', 5);
   w.trade.add(A, 'Iron Sword', 1);
   w.trade.gold(B, 5);
-  w.trade.confirm(A); w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A)); w.trade.confirm(B, observedOfferVersion(w.trade, B));
   const left = w.pack(A);
   yes('the two keys left behind keep their house',
       !!entry(left, { baseId: KEY, count: 2, name: 'Key to Honeyside' }));
@@ -212,7 +213,7 @@ attempt('the receiver already holds pieces of the same records', function () {
   w.trade.add(A, 'Iron Sword', 1);
   w.trade.add(A, 'Iron Arrow', 4);
   w.trade.gold(B, 30);
-  w.trade.confirm(A); w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A)); w.trade.confirm(B, observedOfferVersion(w.trade, B));
   const got = w.pack(B);
   yes('the key they had still opens their own house',
       !!entry(got, { baseId: KEY, count: 1, name: 'Key to Proudspire Manor' }));
@@ -270,9 +271,9 @@ attempt('the piece was dropped between the offer and the agreement', function ()
   w.trade.begin(A, B);
   w.trade.add(A, 'Key', 1);
   w.trade.gold(B, 20);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.store[A].inventory = { entries: [] };
-  const answer = w.trade.confirm(B);
+  const answer = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   // The line is the piece, so the refusal names its house (#1718).
   yes('the trade is refused and says why', /does not have the Key to Breezehome any more/.test(answer));
   yes('and the gold did not move', w.gold(B) === 20 && w.writes.length === 0);
