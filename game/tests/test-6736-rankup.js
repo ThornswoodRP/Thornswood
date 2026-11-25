@@ -72,6 +72,10 @@ for (const server of ['dev', 'main']) {
   w.say(tester, '/testhelp');
   yes(server + ': implemented rankup syntax is discoverable through queued test help',
     w.heardSince(tester, helpAt).some(line => line.includes('/rankup class|profession')));
+  const roleHelp = box.__thornswoodCommandTools;
+  yes(server + ': playtest help lists self rankup, and admin help adds targeting',
+    roleHelp.help('playtester').filter(h => h.word === '/rankup').every(h => !h.syntax.includes('for <person>')) &&
+    roleHelp.help('admin').some(h => h.word === '/rankup' && h.syntax.includes('for <person>')));
 
   for (const actor of [tester, staff]) {
     yes(server + ': a non-admin cannot advance another character',

@@ -62903,8 +62903,9 @@ module.exports = {
   var tools = g.__thornswoodCommandTools;
   if (tools && tools.register) {
     tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
-      syntax: '/rankup class|profession [school] [for <person>]',
-      text: 'Advance your current class or profession by one rank. Only admins may name another person.' }] });
+      syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
+      { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
+        text: 'Advance another character\'s current class or profession by one rank.' }] });
   }
 })();
 // ==== end thornswood staff progression ====
