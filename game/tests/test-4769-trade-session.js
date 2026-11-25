@@ -18,6 +18,8 @@ if(w.loaded()){
  yes('opening reuses its already minted offer identity without another generator',first===view(a).offerVersion);
  const version=view(a).offerVersion;say(a,'/trade gold 10');
  yes('editing rotates the offer version while retaining the session identity',typeof first==='string'&&view(a).sessionId===first&&view(a).offerVersion!==version);
+ const answerForSession=api().confirm(a,first);
+ yes('the public session identity cannot approve a changed offer',/again/.test(answerForSession)&&!api().tradeOf(a).okA&&!api().tradeOf(a).okB);
  say(a,'/trade add 12eb7 1');say(a,'/trade remove 12eb7');say(b,'/trade refresh');
  yes('add remove and owner refresh all retain this same session',typeof first==='string'&&view(a).sessionId===first&&view(b).sessionId===first);
  const membership=w.box().__thornswoodProperty.inCompany;w.box().__thornswoodProperty.inCompany=pid=>pid===1001;
@@ -44,5 +46,6 @@ if(w.loaded()){
  yes('a different same-named partner has a distinct session and no inherited draft',view(a).sessionId!==reopened&&value()==='0');
  const beforeReload=view(a).sessionId;api().cancel(a);w.reload();api().begin(a,b);
  yes('reload cannot recycle a previous session identity',view(a).sessionId!==beforeReload&&typeof view(a).sessionId==='string');
+ yes('the queued path and timers have no uncaught faults',w.faults.length===0&&w.threw.length===0);
 }
 t.done(w);
