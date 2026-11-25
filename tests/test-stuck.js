@@ -494,7 +494,12 @@ console.log('\nin a fight:');
       /used \/stuck in a fight and the wait was cancelled because they were hit, at 3c:Skyrim\.esm \(20500, -3000, 0\)\. Nobody was moved\./.test(records(w3)[0].why));
 
   got = run(w3, BJORN, '/stuck');
-  yes('the hit that cancelled it is itself a fight: the next one waits too', /waits 15 seconds first/.test(got[0] || ''));
+  yes('a cancelled wait uses the five minute limit too (#4784)', /once every 5 minutes/.test(got[0] || ''));
+  second(w3, 300);
+  w3.hp[A_BJORN] = 0.6;
+  second(w3, 1);
+  got = run(w3, BJORN, '/stuck');
+  yes('after the limit, a new hit starts a new wait', /waits 15 seconds first/.test(got[0] || ''));
   second(w3, 2);
   w3.where[A_BJORN].pos = [20700, -3000, 0];
   lines = second(w3, 1).filter(function (l) { return l.to === BJORN; });
@@ -503,8 +508,11 @@ console.log('\nin a fight:');
   yes('nobody moved, and staff have that too', moves(w3, A_BJORN).length === 0 &&
       records(w3).length === 2 && records(w3)[1].because === 'they moved');
 
+  second(w3, 300);
+  w3.hp[A_BJORN] = 0.5;
+  second(w3, 1);
   got = run(w3, BJORN, '/stuck');
-  yes('standing still, it waits again', /waits 15 seconds first/.test(got[0] || ''));
+  yes('after another five minutes, standing still can complete a new wait', /waits 15 seconds first/.test(got[0] || ''));
   w3.where[A_BJORN].pos = [20730, -3000, 0];   // a shuffle inside the slack
   second(w3, 14);
   yes('not moved at 14 seconds', moves(w3, A_BJORN).length === 0);
@@ -529,7 +537,11 @@ console.log('\nin a fight:');
   w4.dead[A_SERA] = false;
   second(w4, 20);
   got = run(w4, SERA, '/stuck');
-  yes('15 seconds after the last sign of a fight it works at once again',
+  yes('reviving does not bypass the cancelled wait limit (#4784)',
+      /once every 5 minutes/.test(got[0] || '') && moves(w4, A_SERA).length === 0);
+  second(w4, 280);
+  got = run(w4, SERA, '/stuck');
+  yes('after five minutes, out of a fight it works at once again',
       moves(w4, A_SERA).length === 1 && /^No safe spot near you was known/.test(got[0] || ''));
 }
 

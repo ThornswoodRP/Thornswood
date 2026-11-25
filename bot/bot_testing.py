@@ -3,6 +3,7 @@ The testing channels' one-time setup, and test tasks posted by hand.
 
 Part of the bot: bot.py loads it (#5357).
 """
+import asyncio
 import datetime
 import os
 import typing
@@ -108,6 +109,8 @@ TASK_ROLE_NAMES = [r.strip() for r in
 # Forum titles are capped at 100 by Discord and a first message at 2000.
 TASK_TITLE_ROOM = 100
 TASK_BODY_ROOM = 2000
+TEST_QUEUE_PAGE_SIZE = 8
+TEST_QUEUE_RESULTS = {'\u2705': 'Passed', '\u274c': 'Failed', '\U0001f4cc': 'Partial'}
 
 
 def _channel_named(guild, name, kinds=None):
@@ -622,3 +625,80 @@ async def test_task_cmd(interaction: discord.Interaction, title: str,
                 'Send Messages and Create Posts.'
                 % (DEV_TASKS_NAME if tag == 'Dev' else TASKS_NAME))
     await interaction.followup.send(said, ephemeral=True)
+
+
+async def _test_queue_result(thread):
+    # Read the starter from Discord so a result added just now is visible,
+    # even when the cached message is absent or has an older reaction count.
+    try:
+        starter = await thread.fetch_message(thread.id)
+    except discord.NotFound:
+        return None
+    except discord.HTTPException:
+        return 'Status unavailable'
+    marks = {str(reaction.emoji).replace('\ufe0f', '') for reaction in starter.reactions
+             if reaction.count > 0}
+    if starter.pinned or thread.flags.pinned:
+        marks.add('\U0001f4cc')
+    results = marks & TEST_QUEUE_RESULTS.keys()
+    if len(results) > 1:
+        return 'Conflicting results'
+    if results:
+        result = TEST_QUEUE_RESULTS[results.pop()]
+        return result + (' · replies' if thread.message_count > 1 else '')
+    return 'Unmarked with replies' if thread.message_count > 1 else 'Ready to test'
+
+
+@tree.command(name='test-queue', description='Browse active playtests and their results.')
+@discord.app_commands.describe(
+    server='Main playtests or the staff-only Dev queue.',
+    search='Words to find in the test title.',
+    page='Which page to show.',
+    order='Which tests to show first.')
+async def test_queue_cmd(interaction: discord.Interaction,
+                         server: typing.Literal['Main', 'Dev'] = 'Main',
+                         search: str = '',
+                         page: discord.app_commands.Range[int, 1] = 1,
+                         order: typing.Literal['Newest', 'Oldest'] = 'Newest'):
+    guild = interaction.guild
+    if guild is None:
+        await _say(interaction, 'This one works in the server.')
+        return
+    forum = (dev_tasks_forum(guild) if server == 'Dev'
+             else _channel_named(guild, TASKS_NAME, ('forum',)))
+    if forum is None or not isinstance(interaction.user, discord.Member):
+        await _say(interaction, 'You do not have access to that test forum.')
+        return
+    permissions = forum.permissions_for(interaction.user)
+    if not permissions.view_channel or not permissions.read_message_history:
+        await _say(interaction, 'You do not have access to that test forum.')
+        return
+
+    words = search.casefold().split()
+    threads = sorted(
+        (thread for thread in forum.threads if not thread.archived and not thread.locked
+         and all(word in thread.name.casefold() for word in words)),
+        key=lambda thread: thread.id, reverse=order == 'Newest')
+    if not threads:
+        await _say(interaction, 'No active %s tests match.' % server)
+        return
+    pages = (len(threads) + TEST_QUEUE_PAGE_SIZE - 1) // TEST_QUEUE_PAGE_SIZE
+    if page > pages:
+        await _say(interaction, 'There are %d pages of matching %s tests.' % (pages, server))
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    start = (page - 1) * TEST_QUEUE_PAGE_SIZE
+    shown = threads[start:start + TEST_QUEUE_PAGE_SIZE]
+    results = await asyncio.gather(*(_test_queue_result(thread) for thread in shown))
+    # Keep the requested date order within each result group. Tests to run
+    # come first on each page, then posts with results or discussion to review.
+    rows = [(thread, result) for thread, result in zip(shown, results) if result is not None]
+    rows.sort(key=lambda row: row[1] != 'Ready to test')
+    heading = '**%s test queue** • Page %d of %d • %d matching' % (
+        server, page, pages, len(threads))
+    lines = ['<#%d> · %s' % (thread.id, result) for thread, result in rows]
+    if len(rows) < len(shown):
+        lines.append('Some posts went away while this page loaded. Run the command again to refresh.')
+    await interaction.followup.send('\n'.join([heading] + lines), ephemeral=True,
+                                    allowed_mentions=discord.AllowedMentions.none())

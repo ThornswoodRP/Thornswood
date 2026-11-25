@@ -173,7 +173,7 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 $dll = $null
 try {
     $dll = Build-LauncherCode -Exe -Source $driver -File @(
-        (Join-Path $App 'InstallSteps.cs'), (Join-Path $App 'InstallAgreements.cs'),
+        (Join-Path $App 'InstallSteps.cs'), (Join-Path $App 'InstallAgreements.cs'), (Join-Path $App 'PathFence.cs'),
         (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs')) `
         -Resource @{ 'skyrim-files.json' = (Under $Repo 'records\skyrim-files.json') }
 } catch { Yes '2. the room rule builds with a driver' $false $_.Exception.Message; Done }
