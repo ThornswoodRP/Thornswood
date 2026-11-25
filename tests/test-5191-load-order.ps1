@@ -57,18 +57,18 @@ function Put([string]$rel, [string]$text) {
     [IO.File]::WriteAllText($p, $text)
 }
 try {
-    foreach ($f in @('scripts/mods/Set-LoadOrder.ps1', 'scripts/mods/ContentPaths.ps1')) { Put $f ([IO.File]::ReadAllText((Join-Path $Repo $f))) }
+    foreach ($f in @('scripts/mods/Set-LoadOrder.ps1', 'scripts/mods/ContentPaths.ps1', 'scripts/release/RecordShape.ps1', 'scripts/release/Read-JsonFile.ps1')) { Put $f ([IO.File]::ReadAllText((Join-Path $Repo $f))) }
     . (Join-Path $root 'scripts/mods/ContentPaths.ps1')
     $three = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp')
     $at = Join-Path $root 'records/load-order.json'
     Put 'records/load-order.json' (Format-ThornswoodLoadOrderRecord -Slug abc -Revision 3 -Order $three)
     Put 'records/collection.json' '{"collection":"abc","revision":3,"plugins":[{"name":"A.esm","master":true},{"name":"B.esp","master":false}]}'
-    Put 'records/collection-plugins.json' '{"collection":"abc","revision":3,"plugins":[]}'
+    Put 'records/collection-plugins.json' ('{"version":1,"collection":"abc","revision":3,"plugins":[{"name":"A.esm","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     $r2 = Run $root @('-Check')
     Yes '2 -Check passes on a record that is its records'' order' ($r2.Code -eq 0 -and $r2.Text -match 'is the order of collection abc revision 3, 9 plugins')
 
     Put 'records/collection.json' '{"collection":"abc","revision":4,"plugins":[{"name":"A.esm","master":true},{"name":"B.esp","master":false},{"name":"New.esp","master":false}]}'
-    Put 'records/collection-plugins.json' '{"collection":"abc","revision":4,"plugins":[]}'
+    Put 'records/collection-plugins.json' ('{"version":1,"collection":"abc","revision":4,"plugins":[{"name":"A.esm","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     $before = [IO.File]::ReadAllText($at)
     $r3 = Run $root @('-Check')
     Yes '2 -Check ends 1 when the records moved and the order did not, and says what to run' ($r3.Code -eq 1 -and $r3.Text -match 'Run pwsh scripts/mods/Set-LoadOrder\.ps1')

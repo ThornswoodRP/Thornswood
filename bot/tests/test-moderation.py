@@ -26,6 +26,7 @@ import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #227
 import asyncio
 import inspect
 import json
+import re
 import shutil
 import tempfile
 
@@ -189,16 +190,37 @@ try:
     else:
         yes('M7 the words are the house words', True)
 
-    # M8: every action the gamemode writes has words here.
+    # Match the staff recorder and its forwarding calls in the shipped
+    # gamemode, not a second list of action names that can go stale.
     gm = open(os.path.join(HERE, '..', 'game', 'gamemode.js'), encoding='utf-8').read()
-    dids = ['kick', 'freeze', 'unfreeze', 'bring', 'goto', 'silence', 'unsilence', 'warn',
-            'give', 'spawn', 'tp', 'ban', 'unban', 'note',
-            # One character or the whole account, and PK (#1010).
-            'banaccount', 'unbanaccount', 'pk',
-            # An admin undoing a PK made by mistake (#1010, 29 September).
-            'unpk']
-    yes('M8 every action the staff block records has a sentence here',
-        all(("record('%s'" % d) in gm and d in bot._MOD_DID for d in dids))
+    emitted = set(re.findall(r'''\b(?:record|staffRecord)\s*\(\s*['"]([a-z][a-z0-9]*)['"]\s*,''', gm))
+    yes('M8 finds staff, crafting, property and company emitters',
+        {'kick', 'craftrank', 'evict', 'companyconfirm'} <= emitted)
+    missing = sorted(d for d in emitted if not bot.moderation_text('live', json.loads(row(d))))
+    yes('M8 every emitted staff record formats' + (': missing ' + ', '.join(missing) if missing else ''),
+        not missing)
+
+    # Match the row shapes the five commands actually write. The despawn
+    # target is in why, while the company's terms take the place of a name.
+    cases = (
+        ('despawn', '', 0, 'kept wolf ff000001', 'despawned a creature: kept wolf ff000001'),
+        ('hurt', 'Bjorn', 2002, 'wound for the scene',
+         'used /hurt on Bjorn (profile 2002): wound for the scene'),
+        ('companypropose', "the company's terms", 0, 'fee to 20',
+         "proposed changes to the company's terms: fee to 20"),
+        ('companydrop', "the company's terms", 0, 'from Aela: fee to 20',
+         "dropped proposed changes to the company's terms: from Aela: fee to 20"),
+        ('companyconfirm', "the company's terms", 0, 'from Aela: fee to 20',
+         "confirmed changes to the company's terms: from Aela: fee to 20"),
+    )
+    put(LIVE, [])
+    put(DEV, [])
+    records = [json.dumps(dict(json.loads(row(d, who=name, why=why, n=i)), who=pid))
+               for i, (d, name, pid, why, _) in enumerate(cases)]
+    ticks = drive([lambda: put(DEV, records)])
+    yes('M8 the staff watcher says all five actions with their actor and details',
+        ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
+                       for _, _, _, _, words in cases]])
     # The site is server.js over its modules in site/lib since #5357; the hub's
     # writes are in those modules.
     site_dir = os.path.join(HERE, '..', 'site')

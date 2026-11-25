@@ -381,6 +381,13 @@ if ($Pick -gt 0) {
         if ($maps) { $null = Read-Map $maps }
     }
     try {
+        if ($Content -or [string]$env:CONTENT_SAME -eq 'yes') {
+            # Check the laid tables even if selection below picks no harness.
+            # OTHER KEY is deliberately held for the merge's own content run.
+            . (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
+            . (Join-Path $Repo 'scripts\dev\OwnPlugins.ps1')
+            Assert-ThornswoodLaidTableOrders $Repo
+        }
         if ($Content) {
             $list = Get-ContentList
             $whole = $list.Count -ge $gate.Count

@@ -37,6 +37,7 @@ param(
 # load is (test-3006), before this measurement's own Continue.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Leftovers.ps1')
+. (Join-Path $PSScriptRoot '..\mods\SteamLibrary.ps1')
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -48,6 +49,8 @@ function MB($b) { '{0,8:n1} MB' -f ($b / 1MB) }
 # Every folder this session can see. The Steam copy is in the list to be
 # measured and named, never to be touched: it is where the vanilla files come
 # from and the installer fingerprints three of them.
+$steamDefault = if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Steam' }
+$steamGame = Get-SteamSkyrim -DefaultRoot $steamDefault
 $roots = @(
     @{ Path = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install);                                            Note = 'the live build' }
     @{ Path = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Engine);                                             Note = 'the SkyMP source and build tree' }
@@ -58,8 +61,10 @@ $roots = @(
     @{ Path = (Join-Path $env:USERPROFILE 'Documents\My Games\Skyrim Special Edition');            Note = 'saves and ini. CAREFUL' }
     @{ Path = (Join-Path $env:USERPROFILE 'OneDrive\Documents\My Games\Skyrim Special Edition');   Note = 'the OneDrive copy of the same' }
     @{ Path = (Join-Path $env:LOCALAPPDATA 'Temp\Skyrim Platform');                   Note = 'CEF caches and logs' }
-    @{ Path = 'C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edition'; Note = 'vanilla Steam copy. DO NOT TOUCH' }
 )
+if ($steamGame) {
+    $roots += @{ Path = $steamGame; Note = 'vanilla Steam copy. DO NOT TOUCH' }
+}
 
 # Backups, previous copies and scratch. Deliberately narrow: a pattern that
 # matches too much turns an audit into a list nobody reads.
@@ -75,6 +80,7 @@ File "Thornswood leftover audit, $stamp"
 File ('=' * 70)
 
 Head 'Measuring'
+if (-not $steamGame) { Out2 '  missing: Skyrim Special Edition in Steam libraries (vanilla Steam copy)' }
 
 $totals = @()
 foreach ($r in $roots) {

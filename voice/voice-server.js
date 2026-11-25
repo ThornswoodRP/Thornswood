@@ -134,10 +134,8 @@ function peerName(p) {
 const OWNS_REPLY_MAX = 64 * 1024;
 const OWNS_WAIT_MS = 3000;
 function owns(ticket, profileId, then) {
-  if (!SITE || !ticket) { then('unchecked'); return; }
-  let mod;
-  try { mod = SITE.startsWith('https:') ? require('https') : require('http'); }
-  catch (e) { then('unchecked'); return; }
+  if (!SITE || !ticket) { then('unchecked', 'THORNSWOOD_SITE is not set or the ticket is missing'); return; }
+  const mod = /^https:/i.test(SITE) ? require('https') : require('http');
 
   const payload = JSON.stringify({ ticket: ticket, profileId: profileId });
   let done = false;
@@ -151,6 +149,12 @@ function owns(ticket, profileId, then) {
       headers: { 'content-type': 'application/json',
                  'content-length': Buffer.byteLength(payload) }
     }, (resp) => {
+      resp.on('error', () => finish('unchecked', 'ownership response was interrupted'));
+      if (resp.statusCode !== 200) {
+        finish('unchecked', 'ownership endpoint returned HTTP ' + resp.statusCode);
+        req2.destroy();
+        return;
+      }
       let buf = '';
       let size = 0;
       resp.on('data', (d) => {
@@ -159,25 +163,30 @@ function owns(ticket, profileId, then) {
         if (size > OWNS_REPLY_MAX) {
           console.log('[voice] the site\'s answer to the ownership check passed ' + OWNS_REPLY_MAX +
                       ' bytes, so the rest was not read');
+          finish('unchecked', 'ownership response exceeded the size limit');
           req2.destroy();
-          finish('unchecked');
           return;
         }
         buf += d;
       });
       resp.on('end', () => {
-        if (resp.statusCode !== 200) { finish('unchecked'); return; }
         let doc;
-        try { doc = JSON.parse(buf); } catch (e) { finish('unchecked'); return; }
+        try { doc = JSON.parse(buf); } catch (e) {
+          finish('unchecked', 'ownership response was not JSON');
+          return;
+        }
         if (doc && doc.ok === true) { finish('yes'); return; }
         const why = doc && typeof doc.why === 'string' ? doc.why : '';
         finish('no', /^[a-z ]{1,20}$/.test(why) ? why : '');
       });
     });
-  } catch (e) { finish('unchecked'); return; }
+  } catch (e) { finish('unchecked', 'could not start the ownership request'); return; }
 
-  late = setTimeout(() => { req2.destroy(); finish('unchecked'); }, OWNS_WAIT_MS);
-  req2.on('error', () => finish('unchecked'));
+  late = setTimeout(() => {
+    finish('unchecked', 'ownership request reached its deadline');
+    req2.destroy();
+  }, OWNS_WAIT_MS);
+  req2.on('error', () => finish('unchecked', 'ownership request failed in transit'));
   req2.write(payload);
   req2.end();
 }
@@ -603,10 +612,11 @@ chatPrune();
  * leaves a plain line reaching everybody rather than silencing the room.
  * /health says which it is.
  *
- * /me, /do, /w, /s and /ooc are local either way. They are not queued for
- * the game server. The line above the head uses those same distances even
- * while a plain line in the box still goes to everybody. Other slashes,
- * including /roll, are still queued.
+ * headlines.floatLine parses /me, /do, /w, /s and /ooc. They are local
+ * in the box and above the head, regardless of the plain chat setting:
+ * 1000 units for whispers, 12000 for shouts, and 4000 for the others.
+ * Plain lines above the head use 4000 units too. Other slashes, including
+ * /roll, are still queued for the game server.
  */
 function chatRangeOf(v) {
   const s = String(v == null ? '' : v).trim().toLowerCase();
@@ -615,42 +625,6 @@ function chatRangeOf(v) {
   return (s && isFinite(n) && n > 0) ? n : 0;
 }
 const CHAT_RANGE = chatRangeOf(process.env.THORNSWOOD_CHAT_RANGE);
-
-/*
- * /me and /do are how an attempt gets said as an attempt: "/me swings at
- * the guard" leaves whether it lands to the other person, which a plain
- * line cannot. Whisper and shout are their own distances in headlines.js
- * (1000 and 12000). chatReach below is only the box while the range is on,
- * and it is a quarter and three times that range, near the voice modes
- * (7, 30 and 85 metres in thornswood-voice.js). The head does not use it.
- */
-const CHAT_VERBS = {
-  '/me': 'me', '/do': 'do',
-  '/whisper': 'whisper', '/w': 'whisper',
-  '/shout': 'shout', '/s': 'shout', '/yell': 'shout', '/y': 'shout'
-};
-const CHAT_USAGE = {
-  me: 'Say /me and then what your character does, like /me draws a sword.',
-  do: 'Say /do and then what there is to see, like /do The door is barred.',
-  whisper: 'Say /w and then what you whisper.',
-  shout: 'Say /s and then what you shout.'
-};
-
-/* The verb a line starts with and the rest of it, or null for a plain line
-   and for every other slash, which still goes to the game server. */
-function chatVerb(text) {
-  const m = /^(\/[a-z]+)(?:\s+([\s\S]*))?$/i.exec(String(text == null ? '' : text));
-  if (!m) return null;
-  const kind = CHAT_VERBS[m[1].toLowerCase()];
-  if (!kind) return null;
-  return { kind: kind, text: String(m[2] || '').trim() };
-}
-
-function chatReach(kind) {
-  if (kind === 'whisper') return CHAT_RANGE / 4;
-  if (kind === 'shout') return CHAT_RANGE * 3;
-  return CHAT_RANGE;
-}
 
 /*
  * Who a line reaches: { to, placed }, or null for everybody.
@@ -1328,6 +1302,14 @@ class Sock {
         return;
       }
       let len = b1 & 0x7f;
+      // A control PING is one whole frame with at most125bytes (RFC6455§5.5).
+      // Reject invalid shapes before echoing them as a control PONG.
+      if (op === 0x9 && (!(b0 & 0x80) || len > 125)) {
+        this.socket.write(Buffer.from([0x88, 2, 0x03, 0xea])); // protocol error1002
+        this.close('protocol');
+        return;
+      }
+
       let off = 2;
 
       if (len === 126) {
@@ -1388,7 +1370,13 @@ class Sock {
       */
       if (op === 0x9) {
         if (!this.backed) {
-          try { this.write(Buffer.from([0x8a, 0])); } catch (e) { this.close('write'); }
+          try {
+            // §5.5.3: the reply carries identical application bytes.
+            const pong = Buffer.allocUnsafe(2 + body.length);
+            pong[0] = 0x8a; pong[1] = body.length;
+            body.copy(pong, 2);
+            this.write(pong);
+          } catch (e) { this.close('write'); }
         }
         continue;
       }
@@ -2554,8 +2542,7 @@ const server = http.createServer((req, res) => {
           and the launcher asks again on its next try.
         */
         if (verdict !== 'yes') {
-          console.log('[voice] NO TOKEN for profile ' + pid + ': ' +
-                      (SITE ? 'no answer from ' + SITE : 'THORNSWOOD_SITE is not set, so nobody can be asked'));
+          console.log('[voice] NO TOKEN for profile ' + pid + ': ' + why);
           res.writeHead(503, { 'content-type': 'text/plain' }).end('nobody could check this profile, so no token');
           return;
         }
@@ -2973,6 +2960,24 @@ server.on('upgrade', (req, socket, head) => {
     */
     if (msg.t === 'ping') { ws.send({ t: 'pong' }); return; }
 
+    // An answerer can lose incoming ICE while its offerer still receives
+    // consent checks. This optional control asks only that current offerer
+    // to retry the pair. Its client checks the fragment and existing retry
+    // budget; no roster, other pair, auth token or peer identity changes.
+    if (msg.t === 'voice-restart') {
+      const keys = Object.keys(msg);
+      if (keys.length !== 3 || keys.some((k) => k !== 't' && k !== 'to' && k !== 'ufrag')) return;
+      if (!Number.isSafeInteger(msg.to) || msg.to <= 0 || msg.to >= myId ||
+          typeof msg.ufrag !== 'string' || !/^[A-Za-z0-9+/]{4,256}$/.test(msg.ufrag)) return;
+      const me = peers.get(myId), to = peers.get(msg.to);
+      // hasVoice is a profile's place; a second chat-only socket sharing it
+      // must not gain this control over an actual voice connection.
+      if (!me || !to || me.voice !== true || to.voice !== true || !hasVoice(me) || !hasVoice(to)) return;
+      if (!hears(me, to) || !hears(to, me)) return;
+      to.ws.send({ t: 'voice-restart', to: msg.to, ufrag: msg.ufrag, from: myId });
+      return;
+    }
+
     // Signalling is passed on as signalling and nothing else (#1350). The
     // server never inspects what an offer or a candidate says, it only
     // decides who is allowed to hear it; see signal for the shape.
@@ -3263,7 +3268,7 @@ server.on('upgrade', (req, socket, head) => {
         p.ws.send(copy);
       }
       if (CHAT_RANGE) {
-        const heard = hearers(myId, me, chatReach('say'));
+        const heard = hearers(myId, me, CHAT_RANGE);
         if (heard) {
           for (const p of heard.to) deliver(p);
           if (heard.to.length <= 1) {

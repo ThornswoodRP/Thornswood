@@ -196,6 +196,14 @@ function constLine(src, name) {
   }
   const MODES = /var MODES = \{([\s\S]*?)\};/.exec(voice);
   const modes = MODES ? new Function('return {' + MODES[1] + '};')() : {};
+  const nativeMarks = /var NATIVE_MARK_MAX = (\{[^}]+\});/.exec(voice);
+  const nativeMax = nativeMarks ? new Function('return ' + nativeMarks[1])() : {};
+  const nativeVoice = fs.readFileSync(path.join(__dirname, '../../launcher/app/VoiceSession.cs'), 'utf8');
+  const quietAt = Object.fromEntries(Array.from(nativeVoice.matchAll(
+    /\{ "(whisper|local|yell)",\s*new Range \{ Full = [\d.]+,\s*Quiet = ([\d.]+)/g),
+  match => [match[1], Number(match[2])]));
+  yes('each native mark cutoff matches the launcher mixer', Object.keys(quietAt).length === 3 &&
+      Object.entries(quietAt).every(([mode, metres]) => nativeMax[mode] === metres));
   yes('your own microphone has a colour for each of the three distances',
       ['whisper', 'local', 'yell'].every(k => modes[k] && /^#[0-9a-f]{6}$/.test(modes[k].colour)));
   yes('and each is the mark\'s colour for that distance, so you see what others see',
@@ -214,7 +222,7 @@ function constLine(src, name) {
   yes('the voice page publishes marks', !!pub);
   if (pub) {
     const sent = [];
-    const run = new Function('lastWho', 'cfg', 'muted', 'hushed', 'MODES', 'UNITS_PER_METRE', 'window',
+    const run = new Function('lastWho', 'cfg', 'muted', 'hushed', 'MODES', 'NATIVE_MARK_MAX', 'inRelay', 'UNITS_PER_METRE', 'window',
       'var markSig = "";\n' + pub[0] + '\nreturn publishMarks;');
     const who = {
       1: { pos: [0, 0, 0], cell: 'c', actor: 0xff000001 },
@@ -223,7 +231,8 @@ function constLine(src, name) {
       4: { pos: [80 * 70, 0, 0], cell: 'c', actor: 0xff000004, talk: 1, mode: 'yell' },
       5: { pos: [5 * 70, 0, 0], cell: 'c', actor: 0xff000005, talk: 0, mode: 'local' }
     };
-    const publish = run(who, { profileId: 1 }, {}, {}, modes, 70,
+    let relay = false;
+    const publish = run(who, { profileId: 1 }, {}, {}, modes, nativeMax, () => relay, 70,
       { skyrimPlatform: { sendMessage: function (to, m) { sent.push(m); } } });
     publish();
     const list = sent.length ? JSON.parse(sent[0].slice(6)) : [];
@@ -239,6 +248,19 @@ function constLine(src, name) {
     who[5].talk = 0;
     publish();
     yes('and it goes when they let go', sent.length === 3 && !/4278190085/.test(sent[2]));
+    relay = true;
+    publish();
+    yes('taking audio over in the launcher clears marks beyond its audible range', sent.at(-1) === 'marks:[]');
+    for (const [mode, metres] of Object.entries(quietAt)) {
+      who[2].mode = mode;
+      who[2].pos[0] = metres * 70 - 1;
+      publish();
+      yes(mode + ' keeps the native mark just inside its audible range',
+          JSON.parse(sent.at(-1).slice(6)).some(row => row.a === who[2].actor && row.m === mode));
+      who[2].pos[0] = metres * 70;
+      publish();
+      yes(mode + ' clears the native mark at the exact silent distance', sent.at(-1) === 'marks:[]');
+    }
   }
 
   const c = code(front);

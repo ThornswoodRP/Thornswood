@@ -834,7 +834,7 @@ $jsonEol = $Eol
 $docLines = New-Object 'System.Collections.Generic.List[string]'
 $docLines.Add('{')
 $docLines.Add('  "builtBy": ' + (JsonStr 'scripts\dev\Build-OreTable.ps1') + ',')
-$docLines.Add('  "source": ' + (JsonStr ('the ' + ($VEIN_TYPES -join ' and ') + ' records carrying ' + $VEIN_SCRIPT + ', across ' + $order.Count + ' plugins in load order, and the MISC records their ' + $ORE_PROPERTY + ' property points at')) + ',')
+$docLines.Add('  "source": ' + (JsonStr ('the ' + ($VEIN_TYPES -join ' and ') + ' records carrying ' + $VEIN_SCRIPT + ', across ' + (Get-LoadOrderName $order) + ', and the MISC records their ' + $ORE_PROPERTY + ' property points at')) + ',')
 $docLines.Add('  "language": ' + (JsonStr $LANGUAGE) + ',')
 $docLines.Add('  "readFrom": ' + (JsonStr ('the VMAD subrecord of each vein: script ' + $VEIN_SCRIPT + ', object property ' + $ORE_PROPERTY)) + ',')
 $docLines.Add('  "yield": ' + (JsonStr 'four pairs, novice first: the least and the most one swing gives at that rank, 1 and a chance of one more. A pair of zeroes means that rank cannot work that seam.') + ',')

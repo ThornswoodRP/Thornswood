@@ -58,6 +58,12 @@ namespace Thornswood.Tests
                 return fails == 0 ? 0 : 1;
             }
 
+            if (argv.Length > 1 && argv[1] == "microphone-picker")
+            {
+                MicrophoneChecks.Run(Check);
+                return fails == 0 ? 0 : 1;
+            }
+
             // launcher\tests\test-4459-setup-keys.ps1: the install window
             // worked from the keyboard, and nothing else.
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
