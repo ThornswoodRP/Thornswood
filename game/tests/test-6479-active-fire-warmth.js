@@ -137,5 +137,29 @@ if (w.loaded()) {
   N.clearBurning(refused);
   yes('the same captured projection environment is independent of later live fire changes',
     JSON.stringify(N.project(beforeProjection, now, false, environment)) === JSON.stringify(staged));
+
+  reset(a); N.setBurning(a, true);
+  w.row(a)._skympNpcLifeGeneration = 1;
+  now += 3000;
+  yes('a settle before the burn tick cannot warm a different life using the old fire',
+    close(N.settle(a).temp, approach(20, 58, 3000)));
+  reset(d); N.setBurning(d, true);
+  w.row(d)._skympNpcLifeGeneration = 1;
+  now += 3000;
+  N.setBurning(d, true);
+  const newLifeAmbient = approach(20, 58, 3000);
+  yes('the first report from a replacement life starts its own warmth interval',
+    close(raw(d).temp, newLifeAmbient));
+  now += 3000;
+  yes('the replacement life warms normally after its own report',
+    close(N.settle(d).temp, approach(newLifeAmbient, 92, 3000)));
+
+  reset(a); N.setBurning(a, true);
+  w.row(a)._skympNpcLifeGeneration = 2;
+  const beforeCleanup = raw(a);
+  now += 3000;
+  N.clearBurning(a);
+  yes('clearing a replaced life never writes its old fire into new needs',
+    JSON.stringify(raw(a)) === JSON.stringify(beforeCleanup));
 }
 t.done(w);

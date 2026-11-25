@@ -52587,12 +52587,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   function projectionEnvironment(actorId, savedOnly) {
+    var fireEnd = burningUntil(actorId);
     return {
       workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
       restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
       warmthTarget: function (n, onFire) { return warmthTarget(actorId, n, savedOnly, onFire ? NEEDS.fire.at : 0); },
-      burningFrom: burnStarts && burnStarts[actorId] || 0,
-      burningUntil: burningUntil(actorId),
+      burningFrom: fireEnd ? burnStarts[actorId] : 0,
+      burningUntil: fireEnd,
       outdoorCooling: outdoorCooling
     };
   }
@@ -52773,9 +52774,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return at * (1 - (d / reach));
   }
 
-  function burningUntil(actorId) {
-    return burning && Object.prototype.hasOwnProperty.call(burning, actorId)
-      ? burning[actorId] + NEEDS.burn.every * 3 : 0;
+  function burningUntil(actorId, identity) {
+    if (!burning || !Object.prototype.hasOwnProperty.call(burning, actorId)) { return 0; }
+    // A new profile, runtime or life can read needs before the burn tick.
+    // Only the actor that reported the fire can bank its elapsed warmth.
+    if ((identity || burnIdentity(actorId)) !== burnIdentities[actorId]) { return 0; }
+    return burning[actorId] + NEEDS.burn.every * 3;
   }
 
   function fireWarmth(n, actorId, savedOnly, bodyFireWorth) {
@@ -55044,24 +55048,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function clearBurning(actorId) {
     var hadFire = Object.prototype.hasOwnProperty.call(burning, actorId);
     var online = onlineNow(actorId);
-    // Bank heat before removing it. An offline character keeps the saved
-    // reading; their next settle is an arrival, never time spent in fire.
-    if (hadFire) {
-      if (online) { settle(actorId); }
-      else { delete here[actorId]; }
-    }
+    // Bank heat only for the original actor. An offline character keeps the
+    // saved reading, and their next settle is an arrival.
+    var bankHeat = hadFire && online && burningUntil(actorId) > 0;
+    if (bankHeat) { settle(actorId); }
+    if (hadFire && !online) { delete here[actorId]; }
     delete burning[actorId];
     delete burnIdentities[actorId];
     delete burnStarts[actorId];
     publishBurnVisual(actorId, false);
-    if (hadFire && online) { pushEffects(actorId); }
+    if (bankHeat) { pushEffects(actorId); }
   }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
     var identity = on ? burnIdentity(actorId) : '';
     if (on && identity) {
-      var wasBurning = burningUntil(actorId) > Date.now();
+      var wasBurning = burningUntil(actorId, identity) > Date.now();
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
