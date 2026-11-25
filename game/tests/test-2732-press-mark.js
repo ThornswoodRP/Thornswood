@@ -158,7 +158,7 @@ const fold = (s) => s.replace(/\s+/g, ' ').trim();
 /* --------------------------------------------------------- B: the panels --- */
 /* Each file's calls, by kind. say: a key or a panel button. typed: the chat box. */
 const PANELS = {
-  'thornswood-board.js': { say: 1 },
+  'thornswood-board.js': { say: 2 },
   'thornswood-furniture.js': { say: 1 },
   'thornswood-box.js': { say: 1 },
   'thornswood-bridge.js': { typed: 2 },
@@ -178,7 +178,8 @@ const PANELS = {
 /* What the free names in a call stand for when it is run. */
 const SAMPLE = {
   line: '/party leave', text: '/me waves',
-  r: { key: 'shove', b: 'b1' }, gst: { pid: 5 }
+  r: { key: 'shove', b: 'b1' }, gst: { pid: 5 },
+  target: { line: '/board-unpin-v1 ["windhelm",1,1000]' }
 };
 const CALL = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.(say|typed)\(/g;
 const sites = [];
@@ -213,8 +214,8 @@ for (const s of sites) {
   const c = chatPage();
   const run = function () {
     const held = ['/me waves'];
-    return new Function('window', 'n', 'line', 'text', 'held', 'r', 'gst', 'return ' + s.callee + '.' + s.kind + '(' + s.args + ');')(
-      c.win, c.net, SAMPLE.line, SAMPLE.text, held, SAMPLE.r, SAMPLE.gst);
+    return new Function('window', 'n', 'line', 'text', 'held', 'r', 'gst', 'target', 'return ' + s.callee + '.' + s.kind + '(' + s.args + ');')(
+      c.win, c.net, SAMPLE.line, SAMPLE.text, held, SAMPLE.r, SAMPLE.gst, SAMPLE.target);
   };
   let threw = '';
   try { run(); } catch (e) { threw = String(e && e.message); }
@@ -229,6 +230,10 @@ for (const s of sites) {
       (typed ? (first.press === undefined && second.press === undefined)
              : (first.press === true && second.press === true)));
   yes('B4 ' + name + ': told once that it is queued', toldOffline === 1 && c.told() === 1);
+  if (s.file === 'thornswood-board.js' && fold(s.args) === 'target.line') {
+    yes('B5 confirmed Take down preserves its exact target offline and online',
+        !!first && !!second && first.text === SAMPLE.target.line && second.text === SAMPLE.target.line);
+  }
 }
 
 /* ---------------------------------------------------- C: the front plugin --- */

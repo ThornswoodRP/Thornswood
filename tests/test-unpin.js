@@ -88,7 +88,7 @@ const PIECES = {
   take: 'function take(parts, actorId, profileId, toProfile) {',
   dropJob: 'function dropJob(parts, actorId, profileId, toProfile) {',
   takedown: 'function takedown(hold, at, byWhom) {',
-  unpin: 'function unpin(parts, actorId, profileId, toProfile) {',
+  unpin: 'function unpin(parts, actorId, profileId, toProfile, expected) {',
   // Every board word ends by asking the social block to draw the panel
   // again (#1374). The real one, against a social block that keeps a list.
   refreshPanel: 'function refreshPanel(actorId) {'

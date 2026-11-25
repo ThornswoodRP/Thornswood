@@ -6680,10 +6680,17 @@
     return n;
   }
 
-  function unpin(parts, actorId, profileId, toProfile) {
+  function unpin(parts, actorId, profileId, toProfile, expected) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at the board you put it on.');
+      return true;
+    }
+    // Resolve the board once. New page intents bind this captured board and
+    // its original creation before any authority, refund or haul operation.
+    if (expected && (!Object.prototype.hasOwnProperty.call(boards, expected.hold) || expected.hold !== hold)) {
+      toProfile(profileId, 'The board changed. Review the current board and press again.');
+      refreshPanel(actorId);
       return true;
     }
     var list = notices[hold] || [];
@@ -6693,6 +6700,11 @@
       return true;
     }
     var n = list[at];
+    if (expected && (!n || !Number.isSafeInteger(n.at) || n.at < 0 || n.at !== expected.at)) {
+      toProfile(profileId, 'That post changed. Review the current board and press again.');
+      refreshPanel(actorId);
+      return true;
+    }
     if (n.down) {
       toProfile(profileId, 'That one is already down.');
       return true;
@@ -8676,7 +8688,7 @@
     rentDue: rentDue, funds: function () { return funds; },
     // Rent still owed on a place by somebody who no longer holds it (#3893).
     arrears: function () { return arrears; },
-    notices: function () { return notices; }, takedown: takedown,
+    notices: function () { return notices; }, takedown: takedown, unpin: unpin,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
     boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
