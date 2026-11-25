@@ -407,6 +407,9 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
   const lines = [];
   function node(tag) {
     const n = { tag: tag, children: [], style: {}, className: '', _text: '', id: '', onclick: null, title: '' };
+    const attrs = {};
+    n.setAttribute = function (name, value) { attrs[name] = String(value); };
+    n.getAttribute = function (name) { return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null; };
     Object.defineProperty(n, 'textContent', {
       get: function () { return n._text + n.children.map(function (c) { return c.textContent; }).join(''); },
       set: function (x) { n._text = String(x); n.children = []; }
@@ -494,6 +497,9 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
     yes('U6 Give back with no reason sends nothing and says why (' + status.textContent + ')',
         lines.length === 0 && /Say why/.test(status.textContent));
     ins[3].value = 'lost in the crash';
+    if (give) { give.onclick({}); }
+    yes('U6 a refused empty reason needs two fresh presses after correction',
+        lines.length === 0 && /Press again/.test(give.textContent));
     if (give) { give.onclick({}); }
     yes('U6 with a reason it sends the item, the count and the reason (' + lines.join(' | ') + ')',
         lines.join() === '/craftstaff give ' + BJORN + ' 2 iron ore | lost in the crash');

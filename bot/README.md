@@ -322,6 +322,10 @@ board themselves, from two places, and each one becomes an issue in
   playtesters (`TESTER_ROLES`, Playtester by default) and staff may use it,
   five an hour each. The bot files the issue at once and answers only them.
   The pin needs Manage Threads, which the bot has through Administrator.
+  If the forum requires a tag, the panel uses its first available tag. A
+  required-tag forum with no available tag gets a repair message in the log
+  and no post. `bot\tests\test-5241-problem-panel-tag.py` checks creation,
+  restart reuse, Discord refusals and the library's tag-ID serialization.
 
 The logs are never copied into the issue. They reach the site from the
 launcher when the game closes, as they always have, and the issue links the

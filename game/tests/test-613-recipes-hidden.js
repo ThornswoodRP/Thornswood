@@ -63,7 +63,7 @@ const GATE_PARTS = [
   take('function professionName(prof) {'),
   take('function aWord(name) {'),
   take('function rankWord(rank) {'),
-  take('function onCraftRoll(actorId, roll) {')
+  take('function onCraftRoll(')
 ];
 const HIDE_PARTS = [
   take('function recipesHiddenScript() {'),

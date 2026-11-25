@@ -222,8 +222,9 @@ yes('W1 onCraft names a craft with no recipe id from the table first, and goes o
     /if \(!recipeId && typeof recipeSetInGame === 'function'\) \{\s*desc = recipeSetInGame\(craftedItemBaseId, workbenchId, arguments\[6\]\);/.test(onCraft) &&
     /if \(!recipeId && !desc\) \{/.test(onCraft) && /const row = craftRow\(desc\);/.test(onCraft));
 yes('W2 and refuses a recipe of the table at the mod\'s own counts, before anything is taken',
-    /typeof RECIPES_SET_IN_GAME === 'object' && Object\.prototype\.hasOwnProperty\.call\(RECIPES_SET_IN_GAME, desc\)\) \{[\s\S]*?return false;/.test(onCraft) &&
-    onCraft.indexOf('RECIPES_SET_IN_GAME, desc') < onCraft.indexOf('const row = craftRow(desc);'));
+    /typeof RECIPES_SET_IN_GAME === 'object' && Object\.prototype\.hasOwnProperty\.call\(RECIPES_SET_IN_GAME, desc\)\) \{[\s\S]*?takes different materials/.test(take('function recipeMetadataRefusal(desc) {')) &&
+    /const no = recipeMetadataRefusal\(desc\);\s*if \(no\) \{[\s\S]*?return false;/.test(onCraft) &&
+    onCraft.indexOf('recipeMetadataRefusal(desc)') < onCraft.indexOf('const row = craftRow(desc);'));
 yes('W3 the counts are handed at spawn, beside the recipes the menu leaves out',
     /handRecipesHidden\(actorId\); \}\n\s*\/\/ And the counts set in each game[\s\S]{0,200}handRecipeCounts\(actorId\);/.test(src));
 yes('W4 the owner script sets counts with SetNthIngredientQuantity and copies no record',
