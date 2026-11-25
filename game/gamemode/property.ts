@@ -4441,8 +4441,13 @@
       e.kind = v.kind;
       e.guestAt = v.guest ? v.guest.at : 0;
     }
+    var previous = bedHas(bedState.lying, actorId) ? bedState.lying[actorId] : null;
     bedState.lying[actorId] = e;
     var line = needs.resting(actorId, e.kind);
+    if (!e.seat && (!previous || previous.ref !== e.ref)) {
+      var college = g.__thornswoodCollege;
+      if (college && college.bedRested) { college.bedRested(actorId); }
+    }
     // Sitting down says nothing: people sit at every table in every inn, and
     // the Rest bar is what shows it counting.
     if (e.seat) { return ''; }
