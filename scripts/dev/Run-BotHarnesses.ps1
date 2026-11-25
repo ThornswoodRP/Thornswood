@@ -1,7 +1,18 @@
-<# Run the bot's complete top-level test-*.py suite, for PRs and nightly (#5958).
-   Python and dependencies are supplied by the caller's hash-pinned venv.
-   Each harness owns a fresh process with a bounded lifetime; one failure
-   does not hide failures in the remaining harnesses. Never runs a live bot. #>
+<#
+.SYNOPSIS
+Runs the complete bot harness suite for pull requests and nightly checks.
+.DESCRIPTION
+Windows only. The caller supplies Python and its hash-pinned virtual
+environment. Each harness has an owned process tree with a bounded lifetime;
+one failure does not hide the remaining failures. Never runs a live bot.
+.PARAMETER Root
+The repository whose top-level bot/tests/test-*.py harnesses run.
+.PARAMETER Python
+The Python executable from the caller's prepared virtual environment.
+.PARAMETER TimeoutSeconds
+How long each harness may run before its owned process tree is terminated.
+#>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root = (Split-Path (Split-Path $PSScriptRoot)),
