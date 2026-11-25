@@ -646,16 +646,11 @@ function cookedOutput(actorId, row) {
   }
 }
 
-function onCraftRoll(actorId, roll) {
+function onCraftRoll(actorId, roll, s) {
   const gate = globalThis.__thornswoodRolls;
   if (gate && typeof gate.has === 'function') {
     try { return !!gate.has(actorId, roll); } catch (e) { return false; }
   }
-  const C = globalThis.__thornswoodCharacter;
-  if (!C || !C.stateOf) { return false; }
-  let s = null;
-  try { s = C.stateOf(actorId); } catch (e) { return false; }
-  if (!s) { return false; }
   const list = s.rolls;
   if (Array.isArray(list)) { return list.indexOf(roll) !== -1; }
   if (list && typeof list === 'object') { return !!list[roll]; }
@@ -663,6 +658,7 @@ function onCraftRoll(actorId, roll) {
 }
 
 function craftAnswer(actorId, row) {
+  const preview = arguments[2] === true;
   const out = { refusal: null, note: null, credit: null };
 
   /*
@@ -718,7 +714,7 @@ function craftAnswer(actorId, row) {
   }
   let s = null;
   try {
-    s = C.stateOf(actorId);
+    s = preview && C.previewState ? C.previewState(actorId) : C.stateOf(actorId);
   } catch (e) {
     log('the craft gate threw reading the character, so it is open:', e);
     return out;
@@ -759,7 +755,7 @@ function craftAnswer(actorId, row) {
   if (row && row.roll) {
     const roll = String(row.roll);
     let on = false;
-    try { on = onCraftRoll(actorId, roll); } catch (e) { on = false; }
+    try { on = onCraftRoll(actorId, roll, s); } catch (e) { on = false; }
     if (!on) {
       const made = String(row.name || 'that');
       out.refusal = roll === 'embassy'
@@ -2216,7 +2212,7 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
   // The same read-only learning gate is asked again at completion. Its
   // credit and allowed note belong only to that later successful craft.
   const stale = recipeId ? recipeMetadataRefusal(desc) : '';
-  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row).refusal : '');
+  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row, true).refusal : '');
   if (refusal) {
     notify(actorId, refusal);
     say(actorId, refusal);

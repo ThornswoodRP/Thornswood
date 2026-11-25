@@ -9776,16 +9776,11 @@ function cookedOutput(actorId, row) {
   }
 }
 
-function onCraftRoll(actorId, roll) {
+function onCraftRoll(actorId, roll, s) {
   const gate = globalThis.__thornswoodRolls;
   if (gate && typeof gate.has === 'function') {
     try { return !!gate.has(actorId, roll); } catch (e) { return false; }
   }
-  const C = globalThis.__thornswoodCharacter;
-  if (!C || !C.stateOf) { return false; }
-  let s = null;
-  try { s = C.stateOf(actorId); } catch (e) { return false; }
-  if (!s) { return false; }
   const list = s.rolls;
   if (Array.isArray(list)) { return list.indexOf(roll) !== -1; }
   if (list && typeof list === 'object') { return !!list[roll]; }
@@ -9793,6 +9788,7 @@ function onCraftRoll(actorId, roll) {
 }
 
 function craftAnswer(actorId, row) {
+  const preview = arguments[2] === true;
   const out = { refusal: null, note: null, credit: null };
 
   /*
@@ -9848,7 +9844,7 @@ function craftAnswer(actorId, row) {
   }
   let s = null;
   try {
-    s = C.stateOf(actorId);
+    s = preview && C.previewState ? C.previewState(actorId) : C.stateOf(actorId);
   } catch (e) {
     log('the craft gate threw reading the character, so it is open:', e);
     return out;
@@ -9889,7 +9885,7 @@ function craftAnswer(actorId, row) {
   if (row && row.roll) {
     const roll = String(row.roll);
     let on = false;
-    try { on = onCraftRoll(actorId, roll); } catch (e) { on = false; }
+    try { on = onCraftRoll(actorId, roll, s); } catch (e) { on = false; }
     if (!on) {
       const made = String(row.name || 'that');
       out.refusal = roll === 'embassy'
@@ -11346,7 +11342,7 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
   // The same read-only learning gate is asked again at completion. Its
   // credit and allowed note belong only to that later successful craft.
   const stale = recipeId ? recipeMetadataRefusal(desc) : '';
-  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row).refusal : '');
+  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row, true).refusal : '');
   if (refusal) {
     notify(actorId, refusal);
     say(actorId, refusal);
@@ -37258,7 +37254,7 @@ return module.exports;
     rules, so an old value the rules refuse is simply not carried, and the
     log says which.
   */
-  function migrate(actorId) {
+  function migrate(actorId, preview) {
     var s = P.fresh();
     var old = null;
     try { old = mp.get(actorId, 'thornswoodChargen'); } catch (e) { old = null; }
@@ -37286,17 +37282,23 @@ return module.exports;
           leftover privilege (bard instruments, etc.) reads it, and leave
           the progression state empty so they re-pick like somebody new.
         */
-        clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
-        try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        if (!preview) {
+          clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
+          try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        }
       } else if (trade) {
         clog('migrate', actorId.toString(16), 'old trade', trade, 'has no home in the rulebook; left on the old property, nothing chosen here');
       }
     }
-    return writeState(actorId, s);
+    return preview ? s : writeState(actorId, s);
   }
 
   function stateOf(actorId) {
     return readState(actorId) || migrate(actorId);
+  }
+
+  function previewState(actorId) {
+    return readState(actorId) || migrate(actorId, true);
   }
 
   // ------------------------------------------------- gates, work, spells --
@@ -38581,7 +38583,7 @@ return module.exports;
   }
 
   g.__thornswoodCharacter = {
-    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, writeState: writeState,
+    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,

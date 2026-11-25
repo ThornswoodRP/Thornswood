@@ -104,6 +104,18 @@ yes('eligibility changing during the wait is checked again at completion',
   changed.started && !changed.made && changed.workMs === 5000
   && /Only a Platewright/.test(last(actor)) && pack(actor) === remaining
   && w.count(actor,craft.output) === output);
+const legacy = cases[0];
+const legacyRow = w.row(legacy.actor);
+delete legacyRow.thornswoodCharacter;
+legacyRow.thornswoodChargen = {class:'smith', half:'platewright'};
+const legacySnapshot = JSON.stringify(legacyRow.thornswoodChargen);
+const legacyPack = pack(legacy.actor);
+const legacyArgs = [legacy.actor,legacy.craft.output,legacy.craft.count,legacy.craft.recipe,legacy.bench,null,legacy.craft.inputs,[]];
+yes('staged craft permission reads the legacy trade without starting work',
+  w.fire('onCraftWork',legacyArgs) === false && /Advanced Platewright/.test(last(legacy.actor)));
+yes('craft preflight never saves a migrated character or changes the old record',
+  legacyRow.thornswoodCharacter === undefined && JSON.stringify(legacyRow.thornswoodChargen) === legacySnapshot &&
+  pack(legacy.actor) === legacyPack);
 yes('no handler or timer throws',w.faults.length === 0 && w.threw.length === 0
   && w.logged(/\] on[A-Z][A-Za-z]+ threw/).length === 0);
 t.done(w);
