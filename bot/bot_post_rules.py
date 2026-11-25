@@ -199,8 +199,6 @@ def github_say(number, text):
         return json.loads(r.read().decode('utf-8'))
 
 
-CHANNEL_NAMES = {'dev': 'dev-test-tasks', 'main': 'test-tasks',
-                 'known': 'known-issues'}
 # Where each kind of post goes, as the refusal comment says it.
 POST_PLACES = {'dev': 'in #dev-test-tasks', 'main': 'in #test-tasks',
                'known': 'in #known-issues', 'roadmap': "on the site's roadmap"}

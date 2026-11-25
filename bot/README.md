@@ -475,7 +475,7 @@ Trial Gamemaster and Loremaster.
 To the bot, staff is the `STAFF_ROLES` roles in `bot.env.json` (Owner,
 Co-Owner, Lead Dev, Lead Gamemaster, Lead Loremaster, Lead Moderator, Lead
 Content Creator, Lead Support, Gamemaster, Dev, Loremaster and Moderator by
-default), matched by id or name, and nothing else. Closing a ticket, with
+default), as set in `bot_core.py`, matched by id or name, and nothing else. Closing a ticket, with
 `/close` or the Close ticket button, and skipping the one open ticket rule
 and the cooldown take one of them. Trial Gamemaster, Support and Content
 Creator are not in it. Faction Leader tickets are pulled to the role IDs in
@@ -578,9 +578,12 @@ Then the person picks a hold.
 
 ## Changing the words later
 
-`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1`
-again, and the posts are rewritten in place. It deletes what the bot wrote last
-time rather than adding a second copy, so the rules never end up posted twice.
+`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1 -Posts`
+again, and the posts are rewritten in place. A plain run leaves the posts alone
+unless `-Posts` is given, so a routine run does not touch existing messages. To
+rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
+lore,factions -Posts`, issue #3656). It deletes what the bot wrote last time
+rather than adding a second copy, so the rules never end up posted twice.
 
 `Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
 it asks for nothing: the build runs on the VPS with the token the running bot

@@ -537,6 +537,29 @@ try {
         Yes 'from revision 5''s folder, not revision 4''s' (Has $r.Out 'collection_7essxf_5_2026-10-21T12-00-00Z')
         Yes 'and the reference under Profile\Default is the list it checked' (Has $r.Out (Join-Path $machine 'Profile\Default\plugins.txt'))
 
+        $config = Join-Path $machine 'config.json'
+        $marker = 'fixture-config-text-must-not-be-printed'
+        [IO.File]::WriteAllText($config, ('{"CollectionUrl":"' + $marker + '";'))
+        try {
+            $r = Run @('-Root', $machine)
+            Yes 'malformed config stops instead of reading the default revision' ($r.Code -eq 1 -and -not (Has $r.Out 'revision 5,'))
+            Yes 'malformed config names the path and JSON error without printing its contents' `
+                ((Has $r.Out 'STOP.') -and (Has $r.Out $config) -and (Has $r.Out 'invalid JSON') -and -not (Has $r.Out $marker))
+
+            $r = Run @('-Root', $machine, '-Collection', $col5)
+            Yes 'an explicit collection does not need the install config' ($r.Code -eq 0)
+
+            # A valid file held exclusively, without ACL changes or a live install.
+            [IO.File]::WriteAllText($config, ('{"CollectionUrl":"https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf","note":"' + $marker + '"}'))
+            $held = [IO.File]::Open($config, 'Open', 'ReadWrite', 'None')
+            try {
+                $r = Run @('-Root', $machine)
+                Yes 'an unreadable existing config stops instead of reading the default revision' ($r.Code -eq 1 -and -not (Has $r.Out 'revision 5,'))
+                Yes 'an unreadable config names the path and read failure without printing its contents' `
+                    ((Has $r.Out 'STOP.') -and (Has $r.Out $config) -and (Has $r.Out 'cannot read') -and -not (Has $r.Out $marker))
+            } finally { $held.Dispose() }
+        } finally { Remove-Item -LiteralPath $config }
+
         $r = Run @('-Root', $machineOther)
         Yes 'config.json names the collection: it reads that one''s revision 9' (Has $r.Out 'revision 9,')
         Yes 'which carries no rules, so it fails (exit 1)' ($r.Code -eq 1)

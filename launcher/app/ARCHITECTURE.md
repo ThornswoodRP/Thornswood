@@ -108,10 +108,10 @@ has been drawn, and `StateChanged`. So:
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
   ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
-  ShellVortexWatch.cs, ShellMicrophone.cs, Waiting.cs and Stall.cs.
+  ShellVortexWatch.cs, ShellAudioSettings.cs, Waiting.cs and Stall.cs.
 
   Opening Settings also refreshes the active recording-input list through
-  `Mics.All`. `MicrophonePicker` keeps an unavailable saved input selected;
+  `Mics.All`. `AudioDevicePicker` keeps an unavailable saved input selected;
   only an explicit selection saves `Config.MicrophoneName` through the usual
   config save path. It does not replace a running audio worker. The choice
   applies after restarting the launcher.

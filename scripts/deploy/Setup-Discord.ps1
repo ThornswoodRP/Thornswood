@@ -305,6 +305,20 @@ if ($code -ne 0) {
 if ($Audit -or $gives.Count) { exit 0 }
 
 $hook = Join-Path $Here '..\..\bot\news-webhook.txt'
+
+# -Check changes nothing and never hands a webhook on. If a leftover file is
+# there, it only notes that it is there, without reading it (#4226).
+if ($Check) {
+  if (Test-Path -LiteralPath $hook) {
+    Write-Host ''
+    Write-Host '  bot\news-webhook.txt is there'
+  }
+  exit $code
+}
+
+# -Only touches no webhook (#2519, #4226).
+if ($Only.Count) { exit $code }
+
 Write-Host ''
 # An empty bot\news-webhook.txt reads back as $null, and .Trim() on that threw
 # before anything was said. Wrapped in a string it is '', which is refused here:
