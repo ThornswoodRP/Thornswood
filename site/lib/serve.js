@@ -778,7 +778,9 @@ async function handle(req, res) {
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
-    if (turnstileOn()) {
+    // who() has already proved the hub's member/staff access. Its private
+    // form has no widget; public senders still need the Turnstile pass.
+    if (turnstileOn() && !w.member && !w.dev) {
       const ts = await turnstilePasses(o.turnstile, requestAddr(req));
       if (ts === 'unasked') {
         return sendJson(res, 503, { error: 'Cloudflare did not answer the check that you are a person, so nothing was sent. Try again in a minute.' });
