@@ -87,6 +87,8 @@ var GOLD_BASE = 15;
 var MAX_COUNT = 2147483647;
 var MAX_LINES_DEFAULT = 24;
 var MAX_STATE_BYTES = 512 * 1024;
+/* Patrick, 22 Oct 2026 (#4576): the cargo register keeps a closed line for 30 days. */
+var KEEP_CLOSED_MS = 30 * 24 * 60 * 60 * 1000;
 var ID_RE = /^[a-z0-9][a-z0-9:_.-]{0,63}$/;
 var HOWS = { delivered: 1, left: 1, returned: 1, taken: 1 };
 
@@ -514,6 +516,53 @@ function createTradeCargo(opts) {
     });
   }
 
+  /*
+    WHAT IS KEPT, AND FOR HOW LONG (#4576; Patrick, 22 Oct 2026: a closed
+    line is kept for 30 days). A line is closed when nothing of it is aboard
+    and nothing of it is being handed out, and it closed at its last out.
+    Once that is keepMs (30 days unless given) before now, the line goes,
+    with its outs and the receipts only it used. A line with anything aboard
+    or pending is never dropped, however old, so the audit still adds up for
+    every line kept. The blocks call this where they write the register.
+    Answers how many lines went; when none is due nothing is changed.
+  */
+  function forget(state, now, keepMs) {
+    if (!time(now)) { throw new Error('The time cannot be verified.'); }
+    var keep = keepMs === undefined ? KEEP_CLOSED_MS : keepMs;
+    if (!time(keep)) { throw new Error('How long a closed line is kept cannot be verified.'); }
+    function due(h) {
+      var closedAt = {}, pending = {};
+      Object.keys(h.lines).forEach(function (k) { if (h.lines[k].aboard === 0) { closedAt[k] = 0; } });
+      h.outs.forEach(function (o) {
+        var k = String(o.line);
+        if (o.receipt === null) { pending[k] = true; }
+        if (has(closedAt, k) && o.at > closedAt[k]) { closedAt[k] = o.at; }
+      });
+      return Object.keys(closedAt).filter(function (k) { return !pending[k] && closedAt[k] + keep <= now; });
+    }
+    var any = Object.keys(state.holds).some(function (id) { return due(state.holds[id]).length > 0; });
+    if (!any) { return 0; }
+    return change(state, function (s) {
+      var gone = 0;
+      Object.keys(s.holds).forEach(function (id) {
+        var h = s.holds[id];
+        var drop = {};
+        due(h).forEach(function (k) { drop[k] = true; });
+        Object.keys(drop).forEach(function (k) {
+          delete s.receipts[h.lines[k].receipt];
+          delete h.lines[k];
+          gone++;
+        });
+        h.outs = h.outs.filter(function (o) {
+          if (!drop[String(o.line)]) { return true; }
+          delete s.receipts[o.receipt];
+          return false;
+        });
+      });
+      return gone;
+    });
+  }
+
   /* What is aboard a hold now, line by line, for a panel. */
   function aboard(state, id) {
     var h = holdOf(state, id);
@@ -546,6 +595,7 @@ function createTradeCargo(opts) {
   return {
     empty: empty, audit: audit, open: open, load: load, depart: depart, amend: amend, arrive: arrive, pullIn: pullIn,
     begin: begin, finish: finish, undo: undo, release: release, aboard: aboard, save: save, parse: load_,
+    forget: forget,
     uncollected: uncollected, nextUncollected: nextUncollected,
     used: function (state, id) { return inUse(holdOf(state, id)); },
     PORTS: Object.keys(ports), MAX_LINES: maxLines, DRIVEN: driven

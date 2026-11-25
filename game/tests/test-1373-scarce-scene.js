@@ -15,8 +15,8 @@ const start = gm.indexOf(startMark);
 const end = gm.indexOf(endMark);
 if (start < 0 || end < 0 || end < start) {
   console.log('FAIL custom quest block is not in gamemode.js');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 function firstNumber(text) {
   const found = String(text).match(/(\d+)/);
@@ -358,3 +358,4 @@ for (const sample of ['throw', undefined, null, [], {}, {v: 2, ranks: {miner: 'm
   assert.equal(qualified, expected, 'only canonical saved rank entries and chosen class qualify');
 }
 console.log('PASS scarce and scene quests match docs/systems/quests.md');
+}

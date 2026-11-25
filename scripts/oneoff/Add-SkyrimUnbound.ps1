@@ -75,11 +75,8 @@ if (-not $papyrusZip) { Die "Could not find 'PapyrusUtil AE SE*' in $Downloads."
 Say "  $($unboundZip.Name)" 'Green'
 Say "  $($papyrusZip.Name)" 'Green'
 
-$7z = @(
-    "$env:ProgramFiles\7-Zip\7z.exe"
-    "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
-    "$env:LOCALAPPDATA\Programs\7-Zip\7z.exe"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+. (Join-Path $PSScriptRoot '..\release\SevenZip.ps1')
+$7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed, and the Unbound archive is a .7z.' }
 
 $work = Join-Path $env:TEMP 'SkyrimUnbound-install'

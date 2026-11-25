@@ -29,7 +29,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(src, a, b) {
   const i = src.indexOf(a);
@@ -52,7 +52,7 @@ const FIRST_SIGHT = between(gm, '    if (!firstSeen.has(actorId)) {', '    if (n
 const ok = RULES && CHARACTER && PERKS && MANEUVERS && TOMES && COLLEGE && SPELLON && TREE && FIRST_SIGHT;
 yes('the rules, character, skill perks, maneuvers, tomes and college blocks, the chargen tick\'s first sight ' +
     'and the client\'s skill tree hand are where this reads them', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 // ------------------------------------------------------- a fake load order --
 const PLUG = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
@@ -422,3 +422,4 @@ delete srv.ctx.__thornswoodChargen;
 }
 
 done();
+}

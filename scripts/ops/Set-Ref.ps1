@@ -134,7 +134,7 @@ $workflow = 'git-ref.yml'
 if ($Fork) { $GitHubRepo = 'ThornswoodRP/skymp'; $workflow = 'thornswood-git-ref.yml' }
 if ($Ops) { $GitHubRepo = 'ThornswoodRP/Thornswood-Ops' }
 $inActions = ($env:GITHUB_ACTIONS -eq 'true')
-$tagShape = '^release/(dev/\d{8}-\d{4}(\d{2})?-dev|main/\d{8}-\d{4}(\d{2})?)$'
+$tagShape = '^release/(dev/\d{8}-\d{4}(\d{2}Z?)?-dev|main/\d{8}-\d{4}(\d{2}Z?)?)$'
 $maxMessage = 4000
 
 # An annotation on the job, which GitHub keeps on its check run, so the

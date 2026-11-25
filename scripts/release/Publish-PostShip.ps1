@@ -80,11 +80,10 @@
   Skip the Enter-to-close pause so Ship can call this without hanging.
 
 .NOTES
-  Exit codes: 0 when the remirror is done, or is waiting on a script another
-  lane has not landed, and 1 when the remirror that is here stopped. Ship reads
-  that code to say on its last screen which line to run again, and does not fail
-  the release over it: a release that is out on the feed, in #news and on the
-  server is out.
+  Exit codes: 0 when the remirror is done, and 1 whenever the remirror didn't
+  happen, a missing script included. Ship reads that code to say on its last
+  screen which line to run again, and does not fail the release over it: a
+  release that is out on the feed, in #news and on the server is out.
 #>
 #Requires -Version 7
 [CmdletBinding()]

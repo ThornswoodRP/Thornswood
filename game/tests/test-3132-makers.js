@@ -28,7 +28,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ------------------------------------------------------- the repository --
@@ -59,7 +59,7 @@ yes('every waiting entry names an issue',
 const SOURCES = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'item-sources.json'), 'utf8'));
 const FILES = SOURCES.readFrom.concat([
   'game/data/item-sources.json',
-  'scripts/dev/Check-Makers.waiting.json', 'docs/systems/lists/who-makes-it.md'
+  'scripts/dev/Check-Makers.waiting.json', 'docs/systems/who-makes-it.md'
 ]);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'test-3132-'));
 function copy() {
@@ -118,7 +118,7 @@ try {
   refused('an exemption with no reason is refused', root, 'exempt with no reason');
 
   root = copy();
-  edit(root, 'docs/systems/lists/who-makes-it.md', s => s + '\nhand edit\n');
+  edit(root, 'docs/systems/who-makes-it.md', s => s + '\nhand edit\n');
   refused('a hand-edited or stale list page is refused', root, 'is out of date');
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

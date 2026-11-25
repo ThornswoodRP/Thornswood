@@ -86,27 +86,32 @@ function readText(p) {
 module.exports = { bundleSourceProblems: bundleSourceProblems };
 
 if (require.main === module) {
+  process.exitCode = cli();
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const mapPath = process.argv[2];
   const fork = process.argv[3];
   if (!mapPath || !fork) {
     console.log('usage: node server-bundle-sources.js <skymp5-server.js.map> <fork>');
-    process.exit(2);
+    return 2;
   }
   let map = null;
   try { map = JSON.parse(fs.readFileSync(mapPath, 'utf8')); } catch (e) {
     console.log('the source map ' + mapPath + ' does not read: ' + e.message);
-    process.exit(2);
+    return 2;
   }
   if (!fs.existsSync(path.join(fork, 'skymp5-server'))) {
     console.log('there is no skymp5-server in ' + fork);
-    process.exit(2);
+    return 2;
   }
   const r = bundleSourceProblems(map, path.resolve(fork), readText);
   // A handful is enough to say what happened; a bundle from another commit
   // can differ in hundreds of places.
   r.problems.slice(0, 20).forEach(function (p) { console.log(p); });
   if (r.problems.length > 20) { console.log('... and ' + (r.problems.length - 20) + ' more'); }
-  if (r.problems.length) { process.exit(1); }
+  if (r.problems.length) { return 1; }
   console.log('SOURCES OK ' + r.sources + ' ' + r.ts);
-  process.exit(0);
+  return 0;
 }

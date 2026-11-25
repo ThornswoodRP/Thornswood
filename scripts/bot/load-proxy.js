@@ -81,16 +81,28 @@ function main() {
   const i = process.argv.indexOf('--target');
   const target = i >= 0 ? String(process.argv[i + 1] || '') : '';
   const m = /^([^:]+):(\d+)$/.exec(target);
+  // Ending lets go of the channel to Load-Test and closes the sockets, so node
+  // ends by itself, with no call to its exit function, which can hang on
+  // Node 24 (#6036).
   if (!m || !process.send) {
     console.log('node load-proxy.js --target <host>:<port>, started by Load-Test.js with IPC');
-    process.exit(2);
+    process.exitCode = 2;
+    if (process.connected) { process.disconnect(); }
+    return;
   }
   const proxy = makeProxy(m[1], Number(m[2]), (port) => process.send({ listening: port }));
+  let stopped = false;
+  const stop = () => {
+    if (stopped) { return; }
+    stopped = true;
+    proxy.close();
+    if (process.connected) { process.disconnect(); }
+  };
   process.on('message', (msg) => {
     if (msg && msg.report) { process.send({ report: proxy.report() }); }
-    if (msg && msg.stop) { proxy.close(); process.exit(0); }
+    if (msg && msg.stop) { stop(); }
   });
-  process.on('disconnect', () => { proxy.close(); process.exit(0); });
+  process.on('disconnect', stop);
 }
 
 if (require.main === module) { main(); }

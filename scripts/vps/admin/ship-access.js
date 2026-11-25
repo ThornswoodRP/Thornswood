@@ -80,7 +80,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(e => { process.stderr.write('ship-access: ' + e.message + '\n'); process.exit(1); });
+  main().catch(e => { process.stderr.write('ship-access: ' + e.message + '\n'); process.exitCode = 1; });
 }
 // call and said serve ops-access.js too, the same App's token for the ops
 // repository's runners and keys (#2862).

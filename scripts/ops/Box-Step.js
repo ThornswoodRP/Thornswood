@@ -195,7 +195,7 @@ async function act(o) {
 async function main() {
   const e = process.env;
   for (const k of ['GITHUB_EVENT_NAME', 'GITHUB_EVENT_PATH', 'GITHUB_REPOSITORY', 'GH_TOKEN']) {
-    if (!e[k]) { console.log('::error::' + k + ' is not set'); process.exit(1); }
+    if (!e[k]) { console.log('::error::' + k + ' is not set'); process.exitCode = 1; return; }
   }
   const said = await act({
     event: e.GITHUB_EVENT_NAME,
@@ -208,5 +208,5 @@ async function main() {
   for (const l of said) { console.log(l); }
 }
 
-if (require.main === module) { main().catch(err => { console.log('::error::' + err.message); process.exit(1); }); }
+if (require.main === module) { main().catch(err => { console.log('::error::' + err.message); process.exitCode = 1; }); }
 module.exports = { act, doneWhen, namesBoxStep, hasOutput, closeStands, verbNames, stepIssues, LABEL, OUTPUT, REOPEN };

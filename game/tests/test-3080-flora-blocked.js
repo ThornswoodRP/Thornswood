@@ -210,4 +210,4 @@ if (!fs.existsSync(path.join(__dirname, '..', '..', 'engine', 'skymp', 'skymp5-c
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

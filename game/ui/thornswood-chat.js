@@ -53,6 +53,27 @@
   */
   var SPENT = '';
 
+  // One bounded close report. The service's existing peer number correlates
+  // it with the other end; never include a token, endpoint or message body.
+  function heartbeatSummary(socket, reason, ev) {
+    var s = socket && socket.heartbeat;
+    if (!s || s.reported) return;
+    s.reported = true;
+    try { console.log('[chat] heartbeat ' + JSON.stringify({ event:'voice_socket_closed', reason:reason,
+      peer:s.peer, ageMs:Date.now()-s.started, rxAgeMs:Date.now()-s.heard,
+      pingTx:s.pingTx, pongRx:s.pongRx, rxMessages:s.rxMessages,
+      txMessages:s.txMessages, txAgeMs:Date.now()-s.written,
+      bufferedBytes:Number(socket.bufferedAmount)||0, closeCode:Number(ev && ev.code)||0,
+      clean:!!(ev && ev.wasClean) })); } catch (e) {
+      // A failed diagnostic sink must not stop socket cleanup or recovery.
+    }
+  }
+  function sendFrame(socket, obj) {
+    socket.send(JSON.stringify(obj));
+    socket.heartbeat.txMessages++;
+    socket.heartbeat.written = Date.now();
+  }
+
   // Colours from the launcher's own palette so the chat looks like the rest of
   // the build rather than like a web page.
   var C_NAME = '#c6aa6d';
@@ -292,6 +313,16 @@
   */
   function url() {
     var b = String(CFG.base || '').replace(/\/+$/, '');
+    // Each dedicated trusted ingress belongs only to its canonical channel.
+    // Ignore stale cross-channel keys, custom routes and legacy launchers.
+    var direct = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
+    var mainDirect = 'wss://main-signal.thornswood.net:44789/voice/';
+    var canonicalHost = String(CFG.host || '').toLowerCase() === 'play.thornswood.net';
+    var port = Number(CFG.port);
+    if (canonicalHost && port === 7789 &&
+        b === 'https://thornswood.net/voice-dev' && CFG.socket === direct) return direct;
+    if (canonicalHost && port === 7778 &&
+        b === 'https://thornswood.net/voice' && CFG.socket === mainDirect) return mainDirect;
     if (b.indexOf('https://') === 0) { return 'wss://' + b.slice(8) + '/'; }
     return '';
   }
@@ -309,14 +340,19 @@
     var token = TOKEN;
     SPENT = token;
     TOKEN = '';
+    var socket;
     try {
-      ws = new WebSocket(url(), ['thornswood', token]);
+      socket = new WebSocket(url(), ['thornswood', token]);
+      socket.heartbeat = { started:Date.now(), heard:Date.now(), written:Date.now(), peer:0,
+        pingTx:0, pongRx:0, rxMessages:0, txMessages:0, reported:false };
+      ws = socket;
     } catch (e) {
       retry();
       return;
     }
 
-    ws.onopen = function () {
+    socket.onopen = function () {
+      if (ws !== socket) return;
       // Not tries = 0 here: a join the service refuses opens first and is
       // closed straight after, and resetting on the open made that a retry
       // every second for as long as the token was refused (issue #409). The
@@ -329,21 +365,25 @@
       var join = { t: 'join', profileId: ME, name: NAME };
       if (!carriesVoice) { join.voice = false; }
       try {
-        ws.send(JSON.stringify(join));
+        sendFrame(ws, join);
       } catch (e) { }
     };
 
-    ws.onmessage = function (ev) {
+    socket.onmessage = function (ev) {
+      if (ws !== socket) return;
       heard = Date.now();
+      socket.heartbeat.heard = heard;
+      socket.heartbeat.rxMessages++;
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (!msg || !msg.t) return;
-      if (msg.t === 'pong') return;
+      if (msg.t === 'pong') { socket.heartbeat.pongRx++; return; }
 
       if (msg.t === 'welcome') {
         tries = 0;
         joined = true;
         peerId = Number(msg.peer) || 0;
+        socket.heartbeat.peer = peerId;
         forget();
         fanout(msg);
         if (!renaming) note('Chat is on. Press enter to talk.', C_SYS);
@@ -351,7 +391,7 @@
         // Anything typed while the socket was down goes now rather than being
         // lost, which is what an unacknowledged send would have been.
         while (queue.length) {
-          try { ws.send(JSON.stringify(chatFrame(queue.shift()))); }
+          try { sendFrame(ws, chatFrame(queue.shift())); }
           catch (e) { break; }
         }
         return;
@@ -419,10 +459,16 @@
       // logged: they arrive several times a second.
     };
 
-    ws.onclose = function () { lost(); };
+    socket.onclose = function (ev) {
+      heartbeatSummary(socket, socket.heartbeat.intent || 'close', ev);
+      if (ws !== socket) return;
+      ws = null;
+      lost();
+    };
 
-    ws.onerror = function () {
-      try { ws.close(); } catch (e) { }
+    socket.onerror = function () {
+      if (ws !== socket) return;
+      try { socket.close(); } catch (e) { }
     };
   }
 
@@ -433,8 +479,10 @@
   function take(t) {
     t = String(t || '');
     if (!t || t === SPENT || t === TOKEN) return;
-    TOKEN = t;
+    // A join token lasts two minutes. An extra response to an earlier ask
+    // must not sit beside a live connection until the next outage.
     if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+    TOKEN = t;
     if (timer) { clearTimeout(timer); timer = null; }
     connect();
   }
@@ -482,13 +530,14 @@
     if (!ws || ws.readyState !== 1 || !joined) return;
     if (Date.now() - heard > SILENT_AFTER) {
       var dead = ws;
+      heartbeatSummary(dead, 'silent');
       ws = null;
       dead.onopen = dead.onclose = dead.onerror = dead.onmessage = null;
       try { dead.close(); } catch (e) { }
       lost();
       return;
     }
-    try { ws.send(JSON.stringify({ t: 'ping' })); } catch (e) { }
+    try { sendFrame(ws, { t: 'ping' }); ws.heartbeat.pingTx++; } catch (e) { }
   }, PING_EVERY);
 
   // --------------------------------------------------------------- dice ---
@@ -553,7 +602,7 @@
       reflex. The server parses it again and does not trust this: this is here
       so a typo is answered in the same breath instead of a round trip later.
     */
-    return count === 1 ? String(sides) : (count + 'x' + sides);
+    return count === 1 ? String(sides) : (sides + 'x' + count);
   }
 
   /* A queued line is its text, or { text, press } for one a key sent (#2251). */
@@ -611,7 +660,7 @@
     // flag, so a line held through an outage keeps it.
     var item = press ? { text: text, press: true } : text;
     if (ws && ws.readyState === 1 && joined) {
-      try { ws.send(JSON.stringify(chatFrame(item))); return true; }
+      try { sendFrame(ws, chatFrame(item)); return true; }
       catch (e) { }
     }
     // Held rather than dropped, and capped so a long outage does not grow
@@ -687,14 +736,14 @@
       if (!carriesVoice) return;
       carriesVoice = false;
       if (ws && ws.readyState === 1) {
-        try { ws.send(JSON.stringify({ t: 'voice', on: false })); } catch (e) { }
+        try { sendFrame(ws, { t: 'voice', on: false }); } catch (e) { }
       }
     },
 
     /** Raw send, for message kinds this file has no opinion about. */
     post: function (obj) {
       if (!ws || ws.readyState !== 1 || !joined) { return false; }
-      try { ws.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
+      try { sendFrame(ws, obj); return true; } catch (e) { return false; }
     },
 
     /** The service's id for this connection, 0 until the welcome arrives. */
@@ -720,6 +769,7 @@
         // Ours, not an outage. In creation the name lands right after the
         // race menu, and this close used to say "Chat lost the server" there.
         if (joined) renaming = true;
+        ws.heartbeat.intent = 'rename';
         try { ws.close(); } catch (e) { }
       } else {
         connect();
@@ -731,7 +781,7 @@
      * pushed in from thornswood-front.js (#1322).
      *
      * A try waiting on it goes at once. One that arrives while the connection
-     * is up is kept for the next try. The one this page last spent is not
+     * is up is discarded; the next try asks for its own. The one last spent is not
      * taken again: the front reads the file the launcher writes and can hand
      * the same string over twice.
      */
@@ -762,6 +812,7 @@
       if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
         tries = 0;
         if (joined) renaming = true;
+        ws.heartbeat.intent = 'character';
         try { ws.close(); } catch (e) { }
       } else {
         connect();

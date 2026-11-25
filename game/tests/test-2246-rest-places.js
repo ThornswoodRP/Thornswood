@@ -48,7 +48,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -60,7 +60,7 @@ function slice(src, start, end) {
 const needsBlock = slice(gm, '// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the needs and property blocks are in the gamemode', !!needsBlock && !!propBlock);
-if (!needsBlock || !propBlock) { done(); }
+if (!needsBlock || !propBlock) { done(); } else {
 
 const HOUR = 3600000, MIN = 60000;
 const clock = { t: Date.UTC(2026, 9, 12, 3, 0, 0) };
@@ -236,7 +236,7 @@ const box = inDir(function () { return boot(needs); });
 const beds = box.__thornswoodBeds;
 yes('the property block publishes the beds and their reading of a room',
     !!beds && typeof beds.placeOf === 'function' && typeof beds.verdict === 'function');
-if (!beds || !beds.placeOf) { done(); }
+if (!beds || !beds.placeOf) { done(); } else {
 
 // ================================================= P. what a room is
 {
@@ -530,3 +530,4 @@ function r1(v) { return Math.round(v * 10) / 10; }
 }
 
 done();
+}}

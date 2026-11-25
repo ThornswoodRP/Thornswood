@@ -1,8 +1,11 @@
 // Write-SystemLists.js
 //
-// Turns the checked-in tables into the lists under docs/systems/lists.
-// Read only apart from those markdown files. Run it after a recipe, harvest,
-// ore or hunt table changes so the plan and the tables stay the same list.
+// Turns the tables into the lists under docs/systems/lists, and writes
+// nothing else: a step of scripts/mods/content-tables.json, so the box writes
+// them with every content build. The class and profession pages beside the
+// folder are written by hand and link to their list; until #5191 this spliced
+// a copy of each list into them, so a build carried hand-written pages and
+// laid an old copy over a newer checkout.
 //
 //   node scripts/dev/Write-SystemLists.js
 const fs = require('fs');
@@ -125,6 +128,8 @@ const index = ['# Recipe and work lists', '',
   'These lists are the items.',
   ''];
 
+// Each half's page, written once the spell book is read, below.
+const halfHead = {};
 Object.keys(byHalf).sort().forEach(function (key) {
   const rows = byHalf[key];
   const file = key.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
@@ -140,8 +145,7 @@ Object.keys(byHalf).sort().forEach(function (key) {
   body += 'By rank: ' + ranks.map(function (r) {
     return r + ' ' + (byRank[r] || 0);
   }).join(', ') + '.\n\n';
-  body += recipeTable(rows);
-  write(file, body);
+  halfHead[key] = body;
   index.push('- [' + key + '](' + file + ') (' + rows.length + ', ' + asked + ' reach the server)');
 });
 
@@ -358,7 +362,7 @@ const classFiles = [
     'Ranked by how hard the crop is to grow. A crop has no gold price. Grow minutes are the novice wait, before the rank multiplier.',
     {}],
   ['fisher.md', 'Fisher', 'game/data/harvests.json', harvests.fish,
-    'Pressed at the water with a fishing pole in the pack: the server refuses a fisher who carries none. A fish has no gold price.',
+    'Press E at the water with a fishing pole in your pack. A fish has no gold price.',
     {}],
   ['hunter.md', 'Hunter', 'game/data/hunts.json', hunts.hunts,
     'Only a hunter loots the body. Yield is least-most of each part. The rank is the rank on the row. A part has no gold price.',
@@ -386,13 +390,7 @@ if (harvests.unranked) {
   index.push('- [Unranked](unranked.md) (' + got.names + ')');
 }
 
-// Written by scripts/dev/Check-Makers.js, which the gate runs (#3132).
-index.push('- [Who makes what the world hands out](who-makes-it.md)');
-index.push('');
-write('README.md', index.join('\n') + '\n');
-
-// The profession and class pages carry the same rows, so a count is not
-// the only place the item lives. Markers keep the hand-written rules.
+// The spell book, for the Bladebinder's staves and the mage schools' books.
 function spellBook() {
   // The gamemode's SPELL_IDS table (game/gamemode-tables, #5191).
   const book = require(path.join(ROOT, 'scripts', 'dev', 'GamemodeTables.js')).read('SPELL_IDS');
@@ -452,48 +450,13 @@ function rankSentence(key) {
   return 'The rank on the row is the rank. It is the dearest ingredient a class produces. An item has no gold price.\n\n';
 }
 
-function spliceDetail(rel, markdown) {
-  const file = path.join(ROOT, rel);
-  if (!fs.existsSync(file)) {
-    console.log('skip missing ' + rel);
-    return;
-  }
-  let text = fs.readFileSync(file, 'utf8');
-  const begin = '<!-- detail:begin -->';
-  const end = '<!-- detail:end -->';
-  const block = begin + '\n\n' + markdown.trim() + '\n\n' + end;
-  if (text.indexOf(begin) !== -1 && text.indexOf(end) !== -1) {
-    text = text.replace(new RegExp(begin + '[\\s\\S]*?' + end), block);
-  } else {
-    const marker = '\n## Where this is\n';
-    const at = text.indexOf(marker);
-    if (at === -1) { text = text.trimEnd() + '\n\n' + block + '\n'; }
-    else { text = text.slice(0, at) + '\n' + block + '\n' + text.slice(at); }
-  }
-  fs.writeFileSync(file, text, 'utf8');
-}
-
 const spells = spellBook();
 
 Object.keys(byHalf).sort().forEach(function (key) {
   const rows = byHalf[key];
   const file = key.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
-  const owner = key.split('/')[0].toLowerCase();
-  const half = key.split('/')[1].toLowerCase();
-  const rel = 'docs/systems/professions/' + owner + '/' + half + '.md';
-  const link = '../../lists/' + file;
-  const asked = rows.filter(function (r) { return r.fires !== false; });
-  const silent = rows.length - asked.length;
-  const temperSentence = silent === 0
-    ? 'None of them are tempering.'
-    : (silent + ' are tempering and do not.');
-  let body = '## Every recipe\n\n' +
-    'Generated from `game/data/recipes.json` by `scripts/dev/Write-SystemLists.js`. ' +
-    rows.length + ' recipes. ' + asked.length + ' reach the server. ' +
-    temperSentence + ' The same rows, with ids, are in [' +
-    file.replace('.md', '') + '](' + link + ').\n\n' +
-    rankSentence(key) +
-    '### Names that reach the server\n\n' +
+  let body = halfHead[key] + rankSentence(key) +
+    '## Names that reach the server\n\n' +
     namesByRank(rows, true) + '\n\n';
   if (key === 'Enchanter/Bladebinder') {
     let inBookCount = 0;
@@ -504,7 +467,8 @@ Object.keys(byHalf).sort().forEach(function (key) {
       spellRows++;
       if (inBook(spells.flat, spell).indexOf('yes') === 0) { inBookCount++; }
     });
-    body += 'The spell column is the HasSpell the crafting menu asks for. ' +
+    body += '## The spells the menu asks for\n\n' +
+      'The spell column is the HasSpell the crafting menu asks for. ' +
       'In the college book means that editor id is one of the spells on the mage pages. ' +
       inBookCount + ' of ' + spellRows + ' staves ask for a spell that is in that book. ' +
       'The rest name a mod spell. A staff whose spell is not in the book can sit at novice in this table and still be unmakeable, because the menu will not list it for someone who was never granted the spell.\n\n';
@@ -526,38 +490,13 @@ Object.keys(byHalf).sort().forEach(function (key) {
         inBook(spells.flat, spell)
       ].join(' | ') + ' |');
     });
-    body += lines.join('\n') + '\n';
-  } else {
-    body += recipeTable(rows);
+    body += lines.join('\n') + '\n\n';
   }
-  spliceDetail(rel, body);
-});
-
-const classPages = {
-  'miner.md': 'docs/systems/classes/miner.md',
-  'gatherer.md': 'docs/systems/classes/gatherer.md',
-  'farmer.md': 'docs/systems/classes/farmer.md',
-  'fisher.md': 'docs/systems/classes/fisher.md',
-  'hunter.md': 'docs/systems/classes/hunter.md'
-};
-Object.keys(classPages).forEach(function (file) {
-  const got = classGot[file];
-  if (!got) { return; }
-  spliceDetail(classPages[file],
-    '## Every record\n\n' +
-    'Generated from the work tables by `scripts/dev/Write-SystemLists.js`. ' +
-    'The same rows are in [' + file.replace('.md', '') + '](../lists/' + file + ').\n\n' +
-    got.table);
+  write(file, body + '## Every recipe\n\n' + recipeTable(rows));
 });
 
 const schoolOrder = ['novice', 'advanced', 'expert', 'master'];
-const schoolPages = {
-  destruction: 'docs/systems/professions/mage/destruction.md',
-  restoration: 'docs/systems/professions/mage/restoration.md',
-  alteration: 'docs/systems/professions/mage/alteration.md',
-  conjuration: 'docs/systems/professions/mage/conjuration.md',
-  illusion: 'docs/systems/professions/mage/illusion.md'
-};
+const schools = ['destruction', 'restoration', 'alteration', 'conjuration', 'illusion'];
 const spellLists = {
   destruction: {
     novice: ['Flames', 'Frostbite', 'Sparks'],
@@ -590,8 +529,9 @@ const spellLists = {
     master: ['Harmony', 'Hysteria', 'Mayhem']
   }
 };
-Object.keys(schoolPages).forEach(function (school) {
-  const lines = ['## The book', '',
+schools.forEach(function (school) {
+  const title = school.charAt(0).toUpperCase() + school.slice(1);
+  const lines = ['# The ' + title + ' book', '',
     'Generated from the spell book and the gamemode\'s `SPELL_IDS` table by `scripts/dev/Write-SystemLists.js`. ' +
     'Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.',
     '',
@@ -603,7 +543,14 @@ Object.keys(schoolPages).forEach(function (school) {
       lines.push('| ' + name + ' | ' + rank + ' | ' + id + ' |');
     });
   });
-  spliceDetail(schoolPages[school], lines.join('\n'));
+  write('mage-' + school + '.md', lines.join('\n') + '\n');
+  index.push('- [The ' + title + ' book](mage-' + school + '.md) (' + schoolOrder.reduce(function (n, r) { return n + (spellLists[school][r] || []).length; }, 0) + ' spells)');
 });
+
+// Written by scripts/dev/Check-Makers.js --write, which the gate holds
+// (#3132); beside this folder, since a build carries the whole folder.
+index.push('- [Who makes what the world hands out](../who-makes-it.md)');
+index.push('');
+write('README.md', index.join('\n') + '\n');
 
 console.log('wrote ' + fs.readdirSync(OUT).length + ' files to ' + OUT);

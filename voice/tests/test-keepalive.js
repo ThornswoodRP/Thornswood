@@ -230,11 +230,11 @@ async function open(pid) {
       const at = head.indexOf('\r\n\r\n');
       if (at < 0) { return; }
       s.removeListener('data', onData);
-      resolve({ sock: s, head: head.slice(0, at) });
+      clearTimeout(late); resolve({ sock: s, head: head.slice(0, at) });
     };
     s.on('data', onData);
     s.on('error', reject);
-    setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no handshake in four seconds')), 4000);
   });
 }
 
@@ -261,14 +261,15 @@ function frames(sock, on) {
     buf = Buffer.concat([buf, d]);
     for (;;) {
       if (buf.length < 2) { return; }
-      let len = buf[1] & 0x7f, off = 2;
+      const header = { fin: !!(buf[0] & 0x80), masked: !!(buf[1] & 0x80), lengthCode: buf[1] & 0x7f };
+      let len = header.lengthCode, off = 2;
       if (len === 126) { if (buf.length < 4) { return; } len = buf.readUInt16BE(2); off = 4; }
       else if (len === 127) { if (buf.length < 10) { return; } len = Number(buf.readBigUInt64BE(2)); off = 10; }
       if (buf.length < off + len) { return; }
       const op = buf[0] & 0x0f;
       const body = buf.slice(off, off + len);
       buf = buf.slice(off + len);
-      on(op, body);
+      on(op, body, header);
     }
   });
 }
@@ -281,6 +282,17 @@ function textFrame(obj) {
   const key = crypto.randomBytes(4);
   const body = Buffer.alloc(data.length);
   for (let i = 0; i < data.length; i++) { body[i] = data[i] ^ key[i & 3]; }
+  return Buffer.concat([head, key, body]);
+}
+
+// Control PINGs carry binary bytes, not JSON or UTF-8 text. Extended length
+// is used only by the invalid126byte case below.
+function pingFrame(data, fin = true) {
+  const op = fin ? 0x89 : 0x09;
+  const head = data.length < 126 ? Buffer.from([op, 0x80 | data.length])
+    : Buffer.from([op, 0xfe, data.length >> 8, data.length & 255]);
+  const key = crypto.randomBytes(4), body = Buffer.alloc(data.length);
+  for (let i = 0; i < data.length; i++) body[i] = data[i] ^ key[i & 3];
   return Buffer.concat([head, key, body]);
 }
 
@@ -351,6 +363,13 @@ function textFrame(obj) {
   const h2 = await (await fetch('http://127.0.0.1:' + PORT + '/health')).json();
   check('/health counts it', h2.closedSilent >= 1, true);
   check('and the service log says so', await logSays(/answered nothing for \d+ s/), true);
+  check('a silent close has a structured transport summary',
+        await logSays(/"event":"voice_socket_closed"[^\n]*"reason":"silent"/), true);
+  const summaries = () => log.split('\n').filter((line) => line.startsWith('{"event":"voice_socket_closed"'))
+    .map((line) => JSON.parse(line));
+  const quietSummary = summaries().find((s) => s.reason === 'silent');
+  check('the silent summary separates attempted heartbeats from received bytes',
+        !!quietSummary && quietSummary.pingTx >= 2 && quietSummary.rxBytes === 0 && quietSummary.pongRx === 0, true);
 
   // One that answers every ping the way a browser does stays, however long.
   const talks = await open(519);
@@ -361,9 +380,9 @@ function textFrame(obj) {
   let onPongFrame = null, onPong = null;
   const talksGone = waitFor();
   talks.sock.on('close', () => { talksClosed = true; talksGone.hit(); });
-  frames(talks.sock, (op, body) => {
+  frames(talks.sock, (op, body, header) => {
     if (op === 9) { if (!talks.sock.writableEnded) { talks.sock.write(PONG); } return; }
-    if (op === 0xa) { if (onPongFrame) { onPongFrame(); } return; }
+    if (op === 0xa) { if (onPongFrame) { onPongFrame(body, header); } return; }
     if (op !== 1) { return; }
     try { got.push(JSON.parse(body.toString('utf8'))); } catch (e) { }
     if (got[got.length - 1] && got[got.length - 1].t === 'pong' && onPong) { onPong(); }
@@ -399,6 +418,22 @@ function textFrame(obj) {
   check('a page ping once joined is answered with a pong', await heard, true);
   check('it is in the room', (await (await fetch('http://127.0.0.1:' + PORT + '/health')).json()).peers, 1);
 
+  // RFC6455§5.5.3 requires the exact application bytes in the reply,
+  // including zero bytes/high bits and the largest legal control payload.
+  for (const payload of [Buffer.alloc(0), Buffer.from([0, 1, 0x80, 0xfe, 0xff]),
+    Buffer.from(Array.from({ length: 125 }, (_, i) => (i * 67) & 255))]) {
+    heard = waitFor();
+    let echoed = null, pongHeader = null;
+    onPongFrame = (body, header) => { echoed = Buffer.from(body); pongHeader = header; heard.hit(); };
+    talks.sock.write(pingFrame(payload));
+    check('the ' + payload.length + 'byte control PING gets a PONG', await heard, true);
+    onPongFrame = null;
+    check('the ' + payload.length + 'byte PONG echoes the exact binary payload',
+      echoed !== null && echoed.equals(payload), true);
+    check('the ' + payload.length + 'byte PONG is final, unmasked and short-encoded',
+      pongHeader && pongHeader.fin && !pongHeader.masked && pongHeader.lengthCode === payload.length, true);
+  }
+
   /*
     Its end shut with no close frame, a process killed or a tab gone. The
     service used to notice only when its next write failed, or here once the
@@ -418,7 +453,41 @@ function textFrame(obj) {
         shut && h3.peers === 0, true);
   check('at once, not found silent later (' + (h3.closedSilent - silentBefore) + ' closed for silence)',
         h3.closedSilent - silentBefore, 0);
+  check('an ended connection also records its heartbeat summary',
+        await logSays(/"event":"voice_socket_closed"[^\n]*"reason":"end"[^\n]*"peer":[1-9]/), true);
+  const activeSummary = summaries().find((s) => s.reason === 'end' && s.peer > 0);
+  check('the summary correlates the joined peer and counts both heartbeat types',
+        !!activeSummary && activeSummary.pongRx > 0 && activeSummary.appPingRx === 2 && activeSummary.appPongTx === 1, true);
+  check('the close summary has only allowlisted diagnostic fields',
+        !!activeSummary && Object.keys(activeSummary).sort().join(',') ===
+        ['event','reason','peer','ageMs','rxAgeMs','txAgeMs','pingTx','pongRx','appPingRx','appPongTx',
+         'rxBytes','txBytes','queuedBytes','backed','previousTickLagMs','sincePingTickMs','errorCode','closeCode'].sort().join(','), true);
   try { talks.sock.destroy(); } catch (e) { }
+
+  // An invalid control PING cannot be echoed as a malformed control PONG.
+  // These are small loopback protocol cases, not a flood or a live probe.
+  for (const [label, frame, profile] of [
+    ['oversized', pingFrame(Buffer.alloc(126)), 521],
+    ['fragmented', pingFrame(Buffer.from('proof'), false), 522],
+    // Header-only declared length: no large allocation or transmission.
+    ['64-bit oversized', Buffer.from([0x89, 0xff, 0, 0, 0, 0, 0, 0x0f, 0x42, 0x41]), 523]]) {
+    const invalid = await open(profile);
+    const reply = waitFor();
+    let result = null, sawPong = false;
+    const ended = waitFor();
+    invalid.sock.once('close', ended.hit);
+    frames(invalid.sock, (op, body) => {
+      if (op === 0xa) sawPong = true;
+      if (op === 8 || op === 0xa) { if (!result) result = { op, body }; reply.hit(); }
+    });
+    invalid.sock.write(frame);
+    const received = await reply;
+    check(label + ' control PING is refused with protocol close1002',
+      received && result && result.op === 8 && result.body.length >= 2 && result.body.readUInt16BE(0) === 1002, true);
+    check(label + ' control PING closes without any PONG',
+      await ended && !sawPong, true);
+    invalid.sock.destroy();
+  }
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');

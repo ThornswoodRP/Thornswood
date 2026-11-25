@@ -328,9 +328,11 @@ function fakePlugin(masters, alchs) {
 }
 // A dish: its bounds, a mesh of its own, MODT, the pick up and eating sounds
 // (Skyrim.esm's, through the file's own numbering), weight, worth.
-function dishRecord(fid, own, sound, i) {
+// It is named as the recipe table names it, since the tool names a fine dish
+// from its plain dish's winning record (#6351).
+function dishRecord(fid, own, sound, i, name) {
   const enit = Buffer.concat([u32(10 + i, 0x2, sound, 0), u32(sound)]);
-  return rec('ALCH', fid, [['EDID', z('Dish' + i)], ['OBND', Buffer.alloc(12, i % 7)], ['FULL', z('Dish ' + i)],
+  return rec('ALCH', fid, [['EDID', z('Dish' + i)], ['OBND', Buffer.alloc(12, i % 7)], ['FULL', z(name || ('Dish ' + i))],
     ['MODL', z('Clutter\\Food\\Dish' + i + '.nif')], ['MODT', Buffer.alloc(12, 3)], ['YNAM', u32(sound)], ['ZNAM', u32(sound)],
     ['DATA', f32(0.5)], ['ENIT', enit], ['EFID', u32(0x3eb15)], ['EFIT', Buffer.alloc(12)]]);
 }
@@ -349,11 +351,11 @@ const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2906-'));
 // stand-in masters, its records and the two effects written into a plugin
 // of their own with the tool's header, so section 4's checks read them.
 const MAKE = [
-  'import importlib.util, struct, sys',
+  'import importlib.util, os, struct, sys',
   'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
   'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
   'problems = []',
-  'made = m.quality_records(sys.argv[2], list(m.PLUGIN_MASTERS), problems)',
+  'made = m.quality_records(sys.argv[2], os.path.join(sys.argv[2], "plugins.txt"), list(m.PLUGIN_MASTERS), problems)',
   'eff = m.quality_effects()',
   'def grp(tag, recs):',
   '    body = b"".join(r.bytes() for r in recs)',
@@ -374,10 +376,15 @@ try {
       const own = f === 'Gourmet.esp' ? ['Skyrim.esm'] : (f === 'Skyrim.esm' ? [] : ['Skyrim.esm']);
       const alchs = byFile[f].map(function (x) {
         const sound = f === 'Gourmet.esp' && gourmetSound !== undefined ? gourmetSound : SOUND;
-        return dishRecord((own.length << 24) | parseInt(x[0].split(':')[0], 16), own, sound, x[1]);
+        return dishRecord((own.length << 24) | parseInt(x[0].split(':')[0], 16), own, sound, x[1], dishes[x[0]]);
       });
       fs.writeFileSync(path.join(masters, f), fakePlugin(own, alchs));
     }
+    // The five masters load whatever plugins.txt says, and Gourmet.esp after them.
+    ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'].forEach(function (m) {
+      if (!byFile[m]) { fs.writeFileSync(path.join(masters, m), fakePlugin(m === 'Skyrim.esm' ? [] : ['Skyrim.esm'], [])); }
+    });
+    fs.writeFileSync(path.join(masters, 'plugins.txt'), '*Gourmet.esp\n');
   }
   writeMasters();
   const out = path.join(dir, 'quality.esp');
@@ -421,4 +428,4 @@ try {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

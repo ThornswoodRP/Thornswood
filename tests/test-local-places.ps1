@@ -98,7 +98,7 @@ foreach ($f in @(Get-ChildItem -LiteralPath $scriptsDir -File -Recurse)) {
 Yes ('no script under scripts names Downloads\Thornswood-Backups or C:\Thornswood-Release-DevBuild' + $(if ($named.Count) { ': ' + ($named -join ', ') } else { '' })) ($named.Count -eq 0)
 
 $asks = [regex]"Where\.ps1'\)\s+Backups\b"
-foreach ($rel in 'scripts\vps\Backup-Server.ps1', 'scripts\vps\Fetch-Backups.ps1', 'scripts\mods\Clean-Everything.ps1', 'scripts\deploy\Rotate-BotToken.ps1') {
+foreach ($rel in 'scripts\vps\Backup-Server.ps1', 'scripts\vps\Fetch-Backups.ps1', 'scripts\dev\Clean-Everything.ps1', 'scripts\deploy\Rotate-BotToken.ps1') {
     $text = [IO.File]::ReadAllText((Join-Path $realRepo $rel))
     $byVar = $text -match '\$where\s*=\s*Join-Path \$Here ''\.\.\\release\\Where\.ps1''' -and $text -match '& \$where Backups'
     Yes ((Split-Path -Leaf $rel) + ' asks Where.ps1 Backups') ($asks.IsMatch($text) -or $byVar)
@@ -144,7 +144,7 @@ try {
         'scripts\release\Where.ps1',
         'scripts\vps\Backup-Server.ps1', 'scripts\vps\Protect-BackupZip.ps1', 'scripts\vps\Fetch-Backups.ps1', 'scripts\vps\Restore-Backup.ps1',
         'scripts\vps\Vps.ps1', 'scripts\vps\Send-Script.ps1', 'scripts\vps\vps.json',
-        'scripts\mods\Clean-Everything.ps1', 'scripts\mods\OnBox.ps1'
+        'scripts\dev\Clean-Everything.ps1', 'scripts\mods\OnBox.ps1'
     )
     function New-Scratch([string]$dir, [bool]$worktree) {
         foreach ($rel in $copy) {
@@ -258,7 +258,7 @@ try {
     foreach ($n in 'thornswood-backup-20261001-0100.zip', 'thornswood-backup-20261002-0100.zip', 'thornswood-backup-20261003-0100.zip', 'thornswood-backup-20261027-0100.zip.enc') {
         [IO.File]::WriteAllText((Join-Path $mainBackups $n), 'x')
     }
-    $r = Run (Join-Path $main 'scripts\mods\Clean-Everything.ps1') @('-Backups', '-Vps', '127.0.0.1', '-User', 'nobody', '-NoPause')
+    $r = Run (Join-Path $main 'scripts\dev\Clean-Everything.ps1') @('-Backups', '-Vps', '127.0.0.1', '-User', 'nobody', '-NoPause')
     Yes ("Clean-Everything -Backups finds the four in local\backups, encrypted or not (exit $($r.Code))") ($r.Out -match '4 backup\(s\), keeping the newest 2' -and $r.Out.Contains('thornswood-backup-20261001-0100.zip') -and $r.Out.Contains('thornswood-backup-20261027-0100.zip.enc'))
     Yes '  and deletes none of them without -Delete' (@(Get-ChildItem -LiteralPath $mainBackups -Filter 'thornswood-backup-*').Count -eq 4)
 }

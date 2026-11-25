@@ -197,12 +197,12 @@ async function person(profileId, name) {
     ws.onopen = () => ws.send(JSON.stringify({ t: 'join', profileId: profileId, name: name }));
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'welcome') { me.peer = m.peer; resolve(me); return; }
+      if (m.t === 'welcome') { me.peer = m.peer; clearTimeout(late); resolve(me); return; }
       if (m.t === 'chat') { me.chat.push(m); }
       if (m.t === 'pong') { const p = me.pongs.shift(); if (p) { p(); } }
     };
     ws.onerror = () => reject(new Error('socket error joining as ' + name));
-    setTimeout(() => reject(new Error('no welcome for ' + name + ' in four seconds')), 4000);
+    const late = setTimeout(() => reject(new Error('no welcome for ' + name + ' in four seconds')), 4000);
   });
 }
 

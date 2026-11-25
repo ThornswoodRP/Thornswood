@@ -51,7 +51,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 const EM = String.fromCharCode(0x2014);
 const FORBIDDEN = new RegExp('pla' + 'yer', 'i');
@@ -76,7 +76,7 @@ const TAIL = "      note('Changing character in ' + left + (left === SWITCH_WAIT
 const fa = front.indexOf(HEAD);
 const fb = front.indexOf(TAIL, fa);
 yes('the idle block and the change character block are in thornswood-front.js where this expects them', fa >= 0 && fb > fa);
-if (!(fa >= 0 && fb > fa)) done();
+if (!(fa >= 0 && fb > fa)) { done(); return; }
 const blocks = front.slice(fa, fb + TAIL.length);
 yes('the numbers: a 10 second wait, and 32 units counts as moving',
     /const SWITCH_WAIT_MS = 10000;/.test(blocks) && /const SWITCH_MOVE_UNITS = 32;/.test(blocks));

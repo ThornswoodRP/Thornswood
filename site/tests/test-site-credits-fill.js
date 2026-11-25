@@ -122,7 +122,7 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   let child = null;
   try {
     siteFiles.copy(dir);
-    fs.mkdirSync(path.join(dir, 'public'));
+    fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
     fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
     const marked = fs.readdirSync(path.join(APP, 'public')).filter(function (n) { return /^marked-.*\.js$/.test(n); });
     for (const m of marked) fs.copyFileSync(path.join(APP, 'public', m), path.join(dir, 'public', m));
@@ -169,5 +169,5 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   }
   yes('the temp folder is gone', !fs.existsSync(dir));
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -367,13 +367,26 @@ namespace Thornswood
 
             OwnGame.Alone(delegate
             {
+                // Restore the installed package before its recipes are read.
+                // An older first setup could discard the recipe and other
+                // shipped files, so Scan had no MadeFromGame issue yet (#6457).
+                bool restored = false;
+                if (kinds.Contains(IssueKind.OursLost) && Updater.CanResync(cfg))
+                {
+                    try
+                    {
+                        restored = Updater.Resync(cfg, say);
+                        if (!restored) say("This launcher has no installed package to put Thornswood's own files back from.");
+                    }
+                    catch (Exception ex) { say("Thornswood's own files could not be put back: " + Failure.Say("Upkeep.FixOnDisk, the release's files", ex)); }
+                }
                 if (kinds.Contains(IssueKind.Lost))
                 {
                     try { OwnGame.PutBackLost(cfg, OwnGame.Lost(true).Vortex, say); }
                     catch (Exception ex) { say("Vortex's files could not be put back: " + Failure.Say("Upkeep.FixOnDisk, putting back Vortex's files", ex)); }
                 }
                 if (kinds.Contains(IssueKind.BuildFiles)) PutBackBuildFiles(say);
-                if (kinds.Contains(IssueKind.MadeFromGame))
+                if (restored || kinds.Contains(IssueKind.MadeFromGame))
                 {
                     try { string made = MadeFromGame.Ensure(); if (!string.IsNullOrEmpty(made)) say(made); }
                     catch (Exception ex) { say("The files made from your game could not be written: " + Failure.Say("Upkeep.FixOnDisk, the files made from the game", ex)); }
@@ -393,16 +406,6 @@ namespace Thornswood
                 {
                     try { Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg)); }
                     catch (Exception ex) { say("The plugin list could not be put right: " + Failure.Say("Upkeep.FixOnDisk, the plugin list", ex, "plugins.txt")); }
-                }
-                // Thornswood's own files, from the release this install is
-                // on, when no update is waiting to bring them anyway.
-                if (kinds.Contains(IssueKind.OursLost) && !kinds.Contains(IssueKind.Update) && Updater.CanResync(cfg))
-                {
-                    try
-                    {
-                        if (!Updater.Resync(cfg, say)) say("This launcher has no installed package to put Thornswood's own files back from.");
-                    }
-                    catch (Exception ex) { say("Thornswood's own files could not be put back: " + Failure.Say("Upkeep.FixOnDisk, the release's files", ex)); }
                 }
             }, delegate { say("An update or a bring-up-to-date is writing into the game folder. Fix goes on as soon as that is done."); });
 

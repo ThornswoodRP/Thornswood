@@ -79,10 +79,10 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'Generated.ps1')
 
-$said = [Action[string, string]] {
-    param($m, $c)
-    if ($c -eq 'Head') { $c = 'Cyan' }
-    Write-Host $m -ForegroundColor $c
-}
+# A void callback cannot forward PowerShell pipeline output. Collect its
+# report and emit it from the script, not from inside the callback.
+$report = [Collections.Generic.List[string]]::new()
+$said = [Action[string, string]] { param($m, $c) $report.Add($m) }
 $r = [Thornswood.CoveredBodies]::Check($Game, [bool]$Quiet, $said)
+Write-Output $report
 exit $r.ExitCode

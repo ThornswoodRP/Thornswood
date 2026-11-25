@@ -264,17 +264,23 @@ function write(root) {
 module.exports = { VERB_LISTS, CODE, strings, named, runs, compare, putReads, write };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const root = path.join(__dirname, '..', '..');
   if (process.argv.indexOf('--write') >= 0) {
     const changed = write(root);
     console.log(changed.length ? 'Wrote the reads of ' + changed.length + ' verbs: ' + changed.join(', ') : 'Every verb\'s reads already names what it runs. Nothing was written.');
-    process.exit(0);
+    return 0;
   }
   let behind = 0;
   for (const r of compare(root)) {
     for (const m of r.missing) { behind++; console.log(r.name + ' runs ' + m + ' (' + r.why.get(m) + '), which its reads in ' + r.list + ' does not name.'); }
     for (const s of r.stale) { behind++; console.log(r.name + ' no longer runs ' + s + ', which its reads in ' + r.list + ' still names.'); }
   }
-  if (behind) { console.log(behind + ' to put right: node scripts/ops/Verb-Files.js --write'); process.exit(1); }
+  if (behind) { console.log(behind + ' to put right: node scripts/ops/Verb-Files.js --write'); return 1; }
   console.log('Every verb\'s reads names what it runs.');
 }

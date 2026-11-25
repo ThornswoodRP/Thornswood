@@ -24,6 +24,12 @@
                                 [-Previous <obj>]
           whether this merge makes a Velopack package, and so builds the
           launcher with the release's Velopack version
+      Get-MergeReleaseDevPackage -Releases <GitHub's Releases>
+          the Release dev's launchers are on: the newest published one
+          with dev's feed, or $null
+      Test-MergeReleaseSetupChanged -SetupFiles <obj> [-Before <obj>]
+          whether the files a package carries beside Game differ from
+          those of that package (setup-files.dev.json)
       Get-VelopackFullOf -Release <GitHub's Release> -Channel dev|main
           the channel's own full package on it, Name and Version, or $null
       Find-MainPackage -Tag <tag> -Manifest <obj> [-Repo owner/name]
@@ -83,6 +89,20 @@
   Release before is carried. Test-MergeReleaseVelopack makes that call from
   the same prints Get-MergeReleaseChanged compares, before the launcher is
   built, so the two cannot disagree.
+
+  THE FILES BESIDE GAME (#6298). A package also carries what the install
+  reads on its first start (Build-SetupFiles.ps1): the reference load order
+  in profile\, config.json, the source note and the licence texts. They are
+  made from the records, not from the launcher's sources or the game files,
+  so a merge that changes only them changed neither part above, and until
+  16 Nov 2026 it made no package: #6302's reference list, made from
+  records\load-order.json, stayed out of every launcher while dev's server
+  ran revision 8's order. So merge-release.yml builds them before the
+  launcher step, and Test-MergeReleaseSetupChanged compares dev's list with
+  the one in the package dev's launchers are on (Get-MergeReleaseDevPackage,
+  the Release the delta is made from). When they differ, the launcher is
+  built again for a new package, as for main's package with no tag, and the
+  parts step counts the launcher as changed, so the one number holds.
 #>
 
 $script:MergeReleaseFirst = 0
@@ -166,6 +186,39 @@ function Test-MergeReleaseVelopack {
   }
   $c = @(Get-MergeReleaseChanged -Manifest $m -Previous $Previous)
   return ($c -contains 'launcher' -or $c -contains 'game')
+}
+
+# The Release dev's launchers are on: the newest published Release with
+# dev's feed (VeloUpdate.cs, THE CHANNEL'S RELEASE), the one dev's delta is
+# made from, or $null when there is none. Newest by when it was published:
+# GitHub's list is in no order (Get-MergeReleaseList).
+function Get-MergeReleaseDevPackage {
+  param([Parameter(Mandatory = $true)][AllowEmptyCollection()]$Releases)
+  $on = @(@($Releases) | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count } |
+          Sort-Object { $_.published_at } -Descending)
+  if ($on.Count) { return $on[0] }
+  return $null
+}
+
+# One line that changes exactly when the files a package carries beside
+# Game do: each path in a setup-files.<channel>.json and its sha256, sorted.
+# '' for no list.
+function Get-MergeReleaseSetupPrint {
+  param($List)
+  if ($null -eq $List -or $null -eq $List.PSObject.Properties['files']) { return '' }
+  $arr = [string[]]@(@($List.files) | ForEach-Object { [string]$_.path + ':' + ([string]$_.sha256).ToLowerInvariant() })
+  [Array]::Sort($arr, [StringComparer]::Ordinal)
+  return ($arr -join ';')
+}
+
+# True when the files beside Game (this merge's setup-files.dev.json) differ
+# from those in the package dev's launchers are on, or that package lists
+# none (header, THE FILES BESIDE GAME).
+function Test-MergeReleaseSetupChanged {
+  param([Parameter(Mandatory = $true)]$SetupFiles, $Before = $null)
+  $now = Get-MergeReleaseSetupPrint $SetupFiles
+  if (-not $now) { throw 'the setup files list names no file' }
+  return ($now -ne (Get-MergeReleaseSetupPrint $Before))
 }
 
 # The channel's own full package on a Release, as GitHub lists its assets:

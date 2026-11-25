@@ -121,11 +121,17 @@ function ssh {
 # Runs the branch with the two things it takes from the rest of Deploy-Docs:
 # the site's folder and the password, which the script asked for with a
 # hidden prompt before it sent anything (#1069). Its own Write-Host lines are
-# kept out of the results; what the far side printed is handed back.
+# kept out of the results; what the far side printed is handed back. A
+# branch that stops the deploy because nothing was written (#4210) throws,
+# and why is kept in $script:branchStopped.
 function Run-Branch([string]$rootWin, [string]$pw) {
     $newPassword = $pw
     function Write-Host { }
-    return @(. ([ScriptBlock]::Create($branch)) | ForEach-Object { [string]$_ })
+    $out = New-Object System.Collections.ArrayList
+    $script:branchStopped = ''
+    try { . ([ScriptBlock]::Create($branch)) | ForEach-Object { [void]$out.Add([string]$_) } }
+    catch { $script:branchStopped = $_.Exception.Message }
+    return @($out)
 }
 
 # How server.js reads it: utf8, JSON.parse. Nothing stripped, so a byte order
@@ -230,6 +236,7 @@ try {
     }
     Yes 'a whole config: no byte order mark on it' ((First3 $f) -ne '239 187 191')
     Yes 'a whole config: it says it kept the rest' (($said -join ' ') -match 'set password, 13 other setting')
+    Yes 'a whole config: and the deploy goes on' (-not $script:branchStopped)
     $wire = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($newPw))
     $sent = $script:lines -join "`n"
     Yes 'the password went to ssh at all' ($script:lines.Count -ge 2)
@@ -260,6 +267,7 @@ try {
     Yes 'a config that will not parse is not touched, byte for byte' ([Convert]::ToBase64String([IO.File]::ReadAllBytes($f)) -eq $was)
     Yes 'and it says so' (($said -join ' ') -match 'WILL NOT READ AS JSON')
     Yes 'and does not claim it set anything' (-not (($said -join ' ') -match '(^|\s)set(\W|$)'))
+    Yes 'and the deploy stops there, saying the password was not written (#4210)' ($script:branchStopped -match 'password was not written')
 
     # ---- an empty file will not parse either. ConvertFrom-Json in 5.1 hands
     # back nothing for it rather than throwing, which is why the branch checks

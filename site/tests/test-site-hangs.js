@@ -502,5 +502,5 @@ function pageChecks() {
   // On a failure the site's own lines go with it, so a slow answer on a
   // runner nobody can log in to says what the site was doing (#2358).
   if (fail) console.log('---- what the site printed\n' + log);
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -71,6 +71,6 @@ async function main(ask) {
 }
 
 if (require.main === module) {
-  main(process.argv[2]).catch(e => { process.stderr.write('ops-access: ' + e.message + '\n'); process.exit(1); });
+  main(process.argv[2]).catch(e => { process.stderr.write('ops-access: ' + e.message + '\n'); process.exitCode = 1; });
 }
 module.exports = { REPOS, ASKS };

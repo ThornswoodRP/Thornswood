@@ -44,4 +44,4 @@ if (at >= 0) {
   yes('a fire out of reach is nothing', r[0] === -1 && r[1] === -1);
 }
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

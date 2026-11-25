@@ -167,5 +167,5 @@ function kept(r) { return INSIDE.filter((n) => r.left[n]); }
   yes('and the log says nothing about the setting', !/THORNSWOOD_CHAT_DAYS/.test(r.log));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

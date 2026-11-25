@@ -587,6 +587,9 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
 .rel .when{font:400 12px/1 var(--mono);letter-spacing:.1em;color:var(--faint)}
 .rel h2,.rel h3{margin:9px 0 8px;font-size:21px;color:var(--page)}
 .rel ul{margin:8px 0 0;color:var(--quiet);font-size:15px}
+.news-picture{margin:16px 0;max-width:960px;min-width:0}
+.news-picture-image{display:block;width:100%;height:auto}
+.news-picture figcaption{overflow-wrap:anywhere}
 
 footer{border-top:1px solid var(--edge);padding:52px 0 64px;
   padding-bottom:calc(64px + env(safe-area-inset-bottom,0px));color:var(--faint);

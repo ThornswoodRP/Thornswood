@@ -32,7 +32,8 @@ function Get-ThornswoodGamemodeBlob([string]$Path) {
 # The git tree id of a folder of gamemode tables, the way the gamemode works
 # it out at load (game/gamemode.js, tableFolder): each NAME.json file's blob
 # as Get-ThornswoodGamemodeBlob gives it, in git's order, then git's tree
-# hash, so it is the id git rev-parse <commit>:game/gamemode-tables prints.
+# hash, so it is the id git mktree gives the folder's files (the tables are
+# the box's build and never committed, #5191).
 # '' when there is no folder: a gamemode from before #5191, which has none.
 function Get-ThornswoodTablesTree([string]$Dir) {
   if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return '' }

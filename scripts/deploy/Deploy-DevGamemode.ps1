@@ -218,9 +218,11 @@
 
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows'
 
-  The order is game\data\last-plugin.json's loadOrder, the one every table
-  and the Last plugin of this commit were built against, with
-  Thornswood-Last.esp on the end. The collection's plugins come from the
+  The order is the one the box's content build of this commit reads, so
+  the one every table and the Last plugin of a Release of it were built
+  against (#6209): records\load-order.json, held to the revision
+  records\collection-plugins.json names (ContentPaths.ps1,
+  Get-ThornswoodContentOrder), with Thornswood-Last.esp on the end. The collection's plugins come from the
   box's store of the revision records\collection-plugins.json names
   (CollectionStore.ps1), which this fills from Nexus through Nexus-Run when
   it is not whole, each held to the record's sha256 before it goes in and
@@ -382,9 +384,10 @@ if ($OrderOnly -and -not $PSBoundParameters.ContainsKey('Why')) { $Why = 'a load
 # (tests\test-6166-order-only.ps1 holds the two lists the same). Main's are
 # used only when each is the same git blob at -At as at this checkout.
 $ThornswoodOrderInputs = @(
+  'records/collection.json',
   'records/collection-plugins.json',
   'records/collection-dropped.json',
-  'game/data/last-plugin.json'
+  'records/load-order.json'
 )
 if ($At) {
   $atRepo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -396,11 +399,15 @@ if ($At) {
     # blobs it names. Nothing of it is used but that answer.
     & git -C $atRepo fetch --quiet --depth 1 --no-tags origin $At 2>&1 | ForEach-Object { Write-Host ('  git: ' + $_) -ForegroundColor DarkGray }
     if ($LASTEXITCODE -ne 0) { throw "commit $At could not be fetched from origin (git ended $LASTEXITCODE), so its order cannot be compared with main's. Nothing was sent." }
+    # Names of their own: PowerShell's names are not case sensitive, so a
+    # $here in this loop was $Here, the script's folder, and every path the
+    # script joined to it afterwards started at a blob id (15 Nov 2026,
+    # build-1.3.75's step: "There is no gamemode at b276e5725e23...").
     $differ = @()
     foreach ($rel in $ThornswoodOrderInputs) {
-      $there = (@(& git -C $atRepo rev-parse --verify --quiet "${At}:$rel" 2>$null) -join '').Trim()
-      $here = (@(& git -C $atRepo rev-parse --verify --quiet "HEAD:$rel" 2>$null) -join '').Trim()
-      if ($there -ne $here) { $differ += $rel }
+      $blobAt = (@(& git -C $atRepo rev-parse --verify --quiet "${At}:$rel" 2>$null) -join '').Trim()
+      $blobHead = (@(& git -C $atRepo rev-parse --verify --quiet "HEAD:$rel" 2>$null) -join '').Trim()
+      if ($blobAt -ne $blobHead) { $differ += $rel }
     }
     $global:LASTEXITCODE = 0
     if ($differ.Count) {
@@ -412,6 +419,33 @@ if ($At) {
   }
 }
 # ==== end thornswood dev order at ====
+# ==== thornswood dev engine light ====
+# WHETHER THE ENGINE LOADS LIGHT PLUGINS, for the start point the settings
+# block moves (#2011), read for every run of this script (#6346). It used to
+# be read only beside the gamemode's server build check, which -OrderOnly
+# skips, so the order step after build-1.3.80's Deployment (16 Nov 2026,
+# 9:03 PM) sent the block "$loadsLight = $", which does not parse. The block
+# went on with no light rule, counted every plugin as full, and moved dev's
+# start point from 0x2F19BAD4 to 0x6119BAD4 (Skyrim Unbound.esp is at place
+# 97 in the list and 47 among the full plugins). From then on every new character on
+# dev, the bot pass's among them, died at createActor with
+#   Error: FromFormId failed due to invalid file index 97 (6119bad4)
+# and every dev Deployment failed its bot pass at login.
+# The record is the build dev runs: with -At the Release's commit, whose
+# server build the deploy agent put on dev, else this checkout's, which the
+# server build check below holds the box's to.
+. (Join-Path $Here 'ServerOrder.ps1')
+$devLightRecord = Join-Path $Here '..\..\records\server-build.json'
+if ($At -and $headAt -ne $At) {
+  $atRecord = @(& git -C $atRepo show "${At}:records/server-build.json" 2>$null) -join "`n"
+  if ($LASTEXITCODE -ne 0 -or -not $atRecord.Trim()) { throw "records/server-build.json could not be read at $At, so whether the engine dev runs loads light plugins is not known and the start point cannot be placed. Nothing was sent." }
+  $global:LASTEXITCODE = 0
+  $devLightRecord = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-server-build-' + $At + '.json')
+  [IO.File]::WriteAllText($devLightRecord, $atRecord, (New-Object Text.UTF8Encoding $false))
+}
+$devRecordLight = [bool](Test-ThornswoodEngineLoadsLight $devLightRecord)
+Write-Host ('  the engine dev runs {0} light plugins, by {1}' -f $(if ($devRecordLight) { 'loads' } else { 'does not load' }), $(if ($devLightRecord -like '*thornswood-server-build-*') { 'the server build record at ' + $At.Substring(0, 12) } else { 'this checkout''s server build record' }))
+# ==== end thornswood dev engine light ====
 if (-not $PutBack -and -not $ShipFollows) {
   if (-not $Note.Trim()) {
     Write-Host ''
@@ -483,8 +517,15 @@ $alsoSends = @('records/most-online.json', 'records/server-build.json')
 # LastPluginOnBox.ps1), which goes up with the make's own tools.
 if ($LoadOrder) { $alsoSends += 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json' }
 # The gamemode's tables (#5191) are in the artifact with it: the gamemode
-# reads them from the folder beside it as it loads.
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends
+# reads them from the folder beside it as it loads. They, our plugin and the
+# Last plugin's recipe are never committed (#5191, stage 4e): they are the
+# box's content build of this commit for the dev server, laid over this
+# checkout first (on the box from the builds it keeps, elsewhere from the
+# build's draft Release), and the artifact holds them to that build.
+. (Join-Path $Here '..\mods\ContentPaths.ps1')
+$laidBuild = Use-ThornswoodContentBuild -Repo (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath -Server dev
+Write-Host ('  content build ' + $laidBuild.Key.Substring(0, 12) + ', built from ' + $laidBuild.Commit.Substring(0, 12))
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends -Content dev
 Write-Host ('  artifact ' + (Format-ThornswoodArtifact $artifact))
 $Gamemode = Join-Path $artifact.Folder 'game\gamemode.js'
 $GamemodeTables = Join-Path $artifact.Folder 'game\gamemode-tables'
@@ -519,9 +560,8 @@ $devRecordSum = Get-ThornswoodRecordSum ([IO.File]::ReadAllBytes($devRecordPath)
 . (Join-Path $Here '..\release\RecordShape.ps1')
 $devRecord = Read-ThornswoodRecord -Path $devRecordPath -Kind server-build
 $devRecordCommit = [string]$devRecord.source.commit
-# Whether the engine loads light plugins, for the start point below: this
-# record's, which the check below holds the dev server's own record to.
-$devRecordLight = ($devRecord.PSObject.Properties.Name -contains 'lightPlugins' -and $devRecord.lightPlugins -eq $true)
+# Whether the engine loads light plugins is read above, for every run
+# ("dev engine light"), from this same record when there is no -At.
 $devBoxSaid = @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ($ThornswoodRecordSumText + "`r`n" + @"
 `$rp = Join-Path '$($Root.Replace('/', '\').Replace("'", "''"))' 'server-build.json'
 if (Test-Path -LiteralPath `$rp) {
@@ -608,27 +648,30 @@ if ($LoadOrder) {
   }
   if ($FromRecord) {
     if ($Dist) { throw '-FromRecord takes the order from the repository''s record and the plugins from the box''s store, so it does not go with -Dist. Nothing was sent.' }
-    # FROM THE RECORD (#4069): the order last-plugin.json was built against,
-    # which is the order every table and the Last plugin of this commit read,
-    # and the collection's plugins from the box's store of the record's
-    # revision. Thornswood-Last.esp goes on the end below, as always.
+    # FROM THE RECORD (#4069): the order the box's content build of this
+    # commit reads (#6209), records\load-order.json held to the revision the
+    # record names (ContentPaths.ps1, Get-ThornswoodContentOrder), and the
+    # collection's plugins from the box's store of that revision. Until 15
+    # Nov 2026 it was game\data\last-plugin.json's order, which the box's
+    # builds had left since 13 Nov: build-1.3.72's tables named revision 8's
+    # 107 plugins and this wrote revision 7's 106. Thornswood-Last.esp goes
+    # on the end below, as always.
     . (Join-Path $Here 'CollectionStore.ps1')
     $repoRoot = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
     $recordPath = Join-Path $repoRoot 'records\collection-plugins.json'
     $store = Get-ThornswoodCollectionStore -RecordPath $recordPath -Fetch { param($w, $h) Invoke-ThornswoodCollectionFetch -Work $w -Head $h -Repo $repoRoot } -Say { param($m) Write-Host $m -ForegroundColor DarkGray }
     $Data = $store.Dir
-    $lastDoc = Join-Path $repoRoot 'game\data\last-plugin.json'
-    $built = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($lastDoc)) $lastDoc
-    # Thornswood-Last.esp on the end here, before the order is held to the
-    # running one: last-plugin.json's order never names the Last plugin, and
-    # the dev server loads it, so held without it the move read as dropping
-    # it (31 Oct 2026, gate run at d88ab73e: "leaves out 1 of the 103 the
-    # running server loads: Thornswood-Last.esp"). The same order the live
-    # move writes (Deploy-Server.ps1 -FromRecord, $recordOrder).
+    . (Join-Path $repoRoot 'scripts\mods\ContentPaths.ps1')
+    $contentOrder = Get-ThornswoodContentOrder -Repo $repoRoot
+    # Thornswood-Last.esp on the end, before the order is held to the
+    # running one: the dev server loads it, so held without it the move read
+    # as dropping it (31 Oct 2026, gate run at d88ab73e: "leaves out 1 of the
+    # 103 the running server loads: Thornswood-Last.esp").
     . (Join-Path $Here 'LastPluginRecipe.ps1')
-    $pluginNames = @(@(@($built.loadOrder) | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -ine $ThornswoodLastPlugin }) + $ThornswoodLastPlugin)
-    if ($pluginNames.Count -lt 2) { throw "$lastDoc has no loadOrder, so there is no order to write. Nothing was sent and the dev server was not touched." }
-    Write-Host ('  load order from {0} ({1} plugins, collection revision {2}), written over the dev server''s' -f 'game\data\last-plugin.json', $pluginNames.Count, $store.Revision) -ForegroundColor DarkGray
+    $pluginNames = @(@(@($contentOrder.Names) | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -ine $ThornswoodLastPlugin }) + $ThornswoodLastPlugin)
+    if ($pluginNames.Count -lt 2) { throw "the records name no load order, so there is no order to write. Nothing was sent and the dev server was not touched." }
+    if ([int]$contentOrder.Revision -ne [int]$store.Revision) { throw ("the order is for revision " + $contentOrder.Revision + " and the store holds revision " + $store.Revision + ". Nothing was sent and the dev server was not touched.") }
+    Write-Host ('  load order the content build reads ({0} plugins, collection revision {1}{2}), written over the dev server''s' -f $pluginNames.Count, $store.Revision, $(if ($contentOrder.Added.Count) { ', adding ' + ($contentOrder.Added -join ', ') } else { '' })) -ForegroundColor DarkGray
     # What the move may drop is the repository's word, not the caller's:
     # records\collection-dropped.json, for the revision the record names.
     $dropDoc = Join-Path $repoRoot 'records\collection-dropped.json'
@@ -1529,7 +1572,8 @@ try {
   $swapOut = @(Remote ((SwapVars $Root $Task $stageName $prevName $Wait $hashes $readBackKeys) + $pick + $swapBlock) |
                ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
 } finally { $ErrorActionPreference = $eap }
-$swapped = Show-SwapResult $swapOut "$rootWin\.prev-<stamp>"
+$prevWhere = if ($PutBack -or $outcome -eq 'recover') { "$rootWin\.undone-<stamp>" } else { "$rootWin\.prev-<stamp>" }
+$swapped = Show-SwapResult $swapOut $prevWhere
 }
 
 Write-Host ''

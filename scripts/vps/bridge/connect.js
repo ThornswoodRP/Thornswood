@@ -96,17 +96,36 @@ const path = require('path');
 const crypto = require('crypto');
 const { OP, accept, encode, Reader, Carry } = require('./ws.js');
 
+// Everything that could keep node running: the sockets this opened and its
+// timers. done lets go of all of it and of standard input and sets the code,
+// and node then ends by itself, with no call to its exit function, which can
+// hang on Node 24 (#6036). Whatever comes in after that is not acted on.
+const socks = new Set();
+const timers = new Set();
+let over = false;
+function done(code) {
+  if (over) return;
+  over = true;
+  process.exitCode = code;
+  for (const t of timers) clearTimeout(t);
+  for (const s of socks) s.destroy();
+  process.stdin.destroy();
+  process.removeAllListeners('SIGHUP');
+  process.removeAllListeners('SIGTERM');
+}
 function die(why) {
+  if (over) return;
   process.stderr.write('box bridge: ' + why + '\n');
-  process.exit(1);
+  done(1);
 }
 
 const where = new URL(process.env.THORNSWOOD_BOX_URL || 'wss://thornswood.net/box/');
-if (where.protocol !== 'wss:' && where.protocol !== 'ws:') die('THORNSWOOD_BOX_URL must be a ws:// or wss:// address, not ' + where.protocol);
+if (where.protocol !== 'wss:' && where.protocol !== 'ws:') { die('THORNSWOOD_BOX_URL must be a ws:// or wss:// address, not ' + where.protocol); return; }
 const secure = where.protocol === 'wss:';
 const port = Number(where.port) || (secure ? 443 : 80);
 const proxyText = process.env.HTTPS_PROXY || process.env.https_proxy || '';
 const token = process.env.THORNSWOOD_BOX_TOKEN || tokenFromFile();
+if (over) return;
 function tokenFromFile() {
   const named = process.env.THORNSWOOD_BOX_TOKEN_FILE || '';
   const file = named || path.join(os.homedir(), '.ssh', 'thornswood-box-token');
@@ -178,7 +197,9 @@ function readHead(sock, what) {
 
 function connectTcp(host, p) {
   return new Promise((resolve, reject) => {
+    if (over) { reject(new Error('this has ended')); return; }
     const s = net.connect({ host, port: p });
+    socks.add(s);
     s.once('connect', () => { s.off('error', reject); resolve(s); });
     s.once('error', reject);
   });
@@ -202,6 +223,7 @@ async function open(resume) {
     waitFor('TLS with ' + where.hostname);
     sock = await new Promise((resolve, reject) => {
       const t = tls.connect({ socket: sock, servername: where.hostname, ALPNProtocols: ['http/1.1'] });
+      socks.add(t);
       t.once('secureConnect', () => { t.off('error', reject); resolve(t); });
       t.once('error', reject);
     });
@@ -237,6 +259,8 @@ const slowTimer = setTimeout(() => {
   slow = true;
   process.stderr.write('box bridge: still opening ' + where.href + ' after ' + secs(Date.now() - began) + ', ' + stage() + '\n');
 }, SLOW_MS);
+timers.add(timer);
+timers.add(slowTimer);
 // ssh ends this with SIGHUP when its ConnectTimeout runs out (on Linux; on
 // Windows it cannot be caught, which is what SLOW_MS is for).
 function endedEarly(sig) { die('ssh ended this (' + sig + ') before the WebSocket to ' + where.href + ' opened, ' + stage()); }
@@ -252,6 +276,7 @@ const ACK_BYTES = 128 * 1024;
 const ACK_MS = 1000;
 
 open('new').then((first) => {
+  if (over) { first.sock.destroy(); return; }
   clearTimeout(timer);
   clearTimeout(slowTimer);
   process.off('SIGHUP', endedEarly);
@@ -297,7 +322,7 @@ open('new').then((first) => {
   function take(chunk) {
     heard = Date.now();
     let msgs;
-    try { msgs = reader.push(chunk); } catch (e) { die('the bridge sent a bad frame: ' + e.message); }
+    try { msgs = reader.push(chunk); } catch (e) { die('the bridge sent a bad frame: ' + e.message); return; }
     for (const m of msgs) {
       if (m.op === OP.BINARY) {
         if (carry) carry.took(m.data.length);
@@ -316,8 +341,8 @@ open('new').then((first) => {
         process.stdout.end();
       } else if (m.op === OP.TEXT) {
         const a = carry ? /^ack (\d{1,15})$/.exec(m.data.toString('latin1')) : null;
-        if (!a) die('the bridge sent a text frame that is not an ack');
-        try { carry.ack(Number(a[1])); } catch (e) { die('the bridge sent ' + e.message); }
+        if (!a) { die('the bridge sent a text frame that is not an ack'); return; }
+        try { carry.ack(Number(a[1])); } catch (e) { die('the bridge sent ' + e.message); return; }
         flow();
       }
     }
@@ -348,10 +373,10 @@ open('new').then((first) => {
   // is a line Windows PowerShell cannot read among the far side's CLIXML
   // ("Cannot process the XML from the 'Error' stream", #3214).
   function gone(why) {
-    if (closing) process.exit(0);
+    if (closing) { done(0); return; }
     if (!carry) {
-      if (/broke/.test(why)) die(why);
-      process.exit(0);
+      if (/broke/.test(why)) die(why); else done(0);
+      return;
     }
     if (reopening) return;
     reopening = true;
@@ -363,11 +388,13 @@ open('new').then((first) => {
     passed.length = 0;
     waiting = '';
     const t = setTimeout(() => die('the WebSocket to ' + where.href + ' went after ' + lostAfter + ' (' + why + '), and a new one to carry the session on did not open in ' + OPEN_MS + ' ms, ' + stage()), OPEN_MS);
+    timers.add(t);
     open(name + ' ' + carry.got).then((next) => {
       clearTimeout(t);
+      if (over) { next.sock.destroy(); return; }
       const got = Number(next.headers['x-thornswood-got']);
       let again;
-      try { again = carry.since(got); } catch (e) { die('the bridge took the session on, but from ' + e.message); }
+      try { again = carry.since(got); } catch (e) { die('the bridge took the session on, but from ' + e.message); return; }
       for (const c of again) next.sock.write(encode(OP.BINARY, c, true));
       reopening = false;
       attach(next.sock, next.rest);
@@ -378,11 +405,11 @@ open('new').then((first) => {
   attach(first.sock, first.rest);
 
   if (carry) {
-    setInterval(() => {
+    timers.add(setInterval(() => {
       if (!sock) return;
       if (Date.now() - heard > HEAR_MS) return gone('nothing came from the bridge for ' + secs(Date.now() - heard));
       sendAck();
-    }, ACK_MS);
+    }, ACK_MS));
   }
 
   process.stdin.on('data', (chunk) => {

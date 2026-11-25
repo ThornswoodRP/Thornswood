@@ -1,8 +1,7 @@
 # Fisher
 
-A pole in the pack, then press E at the water. The fishing mod can
-be replaced. Its scripts do not fire, and three poles plus a few
-pieces of water are not a class.
+A fishing pole in the pack, then press E at the water. Thornswood
+handles the catch and the wait.
 
 The poles are remade as our own records when that mod goes: Crude,
 Fine, and Master. A woodwright still makes them. The master pole
@@ -15,19 +14,14 @@ water. A pole under the water's rank is refused. When it breaks, a
 woodwright makes the next one. A new fisher is handed a crude pole,
 the same way a miner is handed a pick.
 
-Salmon staying on eight spots, ten minutes apart, is on purpose.
-Those eight are not the class. The other water that stands today is
-one or three records of each fish in the table under Every record,
-21 water records in all. That is the whole of a new fisher's evening,
-and it is not enough to climb.
+The server has 21 water records. The [fisher's list](../lists/fisher.md)
+shows each catch, its rank and how many records give it. Salmon wait
+ten minutes between catches at each of their eight spots.
 
-The table under Every record is that current book. The same rows are
-in [lists/fisher.md](../lists/fisher.md).
+## Planned waters
 
-## The water this server places
-
-Each of the nine mainland holds gets water on the river or the coast
-it actually has. A hold with no sea does not grow a sea fish.
+The plan adds water on the rivers and coasts of the nine mainland holds.
+A hold with no sea does not grow a sea fish.
 Solstheim does not get these counts. Solstheim stays scarce.
 
 | Per mainland hold | Spots | What they are |
@@ -135,34 +129,10 @@ cast is a press on water this server owns. You cannot dress a live
 slaughterfish. If one is on the hunter list, that is the hunter's.
 The egg nest is yours.
 
-<!-- detail:begin -->
-
-## Every record
-
-Generated from the work tables by `scripts/dev/Write-SystemLists.js`. The same rows are in [fisher](../lists/fisher.md).
-
-| Name | Rank | Records | You receive | In the world |
-| --- | --- | --- | --- | --- |
-| Clam Meat | novice | 3 | Clam Meat | Clam |
-| Salmon Meat | novice | 8 | Salmon Meat | Salmon |
-| Histcarp | advanced | 1 | Histcarp | Histcarp |
-| Horker Meat | advanced | 1 | Horker Meat | Horker meat |
-| River Betty | advanced | 1 | River Betty | River Betty |
-| Slaughterfish Scales | advanced | 1 | Slaughterfish Scales | Slaughterfish Scales |
-| Small Pearl | advanced | 1 | Small Pearl | Pearl Oyster |
-| Cyrodilic Spadetail | expert | 1 | Cyrodilic Spadetail | Cyrodilic Spadetail |
-| Pearl | expert | 1 | Pearl | Pearl Oyster |
-| Silverside Perch | expert | 1 | Silverside Perch | Silverside Perch |
-| Abecean Longfin | master | 1 | Abecean Longfin | Abecean Longfin |
-| Slaughterfish Egg | master | 1 | Slaughterfish Egg | Slaughterfish Egg Nest |
-
-<!-- detail:end -->
-
 ## Where this is
 
-The 21 water records, the waits, the yields and the season's quarter
-on them are in the server. The
-wait is kept on the water, shared by everyone who fishes it and kept
+The server tracks the water, the waits, the yields and the season's effect.
+The wait is kept on the water, shared by everyone who fishes it and kept
 through a restart (#1413), and a fished-out water says how long is left
 in minutes and hours (#1826). Until 5 October this page said the wait
 was kept per person and cleared by a restart, which it was before #1413

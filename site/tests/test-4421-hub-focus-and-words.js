@@ -32,6 +32,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+// The page's own timers (a request's give-up timer, a line's fade) are
+// unref'd, as a page's timers never hold a process open: node ends when
+// the harness is done, not when a page timer it never waits on fires (#6036).
+const pageTimeout = (fn, ms, ...args) => setTimeout(fn, ms, ...args).unref();
 
 const REPO = process.env.TS_REPO || path.join(__dirname, '..', '..');
 const read = (f) => fs.readFileSync(path.join(REPO, f), 'utf8').split('\r\n').join('\n');
@@ -164,7 +168,7 @@ function makeHub() {
     navigator: { clipboard: { writeText: () => Promise.resolve() } },
     confirm: (t) => { said.confirm.push(String(t)); return true; },
     alert: (t) => { said.alert.push(String(t)); },
-    setTimeout, clearTimeout,
+    setTimeout: pageTimeout, clearTimeout,
     fetch: (p, opts) => {
       calls.push([p, opts || {}]);
       if (p === '/api/hello') return new Promise(() => {});
@@ -310,5 +314,5 @@ function press(b) { b.focus(); b.onclick.call(b); }
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();
