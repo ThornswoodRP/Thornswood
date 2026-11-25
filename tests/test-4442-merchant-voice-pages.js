@@ -181,8 +181,10 @@ yes('O1 offices.md gives Raven Rock its Citizen role and channels',
 
 // ------------------------------------------------------------ V: voice
 yes('V0 staff.ts: /silence sets the end to now plus the minutes, and /unsilence takes the silence off',
-    /state\.silenced\[them\.pid\] = \{ until: Date\.now\(\) \+ mins \* 60000/.test(silenceBranch) &&
-    /delete state\.silenced\[them\.pid\]/.test(unsilenceBranch) && /them\.pid === pid/.test(unsilenceBranch));
+    /requireRestraintSave\(pid, function \(doc\)/.test(silenceBranch) &&
+    /doc\.silenced\[them\.pid\] = \{ until: Date\.now\(\) \+ mins \* 60000/.test(silenceBranch) &&
+    /requireRestraintSave\(pid, function \(doc\) \{ delete doc\.silenced\[them\.pid\]/.test(unsilenceBranch) &&
+    /them\.pid === pid/.test(unsilenceBranch));
 const staffPart = page.voice.slice(page.voice.indexOf('## Staff silence'), page.voice.indexOf('## Voice as words'));
 yes('V1 voice.md: ' + SILENCE_DEFAULT + ' minutes unless said, a day at most (' + SILENCE_MAX + ' minutes)',
     SILENCE_MAX === 24 * 60 && new RegExp('minutes if not ' + SILENCE_DEFAULT + ' \\(a day at most\\)').test(staffPart));

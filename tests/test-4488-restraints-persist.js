@@ -29,7 +29,7 @@ function fresh() {
     runtime: '12345', life: 0, targetProfile: TARGET, guid: 'target-connection' };
 }
 function boot(w, prior) {
-  const r = prior ? prior.__testRig : { posts: [], told: [], logs: [], kicked: [], timers: [] };
+  const r = prior ? prior.__testRig : { posts: [], told: [], logs: [], kicked: [], timers: [], ends: [], order: [] };
   class Clock extends Date { static now() { return w.now; } }
   function request(opts, cb) {
     const req = { on() { return req; }, destroy() {}, end(body) {
@@ -68,6 +68,10 @@ function boot(w, prior) {
     __thornswoodToProfile: (pid, text) => {
       if (w.noticeFault && pid === (w.noticeFaultPid || PID)) throw new Error('injected notice transport failure');
       r.told.push({ pid, text });
+    },
+    __thornswoodSayLine: (pid, line) => {
+      r.ends.push({ pid, line }); r.order.push('end ' + pid);
+      if (w.afterEnd) w.afterEnd();
     },
     mp: {
       getServerSettings: () => {
@@ -110,7 +114,7 @@ function boot(w, prior) {
       getUserGuid: id => id === 2 ? w.guid : 'staff-connection',
       getActorRuntimeIdentity: id => { assert.equal(id, B); return w.runtime; },
       getNpcAIState: id => { assert.equal(id, B); return { profileId: w.targetProfile, lifeGeneration: w.life, isHuman: true, isConnected: true }; },
-      kick: id => r.kicked.push(id)
+      kick: id => { r.kicked.push(id); r.order.push('kick ' + id); }
     }
   };
   if (!prior) vm.createContext(box);
@@ -370,10 +374,23 @@ try {
     w.afterMove = () => { w.fault = 'before'; w.noticeFault = true; };
     assert.doesNotThrow(() => one.command('/bring ' + TARGET));
     assert.deepEqual(one.kicked, [2]);
+    assert.equal(one.ends.length, 1);
+    assert.equal(one.ends[0].pid, TARGET);
+    assert.match(one.ends[0].line.end, /staff.*resolve|resolve.*frozen/i);
+    assert.deepEqual(one.order, ['end ' + TARGET, 'kick 2']);
     assert.equal(w.moves.length, 1);
     assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
     assert.equal(one.box.mp.onThornswoodLogin({ userId: 1, profileId: PID, proof: null }), PID);
     assert.ok(one.logs.some(x => /notice|notification/.test(x) && /failed|could not/.test(x)));
+  });
+  test('pending termination rechecks the connection life after sending its end sentence', () => {
+    const w = fresh(), one = boot(w); one.command('/freeze ' + TARGET);
+    w.afterMove = () => { w.fault = 'before'; };
+    w.afterEnd = () => { w.life++; };
+    one.command('/bring ' + TARGET);
+    assert.deepEqual(one.order, ['end ' + TARGET]);
+    assert.deepEqual(one.kicked, []);
+    assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
   });
   for (const noticePid of [PID, TARGET]) test('postcommit notice to ' + noticePid + ' cannot refuse or omit the committed restraint audit', () => {
     const w = fresh(), one = boot(w); w.noticeFault = true; w.noticeFaultPid = noticePid;

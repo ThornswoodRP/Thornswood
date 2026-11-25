@@ -374,6 +374,9 @@ let DEV = '';
     'join pass: refuseLater',
     'seats: endLater',
     'chat commands: clearTheServer',
+    // The identity-fenced uncertain staff move sends its session-end packet
+    // before its kick; test-4488-restraints-persist exercises the real path.
+    'staff: holdPendingMovement',
     'staff: endLater',
     'staff: command'
   ];
