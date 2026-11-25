@@ -82,7 +82,10 @@ yes('S4 the parts still waiting are said once, after the NPC startup',
     waitAt > gm.indexOf('// NPC SERVER STARTUP END') && gm.indexOf('globalThis.__thornswoodReleaseWaiting();', waitAt + 1) < 0);
 yes('S5 the purse service answers release beside compareAndCommit', /return \{prepare,read,commit,compareAndCommit,pendingRecords,ledgerStates,release,/.test(purseSrc));
 const dp = fs.readFileSync(path.join(REPO, 'scripts', 'vps', 'Delete-Person.ps1'), 'utf8');
-yes('S6 Delete-Person counts the merchant ledger as released', /const RELEASED = \/\^\([^)]*\|merchant-ledger\)\\\.json\$\/i;/.test(dp));
+const released = /const RELEASED = \/([^\n]+)\/i;/.exec(dp);
+const releasedFile = released && new RegExp(released[1], 'i');
+yes('S6 Delete-Person counts the merchant ledger as released',
+    !!releasedFile && releasedFile.test('merchant-ledger.json') && !releasedFile.test('merchant-ledger-copy.json'));
 // S7, that the deletion runbook says the ledger is let go, left with
 // WEBSITE-OPERATIONS.md for the private ops repo (#3693), whose
 // tests/test-ops-docs.js holds it.
@@ -332,7 +335,7 @@ try {
   seed(path.join(dir2, 'private'));
   fs.writeFileSync(path.join(dir2, 'server-settings.json'), JSON.stringify({ privDir: 'private', dataDir: 'data' }));
   fs.writeFileSync(path.join(dir2, 'private', 'deleted-characters.json'),
-    JSON.stringify({ profiles: [P1], actors: [A1, A2], done: { saves: 1, farms: 1, property: 1, embassy: 1, dungeon: 1, cargo: 1, stalls: 1, carts: 1, books: 1 } }));
+    JSON.stringify({ profiles: [P1], actors: [A1, A2], done: { saves: 1, farms: 1, property: 1, embassy: 1, dungeon: 1, cargo: 1, stalls: 1, carts: 1, books: 1, restraints: 1 } }));
   const was = process.cwd();
   process.chdir(dir2);
   let f1, f2;
