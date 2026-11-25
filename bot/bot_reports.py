@@ -163,6 +163,16 @@ async def send_copy(path, state, source, keys, text, client):
                     'staff copies: no staff channel is available; nothing was sent. '
                     'Repair the staff channel configuration before the next pass.')
         return False
+    member = getattr(getattr(ch, 'guild', None), 'me', None)
+    if member is not None:
+        permissions = ch.permissions_for(member)
+        can_send = (permissions.send_messages_in_threads if isinstance(ch, discord.Thread)
+                    else permissions.send_messages)
+        if not (permissions.view_channel and permissions.read_message_history and can_send):
+            copy_notice((source, 'channel-permissions'),
+                        'staff copies: staff channel permissions prevent delivery or reconciliation; '
+                        'nothing was sent. Restore channel access before the next pass.')
+            return False
     cursor = 0
     try:
         async for msg in ch.history(limit=1):
@@ -180,21 +190,11 @@ async def send_copy(path, state, source, keys, text, client):
     try:
         msg = await report_say(text[:1900 - len(marker)] + marker, channel=ch, strict=True)
     except Exception as e:
-        # A returned 4xx rejection (except Request Timeout) proves no post.
-        # Unknown network/5xx outcomes retain intent for reconciliation.
-        if isinstance(e, discord.HTTPException) and 400 <= e.status < 500 and e.status != 408:
-            for key in keys:
-                del state[source][key]
-            if not state[source]:
-                del state[source]
-            _state_write(path, state)
-            copy_notice((source, 'rejected', e.status, e.code),
-                        'staff copies: Discord refused delivery (%s, code %s); nothing was '
-                        'acknowledged. Repair the refusal; a later pass may try again.' % (e.status, e.code))
-        else:
-            copy_notice((source, attempt, 'send'),
-                        'staff copies: delivery %s is uncertain (%s); pending is saved, '
-                        'and no duplicate will be sent without a confirmed receipt.' % (attempt, type(e).__name__))
+        # discord.py retries the POST internally after some resets and 5xx
+        # responses. Even a final 4xx says nothing about an earlier attempt.
+        copy_notice((source, attempt, 'send'),
+                    'staff copies: delivery %s is uncertain (%s); pending is saved '
+                    'for reconciliation and will not be resent.' % (attempt, type(e).__name__))
         return False
     if (type(getattr(msg, 'id', None)) is not int or msg.id <= 0
             or getattr(getattr(msg, 'channel', None), 'id', None) != ch.id):

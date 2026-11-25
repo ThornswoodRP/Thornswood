@@ -255,7 +255,7 @@ try:
     records = [json.dumps(dict(json.loads(row(d, who=name, why=why, n=i)), who=pid))
                for i, (d, name, pid, why, _) in enumerate(cases)]
     ticks = drive([lambda: put(DEV, records)])
-    yes('M8 the staff watcher says all five actions with their actor and details',
+    yes('M8 the staff watcher says the actions with their actor and details',
         len(ticks) == 2 and ticks[0] == []
         and [re.sub(r'\n-# Copy reference: [0-9a-f]{32}$', '', text) for text in ticks[1]]
             == ['**Staff on the dev server:** Aela (profile 1001) ' + words

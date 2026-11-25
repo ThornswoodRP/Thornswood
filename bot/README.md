@@ -416,7 +416,9 @@ account or report IDs. A failed receipt save or an uncertain network answer
 is recovered by finding that exact bot-owned reference in its original
 channel. Empty, inaccessible or incomplete history never permits a blind
 resend. An unresolved attempt holds newer copies from that source and names
-the reference in the log for review. Pending is not a confirmed delivery.
+the reference in the log for review. A final Discord refusal can follow a
+retry of an accepted send, so it leaves the attempt pending. Missing channel
+access detected before a send leaves the copy eligible for a later pass.
 Unreadable indexes expose counts only, and unreadable or incomplete source
 files cannot remove saved private copies. The local regression is
 `bot\tests\test-4247-staff-copy-receipts.py`.

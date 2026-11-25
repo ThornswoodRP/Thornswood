@@ -123,23 +123,64 @@ class Copies(unittest.TestCase):
                 r.run()
                 self.assertEqual(len(r.a.attempts), 1)
 
-    def test_known_refusal_and_absent_channel_retry_later(self):
+    def test_missing_permissions_and_absent_channel_retry_later(self):
         for r in self.each():
             with self.subTest(r.mode):
                 r.put([r.row('refused')])
-                r.a.mode = 'refused'
+                r.a.guild = NS(me=NS(id=50))
+                permissions = NS(view_channel=True, send_messages=False, read_message_history=True)
+                r.a.permissions_for = lambda _: permissions
                 r.run()
-                self.assertEqual(len(r.a.attempts), 1)
+                self.assertFalse(r.a.attempts)
                 self.assertFalse(r.records())
                 self.assertTrue(r.logs)
-                r.a.mode = 'ok'
+                permissions.send_messages = True
+                permissions.read_message_history = False
+                r.run()
+                self.assertFalse(r.a.attempts)
+                self.assertFalse(r.records())
+                permissions.read_message_history = True
                 r.current = None
                 r.run()
                 self.assertFalse(r.records())
                 r.current = r.a
                 r.run()
-                self.assertEqual(len(r.a.attempts), 2)
+                self.assertEqual(len(r.a.attempts), 1)
                 self.assertEqual(len(r.a.messages), 1)
+
+    def test_final_403_cannot_rule_out_acceptance_on_a_client_retry(self):
+        for r in self.each():
+            with self.subTest(r.mode):
+                r.put([r.row('accepted-before-403')])
+                original_send = r.a.send
+
+                async def accepted_then_forbidden(text, **options):
+                    await original_send(text, **options)
+                    raise discord.Forbidden(NS(status=403, reason='Forbidden'),
+                                            {'code': 50013, 'message': 'Missing Permissions'})
+
+                r.a.send = accepted_then_forbidden
+                r.run()
+                self.assertEqual(len(r.a.messages), 1)
+                self.assertTrue(r.records())
+                self.assertTrue(all('attempt' in record for record in r.records().values()))
+                r.a.send = original_send
+                r.run()
+                self.assertEqual(len(r.a.attempts), 1)
+                self.assertTrue(all(record['message'] in r.a.messages for record in r.records().values()))
+
+    def test_final_403_without_a_found_message_stays_pending(self):
+        for r in self.each():
+            with self.subTest(r.mode):
+                r.put([r.row('403-no-copy')])
+                r.a.mode = 'refused'
+                r.run()
+                self.assertTrue(r.records())
+                self.assertTrue(all('attempt' in record for record in r.records().values()))
+                r.a.mode = 'ok'
+                r.run()
+                self.assertEqual(len(r.a.attempts), 1)
+                self.assertFalse(r.a.messages)
 
     def test_accepted_then_save_refused_reconciles_after_restart(self):
         for r in self.each():
