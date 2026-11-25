@@ -389,7 +389,7 @@ game\ui\thornswood-board.js 2
 game\ui\thornswood-box.js 1
 game\ui\thornswood-bridge.js 19
 game\ui\thornswood-chat.js 17
-game\ui\thornswood-emotes.js 4
+game\ui\thornswood-emotes.js 3
 game\ui\thornswood-furniture.js 2
 game\ui\thornswood-help.js 2
 game\ui\thornswood-journal.js 5
