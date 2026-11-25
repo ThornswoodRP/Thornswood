@@ -120,6 +120,16 @@ function rig(random, seed) {
 
 if (block) {
   const api = rig();
+  const canonical = require('../../tests/gamemode-tables.js').table('ITEM_NAMES');
+  const ordinary = api.goodsFor(4);
+  const comparable = ordinary.filter(function (row) { return canonical[row.name.toLowerCase()]; });
+  yes('the ordinary loot rows agree with canonical item names', comparable.length > 20 &&
+    comparable.every(function (row) { return row.desc === canonical[row.name.toLowerCase()][1]; }));
+  ['petty soul gem', 'orichalcum ingot'].forEach(function (name) {
+    const row = ordinary.find(function (it) { return it.name === name; });
+    yes(name + ' is the ordinary recipe-backed record, not its quest homonym',
+      !!row && !!canonical[name] && row.desc === canonical[name][1]);
+  });
   yes('Bleak Falls Temple is tier 1', api.tierOf('371de:Skyrim.esm') === 1);
   yes('the lookup ignores case', api.tierOf('371DE:Skyrim.esm') === 1);
   yes('Temple of Miraak is tier 4', api.tierOf('142f0:Dragonborn.esm') === 4);
