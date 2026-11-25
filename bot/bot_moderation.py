@@ -166,10 +166,18 @@ def moderation_text(where, row):
         why = clean(row.get('why'), 600) or 'a big move of gold.'
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
+    if row['did'] == 'uploaddelete':
+        subject = clean(row.get('whoName'), 240) or 'an unnamed upload'
+        if row.get('phase') == 'metadata':
+            did = 'removed the upload listing for %s' % subject
+        else:
+            did = _MOD_DID['uploaddelete'] % subject
+        return ('**Staff on the site:** %s %s.'
+                % (person(row.get('byName'), None), did))[:1900]
+
     did = _MOD_DID[row['did']]
     if '%s' in did:
-        subject = (clean(row.get('whoName'), 240) or 'an unnamed upload') if row['did'] == 'uploaddelete' else person(row.get('whoName'), row.get('who'))
-        did = did % subject
+        did = did % person(row.get('whoName'), row.get('who'))
     try:
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):

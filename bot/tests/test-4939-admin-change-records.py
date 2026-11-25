@@ -42,5 +42,11 @@ for did, words in [('docsave', 'saved page'),
     bounded = bot.moderation_text('site', {'did': did, 'byName': 'a' * 5000, 'whoName': 'b' * 5000})
     yes(did + ' stays within the existing message limit', bounded is not None and len(bounded) <= 1900)
 
+actor_id = '111111111111111111'
+text = bot.moderation_text('site', {'did': 'uploaddelete', 'phase': 'metadata',
+    'byName': 'Current Aela', 'byId': actor_id, 'whoName': picture})
+yes('upload listing cleanup has its own escaped action and does not print the private actor ID',
+    text is not None and 'Current Aela removed the upload listing for ' + picture in text and actor_id not in text)
+
 print('%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

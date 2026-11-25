@@ -62,6 +62,7 @@ async function act(method, route, body, id = first, headers = {}) {
 function recorded(before, did, subject, actor) {
   const rows = audit().slice(before);
   return rows.length === 1 && rows[0].did === did && rows[0].whoName === subject && rows[0].byName === actor
+    && rows[0].byId === (actor === 'Current Aela' ? first : second)
     && rows[0].server === 'site' && Number.isFinite(Date.parse(rows[0].at));
 }
 (async () => {
@@ -81,6 +82,7 @@ function recorded(before, did, subject, actor) {
     let result = await act('PUT', '/api/doc/help', next, first, { 'x-thornswood-doc-was': version(old), 'x-by-name': 'Forged' });
     yes('page save actually commits with its existing version fence', result.status === 200 && fs.readFileSync(path.join(dir, 'data/help.md'), 'utf8') === next);
     yes('page save records current actor and page key without page contents', recorded(before, 'docsave', 'help', 'Current Aela') && !JSON.stringify(audit()).includes('private page body'));
+    yes('the audit attributes the matching verified Discord account', audit().at(-1).byId === first);
     before = audit().length; result = await act('PUT', '/api/doc/help', 'Stale overwrite', second, { 'x-thornswood-doc-was': version(old) });
     yes('stale page overwrite has no success audit', result.status === 409 && audit().length === before && fs.readFileSync(path.join(dir, 'data/help.md'), 'utf8') === next);
     await act('PUT', '/api/doc/help', next, first, { 'x-thornswood-doc-was': version(next) });
@@ -92,7 +94,7 @@ function recorded(before, did, subject, actor) {
     const inbox = 'data/for-bot/inbox.json', id = 'opaque-report-fixture';
     write(inbox, [{ id, at: Date.now(), state: 'new', text: 'Private report body' }, { id: 'unrelated', at: Date.now(), state: 'new' }]);
     for (const [actName, state] of [['dismiss', 'not doing this'], ['reopen', 'new'], ['delete', null]]) {
-      before = audit().length; result = await act('PUT', '/api/inbox', { id, act: actName, by: 'Forged actor', title: 'Forged subject' }, second);
+      before = audit().length; result = await act('PUT', '/api/inbox', { id, act: actName, by: 'Forged actor', byId: first, title: 'Forged subject' }, second);
       const saved = read(inbox), row = saved.find(item => item.id === id);
       yes('inbox ' + actName + ' commits only requested row', result.status === 200 && (state === null ? !row : row && row.state === state) && saved.some(item => item.id === 'unrelated'));
       yes('inbox ' + actName + ' records actor and opaque subject only', recorded(before, 'inbox' + actName, id, 'Current Brynjolf') && !JSON.stringify(audit()).includes('Private report body'));
@@ -117,8 +119,16 @@ function recorded(before, did, subject, actor) {
     before = audit().length; result = await act('DELETE', '/api/upload/' + name, undefined, second);
     yes('later metadata cleanup records its actual second actor without restoring file', result.status === 200 && !read('uploads/uploads.json')[name]
       && !fs.existsSync(file) && recorded(before, 'uploaddelete', name, 'Current Brynjolf'));
+    yes('file deletion and a metadata-only retry name their distinct committed steps',
+      audit().at(-2).phase === 'file' && audit().at(-1).phase === 'metadata');
     before = audit().length; await act('DELETE', '/api/upload/' + name, undefined, second);
     yes('completed cleanup retry remains quiet', audit().length === before);
+    write('uploads/uploads.json', { [name]: { at: Date.now() } });
+    before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'uploads.json');
+    result = await act('DELETE', '/api/upload/' + name, undefined, second);
+    yes('refused metadata-only change keeps its note and adds no success',
+      result.status === 500 && !!read('uploads/uploads.json')[name] && audit().length === before);
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
     const stuck = path.join(dir, 'uploads/stuck.log'); fs.mkdirSync(stuck); fs.writeFileSync(path.join(stuck, 'keep'), 'owned'); before = audit().length;
     result = await act('DELETE', '/api/upload/stuck.log', undefined);
     yes('failed actual file deletion has no success audit', result.status === 500 && fs.existsSync(stuck) && audit().length === before);

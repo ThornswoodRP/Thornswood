@@ -1573,7 +1573,8 @@ async function handle(req, res) {
     if (!gone.ok) return sendJson(res, 500, { ok: false, name: rm[1], fileKept: true, code: gone.code,
                                               error: 'The file could not be deleted (' + gone.code + '). It is still on the site.' });
     // The file is gone even if the later metadata save is refused.
-    if (existed) modLog({ did: 'uploaddelete', byName: w.name, whoName: rm[1] });
+    if (existed) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'file' });
     const meta = jsonFile(UPMETA, {});
     const hadNote = Object.prototype.hasOwnProperty.call(meta, rm[1]);
     delete meta[rm[1]];
@@ -1583,7 +1584,8 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: rm[1], fileDeleted: true,
         error: 'The file was deleted, but the site could not take it off the uploads list. Try again in a minute.' });
     }
-    if (!existed && hadNote) modLog({ did: 'uploaddelete', byName: w.name, whoName: rm[1] });
+    if (!existed && hadNote) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'metadata' });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -3406,7 +3408,7 @@ async function handle(req, res) {
           message: 'Somebody saved this page after you opened it, so yours was not saved.' });
       }
       if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
-      if (text !== now) modLog({ did: 'docsave', byName: w.name, whoName: md[1] });
+      if (text !== now) modLog({ did: 'docsave', byId: w.id, byName: w.name || w.id, whoName: md[1] });
       return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
@@ -3590,7 +3592,7 @@ async function handle(req, res) {
       else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
       if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
       if (act === 'delete' || priorState !== list[at].state) {
-        modLog({ did: 'inbox' + act, byName: w.name, whoName: id });
+        modLog({ did: 'inbox' + act, byId: w.id, byName: w.name || w.id, whoName: id });
       }
       return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }

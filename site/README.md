@@ -20,11 +20,12 @@ hours still starts the game (`GraceHours` in `launcher\app\Door.cs`) and nothing
 else does.
 
 Admin API changes to a written page, an inbox row or an uploaded file record
-the verified actor and the page key, report ID or filename in the existing
-moderation log (#4939). Page and report contents are not copied into that
-log. Refused writes and unchanged retries add no success record; a committed
-file deletion is recorded even when its later metadata cleanup fails. Log
-retention and write-failure reporting keep their existing rules.
+the verified actor's name and account ID alongside the page key, report ID
+or filename in the moderation log (#4939). Page and report contents stay in
+their original stores. The log records a committed file deletion even if a
+later metadata save fails. A successful retry that only removes the file's
+listing has its own action. A refused write or unchanged retry adds no
+success record.
 
 | Route | Method | Asked by |
 | --- | --- | --- |
