@@ -93,6 +93,19 @@ try {
     const drank = w.eat(maker, FULL);
     yes('only drinking the resulting water restores thirst, with no automatic empty refund',
       drank.sent && Math.abs(needs(maker).drink - thirst - 20) < 0.2 && w.count(maker, FULL) === 0 && w.count(maker, EMPTY) === 0);
+    // A novice Cook still has ordinary meal work. These ingredients may be
+    // supplied by novice miners, gatherers and hunters, as the real table says.
+    const mealDesc = 'f4317:Skyrim.esm', meal = recipes[mealDesc], mealRow = tables.table('RECIPES_BY_ID')[mealDesc];
+    assert(meal && mealRow && !mealRow.nobody && mealRow.rank === 'novice' && meal.canBeMadeOnDayOne);
+    assert(meal.inputItems.every(x => x.suppliedAt === 'novice'));
+    meal.inputItems.forEach(x => w.give(maker, w.idOf(x.item), x.count));
+    const workBefore = w.box().__thornswoodCharacter.stateOf(maker).work.hearthcook || 0;
+    w.activate(pot, maker);
+    const mealMade = w.craft(maker, pot, { recipe: w.idOf(mealDesc), output: w.idOf(meal.out), count: meal.makes,
+      inputs: meal.inputItems.map(x => ({ baseId: w.idOf(x.item), count: x.count })) });
+    yes('a novice still cooks an existing meal and advances through normal meal work', mealMade.made &&
+      w.box().__thornswoodCharacter.stateOf(maker).work.hearthcook > workBefore);
+    w.activate(pot, maker);
     w.activate(cow, chef);
     w.activate(pot, chef);
     const chefMade = w.craft(chef, pot, craft);
