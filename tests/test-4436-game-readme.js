@@ -144,4 +144,4 @@ yes('the README says the content plugin is built on the box and laid by Get-Cont
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
