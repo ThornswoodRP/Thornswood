@@ -233,28 +233,27 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # line stays in the shell's history file, and this is the one place it is
 # read from.
 $hookName = if ($Dev) { 'dev' } else { 'news' }
-$Webhook = ''
-$hookErr = $null
 try {
   $hookLines = @(& (Join-Path $Here 'Discord-Hook.ps1') -Name $hookName 2>&1)
-  if ($LASTEXITCODE -ne 0) {
-    $hookErr = ($hookLines | ForEach-Object { "$_" }) -join "`n"
-  } else {
-    $Webhook = [string]($hookLines | Where-Object { $_ -is [string] -or $_ -is [System.Management.Automation.PSObject] } | Select-Object -First 1)
-    if ($Webhook) { $Webhook = $Webhook.Trim() }
-  }
+  # A script can return successfully without setting a shell exit code.
+  $readHook = $?
+  if ($hookLines | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) { $readHook = $false }
 } catch {
-  $hookErr = $_.Exception.Message
+  # Do not print an error whose text may include the webhook address.
+  $readHook = $false
 }
-if ($hookErr) {
+if (-not $readHook) {
   if ($Dev) {
     Write-Host '  could not reach the server for the dev webhook, #staff-news was not told' -ForegroundColor Red
   } else {
     Write-Host '  could not reach the server for the Discord webhook, skipping' -ForegroundColor Red
   }
   $global:ThornswoodDiscordResult = 'failed'
+  if ($Record) { exit 1 }
   return
 }
+$Webhook = [string]($hookLines | Where-Object { $_ -is [string] } | Select-Object -First 1)
+if ($Webhook) { $Webhook = $Webhook.Trim() }
 if (-not $Webhook) {
   if (-not $Quiet) {
     if ($Dev) {
@@ -547,6 +546,9 @@ try {
   # Said in colour and said again by Ship at the end. A release whose
   # announcement failed is a release nobody knows about, and a grey line in
   # the middle of a long log is a line nobody reads.
-  Write-Host "  COULD NOT POST TO DISCORD: $_" -ForegroundColor Red
+  $reason = if ($_.Exception -is [Microsoft.PowerShell.Commands.HttpResponseException]) {
+    'HTTP ' + [int]$_.Exception.Response.StatusCode
+  } else { $_.Exception.GetType().Name }
+  Write-Host "  COULD NOT POST TO DISCORD: $reason" -ForegroundColor Red
   $global:ThornswoodDiscordResult = 'failed'
 }
