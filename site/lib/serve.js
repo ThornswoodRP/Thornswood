@@ -1781,6 +1781,8 @@ async function handle(req, res) {
 
     const gallery = jsonFile(GALLERY, []);
     const already = gallery.find((g) => String(g.name) === name);
+    const changed = !already || already.url !== '/shot/' + name ||
+      (by && already.by !== by) || (srcset && already.srcset !== srcset);
     if (already) {
       already.url = '/shot/' + name;
       if (by) already.by = by;
@@ -1802,6 +1804,9 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: name, approved: false,
         error: 'The site could not put that on the gallery, so it is still waiting. Try again in a minute.' });
     }
+    // The public entry is committed even if queue cleanup below is refused.
+    if (changed) modLog({ did: 'galleryapprove', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: name, phase: already ? 'updated' : 'approved' });
 
     const left = pending.filter((x) => String(x.name) !== name);
     if (left.length !== pending.length && !putJson(GPENDING, left)) {
@@ -1853,6 +1858,13 @@ async function handle(req, res) {
        that no longer has the name is left alone. The file is not touched
        until all three are saved, so a gallery that would not save is never
        left showing a picture whose file is gone. */
+    let recorded = false;
+    const recordRemoval = (phase) => {
+      if (recorded) return;
+      recorded = true;
+      modLog({ did: 'galleryremove', byId: gs.discordId, byName: gs.name || gs.discordId,
+        whoName: name, phase: phase });
+    };
     const notSaved = (file) => {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'remove-write-failed', file: file }));
       return sendJson(res, 500, { ok: false, name: name,
@@ -1862,18 +1874,20 @@ async function handle(req, res) {
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
+    if (removedGal) recordRemoval('approved');
 
     const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
     if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
+    if (removedPend) recordRemoval('pending');
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
-    const reports = jsonFile(GREPORTS, []);
+    const reports = jsonFile(GREPORTS, fs.existsSync(GREPORTS) ? null : []);
+    if (!Array.isArray(reports)) return notSaved('the reports');
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
-    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
 
     /*
       The file (#2352, option C). Deleted, unless the submission had an open
@@ -1899,33 +1913,51 @@ async function handle(req, res) {
       fileDeleted: false
     };
     const file = path.join(UP, name);
-    if (file.startsWith(UP + path.sep) && fs.existsSync(file)) {
-      const now = Date.now();
-      const hold = itsReports.length > 0;
-      const gone = hold ? { ok: false, code: '' } : deleteUpload(name);
-      const meta = jsonFile(UPMETA, {});
+    const hasFile = file.startsWith(UP + path.sep) && fs.existsSync(file);
+    const now = Date.now();
+    const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
+    const noteNotSaved = () => {
+      retentionSay('gallery', { event: 'note-write-failed', file: name });
+      answer.ok = false;
+      answer.fileKept = !answer.fileDeleted;
+      answer.error = 'Taken off the gallery, but the site could not record that, so ' +
+                     (answer.fileDeleted ? 'its note is still listed.' : 'its file is still on the site. Try again.');
+      return sendJson(res, 500, answer);
+    };
+    if (!savedMeta || typeof savedMeta !== 'object' || Array.isArray(savedMeta)) return noteNotSaved();
+    const meta = new Map(Object.entries(savedMeta));
+    const oldNote = meta.get(name) || {};
+    const wasRemoved = Number(oldNote.removed) > 0;
+    let heldUntil = Number(oldNote.heldUntil) || 0;
+    if (hasFile && itsReports.length && !heldUntil) {
+      heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
+      meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now,
+        heldUntil: heldUntil, heldReports: itsReports.slice(-20) });
+      // The only copy of these reports stays in the open list until their
+      // retention receipt is saved beside the file.
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      recordRemoval('hidden');
+    }
+    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
+    if (kept.length !== reports.length) recordRemoval('reports');
+
+    if (hasFile && heldUntil > now) {
+      answer.heldForReport = true;
+      answer.heldUntil = heldUntil;
+      return sendJson(res, 200, answer);
+    }
+    if (hasFile) {
+      const gone = deleteUpload(name);
       if (gone.ok) {
-        delete meta[name];
+        meta.delete(name);
         answer.fileDeleted = true;
+        recordRemoval('file');
       } else {
-        meta[name] = Object.assign({}, meta[name] || {}, { removed: now });
-        if (hold) {
-          meta[name].heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
-          meta[name].heldReports = itsReports.slice(-20);
-          answer.heldForReport = true;
-          answer.heldUntil = meta[name].heldUntil;
-        }
+        meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now });
       }
-      if (!putJson(UPMETA, meta)) {
-        // Unmarked, a kept file would still be served at /up/<name>.
-        retentionSay('gallery', { event: 'note-write-failed', file: name });
-        answer.ok = false;
-        answer.fileKept = !gone.ok;
-        answer.error = 'Taken off the gallery, but the site could not record that, so ' +
-                       (gone.ok ? 'its note is still listed.' : 'its file can still be opened by staff. Try again.');
-        return sendJson(res, 500, answer);
-      }
-      if (!hold && !gone.ok) {
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      if (!wasRemoved) recordRemoval('hidden');
+      if (!gone.ok) {
         answer.ok = false;
         answer.fileKept = true;
         answer.code = gone.code;
@@ -2011,6 +2043,7 @@ async function handle(req, res) {
     const id = String(o.id || '');
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
+    const dismissed = reports.find((r) => String(r.id) === id);
     const left = reports.filter((r) => String(r.id) !== id);
     // Said, not answered ok (#4379): the report would come back on the next
     // load of the list.
@@ -2018,6 +2051,8 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, id: id, error: 'The site could not save that, so the report is still listed. Try again in a minute.' });
     }
+    if (dismissed) modLog({ did: 'gallerydismiss', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: String(dismissed.name || '') });
     return sendJson(res, 200, { ok: true, id: id, removed: reports.length - left.length });
   }
 
