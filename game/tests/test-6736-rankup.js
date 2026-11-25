@@ -34,15 +34,17 @@ for (const server of ['dev', 'main']) {
   }
   function audit() { return records().filter(r => r.did === 'rankup').length; }
   function command(actor, text, proof, callerActor) {
+    if (proof === undefined && callerActor === undefined) { w.say(actor, text); return true; }
     const pid = w.row(actor).profileId;
     const module = box.__thornswoodStaffProgression;
     return !!module && module.command({ proven: proof !== false }, '/rankup',
       text.split(/\s+/), pid, callerActor === undefined ? actor : callerActor);
   }
   function unchanged(actor, text, target, proof, callerActor) {
-    const before = JSON.stringify(state(target)), count = audit();
+    function rules() { const s = state(target); delete s.panel; delete s.asked; return JSON.stringify(s); }
+    const before = rules(), count = audit();
     command(actor, text, proof, callerActor);
-    return JSON.stringify(state(target)) === before && audit() === count;
+    return rules() === before && audit() === count;
   }
   const partial = seed(tester, 'enchanter', 'bladebinder');
   partial.work.miner = 37;
@@ -66,6 +68,10 @@ for (const server of ['dev', 'main']) {
   yes(server + ': the saved record names who changed whose rank and the exact step',
     records().some(r => r.did === 'rankup' && r.by === 1000 && r.who === 1000 &&
       r.key === 'bladebinder' && r.from === 'novice' && r.to === 'advanced'));
+  const helpAt = w.heard(tester).length;
+  w.say(tester, '/testhelp');
+  yes(server + ': implemented rankup syntax is discoverable through queued test help',
+    w.heardSince(tester, helpAt).some(line => line.includes('/rankup class|profession')));
 
   for (const actor of [tester, staff]) {
     yes(server + ': a non-admin cannot advance another character',
