@@ -27,8 +27,8 @@
 
 .PARAMETER Check
   Writes nothing. Exits 1 when the index is missing or is not what this would
-  write, and says which rows differ. The build check runs this through
-  tests\test-script-index.ps1 on every pull request.
+  write, and says which rows differ. The pull request gate runs this through
+  tests\test-script-index.ps1 when the change reaches the index check.
 
 .PARAMETER Scripts
   The folder whose scripts are listed, every area under it but oneoff:
@@ -204,8 +204,8 @@ function Get-IndexText([string]$dir) {
     $out.Add('')
     $out.Add('    .\scripts\dev\New-ScriptIndex.ps1')
     $out.Add('')
-    $out.Add('and commit this file with it. tests\test-script-index.ps1, which the nightly')
-    $out.Add('checks run, fails when this file is not what that would write.')
+    $out.Add('and commit this file with it. tests\test-script-index.ps1 runs in the pull')
+    $out.Add('request gate and fails when this file is not what that would write.')
     $out.Add('')
     $out.Add('A script''s options are not listed here. Get-Help reads them off its param')
     $out.Add('block, so they are always all of them:')
