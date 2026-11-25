@@ -70,6 +70,7 @@ namespace Thornswood
 
         static int Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--audio-shutdown") return ShutdownCases.Run();
             if (args.Length > 0 && args[0] == "--hrtf") return HrtfTool.Run(args);
             string clockArg = "real", wireArg = "ws";
             double jitter = -1;
