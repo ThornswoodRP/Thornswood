@@ -1,6 +1,8 @@
 <#
-  LoadOrder.ps1
+.SYNOPSIS
+  The load order as the game counts it, and how to put a plugin list into the server's order.
 
+.DESCRIPTION
   The load order as the game counts it, and how to put a plugin list into the
   server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1,
   Check-Manifest.ps1 and Find-MissingMasters.ps1 in scripts\mods, and by Check-ShipReady.ps1,

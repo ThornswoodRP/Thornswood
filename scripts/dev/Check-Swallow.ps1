@@ -98,7 +98,8 @@
 
   Read only. Exits 1 when any file rose, when a file fell and its line has not
   been lowered, or when the baseline cannot be read, and 0 otherwise.
-  build.yml runs it on every pull request.
+  Every pull request runs it in build-pr.yml's "Tree checks", and every
+  push to main in build.yml's, which build-pr.yml is generated from.
 #>
 [CmdletBinding()]
 param(

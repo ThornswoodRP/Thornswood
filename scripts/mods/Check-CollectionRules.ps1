@@ -1,7 +1,9 @@
 <#
-  Check-CollectionRules.ps1
+.SYNOPSIS
+  Whether the plugin rules the Nexus collection carries hold a clean install to a plugin list's order.
 
-      .\scripts\mods\Check-CollectionRules.ps1
+.DESCRIPTION
+  .\scripts\mods\Check-CollectionRules.ps1
       .\scripts\mods\Check-CollectionRules.ps1 -List "$env:LOCALAPPDATA\Skyrim Special Edition\plugins.txt"
       .\scripts\mods\Check-CollectionRules.ps1 -Collection <collection.json or its folder> -List <plugins.txt> -Data <Data folder>
       .\scripts\mods\Check-CollectionRules.ps1 -Root <a Thornswood install>

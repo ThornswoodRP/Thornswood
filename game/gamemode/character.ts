@@ -900,6 +900,10 @@
       '(function(){',
       '  try {',
       '    var v = ctx.value;',
+      '    try {',
+      '      var front = globalThis.Thornswood;',
+      '      if (front && typeof front.localCritterClass === "function") front.localCritterClass(v && typeof v === "object" ? v["class"] : null);',
+      '    } catch (critterError) { ctx.sp.printConsole("Torchbug class delivery failed: " + critterError); }',
       '    if (!v || typeof v !== "object") { return; }',
       // No panel on the value means the write moved a counter and nothing
       // the panel draws, so the browser is not touched at all. See drawn().

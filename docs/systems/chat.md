@@ -40,8 +40,10 @@ enough, you are told.
 ## Dice
 
 `/roll` or `/r`, and the dice. The number is the sides: `/roll 20` is
-one twenty sided die, and `/roll 6x3` is three six sided ones. A
-leading `d` is fine. `/roll` alone is a twenty. Up to 1000 sides and
+one twenty sided die, and `/roll 6x3` is three six sided ones.
+Count-d-sides notation works too: `/roll 1d20` is one twenty sided die,
+and `/roll 3d6` is three six sided ones. A leading `d` is fine.
+`/roll` alone is a twenty. Up to 1000 sides and
 100 dice. The server rolls it, so nobody can make a number up, and
 the result goes to the same people `/ooc` reaches.
 
@@ -94,10 +96,10 @@ It is not this text.
 
 ## Where this is
 
-`/ooc` is local, 4000 units, same cell, in the server. `/roll` is
+`/ooc` is local, 4000 units, same cell, in the voice service. `/roll` is
 rolled in the server and goes to the same people. `/me`, `/do`,
-`/w`, and `/s` are local too, whether or not the plain-line switch is
-on. They are not sent on to the game server.
+`/w`, `/s`, and `/ooc` are local, whether or not the plain-line switch is
+on. They are kept by the voice service and not sent on to the game server.
 
 Plain speech in the box is local on both servers: the same cell,
 4000 units, the same reach as the line above the head.

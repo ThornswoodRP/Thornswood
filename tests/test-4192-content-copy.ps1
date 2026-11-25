@@ -16,10 +16,9 @@
   had long outgrown.
 
   What it runs, each in a child shell against folders of its own:
-    1. a good install: the plugin is copied, each list gets it in front of
-       the plugin -Before names (or at the end where that plugin is missing,
-       and says so), and what it says it installed is the description in the
-       plugin's own header;
+    1. a good install: only the requested Data gets the plugin, both
+       installs keep their lists unchanged, and the content step reports
+       the installed plugin's own header description;
     2. a Data folder that is not there: it stops, exit 1, and no list changes;
     3. on Windows, the plugin in Data held open by another program, the case
        the issue names: it stops, exit 1, says to close the program, and
@@ -91,20 +90,22 @@ $newEsp = New-Plugin $NewText
 $oldEsp = New-Plugin $OldText
 
 # An install: Data with an older plugin in it, and the four plugin lists.
-# Default has the anchor; LocalAppData does not.
+# Both profiles put Content before Last, as the server order does.
 function New-Install([string]$root) {
     $data = Join-Path $root 'Game\Data'
     New-Item -ItemType Directory -Force -Path $data | Out-Null
     [IO.File]::WriteAllBytes((Join-Path $data 'Thornswood-Content.esp'), $oldEsp)
-    Put (Join-Path $root 'Profile\Default\plugins.txt') "*First.esp`r`n*Anchor.esp`r`n*Last.esp`r`n"
-    Put (Join-Path $root 'Profile\Default\loadorder.txt') "First.esp`r`nAnchor.esp`r`nLast.esp`r`n"
-    Put (Join-Path $root 'Profile\LocalAppData\Plugins.txt') "*First.esp`r`n*Last.esp`r`n"
-    Put (Join-Path $root 'Profile\LocalAppData\loadorder.txt') "First.esp`r`nLast.esp`r`n"
+    foreach ($profile in 'Default', 'LocalAppData') {
+        $dir = Join-Path $root "Profile/$profile"
+        $list = if ($profile -eq 'Default') { 'plugins.txt' } else { 'Plugins.txt' }
+        Put (Join-Path $dir $list) "*First.esp`r`n*Thornswood-Content.esp`r`n*Thornswood-Last.esp`r`n"
+        Put (Join-Path $dir 'loadorder.txt') "First.esp`r`nThornswood-Content.esp`r`nThornswood-Last.esp`r`n"
+    }
     return $data
 }
 function Get-Lists([string]$root) {
     return (@('Default\plugins.txt', 'Default\loadorder.txt', 'LocalAppData\Plugins.txt', 'LocalAppData\loadorder.txt') |
-        ForEach-Object { [IO.File]::ReadAllText((Join-Path $root ('Profile\' + $_))) }) -join '|'
+        ForEach-Object { [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $root ('Profile\' + $_)))) }) -join '|'
 }
 function Same([byte[]]$a, [byte[]]$b) { return ([Convert]::ToBase64String($a) -eq [Convert]::ToBase64String($b)) }
 
@@ -131,15 +132,19 @@ try {
     # ---- 1. a good install ---------------------------------------------------
     $root = Join-Path $work 'good'
     $data = New-Install $root
-    $r = Run $content @('-Data', $data, '-Profile', (Join-Path $root 'Profile'), '-Before', 'Anchor.esp')
+    $other = Join-Path $work 'discovered'
+    $otherData = New-Install $other
+    $env:TS_4192_ROOT = $other
+    $listsBefore = Get-Lists $root
+    $otherBefore = Get-Lists $other
+    $r = Run $install @('-Root', $root, '-Only', 'content', '-NoShip', '-NoPause', '-ServerIp', '192.0.2.1')
     Yes "1. a good install exits 0 (exit $($r.Code))" ($r.Code -eq 0)
-    Yes '1.   and Data holds the new plugin' (Same ([IO.File]::ReadAllBytes((Join-Path $data 'Thornswood-Content.esp'))) $newEsp)
-    $def = [IO.File]::ReadAllText((Join-Path $root 'Profile\Default\plugins.txt'))
-    Yes '1.   and a list with the anchor has it just in front of it' ($def -match '\*First\.esp\r?\n\*Thornswood-Content\.esp\r?\n\*Anchor\.esp')
-    $lad = [IO.File]::ReadAllText((Join-Path $root 'Profile\LocalAppData\Plugins.txt'))
-    Yes '1.   and a list without it has it at the end' ($lad -match '\*Last\.esp\r?\n\*Thornswood-Content\.esp\r?\n?$')
-    Yes '1.   it says which plugin each list now has after it' ($r.Out -match 'plugins\.txt\s+line 2, before Anchor\.esp')
-    Yes '1.   and says so where the anchor is missing' ($r.Out -match 'Plugins\.txt\s+line 3, at the end, because Anchor\.esp is not in it')
+    if ($r.Code -ne 0) { Write-Host $r.Out }
+    Yes '1.   only the requested Data holds the new plugin' ((Same ([IO.File]::ReadAllBytes((Join-Path $data 'Thornswood-Content.esp'))) $newEsp) -and (Same ([IO.File]::ReadAllBytes((Join-Path $otherData 'Thornswood-Content.esp'))) $oldEsp))
+    Yes '1.   the requested profile keeps the authoritative order' ((Get-Lists $root) -ceq $listsBefore)
+    Yes '1.   the discovered profile is untouched' ((Get-Lists $other) -ceq $otherBefore)
+    $r = Run $content @('-Data', $data)
+    Yes '1.   the content step alone also leaves both profiles alone' (($r.Code -eq 0) -and ((Get-Lists $root) -ceq $listsBefore) -and ((Get-Lists $other) -ceq $otherBefore))
     Yes '1.   it says it installed the plugin' ($r.Out -match 'done\. Thornswood-Content\.esp is installed')
     Yes '1.   and what it holds is the description in the plugin''s own header' ($r.Out.Contains($NewText))
     Yes '1.   and no count typed into the script' ($r.Out -notmatch '116 crafting|119 fixes')
@@ -149,7 +154,7 @@ try {
     $data = New-Install $root
     $listsBefore = Get-Lists $root
     $gone = Join-Path $root 'Game\NotData'
-    $r = Run $content @('-Data', $gone, '-Profile', (Join-Path $root 'Profile'), '-Before', 'Anchor.esp')
+    $r = Run $content @('-Data', $gone)
     Yes "2. a Data folder that is not there stops it, exit 1 (exit $($r.Code))" ($r.Code -eq 1)
     Yes '2.   it says STOP and where it looked' ($r.Out -match 'STOP\. Thornswood-Content\.esp was not installed' -and $r.Out.Contains($gone))
     Yes '2.   no plugin list changed' ((Get-Lists $root) -eq $listsBefore)
@@ -165,7 +170,7 @@ try {
         $listsBefore = Get-Lists $root
         $inData = Join-Path $data 'Thornswood-Content.esp'
         $held = [IO.File]::Open($inData, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
-        $r = Run $content @('-Data', $data, '-Profile', (Join-Path $root 'Profile'), '-Before', 'Anchor.esp')
+        $r = Run $content @('-Data', $data)
         Yes "3. the plugin held open stops it, exit 1 (exit $($r.Code))" ($r.Code -eq 1)
         Yes '3.   it says STOP, names the file and says to close what holds it' (
             $r.Out -match 'STOP\. Thornswood-Content\.esp was not installed' -and $r.Out.Contains($inData) -and $r.Out -match 'close it and run this again')

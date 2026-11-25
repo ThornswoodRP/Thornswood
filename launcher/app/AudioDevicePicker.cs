@@ -24,7 +24,6 @@ namespace Thornswood
         readonly Func<IEnumerable<Choice>> devices;
         readonly Func<string> saved;
         readonly Func<string> unavailableLabel;
-        readonly Action<Choice> select;
         bool refreshing;
 
         public AudioDevicePicker(ComboBox box, Button refresh, Func<IEnumerable<Choice>> devices,
@@ -34,7 +33,6 @@ namespace Thornswood
             this.devices = devices;
             this.saved = saved;
             this.unavailableLabel = unavailableLabel;
-            this.select = select;
             refresh.Click += delegate { Refresh(); };
             box.SelectionChanged += delegate
             {
