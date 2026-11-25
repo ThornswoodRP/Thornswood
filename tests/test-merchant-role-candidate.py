@@ -34,6 +34,37 @@ class CandidateTrustTests(unittest.TestCase):
             test.assert_called_once()
             self.assertEqual(check.call_args.args[1], root / candidate.CATALOGUE)
 
+    def test_changed_builder_only_derives_when_the_verified_exact_tables_differ(self):
+        for error, expected_derive in (
+            (None, False),
+            (ValueError('Role tables differ from their measured sources'), True),
+            (ValueError('Role-table source evidence is stale'), False),
+        ):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                (root / 'temp').mkdir()
+                manifest = {'server': 'dev', 'commit': 'a' * 40}
+                (root / 'temp/content-laid.json').write_text(json.dumps(manifest))
+                with (
+                    mock.patch.object(candidate, 'ROOT', root),
+                    mock.patch.object(candidate, 'assert_unchanged'),
+                    mock.patch.object(candidate, 'git', side_effect=[b'', b'old', b'new']),
+                    mock.patch.object(candidate, 'module_at') as module,
+                    mock.patch.object(candidate, 'held_digest') as held,
+                    mock.patch.object(candidate, 'candidate_check') as derive,
+                    mock.patch.object(candidate.subprocess, 'run') as test,
+                    mock.patch.object(candidate, 'exact_check', side_effect=error) as exact,
+                ):
+                    if error is None or expected_derive:
+                        candidate.check(allow_candidate=True)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'source evidence is stale'):
+                            candidate.check(allow_candidate=True)
+                held.assert_called_once_with(root, manifest, candidate.CATALOGUE)
+                exact.assert_called_once_with(module.return_value, root / candidate.CATALOGUE)
+                self.assertEqual(derive.called, expected_derive)
+                self.assertEqual(test.called, error is None)
+
     def test_changed_input_and_reader_are_refused(self):
         for path in ('game/data/items.json', 'scripts/mods/Build-LastPlugin.py'):
             with self.subTest(path=path), mock.patch.object(candidate, 'git', return_value=path.encode()) as git:

@@ -110,19 +110,29 @@ def candidate_check(current, manifest, commit, retained_code):
 def check(allow_candidate):
     assert_unchanged('HEAD', (BUILDER,))
     roles = module_at(ROOT / BUILDER, 'candidate_roles')
+    retained_code = None
     if allow_candidate:
         manifest = json.loads((ROOT / 'temp/content-laid.json').read_bytes())
         commit = manifest['commit']
         if manifest['server'] != 'dev' or not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
             raise ValueError('Expected a verified retained Dev content build')
         git('merge-base', '--is-ancestor', commit, 'HEAD')
-        retained_code = git('show', commit + ':' + BUILDER)
-        if retained_code != git('show', 'HEAD:' + BUILDER):
-            candidate_check(roles, manifest, commit, retained_code)
-            return
+        original_code = git('show', commit + ':' + BUILDER)
+        if original_code != git('show', 'HEAD:' + BUILDER):
+            held_digest(ROOT, manifest, CATALOGUE)
+            retained_code = original_code
+
+    try:
+        exact_check(roles, ROOT / CATALOGUE)
+    except ValueError as error:
+        # Derive only after the existing exact check has accepted the sources
+        # and provenance and found a change in the resulting tables.
+        if retained_code is None or str(error) != 'Role tables differ from their measured sources':
+            raise
+        candidate_check(roles, manifest, commit, retained_code)
+        return
 
     subprocess.run([sys.executable, str(ROOT / 'tests/test-merchant-role-data.py')], check=True)
-    exact_check(roles, ROOT / CATALOGUE)
 
 
 if __name__ == '__main__':
