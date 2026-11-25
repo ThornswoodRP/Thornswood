@@ -95,6 +95,12 @@ a page on another name under thornswood.net does. A GET changes nothing
 another page can choose. `site\tests\test-1367-cross-site.js` sends every kind of
 write the hub makes from another site and from this one.
 
+Only `/hub` and `/api/hello` may use the last good Discord role answer to draw
+the page and its navigation when a refresh fails or is late (#4381). Private
+data routes, including GET and HEAD, check current standing and its existing
+one-minute cache instead of using the ten-minute page fallback. The request
+deadlines and configured manual-admin and password permissions stay the same.
+
 ## On your machine
 
 It needs Node 22.19 or later, or 24.5 or later, and nothing else: it sets its

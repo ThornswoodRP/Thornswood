@@ -186,6 +186,8 @@ function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '',
     id: '', className: '', textContent: '', value: '', onclick: null,
+    listeners: {},
+    addEventListener(type, handler) { (this.listeners[type] || (this.listeners[type] = [])).push(handler); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     querySelectorAll(sel) {

@@ -481,8 +481,8 @@ function pageChecks() {
     r = await ask('GET', '/api/gallery/who', null, { as: '714' });
     yes('a signed in page load, Discord silent, a minute on: /api/gallery/who answers when the site\'s wait runs out (' + r.ms + ' ms)',
         r.status === 200 && waitedOut(r));
-    yes('  with the last answer Discord gave for them, so they can still send',
-        r.j.signed === true && r.j.canSubmit === true && r.j.asked === true);
+    yes('  with identity still signed in but eligibility unknown, without reviving old roles (#4381)',
+        r.j.signed === true && r.j.canSubmit === false && r.j.asked === false && r.j.staff === false && r.j.admin === false);
     r = await ask('POST', '/api/report', { title: 'person stale', about: 'Brynjolf', kind: 'report' }, { as: '714' });
     yes('  a Submit still does not act on an old answer: about a person is 503 when the site\'s wait runs out (' + r.ms + ' ms)',
         r.status === 503 && waitedOut(r) && /could not ask Discord/.test(r.j.error));

@@ -18,10 +18,12 @@ const { LINKED } = require('./discord');
 /*
   The game server's log between two moments.
 
-  Its lines start "[2026-09-22 10:02:10.155]", which is local time on this box
-  and the same clock the session's start and end were stamped with, so they
-  compare directly. A line with no stamp belongs to the line above it, which is
-  what a stack trace is, so it is kept whenever the last stamped line was.
+  New lines start with the writer's UTC receipt time, for example
+  "[2026-11-01T08:25:00.000Z]" (#4948), so the repeated hour after clocks
+  go back is unambiguous in either site timezone. The original event text,
+  including its own clock, stays after that prefix. Older local-only stamps
+  remain readable using the box's zone; their repeated hour cannot be recovered.
+  A line with no stamp belongs to the line above it, as a stack trace does.
 
   dev and main are different servers with different logs; the session says
   which it was on.
@@ -236,9 +238,10 @@ function serverLogSlice(channel, from, to) {
   const out = [];
   let keeping = false;
   for (const line of text.split(/\r?\n/)) {
+    const utc = line.match(/^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/);
     const m = line.match(/^\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-    if (m) {
-      const at = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    if (utc || m) {
+      const at = utc ? Date.parse(utc[1]) : new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
       keeping = at >= from && at <= to;
     }
     if (keeping && line.length) out.push(line);

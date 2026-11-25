@@ -125,6 +125,39 @@ function createNativeMerchantTransfer(mp) {
   };
 }
 
+// A proposed ledger value only; the caller commits stock and clock together.
+function agedMerchantStock(state, spoilage, merchantId, now) {
+  if (!spoilage || typeof spoilage.storageTime !== 'function' || typeof spoilage.aged !== 'function')
+    throw new Error('Merchant food aging is unavailable. Nothing moved.');
+  if (!Number.isSafeInteger(now) || now <= 0) throw new Error('The shop clock cannot be verified. Nothing moved.');
+  var next = JSON.parse(JSON.stringify(state)), clock = state.spoilClock;
+  var legacy = clock === undefined;
+  if (legacy) clock = {at:now,days:0};
+  if (!clock || typeof clock !== 'object' || Array.isArray(clock) || Object.keys(clock).length !== 2 ||
+      !Number.isSafeInteger(clock.at) || clock.at <= 0 || clock.at > now ||
+      !Number.isSafeInteger(clock.days) || clock.days < 0 || clock.days > Math.floor((now-clock.at)/spoilage.DAY_MS))
+    throw new Error('The shop food clock cannot be verified. Nothing moved.');
+  var time = spoilage.storageTime(merchantId,clock.at,clock.days,now);
+  next.stock.forEach(function (row) {
+    if (Object.prototype.hasOwnProperty.call(row,'ageUnknown') && row.ageUnknown !== true)
+      throw new Error('The shop food age cannot be verified. Nothing moved.');
+    var entry = row.entry || {baseId:row.baseId,count:row.count};
+    SETTLEMENT.inventory({entries:[entry]});
+    if (entry.baseId !== row.baseId || entry.count !== row.count)
+      throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (legacy && spoilage.lifeOf(entry.baseId) && !spoilage.keptOf(entry)) row.ageUnknown = true;
+    if (row.ageUnknown) return;
+    var changed = spoilage.aged([entry],time.turned).entries[0];
+    if (!changed || changed.count !== row.count) throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (JSON.stringify(changed) !== JSON.stringify(entry)) {
+      row.entry = changed;
+      if (changed.baseId !== row.baseId) { row.baseId = changed.baseId; row.name = changed.name; }
+    }
+  });
+  next.spoilClock = time.clock;
+  return JSON.stringify(next) === JSON.stringify(state) ? null : next;
+}
+
 function createMerchantTrading(deps) {
   var purses = deps.purses;
   var prices = deps.prices;
@@ -138,6 +171,14 @@ function createMerchantTrading(deps) {
   var now = deps.now || function () { return Date.now(); };
   var reach = deps.reach == null ? REACH : deps.reach;
   var sessions = new Map();
+  function ageStock(merchantId,state,caller) {
+    if (!state || state.pending || typeof deps.spoilage !== 'function') return state;
+    var next = agedMerchantStock(state,deps.spoilage(),merchantId,now());
+    if (!next) return state;
+    var committed = purses.compareAndCommit(merchantId,state.revision || 0,next,caller);
+    if (!committed) throw new Error('The trader changed. Choose the trade again. Nothing moved.');
+    return committed;
+  }
   var viewOwners = new WeakMap();
   var sessionSerial = 0;
   /*
@@ -192,7 +233,7 @@ function createMerchantTrading(deps) {
     entries.forEach(function (entry) {
       var key = SETTLEMENT.metadataKey(entry);
       var row = stock.find(function (held) {
-        return held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
+        return !held.ageUnknown && held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
       });
       if (row) {
         if (row.count + entry.count > MAX_GOLD) throw new Error('The shelf is full.');
@@ -206,7 +247,7 @@ function createMerchantTrading(deps) {
     var entries = [], left = count;
     for (var i = 0; i < stock.length && left > 0; i++) {
       var row = stock[i];
-      if (row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
+      if (row.ageUnknown || row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
       var n = Math.min(row.count, left);
       entries.push(Object.assign({}, row.entry || {baseId:row.baseId}, {count:n}));
       row.count -= n; left -= n;
@@ -345,12 +386,12 @@ function createMerchantTrading(deps) {
       if (buy !== null) quotedBuy = true;
       if (buy !== null && carried > 0) carriedBuy = true;
       var held = (state.stock || []).find(function (entry) {
-        return entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
+        return !entry.ageUnknown && entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
       });
       var count = 0;
       var stock = state.stock || [];
       for (var s = 0; s < stock.length; s++) {
-        if (stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
+        if (!stock[s].ageUnknown && stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
       }
       offers.push({
         name: name,
@@ -396,7 +437,7 @@ function createMerchantTrading(deps) {
       supply: supply,
       quests: questView(actorId,merchantId),
       note: note || (settlement.available()
-        ? ''
+        ? ((state.stock || []).some(function(row){return row.ageUnknown;}) ? 'Some older food has no verified age and is not for sale.' : '')
         : 'Buying and selling wait on the native transfer. Nothing has moved.')
     };
     var currentIdentity = viewIdentity ? sessionIdentity(world.actor(actorId)) : null;
@@ -428,7 +469,21 @@ function createMerchantTrading(deps) {
         var closed=closedView(session.actorId,profileId,session);
         views.push({actorId:session.actorId,view:closed}); return;
       }
-      var state = purses.read(session.merchantId), place = state && placeOf(state.reference);
+      var state;
+      try {
+        state = ageStock(session.merchantId,purses.read(session.merchantId),function(){return ownsSession(session.actorId,profileId,session);});
+      } catch(error) {
+        if (!active || sessions.get(profileId)!==session) return;
+        var refused = closedView(session.actorId,profileId,session);
+        refused.note = String(error.message || error);
+        views.push({actorId:session.actorId,view:refused});
+        if (typeof deps.notice === 'function' && isCurrentView(session.actorId,refused)) {
+          try { deps.notice(profileId,refused.note); }
+          catch(noticeError) { if (typeof deps.log === 'function') deps.log('Merchant food notice failed: '+noticeError); }
+        }
+        return;
+      }
+      var place = state && placeOf(state.reference);
       if (state && place) {
         var view=viewFor(session.merchantId,state,place,session.actorId,profileId,session.note,{session:session,identity:session.identity});
         var current = sessionIdentity(world.actor(session.actorId));
@@ -497,7 +552,9 @@ function createMerchantTrading(deps) {
       if (!authed(profileId, reached.human)) return fail('That request is not yours.');
       var identity=sessionIdentity(reached.human);
       if (!identity) return fail('This character is unavailable.', closedView(actorId,profileId,prior));
-      var state = purses.prepare(merchantId);
+      var state;
+      try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return active && sessions.get(profileId)===prior;}); }
+      catch(error) { return fail(String(error.message || error)); }
       if (!active || sessions.get(profileId)!==prior) return fail('This character is unavailable.');
       if (!state) return fail('That is not a guild trader.');
       var place = placeOf(state.reference);
@@ -580,7 +637,15 @@ function createMerchantTrading(deps) {
           released:'Your inventory changed before the turn-in. Nothing moved. Turn the work in again.'});
       }
       if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
-      var questState=purses.prepare(merchantId),questPlace=questState && placeOf(questState.reference);
+      var questState;
+      try {
+        questState = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);});
+      } catch(error) {
+        if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
+        if (typeof deps.log === 'function') deps.log('Merchant shelf refresh failed after quest: ' + error);
+        return refuseSession(text + ' The shelf could not be refreshed. Open the trader panel again.');
+      }
+      var questPlace=questState && placeOf(questState.reference);
       var questResponse=questState && questPlace ? viewFor(merchantId,questState,questPlace,actorId,profileId,text,{session:originalSession,identity:originalSession.identity}) : closedView(actorId,profileId,originalSession);
       return questResponse && isCurrentView(actorId,questResponse) ? fail(text,questResponse) : {text:'',view:null};
     }
@@ -609,7 +674,9 @@ function createMerchantTrading(deps) {
       var view=responseView(state,note);
       return view && isCurrentView(actorId,view) ? fail(text,view) : {text:'',view:null};
     }
-    var state = purses.prepare(merchantId);
+    var state;
+    try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);}); }
+    catch(error) { return fail(String(error.message || error)); }
     if (!state) return fail('That is not a guild trader.');
     if (state.pending) return fail('This trader has a transfer waiting.');
     var place = placeOf(state.reference);
@@ -800,6 +867,11 @@ function installMerchantTrading(env) {
   var minted = typeof env.minted === 'function' ? env.minted : function () { return false; };
   var trading = createMerchantTrading({
     purses: env.purses,
+    spoilage: function () { return g.__thornswoodSpoilage; },
+    notice: function (profileId,line) {
+      if (typeof g.__thornswoodToProfile !== 'function') throw new Error('Merchant notice delivery is unavailable.');
+      g.__thornswoodToProfile(profileId,line);
+    },
     minted: minted,
     log:log,
     prices: {
@@ -968,6 +1040,7 @@ function installMerchantTrading(env) {
 }
 
 module.exports = {
+  agedMerchantStock: agedMerchantStock,
   createMerchantTrading: createMerchantTrading,
   createNativeMerchantTransfer: createNativeMerchantTransfer,
   createQuestTransactions: QUEST_TRANSFER.createQuestTransactions,
