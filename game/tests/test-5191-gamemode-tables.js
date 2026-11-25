@@ -19,8 +19,9 @@
 //   4. No step of the chain writes game/gamemode.js or its source (#6195):
 //      the merchant and market stall bundles carry code, so each is built
 //      out of the chain by its own script, which writes no table, and its
-//      catalogues are table files a step of the chain writes. Each --check
-//      passes.
+//      catalogues are table files a step of the chain writes. The code
+//      bundle checks run here; the table builders are checked separately
+//      over a build of their source inputs.
 //   5. The gamemode's own table() reads the server's folder, else the
 //      repository's game folder, once a load, and stops the load, naming the
 //      file, when a table is missing or does not parse; the load logs the
@@ -133,10 +134,8 @@ const steps = chain.steps.map((s) => s.tool);
 for (const [bundle, tables] of [['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MarketStallTables.js'],
                                 ['scripts/dev/Build-MerchantGamemode.js', 'scripts/dev/Build-MerchantTables.js']]) {
   yes(bundle + ' is not a step, and ' + tables + ' is', steps.indexOf(bundle) < 0 && steps.indexOf(tables) >= 0);
-  for (const tool of [bundle, tables]) {
-    const r = cp.spawnSync(process.execPath, [path.join(REPO, tool), '--check'], { cwd: REPO, encoding: 'utf8' });
-    yes(tool + ' --check: what it writes is what it builds' + (r.status ? ' (' + (r.stderr || r.stdout).trim().split('\n').pop() + ')' : ''), r.status === 0);
-  }
+  const r = cp.spawnSync(process.execPath, [path.join(REPO, bundle), '--check'], { cwd: REPO, encoding: 'utf8' });
+  yes(bundle + ' --check: what it writes is what it builds' + (r.status ? ' (' + (r.stderr || r.stdout).trim().split('\n').pop() + ')' : ''), r.status === 0);
 }
 const buildGamemode = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Build-Gamemode.js'), 'utf8');
 for (const tool of ['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MerchantGamemode.js']) {
