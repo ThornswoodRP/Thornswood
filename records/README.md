@@ -282,6 +282,9 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `collection-revision-6-rule.json`: the plugin rule passed to
+  `New-NexusRevision -Rule` for collection revision 6, putting cheddars_mashups.esl
+  after RaceCompatibility.esm (#3649, #4070, #6299).
 - `load-order.json`: the load order the servers run and every content
   build reads, at the revision `collection-plugins.json` names, the five
   masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
