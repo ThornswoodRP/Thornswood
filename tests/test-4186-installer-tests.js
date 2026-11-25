@@ -23,7 +23,7 @@
       or "Nightly only".
     - a .py runs only where a workflow names it: "python tests/<name>" in
       build-pr.yml for a pull request, nightly.yml's own lines for the night,
-      and nightly.yml's loop over bot\tests\test-*.py. Neither is "No
+      and the shared bot runner used by PR and nightly jobs. Neither is "No
       workflow".
 
   This fails when an installer test on disk is in neither list, when either
@@ -95,7 +95,9 @@ yes('tests/gate-excluded.txt is read (' + excluded.size + ' lines)', excluded.si
 const buildPr = read('.github/workflows/build-pr.yml') || '';
 const nightly = read('.github/workflows/nightly.yml') || '';
 yes('the pull request and nightly workflows are read', buildPr.length > 0 && nightly.length > 0);
-const nightlyRunsBotPy = /Get-ChildItem bot\/tests -Filter 'test-\*\.py'/.test(nightly);
+const botRunner = read('scripts/dev/Run-BotHarnesses.ps1') || '';
+const botSuite = /Get-ChildItem[^\n]*'bot\/tests'[^\n]*-Filter 'test-\*\.py'/.test(botRunner);
+const sharedBot = yml => botSuite && /& \.\/scripts\/dev\/Run-BotHarnesses\.ps1 -Python \$py/.test(yml);
 
 function pythonRunIn(yml, rel) {
   const esc = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '[\\\\/]');
@@ -104,8 +106,8 @@ function pythonRunIn(yml, rel) {
 
 function runsOn(t) {
   if (/\.py$/.test(t.name)) {
-    const pr = pythonRunIn(buildPr, t.rel);
-    const night = pythonRunIn(nightly, t.rel) || (nightlyRunsBotPy && t.rel.startsWith('bot/tests/'));
+    const pr = pythonRunIn(buildPr, t.rel) || (sharedBot(buildPr) && t.rel.startsWith('bot/tests/'));
+    const night = pythonRunIn(nightly, t.rel) || (sharedBot(nightly) && t.rel.startsWith('bot/tests/'));
     if (pr && night) return 'Pull request and nightly';
     if (pr) return 'Pull request only';
     if (night) return 'Nightly only';
