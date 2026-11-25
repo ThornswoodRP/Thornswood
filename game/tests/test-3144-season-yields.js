@@ -126,8 +126,21 @@ const needsSrc = between('// ==== thornswood needs: hunger, thirst and exhaustio
 const underSrc = liftFn('underSeason'), coolSrc = liftFn('outdoorCooling');
 const outdoorCooling = (underSrc && coolSrc)
   ? new Function('g', underSrc + '\n' + coolSrc + '\nreturn outdoorCooling;')(global) : null;
+const needsClock = 1800000000000;
+const needsAPI = new Function('globalThis','mp','Date','setInterval','clearInterval','guard','notify','say',
+  needsSrc + '\nreturn globalThis.__thornswoodNeeds;')({}, {makeProperty() {}}, {now: () => needsClock},
+  () => 0, () => {}, (_, fn) => fn, () => {}, () => {});
+function projectedTemperature(temp, target, cooling) {
+  const n = needsAPI.fresh(); n.temp = temp; n.at = needsClock - 60000;
+  return needsAPI.project(n, needsClock, false, {restingGain: () => 0,
+    warmthTarget: () => target, outdoorCooling: cooling}).needs.temp;
+}
+const coolValue = projectedTemperature(80,20,() => 1.25);
+const warmValue = projectedTemperature(20,80,() => {throw new Error('warming must not read the cooling share');});
+const coolingExpected = 80 + (20-80)*(1-Math.pow(0.5,1/(needsAPI.NEEDS.settleMinutes/1.25)));
+const warmingExpected = 20 + (80-20)*(1-Math.pow(0.5,1/(needsAPI.NEEDS.settleWarmMinutes || needsAPI.NEEDS.settleMinutes)));
 yes('the needs block cuts the cooling half life by the season share, and leaves warming alone',
-  !!needsSrc && /\? \(NEEDS\.settleWarmMinutes \|\| NEEDS\.settleMinutes\)\s*: NEEDS\.settleMinutes \/ outdoorCooling\(n\);/.test(needsSrc));
+  Math.abs(coolValue-coolingExpected) < 1e-9 && Math.abs(warmValue-warmingExpected) < 1e-9);
 season('winter');
 yes('winter out under the sky cools a quarter faster: 90 seconds is 72',
   !!outdoorCooling && outdoorCooling({ place: 'outdoors' }) === 1.25 &&
