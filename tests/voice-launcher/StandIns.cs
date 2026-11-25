@@ -44,6 +44,7 @@ namespace Thornswood
         // The last half second, each ear on its own: left, right, left, ...
         readonly float[] heard = new float[VoiceMix.Rate];
         int at;
+        long renderedFrames;
         readonly object gate = new object();
         volatile bool stop;
         Thread thread;
@@ -79,12 +80,33 @@ namespace Thornswood
                         heard[at] = stereo[i];
                         at = (at + 1) % heard.Length;
                     }
+                    renderedFrames += VoiceMix.Frame;
+                    Monitor.PulseAll(gate);
                 }
                 n++;
                 long due = n * 20 - clock.ElapsedMilliseconds;
                 if (due > 0) Thread.Sleep((int)due);
             }
         }
+
+        // Wait on rendered frames, so the rolling window contains only
+        // output produced after the caller observed the desired mix.
+        public void WaitForFreshPlayback()
+        {
+            var elapsed = Stopwatch.StartNew();
+            lock (gate)
+            {
+                long end = renderedFrames + heard.Length / 2;
+                while (renderedFrames < end)
+                {
+                    int remaining = 10000 - (int)elapsed.ElapsedMilliseconds;
+                    if (remaining <= 0) throw new TimeoutException("No fresh launcher playback window");
+                    Monitor.Wait(gate, remaining);
+                }
+            }
+        }
+
+        public string MixStatus() { return mix.AudioSummary(0); }
 
         /// <summary>
         /// How loud each pitch plays: the tone's amplitude in each 40 ms of

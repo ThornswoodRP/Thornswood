@@ -159,8 +159,14 @@ namespace Thornswood
                 case "say": Sock(c).Say(c.GetProperty("msg").GetRawText()); break;
                 case "close": Sock(c).CloseFromService(); break;
                 case "send-outcome": Sock(c).SendOutcome = Str(c, "answer"); break;
+                case "mix-status":
+                    using (var status = JsonDocument.Parse(VoiceAudio.Last?.MixStatus() ?? "{}"))
+                        Emit(w => { w.WriteString("ev", "mix-status"); w.WritePropertyName("value"); status.RootElement.WriteTo(w); });
+                    break;
                 case "hear":
                 {
+                    if (c.TryGetProperty("fresh", out JsonElement fresh) && fresh.GetBoolean())
+                        VoiceAudio.Last.WaitForFreshPlayback();
                     var levels = new List<KeyValuePair<string, double>>();
                     foreach (JsonElement t in c.GetProperty("tones").EnumerateArray())
                         levels.Add(new KeyValuePair<string, double>(t.GetRawText(), VoiceAudio.Last == null ? 0 : VoiceAudio.Last.Hear(t.GetDouble())));
