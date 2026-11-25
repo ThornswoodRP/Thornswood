@@ -120,6 +120,31 @@ class TroubleReceipts(unittest.TestCase):
         self.assertEqual(rig.a.attempts, [])
         self.assertNotIn('session-one', rig.records())
 
+    def test_known_preflight_refusal_retries_after_restart(self):
+        rig = Rig()
+        def arrive():
+            rig.put([rig.row()]); rig.a.allowed = False; rig.a.mode = 'refused'
+        rig.run(arrive)
+        self.assertEqual(rig.a.posts, {})
+        rig.a.allowed = True; rig.a.mode = 'ok'; rig.run(lambda: None)
+        self.assertEqual(len(rig.a.posts), 1)
+        self.assertIn('message', rig.records()['session-one'])
+
+    def test_admitted_alert_retries_intent_save_after_restart(self):
+        rig = Rig(); rig.run(lambda: rig.put([rig.row()]), fail_intent=True)
+        self.assertEqual(rig.a.attempts, [])
+        rig.run(lambda: None)
+        self.assertEqual(len(rig.a.posts), 1)
+        self.assertIn('message', rig.records()['session-one'])
+
+    def test_admission_without_delivery_expires_with_complete_source(self):
+        rig = Rig(); rig.a.allowed = False
+        rig.run(lambda: rig.put([rig.row()]))
+        self.assertIn('session-one', rig.index().get('admitted', {}))
+        rig.run(lambda: rig.put([]), lambda: None)
+        self.assertNotIn('session-one', rig.index().get('admitted', {}))
+        self.assertEqual(rig.a.attempts, [])
+
     def test_confirmed_save_failure_reconciles_after_restart_without_resend(self):
         rig = Rig()
         rig.run(lambda: rig.put([rig.row()]), fail_confirmed=True)
@@ -161,10 +186,11 @@ class TroubleReceipts(unittest.TestCase):
         self.assertNotIn('session-two', rig.records())
 
     def test_corrupt_index_pauses_private_delivery_without_overwrite(self):
-        rig = Rig(); rig.receipts.write_text('{', encoding='utf-8')
-        rig.run(lambda: rig.put([rig.row()]), lambda: None)
-        self.assertEqual(rig.receipts.read_text(encoding='utf-8'), '{')
-        self.assertFalse(any('Private fixture' in text for text in rig.a.posts.values()))
+        for malformed in ['{', json.dumps(dict(admitted=[]))]:
+            rig = Rig(); rig.receipts.write_text(malformed, encoding='utf-8')
+            rig.run(lambda: rig.put([rig.row()]), lambda: None)
+            self.assertEqual(rig.receipts.read_text(encoding='utf-8'), malformed)
+            self.assertFalse(any('Private fixture' in text for text in rig.a.posts.values()))
 
     def test_malformed_source_cannot_prove_expiry(self):
         rig = Rig(); rig.run(lambda: rig.put([rig.row()]))

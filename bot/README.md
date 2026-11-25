@@ -445,7 +445,9 @@ files cannot remove saved private copies. The local regression is
 
 Failed-session alerts use that same delivery protocol in their existing
 `data\trouble-posts.json` store (#4943). A missing channel or permission found
-before sending can recover on a later pass. Uncertain sends remain pending
+before sending can recover on a later pass. A source admission marker in the
+same store keeps newly observed alerts eligible across a restart without
+replaying historical startup rows; it is not proof of delivery. Uncertain sends remain pending
 for exact-reference reconciliation or manual review; they do not count as
 delivered and are not blindly resent. Existing startup backlog suppression,
 legacy confirmed receipts and cleanup when the source session expires stay

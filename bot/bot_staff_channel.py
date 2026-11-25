@@ -170,12 +170,18 @@ def _trouble_rows_valid(rows):
         and isinstance(row.get('session'), str) and bool(row['session']) for row in rows)
 
 
+def _trouble_admitted_valid(state):
+    admitted = state.get('admitted', {}) if isinstance(state, dict) else None
+    return isinstance(admitted, dict) and all(isinstance(sid, str) and bool(sid) and value is True
+                                            for sid, value in admitted.items())
+
+
 def _trouble_copy_state():
     # bot_reports uses this module's channel resolver; defer the shared
     # protocol import until the bot's modules have finished loading.
     from bot_reports import copy_post_valid
     state = _state_read(TROUBLE_POSTS)
-    if (not isinstance(state, dict) or not isinstance(state.get('posts', {}), dict)
+    if (not _trouble_admitted_valid(state) or not isinstance(state.get('posts', {}), dict)
             or not all(copy_post_valid(post) for post in state.get('posts', {}).values())):
         log('trouble: receipt index cannot be trusted; private delivery is paused.')
         return None
@@ -231,10 +237,17 @@ async def trouble_forget(rows, path=None):
         log('trouble: %s cannot be read, so no post was deleted this pass'
             % path)
         return 0, 1
+    if not _trouble_admitted_valid(state):
+        log('trouble: source admissions are invalid; no receipt or admission was removed.')
+        return 0, 1
     posts = state.get('posts') or {}
     present = _trouble_sessions(rows)
     deleted = failed = 0
     changed = False
+    admitted = state.get('admitted', {})
+    for sid in [key for key in admitted if key not in present]:
+        del admitted[sid]
+        changed = True
     for sid in [k for k in posts if k not in present]:
         rec = posts.get(sid) if isinstance(posts.get(sid), dict) else {}
         if 'attempt' in rec:
@@ -421,8 +434,16 @@ async def watch_trouble():
                     await asyncio.sleep(TROUBLE_EVERY)
                     continue
             posts = state.setdefault('posts', {})
+            admitted = state.setdefault('admitted', {})
+            # Durable admission is separate from delivery. A known no-send
+            # failure must not become historical backlog at the next start.
+            said.difference_update(admitted)
+            fresh = [row for row in rows if row['session'] not in said and row['session'] not in posts]
+            if any(row['session'] not in admitted for row in fresh):
+                admitted.update((row['session'], True) for row in fresh)
+                _state_write(TROUBLE_POSTS, state)
             if not any('attempt' in post for post in posts.values()):
-                for row in rows:
+                for row in fresh:
                     sid = row['session']
                     if sid in said or sid in posts:
                         continue
