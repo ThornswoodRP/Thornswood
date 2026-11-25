@@ -63,6 +63,11 @@ _MOD_DID = {
     'despawn': 'despawned a creature',
     'hurt': 'used /hurt on %s',
     'tp': 'sent %s',
+    'heal': 'used /heal on %s',
+    'rankup': 'advanced a rank for %s',
+    'rename': 'renamed %s',
+    'setneeds': 'changed a need for %s',
+    'tpto': 'teleported to %s for testing',
     # One character, or the whole account, and a character killed for good (#1010).
     'ban': 'banned the character %s',
     'unban': 'lifted the ban on the character %s',

@@ -15,8 +15,14 @@ machine. A fresh install starts as Wave, Bow, Laugh, Point, Pray,
 Dance, Lute, Drink.
 
 On the right is every emote, in alphabetical order, and a search.
-Tab moves to the search. Click a name to play it. There are no
-categories.
+Tab moves to the search, then through the slot buttons and the names;
+Shift Tab goes back. Left and right move between slot buttons, and up
+and down move through the names. Enter in the search plays the first
+match. Enter or Space on a name plays it; on a slot button it chooses
+that slot for assigning the next name instead. The chosen slot is
+marked until you choose it again or close the wheel. Letters and
+numbers typed in the search stay search text. Click a name to play
+it. There are no categories.
 
 N stands you up. The middle of the wheel, marked STOP, stands you
 up and closes the wheel. Escape closes it without playing anything.

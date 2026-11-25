@@ -257,6 +257,37 @@ jobs:
           ./scripts/dev/Launcher-Reach.ps1 -Base $env:BASE
           exit $LASTEXITCODE
 
+  # BOT HARNESSES (#5958). Run the entire suite on every change, alongside
+  # the existing gate. Nightly uses the same runner; no path-selection skip.
+  bot:
+    name: Bot harnesses
+    needs: tested
+    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Run the bot harnesses
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP 'bot-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $py = Join-Path $venv 'Scripts\python.exe'
+          if (-not (Test-Path $py)) { throw 'could not make the bot harness venv' }
+          & $py -m pip install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r bot\requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./scripts/dev/Run-BotHarnesses.ps1 -Python $py
+
   # Each share runs its part of the pick's plan. A share of what a change can
   # reach says so in its name, and scripts\dev\Tested-Tree.js counts a pull
   # request's tree as tested only when every share of its run passed and was

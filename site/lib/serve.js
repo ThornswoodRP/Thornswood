@@ -1005,6 +1005,7 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'no Discord account holds that character, so ban the character' });
       }
       const minutes = banMinutes(o.minutes);
+      if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
       const until = minutes ? now + minutes * 60000 : 0;
       const whole = what === 'banaccount';
       const banKey = whole ? account : 'p:' + pid;
@@ -3326,6 +3327,7 @@ async function handle(req, res) {
         const why = String(o.why || '').trim().slice(0, 500);
         if (!why) return sendJson(res, 400, { error: 'a ban says why' });
         const minutes = banMinutes(o.minutes);
+        if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
         const until = minutes ? now + minutes * 60000 : 0;
         const row = { at: now, until, why, by: w.name, byId: w.id, from: 'the hub', account: id };
         const ok = pid

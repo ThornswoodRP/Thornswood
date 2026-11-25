@@ -24,7 +24,7 @@ function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), "utf8").sp
 const ps = read("scripts/dev/Build-RecipeTable.ps1").replace(/^﻿/, "");
 const gm = require('../../tests/gamemode-tables.js').joined(read("game/gamemode.js"));
 const recipes = JSON.parse(read("game/data/recipes.json"));
-const cutDoc = JSON.parse(read("docs/systems/cut-items.json"));
+const cutDoc = JSON.parse(read("game/data/cut-items.json"));
 const fisher = read("docs/systems/classes/fisher.md");
 
 let pass = 0, fail = 0;
@@ -91,8 +91,8 @@ yes("and both gamemode tables go to their own files through GamemodeTables.ps1, 
   (ps.match(/Write-GamemodeTable '(RECIPES_BY_ID|STAFF_SPELLS)'/g) || []).length === 2 && ps.indexOf('"`r`n"') < 0);
 
 // ---- the cut file (#1391) ------------------------------------------------
-yes("the build reads docs/systems/cut-items.json",
-  ps.indexOf("$CUT_FILE = Join-Path $PSScriptRoot '..\\..\\docs\\systems\\cut-items.json'") >= 0);
+yes("the build reads game/data/cut-items.json",
+  ps.indexOf("$CUT_FILE = Join-Path $PSScriptRoot '..\\..\\game\\data\\cut-items.json'") >= 0);
 const rolls = knob("CUT_ROLLS") || {};
 const rollsLine = /^\$CUT_ROLLS = \[ordered\]@\{ 'embassy' = 'embassy'; 'thalmor' = 'remnant' \}$/m.test(ps);
 yes("embassy rows go on the embassy roll and thalmor rows on the remnant roll", rollsLine || (rolls.embassy === "embassy" && rolls.thalmor === "remnant"));

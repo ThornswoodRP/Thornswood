@@ -3,6 +3,22 @@
 One meter. 0 is freezing. 100 is as hot as it goes. 50 is comfortable.
 It moves both ways, toward whatever the place is worth.
 
+## Contents
+
+- [What you see](#what-you-see)
+- [What it costs](#what-it-costs)
+- [How fast it moves](#how-fast-it-moves)
+- [The place](#the-place)
+- [Weather, wind, night, height](#weather-wind-night-height)
+- [Storms on the road](#storms-on-the-road)
+- [The season and the sky](#the-season-and-the-sky)
+- [On the map](#on-the-map)
+- [Fire](#fire)
+- [Water](#water)
+- [Clothing](#clothing)
+- [A meal](#a-meal)
+- [Where this is](#where-this-is)
+
 ## What you see
 
 | Reading | Word |
@@ -163,6 +179,10 @@ One roll is one climate, and everybody standing in it has that sky.
 It lasts 20 to 60 real minutes, a whole number of minutes, each
 length as likely as the others. Then it rolls again. The next sky is
 not announced.
+
+A sky whose weather is still loading is not considered applied. Once
+that weather is available, the same shared sky is applied without a new
+roll. A sky already applied is left alone on unchanged frames.
 
 The records are Cathedral Weathers, the mod already in the collection.
 Each record is already clear, cloudy, rain, or snow, which is what
