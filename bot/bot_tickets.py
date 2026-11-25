@@ -1137,13 +1137,39 @@ async def close_here(interaction, why=None):
 
     # Sent first, then archived. The other way round the message never lands,
     # because an archived thread will not take one.
+    archived = False
     try:
         await ch.edit(archived=True, locked=True)
+        archived = True
     except Exception:
         try:
             await ch.edit(archived=True)
+            archived = True
         except Exception:
             log('could not archive the ticket thread:\n' + traceback.format_exc())
+
+    if not archived:
+        fail_msg = 'Discord could not archive the ticket thread, so it remains open.'
+        try:
+            if hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send'):
+                await interaction.followup.send(fail_msg, ephemeral=True)
+            elif hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send_message'):
+                await interaction.followup.send_message(fail_msg, ephemeral=True)
+        except Exception:
+            log('could not tell user about archive failure:\n' + traceback.format_exc())
+
+        try:
+            await ch.send('Archive failed: Discord could not archive this thread, so the ticket remains open.')
+        except Exception:
+            log('could not post archive failure in ticket:\n' + traceback.format_exc())
+
+        try:
+            if book is not None:
+                note_fail = 'Archive failed: **%s** is still open, Discord could not archive it.\n%s' % (
+                    as_typed(ch.name, 100), ch.jump_url)
+                await book.send(note_fail, allowed_mentions=mentions, suppress_embeds=True)
+        except Exception:
+            log('could not post archive failure in staff log:\n' + traceback.format_exc())
 
 
 class TicketTools(discord.ui.View):
