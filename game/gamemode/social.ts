@@ -186,7 +186,11 @@
   function online() {
     return memo('online', function () {
       var all = [];
-      try { all = mp.get(0, 'onlinePlayers') || []; } catch (e) { return []; }
+      try { all = mp.get(0, 'onlinePlayers'); } catch (e) { return []; }
+      // Raw membership also proves disconnects for private save outcomes.
+      // Keep it only for this pass, before hiding faces still being created.
+      if (tickMemo && Array.isArray(all)) tickMemo.onlineRaw = all;
+      all = all || [];
       var chargen = g.__thornswoodChargen;
       if (!chargen || !chargen.hasStoredAppearance) { return all; }
       var out = [];
@@ -1323,8 +1327,7 @@
     var all = online();
     // The public list can fail or omit a face still loading. Only a successful
     // raw online read retires outcomes; an unknown read is not a disconnect.
-    var saveOnline = null;
-    try { saveOnline = mp.get(0, 'onlinePlayers'); } catch (eSaveOnline) { saveOnline = null; /* Unknown presence retains the private save outcome. */ }
+    var saveOnline = tickMemo && tickMemo.onlineRaw;
     if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
       if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
     }
