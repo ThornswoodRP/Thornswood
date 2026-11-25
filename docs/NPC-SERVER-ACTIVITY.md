@@ -40,10 +40,10 @@ and their traders. Humans, profiles and connected identities are protected.
 ## Where the lists come from
 
 [Population counts and locations](NPC-POPULATION.md),
-[exact NPC spawn coordinates](NPC-SPAWNS.csv),
-[hunting yields and access gates](HUNTING-SPOTS.csv),
-[existing fishing locations](FISHING-SPOTS.csv) and
-[hanging game locations](HANGING-GAME-SPOTS.csv) come from these inputs.
+[exact NPC spawn coordinates](../game/data/NPC-SPAWNS.csv),
+[hunting yields and access gates](../game/data/HUNTING-SPOTS.csv),
+[existing fishing locations](../game/data/FISHING-SPOTS.csv) and
+[hanging game locations](../game/data/HANGING-GAME-SPOTS.csv) come from these inputs.
 The existing fishing placements are a source inventory, before the new fishery
 allocation, poles, traps and scarce quest gates in the Fisher specification.
 

@@ -14,6 +14,9 @@ generated from the recipe, harvest, ore and hunt tables. [Who makes what
 the world hands out](systems/who-makes-it.md) is generated from the same
 tables by the makers check.
 
+[Testing progression](systems/testing-progression.md) describes the approved
+playtest tools for advancing a current class or profession and their access rules.
+
 ## Contents
 
 - [Buttons, not commands](#buttons-not-commands)
@@ -28,6 +31,9 @@ tables by the makers check.
 
 [Playtest and admin commands](systems/playtest-and-admin-commands.md) records
 the testing tools, role permissions and delivery checks.
+
+[Staff scene tools](systems/staff-tools.md) describes authorized self modes,
+their lifecycle and bounded administrative NPC cleanup.
 
 Decided by Patrick on 4 Oct: "can we stop with the commands, I want
 things to be buttons, it's nicer and more immersive", and "no more

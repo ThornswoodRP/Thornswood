@@ -89,6 +89,8 @@ function makeEl(tag) {
     id: '', className: '', textContent: '', value: '', onclick: null, scrollTop: 0,
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
+    setAttribute(n, v) { this.attrs[n] = String(v); },
+    removeAttribute(n) { delete this.attrs[n]; },
     focus() { },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });

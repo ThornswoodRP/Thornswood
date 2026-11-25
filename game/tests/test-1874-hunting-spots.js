@@ -1,6 +1,6 @@
 // test-1874-hunting-spots.js
 //
-// #1874. docs/HUNTING-SPOTS.csv is every retained animal placement with what
+// #1874. game/data/HUNTING-SPOTS.csv is every retained animal placement with what
 // its body gives, from game/data/npc-population.json and game/data/hunts.json.
 // It was last written in #1413, and #1523 and #1808 rebuilt hunts.json without
 // writing it again: 878 rows named products the table no longer gives (every
@@ -20,7 +20,7 @@
 //
 //     python scripts/dev/Build-ResourceLocations.py --hunting-only
 //
-// and commit docs/HUNTING-SPOTS.csv with the table.
+// and commit game/data/HUNTING-SPOTS.csv with the table.
 const REPO_DIR = require("path").join(__dirname, "..", "..");
 const fs = require("fs");
 const os = require("os");
@@ -36,7 +36,7 @@ function yes(what, cond) {
 function lf(s) { return s.split(CR).join(""); }
 function readRepo(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), "utf8"); }
 
-const CSV = "docs/HUNTING-SPOTS.csv";
+const CSV = "game/data/HUNTING-SPOTS.csv";
 const FIX = "python scripts/dev/Build-ResourceLocations.py --hunting-only";
 
 // The runner on the VPS has python; this VM has python3 as well. No Python is
@@ -176,7 +176,7 @@ yes("a body the hunt table leaves out (#1808) is not a Hunter row: the Spectral 
 // ---- 4. the population writer leaves the same file, all its columns
 {
   const tmp = stage("pop"); temps.push(tmp);
-  fs.copyFileSync(path.join(REPO_DIR, "docs", "NPC-SPAWNS.csv"), path.join(tmp, "docs", "NPC-SPAWNS.csv"));
+  fs.copyFileSync(path.join(REPO_DIR, "game", "data", "NPC-SPAWNS.csv"), path.join(tmp, "game", "data", "NPC-SPAWNS.csv"));
   const prog = [
     "import importlib.util, json, pathlib, sys",
     "here = pathlib.Path(sys.argv[1])",
@@ -193,7 +193,7 @@ yes("a body the hunt table leaves out (#1808) is not a Hunter row: the Spectral 
   yes("the population rebuild writes " + CSV + " with the hunt columns, the same file", lf(made) === lf(committed));
   if (lf(made) !== lf(committed)) { console.log("      " + firstDiff(committed, made)); }
   yes("and NPC-SPAWNS.csv is still what it writes",
-      lf(fs.readFileSync(path.join(tmp, "docs", "NPC-SPAWNS.csv"), "utf8")) === lf(readRepo("docs/NPC-SPAWNS.csv")));
+      lf(fs.readFileSync(path.join(tmp, "game", "data", "NPC-SPAWNS.csv"), "utf8")) === lf(readRepo("game/data/NPC-SPAWNS.csv")));
 }
 
 // ---- 5. the full run still needs the plugins, and says so

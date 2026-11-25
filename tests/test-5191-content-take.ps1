@@ -192,6 +192,26 @@ try {
     $r = Run @('-Repo', $repo, '-Newest', '-Take', '-Output', '')
     Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
 
+    $oldSpotPath = 'docs/HUNTING-SPOTS.csv'
+    $newSpotPath = 'game/data/HUNTING-SPOTS.csv'
+    $spotFile = Join-Path $repo $newSpotPath
+    $spots = @{ $oldSpotPath = $enc.GetBytes('the older signed build data') }
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots), '-Output', '')
+    Check '3 -Newest lays verified legacy spot bytes at the new path' (
+        $r.Code -eq 0 -and (Test-Path -LiteralPath $spotFile) -and
+        (Sha ([IO.File]::ReadAllBytes($spotFile))) -ceq (Sha $spots[$oldSpotPath]) -and
+        -not (Test-Path -LiteralPath (Join-Path $repo $oldSpotPath)))
+    $spots[$newSpotPath] = $enc.GetBytes('new location in the build')
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots), '-Output', '')
+    Check '3 -Newest prefers the verified current path when both are present' (
+        $r.Code -eq 0 -and (Sha ([IO.File]::ReadAllBytes($spotFile))) -ceq (Sha $spots[$newSpotPath]))
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+    $badSpot = @{ $oldSpotPath = ('0' * 64); $newSpotPath = (Sha $spots[$newSpotPath]) }
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots $badSpot), '-Output', '')
+    Check '3 -Newest refuses a wrong hash before laying either spot file' (
+        $r.Code -eq 1 -and $r.Text -match 'is not the sha256' -and -not (Test-Path -LiteralPath $spotFile))
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+
     # 3d. In a workflow GitHub's download step takes the build (#6359):
     # -Find names it, and the script's own download refuses.
     @{ artifacts = @(

@@ -307,7 +307,10 @@ async function handle(req, res) {
   // POST from the hub, waits no longer than Play (#1164).
   const pageLoad = req.method === 'GET';
   const submitDoor = req.method === 'POST' && SUBMIT_DOORS.has(route);
-  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS, pageLoad);
+  // The report form chooses whether a submit needs CAPTCHA. A stale role
+  // answer may help draw other pages, but cannot promise the POST's bypass.
+  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS,
+                      pageLoad && route !== '/api/report/form');
 
   // ---------------------------------------------------------- member login
   if (p === '/api/login' && req.method === 'POST') {
@@ -750,9 +753,10 @@ async function handle(req, res) {
      time, five an hour from one place, and the inbox is capped so it cannot
      be used to fill the disk. See thornswood report limits above. */
   // What the report page needs to draw the form: the Turnstile site key, or
-  // nothing when the check is off (#3216). Public, like the key itself.
+  // nothing when the check is off or current hub authority already proves
+  // access (#4347). The same proof is checked again when the form submits.
   if (route === '/api/report/form' && req.method === 'GET') {
-    return sendJson(res, 200, { turnstile: turnstileOn() ? cfg.turnstileSiteKey : '' });
+    return sendJson(res, 200, { turnstile: turnstileOn() && !w.member && !w.dev ? cfg.turnstileSiteKey : '' });
   }
 
   if (route === '/api/report' && req.method === 'POST') {
@@ -778,7 +782,9 @@ async function handle(req, res) {
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
-    if (turnstileOn()) {
+    // who() has already proved current member/staff access. The public form
+    // omits its widget for that proof; all other senders still need a pass.
+    if (turnstileOn() && !w.member && !w.dev) {
       const ts = await turnstilePasses(o.turnstile, requestAddr(req));
       if (ts === 'unasked') {
         return sendJson(res, 503, { error: 'Cloudflare did not answer the check that you are a person, so nothing was sent. Try again in a minute.' });
@@ -1005,6 +1011,7 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'no Discord account holds that character, so ban the character' });
       }
       const minutes = banMinutes(o.minutes);
+      if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
       const until = minutes ? now + minutes * 60000 : 0;
       const whole = what === 'banaccount';
       const banKey = whole ? account : 'p:' + pid;
@@ -3326,6 +3333,7 @@ async function handle(req, res) {
         const why = String(o.why || '').trim().slice(0, 500);
         if (!why) return sendJson(res, 400, { error: 'a ban says why' });
         const minutes = banMinutes(o.minutes);
+        if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
         const until = minutes ? now + minutes * 60000 : 0;
         const row = { at: now, until, why, by: w.name, byId: w.id, from: 'the hub', account: id };
         const ok = pid

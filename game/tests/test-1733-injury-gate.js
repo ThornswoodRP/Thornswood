@@ -54,13 +54,16 @@ function number(name) {
 const NEEDS_SRC = slice('// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 const HURT_SRC = slice('// ==== thornswood injury and disease ====', '// ==== end thornswood injury and disease ====');
 const GATE_SRC = slice('function unfitToMake(actorId, workbenchId) {', '\n}\n');
-const CRAFT_SRC = slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
+const CRAFT_SRC = slice('function recipeMetadataRefusal(desc) {', '\n}\n') +
+  slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
 // The order taken at a bench before its time runs (#3161) asks it too, so a
 // person too tired to work is told before they wait.
 const WORK_SRC = slice("mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
 const KEY_SRC = slice('  function cutKey(actorId, profileId, toProfile, parts) {', '\n  }\n');
 // A master key cut again at a forge (#2254) is a third road, and asks too.
 const MASTER_SRC = slice('  function cutMasterKey(actorId, profileId, toProfile, parts) {', '\n  }\n');
+const DYE_START_SRC = slice('  function pressed(actorId, benchKeyword, workbenchId) {', '\n  }\n');
+const DYE_FINISH_SRC = slice('  function finishSteep(actorId, dye, workbenchId) {', '\n  }\n');
 const FORGE_HERE_SRC = slice('  function forgeHere(parts, actorId) {', '\n  }\n');
 const AT_FORGE_SRC = slice('  function atForge(actorId) {', '\n  }\n');
 const TOUCHED_SRC = slice('  function touchedBench(actorId, baseDesc, refrId) {', '\n  }\n');
@@ -299,13 +302,17 @@ Object.keys(ROADS).forEach(function (name) {
   yes('W2 no other code asks either block\'s craftRefusal by another name (only the two definitions and the gate)',
       other === 4);
   const calls = code.match(/\bunfitToMake\(actorId, [a-zA-Z]+\);/g) || [];
-  yes('W3 the roads ask the gate: a bench\'s menu with its bench, the kiln\'s included, when the order is taken (#3161) and when it is made, a key with the forge, and a master key with the forge (#2254)',
-      calls.length === 4 && !/function burnCharcoal\b/.test(code) &&
+  yes('W3 the known crafting roads ask the gate, including both ends of hair-dye steeping with its cooking reference',
+      calls.length === 6 && !/function burnCharcoal\b/.test(code) &&
+      !!DYE_START_SRC && /unfitToMake\(actorId, workbenchId\)/.test(DYE_START_SRC) &&
+      !!DYE_FINISH_SRC && /unfitToMake\(actorId, workbenchId\)/.test(DYE_FINISH_SRC) &&
       /unfitToMake\(actorId, workbenchId\)/.test(CRAFT_SRC) &&
       !!WORK_SRC && /unfitToMake\(actorId, workbenchId\)/.test(WORK_SRC) &&
       /unfitToMake\(actorId, forge\)/.test(KEY_SRC) &&
       !!MASTER_SRC && /unfitToMake\(actorId, forge\)/.test(MASTER_SRC));
   yes('W4 each asks before anything is taken',
+      DYE_START_SRC.indexOf('unfitToMake(') < DYE_START_SRC.indexOf('steeps[actorId] =') &&
+      DYE_FINISH_SRC.indexOf('unfitToMake(') < DYE_FINISH_SRC.indexOf('HAIR_DYE.afterSteep(') &&
       CRAFT_SRC.indexOf('unfitToMake(') < CRAFT_SRC.indexOf('recipelessCraft(') &&
       KEY_SRC.indexOf('unfitToMake(') < KEY_SRC.indexOf('takeItem(') &&
       MASTER_SRC.indexOf('unfitToMake(') < MASTER_SRC.indexOf('takeItem('));

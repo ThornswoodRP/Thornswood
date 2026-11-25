@@ -248,6 +248,11 @@ The short form of the rules. The same decisions, with the dates they were made, 
   plugins are clean, that the Python names only what exists (ruff, issue
   #1343), the count of silent catches (#5292) and that the launcher touches
   its window only from the UI thread (`scripts\dev\Check-UiThread.py`). The
+  independent job "Bot harnesses" runs every top-level `bot/tests/test-*.py`
+  on every pull request and merge-queue build, using the same bounded runner
+  as nightly (`scripts/dev/Run-BotHarnesses.ps1`, #5958). Its failure, skip or
+  cancellation prevents "Build check result" from passing; same-tree reuse
+  also requires that bot job to have passed. The
   job "Launcher builds", on a Windows runner, publishes the native launcher
   the way every build does (`scripts\release\Build-Launcher.ps1`, red on a
   compile error or a trim or native code warning, issue #4823), checks the

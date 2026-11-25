@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\tests\test-4087-chain-rerun.ps1
 
-  #4087. Build-RecipeTable.ps1 reads docs\systems\cut-items.json back
+  #4087. Build-RecipeTable.ps1 reads game\data\cut-items.json back
   (readsBack in scripts\mods\content-tables.json), and Write-CutItems.js,
   later in the chain, writes it. Since #4087 the script sorts a row a new
   plugin added into that file, so the recipe build has to run again on it:
@@ -179,12 +179,12 @@ try {
     $real = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/content-tables.json')) | ConvertFrom-Json
     $readerAt = -1; $writerAt = -1
     for ($i = 0; $i -lt $real.steps.Count; $i++) {
-        if (@($real.steps[$i].readsBack) -contains 'docs/systems/cut-items.json') { $readerAt = $i }
-        if (@($real.steps[$i].writes) -contains 'docs/systems/cut-items.json' -and $real.steps[$i].tool -eq 'scripts/dev/Write-CutItems.js') { $writerAt = $i }
+        if (@($real.steps[$i].readsBack) -contains 'game/data/cut-items.json') { $readerAt = $i }
+        if (@($real.steps[$i].writes) -contains 'game/data/cut-items.json' -and $real.steps[$i].tool -eq 'scripts/dev/Write-CutItems.js') { $writerAt = $i }
     }
     Yes 'content-tables.json has the recipe build read cut-items.json back before Write-CutItems.js writes it' ($readerAt -ge 0 -and $writerAt -gt $readerAt -and $real.steps[$readerAt].tool -eq 'scripts/dev/Build-RecipeTable.ps1')
     $writesKept = @($real.steps | Where-Object { $_.tool -eq 'scripts/dev/Write-CutItems.js' } | ForEach-Object { @($_.writes) })
-    Yes 'and Write-CutItems.js names cut-kept.json among what it writes' ($writesKept -contains 'docs/systems/cut-kept.json')
+    Yes 'and Write-CutItems.js names cut-kept.json among what it writes' ($writesKept -contains 'game/data/cut-kept.json')
     $recostAt = -1
     for ($i = 0; $i -lt $real.steps.Count; $i++) { if ($real.steps[$i].tool -eq 'scripts/dev/Build-Recost.py' -and @($real.steps[$i].writes) -contains 'game/data/recost.json') { $recostAt = $i } }
     Yes 'and has it read recost.json back before Build-Recost.py writes it (#5191)' (

@@ -340,7 +340,7 @@ game\gamemode\durability.ts 4
 game\gamemode\embassy-and-remnant.ts 1
 game\gamemode\event-handlers.ts 1
 game\gamemode\farming.ts 4
-game\gamemode\furniture.ts 6
+game\gamemode\furniture.ts 5
 game\gamemode\gathering-stations.ts 2
 game\gamemode\hair-dye.ts 5
 game\gamemode\hold-economy.ts 5
@@ -351,11 +351,11 @@ game\gamemode\map-calendar.ts 2
 game\gamemode\market-stalls-bundle.ts 7
 game\gamemode\merchant-trading-bundle.ts 7
 game\gamemode\mod-settings.ts 6
-game\gamemode\needs.ts 22
+game\gamemode\needs.ts 21
 game\gamemode\npc-server-runtime.ts 2
 game\gamemode\property.ts 43
 game\gamemode\scripted-activators.ts 8
-game\gamemode\season.ts 7
+game\gamemode\season.ts 6
 game\gamemode\server-manifest.ts 1
 game\gamemode\small-helpers.ts 5
 game\gamemode\social.ts 19
@@ -389,7 +389,7 @@ game\ui\thornswood-board.js 2
 game\ui\thornswood-box.js 1
 game\ui\thornswood-bridge.js 19
 game\ui\thornswood-chat.js 17
-game\ui\thornswood-emotes.js 4
+game\ui\thornswood-emotes.js 3
 game\ui\thornswood-furniture.js 2
 game\ui\thornswood-help.js 2
 game\ui\thornswood-journal.js 5

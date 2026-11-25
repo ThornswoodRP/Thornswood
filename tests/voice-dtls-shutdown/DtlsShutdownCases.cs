@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
+using SharpSRTP.DTLS;
 
 namespace Thornswood
 {
@@ -30,7 +31,7 @@ namespace Thornswood
             while (clock.ElapsedMilliseconds < ms) { if (done()) return true; Thread.Sleep(10); }
             return done();
         }
-        static object Layer(VoicePeer p) { return Get(Get(p, "dtls"), "m_recordLayer"); }
+        static object Layer(VoicePeer p) { return Get(((BcDtlsTransport)Get(p, "dtls")).Transport, "m_recordLayer"); }
         static bool IsFailed(object layer) { return (bool)layer.GetType().GetProperty("IsFailed", Hidden).GetValue(layer); }
 
         sealed class Pair : IDisposable
@@ -72,7 +73,7 @@ namespace Thornswood
 
         // The JS compile adapter routes the unchanged native call here. Park
         // before entering BouncyCastle, so no library deadline has started.
-        public static int ReceiveAfterGate(int id, DtlsTransport transport, byte[] buffer, int offset, int length, int wait)
+        public static int ReceiveAfterGate(int id, IDtlsTransport transport, byte[] buffer, int offset, int length, int wait)
         {
             var gate = beforeReceive;
             if (id == 2 && gate != null && Interlocked.Increment(ref gate.Calls) == 1)

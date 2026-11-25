@@ -30,11 +30,9 @@ namespace Thornswood
     /// game's included. The session opts out of that (SetDuckingPreference):
     /// the page's browser never ducked the game, and nobody asked for it.
     ///
-    /// When a device goes away (unplugged, disabled, or the default moved),
-    /// Windows says so with AUDCLNT_E_DEVICE_INVALIDATED, and the side that
-    /// lost it opens the one that now holds its place, once. With nothing to
-    /// open, the microphone says "no microphone" and voice listens only, as
-    /// the page did when getUserMedia was refused, until the next start.
+    /// When a device goes away or the user changes the Windows default,
+    /// the worker opens the device for that role. The active stream stays in use until the
+    /// replacement has started.
     /// </summary>
     sealed partial class VoiceAudio : IDisposable
     {
@@ -42,8 +40,6 @@ namespace Thornswood
         readonly Config cfg;
         readonly object lifecycle = new object();
         readonly ManualResetEvent stopping = new ManualResetEvent(false);
-        // Keep checking the device if an invalidated stream stops signaling.
-        const int AudioProbeMs = 200;
         volatile bool stop;
         Thread mic, speakers;
 
@@ -109,27 +105,34 @@ namespace Thornswood
             return AvSetMmThreadCharacteristicsW("Pro Audio", ref index);
         }
 
-        // ------------------------------------------------------- microphone
+        void Capture() { RunAudio(VoiceCom.eCapture); }
+        void Playback() { RunAudio(VoiceCom.eRender); }
 
-        void Capture()
+        void RunAudio(int flow)
         {
+            bool capture = flow == VoiceCom.eCapture;
+            string label = capture ? "microphone" : "speakers";
             bool com = VoiceCom.Enter();
             nint mm = Realtime();
             try
             {
                 for (int round = 0; round < 2 && !stop; round++)
                 {
-                    int hr = CaptureOnce();
-                    if (hr != VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return;
-                    OnEvent("log", "the microphone went away (unplugged or switched off), opening the one Windows has now");
+                    int result = RunEndpoint(flow, label);
+                    if (result == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED && !stop)
+                    {
+                        OnEvent("log", "the " + label + " went away, opening the Windows device again");
+                        continue;
+                    }
+                    if (result != 0 && !stop)
+                        DeviceFailed(flow, "the " + label + " stopped (0x" + result.ToString("X8") + ")");
+                    return;
                 }
-                OnEvent("log", "the microphone went away again, so voice listens only until the launcher starts again");
-                OnEvent("status", "no microphone");
+                if (!stop) DeviceFailed(flow, "the " + label + " went away again");
             }
             catch (Exception ex)
             {
-                OnEvent("log", "microphone refused: " + Failure.Why("VoiceAudio, the microphone", ex, "the microphone"));
-                OnEvent("status", "no microphone");
+                DeviceFailed(flow, Failure.Why("VoiceAudio, the " + label, ex, "the " + label));
             }
             finally
             {
@@ -138,121 +141,280 @@ namespace Thornswood
             }
         }
 
-        /// <summary>
-        /// Opens the microphone and reads it until told to stop. Returns the
-        /// HRESULT that ended it: 0 for a stop, AUDCLNT_E_DEVICE_INVALIDATED
-        /// when the device went away.
-        /// </summary>
-        unsafe int CaptureOnce()
+        int RunEndpoint(int flow, string label)
         {
-            int hr;
-            VoiceCom.IMMDeviceEnumerator en = VoiceCom.Enumerator(out hr);
-            if (en == null) { Refused("no audio devices (0x" + hr.ToString("X8") + ")"); return 0; }
-            VoiceCom.IMMDevice dev = null;
-            VoiceCom.IAudioClient2 client = null;
-            VoiceCom.IAudioCaptureClient cap = null;
-            bool started = false;
-            var wake = new AutoResetEvent(false);
+            VoiceCom.IMMDeviceEnumerator enumerator = VoiceCom.Enumerator(out int result);
+            if (enumerator == null)
+            {
+                DeviceFailed(flow, "no audio devices (0x" + result.ToString("X8") + ")");
+                return 0;
+            }
+
             try
             {
-                string name, why;
-                dev = Mics.OpenForVoice(en, cfg, out name, out why);
-                if (dev == null) { Refused(why); return 0; }
-                if (why.Length > 0) OnEvent("log", why.Trim());
+                using var watcher = WatchDefaults(enumerator, label);
+                return VoiceEndpointWorker.Run(flow, stopping, watcher?.Changes,
+                    () => ChooseEndpoint(enumerator, flow), error =>
+                    {
+                        if (error != 0)
+                            OnEvent("log", "the replacement " + label + " could not start yet (0x" + error.ToString("X8") + ")");
+                    });
+            }
+            finally { VoiceCom.Release(enumerator); }
+        }
 
-                client = Activate(dev, out hr);
-                if (client == null) return Stopped(hr, "Windows would not open " + name);
+        VoiceDefaultDevices WatchDefaults(VoiceCom.IMMDeviceEnumerator enumerator, string label)
+        {
+            try { return new VoiceDefaultDevices(enumerator); }
+            catch (COMException ex)
+            {
+                OnEvent("log", "Windows could not watch the default " + label + " (0x" + ex.ErrorCode.ToString("X8") + ")");
+                return null;
+            }
+        }
 
-                var props = new VoiceCom.AudioClientProperties
+        IVoiceEndpoint ChooseEndpoint(VoiceCom.IMMDeviceEnumerator enumerator, int flow)
+        {
+            VoiceCom.IMMDevice device = null;
+            string name, note;
+            int result = 0;
+            try
+            {
+                if (flow == VoiceCom.eCapture)
                 {
-                    cbSize = (uint)sizeof(VoiceCom.AudioClientProperties),
-                    eCategory = VoiceCom.AudioCategory_Communications
-                };
-                hr = client.SetClientProperties(&props);
-                if (hr != 0) OnEvent("log", "the microphone is open without Windows' voice processing (0x" + hr.ToString("X8") + ")");
+                    device = Mics.OpenForVoice(enumerator, cfg, out name, out note);
+                }
+                else
+                {
+                    result = AudioOutput.OpenForVoice(enumerator, cfg.AudioOutputId, out device);
+                    name = device == null ? "" : VoiceCom.NameOf(device);
+                    note = device == null ? "Windows has no speakers (0x" + result.ToString("X8") + ")" : "";
+                }
+                var selection = new NativeEndpoint(this, device, flow, name, note, result);
+                device = null;
+                return selection;
+            }
+            finally { VoiceCom.Release(device); }
+        }
 
-                var fmt = VoiceCom.FloatFormat(VoiceMix.Rate, 1);
-                hr = client.Initialize(VoiceCom.AUDCLNT_SHAREMODE_SHARED,
+        void DeviceFailed(int flow, string reason)
+        {
+            bool capture = flow == VoiceCom.eCapture;
+            OnEvent("log", (capture ? "microphone refused: " : "could not play voice: ") + reason);
+            if (capture) OnEvent("status", "no microphone");
+        }
+
+        sealed class NativeEndpoint : IVoiceEndpoint
+        {
+            readonly VoiceAudio audio;
+            readonly VoiceCom.IMMDevice device;
+            readonly int flow, selectionResult;
+            readonly string name, note;
+
+            public NativeEndpoint(VoiceAudio audio, VoiceCom.IMMDevice device, int flow, string name, string note, int selectionResult)
+            {
+                this.audio = audio;
+                this.device = device;
+                this.flow = flow;
+                this.name = name;
+                this.note = note;
+                this.selectionResult = selectionResult;
+                Id = device == null ? "" : VoiceCom.IdOf(device);
+            }
+
+            public string Id { get; }
+
+            public IVoiceEndpointStream Start(out int result)
+            {
+                result = selectionResult;
+                if (device == null)
+                {
+                    if (result != VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED)
+                    {
+                        audio.DeviceFailed(flow, note);
+                        result = 0;
+                    }
+                    return null;
+                }
+
+                var stream = audio.OpenStream(device, flow, out result);
+                if (stream == null) return null;
+                try
+                {
+                    if (flow == VoiceCom.eCapture)
+                    {
+                        if (note.Length != 0) audio.OnEvent("log", note.Trim());
+                        audio.OnEvent("log", "microphone open: " + (name.Length > 0 ? name : "unnamed"));
+                        audio.OnEvent("status", "mic ready");
+                    }
+                    else audio.OnEvent("debug", "playing voice on " + name);
+                    return stream;
+                }
+                catch
+                {
+                    stream.Dispose();
+                    throw;
+                }
+            }
+
+            public void Dispose() { VoiceCom.Release(device); }
+        }
+
+        sealed class NativeStream : IVoiceEndpointStream
+        {
+            readonly VoiceCom.IAudioClient2 client;
+            readonly object service;
+            readonly Func<int> process;
+            readonly AutoResetEvent ready;
+
+            public NativeStream(VoiceCom.IAudioClient2 client, object service, AutoResetEvent ready, Func<int> process)
+            {
+                this.client = client;
+                this.service = service;
+                this.ready = ready;
+                this.process = process;
+            }
+
+            public WaitHandle Ready => ready;
+            public int Process() { return process(); }
+
+            public void Dispose()
+            {
+                try { client.Stop(); }
+                finally
+                {
+                    VoiceCom.Release(service);
+                    VoiceCom.Release(client);
+                    ready.Dispose();
+                }
+            }
+        }
+
+        unsafe IVoiceEndpointStream OpenStream(VoiceCom.IMMDevice device, int flow, out int result)
+        {
+            bool capture = flow == VoiceCom.eCapture;
+            var client = Activate(device, out result);
+            if (client == null) return null;
+            object service = null;
+            var wake = new AutoResetEvent(false);
+            NativeStream stream = null;
+            try
+            {
+                if (capture)
+                {
+                    var props = new VoiceCom.AudioClientProperties
+                    {
+                        cbSize = (uint)sizeof(VoiceCom.AudioClientProperties),
+                        eCategory = VoiceCom.AudioCategory_Communications
+                    };
+                    int processing = client.SetClientProperties(&props);
+                    if (processing != 0) OnEvent("log", "the microphone is open without Windows' voice processing (0x" + processing.ToString("X8") + ")");
+                }
+
+                var format = VoiceCom.FloatFormat(VoiceMix.Rate, capture ? 1 : 2);
+                result = client.Initialize(VoiceCom.AUDCLNT_SHAREMODE_SHARED,
                     VoiceCom.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | VoiceCom.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                     VoiceCom.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY | VoiceCom.AUDCLNT_STREAMFLAGS_NOPERSIST,
-                    200000, 0, &fmt, 0);   // 20 ms of buffer, in 100 ns units
-                if (hr != 0) return Stopped(hr, "Windows would not start " + name);
+                    capture ? 200000 : 400000, 0, &format, 0); // 20 ms capture, 40 ms render
+                if (result != 0) return null;
+                result = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
+                if (result != 0) return null;
 
-                NoDucking(client);
-
-                nint p;
-                hr = client.GetService(VoiceCom.IID_IAudioCaptureClient, out p);
-                if (hr != 0) return Stopped(hr, "no capture service on " + name);
-                cap = VoiceCom.Wrap<VoiceCom.IAudioCaptureClient>(p);
-                hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
-                if (hr != 0) return Stopped(hr);
-                hr = client.Start();
-                if (hr != 0) return Stopped(hr);
-                started = true;
-
-                // The page's words: the launcher logs both.
-                OnEvent("log", "microphone open: " + (name.Length > 0 ? name : "unnamed"));
-                OnEvent("status", "mic ready");
-
-                float[] frame = new float[VoiceMix.Frame];
-                int have = 0;
-                WaitHandle[] signals = { stopping, wake };
-                while (WaitHandle.WaitAny(signals, AudioProbeMs) != 0 && !stop)
+                Func<int> process;
+                if (capture)
                 {
-                    while (!stop)
-                    {
-                        uint next;
-                        hr = cap.GetNextPacketSize(out next);
-                        if (hr != 0) return Stopped(hr);
-                        if (next == 0) break;
-                        nint data; uint frames, flags; ulong pos, qpc;
-                        hr = cap.GetBuffer(out data, out frames, out flags, out pos, out qpc);
-                        if (hr < 0) return Stopped(hr);
-                        // An empty buffer is a normal status and owns no packet.
-                        if (hr == VoiceCom.AUDCLNT_S_BUFFER_EMPTY || frames == 0) break;
-                        try
-                        {
-                            float* src = (float*)data;
-                            bool silent = (flags & VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT) != 0;
-                            for (uint i = 0; i < frames && !stop; i++)
-                            {
-                                frame[have++] = silent ? 0f : src[i];
-                                if (have == frame.Length)
-                                {
-                                    OnFrame(frame);
-                                    frame = new float[VoiceMix.Frame];
-                                    have = 0;
-                                }
-                            }
-                        }
-                        finally { hr = cap.ReleaseBuffer(frames); }
-                        if (hr != 0) return Stopped(hr);
-                    }
+                    NoDucking(client);
+                    result = client.GetService(VoiceCom.IID_IAudioCaptureClient, out nint pointer);
+                    if (result != 0) return null;
+                    var packets = VoiceCom.Wrap<VoiceCom.IAudioCaptureClient>(pointer);
+                    if (packets == null) { result = unchecked((int)0x80004003); return null; }
+                    service = packets;
+                    process = CapturePackets(packets);
                 }
-                return 0;
+                else
+                {
+                    result = client.GetBufferSize(out uint size);
+                    if (result != 0) return null;
+                    result = client.GetService(VoiceCom.IID_IAudioRenderClient, out nint pointer);
+                    if (result != 0) return null;
+                    var render = VoiceCom.Wrap<VoiceCom.IAudioRenderClient>(pointer);
+                    if (render == null) { result = unchecked((int)0x80004003); return null; }
+                    service = render;
+                    var samples = new float[size * 2];
+                    process = () => RenderAudio(client, render, size, samples);
+                }
+
+                if (stop) return null;
+                var candidate = new NativeStream(client, service, wake, process);
+                result = client.Start();
+                if (result != 0) return null;
+                stream = candidate;
+                return stream;
             }
             finally
             {
-                if (started) client.Stop();
-                VoiceCom.Release(cap);
-                VoiceCom.Release(client);
-                VoiceCom.Release(dev);
-                VoiceCom.Release(en);
-                wake.Dispose();
+                if (stream == null)
+                {
+                    VoiceCom.Release(service);
+                    VoiceCom.Release(client);
+                    wake.Dispose();
+                }
             }
         }
 
-        int Stopped(int hr, string message = "the microphone stopped")
+        unsafe Func<int> CapturePackets(VoiceCom.IAudioCaptureClient packets)
         {
-            if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
-            Refused(message + " (0x" + hr.ToString("X8") + ")");
-            return 0;
+            var frame = new float[VoiceMix.Frame];
+            int have = 0;
+            return delegate
+            {
+                while (!stop)
+                {
+                    int result = packets.GetNextPacketSize(out uint next);
+                    if (result != 0) return result;
+                    if (next == 0) break;
+                    result = packets.GetBuffer(out nint data, out uint frames, out uint flags, out _, out _);
+                    if (result < 0) return result;
+                    if (result == VoiceCom.AUDCLNT_S_BUFFER_EMPTY || frames == 0) break;
+                    try
+                    {
+                        var src = (float*)data;
+                        bool silent = (flags & VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT) != 0;
+                        for (uint i = 0; i < frames && !stop; i++)
+                        {
+                            frame[have++] = silent ? 0f : src[i];
+                            if (have == frame.Length)
+                            {
+                                OnFrame(frame);
+                                frame = new float[VoiceMix.Frame];
+                                have = 0;
+                            }
+                        }
+                    }
+                    finally { result = packets.ReleaseBuffer(frames); }
+                    if (result != 0) return result;
+                }
+                return 0;
+            };
         }
 
-        void Refused(string why)
+        unsafe int RenderAudio(VoiceCom.IAudioClient2 client, VoiceCom.IAudioRenderClient render, uint size, float[] samples)
         {
-            OnEvent("log", "microphone refused: " + why);
-            OnEvent("status", "no microphone");
+            int result = client.GetCurrentPadding(out uint padding);
+            if (result != 0) return result;
+            if (padding >= size) return 0;
+            uint room = size - padding;
+            result = render.GetBuffer(room, out nint data);
+            if (result != 0) return result;
+            uint flags = VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT;
+            try
+            {
+                mix.Render(samples, (int)room);
+                new Span<float>(samples, 0, (int)room * 2).CopyTo(new Span<float>((void*)data, (int)room * 2));
+                flags = 0;
+            }
+            finally { result = render.ReleaseBuffer(room, flags); }
+            return result;
         }
 
         static VoiceCom.IAudioClient2 Activate(VoiceCom.IMMDevice dev, out int hr)
@@ -264,126 +426,16 @@ namespace Thornswood
 
         void NoDucking(VoiceCom.IAudioClient2 client)
         {
-            nint p;
-            int hr = client.GetService(VoiceCom.IID_IAudioSessionControl2, out p);
+            int hr = client.GetService(VoiceCom.IID_IAudioSessionControl2, out nint p);
             if (hr != 0) { OnEvent("log", "could not ask Windows not to lower other sounds (0x" + hr.ToString("X8") + ")"); return; }
-            VoiceCom.IAudioSessionControl2 s = VoiceCom.Wrap<VoiceCom.IAudioSessionControl2>(p);
+            VoiceCom.IAudioSessionControl2 session = VoiceCom.Wrap<VoiceCom.IAudioSessionControl2>(p);
+            if (session == null) return;
             try
             {
-                hr = s.SetDuckingPreference(1);
+                hr = session.SetDuckingPreference(1);
                 if (hr != 0) OnEvent("log", "could not ask Windows not to lower other sounds (0x" + hr.ToString("X8") + ")");
             }
-            finally { VoiceCom.Release(s); }
-        }
-
-        // --------------------------------------------------------- speakers
-
-        void Playback()
-        {
-            bool com = VoiceCom.Enter();
-            nint mm = Realtime();
-            try
-            {
-                for (int round = 0; round < 2 && !stop; round++)
-                {
-                    int hr = PlaybackOnce();
-                    if (hr != VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return;
-                    OnEvent("log", "the speakers went away (unplugged or the default changed), playing on the ones Windows has now");
-                }
-                OnEvent("log", "the speakers went away again, so nobody is heard until the launcher starts again");
-            }
-            catch (Exception ex) { OnEvent("log", "could not play voice: " + Failure.Why("VoiceAudio, playing", ex, "the speakers")); }
-            finally
-            {
-                if (mm != 0) AvRevertMmThreadCharacteristics(mm);
-                VoiceCom.Leave(com);
-            }
-        }
-
-        /// <summary>
-        /// Plays the mix on the chosen Windows audio output until told to stop.
-        /// Returns as CaptureOnce.
-        /// </summary>
-        unsafe int PlaybackOnce()
-        {
-            int hr;
-            VoiceCom.IMMDeviceEnumerator en = VoiceCom.Enumerator(out hr);
-            if (en == null) { OnEvent("log", "could not play voice: no audio devices (0x" + hr.ToString("X8") + ")"); return 0; }
-            VoiceCom.IMMDevice dev = null;
-            VoiceCom.IAudioClient2 client = null;
-            VoiceCom.IAudioRenderClient ren = null;
-            var wake = new AutoResetEvent(false);
-            try
-            {
-                hr = AudioOutput.OpenForVoice(en, cfg.AudioOutputId, out dev);
-                if (hr != 0 || dev == null) return PlaybackFailure(hr, "could not play voice: Windows has no speakers");
-                string name = VoiceCom.NameOf(dev);
-                client = Activate(dev, out hr);
-                if (client == null) return PlaybackFailure(hr, "could not play voice on " + name);
-
-                var fmt = VoiceCom.FloatFormat(VoiceMix.Rate, 2);
-                hr = client.Initialize(VoiceCom.AUDCLNT_SHAREMODE_SHARED,
-                    VoiceCom.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | VoiceCom.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
-                    VoiceCom.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY | VoiceCom.AUDCLNT_STREAMFLAGS_NOPERSIST,
-                    400000, 0, &fmt, 0);   // 40 ms
-                if (hr != 0) return PlaybackFailure(hr, "could not play voice on " + name);
-
-                uint size;
-                hr = client.GetBufferSize(out size);
-                if (hr != 0) return PlaybackFailure(hr);
-                nint p;
-                hr = client.GetService(VoiceCom.IID_IAudioRenderClient, out p);
-                if (hr != 0) return PlaybackFailure(hr, "could not play voice on " + name);
-                ren = VoiceCom.Wrap<VoiceCom.IAudioRenderClient>(p);
-                hr = client.SetEventHandle(wake.SafeWaitHandle.DangerousGetHandle());
-                if (hr != 0) return PlaybackFailure(hr);
-
-                float[] buf = new float[size * 2];
-                hr = client.Start();
-                if (hr != 0) return PlaybackFailure(hr);
-                try
-                {
-                    OnEvent("debug", "playing voice on " + name);
-                    WaitHandle[] signals = { stopping, wake };
-                    while (WaitHandle.WaitAny(signals, AudioProbeMs) != 0 && !stop)
-                    {
-                        uint padding;
-                        hr = client.GetCurrentPadding(out padding);
-                        if (hr != 0) return PlaybackFailure(hr);
-                        uint room = size - padding;
-                        if (room == 0) continue;
-                        nint data;
-                        hr = ren.GetBuffer(room, out data);
-                        if (hr != 0) return PlaybackFailure(hr);
-                        uint flags = VoiceCom.AUDCLNT_BUFFERFLAGS_SILENT;
-                        try
-                        {
-                            mix.Render(buf, (int)room);
-                            new Span<float>(buf, 0, (int)room * 2).CopyTo(new Span<float>((void*)data, (int)room * 2));
-                            flags = 0;
-                        }
-                        finally { hr = ren.ReleaseBuffer(room, flags); }
-                        if (hr != 0) return PlaybackFailure(hr);
-                    }
-                    return 0;
-                }
-                finally { client.Stop(); }
-            }
-            finally
-            {
-                VoiceCom.Release(ren);
-                VoiceCom.Release(client);
-                VoiceCom.Release(dev);
-                VoiceCom.Release(en);
-                wake.Dispose();
-            }
-        }
-
-        int PlaybackFailure(int hr, string message = "voice playback stopped")
-        {
-            if (hr == VoiceCom.AUDCLNT_E_DEVICE_INVALIDATED) return hr;
-            OnEvent("log", message + " (0x" + hr.ToString("X8") + ")");
-            return 0;
+            finally { VoiceCom.Release(session); }
         }
     }
 }

@@ -30,17 +30,45 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 
 Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
 
+## Repair equipment for testing
+
+Playtesters, staff and admins can use `/repairgear` on themselves on both Dev and Main. Admins can use `/repairgear for <person>` on somebody else. A playtester may also name their own character unambiguously.
+
+The command restores every carried weapon, armour piece and garment below 100% to sound condition. Pieces above 100% keep their condition. Jewellery and tools keep their ordinary rules. Custom names, tempering, enchantments, charges, poisons, counts and ownership remain with each piece; no repair kits are spent. The worn record and pack change together, and the action is recorded.
+
+The command requires the server's equipment repair support. If the equipment changed while the repair was being prepared, it refuses rather than guessing which piece was meant. If the server cannot confirm a repair, staff should check that problem before repeating the command.
+
+## Set needs for testing
+
+Playtesters, staff and admins can use `/setneeds <hunger|thirst|rest|temperature> <value>` on themselves on both Dev and Main. Admins can add `for <person>` to change another character. An unambiguous explicit self target also works for a playtester.
+
+Use a decimal number from 0 to 100, including both bounds. Hunger, thirst and rest are full at 100; temperature is comfortable at 50, colder below and hotter above. For example, `/setneeds thirst 25` sets your drink meter to 25, while `/setneeds temperature 50 for Aldis` sets Aldis to comfortable warmth.
+
+The other needs first account for their elapsed time. The selected value is then saved exactly, its penalties and displays refresh, and the change is recorded. Injuries, carried items and ongoing effects retain their ordinary rules. Existing invalid needs are refused; a character with no needs record starts with the ordinary full meters and comfortable temperature before the requested change.
+
 ## For yourself
 
 | Command | What it does |
 | --- | --- |
+| `/setneeds` | Set your own hunger, thirst, rest or temperature. Admins may name another character. |
+| `/repairgear` | Repair your carried gear. Admins may name another character. |
 | `/tp` | Lists the towns you can name |
 | `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
+| `/tpto <person>` | Teleports your own living character to an unambiguous online person, by name, prefix, profile or character id. Playtesters may use it on Dev and Main; frozen, cuffed and locked-jail movement is refused. It never moves the other person |
 
 The count is the last word, and only when it is a number with a name in front of it.
+
+## Restore vitals for testing
+
+| Command | Who | What it does |
+| --- | --- | --- |
+| `/heal` | Playtesters, staff and admins, on Dev and Main | Restores your current health, magicka and stamina |
+| `/heal for <person>` | Admins for another character; the self-only permission still permits your own named character | Restores the named online character's vitals |
+
+Healing does not undo death, change progression, repair equipment or remove injury decisions. It uses the current character's actual vitals and records a successful change. An invalid command or a refused write never reports a successful heal.
 
 ## At somebody else
 
@@ -56,6 +84,15 @@ Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourse
 
 Somebody frozen stays frozen where another staff member sends them. Their own teleport commands are refused until they are released.
 
+## Inspect a character
+
+| Command | Who | What it shows |
+| --- | --- | --- |
+| `/inspect` | Playtesters, staff and admins, on Dev or Main | Your character's name and form id, location, vitals, last recorded needs, class, profession and ranks |
+| `/inspect for <person>` | Playtesters for their own unambiguous character; admins for somebody else | The same report for the selected character, using a name, unique name prefix, form id or profile number |
+
+The report reads gameplay state without advancing needs or migrating a character. Positions and percentages are rounded to one decimal place. Missing or invalid values say unavailable, including god mode when the engine does not expose its flag. Private account and Discord data are excluded. Each report uses several short chat lines, so all ranks fit.
+
 ## Spawned creatures
 
 Staff.
@@ -63,6 +100,27 @@ Staff.
 | Command | What it does |
 | --- | --- |
 | `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
+
+## Scene tools
+
+These scene tools work for Playtesters on Dev and Main. Modes end when the
+session loses its current pass or role, or the actor's authority changes.
+They accept no other person's name. [Staff scene tools](../systems/staff-tools.md)
+describes their native dependency, lifecycle and game acceptance checks.
+
+| Command | What it does |
+| --- | --- |
+| `/fly [on\|off]` | Toggles collision-free flight for yourself. Frozen, cuffed or locked-jail movement remains refused |
+| `/phase` | Moves you 256 units forward in the same cell, unless frozen, cuffed or held in a locked jail |
+| `/godmode [on\|off]` | Toggles flight, damage protection, lethal validated attacks and paused hunger, thirst, Rest and temperature. Existing needs values resume on exit; dead characters cannot enable it |
+| `/invisible [on\|off]` | Hides or shows your rendered body and nearby/party name tags; NPC perception stays as it was |
+| `/cleareffects` | Clears your alcohol and drug effects, pending crashes, hangover and withdrawal. Existing injuries, disease and unrelated magic remain |
+
+The cleanup command requires the Admin role.
+
+| Command | What it does |
+| --- | --- |
+| `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes people and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
 
 ## Buildings, stalls and carts
 
@@ -88,7 +146,7 @@ Staff.
 
 | Command | What it does |
 | --- | --- |
-| `/craftstaff pick`, `raise`, `recipe`, `recipes`, `give` | The crafting card on the Office page of K (#3167): picks somebody in the world, raises one of their ranks one step, says why a recipe is stuck for them, and gives back an item with a count and a reason. Never on yourself for `raise` and `give`. Sent by the card's buttons, never typed |
+| `/craftstaff pick`, `raise`, `recipe`, `recipes`, `give` | The crafting card on the Office page of K (#3167): picks somebody in the world, raises one of their ranks one step, checks why an owned recipe or kept smelt is stuck for them (unowned recipes are outside the check), and gives back an item with a count and a reason. Never on yourself for `raise` and `give`. Sent by the card's buttons, never typed |
 
 ## Keeping order
 
@@ -102,6 +160,17 @@ Staff.
 | `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
+
+## Rename a character
+
+Admins only, including when renaming yourself. Playtesters and staff without the admin role cannot use either form.
+
+| Command | What it does |
+| --- | --- |
+| `/rename self <new name>` | Renames your current saved character |
+| `/rename <person> <new name>` | Renames another character who is in the world; names, unique name prefixes, form ids and profile numbers work |
+
+Names use 1 to 60 characters: Unicode letters and numbers, spaces, apostrophes, hyphens or periods, with at least one letter or number. Accents are normalized to NFC, outer spaces are trimmed and repeated spaces become one. Controls, invisible direction marks and markup are refused. Existing duplicate names remain allowed; use the character's form id or profile number when a name is ambiguous. The character, account and profile stay the same, the new name survives reconnecting, and the staff record keeps the old and new names.
 
 ## Bans, PKs and notes
 

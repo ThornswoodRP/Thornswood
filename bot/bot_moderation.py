@@ -56,6 +56,11 @@ _MOD_DID = {
     'despawn': 'despawned a creature',
     'hurt': 'used /hurt on %s',
     'tp': 'sent %s',
+    'heal': 'used /heal on %s',
+    'rankup': 'advanced a rank for %s',
+    'rename': 'renamed %s',
+    'setneeds': 'changed a need for %s',
+    'tpto': 'teleported to %s for testing',
     # One character, or the whole account, and a character killed for good (#1010).
     'ban': 'banned the character %s',
     'unban': 'lifted the ban on the character %s',
@@ -86,6 +91,18 @@ _MOD_DID = {
     'craftrank': 'raised a rank of %s',
     'craftrecipes': 'handed the newer recipe list to the game of %s',
     'craftgive': 'gave back to %s',
+    # Playtest scene commands identify the acting character. Changes made to
+    # a character's equipment or progression also name the target.
+    'fly': 'changed their flight mode',
+    'phase': 'used /phase',
+    'godmode': 'changed their invulnerability',
+    'invisible': 'changed their visibility',
+    'cleareffects': 'used /cleareffects',
+    'killall': 'used /killall',
+    'tools-off': 'ended scene tools for %s',
+    'setclass': 'changed the class of %s',
+    'setprofession': 'changed the profession of %s',
+    'repair': 'repaired equipment for %s',
     # Not staff: somebody's own /stuck (#414), said as its why reads.
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).

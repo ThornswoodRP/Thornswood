@@ -40,6 +40,17 @@ def fixture():
 
 
 class RoleDataTests(unittest.TestCase):
+    def test_only_the_cut_source_path_may_change(self):
+        old = 'docs/systems/cut-items.json'
+        new = 'game/data/cut-items.json'
+        expected = {new: '1' * 64, 'game/data/hunts.json': '2' * 64}
+        stored = {old: '1' * 64, 'game/data/hunts.json': '2' * 64}
+        self.assertTrue(roles.source_hashes_match(stored, expected))
+        self.assertTrue(roles.source_hashes_match(expected, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, old: '3' * 64}, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, new: expected[new]}, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, 'game/data/hunts.json': '4' * 64}, expected))
+
     def test_roles_and_measured_nonplant_sources(self):
         tables, evidence = roles.derive(*fixture())
         self.assertEqual(tuple(tables), roles.ROLES)

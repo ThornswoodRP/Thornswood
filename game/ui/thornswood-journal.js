@@ -333,7 +333,7 @@
                 '<span class="c">' + esc(gb[gi].kind) + '</span></button>';
       }
       if (group.canBusiness || group.canFaction) {
-        html += '<input id="' + ID + '-gname" placeholder="A name">';
+        html += '<input id="' + ID + '-gname" aria-label="Group name" placeholder="A name">';
         if (group.canBusiness) {
           html += '<button class="item go" data-found="business">New business</button>';
         }
@@ -568,9 +568,9 @@
         out += '</div>';
       }
       if (book.canPrices) {
-        out += '<div class="bar"><input id="' + ID + '-price-name" placeholder="what">' +
-               '<input id="' + ID + '-price-buy" placeholder="buy, blank if not">' +
-               '<input id="' + ID + '-price-sell" placeholder="sell, blank if not">' +
+        out += '<div class="bar"><input id="' + ID + '-price-name" aria-label="Item name" placeholder="what">' +
+               '<input id="' + ID + '-price-buy" aria-label="Buying price" placeholder="buy, blank if not">' +
+               '<input id="' + ID + '-price-sell" aria-label="Selling price" placeholder="sell, blank if not">' +
                '<button data-g="price">Set price</button></div>';
       }
       out += '<b>Talk</b>';
@@ -583,7 +583,7 @@
       out += '<div class="none">You cannot read this book.</div>';
     }
     if (book.speak) {
-      out += '<div class="bar"><input id="' + ID + '-gline" placeholder="out of character">' +
+      out += '<div class="bar"><input id="' + ID + '-gline" aria-label="Out of character message" placeholder="out of character">' +
              '<button class="go" data-g="say">Say</button></div>';
     }
     if (book.invite) {
@@ -594,7 +594,7 @@
       */
       out += '<div class="bar">' +
              (facing ? '<button data-g="invitefacing">Invite ' + esc(facing.name) + '</button>' : '') +
-             '<input id="' + ID + '-ginvite" placeholder="who is here">' +
+             '<input id="' + ID + '-ginvite" aria-label="Person to invite" placeholder="who is here">' +
              '<button data-g="invite">Invite</button></div>';
     }
     if (book.canRoles) {
@@ -616,26 +616,26 @@
         }
         out += '</div>';
       }
-      out += '<div class="bar"><input id="' + ID + '-grole" placeholder="a role">' +
+      out += '<div class="bar"><input id="' + ID + '-grole" aria-label="New role name" placeholder="a role">' +
              '<button data-g="rolenew">New role</button></div>';
-      out += '<div class="bar"><input id="' + ID + '-grold" placeholder="a role">' +
-             '<input id="' + ID + '-grnew" placeholder="its new name">' +
+      out += '<div class="bar"><input id="' + ID + '-grold" aria-label="Current role name" placeholder="a role">' +
+             '<input id="' + ID + '-grnew" aria-label="Replacement role name" placeholder="its new name">' +
              '<button data-g="rolerename">Rename role</button></div>';
     }
     // Invite also removes someone who is not the owner (factions.md, Roles).
     if (book.canRoles || book.invite) {
-      out += '<div class="bar"><input id="' + ID + '-gwho" placeholder="who is in the book">' +
-             (book.canRoles ? '<input id="' + ID + '-gset" placeholder="their role">' +
+      out += '<div class="bar"><input id="' + ID + '-gwho" aria-label="Person in the book" placeholder="who is in the book">' +
+             (book.canRoles ? '<input id="' + ID + '-gset" aria-label="Role to assign" placeholder="their role">' +
                               '<button data-g="setrole">Set role</button>' : '') +
              (book.invite ? '<button data-g="remove">Remove</button>' : '') + '</div>';
     }
     if (book.owner) {
-      out += '<div class="bar"><input id="' + ID + '-grename" placeholder="a new name">' +
+      out += '<div class="bar"><input id="' + ID + '-grename" aria-label="New group name" placeholder="a new name">' +
              '<button data-g="rename">Rename</button>' +
              '<button data-g="disband">Disband</button></div>';
     }
     if (book.staff) {
-      out += '<div class="bar"><input id="' + ID + '-ghand" placeholder="who already belongs">' +
+      out += '<div class="bar"><input id="' + ID + '-ghand" aria-label="New owner" placeholder="who already belongs">' +
              '<button data-g="give">Hand it on</button></div>';
     }
     if (book.leave) {
@@ -779,7 +779,7 @@
 
     var html =
       '<div class="bar">' +
-      '<input id="' + ID + '-title" value="' + esc(book.title) + '" style="max-width:360px">' +
+      '<input id="' + ID + '-title" aria-label="Journal title" value="' + esc(book.title) + '" style="max-width:360px">' +
       '<button data-do="rename">Rename</button>' +
       '<span class="grow"></span>' +
       '<button data-do="dropbook">Throw away</button>' +
@@ -805,13 +805,13 @@
     } else {
       html +=
         '<div class="bar">' +
-        '<input id="' + ID + '-ptitle" maxlength="' + TITLE_CHARS + '" value="' + esc(page.title) + '" style="max-width:320px">' +
+        '<input id="' + ID + '-ptitle" aria-label="Page title" maxlength="' + TITLE_CHARS + '" value="' + esc(page.title) + '" style="max-width:320px">' +
         '<span class="grow"></span>' +
         '<button data-do="sharepage">Share this page</button>' +
         '<button data-do="unsharepage">Stop sharing it</button>' +
         '<button class="go" data-do="save">Save</button>' +
         '</div>' +
-        '<textarea id="' + ID + '-text" maxlength="' + PAGE_CHARS + '">' + esc(page.text || '') + '</textarea>';
+        '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(page.text || '') + '</textarea>';
     }
 
     main.innerHTML = html;

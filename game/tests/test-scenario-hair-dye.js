@@ -194,6 +194,79 @@ const washed = mixed(dyed, BROWN, WASH.strength);
 yes('F1 the wash takes Brenna\'s hair ' + WASH.strength + ' of the way back to the brown she was made with (' + c6(dyed) + ' -> ' + c6(colour(BRENNA)) + ')',
   colour(BRENNA) === washed && dyesIn(DAGNY, WASH) === 0);
 
+// #4692: the actual activation route must ask the shared craft gate, both
+// before the wait and before spending inputs. Cooking remains one-handed.
+const H = w.box().__thornswoodHurt, HD = w.box().__thornswoodHairDye;
+function fitness(rest, injury) {
+  H.staff(DAGNY, ['clear'], 'fixture');
+  if (injury) { H.staff(DAGNY, injury, 'fixture'); }
+  const n = w.prop(DAGNY, 'thornswoodNeeds'); n.rest = rest; n.at = w.now();
+  w.mp().set(DAGNY, 'thornswoodNeeds', n);
+}
+COPPER.inputs.forEach(x => w.give(DAGNY, id(x.item), x.count * 5));
+for (const state of [
+  { name: 'low Rest', rest: 5, line: /too exhausted|too tired/i },
+  { name: 'bad disease', rest: 100, injury: ['fever'], line: /too sick to work/ }
+]) {
+  fitness(state.rest, state.injury);
+  if (state.injury) {
+    const hurt = w.prop(DAGNY, 'thornswoodHurt'); hurt.ills[0].at = w.now() - 31 * 60000;
+    w.mp().set(DAGNY, 'thornswoodHurt', hurt);
+  }
+  const had = held(DAGNY, COPPER), count = dyesIn(DAGNY, COPPER), at = w.heard(DAGNY).length;
+  w.activate(POT, DAGNY);
+  yes('fitness: ' + state.name + ' refuses the actual press with the craft reason',
+    w.heardSince(DAGNY, at).some(line => state.line.test(line)));
+  yes('fitness: ' + state.name + ' starts no steep and keeps all dye inputs',
+    !HD.steeps[DAGNY] && held(DAGNY, COPPER) === had && dyesIn(DAGNY, COPPER) === count);
+  delete HD.steeps[DAGNY]; // isolate the counterfactual on unfixed source
+}
+const river = w.prop(DAGNY, 'thornswoodNeeds');
+river.water = { river: 1 }; river.boilFrom = null;
+w.mp().set(DAGNY, 'thornswoodNeeds', river);
+const beforeBoil = held(DAGNY, COPPER);
+w.activate(POT, DAGNY);
+yes('fitness: refused dye still starts the carried river-water boil',
+  typeof w.prop(DAGNY, 'thornswoodNeeds').boilFrom === 'number');
+w.run(LIST.steepSeconds * 1000 + 1000);
+w.say(DAGNY, '/place indoors - 0 1 0 40'); w.run(1000);
+yes('fitness: water boils after dye refusal without spending dye ingredients',
+  w.prop(DAGNY, 'thornswoodNeeds').water.boiled === 1 && held(DAGNY, COPPER) === beforeBoil);
+fitness(100, ['break', 'arm']);
+let benchSeen;
+const craftRefusal = H.craftRefusal;
+H.craftRefusal = function (actor, bench) { benchSeen = bench; return craftRefusal(actor, bench); };
+w.activate(POT, DAGNY);
+yes('fitness: injury policy receives the actual cooking reference', benchSeen === POT);
+yes('fitness: a broken arm still permits the one-handed cooking spot', !!HD.steeps[DAGNY]);
+H.craftRefusal = craftRefusal;
+fitness(5);
+const heldBeforeFinish = held(DAGNY, COPPER), dyesBeforeFinish = dyesIn(DAGNY, COPPER);
+w.run(LIST.steepSeconds * 1000 + 1000);
+heardAt = w.heard(DAGNY).length;
+w.say(DAGNY, '/place indoors - 0 1 0 40'); w.run(1000);
+yes('fitness: becoming exhausted during the wait refuses completion',
+  w.heardSince(DAGNY, heardAt).some(line => /too exhausted|too tired/i.test(line)));
+yes('fitness: refused completion consumes no dye inputs and makes no dye',
+  !HD.steeps[DAGNY] && held(DAGNY, COPPER) === heldBeforeFinish && dyesIn(DAGNY, COPPER) === dyesBeforeFinish);
+fitness(100);
+w.activate(POT, DAGNY);
+yes('fitness: a fresh fit press can restart after refused completion', !!HD.steeps[DAGNY]);
+H.staff(DAGNY, ['fever'], 'fixture');
+const bad = w.prop(DAGNY, 'thornswoodHurt'); bad.ills[0].at = w.now() - 31 * 60000;
+w.mp().set(DAGNY, 'thornswoodHurt', bad);
+benchSeen = undefined;
+H.craftRefusal = function (actor, bench) { benchSeen = bench; return craftRefusal(actor, bench); };
+const beforeIll = held(DAGNY, COPPER), dyesBeforeIll = dyesIn(DAGNY, COPPER);
+w.run(LIST.steepSeconds * 1000 + 1000); heardAt = w.heard(DAGNY).length;
+w.say(DAGNY, '/place indoors - 0 1 0 40'); w.run(1000);
+yes('fitness: completion rechecks severe illness using the original cooking reference',
+  benchSeen === POT && w.heardSince(DAGNY, heardAt).some(line => /too sick to work/.test(line)));
+yes('fitness: illness during the wait clears the slot and keeps every dye input',
+  !HD.steeps[DAGNY] && held(DAGNY, COPPER) === beforeIll && dyesIn(DAGNY, COPPER) === dyesBeforeIll);
+H.craftRefusal = craftRefusal;
+fitness(100);
+
 // ------------------------------------------------------------ G. restart --
 const before = { dagny: colour(DAGNY), brenna: colour(BRENNA), made: JSON.stringify(w.prop(BRENNA, 'thornswoodHairMade') || null) };
 const r = w.restart();

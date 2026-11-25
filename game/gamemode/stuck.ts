@@ -205,6 +205,12 @@
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
 
   // A server move begins a new journey. Keep the cooldown and the last
   // successful escape's trap information, which are independent of steps.
@@ -557,7 +563,7 @@
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
-    resetTrail: resetTrail,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };

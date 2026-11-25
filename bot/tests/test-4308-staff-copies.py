@@ -1,16 +1,17 @@
 """Drive the two staff-copy watchers with local stores and a stand-in Discord."""
+import os
+import sys
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, HERE)
+import _pyguard  # noqa: F401
 import asyncio
 import json
-import os
 from pathlib import Path
-import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import _pyguard  # noqa: F401
 
 
 class Room:

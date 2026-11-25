@@ -81,7 +81,11 @@ function pageRig(sent) {
       setAttribute(k, v) { this.attrs[k] = String(v); },
       getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
       addEventListener(t, fn) { (this.own[t] = this.own[t] || []).push(fn); },
-      querySelectorAll() { return []; },
+      querySelectorAll(selector) {
+        // This fixture models search only; it is a native focusable input.
+        return this.id === 'thornswood-wheel' && selector === 'input,button,[tabindex="0"]'
+          ? [byId['thornswood-emote-find']] : [];
+      },
       focus() { d.activeElement = this; },
       blur() { if (d.activeElement === this) { d.activeElement = d.body; } }
     };

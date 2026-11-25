@@ -52,6 +52,7 @@
   var PROBLEM_MAX = 1000;
   var root = null;
   var topic = 'talking';
+  var topicButtons = null;
 
   /* A fresh install's keys: Thornswood.ini's, and the game's own E. */
   var keys = {
@@ -244,7 +245,7 @@
       '<div class="panel">' +
       '<h2>Help</h2>' +
       '<div class="nav" id="' + ID + '-nav"></div>' +
-      '<div class="body" id="' + ID + '-body"></div>' +
+      '<div class="body" id="' + ID + '-body" role="region"></div>' +
       '<div class="foot"><span id="' + ID + '-foot"></span><span style="flex:1"></span>' +
       '<button id="' + ID + '-settings">Settings</button>' +
       '<button id="' + ID + '-close">Close</button></div>' +
@@ -288,20 +289,31 @@
     var nav = root.querySelector('#' + ID + '-nav');
     var body = root.querySelector('#' + ID + '-body');
     var foot = root.querySelector('#' + ID + '-foot');
-    var html = '';
-    for (var i = 0; i < TOPICS.length; i++) {
-      html += '<button data-topic="' + TOPICS[i].id + '"' +
-              (TOPICS[i].id === topic ? ' class="go"' : '') + '>' + esc(TOPICS[i].title) + '</button>';
+    // The topics are static. Keep their actual buttons mounted so selecting
+    // one, or refreshing key names, cannot discard keyboard focus.
+    if (!topicButtons) {
+      var html = '';
+      for (var i = 0; i < TOPICS.length; i++) {
+        html += '<button id="' + ID + '-topic-' + TOPICS[i].id + '" data-topic="' + TOPICS[i].id + '">' +
+                esc(TOPICS[i].title) + '</button>';
+      }
+      nav.innerHTML = html;
+      topicButtons = nav.querySelectorAll('button[data-topic]');
+      for (var b = 0; b < topicButtons.length; b++) {
+        topicButtons[b].onclick = function () {
+          topic = this.getAttribute('data-topic');
+          draw();
+        };
+      }
     }
-    nav.innerHTML = html;
-    var buttons = nav.querySelectorAll('button[data-topic]');
-    for (var b = 0; b < buttons.length; b++) {
-      buttons[b].onclick = function () {
-        topic = this.getAttribute('data-topic');
-        draw();
-      };
+    for (var c = 0; c < topicButtons.length; c++) {
+      var current = topicButtons[c].getAttribute('data-topic') === topic;
+      topicButtons[c].className = current ? 'go' : '';
+      if (current) { topicButtons[c].setAttribute('aria-current', 'page'); }
+      else { topicButtons[c].removeAttribute('aria-current'); }
     }
     var t = find(topic) || TOPICS[0];
+    body.setAttribute('aria-labelledby', ID + '-topic-' + t.id);
     var out = '<p class="lead">' + esc(lead(keys)) + '</p>';
     var paras = t.text(keys);
     for (var p = 0; p < paras.length; p++) { out += '<p>' + esc(paras[p]) + '</p>'; }
@@ -318,7 +330,7 @@
       '<p>Say what went wrong and what you were doing. It goes on the board for the ' +
       'developers, with where you are standing and the logs of this game, which are ' +
       'sent when you close it.</p>' +
-      '<textarea id="' + ID + '-ptext" maxlength="' + PROBLEM_MAX + '">' + esc(problemDraft) + '</textarea>' +
+      '<textarea id="' + ID + '-ptext" aria-label="Problem report" maxlength="' + PROBLEM_MAX + '">' + esc(problemDraft) + '</textarea>' +
       '<div class="row"><button class="go" id="' + ID + '-psend">Send</button>' +
       '<span id="' + ID + '-psaid"></span></div>' +
       '</div>';

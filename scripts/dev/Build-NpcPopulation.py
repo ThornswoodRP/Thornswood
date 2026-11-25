@@ -526,7 +526,7 @@ def write_runtime(payload):
     gamemode_tables.write('NPC_POPULATION_DATA', compact)
 
 
-# docs/HUNTING-SPOTS.csv is every retained animal with what its body gives.
+# game/data/HUNTING-SPOTS.csv is every retained animal with what its body gives.
 # One writer, so a population rebuild and a hunt table rebuild both leave the
 # same columns (#1874): it reads only npc-population.json and hunts.json, and
 # Build-ResourceLocations.py --hunting-only runs it without any plugin.
@@ -555,7 +555,7 @@ def write_hunting_spots(npcs):
     root = HERE.parent.parent
     hunts = json.loads((root / 'game/data/hunts.json').read_text(encoding='utf-8'))['hunts']
     rows = hunting_rows(npcs, hunts)
-    target = root / 'docs' / 'HUNTING-SPOTS.csv'
+    target = root / 'game' / 'data' / 'HUNTING-SPOTS.csv'
     # LF on every machine, as git stores it (#3029): since #3120 this builder
     # is a step of scripts/mods/content-tables.json.
     with target.open('w', encoding='utf-8', newline='') as output:
@@ -571,7 +571,7 @@ def write_catalogues(payload):
     columns = ['ref', 'name', 'base', 'hold', 'locationName', 'location', 'habitat', 'role',
                'species', 'tier', 'cap', 'returnMinutes', 'leash', 'cell', 'world', 'x', 'y', 'z']
     kept = [r for r in payload['npcs'] if r['keep']]
-    with (root / 'NPC-SPAWNS.csv').open('w', encoding='utf-8', newline='') as output:
+    with (HERE.parent.parent / 'game/data/NPC-SPAWNS.csv').open('w', encoding='utf-8', newline='') as output:
         writer = csv.DictWriter(output, fieldnames=columns, lineterminator='\n')
         writer.writeheader()
         for r in kept:
@@ -586,7 +586,7 @@ def write_catalogues(payload):
         f"{summary['catalogued']:,} placements inspected; {summary['retained']:,} retained; {summary['excluded']:,} excluded.", '',
         'Named pets and named enemies are excluded even when their source record lacks the Unique flag.',
         'Merchant traders and exterior transport services remain available.', '',
-        '[All retained spawn coordinates](NPC-SPAWNS.csv) and [animal habitat coordinates](HUNTING-SPOTS.csv)',
+        '[All retained spawn coordinates](../game/data/NPC-SPAWNS.csv) and [animal habitat coordinates](../game/data/HUNTING-SPOTS.csv)',
         'list source identities, species, location, tier, cap, return interval and home radius.',
         'Each row is one authored identity, not a per-person spawn. A dead identity returns once after its',
         'listed interval; the deadline persists through restart. A corpse yields one shared dressing per life.', '',
@@ -627,7 +627,7 @@ def write_merchants(payload):
         lines.append('| ' + ' | '.join([row['hold'], row['role'], row['locationName'], ref, row['bookHold']]) + ' |')
     lines += ['', 'Total: 60', '',
         'Each authored identity returns after 360 minutes and keeps its existing 512-unit home radius.',
-        'Exact coordinates and the shared population rules are in [NPC spawns](../NPC-SPAWNS.csv).']
+        'Exact coordinates and the shared population rules are in [NPC spawns](../../game/data/NPC-SPAWNS.csv).']
     with (root / 'docs/systems/merchant-traders.md').open('w', encoding='utf-8', newline='\n') as output:
         output.write('\n'.join(lines) + '\n')
 

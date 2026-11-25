@@ -126,6 +126,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Nightly-Stray.ps1](dev/Nightly-Stray.ps1) | Names every pull request open more than two days and every branch with no open pull request, in this repository and in the engine fork, reading every page GitHub has. |
 | [dev/OwnPlugins.ps1](dev/OwnPlugins.ps1) | Where a builder reads a plugin of the load order from (#2923). |
 | [dev/Report-Clone.ps1](dev/Report-Clone.ps1) | Says what One's clone holds that only One can see: every worktree, with its branch, whether it has changes nobody committed and when it last changed; every stash; every local branch, with whether GitHub still has it and how far behind main it is; the folders in temp\ and worktrees\ that no worktree owns. |
+| [dev/Run-BotHarnesses.ps1](dev/Run-BotHarnesses.ps1) | Runs the complete bot harness suite for pull requests and nightly checks. |
 | [dev/Run-Gate.ps1](dev/Run-Gate.ps1) | Runs the gate harnesses for build.yml's gate: picks and splits them for its shares, on a pull request only those its change can reach, and runs a share's part (#3114, #5183). |
 | [dev/Run-RealClient.ps1](dev/Run-RealClient.ps1) | Starts the real launcher and the real game on this PC, presses Play the way a person does, and walks the game through a list of steps with the test plugin, game\plugins\thornswood-test.js (#5197). |
 | [dev/Start-Thornswood.ps1](dev/Start-Thornswood.ps1) | Launches the game the way the launcher's Play() does, without the launcher. |

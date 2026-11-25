@@ -239,7 +239,7 @@ Say ('steps 1 to {0}{1} read it without {2}: {3}' -f $lastAt, $(if ($lastAt -lt 
 # A file a step reads back (readsBack in content-tables.json) is written by a
 # later step. When that step changes it, the reader built from the old one, so
 # the chain runs again from the reader, once (#4087): Build-RecipeTable.ps1
-# reads docs\systems\cut-items.json, and Write-CutItems.js sorts a row a new
+# reads game\data\cut-items.json, and Write-CutItems.js sorts a row a new
 # plugin added into it, which the recipe build has to apply; it reads
 # game\data\recost.json too, which Build-Recost.py writes from it (#5191).
 # Each file read back may change once: a second change of the same file is a

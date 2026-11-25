@@ -510,13 +510,13 @@ sys.exit(3)
         $src2 = Join-Path $work 'src2'
         New-Item -ItemType Directory -Force -Path (Join-Path $src2 'scripts\mods'), (Join-Path $src2 'game\content'), (Join-Path $src2 'docs\systems') | Out-Null
         [IO.File]::WriteAllText((Join-Path $src2 'game\content\Thornswood-Content.esp'), 'repo copy')
-        [IO.File]::WriteAllText((Join-Path $src2 'docs\systems\cut-items.json'), '[]')
+        [IO.File]::WriteAllText((Join-Path $src2 'docs\systems\cut-items.md'), 'plan')
         $psTool = @'
 param([string]$Data, [string]$PluginsTxt)
 'PLUGINS ' + ([IO.File]::ReadAllLines($PluginsTxt) -join '|')
 'SHELL ' + $PSVersionTable.PSEdition
 $top = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Set-Content -LiteralPath (Join-Path $top 'docs\systems\cut-items.json') -Value '["x"]'
+Set-Content -LiteralPath (Join-Path $top 'docs\systems\cut-items.md') -Value 'updated'
 New-Item -ItemType Directory -Force -Path (Join-Path $top 'tests\fixtures') | Out-Null
 Set-Content -LiteralPath (Join-Path $top 'tests\fixtures\watched.json') -Value '{}'
 Set-Content -LiteralPath (Join-Path $top 'tests\fixtures\not-watched.json') -Value '{}'
@@ -535,7 +535,7 @@ exit 0
         Yes 'and nothing else of the server''s settings reaches the run' (-not @($lines | Where-Object { $_ -match 'not-for-the-run' }).Count -and
             -not @(Get-ChildItem -LiteralPath $run2 -Recurse -File | Where-Object { $_.Extension -ne '.esp' -and $_.Name -ne 'tools.zip' -and [IO.File]::ReadAllText($_.FullName).Contains('not-for-the-run') }).Count)
         Yes 'what it wrote under docs\systems comes back, and a watched file outside them it made, and not one it was not asked to watch (#3425)' (
-            (@($lines | Where-Object { $_ -like 'CHANGED *' }) -join ',') -eq 'CHANGED docs/systems/cut-items.json,CHANGED tests/fixtures/watched.json' -and ($lines -contains 'EXIT 0'))
+            (@($lines | Where-Object { $_ -like 'CHANGED *' }) -join ',') -eq 'CHANGED docs/systems/cut-items.md,CHANGED tests/fixtures/watched.json' -and ($lines -contains 'EXIT 0'))
         $gone = Stop-Keeper $runKeeper
         Yes 'and its keeper removes its folder' (($gone -contains ('GONE ' + $run2)) -and -not (Test-Path -LiteralPath $run2))
 

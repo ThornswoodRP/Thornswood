@@ -16,15 +16,16 @@ These tools are for testing and administration. Ordinary play keeps its existing
 | --- | --- | --- | --- |
 | command-access | Existing role, connection, pass and character ownership checks | Existing command router and staff helpers | #6628 foundation |
 | command-help | Route registered tools and show role-appropriate syntax and examples | command-access | #6731 |
+| person-teleport | Move only yourself to an online person; preserve restraints and combat/cooldown history | command-access, canonical location and stuck state | #6757 |
 | movement-and-god-mode | Flight, phase, god mode, invisibility, effect clearing and bounded cleanup | command-access, authoritative engine behavior | #6628 |
-| inspect | Read your current character, or another character for an admin | command-access | #6732 |
+| inspect | Read only the recorded gameplay state of yourself, or somebody else for an admin, with unavailable fields stated plainly | command-access, canonical gameplay properties | #6732 |
 | restore-vitals | Restore health, magicka and stamina without reversing permanent decisions | command-access | #6733 |
-| set-needs | Set controlled hunger, thirst, rest and temperature values | command-access, canonical needs state | #6734 |
-| repair-equipment | Repair the intended equipment without losing item identity | command-access, canonical equipment state | #6735 |
+| set-needs | `/setneeds <hunger\|thirst\|rest\|temperature> <0..100>` for yourself; admins add `for <person>`. Full meters are 100 and comfortable temperature is 50. One saved snapshot retains the elapsed clock and refreshes effects | command-access, canonical needs state | #6734 |
+| repair-equipment | `/repairgear` restores your carried equipment below 100%; admins add `for <person>`. Preserve stronger pieces and every item extra, with pack and worn names committed together | command-access, canonical equipment state and native atomic operation | #6735 |
 | rank-up | Advance an existing class or profession track through its progression rules | command-access, canonical progression | #6736 |
 | change-class | Change a class and keep saved state and unlocks consistent | command-access, canonical progression | #6737 |
 | change-profession | Change a profession and keep crafting access consistent | command-access, canonical progression | #6738 |
-| rename | Admin-only persistent rename of yourself or another character | command-access, authoritative appearance | #6739 |
+| rename | Admin-only persistent rename of yourself or another character; refresh the roster and nearby names | command-access, authoritative appearance and roster | #6739 |
 
 Build order: command-access, then command-help and the independent tools. Engine work may proceed beside the utilities. Each tool has its own acceptance checks and does not become available merely because it is described here.
 

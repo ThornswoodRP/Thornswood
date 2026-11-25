@@ -2275,14 +2275,17 @@ namespace Thornswood
         /// deploy can put them back here. Scan sees that the moment it runs and
         /// Fix puts it right again, which is a loop somebody can see and get
         /// out of. The other way round is silent and lands on somebody else.
+        ///
+        /// When the name will not come off (Windows refuses the delete), or
+        /// how many names the file has cannot be read, this throws, and the
+        /// caller does not write: a write then would go through the link all
+        /// the same (#4694). Until #4694 it noted the failure and returned as
+        /// if the link were off, and Fix wrote into Vortex's copy without a
+        /// word.
         /// </summary>
         public static void Detach(string path)
         {
-            try
-            {
-                if (File.Exists(path) && Links(path) > 1) File.Delete(path);
-            }
-            catch (Exception ex) { Swallow.Note("OwnGame.Detach, delete", ex); }
+            if (File.Exists(path) && Links(path) > 1) File.Delete(path);
         }
 
         /// <summary>
@@ -2304,7 +2307,10 @@ namespace Thornswood
                 // which every caller already catches.
                 if (h.IsInvalid) Marshal.ThrowExceptionForHR(Marshal.GetHRForLastWin32Error());
                 FileInfoByHandle info;
-                if (!GetFileInformationByHandle(h, out info)) return 1;
+                // A count Windows would not give is not one name: answering
+                // 1 here let Detach write through a link it never saw (#4694).
+                if (!GetFileInformationByHandle(h, out info))
+                    throw new IOException("Windows did not say how many names " + path + " has", Marshal.GetHRForLastWin32Error());
                 return (int)info.NumberOfLinks;
             }
         }

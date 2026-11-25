@@ -134,8 +134,11 @@ holds the two to each other. The gamemode's own tables from that build go to
 | `thalmor-patrols.json` | by hand |
 | `trading-company.json` | by hand |
 | `war-stages.json` | by hand |
+| `cut-items.json` | `scripts\dev\Write-CutItems.js` |
+| `cut-kept.json` | `scripts\dev\Write-CutItems.js` |
 | `merchant-traders.json` | `scripts\dev\Build-NpcPopulation.py --write-runtime` |
 | `mine-buildings.json` | `scripts\dev\Measure-MineBuildings.py --out game\data\mine-buildings.json` |
+| `NPC-SPAWNS.csv` | `scripts\dev\Build-NpcPopulation.py --write-runtime` |
 | `station-sites.json` | `scripts\dev\Build-StationSites.py` |
 
 ## On your machine

@@ -3,6 +3,22 @@
 One meter. 0 is freezing. 100 is as hot as it goes. 50 is comfortable.
 It moves both ways, toward whatever the place is worth.
 
+## Contents
+
+- [What you see](#what-you-see)
+- [What it costs](#what-it-costs)
+- [How fast it moves](#how-fast-it-moves)
+- [The place](#the-place)
+- [Weather, wind, night, height](#weather-wind-night-height)
+- [Storms on the road](#storms-on-the-road)
+- [The season and the sky](#the-season-and-the-sky)
+- [On the map](#on-the-map)
+- [Fire](#fire)
+- [Water](#water)
+- [Clothing](#clothing)
+- [A meal](#a-meal)
+- [Where this is](#where-this-is)
+
 ## What you see
 
 | Reading | Word |
@@ -164,6 +180,10 @@ It lasts 20 to 60 real minutes, a whole number of minutes, each
 length as likely as the others. Then it rolls again. The next sky is
 not announced.
 
+A sky whose weather is still loading is not considered applied. Once
+that weather is available, the same shared sky is applied without a new
+roll. A sky already applied is left alone on unchanged frames.
+
 The records are Cathedral Weathers, the mod already in the collection.
 Each record is already clear, cloudy, rain, or snow, which is what
 the meter reads. A season mod that follows the game's months, or that
@@ -202,6 +222,17 @@ weather.
 
 Standing in the coals deals about 7 health a second. That is the flame,
 not the meter. You can read Burning and also be on fire.
+
+Being on fire supplies the same 34 warmth as a normal fire at your feet,
+even after you leave the coals or catch fire from someone else. It uses the
+stronger of that heat and a nearby fire, rather than adding both. The target
+changes with the fire; the reading still follows the half-gap curve above.
+When the fire ends, its warmth ends too. A delayed reading counts only the
+time that fire was active. Time logged out gains no warmth from it.
+
+The Body page names a fire on you separately from a nearby fire and its
+distance. Its current reading, target and worn pieces are the server's
+snapshot when K opens or you press Read again.
 
 Fire spreads. Someone burning sets alight anyone in the same cell
 within about two paces (220 units). The caught burn lasts 5 seconds
