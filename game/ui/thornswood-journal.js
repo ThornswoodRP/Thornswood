@@ -49,6 +49,7 @@
   var pageDraft = null; // only the currently selected owned page
   var pendingLeave = null, leaveChoice = null, lastEdit = 'text', leaveNotice = '';
   var destructiveArm = null, destructiveTimer = 0, destructiveHeld = '';
+  var groupFieldError = null;
   var DESTRUCTIVE_ARM_MS = 5000; // The same second-press window as Office.
   var readingShared = -1;
   var openGroup = '';
@@ -240,6 +241,7 @@
       '<div class="side" id="' + ID + '-side"></div>' +
       '<div class="main" id="' + ID + '-main"></div>' +
       '</div>' +
+      '<p id="' + ID + '-field-reason" role="status" aria-live="polite" style="display:none;margin:0;padding:0 18px"></p>' +
       '<div class="foot"><span id="' + ID + '-foot"></span><span style="flex:1"></span>' +
       '<button id="' + ID + '-help">Help</button>' +
       '<button id="' + ID + '-settings">Settings</button>' +
@@ -250,6 +252,9 @@
     root.addEventListener('focusin', rememberEditor);
     root.addEventListener('focusout', rememberEditor);
     root.addEventListener('input', resetDestructive);
+    root.addEventListener('input', function (ev) {
+      if (groupFieldError && ev.target === groupFieldError.field) clearGroupFieldError();
+    });
     root.addEventListener('click', function (ev) {
       if (destructiveArm && ev.target !== destructiveArm.button) resetDestructive();
     }, true);
@@ -525,11 +530,13 @@
     var groupBtns = side.querySelectorAll('button[data-group],button[data-found]');
     for (var gbi = 0; gbi < groupBtns.length; gbi++) {
       groupBtns[gbi].onclick = function () {
+        if (!shown || !root.contains(this)) return;
         var found = this.getAttribute('data-found');
         if (found) {
           var nameEl = root.querySelector('#' + ID + '-gname');
           var gname = nameEl ? String(nameEl.value || '').trim() : '';
-          if (!gname) { return; }
+          clearGroupFieldError();
+          if (!needGroupField('gname', 'Give the group a name first.')) return;
           net('/book new ' + found + ' ' + gname);
           return;
         }
@@ -778,6 +785,48 @@
     }
   }
 
+  // Own only the validity and description token installed for this refusal.
+  // Existing hints/errors, and newer changes by another owner, survive cleanup.
+  function clearGroupFieldError() {
+    var error = groupFieldError;
+    if (!error) return;
+    groupFieldError = null;
+    var field = error.field;
+    if (field.validationMessage === error.reason && field.validity.customError) {
+      field.setCustomValidity(error.custom);
+    }
+    if (field.getAttribute('aria-invalid') === 'true') {
+      if (error.invalid == null) field.removeAttribute('aria-invalid');
+      else field.setAttribute('aria-invalid', error.invalid);
+    }
+    if (error.added) {
+      var now = field.getAttribute('aria-describedby');
+      var remaining = now === error.installed ? error.described :
+        String(now || '').split(/\s+/).filter(function (id) { return id && id !== ID + '-field-reason'; }).join(' ');
+      if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
+      else field.setAttribute('aria-describedby', remaining);
+    }
+    var note = root.querySelector('#' + ID + '-field-reason');
+    note.textContent = ''; note.style.display = 'none';
+  }
+
+  function needGroupField(id, reason) {
+    var field = root.querySelector('#' + ID + '-' + id);
+    if (!field || !root.contains(field)) return false;
+    if (String(field.value || '').trim()) return true;
+    var described = field.getAttribute('aria-describedby');
+    var added = String(described || '').split(/\s+/).indexOf(ID + '-field-reason') < 0;
+    var installed = added ? (described ? described + ' ' : '') + ID + '-field-reason' : described;
+    groupFieldError = {field:field,reason:reason,custom:field.validity.customError ? field.validationMessage : '',
+      invalid:field.getAttribute('aria-invalid'),described:described,added:added,installed:installed};
+    var note = root.querySelector('#' + ID + '-field-reason');
+    note.textContent = reason; note.style.display = 'block';
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', installed);
+    field.setCustomValidity(reason); field.focus(); field.reportValidity();
+    return false;
+  }
+
   function gval(id) {
     var el = root.querySelector('#' + ID + '-' + id);
     return el ? String(el.value || '').trim() : '';
@@ -789,18 +838,20 @@
   }
 
   function onGroup() {
+    if (!shown || !root.contains(this)) return;
+    clearGroupFieldError();
     var book = groupBook();
     if (!book) { return; }
     var verb = this.getAttribute('data-g');
     if (verb === 'say') {
       var line = gval('gline');
-      if (!line) { return; }
+      if (!needGroupField('gline', 'Write a message first.')) return;
       net('/book say ' + book.id + ' ' + line);
       return;
     }
     if (verb === 'invite') {
       var who = gval('ginvite');
-      if (!who) { return; }
+      if (!needGroupField('ginvite', 'Name the person to invite.')) return;
       net('/book invite ' + book.id + ' ' + who);
       return;
     }
@@ -812,7 +863,7 @@
     if (verb === 'leave') { net('/book leave ' + book.id); openGroup = ''; return; }
     if (verb === 'rename') {
       var next = gval('grename');
-      if (!next) { return; }
+      if (!needGroupField('grename', 'Give the group a new name.')) return;
       net('/book rename ' + book.id + ' ' + next);
       return;
     }
@@ -826,7 +877,7 @@
     }
     if (verb === 'price') {
       var item = gval('price-name');
-      if (!item) { return; }
+      if (!needGroupField('price-name', 'Name the item to price.')) return;
       net('/book price ' + book.id + ' | ' + item + ' | ' + blankGold('price-buy') + ' | ' + blankGold('price-sell'));
       return;
     }
@@ -836,14 +887,15 @@
     }
     if (verb === 'rolenew') {
       var role = gval('grole');
-      if (!role) { return; }
+      if (!needGroupField('grole', 'Give the new role a name.')) return;
       net('/book role ' + book.id + ' new | ' + role);
       return;
     }
     if (verb === 'rolerename') {
       var was = gval('grold');
       var renamed = gval('grnew');
-      if (!was || !renamed) { return; }
+      if (!needGroupField('grold', 'Name the current role.') ||
+          !needGroupField('grnew', 'Give the role a new name.')) return;
       net('/book role ' + book.id + ' rename | ' + was + ' | ' + renamed);
       return;
     }
@@ -864,19 +916,20 @@
     if (verb === 'setrole') {
       var person = gval('gwho');
       var set = gval('gset');
-      if (!person || !set) { return; }
+      if (!needGroupField('gwho', 'Name the person whose role changes.') ||
+          !needGroupField('gset', 'Name the role to assign.')) return;
       net('/book member ' + book.id + ' role | ' + person + ' | ' + set);
       return;
     }
     if (verb === 'remove') {
       var gone = gval('gwho');
-      if (!gone) { return; }
+      if (!needGroupField('gwho', 'Name the person to remove.')) return;
       net('/book member ' + book.id + ' remove | ' + gone);
       return;
     }
     if (verb === 'give') {
       var heir = gval('ghand');
-      if (!heir) { return; }
+      if (!needGroupField('ghand', 'Name the new owner.')) return;
       net('/book give ' + book.id + ' | ' + heir);
     }
   }
@@ -1097,6 +1150,7 @@
 
   function drawContents() {
     if (!root || !shown) { return; }
+    clearGroupFieldError();
     resetDestructive();
     drawSide();
     drawMain();
@@ -1117,6 +1171,7 @@
   function close() {
     if (!shown) { return; }
     resetDestructive(); destructiveHeld = '';
+    clearGroupFieldError();
     shown = false; cancelLeave(false);
     if (root) { root.className = ''; }
     tell('closed');
