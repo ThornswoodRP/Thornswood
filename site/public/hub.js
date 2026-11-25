@@ -1693,13 +1693,27 @@ function saidNow(t) {
   if (t === 'saved') setTimeout(function () { if (el('said') === s) s.textContent = ''; }, 1600);
 }
 /* Says what an action did in the hub's one live region (#4421), #hubsaid in
-   index.html, which no redraw replaces. Emptied first, so the same words
-   twice are read twice. */
+   index.html, which no redraw replaces. Leave a cleared render turn before
+   publishing, including identical results (#5858). This exposes a new change;
+   what is spoken still depends on the browser and assistive technology. */
+var announceFrame = 0, announceRequest = 0;
 function announce(t) {
+  var request = ++announceRequest;
+  if (announceFrame) { cancelAnimationFrame(announceFrame); announceFrame = 0; }
   var s = el('hubsaid');
   if (!s) return;
   s.textContent = '';
-  s.textContent = String(t || '');
+  var words = String(t || '');
+  if (!words) return;
+  function current() { return request === announceRequest && el('hubsaid') === s; }
+  announceFrame = requestAnimationFrame(function () {
+    if (!current()) return;
+    announceFrame = requestAnimationFrame(function () {
+      if (!current()) return;
+      announceFrame = 0;
+      s.textContent = words;
+    });
+  });
 }
 
 /* ------------------------------------------------------------- economy -- */
