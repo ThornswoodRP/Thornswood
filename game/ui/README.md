@@ -45,6 +45,29 @@ the menu's loop with one of Thornswood's hints over it, from
 this folder: Go.ps1 writes it from `site\data\site\lines.md`, the one copy
 of the hints (#3130, #3147).
 
+### Dialogs when opening
+
+The journal, board, party, character, trade, drop box, ride, wounds, repair,
+furniture, maneuvers, help, merchant and ship panels call
+`window.thornswoodDialog.open(dialog, title)` from the bridge after drawing a
+closed panel into view. It names the dialog from its mounted title and focuses
+the first visible, enabled control. If there are no controls, it focuses the
+named dialog itself. The merchant and ship keep their existing modal
+attributes.
+
+Call it only when a panel changes from closed to open. Panels that replace a
+focused control during a redraw use `thornswoodDialog.redraw(root, draw)` to
+keep focus and the text selection on the matching control. If that control
+disappears, focus goes to the dialog. The character section rows and
+maneuvers use native buttons so Enter and Space activate the same actions as
+clicking. Repeated keydown does not trigger another action. The away prompt
+keeps its separate alert-dialog and focus-restoration behavior.
+
+`game/tests/test-4601-panel-dialog-focus.js` renders the actual pages with the
+bridge and checks their names, initial focus, reopening, owner updates and
+native-button event boundaries. Chrome accessibility-tree and keyboard checks
+also verify the native browser behavior before shipping.
+
 ## On your machine
 
 From the repo folder, with the game closed:

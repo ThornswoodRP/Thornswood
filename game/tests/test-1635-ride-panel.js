@@ -321,10 +321,10 @@ function pageRig() {
   let buttons = [];
   function ridesDrawn() {
     buttons = [];
-    const re = /<button class="go" data-n="(\d+)">Ride<\/button>/g;
+    const re = /<button class="go" data-focus-key="([^"]+)" data-n="(\d+)">Ride<\/button>/g;
     let m;
     while ((m = re.exec(body.innerHTML))) {
-      const n = m[1];
+      const n = m[2];
       buttons.push({ disabled: false, onclick: null, getAttribute: function () { return n; } });
     }
     return buttons;
@@ -374,7 +374,7 @@ function pageRig() {
     P.root().className === 'on');
   yes('the title is the driver, his line and his stop', /^Bjorlam <span class="sub">the carriage from Whiterun<\/span>$/.test(P.h2.innerHTML));
   yes('each stop is a row with its fare and a Ride button', P.rides().length === 2 &&
-    /Solitude<\/span><span class="fare">20 gold<\/span><button class="go" data-n="0">Ride<\/button>/.test(P.body.innerHTML) &&
+    /Solitude<\/span><span class="fare">20 gold<\/span><button class="go" data-focus-key="Solitude" data-n="0">Ride<\/button>/.test(P.body.innerHTML) &&
     /Riverwood<\/span><span class="fare">10 gold<\/span>/.test(P.body.innerHTML));
   yes('and it says where the fare goes and what a short pack means',
     /The fare goes into Whiterun's drop box\. If the gold is not in your pack, you do not move and nothing is taken\./.test(P.body.innerHTML));
