@@ -62,7 +62,7 @@ const HERE = __dirname;
 // that string is the only way to tell which copy is running. It
 // stayed at owners-5 across the chat log going in on 22 September, so the
 // health check answered identically before and after and proved nothing.
-const BUILD = 'cull-1-command-ack-1-chat-limit-1-chat-local-1-turn-key-1-backpressure-1-keepalive-2-moved-1-deploy-1-line-close-1-head-1-hush-1-auth-on-1-owns-limit-1-masked-1-relay-shapes-1-origin-1-doors-1-ice-relay-1-proxied-1-token-once-1-tls-only-1-ice-socket-1-no-page-1-most-1-roster-once-1-long-command-1-captions-2-line-log-1-own-reports-1-seated-voice-1-health-here-1';
+const BUILD = 'cull-1-command-ack-1-chat-limit-1-chat-local-1-turn-key-1-backpressure-1-keepalive-2-moved-1-deploy-1-line-close-1-head-1-hush-1-auth-on-1-owns-limit-1-masked-1-relay-shapes-1-origin-1-doors-1-ice-relay-1-proxied-1-token-once-1-tls-only-1-ice-socket-1-no-page-1-most-1-roster-once-1-long-command-1-captions-2-line-log-1-own-reports-1-seated-voice-1-health-here-1-quoted-letter-1';
 
 // ==== thornswood deploy record ====
 // Which commit this copy came from (#459): Install-Voice.ps1 leaves the deploy
@@ -532,6 +532,7 @@ function pluginReport(text) {
    command. Every "/line" still goes to the game server: this decides the log
    and nothing else. */
 function commandLogText(me, text, press) {
+  if (/^\/letter-post-v1(?:\s|$)/i.test(text)) return '/letter-post-v1 [sealed letter]';
   if (press === true && pluginReport(text)) return '';
   if (/^\/joinpass\b/i.test(text)) return '/joinpass [pass]';
   if (/^\/line\s*$/i.test(text) && me && me.inLine) return '';
@@ -3113,7 +3114,16 @@ server.on('upgrade', (req, socket, head) => {
       const me = peers.get(myId);
       // A slash line that is not speech (/me, /do, /w, /s and /ooc are) is a
       // command, and keeps up to COMMAND_CHARS. Everything said keeps 400.
-      const long = pageText(msg.text).slice(0, COMMAND_CHARS);
+      const rawLetter = pageText(msg.text);
+      // A malformed private opcode is refused before either speech or logging.
+      // Oversized new requests are never cut into a possibly different letter.
+      if (/^\s+\/letter-post-v1(?:\s|$)/i.test(rawLetter) ||
+          (/^\/letter-post-v1(?:\s|$)/i.test(rawLetter) && rawLetter.length > COMMAND_CHARS)) {
+        ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
+          text:'That letter request is invalid or too long. It was not sent; keep your draft.'});
+        return;
+      }
+      const long = rawLetter.slice(0, COMMAND_CHARS);
       const text = (long.charAt(0) === '/' && !headlines.floatLine(long)) ? long : long.slice(0, SAID_CHARS);
       if (!text) return;
 

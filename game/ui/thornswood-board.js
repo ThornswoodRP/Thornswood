@@ -15,7 +15,7 @@
   Make a post sends /notice and /job (#2554); Take, Take down, Put it back
   and Pay the reward send /take, /unpin, /dropjob and /job done (#1627,
   #2554); Send a haul and Confirm send /haul (#1393); Write a letter sends
-  /letter (#1595).
+  /letter-post-v1 (#4412).
 
   setData never opens the panel. E on the board does: the server answers it
   (#2516) on thornswoodBoardOpen, which calls open(). A later setData redraws
@@ -325,8 +325,8 @@
     }
     /*
       A LETTER (#1595, docs/systems/noticeboards.md): who it is for and the
-      words, up to 300 characters, which was /letter. The name goes over in
-      double quotes so a name of several words stays one name. The name is
+      words, up to 300 characters. The name and words use separate URI tokens;
+      quotes and spaces remain part of the same recipient name. The name is
       held to 60, the same as a post's title.
     */
     out += '<h3>Write a letter</h3>';
@@ -510,9 +510,13 @@
       return;
     }
     if (verb === 'letter') {
-      var to = field(ID + '-to').replace(/"/g, '').replace(/\s+/g, ' ').trim();
-      var words = field(ID + '-letter');
-      if (to && words) { net('/letter "' + to + '" ' + words); }
+      var to = document.getElementById(ID + '-to').value;
+      var words = document.getElementById(ID + '-letter').value;
+      if (!to.trim() || !words.trim()) { say('Say who the letter is for and what it says.'); return; }
+      var letterLine;
+      try { letterLine = '/letter-post-v1 ' + encodeURIComponent(to) + ' ' + encodeURIComponent(words); }
+      catch (eLetter) { say('That letter contains invalid text. Nothing was sent; keep your draft.'); return; }
+      net(letterLine);
       return;
     }
     if (verb === 'haul') {

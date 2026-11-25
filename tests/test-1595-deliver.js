@@ -376,22 +376,19 @@ attempt('Write a letter', function () {
       /id="' \+ ID \+ '-to"[^>]*maxlength="60"/.test(page) && /id="' \+ ID \+ '-letter"[^>]*maxlength="300"/.test(page) &&
       /data-do="letter">Post the letter<\/button>/.test(page));
   const branch = slice(page, "    if (verb === 'letter') {", '\n    }\n');
-  yes('B3 it sends /letter with the name in double quotes, quotes taken out of the name', !!branch &&
-      /field\(ID \+ '-to'\)\.replace\(\/"\/g, ''\)/.test(branch) && branch.indexOf("net('/letter \"' + to + '\" ' + words);") !== -1);
-  // The chat socket cuts a command at COMMAND_CHARS, and a line said at 400 (voice/voice-server.js, #2554).
+  yes('B3 the panel sends a distinct encoded letter verb without stripping quotes', !!branch &&
+      !/\.replace\(\/"\/g/.test(branch) && /encodeURIComponent\(to\)/.test(branch) && /encodeURIComponent\(words\)/.test(branch));
   const voice = read('voice/voice-server.js');
-  const longest = ('/letter "' + 'x'.repeat(60) + '" ' + 'y'.repeat(300)).length;
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
-  yes('B4 the longest line the form can send fits what the chat socket carries for a command (' + cap + ')',
-      /pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
-  // Run the branch: what it sends for a name with quotes and spaces in it.
+  const longest='/letter-post-v1 '+encodeURIComponent('雪'.repeat(60))+' '+encodeURIComponent('雪'.repeat(300));
+  const carry=require('./fixtures/chat-relay-cut')(voice);
+  yes('B4 the longest encoded form fits the unchanged relay command bound ('+cap+')',longest.length<=cap&&carry(longest)===longest);
+  yes('B4 ordinary legacy letter commands keep the original bound',carry('/letter '+'x'.repeat(cap)).length===cap);
   if (branch) {
-    const sent = [];
-    const fields = { 'ts-board-to': '  "Lydia   Stormblade" ', 'ts-board-letter': WORDS_OF_IT };
-    new Function('verb', 'ID', 'field', 'net', branch)('letter', 'ts-board',
-      function (id) { return String(fields[id] || '').trim(); }, function (l) { sent.push(l); });
-    yes('B5 a name with quotes and doubled spaces goes over as one clean name',
-        sent.length === 1 && sent[0] === '/letter "Lydia Stormblade" ' + WORDS_OF_IT);
+    const sent=[],fields={'ts-board-to':'  "Lydia   Stormblade" ','ts-board-letter':WORDS_OF_IT};
+    const document={getElementById(id){return {value:fields[id]||''};}};
+    new Function('verb','ID','document','net','say',branch)('letter','ts-board',document,l=>sent.push(l),()=>{});
+    yes('B5 quotes and actual spaces remain in the encoded recipient',sent.length===1&&sent[0]==='/letter-post-v1 '+encodeURIComponent(fields['ts-board-to'])+' '+encodeURIComponent(WORDS_OF_IT));
   }
 });
 

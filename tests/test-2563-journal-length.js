@@ -52,21 +52,11 @@ const worst = '/journal page ' + jid + ' ' + pid + ' ' + 'T'.repeat(titleCut) + 
 yes('the longest page line (' + worst.length + ') fits a command on the chat socket (' + commandChars + ')',
     worst.length <= commandChars);
 
-// The real cut in the chat handler.
-const cutLines = /(const long = pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\);\s*const text = [^\n]+)/.exec(voice);
-// The cut reads the line through pageText (#4206), so it runs with the real one.
-const pageTextFn = (/function pageText\(v\) \{[\s\S]*?\r?\n\}/.exec(voice) || [''])[0];
-yes('the chat handler\'s cut is found', !!cutLines && !!pageTextFn);
-if (cutLines && pageTextFn) {
-  const run = function (line) {
-    const box = { msg: { text: line }, COMMAND_CHARS: commandChars, SAID_CHARS: 400,
-                  headlines: { floatLine: function (l) { return /^\/(me|do|w|s|ooc)\b/.test(l); } }, out: null };
-    vm.runInNewContext(pageTextFn + '\n' + cutLines[1] + '\nout = text;', box);
-    return box.out;
-  };
-  yes('that longest page line goes through the socket whole', run(worst) === worst);
-  yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
-}
+// Execute the actual handler, including the new private-command refusals.
+const run = require('./fixtures/chat-relay-cut')(voice);
+yes('the chat handler cut is found', typeof run === 'function');
+yes('that longest page line goes through the socket whole', run(worst) === worst);
+yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
 
 // The real writePage.
 const wp = /(function writePage\([\s\S]*?\n  \})\n/.exec(gm);
