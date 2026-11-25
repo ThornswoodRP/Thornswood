@@ -49,7 +49,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `signouts.json` | site | site | High: a sign out (#4405) | its own: a time per keyed account, never written over while it will not read, and while broken every staff sign in reads as signed out (`site/lib/auth.js`) |
 | `notes.json` | site | site | Medium: concurrent edits (#2188) | none |
 | `for-bot/inbox.json`, `for-bot/trouble.json` | site | site, bot (reports and Report a problem from the inbox, the staff channel's trouble posts) | Medium: concurrent edits (#2188) | none |
-| `results.json` | site, from staff marking test results in the hub | site | Low | none |
+| `results.json` | site, from staff marking test results in the hub | site | Low | one mark merges into the latest file; its author comes from the authenticated session, never the request (#5855). An unreadable file or refused save leaves existing marks unchanged |
 | `roster.json` | site, from what each game server's gamemode sends (POST /api/roster) | site (and each person's characters at join) | Medium | none |
 | `economy.json` | site, from each game server's hold economy count (POST /api/economy) | site (the hub's Hold economy page) | Low | none |
 | `session-logs/<session>.json` | site, from the launcher at the end of a play session | site (the hub), Read-LauncherStarts.ps1 | Medium: kept 365 days by the file's time, then deleted (#4432) | none |
