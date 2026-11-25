@@ -125,12 +125,16 @@ const CHAT_DIRS = {
    come from the same server. */
 function chatSlice(profileId, from, to, channel) {
   const want = Number(profileId) || 0;
-  if (!want) return { ok: true, why: '', lines: [] };
+  if (!want || !Number.isFinite(from) || !Number.isFinite(to) || from > to) return { ok: true, why: '', lines: [] };
   const dev = channel === 'dev';
   const dir = CHAT_DIRS[dev ? 'dev' : 'main'];
   const days = {};
-  for (const at of [from, to]) {
-    const d = new Date(at);
+  const d = new Date(from), last = new Date(to);
+  if (!Number.isFinite(d.getTime()) || !Number.isFinite(last.getTime())) return { ok: true, why: '', lines: [] };
+  d.setHours(0, 0, 0, 0); last.setHours(0, 0, 0, 0);
+  // Local calendar dates, including every middle day. A DST day is not
+  // always 24 hours long, so adding milliseconds can repeat or skip a date.
+  for (; d <= last; d.setDate(d.getDate() + 1)) {
     const p = (n) => (n < 10 ? '0' : '') + n;
     days[d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())] = 1;
   }
