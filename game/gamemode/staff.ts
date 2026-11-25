@@ -9,7 +9,7 @@
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -225,6 +225,24 @@
              'you right now. Leave the Thornswood launcher open while you play; if it ' +
              'still says this in a minute, restart the game from the launcher.';
     }
+    return '';
+  }
+
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
     return '';
   }
 
@@ -939,9 +957,15 @@
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
       state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
       pushSilenced();
@@ -1044,6 +1068,7 @@
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
