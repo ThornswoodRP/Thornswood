@@ -5,7 +5,7 @@ const fs = require('fs'), path = require('path');
 const standIn = require('../../tests/stand-in-server');
 const t = standIn.checks(), yes = t.yes;
 const w = standIn.world({ name: '6479-fire-warmth', settings: { thornswoodServer: 'main' } });
-const actors = Array.from({ length: 4 }, (_, i) => w.person(0xff006490 + i, {
+const actors = Array.from({ length: 5 }, (_, i) => w.person(0xff006490 + i, {
   profileId: 1000 + i, name: 'Brenna ' + i, cell: '3c:Skyrim.esm', pos: [i * 1000, 0, 0]
 }));
 const approach = (temp, target, ms) => target + (temp - target) * Math.pow(0.5, ms / (target > temp ? 30000 : 90000));
@@ -100,5 +100,28 @@ if (w.loaded()) {
   reset(b); say(b, '/burn 1');
   const saved = raw(b).temp; w.leave(b); now += 60000; w.run(2500); w.arrive(b);
   yes('rejoining does not apply the former burning interval to time spent away', close(N.settle(b).temp, saved));
+  const refused = actors[4]; reset(refused); now += 60000;
+  const setter = box.mp.set;
+  let failures = 0;
+  box.mp.set = function (id, key, next) {
+    if (id === refused && key === 'thornswoodNeeds' && !failures) { failures++; throw Error('injected first fire-bank save failure'); }
+    return setter(id, key, next);
+  };
+  try { say(refused, '/burn 1'); } finally { box.mp.set = setter; }
+  yes('the failed-write case rejects the earliest actual needs bank save', failures === 1);
+  yes('a later successful needs write cannot heat the idle minute before the real fire started', close(raw(refused).temp, approach(20, 58, 60000)));
+  reset(refused); now += 60000;
+  let active = false, refusedBanks = 0;
+  box.mp.set = function (id, key, next) {
+    if (id === refused && key === 'thornswoodBurnVisual' && next.on) { active = true; }
+    if (id === refused && key === 'thornswoodNeeds' && !active) { refusedBanks++; throw Error('injected pre-fire bank refusal'); }
+    return setter(id, key, next);
+  };
+  try { say(refused, '/burn 1'); } finally { box.mp.set = setter; }
+  yes('the real pre-fire saves can all fail before canonical burning activates', refusedBanks > 0 && active);
+  yes('even when all pre-fire banks fail a successful later settle preserves the old ambient interval',
+    close(raw(refused).temp, approach(20, 58, 60000)));
+  yes('a failed needs bank does not disable the canonical fire report or its active warmth target',
+    w.prop(refused, 'thornswoodBurnVisual').on === true && panel(refused).tempTarget === 92);
 }
 t.done(w);
