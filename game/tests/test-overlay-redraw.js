@@ -52,6 +52,7 @@ const timers = [];
 const feed = { 1: { name: 'Me', pos: [0, 0, 0], angleZ: 0, cell: 'c' },
                2: { name: 'Friend', pos: [700, 700, 0], angleZ: 0, cell: 'c' } };
 const window = {
+  listeners: {}, addEventListener: function (type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
   thornswoodVoice: { who: function () { return feed; } },
   skyrimPlatform: { sendMessage: function () { } }
 };
