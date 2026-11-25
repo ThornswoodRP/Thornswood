@@ -57,8 +57,18 @@ The other needs first account for their elapsed time. The selected value is then
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
+| `/tpto <person>` | Teleports your own living character to an unambiguous online person, by name, prefix, profile or character id. Playtesters may use it on Dev and Main; frozen, cuffed and locked-jail movement is refused. It never moves the other person |
 
 The count is the last word, and only when it is a number with a name in front of it.
+
+## Restore vitals for testing
+
+| Command | Who | What it does |
+| --- | --- | --- |
+| `/heal` | Playtesters, staff and admins, on Dev and Main | Restores your current health, magicka and stamina |
+| `/heal for <person>` | Admins for another character; the self-only permission still permits your own named character | Restores the named online character's vitals |
+
+Healing does not undo death, change progression, repair equipment or remove injury decisions. It uses the current character's actual vitals and records a successful change. An invalid command or a refused write never reports a successful heal.
 
 ## At somebody else
 
@@ -73,6 +83,15 @@ Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourse
 | `/goto <person>` | Moves you to them |
 
 Somebody frozen stays frozen where another staff member sends them. Their own teleport commands are refused until they are released.
+
+## Inspect a character
+
+| Command | Who | What it shows |
+| --- | --- | --- |
+| `/inspect` | Playtesters, staff and admins, on Dev or Main | Your character's name and form id, location, vitals, last recorded needs, class, profession and ranks |
+| `/inspect for <person>` | Playtesters for their own unambiguous character; admins for somebody else | The same report for the selected character, using a name, unique name prefix, form id or profile number |
+
+The report reads gameplay state without advancing needs or migrating a character. Positions and percentages are rounded to one decimal place. Missing or invalid values say unavailable, including god mode when the engine does not expose its flag. Private account and Discord data are excluded. Each report uses several short chat lines, so all ranks fit.
 
 ## Spawned creatures
 
@@ -120,6 +139,17 @@ Staff.
 | `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
+
+## Rename a character
+
+Admins only, including when renaming yourself. Playtesters and staff without the admin role cannot use either form.
+
+| Command | What it does |
+| --- | --- |
+| `/rename self <new name>` | Renames your current saved character |
+| `/rename <person> <new name>` | Renames another character who is in the world; names, unique name prefixes, form ids and profile numbers work |
+
+Names use 1 to 60 characters: Unicode letters and numbers, spaces, apostrophes, hyphens or periods, with at least one letter or number. Accents are normalized to NFC, outer spaces are trimmed and repeated spaces become one. Controls, invisible direction marks and markup are refused. Existing duplicate names remain allowed; use the character's form id or profile number when a name is ambiguous. The character, account and profile stay the same, the new name survives reconnecting, and the staff record keeps the old and new names.
 
 ## Bans, PKs and notes
 

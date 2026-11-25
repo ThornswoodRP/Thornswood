@@ -12438,7 +12438,7 @@ log('gamemode loaded:',
   if (globalThis.__thornswoodRoster) {
     try { clearInterval(globalThis.__thornswoodRoster); } catch (e) { }
   }
-  globalThis.__thornswoodRoster = setInterval(function () {
+  function refresh() {
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
 
@@ -12489,7 +12489,9 @@ log('gamemode loaded:',
 
     // Still dirty when the write was refused: the file is behind the book.
     if (dirty) { dirty = !write(); }
-  }, EVERY_MS);
+  }
+  globalThis.__thornswoodRefreshRoster = refresh;
+  globalThis.__thornswoodRoster = setInterval(refresh, EVERY_MS);
 
   console.log('[thornswood] character roster published at ' + FILE);
 })();
@@ -18569,15 +18571,21 @@ log('gamemode loaded:',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
       '    if (st.thornswoodSkyId === id) { return; }',
-      '    st.thornswoodSkyId = id;',
+      // An id is applied only when its native operation completes. A form
+      // unavailable during loading must not suppress later owner updates.
       '    if (!id) {',
-      '      try { if (ctx.sp.Weather.releaseOverride) { ctx.sp.Weather.releaseOverride(); } } catch (e0) { }',
+      '      if (!ctx.sp.Weather.releaseOverride) { return; }',
+      '      ctx.sp.Weather.releaseOverride();',
+      '      st.thornswoodSkyId = id;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
       '    if (!form) { return; }',
       '    var weather = ctx.sp.Weather.from(form);',
-      '    if (weather && weather.forceActive) { weather.forceActive(true); }',
+      '    if (weather && weather.forceActive) {',
+      '      weather.forceActive(true);',
+      '      st.thornswoodSkyId = id;',
+      '    }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -61926,6 +61934,12 @@ module.exports = {
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
 
   // A server move begins a new journey. Keep the cooldown and the last
   // successful escape's trap information, which are independent of steps.
@@ -62278,7 +62292,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
-    resetTrail: resetTrail,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -62383,6 +62397,96 @@ module.exports = {
     ]
   });
 })();
+// ==== thornswood admin rename ====
+// #6739: change the saved appearance name through the engine's normal
+// appearance binding, which persists it and reliably updates its listeners.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var MAX_NAME = 60;
+  // Refuse invisible controls, markup and malformed Unicode; never remove
+  // them and quietly save a different name. Ordinary spaces are normalized.
+  var UNSAFE = /[\p{C}\p{Zl}\p{Zp}<>]/u;
+  var NAME = /^[\p{L}\p{M}\p{N} .'\u2019-]+$/u;
+
+  function validateName(text) {
+    if (typeof text !== 'string' || UNSAFE.test(text)) {
+      return { why: 'A name cannot contain controls, invisible marks or markup.' };
+    }
+    var name = text.normalize('NFC').trim().replace(/ +/g, ' ');
+    if (!name || !/[\p{L}\p{N}]/u.test(name)) { return { why: 'A name needs at least one letter or number.' }; }
+    if (Array.from(name).length > MAX_NAME) { return { why: 'A name is at most 60 characters.' }; }
+    if (!NAME.test(name)) { return { why: 'Use letters, numbers, spaces, apostrophes, hyphens or periods in a name.' }; }
+    return { name: name, why: '' };
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rename') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.authorizeTool !== 'function') {
+      if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, 'Renaming is unavailable right now.'); }
+      return true;
+    }
+    // Self and other-character renames have exactly the same admin boundary.
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+    if (refused) { staff.tell(pid, refused); return true; }
+    if (UNSAFE.test(String(cmd.text || ''))) {
+      staff.tell(pid, 'A name cannot contain controls, invisible marks or markup.');
+      return true;
+    }
+    var words = parts.slice(1);
+    var target;
+    if (String(words[0] || '').toLowerCase() === 'self') {
+      target = { actorId: actorId, pid: pid, rest: words.slice(1) };
+    } else {
+      target = staff.takePerson(words);
+      if (!target.actorId) { staff.tell(pid, target.why || 'Name somebody who is in the world.'); return true; }
+    }
+    if (!target.rest.length) {
+      staff.tell(pid, 'Use /rename self <new name> or /rename <person> <new name>.');
+      return true;
+    }
+    var named = validateName(target.rest.join(' '));
+    if (named.why) { staff.tell(pid, named.why); return true; }
+    var saved;
+    try { saved = mp.get(target.actorId, 'appearance'); }
+    catch (eRead) { staff.tell(pid, 'The server could not read that character\'s saved appearance, so the name was not changed.'); return true; }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      staff.tell(pid, 'That character has no saved appearance to rename yet.');
+      return true;
+    }
+    var oldName = String(saved.name || '');
+    if (oldName === named.name) { staff.tell(pid, 'That character is already called ' + named.name + '.'); return true; }
+    // Take the requestor's name before a self rename changes it.
+    var byName = staff.nameOf(actorId);
+    var next = Object.assign({}, saved, { name: named.name });
+    try { mp.set(target.actorId, 'appearance', next); }
+    catch (eWrite) { staff.tell(pid, 'The server could not rename that character. Nothing was confirmed; try again later.'); return true; }
+    staff.record('rename', pid, byName, target.pid, oldName,
+      'Renamed to ' + named.name + '.', 0,
+      { character: target.actorId.toString(16), oldName: oldName, newName: named.name });
+    // Publish from the same saved appearance used by the normal roster and
+    // nearby views, including when somebody disconnects before their timer.
+    if (g.__thornswoodRefreshRoster) { g.__thornswoodRefreshRoster(); }
+    var social = g.__thornswoodSocial;
+    if (social && social.nearTick) { social.nearTick(); }
+    staff.tell(pid, 'Renamed ' + (target.actorId === actorId ? 'your character' : oldName) +
+      ' to ' + named.name + '. This is logged for staff.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin renamed your character to ' + named.name + '. This is logged for staff.'); }
+    return true;
+  }
+
+  g.__thornswoodRename = { command: command, validateName: validateName };
+  if (g.__thornswoodCommandTools) {
+    g.__thornswoodCommandTools.register('rename', {
+      command: command,
+      help: [{ word: '/rename', role: 'admin',
+        syntax: '/rename self <newname> | /rename <person> <newname>',
+        text: 'Renames the same saved character. Names use 1 to 60 characters: letters, numbers, spaces, apostrophes, hyphens or periods.' }]
+    });
+  }
+})();
+// ==== end thornswood admin rename ====
 // ==== thornswood staff ====
 /*
   WHAT A MODERATOR CAN DO IN THE WORLD. Issue #412, "A moderator has no powers
@@ -63804,6 +63908,68 @@ module.exports = {
   tblog('ready: asks from the hub are taken every', EVERY_MS / 1000, 's');
 })();
 // ==== end thornswood take back ====
+// Restore vitals for a self-only playtest or an admin's named target (#6733).
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Usage: /heal, or /heal for <person> for an admin.';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/heal') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    var args = parts.slice(1);
+    if (args.length) {
+      if (args.length < 2 || args[0].toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      target = staff.takePerson(args.slice(1));
+      if (!target.actorId || target.rest.length) { staff.tell(pid, target.why || USAGE); return true; }
+      if (target.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+    }
+    var dead, current;
+    try { dead = mp.get(target.actorId, 'isDead'); current = mp.get(target.actorId, 'percentages'); }
+    catch (e) { staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true; }
+    if (dead === true) { staff.tell(pid, 'That character is dead. Healing cannot undo death; use the normal wake or the appropriate admin process.'); return true; }
+    if (dead !== false || !current || ['health', 'magicka', 'stamina'].some(function (key) {
+      return typeof current[key] !== 'number' || !Number.isFinite(current[key]);
+    })) {
+      staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true;
+    }
+    if (current.health === 1 && current.magicka === 1 && current.stamina === 1) {
+      staff.tell(pid, target.name + ' already has full health, magicka and stamina.'); return true;
+    }
+    try {
+      mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
+      var confirmed = mp.get(target.actorId, 'percentages');
+      if (mp.get(target.actorId, 'isDead') !== false || !confirmed ||
+          confirmed.health !== 1 || confirmed.magicka !== 1 || confirmed.stamina !== 1) {
+        throw new Error('The native vitals write was not applied.');
+      }
+    }
+    catch (e) {
+      log('heal: could not confirm vitals for ' + target.actorId.toString(16) + ': ' + e);
+      staff.tell(pid, 'Healing could not be confirmed. The server recorded why; try again only after the problem is checked.');
+      return true;
+    }
+    var byName = staff.nameOf(actorId);
+    staff.record('heal', pid, byName, target.pid, target.name, 'restored health, magicka and stamina', 0);
+    staff.tell(pid, 'Restored health, magicka and stamina for ' + target.name + '.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin restored your health, magicka and stamina.'); }
+    return true;
+  }
+  g.__thornswoodHeal = { command: command };
+  g.__thornswoodCommandTools.register('heal', {
+    command: command,
+    help: [
+      { word: '/heal', role: 'playtester', syntax: '/heal', text: 'Restore your health, magicka and stamina for testing.' },
+      { word: '/heal', role: 'admin', syntax: '/heal for <person>', text: 'Restore another character\'s vitals without undoing death or permanent decisions.' }
+    ]
+  });
+})();
 // ==== thornswood staff crafting ====
 /*
   STAFF CRAFTING TOOLS, ON THE OFFICE PAGE OF K (#3167). Patrick, 22 Oct
@@ -64265,6 +64431,114 @@ function createSharedResourceStock(api, now) {
 try { globalThis.__thornswoodResourceStock=createSharedResourceStock(mp,()=>Date.now()); }
 catch(error) { log('Shared resource stock could not start: '+error); }
 
+// ==== thornswood gameplay inspection ====
+// #6732: inspect the recorded gameplay state without settling or writing it.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function read(actor, property) {
+    try { return mp.get(actor, property); } catch (e) { return undefined; }
+  }
+  function text(value, most) {
+    if (typeof value !== 'string') { return 'unavailable'; }
+    var out = value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ').trim();
+    return out ? (out.length > most ? out.slice(0, most - 3) + '...' : out) : 'unavailable';
+  }
+  function number(value, scale, suffix) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(value * scale)) { return 'unavailable'; }
+    return String(Number((value * scale).toFixed(1))) + suffix;
+  }
+  function field(value, key, scale, suffix) {
+    return number(object(value) ? value[key] : undefined, scale, suffix);
+  }
+  function named(value, table) {
+    if (value === null || value === '') { return 'not chosen'; }
+    return typeof value === 'string' && table && Object.prototype.hasOwnProperty.call(table, value)
+      ? table[value].name : 'unavailable';
+  }
+  function rankLabels(table) {
+    var out = {};
+    Object.keys(table.classes).forEach(function (key) { out[key] = table.classes[key].name; });
+    Object.keys(table.professions).forEach(function (key) {
+      var halves = table.professions[key].halves;
+      Object.keys(halves || {}).forEach(function (half) { out[half] = halves[half]; });
+    });
+    table.schools.forEach(function (key) { out[key] = key.charAt(0).toUpperCase() + key.slice(1); });
+    return out;
+  }
+  function report(staff, pid, actor) {
+    var appearance = read(actor, 'appearance');
+    staff.tell(pid, 'Character: ' + text(object(appearance) ? appearance.name : undefined, 90) +
+      ' (form ' + actor.toString(16) + ').');
+    var pos = read(actor, 'pos');
+    staff.tell(pid, 'Location: ' + text(read(actor, 'worldOrCellDesc'), 120) + '; position ' +
+      [0,1,2].map(function (i) { return number(Array.isArray(pos) ? pos[i] : undefined, 1, ''); }).join(', ') + '.');
+    var vitals = read(actor, 'percentages');
+    staff.tell(pid, 'Health: ' + field(vitals, 'health', 100, '%') + '; Magicka: ' +
+      field(vitals, 'magicka', 100, '%') + '; Stamina: ' + field(vitals, 'stamina', 100, '%') + '.');
+    // Needs.read supplies defaults and stateOf can migrate. Read the saved
+    // properties themselves so missing or invalid values remain unavailable.
+    var needs = read(actor, 'thornswoodNeeds');
+    staff.tell(pid, 'Needs (last recorded): Food: ' + field(needs, 'food', 1, '/100') +
+      '; Drink: ' + field(needs, 'drink', 1, '/100') + '; Rest: ' + field(needs, 'rest', 1, '/100') +
+      '; Temperature: ' + field(needs, 'temp', 1, '/100') + '.');
+    var saved = read(actor, 'thornswoodCharacter');
+    var state = object(saved) && saved.v === 1 ? saved : null;
+    var progression = g.__thornswoodProgression;
+    var table = progression && progression.TABLE;
+    var labels = table ? rankLabels(table) : {};
+    staff.tell(pid, 'Class: ' + (state ? named(state.cls, table && table.classes) : 'unavailable') +
+      '; Profession: ' + (state ? named(state.prof, table && table.professions) : 'unavailable') +
+      '; Half: ' + (state && typeof state.half === 'string' && Object.prototype.hasOwnProperty.call(labels, state.half)
+        ? labels[state.half] : state && state.half === null ? 'not chosen' : 'unavailable') + '.');
+    var ranks = state && object(state.ranks) ? state.ranks : null;
+    var entries = ranks && table ? Object.keys(labels).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(ranks, key);
+    }).map(function (key) {
+      return labels[key] + ': ' + (table.ranks.indexOf(ranks[key]) !== -1 ? ranks[key] : 'unavailable');
+    }) : null;
+    var line = 'Ranks: ';
+    (entries || []).forEach(function (entry) {
+      if (line.length + entry.length > 250) { staff.tell(pid, line); line = 'Ranks: '; }
+      line += (line === 'Ranks: ' ? '' : '; ') + entry;
+    });
+    staff.tell(pid, line + (entries ? (entries.length ? '.' : 'none recorded.') : 'unavailable.'));
+    var godMode = read(actor, 'isGodMode');
+    staff.tell(pid, 'God mode: ' + (typeof godMode === 'boolean' ? (godMode ? 'on' : 'off') : 'unavailable') + '.');
+  }
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/inspect') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor;
+    if (parts.length !== 1) {
+      if (String(parts[1]).toLowerCase() !== 'for' || parts.length < 3) {
+        staff.tell(pid, 'Usage: /inspect or /inspect for <person>.'); return true;
+      }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, 'Usage: /inspect for <person>.'); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId;
+    }
+    report(staff, pid, target);
+    return true;
+  }
+  g.__thornswoodInspect = { command: command };
+  g.__thornswoodCommandTools.register('inspect', {
+    command: command,
+    help: [{ word: '/inspect', role: 'playtester', syntax: '/inspect',
+      text: 'Read your own recorded gameplay state without changing it.' },
+      { word: '/inspect', role: 'admin', syntax: '/inspect for <person>',
+        text: 'Read another character\'s recorded gameplay state without changing it.' }]
+  });
+})();
+// ==== end thornswood gameplay inspection ====
 // NPC MERCHANT PURSES BEGIN
 function createPrivateMerchantLedger(fs,path,settings,references,durableWriter) {
   return createPrivateEconomyLedger(fs,path,settings,'merchant',references,durableWriter);
@@ -64705,6 +64979,55 @@ function createNpcMerchantPurses(api,data,storage) {
 }
 // NPC MERCHANT PURSES END
 
+// Self-only person teleport for Playtesters on Dev and Main (#6757).
+(function () {
+  'use strict';
+  var g=globalThis,USAGE='Usage: /tpto <person>.';
+  function place(actor) {
+    var desc=mp.get(actor,'worldOrCellDesc'),pos=mp.get(actor,'pos'),rot=mp.get(actor,'angle');
+    function vector(value){return Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);}
+    if(typeof desc!=='string'||!desc||!vector(pos)||!vector(rot)){throw new Error('Authoritative location is unavailable.');}
+    return {desc:desc,pos:pos.slice(),rot:rot.slice()};
+  }
+  function command(cmd,word,parts,pid,actor) {
+    if(word!=='/tpto'){return false;}
+    var staff=g.__thornswoodStaff,refused=staff.authorizeTool(cmd,pid,actor,'playtester');
+    if(refused){staff.tell(pid,refused);return true;}
+    if(parts.length<2){staff.tell(pid,USAGE);return true;}
+    var person=staff.takePerson(parts.slice(1));
+    if(!person.actorId||person.rest.length){staff.tell(pid,person.why||USAGE);return true;}
+    if(person.actorId===actor||person.pid===pid){staff.tell(pid,'That is you.');return true;}
+    try {
+      if(mp.get(actor,'isDead')!==false||mp.get(person.actorId,'isDead')!==false){
+        staff.tell(pid,'Both characters must be alive to teleport.');return true;
+      }
+      var from=place(actor),to=place(person.actorId);
+      if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
+      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
+      if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
+        throw new Error('Movement safeguards are unavailable.');
+      }
+      if(cuffs.cuffedBy(actor)){staff.tell(pid,'You are cuffed, so you cannot teleport yourself.');return true;}
+      if(property.lockedJailHere(actor,pid)){staff.tell(pid,'A guard has a cell locked here, so you cannot teleport out of this jail.');return true;}
+      mp.set(actor,'locationalData',{cellOrWorldDesc:to.desc,pos:to.pos,rot:to.rot});
+      var confirmed=place(actor);
+      if(confirmed.desc!==to.desc||confirmed.pos.some(function(n,i){return n!==to.pos[i];})){
+        throw new Error('The native teleport was not applied.');
+      }
+      stuck.teleported(pid,actor);
+      staff.record('tpto',pid,staff.nameOf(actor),person.pid,person.name,'Self-only playtest teleport.',0,{from:from,to:to});
+      staff.tell(pid,'Sent to '+person.name+'.');
+    } catch(e) {
+      log('tpto: could not confirm teleport for '+actor.toString(16)+': '+e);
+      staff.tell(pid,'The teleport could not be confirmed. Staff can check the server log.');
+    }
+    return true;
+  }
+  g.__thornswoodPersonTeleport={command:command};
+  g.__thornswoodCommandTools.register('person-teleport',{command:command,
+    help:[{word:'/tpto',role:'playtester',syntax:'/tpto <person>',text:'Teleport yourself to an online person; restraints still apply.'}]});
+})();
 // NPC POPULATION POLICY BEGIN
 /*
   THALMOR PATROLS (#1390). docs/systems/thalmor.md: "A patrol is 2 to 4. They
