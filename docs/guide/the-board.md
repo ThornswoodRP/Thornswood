@@ -264,6 +264,17 @@ is for just regular testing for our playtesters, only when it's on main",
 and known issues are what is on the board whose fix has not landed yet
 (Patrick, 26 Oct, #3140). Test tasks never go on the report page; they go in Discord.
 
+Use `/test-queue` in Discord for a private list of active Main tests.
+Choose Dev if you can read the staff test forum. Search by words in the title
+or choose a page and change the order. Each entry opens its forum post.
+Tests with no result or replies appear first on each page. Mark the opening
+post ✅ for a pass, ❌ for a failure, or 📌 when it partly works, and use the
+thread to say what you saw. A result with conflicting marks needs review.
+Read the replies before retiring a post, including one marked passed.
+Staff record the result and link any follow-up fix on GitHub before taking a
+finished or blocked task out of the queue. A new build carrying a follow-up
+fix gets a fresh test task.
+
 - **#test-tasks, Main test tasks.** An ordinary check any playtester can do
   with the normal game. If a playtester could do it once it is on main, it
   is Main, even when a dev command would make it quicker. Its comment is
