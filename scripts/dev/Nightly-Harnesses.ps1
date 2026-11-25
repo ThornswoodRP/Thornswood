@@ -235,7 +235,7 @@ function Get-RootEntries([string]$path) {
     }
     return $entries
 }
-$script:rootBefore = Get-RootEntries $Root
+$rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
     $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
     $OutDir = Join-Path $base ('harness-out-' + $Shard)
@@ -621,30 +621,6 @@ function Finish-One($r, [bool]$timedOut) {
     }
     Write-StartLog ([ordered]@{ name = $t.Name; end = [DateTime]::UtcNow.ToString('o'); code = $code; secs = $secs; skipped = $skipped; skips = @($skips); passes = $passes })
     $path = $t.File.FullName
-    $rootDirty = @()
-    if (Test-Path -LiteralPath $Root) {
-        $now = Get-RootEntries $Root
-        foreach ($k in $now.Keys) {
-            if (-not $script:rootBefore.ContainsKey($k)) {
-                $rootDirty += $k
-                $full = Join-Path $Root $k
-                if (Test-Path -LiteralPath $full) {
-                    Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
-                }
-            } elseif ($now[$k] -ne $script:rootBefore[$k]) {
-                $rootDirty += "$k (modified)"
-            }
-        }
-        foreach ($k in $script:rootBefore.Keys) {
-            if (-not $now.ContainsKey($k)) {
-                $rootDirty += "$k (removed)"
-            }
-        }
-    }
-    if ($rootDirty.Count) {
-        $code = 1
-        Write-Host ("::error file={0}::harness wrote to the repository root: {1}" -f $path, ($rootDirty -join ', '))
-    }
     if ($timedOut) { Write-Host ("::error file={0}::harness timed out after {1}s and was killed" -f $path, $t.Clock) }
     elseif ($code -ne 0) { Write-Host ("::error file={0}::harness failed (exit {1}){2}" -f $path, $code, (Get-FailSaid $printed)) }
     if ($left.Count) { Write-Host ("::warning file={0}::harness left {1} process(es) running when it ended, now killed: {2}" -f $path, $left.Count, ($left -join ', ')) }
@@ -841,11 +817,32 @@ if ($failed.Count) {
     Write-Host ("{0} harness(es) failed: {1}" -f $failed.Count, ($failed -join ', '))
 }
 $reportBad = $false
-if ($Report) { Write-Report $results $notRun }
+# Concurrent harnesses share this checkout. Report a lasting change against
+# the share, and leave the files available to diagnose where it came from.
+$rootAfter = Get-RootEntries $Root
+$rootDirty = @(
+    foreach ($name in ($rootAfter.Keys | Sort-Object)) {
+        if (-not $rootBefore.ContainsKey($name)) { "$name (added)" }
+        elseif ($rootAfter[$name] -ne $rootBefore[$name]) { "$name (modified)" }
+    }
+    foreach ($name in ($rootBefore.Keys | Sort-Object)) {
+        if (-not $rootAfter.ContainsKey($name)) { "$name (removed)" }
+    }
+)
+$reportRows = $results
+if ($rootDirty.Count) {
+    $rootFailure = 'the harness share changed the repository root: ' + ($rootDirty -join ', ')
+    Write-Host ('::error::' + $rootFailure)
+    $reportRows += [pscustomobject]@{
+        Name = 'harness share root audit'; Code = 1; TimedOut = $false; Secs = 0
+        Said = 'FAIL  ' + $rootFailure; Clock = 0
+    }
+}
+if ($Report) { Write-Report $reportRows $notRun }
 if ($Summary) {
     & (Join-Path $PSScriptRoot 'Merge-HarnessReports.ps1') -Path $Report -Expect 1 -Summary $Summary -Title $Title
     if ($LASTEXITCODE -ne 0) { $reportBad = $true; Write-Host '::error::the report could not be written to the run''s summary' }
 }
-if ($failed.Count -or $notRun.Count -or $reportBad) { exit 1 }
+if ($failed.Count -or $notRun.Count -or $reportBad -or $rootDirty.Count) { exit 1 }
 Write-Host 'every harness passed'
 exit 0
