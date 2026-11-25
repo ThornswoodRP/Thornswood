@@ -444,7 +444,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     # once it changes. Until 1 Nov only a posted issue was remembered, and
     # every pass read the comments of every other issue closed since 'since'
     # again: about 1,200 calls a pass, the whole hourly allowance in four
-    # passes (#5184).
+    # passes (#4331, #5184).
     read = state.setdefault('tasks_read', {})
     for key in [k for k in read if int(k) not in closed]:
         read.pop(key, None)

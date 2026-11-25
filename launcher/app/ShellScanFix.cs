@@ -318,7 +318,7 @@ namespace Thornswood
                 string why = null;
                 bool asked = false;
                 try { launcher = Updater.CheckLauncher(cfg); asked = true; }
-                catch (Exception ex) { why = ex.Message; }
+                catch (Exception ex) { why = Failure.Why("ShellScanFix", ex); }
                 string note = Updater.LastLauncherCheck;
                 Dispatcher.UIThread.Post(delegate
                 {
@@ -397,7 +397,7 @@ namespace Thornswood
             catch (Exception ex)
             {
                 fixing = false;
-                Log("Fix could not scan first (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                Log("Fix could not scan first (" + Failure.Why("ShellScanFix, scanning before Fix", ex) + "), so nothing was changed.");
                 ShowVerify(Verify.LastIssues, false);
                 return;
             }
@@ -442,7 +442,7 @@ namespace Thornswood
                     Upkeep.FixOnDisk(cfg, found, say);
                 });
             }
-            catch (Exception ex) { say("Fix stopped part way (" + ex.Message.TrimEnd('.') + ")."); }
+            catch (Exception ex) { say("Fix stopped part way: " + Failure.Say("ShellScanFix, Fix", ex)); }
             foreach (string m in said) Log(m);
 
             // Scan again: this is the answer, not what Fix did.
@@ -461,7 +461,7 @@ namespace Thornswood
                 {
                     string repaired = null;
                     try { await OffThread(delegate { repaired = Icons.Repair(); }); }
-                    catch (Exception ex) { repaired = "Could not refresh the icon (" + ex.Message.TrimEnd('.') + ")."; }
+                    catch (Exception ex) { repaired = "Could not refresh the icon: " + Failure.Say("ShellScanFix, the icon", ex); }
                     Log(repaired);
                     plugins = await Rescan();
                 }
@@ -559,7 +559,7 @@ namespace Thornswood
                     Upkeep.Look(cfg, true);
                 });
             }
-            catch (Exception ex) { Log("Fix could not scan again afterwards (" + ex.Message.TrimEnd('.') + "). Press Scan."); }
+            catch (Exception ex) { Log("Fix could not scan again afterwards (" + Failure.Why("ShellScanFix, scanning after Fix", ex) + "). Press Scan."); }
             return plugins ?? Verify.LastIssues ?? new List<Issue>();
         }
 

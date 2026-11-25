@@ -44,8 +44,8 @@ const code = (a >= 0 && b > a) ? src.slice(a, b) : null;
 yes('the frame line is in the plugin', code !== null);
 if (code === null) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 let now = 1000000;
 const FakeDate = { now: function () { return now; } };
@@ -112,4 +112,5 @@ const none = lines.filter(function (l) { return /^frame: /.test(l); })[0] || '';
 yes('with no client view yet it says not known, and no TypeError', /the client draws not known$/.test(none));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

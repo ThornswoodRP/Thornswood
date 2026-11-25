@@ -99,4 +99,4 @@ yes('Save checks the length and tells the footer before it sends',
     save[1].indexOf('raw.length > PAGE_CHARS') < save[1].indexOf('net('));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

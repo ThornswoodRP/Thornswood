@@ -450,6 +450,8 @@ return module.exports;
   function commit(next) {
     if (unreadable || !reg) { return false; }
     try {
+      // A line closed more than 30 days ago goes as the register writes (#4576).
+      next.ships.forget(next.state, Date.now());
       var text = TRADE_CARGO.saveRegister(next);
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE + '.tmp', text);
@@ -614,12 +616,23 @@ return module.exports;
     var SESSION_MS = 10 * 60 * 1000;   // a dock panel left open this long asks for the crate again
     var CRATE_MS = 60 * 1000;          // staff press a container, then the staff panel, within a minute
     var NEAR = 400;                    // the reach of a dock crate, the same as a hold's box
-    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, receiptN = 0, timer = null;
+    var sessions = {}, drafts = {}, crateSeen = {}, viewAt = 0, timer = null;
     var RUN = (function () {
       try { if (typeof serverRunId === 'function') { return String(serverRunId()); } } catch (eRun) { }
       return Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
     })();
-    function receipt(kind) { return kind + ':' + RUN + ':' + (++receiptN); }
+    /*
+      A RECEIPT'S NAME is kind:RUN:n (#4928). RUN is the server's run, kept on
+      globalThis, which a gamemode reload keeps, and the register on disk keeps
+      every name used. So n is kept on globalThis beside the run: a reload
+      carries on counting where the last load stopped, and a restart, a new
+      run, starts again at 1 under a run no name has used yet.
+    */
+    function receipt(kind) {
+      var n = (Number(g.__thornswoodShipReceiptN) || 0) + 1;
+      g.__thornswoodShipReceiptN = n;
+      return kind + ':' + RUN + ':' + n;
+    }
 
     function hook(name, pid) {
       var f = g[name];
@@ -845,13 +858,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);

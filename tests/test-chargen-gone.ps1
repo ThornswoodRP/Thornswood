@@ -124,7 +124,7 @@ $sources = @($sources | Where-Object { $_.Name -notlike 'test-*' })
 $naming = @($sources | Where-Object {
     ($keepsItOut -notcontains (RepoRel $_)) -and
     ([IO.File]::ReadAllText($_.FullName)).IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
-Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($naming.Count -eq 0)
+Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($sources.Count -gt 0 -and $naming.Count -eq 0)
 foreach ($n in $naming) { Write-Host ('      still named in ' + (RepoRel $n)) }
 
 # Not $keep: the Go.ps1 block lifted below has a $keep of its own.
@@ -396,7 +396,10 @@ namespace $ns
 }
 "@
 $compiled = $true
-try { $null = Add-LauncherType -Source $cs }
+# ReadUiGoneRecord says a caught exception through Failure (#4633): the real
+# one, in this namespace, beside the stand-in Swallow above.
+$failureCs = [IO.File]::ReadAllText((Join-Path $Here 'launcher\app\Failure.cs')).Replace('namespace Thornswood', 'namespace ' + $ns)
+try { $null = Add-LauncherType -Source $cs, $failureCs }
 catch { $compiled = $false; Write-Host ('      ' + $_.Exception.Message) }
 Yes 'OwnGame''s Skip and Foreign and Keep''s Seed and Forget compile as lifted, with the .NET SDK the launcher builds with' $compiled
 if (-not $compiled) { Done }
@@ -582,7 +585,7 @@ namespace $emptyNs {
 }
 "@
     $emptyExe = $null
-    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
+    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $failureCs.Replace("namespace $ns", "namespace $emptyNs"), $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
     catch { Write-Host ('      ' + $_.Exception.Message.Trim()) }
     Yes 'the lifted OwnGame with an empty ui-gone.json embedded builds with the .NET SDK the launcher builds with' ($null -ne $emptyExe)
     $emptySaid = ''

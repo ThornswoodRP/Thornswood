@@ -79,10 +79,15 @@ THE RULE, every number of it a knob below
 
 WHY IT IS STABLE
 
-  Once Thornswood-Last.esp carries the new counts, a recipes.json built from
-  that load order reads them, and those rows would read as usual. So a row
-  already in recost.json keeps the ORIGINAL inputs it was first measured
-  with, for its own cost and for its group's median, every run. A row that
+  Build-RecipeTable.ps1 reads this file back and gives each row here the new
+  counts, as Thornswood-Last.esp carries them (#5191: it is built before that
+  plugin and never reads it), and the chain runs it again when this changes
+  the file. Those rows would then read as usual. So a row already in
+  recost.json keeps the ORIGINAL inputs it was first measured with, for its
+  own cost and for its group's median, every run, and the kind and rank it
+  was first measured at, since its rank in recipes.json is read off the
+  counts this gives it (#6351: taking a recipe's coins out can lower it). A
+  row that
   leaves the load order leaves the file. A row that newly falls outside the
   band joins it.
 
@@ -150,22 +155,37 @@ def candidates(recipes, metal, kept):
         inputs = [{'item': i['item'], 'name': i['name'], 'count': i['count']} for i in source]
         if not inputs or any(i.get('type') in PIECES for i in row.get('inputItems', [])):
             continue
-        group = (row.get('family', ''), row.get('rank', ''), ' + '.join(metal[row['out']]))
+        group = measured(desc, row, kept) + (' + '.join(metal[row['out']]),)
         out.append((desc, row, inputs, group))
     return out
+
+
+def measured(desc, row, kept):
+    """(kind, rank) a row is measured at: the ones it was first measured with
+    when it is already listed, as its inputs are, else its row's. A row's
+    rank in recipes.json is read off the recipe as the game asks it, so it
+    moves once this file's counts are applied: an Immersive Weapons forge
+    recipe whose coins are taken out is no longer held up by them, and
+    25d24 went from expert to advanced. The box's chain starts from no
+    recost.json and runs this once more after the recipe table has read it;
+    with the row's new rank this file changed again, and every content build
+    after f7dd2d1 stopped there (#6351)."""
+    if desc in kept:
+        return (kept[desc].get('kind', ''), kept[desc].get('rank', ''))
+    return (row.get('family', ''), row.get('rank', ''))
 
 
 def cost(inputs):
     return sum(i['count'] for i in inputs if i['item'] != COIN)
 
 
-def entry_for(desc, row, inputs, to):
+def entry_for(desc, row, inputs, to, kind_rank):
     return {
         'recipe': desc,
         'editorId': row.get('editorId', ''),
         'name': row.get('name', ''),
         'plugin': row.get('plugin', desc.split(':', 1)[1]),
-        'kind': row.get('family', ''), 'rank': row.get('rank', ''),
+        'kind': kind_rank[0], 'rank': kind_rank[1],
         'costWas': cost(inputs),
         'inputs': [dict(i, to=t) for i, t in zip(inputs, to)],
         'costNow': sum(t for i, t in zip(inputs, to) if i['item'] != COIN),
@@ -200,7 +220,7 @@ def build(recipes, previous, policy=None):
             continue
         factor = median / was
         to = [0 if i['item'] == COIN else max(1, int(round(i['count'] * factor))) for i in inputs]
-        entry = entry_for(desc, row, inputs, to)
+        entry = entry_for(desc, row, inputs, to, group[:2])
         entry.update({'metal': group[2], 'peers': len(groups[group]), 'usual': median})
         entry['why'] = ['peers'] + (['coins'] if COIN in [i['item'] for i in inputs] else [])
         if [t for i, t in zip(inputs, to) if i['item'] != COIN] == [i['count'] for i in inputs if i['item'] != COIN] \
@@ -221,7 +241,8 @@ def build(recipes, previous, policy=None):
         inputs = [{'item': i['item'], 'name': i['name'], 'count': i['count']} for i in source]
         if COIN not in [i['item'] for i in inputs]:
             continue
-        entry = entry_for(desc, row, inputs, [0 if i['item'] == COIN else i['count'] for i in inputs])
+        entry = entry_for(desc, row, inputs, [0 if i['item'] == COIN else i['count'] for i in inputs],
+                          measured(desc, row, kept))
         entry['why'] = ['coins']
         recost.append(entry)
     recost.sort(key=lambda r: r['recipe'])

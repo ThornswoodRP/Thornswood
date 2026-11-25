@@ -1,17 +1,17 @@
 """
 test-python-version.py
 
-#2276: the bot and its tests need Python 3.11 or newer (the bot runs on
-3.12; Pillow 13 needs 3.11, #1401). The check is one shared module,
-_pyguard.py.
+#2276 and #4502: the bot and its tests support Python 3.11 and 3.12.
+The check is one shared module, _pyguard.py.
 
-  1. python_too_old() says nothing on 3.11, 3.12 and later, and on 3.10 and
-     3.9 names the version, the path and py -3.12.
+  1. unsupported_python() accepts patch releases of 3.11 and 3.12 and
+     names the supported versions, executable path and py -3.12 otherwise.
   2. bot.py imports _pyguard as its first import, before anything else, and
      every bot/tests/test-*.py does too once its two lines that find bot\
      from bot\tests are done (import os and sys, HERE, sys.path), #5341.
-  3. bot.py and every bot/tests/test-*.py, run on a faked 3.10 in a child Python,
-     stop with that message: non-zero, no traceback, never reaching discord.
+  3. bot.py and every bot/tests/test-*.py, run with faked unsupported
+     versions in child processes, stop with that message: non-zero, no
+     traceback, never reaching discord.
   4. Install-Bot.ps1 sends _pyguard.py with bot.py.
 
 Never connects to anything.
@@ -35,17 +35,22 @@ def yes(what, cond):
     print(('PASS  ' if cond else 'FAIL  ') + what)
 
 
-too_old = _pyguard.python_too_old
-yes('3.12 is fine', too_old((3, 12, 10)) is None)
-yes('3.11 is fine', too_old((3, 11, 0)) is None)
-yes('3.14 is fine', too_old((3, 14, 5)) is None)
-said = too_old((3, 9, 13), r'C:\Python39\python.exe') or ''
+check_python = _pyguard.unsupported_python
+yes('3.12 is fine', check_python((3, 12, 10)) is None)
+yes('3.11 is fine', check_python((3, 11, 0)) is None)
+for version in ((3, 13, 0), (3, 14, 5), (4, 0, 0)):
+    said = check_python(version, r'C:\PythonNew\python.exe') or ''
+    number = '.'.join(str(part) for part in version)
+    yes('%s is refused, naming the supported range, path and py -3.12' % number,
+        number in said and 'PythonNew' in said and 'py -3.12' in said
+        and '3.11 or 3.12' in said)
+said = check_python((3, 9, 13), r'C:\Python39\python.exe') or ''
 yes('3.9 is refused, naming the version, the path and py -3.12',
     '3.9.13' in said and 'Python39' in said and 'py -3.12' in said
-    and '3.11 or newer' in said)
-said = too_old((3, 10, 14), r'C:\Python310\python.exe') or ''
+    and '3.11 or 3.12' in said)
+said = check_python((3, 10, 14), r'C:\Python310\python.exe') or ''
 yes('3.10 is refused too: Pillow 13 needs 3.11 (#1401)',
-    '3.10.14' in said and '3.11 or newer' in said)
+    '3.10.14' in said and '3.11 or 3.12' in said)
 
 
 def finds_bot(node):
@@ -85,7 +90,7 @@ yes('bot.py and all %d bot tests import _pyguard first (wrong: %s)'
 
 CHILD = (
     'import sys, runpy\n'
-    'sys.version_info = (3, 10, 14, "final", 0)\n'
+    'sys.version_info = %r\n'
     'class Stop(object):\n'
     '    def find_module(self, n, p=None):\n'
     '        return None\n'
@@ -96,19 +101,23 @@ CHILD = (
     'sys.meta_path.insert(0, Stop())\n'
     'sys.path.insert(0, %r)\n'
     'sys.argv = [sys.argv[1]]\n'
-    'runpy.run_path(sys.argv[0], run_name="__main__")\n' % HERE)
+    'runpy.run_path(sys.argv[0], run_name="__main__")\n')
 env = dict(os.environ, DISCORD_TOKEN='not-a-real-token')
-bad = []
-for f in files:
-    p = subprocess.run([sys.executable, '-c', CHILD, f], capture_output=True,
-                       text=True, env=env, timeout=60)
-    out = (p.stdout or '') + (p.stderr or '')
-    if not (p.returncode != 0 and 'needs Python 3.11 or newer' in out
-            and 'reached ' not in out and 'Traceback' not in out):
-        bad.append('%s (exit %s: %s)' % (os.path.basename(f), p.returncode,
-                                         out.strip()[-160:]))
-yes('on a faked 3.10, bot.py and every bot test stop with the plain message '
-    'and nothing else (%d run; bad: %s)' % (len(files), bad), not bad)
+for version in ((3, 10, 14, 'final', 0), (3, 13, 0, 'final', 0)):
+    child = CHILD % (version, HERE)
+    number = '.'.join(str(part) for part in version[:3])
+    bad = []
+    for f in files:
+        p = subprocess.run([sys.executable, '-c', child, f], capture_output=True,
+                           text=True, env=env, timeout=60)
+        out = (p.stdout or '') + (p.stderr or '')
+        if not (p.returncode != 0 and 'needs Python 3.11 or 3.12' in out
+                and 'this is Python ' + number in out
+                and 'reached ' not in out and 'Traceback' not in out):
+            bad.append('%s (exit %s: %s)' % (os.path.basename(f), p.returncode,
+                                             out.strip()[-160:]))
+    yes('on a faked %s, bot.py and every bot test stop with the plain message '
+        'and nothing else (%d run; bad: %s)' % (number, len(files), bad), not bad)
 
 install = open(os.path.join(HERE, '..', 'scripts', 'deploy', 'Install-Bot.ps1'),
                encoding='utf-8').read()

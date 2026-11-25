@@ -49,6 +49,7 @@ try {
     [IO.File]::Copy((Join-Path $Repo 'scripts\mods\LoadOrder.ps1'), (Join-Path $Fake 'scripts\mods\LoadOrder.ps1'))
 [void][IO.Directory]::CreateDirectory((Join-Path $Fake 'scripts\release'))
 [IO.File]::Copy((Join-Path $Repo 'scripts\release\Read-JsonFile.ps1'), (Join-Path $Fake 'scripts\release\Read-JsonFile.ps1'))
+[IO.File]::Copy((Join-Path $Repo 'scripts\release\SevenZip.ps1'), (Join-Path $Fake 'scripts\release\SevenZip.ps1'))
     W (Join-Path $Fake 'scripts\vps\Vps.ps1') "function Get-ThornswoodVpsUser { 'stub-user' }`nfunction Get-ThornswoodVpsAddress { '192.0.2.1' }`n"
     $q = { param($s) $s.Replace("'", "''") }
     W (Join-Path $Fake 'scripts\vps\Send-Script.ps1') @"
@@ -81,6 +82,7 @@ function Invoke-ThornswoodRemote {
     $r = Run @('-Dev')
     Yes '-Dev reads the -Dev root' ($r.Out -match 'reading .*Thornswood-Server-Dev \(dev\)' -and $r.Out -match 'server wants\s+6 plugins')
     Yes '  and says the build has one the dev server does not list, with dev advice' ($r.Out -match 'B\.esp' -and $r.Out -match 'one list runs out')
+    Yes '  and exits 1, because the lists differ (#4760)' ($r.Code -eq 1)
 
     # 2. A server one level down, in a folder with [ ] in its name.
     Reset
@@ -167,8 +169,37 @@ function Invoke-ThornswoodRemote {
     $r = Run @('-Full')
     Yes 'an order that parts company names the slot and says to press Fix, not redeploy' ($r.Out -match 'part company at slot 6' -and $r.Out -match 'Press Fix' -and $r.Out -match 'Do not redeploy')
     Yes '  and -Full prints the server list' ($r.Out -match '\s7\s+A\.esp')
+    Yes '  and exits 1 (#4760)' ($r.Code -eq 1)
 
-    # 7. Light plugins (#4128). A server that loads them names them in its
+    # 7. The exit code for each finding (#4760). Until then every one of these
+    # printed its finding and exited 0, so whatever ran it read a pass.
+    Reset
+    Server 'Thornswood-Server' (@($order) + @('C.esp'))
+    $r = Run @()
+    Yes 'a plugin the server wants that the build does not have: named, exit 1' ($r.Out -match 'the server wants that you DO NOT have' -and $r.Out -match 'C\.esp' -and $r.Code -eq 1)
+
+    Reset
+    Server 'Thornswood-Server' $order
+    W (Join-Path $Drive 'Thornswood-Server\data\client\manifest.json') '{ not json'
+    $r = Run @()
+    Yes 'a manifest copy that cannot be read: named UNREADABLE, exit 1, though the other copy matches' ($r.Out -match 'UNREADABLE' -and $r.Out -match 'POSITION BY POSITION: identical' -and $r.Code -eq 1)
+
+    Reset
+    Server 'Thornswood-Server' $order
+    $plug = Join-Path $Client 'Profile\LocalAppData\plugins.txt'
+    $kept = [IO.File]::ReadAllText($plug)
+    [IO.File]::Delete($plug)
+    $r = Run @()
+    Yes 'no plugins.txt in the build to compare: says so, exit 1' ($r.Out -match 'No plugins\.txt at' -and $r.Code -eq 1)
+    W $plug $kept
+
+    $r = Run @()
+    Yes 'and with it back, identical: exit 0' ($r.Out -match 'POSITION BY POSITION: identical' -and $r.Code -eq 0)
+
+    $head = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\Check-Manifest.ps1'))
+    Yes 'its header says when it exits 0 and when 1' ($head -match '(?s)^<#.*Exit 0 when.*Exit 1\s+when.*#>')
+
+    # 8. Light plugins (#4128). A server that loads them names them in its
     # light list, and in its whole order after the full plugins. The client's
     # check walks the full plugins against mods and the light ones against
     # light, so this compares each with each: a correct client with

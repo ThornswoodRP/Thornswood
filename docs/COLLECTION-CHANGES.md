@@ -121,6 +121,22 @@ some of a file's plugins is refused, because Nexus installs the whole file.
 
 Change its `fileId`, and its plugins if the new file brings others. Name
 under `dropPatch` any patch of the old file that has to go with it.
+The publisher gives the moved archive a fresh Vortex reference tag and moves
+its tagged ordering references with it. Keeping the old tag would let Vortex
+accept the old download before it checks the changed file id or hash.
+
+### Repairing a published reference tag
+
+When the files already match the record but an earlier revision reused an
+old archive's tag, the collection-record workflow can publish an identity
+repair. Its `refresh_tag` input names the existing Nexus mod numbers, separated
+by commas. Leave `whatif` on to build the repair without writing to Nexus;
+run with it off to publish. This mode refuses any other pending record change.
+
+The downloaded draft must change only those reference tags and their ordering
+references, apart from the page text supplied by its record. A failed check
+discards the draft. Files, installer answers and plugin indices stay the same.
+The records and release then follow the new revision in the usual way.
 
 ## Changing the order or a rule
 
@@ -156,7 +172,12 @@ and which of them the Last plugin's recipe reads.
 2. the published revision and the record give the change; no change, and
    it stops with nothing written;
 3. `New-NexusRevision.ps1` drafts the next revision with all of it;
-4. `Install-NexusRevision.ps1` lays the draft out;
+4. `Install-NexusRevision.ps1` lays the draft out. It keeps each mod's
+   archive in its download cache on the runner, one folder per Nexus file
+   id (`%LOCALAPPDATA%\Thornswood\nexus-cache`, or
+   `~/.cache/thornswood/nexus-cache` off Windows). Once it has every archive
+   the draft lists, it takes the folders of other file ids out, so the cache
+   holds one revision's archives and no more;
 5. the record that layout makes, read from each plugin's own header, is held
    to the merged record. Where they part the draft is discarded and the run
    stops, naming each difference;

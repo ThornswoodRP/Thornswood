@@ -49,7 +49,7 @@ TICKET_DESKS = [
     ('report-someone',    ('report',)),
     ('apply-to-playtest', ('playtest',)),
     ('apply-for-a-seat',  ('jarl', 'faction')),
-    ('apply-for-staff',   ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator')),
+    ('apply-for-staff',   ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator', 'support')),
 ]
 # Every channel a ticket thread can be off.
 TICKET_NAMES = [d for d, _k in TICKET_DESKS] + [n for n in TICKETS

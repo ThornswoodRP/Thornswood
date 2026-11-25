@@ -34,7 +34,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const A = '// ==== thornswood spoils ====';
@@ -43,7 +43,7 @@ const a = src.indexOf(A);
 const b = a < 0 ? -1 : src.indexOf(B, a);
 const block = (a >= 0 && b >= 0) ? src.slice(a, b) : null;
 yes('the spoils block is in the gamemode', block !== null);
-if (!block) { done(); }
+if (!block) { done(); return; }
 
 const CUTS = ['3ada4:Skyrim.esm', 'bff20:Playable Rieklings.esp', 'bff21:Playable Rieklings.esp'];
 const read = function (rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8'); };

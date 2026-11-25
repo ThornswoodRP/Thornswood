@@ -1,0 +1,360 @@
+# Real issue titles and the area labels people gave them, for
+# tests/test-4144-area-labels.ps1. Read from the board's open issues on
+# 12 Nov 2026, each area's first issues in Order (#4144). Issues that carried
+# only "area: triage" are left out: nobody had said their area yet.
+# "area: CI" and "area: deploy" are written as GitHub & CI and Operations,
+# the labels they fold into. One issue a line: number, a tab, its areas with
+# | between them, a tab, its title. A line starting # is a comment.
+3620	Operations	Wipe-Saves.ps1 and Restore-Server.ps1 keep the old characters, book chat and registers beside the live server with no time limit, while the privacy page says a character is kept until a wipe
+3684	Legal|Security	Going public: rewrite this repo's history in place with git-filter-repo, then have GitHub Support purge old and PR refs
+3685	GitHub & CI|Security	Going public: no fork pull request may ever reach the VPS self-hosted runner
+2760	Security	Fork pull request builds can write the vcpkg cache the shipped engine build reads
+2791	Content|Legal	Thornswood-Last.esp hands out records from about 27 other authors' plugins with no permission on record
+4327	Launcher|Accessibility	Launcher music volume can't be set from the keyboard
+4329	Launcher|Accessibility	Launcher controls have no names a screen reader can say
+4394	Website|Accessibility	The hub's sign out button is too small to hit easily
+4409	Launcher|Accessibility	The setup window ignores Windows high contrast and text size
+4421	Website|Accessibility	Staff hub actions throw keyboard focus back to the top and announce nothing
+4459	Launcher|Packaging|Accessibility	The setup window never places keyboard focus, and cuts off the chosen folder
+4474	Client|Accessibility	Most in-game panels don't scale on big screens and there is no text size setting
+4475	Client|Accessibility	In-game panels show no keyboard focus and lose what you're typing on every update
+4491	Discord|Accessibility	The welcome card is posted with no image description
+4503	Tools|Accessibility	Most hand-run mod scripts and the Nexus scripts say nothing under Get-Help
+4127	Website|Accessibility	Home slideshow cannot be paused from the keyboard, announces itself every 5 seconds, and the open dot and nav link are not marked current
+4367	Website|Accessibility	The Not allowed in page has no lang, no viewport and no main, so it is tiny on a phone
+4368	Website|Accessibility	The hub has no skip link past its tabs, and a failed sign-in is not announced
+4575	Launcher|Website|Accessibility	Ask for a short description with each gallery picture
+5271	Launcher|Accessibility	Uninstall shows no progress and no result, and can say nothing was removed after it removed things
+5272	Launcher|Accessibility	Setup has no Stop button while it downloads and unpacks
+5273	Launcher|Accessibility	Setup closes the moment it succeeds, before its last lines can be read
+5274	Launcher|Accessibility	When setup's final checks fail, it says only "Setup stopped with code 1."
+5510	Website|Accessibility	The public site scrolls smoothly even when the visitor asked for reduced motion
+5459	GitHub & CI	The box-bridge harness sometimes never ends after its last line in the merge queue's first Linux share
+5463	GitHub & CI	test-2308-content-before-ship sometimes sees Publish-Update refuse for another reason, and does not print what it said
+5784	Operations	Planned server restarts go out with no Discord announcement
+3693	Docs	Going public: a person rewrites the public docs, and agent-only files leave the public repo
+4594	Launcher|Load order|Packaging	The launcher stops writing light flags into plugins
+4470	Moderation|Website	The deletion dry run can say a deletion is done while the game server still holds the character
+4180	Packaging|Testing	The setup window's unpack step is untested and can carry old files into a new install
+4330	Website|Performance	The Downloads page jumps when the age check replaces it
+5034	Server	Check two logins close together and NPC deaths keep the dev server up
+4129	Testing	The server-ready test's slow-start case sometimes never sees its stand-in server answer
+4337	Tools|Docs	Move data files out of docs and scripts to sit beside what reads them
+5040	World	The Free Skyrim Trading Company replaces the East Empire Company
+5730	GitHub & CI	No Bot path reads a NuGet package's hash and source commit for a licence update
+5768	Launcher	System packages 11.0.0 in #5766 fail the launcher pin harness and the deploy agent's locked restore
+5775	Website	Gallery page fails to read the public data a second time since the shared request
+5821	Launcher	Uninstall leaves the old Game folder a reinstall moved aside, and calls it not Thornswood's
+5831	Website	test-3147-lines fails "a copy of the site comes up" on Windows gate share 3 of 5
+3686	Launcher|Release	Going public: ship downloads and updates from this repo's Releases, and keep old launchers updating
+4351	Launcher|Testing	Launcher tests read the code as text instead of running it
+4396	Launcher|Website	The guides send people to the wrong place for Connect Discord
+4431	Launcher|Docs	No doc lists what an install leaves on the PC
+4496	Launcher|Website	The join and Downloads pages leave Downgrade out of their install steps
+4950	Launcher|Release	Release ids use the local clock, so a release in the repeated hour on 1 Nov can sort before an earlier one
+4518	Gamemode|Launcher	A new character's check-in can get no answer while the game starts
+4536	Launcher|Packaging|Docs	The signing help says to sign the setup window, which breaks the installer
+4538	Launcher|Packaging	Setup and packaging still quote the sizes of the old 18 GB build
+4900	Launcher	Launcher help does not say Play now builds the animation and body files first
+4550	Launcher	The game sometimes starts again a few seconds after quitting
+4333	Website|Performance	On phones the home page banner grows after it loads
+4334	Website|Performance	Every page waits on two stylesheets before it draws
+4359	Website	Take the unused board editor out of the staff hub and the site
+4365	Website	The site crashes on an older Node with no word about which Node it needs
+4380	Website	One account can push everybody else's gallery reports out
+4395	Website|Docs	The site says the installer leaves your Skyrim alone, but by default it doesn't
+4405	Security|Website	Signing out of the site doesn't end a copied sign-in
+4406	Website	A failed Discord sign-in lands on the front page with no message
+4407	Website	The report and gallery forms show raw server error codes
+4432	Website|Performance	The site freezes while it checks the age of saved launcher logs
+4434	Website|Docs	The JSON state inventory has wrong owners and missing stores
+5196	Discord	After every dev deploy, scripted bot clients play through each system on a throwaway copy of the dev server
+4339	Discord	One bad write to the open ticket list wipes it
+4349	Discord	The bot refuses a Dev test task that only needs the dev server
+4428	Discord|Docs	The bot's comments say its records sit beside the code
+4189	Discord|GitHub & CI	The bot's tests only run at night, not on pull requests that change the bot
+4227	Discord	The join card backfill can post a second card to people who already have one
+4228	Discord	The bot can't update a known-issues or test-task post once Discord archives it
+4230	Discord	A ticket with no Discord copy is reported safe before the site has it
+4237	Discord	Closing a ticket says it's closed even when Discord wouldn't archive it
+4241	Discord	Bots that join the Discord get a welcome card and a join number
+4245	Discord	The bot marks its slash commands registered even when registering failed
+4247	Discord	Reports and staff actions can go unannounced to staff
+4490	Discord	The bot stalls while it comments on a refused forum post
+4492	Discord	A prune build deletes #bugs, #character-introductions or #tales without checking what's in it
+4466	Voice|Website	Emotes skip the chat limit, so one connection can flood heads and the chat log
+4467	Voice|Website|Docs	The voice install script says an empty site address only turns a check off; it stops every join
+4206	Voice|Website	A voice chat message whose text is an object stops the voice service
+4262	Voice|Website	voice-server.js keeps an unused copy of the chat-verb table and parser beside headlines.js, and bot.py has three names nothing reads
+4300	Voice|Website|Docs	voice/README.md leaves out seven settings voice-server.js reads, including how long chat is kept
+4317	Voice|Website|Performance	Voice recopies a partial WebSocket frame on every read, so one large frame sent in small pieces costs about 145 ms
+4355	Voice|Website	Typed chat and emotes keep newlines and direction marks that names and captions have taken out
+4356	Voice|Website	The chat and caption limits are per connection, so a second socket or a reconnect gets a fresh allowance
+4383	Voice|Website	The voice server matches POST /positions on the raw address, so a query string makes it miss
+4592	Voice|Website	No test checks that voice refuses a WebSocket upgrade from another site's Origin
+4908	Voice|Website	No test catches six broken guards on voice's gamemode-only routes (/positions cap, /commands/ack, /silenced expiry, three in /say)
+5095	Voice	The voice negotiation harness's backed socket drains within a second on GitHub's Windows runner
+4528	Voice	One connection sending commands fast can fill the shared queue, so everyone's commands are refused
+4532	Voice	One connection can close another person's voice or chat connection by flooding them with offers
+4605	Voice	Show what people say on voice as words over their heads
+4482	Gamemode|Docs	The Tireless perk text says running and swinging cost half stamina
+4989	Gamemode	The deploy gate has no verb for the live gamemode (Deploy-Server -GamemodeOnly)
+4507	Gamemode	Killmoves don't show on other people
+5036	Gamemode	A character whose saved race can't be read is kept, and its form id never goes to a new character
+4519	Gamemode	Removing a friend does not unshare the journals you shared with them
+4520	Gamemode	A trade can move one side's things and then say nothing was taken
+4524	Gamemode	A quest save that writes and then errors turns quests off for everyone
+4526	Gamemode	Someone the join pass refuses is never refused again if the first kick fails
+4527	Gamemode	"/line hand" can give a place in line or a held seat to anyone
+4529	Gamemode	A server stop during a save can wipe the property, farm or season file
+4530	Gamemode	A guild trader can pay more for an item than it sells it for
+4901	Gamemode	A crash after gold or goods go into the drop box, onto a board or onto the floor can leave them in both the pack and the record
+4915	Gamemode	A brewed potion is treated as a quest item, so it cannot be stored, dropped, taken or traded
+4920	Gamemode	A deletion request merged in while the game server starts is written over and lost
+3691	Legal|Security|Engine	The skymp fork is already public: audit its history, branches, artifacts and licence texts
+4183	GitHub & CI|Engine	The engine fork's workflows use actions built for old Node versions
+5154	Engine	Upstream SkyMP fixes show only as a red nightly, and someone has to start the fork merge by hand
+5188	Engine	The engine pin PR merges itself on green, and the fork takes upstream SkyMP in a weekly rolling PR
+5035	Engine	Make the game and mod scripts Thornswood relies on run on the server
+4513	Engine	A brewed potion or a made enchantment is lost after a relog
+4523	Client|Engine	The start screen's guard against keys from other windows never turns on
+3818	Security|Engine	Rewrite the skymp fork's history so its commits carry noreply addresses, together with this repo's rewrite
+4598	Client|Gamemode|Engine	A refused chopping block or ore vein should never start the swing
+4600	Engine	Building the same engine commit twice gives records that never match
+4602	Engine	Every character starts able to cast Flames and Healing
+4608	Gamemode|Engine	A piece below full condition, or with a name of its own, can't be enchanted
+4609	Engine	Moving a placed object is not seen by people already near it
+4612	Engine	Let the server keep one effect of a food and drop the rest
+4661	Engine	Two people may see a different day of the week for the same date
+3682	GitHub & CI	Going public: set the About box, community files, issue forms and labels a stranger will see
+3721	GitHub & CI|Legal|Security	Get the repo ready to go public
+1273	GitHub & CI	Nightly checks failed
+3399	GitHub & CI	GitHub Actions artifact storage is full, so artifact uploads now fail
+5018	GitHub & CI	Protect the fork's engine branch and main from force pushes and deletion
+3889	GitHub & CI	Signing runner takes any job a branch's own workflow asks it for
+4135	GitHub & CI	Done on merge stops when GitHub's commit-to-pull-request lookup fails
+4144	GitHub & CI	The area labeller guesses wrong or gives up on most new issues
+4153	GitHub & CI	Remove the engine build prune workflow, which has nothing left to prune
+4157	GitHub & CI	The build workflows' headers and the guide describe rules that are no longer true
+4159	GitHub & CI|Security	GitHub lets any action run in this repository and the engine fork, pinned or not
+4161	GitHub & CI|Security	Dependabot hasn't finished a run since 23 Sep
+4162	GitHub & CI|Security	Nightly and release jobs hold write tokens they don't need
+4164	GitHub & CI|Testing	Most voice tests only run at night, not on pull requests
+3534	Operations	The weekly review cannot check launcher start time, One's worktrees and stashes, GitHub's settings or the board's Order
+5014	Legal|Operations	A deletion request reaches every store, the welcome card too, and a restore puts it back
+2862	Operations	Rely on One less: move what can run in the cloud now
+3896	Operations|Security	Edge's updater adds an inbound mDNS rule on the box with every new version
+4123	Operations	Rehearse a full restore that starts the server and loads a character
+4125	Operations	Write down the first availability baseline for each service
+4130	Operations	Two deploys of the same build can write the same file on the server at once
+4131	Operations	A cancelled build can leave git lock files that break the next build on that machine
+3217	Operations	After every box restart the watchdog alerts that the build runners are down while their delayed start is still pending
+4136	Operations	A computer's copy of the server bridge client is never updated
+4137	Operations	Installing the server bridge over the bridge cuts its own connection
+4139	Operations	The watchdog reports a deliberate server update as an outage
+4140	Operations	Server scripts hide the real error when a connection drops
+4141	Operations	The build machines' outbound allow lists are only refreshed by hand
+5015	Security	Update the engine server's dependencies that have open advisories
+4122	Security	The game server only watches the login proof instead of requiring it
+4509	Mods	A flute, lute or drum looks wrong when equipped and plays nothing
+4511	Mods	A few mod menus forget their settings every time you come in
+4535	Mods|Docs	The 7essxf rebuild page reads as current but is a one-time record that is now wrong
+4537	Mods	The collection's Nexus page describes mods and steps the game no longer uses
+5037	Mods	Bows, arrows, instruments and fishing poles are made at a woodworking bench, not the forge
+4567	Content|Mods	Rebuild the NPC catalogue and Thornswood-Last.esp for the new hair mod
+4703	Mods	Many scripts stop at their parameters under Windows PowerShell 5.1
+4735	Mods	The collection revision readers guess or give 0 when Vortex is open
+4740	Mods	The mods scripts folder holds scripts that are not mod tools
+4760	Load order|Mods	Three load order checks exit 0 after finding a problem
+5016	Release	Dev and main Ships run from the cloud instead of the owner's PC
+3314	Release	A Ship from the cloud cannot push its release tag
+4323	Release	Rollback and scrub leave a release manifest that no longer matches the feed
+4341	Release	The release list compares a deleted character's id two ways
+4343	Release	Find what holds the dev server folder when its swap is refused
+4358	Release	The Ship dry run test fails in every cloud session
+4425	Release	Install-Everything makes a dev Ship build from the play install
+4430	Release	The steps for a main Ship leave out the installer check
+4185	GitHub & CI|Release	The release build doesn't notice when cleaning its checkout fails
+3715	Legal	The installer ships 45 Pandora and BodySlide files with no source or permission recorded in THIRD-PARTY.md or asset-provenance.json
+4326	Legal	The privacy page leaves out the Discord names in the bot's log
+4352	Legal|Operations	Crash dumps on the server are full, kept for ever, and not on the privacy page
+4384	Legal	The privacy page leaves out journals, friends lists and mutes
+4417	Legal	The setup's age box isn't recorded, though the terms page says it is
+4548	In-game	The in-game help never names the stop key or the voice lock key
+4549	In-game	After mining you can't jump, sprint or use a forge until the pickaxe is put on again
+4555	In-game	The forge lists Dwarven Metal Ingot six times, and its pack popup is too wide
+5038	In-game	Every class and profession has things to do and make, and everything in the world has a recipe
+4558	In-game	Check what people craft against race crafts, company goods and faction or quest items
+3149	In-game	Recipe unlocks by rank: higher-tier recipes appear only as you rank up
+4559	In-game	An alchemy journal page of mixes brewed and ingredients eaten
+4560	In-game	Couriers carry parcels, and letters and parcels wait at an inn
+4561	In-game	Contracts between people, signed and kept in a ledger
+4562	In-game	An apprentice ranks faster while working beside their master
+4512	Client	Typing in another window still moves your character
+4514	Client	The game crashed on dev seconds after stepping out into Windhelm
+4531	Client	The look prompt shows another person's name without escaping it
+2025	Client	Quit to Main Menu freezes or crashes the game (EngineFixes access violation)
+4544	Client	Two comments in the front plugin name a missing test and a wrong count
+4547	Client	The emote plugin's header says it never talks to the server
+4552	Client	Sitting on a chair or bed only lasts a few seconds on dev
+5191	Content	Generated content tables are built from their sources, not committed, so content PRs stop waiting on each other
+2793	Content|Legal	Thornswood Content's Nexus ini and face files have no author or permission recorded
+3105	Content	Content tables are built from One's plugin list, not the load order the servers run
+4578	Content|Gamemode	Repair gear with the profession that makes it, at its own bench
+4610	Content	Seasoned dishes need records of their own
+4619	Content	Two of our plugins give the wrong record count in their header
+4634	Content	Plugin builds run the masters check themselves
+4644	Content|In-game	Staff blanks, instruments and two bows have no recipe
+4335	Docs	The Developer Guide's staff command rows are behind the commands page
+4336	Docs	Long docs need a table of contents and headings
+4353	Docs	The Developer Guide contradicts itself on the clone folder and claim labels
+4390	Docs	The injury page says a tailor can make a splint
+4392	Docs	Retire the old NPC server page and bring the current one up to date
+4398	Docs	The fishing pages disagree on the pole and the number of waters
+4414	Docs	The embassy page contradicts the Accord and the carriage fares
+4728	Load order	The collection rules check says NOT HELD on the server's own order
+4803	Load order	Check-Manifest names missing plugins but never says what to do
+4804	Load order	Deploy-Gamemode -Vortex reads whichever Vortex profile deployed last
+4806	Load order	Show-EslCascade answers a question the light plugin engine retired
+4809	Load order	Find-MissingMasters says nothing will crash when it can't find plugins.txt
+4128	Load order	Check-Manifest counts light plugins on the server's side but not on yours, so it says Thornswood-Last.esp is missing
+4387	Load order	Ship's load order check and Check-ShipReady pass a Thornswood Vortex profile that has no plugins.txt
+4422	Load order	resource-locations.json is built on an older load order than the NPC catalogue it is copied from, and nothing checks it
+4484	Moderation	A ban set in the game and lifted on the site keeps ending that person's session
+4488	Moderation	A game server restart lifts every staff silence and freeze without telling staff
+4636	Moderation	/silence reads only bare minutes, so "/silence name 2h" silences for 30 minutes
+4637	Moderation	A character ban made in the game hides an account ban, so the person is told they can still play their other characters
+4640	Moderation	A frozen or silenced person is free again on another character of the same account
+4240	Moderation	A character named Thornswood writes chat lines that look like the server's own notices
+4186	Packaging|Testing	No page lists the installer's tests or says which ones run on a pull request
+4539	Packaging	The VirusTotal reply says setup starts a batch file it no longer runs
+4571	Packaging	Build the travel clothes and executioner outfits ourselves
+4622	Packaging	The installer can pack a setup window built before a change to its files
+4680	Launcher|Packaging	A collection install fails its own final check if Skyrim never ran
+3752	Performance	Package-Thornswood recopies the whole stage on every Ship, rebuilds a failed zip at a slower level, and walks the stage again for numbers it already has
+4476	Performance	A game plugin handler that keeps failing logs its whole stack every frame
+4478	Performance	The front plugin asks whether a menu is open four times every frame
+4485	Performance	The P and J panel is rebuilt every 1.5 seconds with the text of every journal
+4143	Website|Performance	The hub's sign-in page and home still load the 89 KB logo, and the sign-in page waits on a script it does not use
+4316	Website|Performance	Once 4096 senders are in the public read limit, every new visitor gets a 429 on /api/public for up to a minute
+4665	Server|Voice	Voice goes through the server, which forwards each voice only to people in range
+4781	Server	One failing merchant session stops the refresh for every open merchant panel
+4822	Server	Get-ProdFacts reads a task with no trigger as one blank trigger
+5053	Server	Find what makes the dev server lag at the Whiterun market
+4132	Testing	The empty catch check skips the game's scripts, the setup program and the server service
+4134	Testing	The own-folder test sometimes keeps the old texture after a refresh
+4146	Testing	The voice roster test sometimes sends one roster per departure on Windows
+4154	Testing	The site lines test reads the site's log too early when the machine is busy
+4165	GitHub & CI|Testing	The action pin test accepts any comment as the version, so one pin names the wrong version
+4167	Testing	No test runs the install script the way the setup window starts it
+4168	Testing	The fresh load order test reads the machine's own settings and stops on a build machine
+4338	Tools	Retire the one-off scripts folder, or make its readme true
+4345	Tools	Run-OnBox leaves out files a content builder reads by hand
+4346	Tools	Scripts that ask for a secret end silently with no keyboard
+4426	Tools|Docs	The first-run install script doesn't say it publishes a dev release
+4427	Tools	The install script says press Play and succeeds after a failed publish
+4429	Tools|Docs	Script headers say the wrong thing about which checks run on pull requests
+4454	Tools|Website	Running the site from a checkout writes reports, uploads and sign-in files into the git tree
+4481	Tools	The lint script skips ruff on a PC whose only Python comes from uv
+4489	Tools	The food and mine buildings tables name a builder script that doesn't exist
+4581	World	Carriage and ferry drivers can't be talked to
+4641	World	NPCs with work of their own: jobs, routines and errands
+4662	World	A storm slows someone on foot but not the horse they ride
+4664	World	An NPC trader's food never spoils
+4763	World	The NPC builder calls Warmaiden's and three houses dungeons because of a name match
+4796	Content|World	Thornswood's own map markers, to replace Atlas Map Markers
+5056	World	Hair tint from the race menu stays after logging out and in
+5057	World	Guards, bounties and cells run by people
+5058	World	Property you actually own
+4166	GitHub & CI	Unnamed workflow steps show as a 40-character commit hash on the checks page
+4170	GitHub & CI|Operations	The outside watcher runs every 11 minutes or so, not every five
+4171	GitHub & CI	Five places still send readers to CONTRIBUTING.md, which no longer exists
+4178	GitHub & CI	A failed build or nightly says only that something failed and buries the reason
+4179	GitHub & CI	The pull request build reads an input it doesn't have and describes a manual run it can't do
+4188	GitHub & CI	The PowerShell linter hasn't run on our build machines since 22 Oct
+4194	GitHub & CI	Four out of five Actions runs are label workflows that start and skip
+4196	GitHub & CI	Wiping saves starts the servers again after a failed move
+4198	GitHub & CI	A server restore reports OK when it couldn't lock the bot's settings file
+4199	GitHub & CI	Resetting a character on this machine says Done when the reset failed
+4201	GitHub & CI	Set-Door with no root can change the restore rehearsal's door instead of the live one
+4202	GitHub & CI	Restoring the live server is refused while the dev server is running
+4203	GitHub & CI	Deleting a person's data reports it recorded when some of their files couldn't be read
+4204	GitHub & CI	Restart-Server says it worked when the restart failed
+4205	GitHub & CI	Nightly backups made without the game servers push out complete ones
+4207	GitHub & CI	Installing the service watchdog says it's running when it wasn't installed
+4209	GitHub & CI	The whole-server backup says it took files it couldn't copy
+4210	GitHub & CI	Changing the site's password or form check says it worked when it didn't
+4211	GitHub & CI	Bot token, login and install scripts say they worked when the bot didn't restart
+4212	GitHub & CI	A server folder whose lock failed is left open and never locked again
+4213	GitHub & CI	Installing the bot carries on when its folders couldn't be locked
+4214	GitHub & CI	Installing the nightly backup says it's set up when the task didn't register
+4217	GitHub & CI	Setting up the domain ends green when writing the web server config or opening ports failed
+4435	Website	Site errors show a browser a bare line of text with no way back
+4447	Website	A site file that won't read is saved over as empty plus one row, losing every ticket and report
+4448	Website	A broken bans or link file stops everyone playing while the watchdog says the site is healthy
+4462	Website	One bad request stops the voice service, taking voice and chat down
+4472	Website	robots.txt misses the member sessions page and lists six pages that no longer exist
+5021	Legal|Website	The privacy page's last changed date follows every change to its wording
+4182	Discord|Website	The /test-task refusal lists role IDs, and the command list misdescribes /test-task and /close
+4187	Website	Hub failure messages hide causes the site already gives: sign-in wait, staff actions and saves
+4223	Website	The site's secret compare throws on any non-ASCII input, so a wrong key or password gets a 500
+4231	Website	A gallery picture staff take down can still be served from caches for a day, because /shot/ is public, max-age=86400 and removal purges nothing
+4244	Website	The bot's status line rotation is tested only by test-3147-lines' bot half, which skips and passes when no Python loads the bot
+4251	Website	Turning the open switch on writes Member into config.json's play list, so turning it off again leaves Members able to play
+4271	Discord|Website	Five staff actions in moderation.log never reach the staff channel: despawn, hurt and the company's terms
+4281	Discord|Website	The failed-session post puts the uploaded log line and name into Discord unescaped, so a line can break out of its code block
+4285	Discord|Website	The ticket close note shows the ticket name and close reason unescaped, with mentions and link previews on
+4308	Legal|Website	The bot's report and staff-action posts in the staff channel are never deleted, though privacy.md gives those records 365 days
+4313	Legal|Website	The welcome card with a person's name, avatar and join number is never deleted, though privacy.md drops the number after 365 days or on request
+4347	Website	The hub's Report a problem form is always refused while Turnstile is on, because it never sends a Turnstile pass
+4381	Website	If Discord is slow, the site's admin and staff data stays readable for up to 10 minutes after the role is removed
+4382	Website	POST /api/report or /api/ticket with the body null answers 500 instead of 400
+4401	Website	Gallery approve and delete accept any file in uploads/, so uploads.json can be published at /shot/ or deleted
+4402	Website	GET /up/small stops the site: a directory name reaches an unhandled read stream (EISDIR)
+4403	Website	A gallery submission whose queue write fails keeps its file and note forever, outside the 90-day limit
+4404	Website	No total size, queue length or free-space limit on uploads, only a per-address hourly budget
+4446	Website	News, roadmap and gallery pages replace content that already loaded with "Could not load it" when a second request fails
+4922	Gamemode	An in-game /report reaches the moderator it is about when the name is shared or not matched exactly
+4928	Gamemode	After a gamemode reload, trade ship receipts repeat, and a collect can leave a ship unable to sail
+4932	Gamemode	A silenced or frozen staff member can lift it from themselves
+4941	Gamemode	One trader record without both commission books stops letting a person's holdings go
+4541	Gamemode	A restart countdown can open by naming more time than is left
+4543	Gamemode	Trading Company comments still say it is not wired in and no ship loads
+4955	Gamemode	Work costs rest by your highest rank anywhere, not the rank of the work
+4576	Gamemode	The trade cargo register keeps every closed line forever
+5042	Gamemode|Legal	Check a deleted character's merchant trades are let go on the live server
+4579	Gamemode	The arcane enchanter makes and teaches enchantments that are off the enchantments list
+4583	Gamemode	An owned bed is pressed a second time in case the first press was refused
+4607	Gamemode	Going down instead of dying, and being stabilized
+4617	Gamemode	A trader turning down work doesn't say what is missing or when to come back
+4618	Gamemode	A refused spell tome is sent back on a timer
+4624	Gamemode	The engine writes the server manifest in place at start
+4627	Gamemode	Set the trading company's freight fee per load
+4677	Gamemode	A trade cart stays on the road when its driver leaves, and can be raided there
+4692	Gamemode	Steeping hair dye skips the craft check for rest, disease and injury
+4784	Gamemode	A cancelled /stuck wait in a fight can be repeated with no limit, each one posting to staff
+5041	Launcher	Check the dev News tab names the version main is on now
+4582	Launcher	The launcher's long waits use a nested message pump instead of awaiting
+4628	Launcher	The launcher waits out file locks with retries and fixed sleeps
+4630	Launcher	Lines go missing from launcher.log when two parts write at once
+4631	Launcher	Make the Downgrade button wait on what Steam shows instead of guessing
+4632	Launcher	Remove dead launcher code and stop sending the old GitHub token
+4633	Launcher	Launcher errors show Windows' message with nothing to do next
+4643	Launcher	The site's session log files a game under the last character played
+4666	Launcher|Voice	Voice: a native voice engine in the launcher
+4667	Launcher|Voice	Voice: take the browser out of voice
+4682	Launcher	The launcher carries one machine's server folder path built in
+4683	Launcher	Uninstall can delete the wrong folder or nothing if the path has a percent sign
+4684	Launcher	The launcher build does not check the client record it compiles in
+4687	Launcher|Packaging	An installer can be built and published without its plugin list
+4690	Launcher	A failed hold on the game files is logged under the wrong name
+4691	Launcher	Play still rewrites settings for a mod the collection removed
+4693	Launcher|Packaging	A screen reader cannot use the setup window's drive choice or progress
+4694	Launcher	Fix can write through a Vortex hard link when the link does not come off
+4698	Launcher	A leftover Skyrim backup gets parked under a dated name nothing reads
+4700	Launcher	Downgrade can type its Steam command into a Steam chat window
+4701	Launcher	Connect Discord leaves the 30-day launcher sign-in in browser history
+4702	Launcher	A launcher stopped mid-save loses every setting
+4708	Launcher	The greyed Play button never shows why it is greyed
+4709	Launcher	Accent-coloured text is too faint in five launcher themes
+4710	Launcher	The launcher ignores Windows high contrast and text size

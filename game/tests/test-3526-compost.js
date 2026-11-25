@@ -236,4 +236,4 @@ check('I1 spoilage.md says what compost does', /quarter less/.test(spoilDoc) && 
 check('I2 farmer.md has compost', /## Compost/.test(farmerDoc) && /Work in spoiled food/.test(farmerDoc));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

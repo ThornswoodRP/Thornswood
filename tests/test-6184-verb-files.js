@@ -163,4 +163,4 @@ yes('4 a reads of several lines is replaced whole', JSON.parse(three).verbs.One.
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

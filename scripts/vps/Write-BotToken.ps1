@@ -286,6 +286,51 @@ function Get-ThornswoodLogLength([string]$Log) {
   return 0
 }
 
+# What each restart below prints when it worked, and the lines that say it
+# did not, in one list (#4211). Rotate-BotToken.ps1, Set-DiscordLogin.ps1 and
+# Install-Bot.ps1 dot-source this file on their own machine too: they show
+# these lines in red (Test-ThornswoodRestartLine), and hold what the box said
+# to the restarts they started (Get-ThornswoodRestartFailed), ending 1 when
+# one of them did not say it worked. Until then each kept a list of its own,
+# the lists differed, and a bot that was not restarted or never said it
+# connected, or a site that did not come back, ended 0.
+$ThornswoodRestartSteps = [ordered]@{
+  bot  = @{ Step = 'restarting the bot until it says it is connected'; Ok = '^bot reconnected$' }
+  site = @{ Step = 'starting the site again'; Ok = '^site restarted, answering on \d+$' }
+}
+$ThornswoodRestartFailLines = @(
+  '^BOT NOT RESTARTED',
+  '^BOT HAS NOT SAID IT IS CONNECTED',
+  '^SITE DID NOT COME BACK',
+  'CANNOT READ THE SERVER'
+)
+
+function Test-ThornswoodRestartLine([string]$Line) {
+  $l = "$Line".Trim()
+  foreach ($p in $ThornswoodRestartFailLines) { if ($l -cmatch $p) { return $true } }
+  return $false
+}
+
+# One FAILED line for each restart in $Steps (bot, site) the box did not say
+# worked, naming it and what the box said instead, and one for any other line
+# on the list above. Empty when every restart said it worked.
+function Get-ThornswoodRestartFailed([object[]]$Lines, [string[]]$Steps) {
+  $said = @(@($Lines) | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  $bad = @($said | Where-Object { Test-ThornswoodRestartLine $_ })
+  $named = @()
+  $out = @()
+  foreach ($k in @($Steps)) {
+    $s = $ThornswoodRestartSteps[$k]
+    if (@($said | Where-Object { $_ -cmatch $s.Ok }).Count) { continue }
+    $why = @($bad | Where-Object { $named -notcontains $_ } | Select-Object -First 1)
+    if ($why.Count) { $named += $why[0]; $out += ('FAILED    ' + $s.Step + ' did not happen. The box said: ' + $why[0]) }
+    elseif ($said.Count) { $out += ('FAILED    ' + $s.Step + ' did not happen. The box never said it did.') }
+    else { $out += ('FAILED    ' + $s.Step + ' did not happen. The box said nothing back.') }
+  }
+  foreach ($b in $bad) { if ($named -notcontains $b) { $out += ('FAILED    ' + $b) } }
+  return $out
+}
+
 # The bot's service restarted by its name (issue #465; Install-Bot.ps1 puts
 # it there), then the bot's own lines from this start: "up as" is who it
 # logged in as, and "watching N server(s)" is it connected. Stopping the

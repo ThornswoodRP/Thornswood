@@ -737,4 +737,4 @@ yes('a second note for the same session is not added twice', again.length === 1)
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { }
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

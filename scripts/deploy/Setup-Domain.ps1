@@ -173,7 +173,7 @@ foreach ($need in @('Strict-Transport-Security', 'X-Content-Type-Options', 'Refe
 }
 $cfg64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($caddyfile))
 
-Remote @"
+$caddySaid = @(Remote @"
 `$ErrorActionPreference = 'Stop'
 `$dir = '$caddyWin'
 $(Get-ThornswoodLockedFolderScript $caddyWin)
@@ -209,16 +209,18 @@ if (-not (Test-Path (Join-Path `$dir 'caddy.exe'))) {
 # A Caddyfile already on the box is kept beside the new one before it is
 # replaced, so a route somebody added by hand can be put back.
 `$cf = Join-Path `$dir 'Caddyfile'
-`$bytes = [Convert]::FromBase64String('$cfg64')
-if (Test-Path -LiteralPath `$cf) {
-  `$old = [IO.File]::ReadAllBytes(`$cf)
-  if ([Convert]::ToBase64String(`$old) -ne '$cfg64') {
-    `$keep = `$cf + '.before-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-    Copy-Item -LiteralPath `$cf -Destination `$keep -Force
-    'the Caddyfile that was there is kept as ' + (Split-Path -Leaf `$keep)
+try {
+  `$bytes = [Convert]::FromBase64String('$cfg64')
+  if (Test-Path -LiteralPath `$cf) {
+    `$old = [IO.File]::ReadAllBytes(`$cf)
+    if ([Convert]::ToBase64String(`$old) -ne '$cfg64') {
+      `$keep = `$cf + '.before-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+      Copy-Item -LiteralPath `$cf -Destination `$keep -Force
+      'the Caddyfile that was there is kept as ' + (Split-Path -Leaf `$keep)
+    }
   }
-}
-[IO.File]::WriteAllBytes(`$cf, `$bytes)
+  [IO.File]::WriteAllBytes(`$cf, `$bytes)
+} catch { throw ('Could not write the Caddyfile: ' + `$_.Exception.Message) }
 'Caddyfile written, from scripts\deploy\Caddyfile'
 
 # The web rules live in the box's own policy store, the only one the firewall
@@ -234,14 +236,27 @@ $(Get-ThornswoodFirewallScript)
 foreach (`$p in 80,443) {
   `$n = 'Thornswood Web ' + `$p
   if (-not (Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName `$n -EA SilentlyContinue)) {
-    New-NetFirewallRule -PolicyStore localhost -DisplayName `$n -Direction Inbound -Protocol TCP ``
-      -LocalPort `$p -Action Allow | Out-Null
+    try {
+      New-NetFirewallRule -PolicyStore localhost -DisplayName `$n -Direction Inbound -Protocol TCP ``
+        -LocalPort `$p -Action Allow -ErrorAction Stop | Out-Null
+    } catch { throw ('Could not open TCP port ' + `$p + ': ' + `$_.Exception.Message) }
     `$fwMade++
     'opened ' + `$p + ' to any address. Once the name is behind Cloudflare, Set-WebFirewall.ps1 takes it to Cloudflare''s ranges only (#2995)'
   }
 }
 if (`$fwMade) { Sync-ThornswoodFirewall }
-"@ | ForEach-Object { "  $_" }
+"@)
+$caddyRc = $LASTEXITCODE
+$caddySaid | ForEach-Object { "  $_" }
+# A Caddy folder the box could not lock stops the run there, and the box's
+# script stopped at the lock, so no caddy.exe or Caddyfile went into it (#4212).
+$lockFailed = Get-ThornswoodLockFailure $caddySaid
+if ($lockFailed) { throw ('The box could not lock ' + $caddyWin + ', so nothing was put in it and the run stops here. The next run locks it again: ' + $lockFailed) }
+
+if ($caddyRc -ne 0) {
+  Write-Host "Caddy setup failed (remote exit $caddyRc). The lines above say why. No restart was requested." -ForegroundColor Red
+  exit 1
+}
 
 # The docs site moves to loopback, so 3001 is no longer a plain HTTP way in.
 Write-Host ''

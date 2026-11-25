@@ -22,7 +22,7 @@ function guarded(f) {
  return createSettlement({purses:f.purses,transfer:f.transfer,world:'dev:test-ledger',now:()=>at});
 }
 function reserve(f,count=1){
- const made=policy.reserve(undefined,human,job,{hash:'a'.repeat(64),item:{baseId:100,name:'Iron Ingot'},count,unit:3},at,250);
+ const made=policy.reserve(undefined,human,job,{hash:'a'.repeat(64),item:{baseId:100,name:'Iron Ingot'},count,unit:3},at);
  f.states.get(1).commissions=made.next;return made;
 }
 {
@@ -47,14 +47,15 @@ function reserve(f,count=1){
    {kind:'cancel',job,token:held.token,at}),/transition/i,'another human cannot cancel this promise');
  assert.deepEqual(copy(f.states.get(1)),state);assert.deepEqual(copy(f.calls),[]);
 }
+// A commission's pay is new gold (#6180): the trader's purse is the same after.
 {
  const f=context.fixture(),held=reserve(f),offer=f.offer();let time=at;
- offer.kind='commission';offer.next.commissions=policy.finish(held.next,human,job,held.token,time).next;
+ offer.kind='commission';offer.next.purse=250;offer.next.commissions=policy.finish(held.next,human,job,held.token,time).next;
  const make=()=>createSettlement({purses:f.purses,transfer:f.transfer,world:'dev:test-ledger',now:()=>time});
  let s=make();assert.equal(s.begin(offer).accepted,true);
  assert.equal(f.states.get(1).pending.version,4,'commission transfers have an explicit new format');
  assert.deepEqual(copy(f.inv.entries[1]),{baseId:100,count:7,name:'Tempered iron',health:0.7});
- f.save();s.tick();assert.equal(f.states.get(1).purse,247);
+ f.save();s.tick();assert.equal(f.states.get(1).purse,250,'the pay does not come out of the purse');
  assert.equal(f.inv.entries[0].count,43);assert.equal(Object.keys(f.states.get(1).commissions.held).length,0);
  const credit=copy(f.states.get(1));s.shutdown();f.save();time+=8*60*60*1000;
  s=make();s.tick();const settled=f.states.get(1);
@@ -65,21 +66,26 @@ function reserve(f,count=1){
  assert.equal(credit.pending.version,4);
 }
 {
- const f=context.fixture();reserve(f,83);const offer=f.offer();offer.next.commissions=copy(offer.previous.commissions);
- assert.throws(()=>f.make().begin(offer),/reserv|commission/i,'ordinary trade cannot spend the promised249 gold');
- assert.deepEqual(copy(f.calls),[]);assert.equal(f.states.get(1).purse,250);
+ const f=context.fixture(),held=reserve(f),offer=f.offer();
+ offer.kind='commission';offer.next.commissions=policy.finish(held.next,human,job,held.token,at).next;
+ assert.equal(f.make().begin(offer).accepted,true,'a turn-in saved before #6180, paid from the purse, still finishes as saved');
 }
-for(const defect of ['owner','payment','count','promise','foreign-cooldown']) {
- const f=context.fixture(),held=reserve(f),offer=f.offer();offer.kind='commission';
+{
+ const f=context.fixture();reserve(f,83);const offer=f.offer();offer.next.commissions=copy(offer.previous.commissions);
+ assert.equal(f.make().begin(offer).accepted,true,'work taken holds none of the purse, so ordinary trade still spends all of it');
+}
+for(const defect of ['owner','payment','purse','count','promise','foreign-cooldown']) {
+ const f=context.fixture(),held=reserve(f),offer=f.offer();offer.kind='commission';offer.next.purse=250;
  offer.next.commissions=policy.finish(held.next,human,job,held.token,at).next;
  if(defect==='owner') {const nextHuman={desc:'11',profileId:7};const changed=policy.reserve(undefined,nextHuman,job,
-   {hash:'a'.repeat(64),item:{baseId:100,name:'Iron Ingot'},count:1,unit:3},at,250);f.states.get(1).commissions=changed.next;
+   {hash:'a'.repeat(64),item:{baseId:100,name:'Iron Ingot'},count:1,unit:3},at);f.states.get(1).commissions=changed.next;
    offer.previous=copy(f.states.get(1));offer.next.commissions=policy.finish(changed.next,nextHuman,job,changed.token,at).next;}
- if(defect==='payment'){offer.next.purse=246;offer.credit[0].count=4;}
+ if(defect==='payment')offer.credit[0].count=4;
+ if(defect==='purse')offer.next.purse=240;
  if(defect==='count'){offer.debit.entries[1].count=6;offer.next.stock[0].count=2;offer.next.stock[0].entry.count=2;}
  if(defect==='promise')offer.next.commissions.held=copy(held.next.held);
  if(defect==='foreign-cooldown')offer.next.commissions.cool[policy.key(human,'q-other-work')]=at;
  assert.throws(()=>f.make().begin(offer),/commission|conserve/i,defect);
  assert.deepEqual(copy(f.calls),[],'malformed completion makes no native inventory write');
 }
-console.log('PASS commission conservation, reserved purse, metadata, delayed settlement and exact legacy pending compatibility');
+console.log('PASS commission conservation, pay as new gold, metadata, delayed settlement and exact legacy pending compatibility');

@@ -287,5 +287,5 @@ async function hubAt(pathname, word) {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

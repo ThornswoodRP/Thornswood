@@ -86,6 +86,7 @@ namespace Thornswood
         readonly IOpusEncoder encoder;
         readonly byte[] packet = new byte[1275];
         VoiceAudio audio;
+        long audioSince;
         volatile bool disposed;
 
         public VoiceSession(Action<string, string> host, Config conf) : this(host, conf, new World()) { }
@@ -104,6 +105,7 @@ namespace Thornswood
             encoder.UseInbandFEC = true;
             encoder.PacketLossPercent = 5;
             loop = world.Loop();
+            audioSince = Now();
             pinger = world.Time.CreateTimer(delegate { Post(Ping); }, null,
                                             TimeSpan.FromMilliseconds(PING_EVERY), TimeSpan.FromMilliseconds(PING_EVERY));
             Post(delegate { Host("status", "waiting for config"); });
@@ -149,6 +151,7 @@ namespace Thornswood
             public string Mode = "local";
             public bool Initiator;
             public int Restarts;
+            public ITimer RestartWait;
         }
 
         /// <summary>A row of the service's position table: where somebody is, and whether staff silenced them.</summary>
@@ -303,12 +306,14 @@ namespace Thornswood
         /// </summary>
         void Frame(float[] pcm)
         {
+            mix.Meter.Capture(pcm, micLive);
             long n = Interlocked.Increment(ref frames);
             if (!micLive) return;
             VoicePeer[] to = live;
             if (to.Length == 0) return;
             int len = encoder.Encode(pcm, VoiceMix.Frame, packet, packet.Length);
             if (len <= 0) return;
+            mix.Meter.Encoded(len);
             var opus = new ReadOnlySpan<byte>(packet, 0, len);
             foreach (VoicePeer p in to) p.Send(opus, n);
         }
@@ -324,9 +329,14 @@ namespace Thornswood
             public readonly CancellationTokenSource Stop = new CancellationTokenSource();
             public readonly Channel<string> Out = Channel.CreateUnbounded<string>();
             public bool Open;
+            public long StartedAt, ReceivedAt, WrittenAt;
+            public int Peer, PingQueued, PongRx, RxMessages, RxReceives, Queued, Written;
+            public Task Sending;
+            public string WriteError = "";
+            public bool Reported;
         }
 
-        void Send(Action<Utf8JsonWriter> write)
+        void Send(Action<Utf8JsonWriter> write, bool ping = false)
         {
             if (ws == null || !ws.Open) return;
             var ms = new MemoryStream();
@@ -336,7 +346,11 @@ namespace Thornswood
                 write(w);
                 w.WriteEndObject();
             }
-            ws.Out.Writer.TryWrite(Encoding.UTF8.GetString(ms.ToArray()));
+            if (ws.Out.Writer.TryWrite(Encoding.UTF8.GetString(ms.ToArray())))
+            {
+                ws.Queued++;
+                if (ping) ws.PingQueued++;
+            }
         }
 
         /*
@@ -427,6 +441,13 @@ namespace Thornswood
 
         void Ping()
         {
+            if (audio != null)
+            {
+                long now = Now();
+                string summary = mix.AudioSummary(now - audioSince);
+                audioSince = now;
+                Quiet("audio levels " + summary);
+            }
             if (ws == null || !ws.Open || myPeer == 0) return;
             long quiet = Now() - heard;
             if (quiet > SILENT_AFTER)
@@ -435,11 +456,11 @@ namespace Thornswood
                     " s, so looking for it again");
                 Sock dead = ws;
                 ws = null;
-                Close(dead);
+                Close(dead, "silent");
                 Lost();
                 return;
             }
-            Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "ping"); });
+            Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "ping"); }, true);
         }
 
         /* The socket is gone, however it went. */
@@ -451,8 +472,44 @@ namespace Thornswood
             Later(RetryIn());
         }
 
-        static void Close(Sock s)
+        void SocketSummary(Sock s, string reason, int closeCode = 0, string error = "")
         {
+            if (s.Reported) return;
+            s.Reported = true;
+            long now = Now();
+            Task sending = s.Sending;
+            TaskStatus status = sending == null ? TaskStatus.Created : sending.Status;
+            string writeError = s.WriteError;
+            string sendState = sending == null ? (writeError.Length > 0 ? "failed" : "none")
+                : status == TaskStatus.Faulted ? "failed" : status == TaskStatus.Canceled ? "canceled"
+                : status == TaskStatus.RanToCompletion ? "complete" : "pending";
+            if (status == TaskStatus.Faulted)
+            {
+                Exception e = sending.Exception.GetBaseException();
+                writeError = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+            }
+            using (var ms = new MemoryStream())
+            {
+                using (var w = new Utf8JsonWriter(ms))
+                {
+                    w.WriteStartObject();
+                    w.WriteString("event", "voice_socket_closed"); w.WriteString("reason", reason);
+                    w.WriteNumber("peer", s.Peer); w.WriteNumber("ageMs", now - s.StartedAt);
+                    w.WriteNumber("rxAgeMs", now - s.ReceivedAt); w.WriteNumber("txAgeMs", now - s.WrittenAt);
+                    w.WriteNumber("pingQueued", s.PingQueued); w.WriteNumber("pongRx", s.PongRx);
+                    w.WriteNumber("rxMessages", s.RxMessages); w.WriteNumber("queued", s.Queued);
+                    w.WriteNumber("rxReceives", s.RxReceives); w.WriteString("sendState", sendState);
+                    w.WriteNumber("written", s.Written); w.WriteNumber("unwritten", s.Queued - s.Written);
+                    w.WriteString("writeError", writeError); w.WriteNumber("closeCode", closeCode);
+                    w.WriteString("error", error); w.WriteEndObject();
+                }
+                Quiet(Encoding.UTF8.GetString(ms.ToArray()));
+            }
+        }
+
+        void Close(Sock s, string reason = "closed")
+        {
+            SocketSummary(s, reason);
             s.Out.Writer.TryComplete();
             s.Stop.Cancel();
             if (s.Ws == null) return;
@@ -547,7 +604,7 @@ namespace Thornswood
             // The token goes with the handshake, as the protocol after
             // 'thornswood', and is what says who we are (#1337). It is never
             // in the url, which is written to the launcher's log.
-            var s = new Sock();
+            var s = new Sock { StartedAt = Now(), ReceivedAt = Now(), WrittenAt = Now() };
             ws = s;
             _ = Pump(s, new Uri(url), new[] { "thornswood", token });
         }
@@ -565,7 +622,8 @@ namespace Thornswood
             catch (Exception e)
             {
                 if (ws != s) return;
-                Quiet("the voice server did not answer (" + e.Message + ")");
+                Quiet("the voice server did not answer (" + Failure.Plain(e, "the voice server") + ")");
+                SocketSummary(s, "handshake", error: e.GetType().Name);
                 ws = null;
                 Lost();
                 return;
@@ -577,22 +635,41 @@ namespace Thornswood
 
             var buf = new byte[64 * 1024];
             var acc = new MemoryStream();
+            int closeCode = 0;
+            bool closeFrame = false;
+            string error = "";
             try
             {
                 while (ws == s)
                 {
                     WebSocketReceiveResult r = await s.Ws.ReceiveAsync(buf, CancellationToken.None);
-                    if (r.MessageType == WebSocketMessageType.Close) break;
+                    if (r.MessageType == WebSocketMessageType.Close)
+                    {
+                        closeFrame = true; closeCode = (int)(r.CloseStatus ?? 0); break;
+                    }
+                    s.ReceivedAt = Now(); s.RxReceives++;
                     acc.Write(buf, 0, r.Count);
                     if (!r.EndOfMessage) continue;
                     string text = Encoding.UTF8.GetString(acc.GetBuffer(), 0, (int)acc.Length);
                     acc.SetLength(0);
-                    if (ws == s) Message(text);
+                    if (ws == s)
+                    {
+                        s.RxMessages++;
+                        Message(text);
+                    }
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + e.Message + ")"); }
+            // A socket the server closed or never opened is looked for again
+            // (Lost); its reason is the debug line, not a swallowed
+            // exception on every reconnect (Failure.Plain).
+            catch (Exception e)
+            {
+                error = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+                if (ws == s) Quiet("the voice server's socket closed (" + Failure.Plain(e, "the voice server") + ")");
+            }
             if (ws != s) return;
             ws = null;
+            SocketSummary(s, closeFrame ? "close_frame" : "receive", closeCode, error);
             Close(s);
             Lost();
         }
@@ -609,10 +686,20 @@ namespace Thornswood
                 {
                     string m;
                     while (s.Out.Reader.TryRead(out m))
-                        await s.Ws.SendAsync(Encoding.UTF8.GetBytes(m), WebSocketMessageType.Text, true, CancellationToken.None);
+                    {
+                        s.Sending = null;
+                        s.Sending = s.Ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(m)),
+                            WebSocketMessageType.Text, true, CancellationToken.None);
+                        await s.Sending;
+                        s.Written++; s.WrittenAt = Now();
+                    }
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + e.Message + ")"); }
+            catch (Exception e)
+            {
+                s.WriteError = e is WebSocketException we ? we.WebSocketErrorCode.ToString() : e.GetType().Name;
+                if (ws == s) Quiet("could not write to the voice server (" + Failure.Plain(e, "the voice server") + ")");
+            }
         }
 
         void Opened(Sock s)
@@ -670,16 +757,17 @@ namespace Thornswood
             heard = Now();
             JsonDocument doc;
             try { doc = JsonDocument.Parse(text); }
-            catch (JsonException e) { Quiet("the voice server sent something that is not JSON (" + e.Message + ")"); return; }
+            catch (JsonException e) { Quiet("the voice server sent something that is not JSON (" + Failure.Why("VoiceSession, a message", e, "the voice server's message") + ")"); return; }
             using (doc)
             {
                 JsonElement m = doc.RootElement;
                 string t = Str(m, "t");
-                if (t == "pong") return;
+                if (t == "pong") { if (ws != null) ws.PongRx++; return; }
                 // In, so the next loss starts again from two seconds.
                 if (t == "welcome")
                 {
                     myPeer = (int)Num(m, "peer");
+                    if (ws != null) ws.Peer = myPeer;
                     myProfile = cfg.ProfileId;
                     tries = 0;
                     Send(delegate (Utf8JsonWriter w) { w.WriteString("t", "talk"); w.WriteBoolean("on", talking); });
@@ -708,6 +796,7 @@ namespace Thornswood
                 }
                 if (t == "hush") { NoteHush((long)Num(m, "profileId"), Truthy(m, "on")); Placed(); ApplyMicTrack(); return; }
                 if (t == "sdp") { OnSdp(m); return; }
+                if (t == "voice-restart") { OnRestart(m); return; }
                 if (t == "ice") { OnIce(m); return; }
                 if (t == "vmode")
                 {
@@ -828,6 +917,7 @@ namespace Thornswood
         /// </summary>
         void Build(int id, Rec rec)
         {
+            CancelRestartWait(rec);
             if (rec.Pc != null) rec.Pc.Dispose();
             var pc = new VoicePeer(id, rec.Initiator, mix);
             rec.Pc = pc;
@@ -860,7 +950,7 @@ namespace Thornswood
                 string sdp = pc.Description();
                 SendSdp(id, "offer", sdp);
             }
-            catch (Exception e) { Say("offer failed: " + e.Message); }
+            catch (Exception e) { Say("offer failed: " + Failure.Why("VoiceSession, the offer", e, "the voice peer")); }
         }
 
         void SendSdp(int id, string type, string sdp)
@@ -885,14 +975,14 @@ namespace Thornswood
 
         void IceState(int id, Rec rec, VoicePeer pc, string st)
         {
-            if (rec.Pc != pc) return;
+            Rec current;
+            if (!conns.TryGetValue(id, out current) || current != rec || rec.Pc != pc) return;
             Quiet("peer " + id + " (" + (rec.Name.Length > 0 ? rec.Name : "no name yet") + ") is " + st);
             if (st != "failed") return;
             if (rec.Restarts >= 1)
             {
                 // The launcher puts "Voice: " on the front of anything this sends.
-                Say("could not reach " + Who(rec) + ". One of you is behind a router " +
-                    "that will not let the two of you talk directly.");
+                Say("could not reach " + Who(rec) + ".");
                 return;
             }
             rec.Restarts++;
@@ -900,7 +990,73 @@ namespace Thornswood
             // Again from the start, with a new ICE username and password: the
             // side that offers makes a new offer, and the side that answers
             // takes it as a new connection (OnSdp). DTLS starts again too.
-            if (rec.Initiator) Build(id, rec);
+            if (rec.Initiator) { Build(id, rec); return; }
+
+            // ICE loss is not necessarily symmetric. The offerer can still
+            // hear our consent checks while we hear nothing. Ask it to spend
+            // its existing retry, naming precisely the offer we failed on.
+            string ufrag = pc.RemoteUfrag;
+            if (!ValidUfrag(ufrag)) { Say("could not reach " + Who(rec) + "."); return; }
+            ITimer waiting = null;
+            waiting = world.Time.CreateTimer(delegate
+            {
+                Post(delegate
+                {
+                    Rec active;
+                    if (!conns.TryGetValue(id, out active) || active != rec || rec.Pc != pc || rec.RestartWait != waiting) return;
+                    rec.RestartWait = null;
+                    waiting.Dispose();
+                    // An older peer or service ignores this optional request.
+                    // End that wait honestly; never reconnect the whole room.
+                    Say("could not reach " + Who(rec) + ".");
+                });
+            }, null, TimeSpan.FromSeconds(30), Timeout.InfiniteTimeSpan);
+            rec.RestartWait = waiting;
+            Send(delegate (Utf8JsonWriter w)
+            {
+                w.WriteString("t", "voice-restart");
+                w.WriteNumber("to", id);
+                w.WriteString("ufrag", ufrag);
+            });
+        }
+
+        static void CancelRestartWait(Rec rec)
+        {
+            ITimer waiting = rec.RestartWait;
+            rec.RestartWait = null;
+            if (waiting != null) waiting.Dispose();
+        }
+
+        static bool ValidUfrag(string s)
+        {
+            if (s == null || s.Length < 4 || s.Length > 256) return false;
+            foreach (char c in s)
+                if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/')) return false;
+            return true;
+        }
+
+        void OnRestart(JsonElement m)
+        {
+            int count = 0;
+            foreach (JsonProperty p in m.EnumerateObject())
+            {
+                if (p.Name != "t" && p.Name != "to" && p.Name != "from" && p.Name != "ufrag") return;
+                count++;
+            }
+            JsonElement from, to, fragment;
+            int id, target;
+            if (count != 4 || myPeer <= 0 || !m.TryGetProperty("from", out from) || from.ValueKind != JsonValueKind.Number || !from.TryGetInt32(out id) || id <= myPeer ||
+                !m.TryGetProperty("to", out to) || to.ValueKind != JsonValueKind.Number || !to.TryGetInt32(out target) || target != myPeer ||
+                !m.TryGetProperty("ufrag", out fragment) || fragment.ValueKind != JsonValueKind.String) return;
+            string ufrag = fragment.GetString();
+            Rec rec;
+            if (!ValidUfrag(ufrag) || !conns.TryGetValue(id, out rec) || !rec.Initiator || rec.Pc == null || rec.Pc.LocalUfrag != ufrag || rec.Restarts >= 1) return;
+            // The voice loop serializes this with local failure callbacks.
+            // A simultaneous local retry changes Pc and ufrag, so neither a
+            // stale request nor a duplicate can create a second generation.
+            rec.Restarts++;
+            Quiet("peer " + id + " requested its pair retry");
+            Build(id, rec);
         }
 
         static string UfragOf(string sdp)
@@ -947,7 +1103,7 @@ namespace Thornswood
                     rec.Pc.SetRemote(sdp);
                 }
             }
-            catch (Exception e) { Say("sdp failed: " + e.Message); }
+            catch (Exception e) { Say("sdp failed: " + Failure.Why("VoiceSession, the sdp", e, "the voice peer")); }
         }
 
         void OnIce(JsonElement m)
@@ -966,6 +1122,7 @@ namespace Thornswood
             Rec rec;
             if (!conns.TryGetValue(id, out rec)) return;
             conns.Remove(id);
+            CancelRestartWait(rec);
             if (rec.Pc != null) rec.Pc.Dispose();
             mix.Remove(id);
             lastMode.Remove(id);
@@ -984,7 +1141,10 @@ namespace Thornswood
                 // Nowhere to measure from, so distance is left as it was. A
                 // mute is not a distance and does not wait for one.
                 foreach (KeyValuePair<int, Rec> kv in conns)
-                    if (muted.Contains(kv.Value.ProfileId) || hushed.Contains(kv.Value.ProfileId)) { mix.SetLevel(kv.Key, 0); mix.SetAudible(kv.Key, false); }
+                {
+                    if (muted.Contains(kv.Value.ProfileId) || hushed.Contains(kv.Value.ProfileId)) { mix.SetLevel(kv.Key, 0, "muted-or-hushed"); mix.SetAudible(kv.Key, false); }
+                    else mix.Explain(kv.Key, "missing-local-position");
+                }
                 return;
             }
             double rad = me.AngleZ * Math.PI / 180;
@@ -999,11 +1159,12 @@ namespace Thornswood
                 places.TryGetValue(rec.ProfileId.ToString(CultureInfo.InvariantCulture), out them);
                 if (muted.Contains(rec.ProfileId) || hushed.Contains(rec.ProfileId) || (them != null && them.Hush))
                 {
-                    mix.SetLevel(id, 0); mix.SetAudible(id, false); continue;
+                    mix.SetLevel(id, 0, "muted-or-hushed"); mix.SetAudible(id, false); continue;
                 }
                 mix.SetAudible(id, true);
                 // A wall is not a distance. Another cell is silence whatever the maths says.
-                if (them == null || !them.HasPos || them.Cell != me.Cell) { mix.SetLevel(id, 0); continue; }
+                if (them == null || !them.HasPos) { mix.SetLevel(id, 0, "missing-remote-position"); continue; }
+                if (them.Cell != me.Cell) { mix.SetLevel(id, 0, "other-cell"); continue; }
 
                 double dx = them.X - me.X;
                 double dy = them.Y - me.Y;
@@ -1019,7 +1180,8 @@ namespace Thornswood
                 // carries and everybody else hears the result at whatever
                 // range that choice reaches.
                 double metres = Math.Sqrt(right * right + forward * forward + up * up);
-                mix.SetLevel(id, LevelFor(rec.Mode, metres));
+                double level = LevelFor(rec.Mode, metres);
+                mix.SetLevel(id, level, level == 0 ? "out-of-range" : "in-range");
 
                 // Web Audio looked down -z, so what is in front is negative.
                 mix.SetPosition(id, right, up, -forward);

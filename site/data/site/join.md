@@ -86,7 +86,17 @@ The link is on the [Downloads](/downloads) page, on the card above Play and on
 the launcher's Diagnostics page. Each opens the revision of the collection the
 server was built against and names its number. Install that revision, not a
 newer one Nexus may show first: a newer one keeps Play shut until the server
-catches up. Vortex takes it from there: it makes a profile for Thornswood,
+catches up.
+
+A new Nexus account has two stops before Vortex can start. First, some of the
+collection's mods are marked adult, and Nexus hides the collection until you
+turn on adult content in your Nexus Mods settings. In some countries Nexus
+asks you to verify your age first. Second, on a free account Vortex opens
+each file's page on Nexus and you press **Slow download** there, once for
+each file: 121 files, from 112 mods. A Premium account downloads them without
+pressing anything.
+
+After that, Vortex takes it from there: it makes a profile for Thornswood,
 downloads every mod from its own author, and deploys them. Give it time.
 
 When the server later moves to a newer revision, update the collection inside
@@ -117,6 +127,14 @@ compares every plugin with the server's copy, byte for byte. If one differs it
 says so. For Thornswood's own plugin **Fix** downloads the latest release's
 copy; for another author's mod it names the mod to update or reinstall in
 Vortex.
+
+The first time you press Play, and again after the collection changes, the
+launcher builds Thornswood's animation and body files on your computer before
+the game starts. Its status line reads **Building Thornswood's animation and
+body files** while it works, and it takes a few minutes, so leave it be. If the
+build stops, a box says why and the game does not start. The launcher log on
+the Diagnostics page has each step it took, and the [help](/help) page says
+what to do.
 
 Then the game loads to its main menu and lists your characters, with an empty
 slot for a new one. Pick one and you are in. There is no address to type and

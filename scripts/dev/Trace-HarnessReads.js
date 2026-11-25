@@ -290,7 +290,7 @@ async function main() {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--out') { outDir = argv[++i]; } else if (argv[i] === '--jobs') { jobs = parseInt(argv[++i], 10); } else if (argv[i] === '--clock') { clock = parseInt(argv[++i], 10); } else { names.push(argv[i]); }
   }
-  if (!outDir) { console.error('usage: Trace-HarnessReads.js --out <dir> [--jobs N] [names...]'); process.exit(2); }
+  if (!outDir) { console.error('usage: Trace-HarnessReads.js --out <dir> [--jobs N] [names...]'); process.exitCode = 2; return; }
   fs.mkdirSync(outDir, { recursive: true });
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-'));
   const pristine = path.join(work, 'pristine');
@@ -325,5 +325,5 @@ async function main() {
   cp.execFileSync('rm', ['-rf', work]);
 }
 
-if (require.main === module) { main().catch(e => { console.error(e); process.exit(1); }); }
+if (require.main === module) { main().catch(e => { console.error(e); process.exitCode = 1; }); }
 module.exports = { makeParser: makeParser, splitArgs: splitArgs, unquote: unquote };

@@ -206,7 +206,7 @@ $errs = $null
 [void][Management.Automation.Language.Parser]::ParseInput($farRec, [ref]$null, [ref]$errs)
 Yes 'from the record, the run lays the collection''s store over the server''s plugins and lists the order it is given, and its text parses' (
     (-not $errs -or $errs.Count -eq 0) -and $farRec.Contains("`$collection = 'C:\Thornswood-Deploys\collection\abc-8'") -and
-    $farRec.Contains("`$names = @('Skyrim.esm', 'KS_Hairdo''s_Lite_NoNPCs.esp')") -and $farRec.Contains('if ($True) {') -and $far.Contains("`$collection = ''"))
+    $farRec.Contains("`$names = @(@('Skyrim.esm', 'KS_Hairdo''s_Lite_NoNPCs.esp') | Where-Object") -and $farRec.Contains('if ($True) {') -and $far.Contains("`$collection = ''"))
 $m = ''; $m2 = ''
 try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @('A.esp')) } catch { $m = $_.Exception.Message }
 try { [void](Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\S' -Tool 'scripts/mods/t.py' -Order @("A.esp'; Remove-Item C:\ -Recurse; '.esp", 'x\..\y.esp') -Collection 'C:\c') } catch { $m2 = $_.Exception.Message }
@@ -229,6 +229,47 @@ $m2 = ''
 try { Get-ThornswoodOnBoxKeepScript -Run 'C:\Windows\Temp\thornswood-onbox-0123456789ab' -End 'Global\Something-Else' | Out-Null } catch { $m2 = $_.Exception.Message }
 Yes 'and both refuse an event name that is not a keeper''s' ($m -match 'not a keeper''s end event' -and $m2 -match 'not a keeper''s end event')
 Yes 'the run holds its folder''s lock while it runs, and stops when it cannot' ($far.Contains("New-Object IO.FileStream((`$run + '.lock'), 'Open', 'ReadWrite', 'ReadWrite')") -and $far -match 'could not be held through its lock')
+Yes 'the run leaves the server''s copy of each plugin the build makes out of its data, and reads game\content only when the commit has it (#6351)' (
+    $far.Contains("`$ours = @(@('thornswood-content.esp')") -and $far.Contains("if (Test-Path -LiteralPath `$ownDir -PathType Container)"))
+Yes 'a plugin the build makes that the commit does not hold yet is left out of the recorded order, not missed (#6351)' (
+    $farRec.Contains("`$unmade -notcontains `$_.ToLowerInvariant()") -and $farRec.IndexOf('$unmade = ') -lt $farRec.IndexOf("`$missing = "))
+Yes 'an error the run does not catch ends it on a STOP line (#6351)' ($far.Contains("trap { 'STOP. ' + `$_.Exception.Message"))
+$runSrc = Get-Content -LiteralPath $runOnBox -Raw
+Yes 'and Run-OnBox.ps1 hands that STOP line on when the run ends with no EXIT' ($runSrc.Contains("the run on the box stopped before the tool ended, so nothing was brought back: ") -and $runSrc.Contains("-Own `$own"))
+# A tool that ends other than 0 says why on a last STOP line of Run-OnBox's
+# own (#6351): its last STOP line, else the last line it printed, which for a
+# Python tool that died is its error. Add-ContentRecords.py's on 16 Nov 2026
+# said only "ended with exit 1".
+$died = @('the run''s folder', '-------- scripts/mods/Add-ContentRecords.py --------', 'Thornswood-Content.esp, from its sources (#5191)',
+    'Traceback (most recent call last):', '  File "x.py", line 1, in <module>', "FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'", '', '-------- end --------', 'CHANGED x', 'EXIT 1')
+Yes 'Get-ThornswoodToolReason takes the last line a tool printed when it printed no STOP line' ((Get-ThornswoodToolReason $died) -ceq "FileNotFoundError: [Errno 2] No such file or directory: 'recipes.json'")
+$said = @('STOP. not this one, the run''s', '-------- t --------', 'STOP. the first', 'STOP. the second. Nothing was written.', 'a line after', '-------- end --------', 'EXIT 1')
+Yes 'and its last STOP line, without the STOP, when it printed one, and nothing from outside its own lines' ((Get-ThornswoodToolReason $said) -ceq 'the second. Nothing was written.')
+Yes 'and nothing when it printed nothing' ((Get-ThornswoodToolReason @('-------- t --------', '', '-------- end --------', 'EXIT 2')) -ceq '')
+# Run only the reporting tail with the stand-in tool's exit and lines. No
+# connection or artifact is needed to check the caller's output contract.
+$ast = [Management.Automation.Language.Parser]::ParseInput($runSrc, [ref]$null, [ref]$null)
+$statements = $ast.EndBlock.Statements
+$cleanup = $statements | Where-Object { $_ -is [Management.Automation.Language.TryStatementAst] -and $_.Finally } | Select-Object -Last 1
+if (-not $cleanup) { throw 'Run-OnBox.ps1 has no top-level cleanup before its verdict' }
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('ts-2899-verdict-' + [guid]::NewGuid().ToString('n'))
+$null = New-Item -ItemType Directory -Path $fixture
+try {
+    $tail = Join-Path $fixture 'verdict.ps1'
+    $log = Join-Path $fixture 'verdict.txt'
+    [IO.File]::WriteAllText($tail, ('param([int]$code, [string[]]$lines)' + "`n" + $runSrc.Substring($cleanup.Extent.EndOffset)))
+    & $tail -code 3 -lines $said > $log
+    $actualCode = $LASTEXITCODE
+    $actual = [IO.File]::ReadAllLines($log)
+    Yes 'Run-OnBox keeps the nonzero tool exit and its last STOP reason on redirected output' (
+        $actualCode -eq 3 -and $actual -ccontains 'the tool exited 3' -and
+        $actual.Count -ge 2 -and $actual[-1] -ceq 'STOP. the second. Nothing was written.')
+    & $tail -code 0 -lines $said > $log
+    $actualCode = $LASTEXITCODE
+    $actual = [IO.File]::ReadAllLines($log)
+    Yes 'Run-OnBox keeps exit 0 and prints no STOP on success' (
+        $actualCode -eq 0 -and $actual.Count -eq 1 -and $actual[0] -ceq 'the tool exited 0')
+} finally { Remove-Item -LiteralPath $fixture -Recurse -Force }
 $runText = Get-Content -LiteralPath $runOnBox -Raw
 # The keeper is started and told the run is over in OnBox.ps1, for every
 # script that lands files on the box (#3035), and Run-OnBox.ps1 goes through it.
@@ -419,6 +460,41 @@ sys.exit(3)
         $gone = Stop-Keeper $runKeeper
         Yes 'the keeper removes the run''s folder and its lock when its end event is set, and the archive stays in the store' (
             ($gone -contains ('GONE ' + $run)) -and -not (Test-Path -LiteralPath $run) -and -not (Test-Path -LiteralPath ($run + '.lock')) -and [IO.File]::ReadAllText($archive) -eq 'archive bytes')
+
+        # A commit with no game\content (#6351): the first step of a content
+        # build makes the plugin, and nothing generated is committed. The run
+        # leaves the server's copy out and the tool still runs to its EXIT.
+        $run3 = Join-Path $work 'thornswood-onbox-0a1b2c3d4e5f'
+        $runKeeper = Start-Keeper $run3
+        $src3 = Join-Path $work 'src3'
+        New-Item -ItemType Directory -Force -Path (Join-Path $src3 'scripts\mods') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $src3 'scripts\mods\t.py'), "import os, sys`nprint('OWN ' + str(os.path.exists(os.path.join(sys.argv[2], 'Thornswood-Content.esp'))))`n")
+        [IO.Compression.ZipFile]::CreateFromDirectory($src3, (Join-Path $run3 'tools.zip'))
+        $file3 = Join-Path $work 'far3.ps1'
+        # From the record, as a content build runs it: the recorded order
+        # names the plugin the commit does not hold yet.
+        $coll3 = Join-Path $work 'collection3'
+        New-Item -ItemType Directory -Force -Path $coll3 | Out-Null
+        [IO.File]::WriteAllText((Join-Path $coll3 'store.json'), '{}')
+        [IO.File]::WriteAllText($file3, (Get-ThornswoodOnBoxScript -Run $run3 -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}') -ArchiveStore $store -Order @('Skyrim.esm', 'Thornswood-Content.esp') -Collection $coll3), (New-Object Text.UTF8Encoding($true)))
+        $lines3 = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file3 2>&1 | ForEach-Object { "$_" })
+        foreach ($l in $lines3) { Write-Host ('    ' + $l) }
+        Yes 'a commit with no game\content runs the tool to its EXIT, with the server''s copy of our plugin left out (#6351)' (
+            ($lines3 -contains 'OWN False') -and ($lines3 -contains 'EXIT 0') -and ($lines3 -match '^data\s+1 plugin\(s\)').Count -eq 1 -and
+            ($lines3 -match '^unmade\s+thornswood-content\.esp: not in this commit yet').Count -eq 1)
+        $null = Stop-Keeper $runKeeper
+
+        # A run that fails before its tool says why on a STOP line (#6351).
+        $run4 = Join-Path $work 'thornswood-onbox-5f4e3d2c1b0a'
+        $runKeeper = Start-Keeper $run4
+        [IO.File]::WriteAllText((Join-Path $run4 'tools.zip'), 'not a zip')
+        $file4 = Join-Path $work 'far4.ps1'
+        [IO.File]::WriteAllText($file4, (Get-ThornswoodOnBoxScript -Run $run4 -ServerRoot $server -Tool 'scripts/mods/t.py' -ArchiveStore $store), (New-Object Text.UTF8Encoding($true)))
+        $lines4 = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file4 2>&1 | ForEach-Object { "$_" })
+        foreach ($l in $lines4) { Write-Host ('    ' + $l) }
+        Yes 'a run that fails before its tool says what on a STOP line, with no EXIT' (
+            @($lines4 | Where-Object { $_ -cmatch '^STOP\. .+\(run\.ps1 line \d+\)$' }).Count -eq 1 -and -not @($lines4 | Where-Object { $_ -like 'EXIT *' }).Count)
+        $null = Stop-Keeper $runKeeper
 
         # A PowerShell tool given the plugin list (#3100): the server's
         # loadOrder after the five masters, nothing else of its settings.

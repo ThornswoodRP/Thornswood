@@ -4,11 +4,13 @@ React to the rules, get Member (#5841).
 Part of the bot: bot.py loads it (#5357).
 
 THE ORDER (Patrick, 12 Nov 2026, page cards q-discord-hand-given-member and
-q-discord-readback, A): somebody new sees #rules and #welcome-travelers.
-Reacting to the rules gives Member, and the reaction is the record that they
-accept the rules and are 18 or over (the rules open with that). Member opens
-the welcome, about and application channels. An approved application gives
-Playtester, which opens the rest. "Don't make it a button."
+q-discord-readback, A, widened 16 Nov 2026): somebody new reads Start Here,
+Information, the Roleplay Guide, #welcome-travelers, #general-chat and
+#travelers-questions, and talks in none of them. Reacting to the rules gives
+Member, and the reaction is the record that they accept the rules and are 18
+or over (the rules open with that). Member applies, opens tickets and asks in
+#travelers-questions. An approved application gives Playtester, which opens
+the rest. "Don't make it a button."
 
 The bot keeps one message of its own in #rules, GATE_TEXT, and reacts to it
 with MARK so there is something to press. It is a message apart from the

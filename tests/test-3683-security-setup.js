@@ -230,4 +230,4 @@ yes('E  and the reader fails one on the VPS that runs on pull requests and publi
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

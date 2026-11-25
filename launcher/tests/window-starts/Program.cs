@@ -62,13 +62,30 @@ namespace Thornswood.Tests
                 return SetupLook.Run();
             }
 
-            AppBuilder.Configure<App>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
+            bool pictures = argv.Length > 1 && argv[1] == "news-pictures";
+            var builder = AppBuilder.Configure<App>();
+            if (pictures) builder.UseSkia();
+            builder.UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = !pictures })
                 .SetupWithoutStarting();
+
+            if (pictures)
+            {
+                NewsPictureChecks.Run(Check);
+                return fails == 0 ? 0 : 1;
+            }
+
+            if (argv.Length > 1 && argv[1] == "microphone-picker")
+            {
+                MicrophoneChecks.Run(Check);
+                return fails == 0 ? 0 : 1;
+            }
 
             // launcher\tests\test-4459-setup-keys.ps1: the install window
             // worked from the keyboard, and nothing else.
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
+            // launcher\tests\test-4693-setup-reader.ps1: the install window as
+            // a screen reader finds it, and nothing else.
+            if (argv.Length > 1 && argv[1] == "setup-reader") return SetupReader.Run();
 
             MainWindow win = null;
             Check("the window is made from its markup", () => win = new MainWindow());

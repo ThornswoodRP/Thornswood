@@ -4,7 +4,7 @@
   "what": "The Thornswood collection on Nexus as it should be: each Nexus file it installs and the plugins that file puts in Data, every plugin in the collection's order with the rule that holds it there and what its header says, and the plugins the servers load that a change takes out. A mod change is a pull request to this file (docs\\COLLECTION-CHANGES.md): Check-CollectionRecord.ps1 holds it to the load order, the pages' permissions and the servers' order, and the merge drafts the revision it describes, lays it out, holds it to this record and publishes it (Publish-CollectionRecord.ps1). revision is the newest published revision the record has followed.",
   "collection": "7essxf",
   "game": "skyrimspecialedition",
-  "revision": 8,
+  "revision": 11,
   "mods": [
     { "modId": 198, "fileId": 489053, "name": "Caliente's Beautiful Bodies Enhancer CBBE - v2.0.3", "plugins": ["CBBE.esp", "RaceMenuMorphsCBBE.esp"] },
     { "modId": 201, "fileId": 767958, "name": "BodySlide and Outfit Studio - v5.8.2", "plugins": [] },
@@ -32,6 +32,7 @@
     { "modId": 12604, "fileId": 749043, "name": "SkyUI", "plugins": ["SkyUI_SE.esp"] },
     { "modId": 12688, "fileId": 803483, "name": "moreHUD for SE and AE", "plugins": ["AHZmoreHUD.esp"] },
     { "modId": 12939, "fileId": 536557, "name": "Deadly Spell Impacts v1.9", "plugins": ["DeadlySpellImpacts.esp"] },
+    { "modId": 13048, "fileId": 462773, "name": "PapyrusUtil SE - Modders Scripting Utility Functions - PapyrusUtil SE - Scripting Utility Functions", "plugins": [] },
     { "modId": 14658, "fileId": 691084, "name": "Granite Hill", "plugins": ["aaaGraniteHill.esp"] },
     { "modId": 16788, "fileId": 52498, "name": "Immersive Weapons", "plugins": ["Immersive Weapons.esp"] },
     { "modId": 17230, "fileId": 725261, "name": "Engine Fixes - SKSE64 Preloader", "plugins": [] },

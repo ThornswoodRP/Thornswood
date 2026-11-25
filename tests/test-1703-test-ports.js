@@ -183,12 +183,17 @@ for (const f of starters) {
 }
 // The bot pass starts the service through scripts/bot/relay.js (#5196), on
 // the port its copy's settings name, and asks it nothing (not /token) until
-// that copy has said it is listening there.
+// that copy has said it is listening there. Given port 0 it takes the port
+// the service says it bound (#6050), and given one it holds the service to it.
 {
   const relay = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'bot', 'relay.js'), 'utf8');
   yes('scripts/bot/relay.js waits for its own service to say it is listening on its port before asking it anything',
-      relay.indexOf("new RegExp('\\\\[voice\\\\] listening on 127\\\\.0\\\\.0\\\\.1:' + this.port + '\\\\b')") >= 0 &&
-      relay.indexOf('if (this.lines.some((l) => said.test(l))) { return \'\'; }') >= 0);
+      relay.indexOf("const said = /\\[voice\\] listening on 127\\.0\\.0\\.1:(\\d+)\\b/;") >= 0 &&
+      relay.indexOf("if (this.port === 0) { this.port = got; return ''; }") >= 0 &&
+      relay.indexOf("if (got === this.port) { return ''; }") >= 0);
+  const voice = fs.readFileSync(path.join(REPO_DIR, 'voice', 'voice-server.js'), 'utf8');
+  yes('voice/voice-server.js says the port it bound, so a copy started on 0 can be found (#6050)',
+      /console\.log\('\[voice\] listening on ' \+ BIND \+ ':' \+ server\.address\(\)\.port/.test(voice));
 }
 
 // ------------------------------------------------------ the site's own word
@@ -229,7 +234,7 @@ for (const f of sites) {
 {
   const srvSrc = read(path.join(REPO_DIR, 'site', 'server.js'));
   yes('site/server.js says the port it got, not the one it was handed',
-      /}\).listen\(PORT, BIND, function \(\) \{(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
+      /}\)\.once\('error', listenFailed\)\.listen\(PORT, BIND, function \(\) \{\s*this\.off\('error', listenFailed\);(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
 }
 yes('saidPort() reads the port off a whole line, and nothing off half of one',
     siteFiles.saidPort('[thornswood-docs] listening on 127.0.0.1:4567\n') === 4567 &&

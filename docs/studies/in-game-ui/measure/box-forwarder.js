@@ -84,7 +84,9 @@ if (ROLE === 'box') {
     } else if (m.t === 'bye') {
       for (const c of Object.values(conns)) c.pc.close();
       ndc.cleanup();
-      process.exit(0);
+      // Letting go of the channel to the run ends this child, as nothing
+      // else holds it open (#6036).
+      process.disconnect();
     }
   });
 }
@@ -121,7 +123,9 @@ if (ROLE === 'talker' || ROLE === 'listeners') {
       if (timer) clearInterval(timer);
       for (const c of Object.values(conns)) c.pc.close();
       ndc.cleanup();
-      process.exit(0);
+      // Letting go of the channel to the run ends this child, as nothing
+      // else holds it open (#6036).
+      process.disconnect();
     }
   });
 }
@@ -135,12 +139,14 @@ if (!ROLE) {
     child.send({ t: t.ask });
   });
   const sizes = process.argv.slice(2).map(Number).filter((n) => n >= 1);
+  const kids = [];
   (async () => {
     const rows = [];
     for (const n of (sizes.length ? sizes : [10, 50, 100, 200])) {
       const box = fork(__filename, ['box']);
       const talker = fork(__filename, ['talker']);
       const ls = fork(__filename, ['listeners']);
+      kids.push(box, talker, ls);
       const side = (id) => (id === 0 ? talker : ls);
       box.on('message', (m) => { if (m.t === 'sig') side(m.to).send({ t: 'sig', to: m.to, s: m.s }); });
       for (const c of [talker, ls]) c.on('message', (m) => { if (m.t === 'sig') box.send({ t: 'sig', from: m.from, s: m.s }); });
@@ -173,5 +179,9 @@ if (!ROLE) {
       console.log('| ' + r.listeners + ' | ' + r.open + ' | ' + r.boxCpuPct + ' | ' + r.talkerCpuPct + ' | ' + r.forwardedPerSec +
         ' | ' + r.receivedPerSec + ' | ' + r.boxOutKbit + ' |');
     }
-  })().catch((e) => { console.error(e); process.exit(1); });
+  })().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+    for (const k of kids) { if (k.exitCode === null && k.signalCode === null) k.kill(); }
+  });
 }

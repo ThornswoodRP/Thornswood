@@ -242,9 +242,8 @@ namespace Thornswood
             {
                 // Same as at startup: not knowing is not a reason to refuse
                 // Play, but it is said, so a report shows the check was missed.
-                Swallow.Note("ShellOwnGame.OwnGameRefreshIfDue", ex);
                 Log("Could not tell whether Thornswood's own Skyrim folder matches what Vortex has deployed (" +
-                    ex.Message.TrimEnd('.') + "). Starting from the folder as it is.");
+                    Failure.Why("ShellOwnGame.OwnGameRefreshIfDue", ex) + "). Starting from the folder as it is.");
                 return false;
             }
             if (ownGameBusy)
@@ -479,7 +478,7 @@ namespace Thornswood
             PlayProgress.FolderFirst(true);
             string said = null, fail = null;
             try { said = make ? OwnGame.Make(c, say) : OwnGame.Refresh(c, say); }
-            catch (Exception ex) { fail = ex.Message; }
+            catch (Exception ex) { fail = Failure.Why("ShellOwnGame", ex); }
 
             // Made: from here Paths name the new folder, as they will after
             // the restart below, so the light flags and the load order are
@@ -513,7 +512,8 @@ namespace Thornswood
             if (fail == null)
             {
                 bool already = said != null
-                    && said.IndexOf("already matches what Vortex has deployed", StringComparison.Ordinal) >= 0;
+                    && (said.IndexOf("already matches what Vortex has deployed", StringComparison.Ordinal) >= 0
+                        || said.IndexOf("already matches the mods in Mod Organizer 2", StringComparison.Ordinal) >= 0);
                 int ordered = 0;
                 try
                 {
@@ -521,8 +521,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    Swallow.Note("ShellOwnGame.StartOwnGame, PutInServerOrder after Vortex bring-up-to-date", ex);
-                    say("Could not put the plugin list into the server's order after the Vortex update (" + ex.Message.TrimEnd('.') + "). Press Fix on Diagnostics if Mod list goes red.");
+                    say("Could not put the plugin list into the server's order after the Vortex update (" + Failure.Why("ShellOwnGame.StartOwnGame, PutInServerOrder after Vortex bring-up-to-date", ex, "plugins.txt") + "). Press Fix on Diagnostics if Mod list goes red.");
                 }
                 bool needVerify = !already || ordered > 0
                     || !Verify.LastUsedServer || Verify.LastIssues == null;
@@ -645,7 +644,7 @@ namespace Thornswood
                 {
                     string why;
                     try { why = OwnGame.WhyNot(askCfg, askInto); }
-                    catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + ex.Message; }
+                    catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + Failure.Say("ShellOwnGame, what Vortex deployed", ex); }
                     string text = (why == null
                         ? "Not made yet. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
                         : "Not made yet. " + why) + askChosen;
@@ -750,7 +749,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not restart by itself (" + ex.Message + "). Close the launcher and open it again.");
+                Log("Could not restart by itself (" + Failure.Why("ShellOwnGame, restarting", ex, "Thornswood.exe") + "). Close the launcher and open it again.");
                 return;
             }
             restarting = true;

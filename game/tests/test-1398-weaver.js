@@ -43,7 +43,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(text, a, b) {
   const i = text.indexOf(a);
@@ -57,7 +57,7 @@ const MANEUVERS = between(gm, '// ==== thornswood warrior maneuvers ====', '// =
 const NEEDS_WOVEN = /woven: \{ degrees: (\d+), mark: '([^']+)' \}/.exec(gm);
 yes('the rules, the character block, the maneuvers block and the weather mark are in the gamemode',
     !!(RULES && CHARACTER && MANEUVERS && NEEDS_WOVEN));
-if (!(RULES && CHARACTER && MANEUVERS && NEEDS_WOVEN)) { done(); }
+if (!(RULES && CHARACTER && MANEUVERS && NEEDS_WOVEN)) { done(); } else {
 
 // ------------------------------------------------------------ A. the pick --
 const store = {};
@@ -480,3 +480,4 @@ attempt('D: the page', function () {
 });
 
 done();
+}

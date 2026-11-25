@@ -71,4 +71,4 @@ yes('it is written once per new person looked at, not every poll',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

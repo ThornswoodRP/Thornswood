@@ -14,7 +14,7 @@
 // worldspace.
 //
 // What it checks:
-//   1. DATA.ownWorlds (game\data\data.json and the DATA line, written by
+//   1. DATA.ownWorlds (game\data\own-worlds.json and the DATA line, written by
 //      scripts\dev\Build-WakeTable.js) gives every worldspace of DATA.worldspaces
 //      one answer: laid out in Tamriel's coordinates (Tamriel and the five
 //      walled cities among them) or a key with its places; each place is
@@ -47,7 +47,8 @@ const ROOT = path.join(__dirname, '..', '..');
 const CR = String.fromCharCode(13);
 const GM = process.env.GAMEMODE || path.join(ROOT, 'game', 'gamemode.js');
 const gm = fs.readFileSync(GM, 'utf8').split(CR).join('');
-const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'data.json'), 'utf8'));
+const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'own-worlds.json'), 'utf8'));
+const hand = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'data.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -60,14 +61,14 @@ const m = require('../../tests/gamemode-tables.js').lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
 yes('gamemode.js has a DATA line', !!DATA);
-if (!DATA) { done(); }
+if (!DATA) { done(); } else {
 
 // ---- 1. the table -----------------------------------------------------------
 const SOLSTHEIM = '800:Dragonborn.esm';
 const TAMRIEL = ['3c:Skyrim.esm', '1a26f:Skyrim.esm', '37edf:Skyrim.esm', '1691d:Skyrim.esm', '16d71:Skyrim.esm', '16bb4:Skyrim.esm'];
 const own = DATA.ownWorlds;
 yes('DATA has ownWorlds, the places to wake in each worldspace with coordinates of its own', !!own && typeof own === 'object');
-yes('and it is the same in data.json', !!own && JSON.stringify(data.ownWorlds) === JSON.stringify(own));
+yes('and it is the same in own-worlds.json', !!own && JSON.stringify(data.ownWorlds) === JSON.stringify(own));
 const ws = DATA.worldspaces || [];
 const stray = Object.keys(own || {}).filter(function (k) { return ws.indexOf(k) < 0; });
 yes('every key is a worldspace of the load order' + (stray.length ? ' (not: ' + stray.join(', ') + ')' : ''), !!own && stray.length === 0);
@@ -94,7 +95,7 @@ const rrTemple = sol.filter(function (p) { return p.kind === 'temple' && p.cell 
 const netch = sol.filter(function (p) { return p.kind === 'inn' && p.cell === 'DLC2RRTheRetchingNetch'; })[0];
 yes('Solstheim has the Raven Rock temple and the Retching Netch (' + sol.map(function (p) { return p.kind + ' ' + p.cell; }).join(', ') + ')',
   sol.length === 2 && !!rrTemple && !!netch);
-const marker = data.destinations && data.destinations.ravenrock && data.destinations.ravenrock.temple;
+const marker = hand.destinations && hand.destinations.ravenrock && hand.destinations.ravenrock.temple;
 yes('the temple wakes you at the respawn point Raven Rock always had',
   !!rrTemple && !!marker && rrTemple.desc === marker.desc && JSON.stringify(rrTemple.pos) === JSON.stringify(marker.pos) &&
   JSON.stringify(rrTemple.rot) === JSON.stringify(marker.rot) && rrTemple.destination === 'ravenrock');
@@ -111,7 +112,7 @@ function sliceFn(src, start, end) {
 }
 const arrivalSrc = sliceFn(gm, '\nfunction dist2(', '\nfunction ensureProperties(');
 yes('resolveArrival and the helpers it calls are sliced out of gamemode.js', !!arrivalSrc);
-if (!arrivalSrc) { done(); }
+if (!arrivalSrc) { done(); } else {
 // The functions of the slice, with mp and log stood in for where a test needs them.
 function sliceParts(mp) {
   return new Function('DATA', 'WORLDSPACES', 'PREFER_SLOT', 'FALLBACK_DESTINATION', 'mp', 'log',
@@ -170,7 +171,7 @@ yes('no worldspace of its own reaches the capitals or the mainland\'s doors' + (
 // on the character (CAME_IN_PROPERTY); the presses here are the ones a person
 // makes walking in.
 const doorsIn = DATA.ownWorldDoors || {};
-yes('DATA.ownWorldDoors lists the doors into each worldspace of its own, the same in data.json (' + Object.keys(doorsIn).length + ')',
+yes('DATA.ownWorldDoors lists the doors into each worldspace of its own, the same in own-worlds.json (' + Object.keys(doorsIn).length + ')',
   Object.keys(doorsIn).length > 0 && JSON.stringify(data.ownWorldDoors) === JSON.stringify(doorsIn) &&
   Object.keys(doorsIn).every(function (d) { return has(own, doorsIn[d]); }));
 yes('  the Pit has its two, from the waiting room and the palace',
@@ -196,7 +197,7 @@ if (typeof next === 'function') {
   let rec = null;
   // Blackreach, entered from a door the Reach holds: a room DATA.cellToHold
   // gives the Reach, and a door into Blackreach pressed there.
-  const reachRoom = Object.keys(data.cellToHold).filter(function (c) { return data.cellToHold[c] === 'ReachHoldLocation'; })[0];
+  const reachRoom = Object.keys(hand.cellToHold).filter(function (c) { return hand.cellToHold[c] === 'ReachHoldLocation'; })[0];
   rec = press(null, '58e22:Skyrim.esm', { desc: reachRoom, pos: [0, 0, 0] });
   yes('a door into Blackreach pressed in a room of the Reach writes Blackreach and the Reach (' + JSON.stringify(rec) + ')',
     rec.world === '1ee62:Skyrim.esm' && rec.hold === 'ReachHoldLocation' && rec.door === '58e22:Skyrim.esm');
@@ -214,7 +215,7 @@ if (typeof next === 'function') {
   yes('in through Mzinchaleft, a death in Blackreach wakes where a death in Mzinchaleft would (' + a.destination + ' ' + a.slot + ')',
     a.hold === 'HjaalmarchHoldLocation' && a.destination === mzin.destination && a.slot === mzin.slot && a.via === 'came-in-by');
   // Through Alftand's worldspace: the hold they came into it with is carried.
-  const winterRoom = Object.keys(data.cellToHold).filter(function (c) { return data.cellToHold[c] === 'WinterholdHoldLocation'; })[0];
+  const winterRoom = Object.keys(hand.cellToHold).filter(function (c) { return hand.cellToHold[c] === 'WinterholdHoldLocation'; })[0];
   const alftand = Object.keys(doorsIn).filter(function (d) { return doorsIn[d] === '69857:Skyrim.esm'; })[0];
   rec = press(null, '58e22:Skyrim.esm', { desc: reachRoom, pos: [0, 0, 0] });
   rec = press(rec, alftand, { desc: winterRoom, pos: [0, 0, 0] });
@@ -285,8 +286,9 @@ if (DATA_DIR && LIST && fs.existsSync(DATA_DIR) && fs.existsSync(LIST) && !proce
 }
 
 done();
+}}
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }

@@ -88,4 +88,4 @@ yes('C1 the HUD icon comment reads as it did before #1689, with no dash', gm.ind
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

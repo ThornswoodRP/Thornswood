@@ -20,7 +20,10 @@
        or one of the other files the deploy sends (-AlsoSends), refuses the
        build, naming every such file; an ignored file does not count and
        never goes in; there is no way to hand it a file from elsewhere; a
-       path the commit lacks stops the build.
+       path the commit lacks stops the build. The one other source is
+       -Content, which names a server and no path: what the box's content
+       build writes comes from the build laid over the checkout, held to that
+       commit's inputs (#5191, tests\test-5191-laid-build.ps1).
     4. Sending and recording, against a stand-in box (ssh and scp replaced by
        functions that act on a temp folder): the store gets the zip and its
        record, a zip the store already holds is not sent again, and
@@ -248,8 +251,9 @@ try {
     Yes 'a read that fails stops, naming git and the repository, and git is let go' ($why -match 'git cat-file --batch in .+ failed: git cat-file answered: [0-9a-f]{40} tree')
 
     $params = @((Get-Command New-ThornswoodArtifact).Parameters.Keys | Where-Object { [System.Management.Automation.PSCmdlet]::CommonParameters -notcontains $_ })
-    Yes 'New-ThornswoodArtifact takes no file from elsewhere and no switch past the refusal' (
-        ((($params | Sort-Object) -join ',') -eq 'AlsoSends,Component,OutDir,Paths,RepoDir'))
+    $contentSet = @((Get-Command New-ThornswoodArtifact).Parameters['Content'].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } | ForEach-Object { $_.ValidValues })
+    Yes 'New-ThornswoodArtifact takes no file from elsewhere and no switch past the refusal; -Content names a server, never a path' (
+        ((($params | Sort-Object) -join ',') -eq 'AlsoSends,Component,Content,OutDir,Paths,RepoDir') -and (($contentSet | Sort-Object) -join ',') -eq ',dev,main')
 
     # A second commit is a second name.
     Put (Join-Path $src 'site\server.js') "'use strict';`nconsole.log('site two');`n"
@@ -333,6 +337,13 @@ try {
         (Refusal { Assert-ThornswoodSourceIntegrity -Artifact $v -RepoDir $src }) -eq '')
 
     # ---- 4. sending and recording, against a stand-in box ------------------
+    # The store's lock is a Windows ACL. Off Windows the lock the box's text
+    # carries is stood in, so the text runs whole; a lock that fails stops
+    # that text (#4212), which is scripts\tests\test-4212-lock-checked.ps1's.
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        function Lock-ThornswoodFolder { param([string]$Path, [switch]$Only, [string[]]$Writers) }
+        function Test-ThornswoodFolderLocked { param([string]$Path) return $true }
+    }
     $box = Join-Path $tmp 'box'
     $store = (Join-Path $box 'Thornswood-Deploys').Replace('\', '/')
     $partRoot = (Join-Path $box 'Thornswood-Server-Dev').Replace('\', '/')

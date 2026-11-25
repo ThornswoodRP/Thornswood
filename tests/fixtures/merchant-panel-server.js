@@ -61,7 +61,7 @@ http.createServer((req,res)=>{
        canReturn:true,canAbandon:true,token:17}
     ];
     if(commissionScenario==='commissions-no-price')Object.assign(data.quests[0],{
-      state:'unavailable',canTake:false,gold:null,quotedUnit:null,check:'No submitted buy price is available for this work.'});
+      state:'unavailable',canTake:false,gold:null,quotedUnit:null,check:'Staff have set no reward for this work.'});
     if(commissionScenario==='commissions-waiting') {
       data.canTrade=false;data.offers[0].maxSell=0;data.sellReason='This trader is finishing a saved transfer.';
       Object.assign(data.quests[0],{state:'unavailable',canTake:false,check:data.sellReason});

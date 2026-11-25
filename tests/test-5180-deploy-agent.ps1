@@ -184,6 +184,9 @@ try {
             Yes '  and -Status prints where the last pass got to, its own lines and the copy server''s, addresses taken out' (
                 $null -ne $st -and $st.Parses -and $st.Text.Contains("'C:\Thornswood-BotPass\run'") -and $st.Text.Contains("'bot-pass.log'") -and
                 $st.Text.Contains('server\bot-pass-server.log') -and $st.Text.Contains("'<address>'") -and $st.Text.Contains('C:\Thornswood-BotPass\passes'))
+            Yes '  and every error the copy''s server threw in its tick or caught there, with the lines around it, which the last lines miss' (
+                $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8") -and
+                $st.Text.Contains("'server\bot-pass-server.log'"))
             $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
             Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
             $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '..\..\Windows')
@@ -281,9 +284,11 @@ $h = @{}; $want = ''
     $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))
     Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
     $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
-    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json') {
+    $cp = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\mods\ContentPaths.ps1'))
+    foreach ($f in 'records/collection.json', 'records/collection-plugins.json', 'records/collection-dropped.json', 'records/load-order.json') {
         $win = $f.Replace('/', '\')
-        Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and ($dg.Contains($f) -or $dg.Contains($win) -or $dg.Contains("'" + (Split-Path -Leaf $win) + "'")))
+        # -FromRecord reads the order Get-ThornswoodContentOrder makes (#6209), from these.
+        Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and $dg.Contains("'" + $f + "'") -and ($cp.Contains("'" + $f + "'") -or $dg.Contains($win)))
     }
     $lop = [regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value
     Yes '  and not when our own plugins change: they are the Release''s (#6175)' ($lop -ne '' -and -not $lop.Contains('Thornswood-Content.esp') -and -not $lop.Contains('last-plugin.recipe'))

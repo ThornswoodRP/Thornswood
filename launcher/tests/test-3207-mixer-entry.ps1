@@ -76,7 +76,11 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 # Paths.LogFile. A null log file makes Swallow write nothing.
 $paths = 'namespace Thornswood { static class Paths { public static string LogFile = null; } }'
 $swallow = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\Swallow.cs'))
+# And Failure, which says a caught exception through Swallow (#4633).
+$failure = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\Failure.cs'))
 $music = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\MenuMusic.cs'))
+$audioOutput = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\AudioOutput.cs'))
+$voiceCom = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\VoiceCom.cs'))
 
 # The harness's side: what MenuMusic logs, and the mixer's view of this
 # process, read the way the mixer reads it.
@@ -204,7 +208,7 @@ namespace Thornswood
 '@
 
 $asm = $null
-try { $asm = Add-LauncherType -Source $paths, $swallow, $music, $probe }
+try { $asm = Add-LauncherType -Source $paths, $swallow, $failure, $music, $audioOutput, $voiceCom, $probe }
 catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
 Yes 'MenuMusic.cs compiles with the .NET SDK the launcher builds with, NLayer from its package' ($null -ne $asm)
 if (-not $asm) { Done }

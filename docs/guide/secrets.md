@@ -14,6 +14,7 @@ says **not enforced** where nothing checks it.
 | Character register secret, retired | `server-secret.txt` at the repo root on Patrick's machine, and `C:\Thornswood-Voice\secret.txt` on the VPS if it is still there. Nothing removed that one when the register went, and `C:\Thornswood-Voice-Dev` may hold a copy, because `vps-dev-instance.ps1` copied the live voice folder whole until #1083; it copies only the program, its page and the log roller now | **Not enforced.** Nothing has read it since 23 September, when the voice service's character register (`/whoami`, `/claim`, `/owners`) was taken out and `Install-Voice.ps1` stopped sending it. It is not the join password: since 18 September it has been 32 random bytes. | Nobody. With no reader there is nothing to reissue. It is listed so nobody takes it for a live secret, or for the join password. |
 | Site member password | `password` in `C:\Thornswood-Docs\config.json`. When that is missing the site makes a random one, writes it, and prints it once. It does not print it on a later start | **Not enforced** while Discord sign in is set up: `/api/login` refuses it and the member cookie is ignored. It is a way in only to a site with no Discord client id and secret. | Nobody needs to while Discord is set up. Otherwise anyone with VPS access edits that line and restarts the site. |
 | Site `botKey`, which is also the door key | `botKey` in `C:\Thornswood-Docs\config.json`. The same value is `THORNSWOOD_KEY` in `C:\Thornswood-Bot\bot.env.json`, and `key` in `C:\Thornswood-Server\private\door.json` and `C:\Thornswood-Server-Dev\private\door.json` | The site's `/api/ticket` (the bot filing tickets), `/api/roster` (the game server sending its character book) and `/api/allowed` and `/dev/api/allowed` (the door's list). Each answers 401 without it. Whoever holds it can read every allowed person's name and profile ids, the admins' included. | Anyone with VPS access: `Install-Bot.ps1 -RotateKey`, then `Deploy-Docs.ps1` so the site loads it, then `Set-Door.ps1 -Connect` and `Set-Door.ps1 -Connect -Root C:\Thornswood-Server-Dev -Site https://thornswood.net/dev`. Skip the last two and both doors are refused on their next fetch. |
+| Join pass key | `passKey` in `C:\Thornswood-Docs\config.json`. The same value is `passKey` in `C:\Thornswood-Server\private\door.json` and `C:\Thornswood-Server-Dev\private\door.json` | Signs and checks the launcher's join pass (`/api/play/pass`). The server checks the pass for every game in the world, ends a game with no valid pass after three minutes, and ends a second game from an account already in the world. | Anyone with VPS access: edit or delete `passKey` in `C:\Thornswood-Docs\config.json`, restart the site with `Deploy-Docs.ps1` (which makes a new key when missing), then run `Set-Door.ps1 -Connect` and `Set-Door.ps1 -Connect -Root C:\Thornswood-Server-Dev -Site https://thornswood.net/dev`. Passes already issued expire in ten minutes. |
 | Site `secret` | `secret` in `C:\Thornswood-Docs\config.json`. The site makes it on its first start. | Signs the site's Discord sign in cookie and the ticket every launcher keeps in `Profile\discord.txt`. Whoever holds it can pass as any Discord account, to the site and to the launcher's check in. | Anyone with VPS access, and there is no script: delete that line and restart the site with `Deploy-Docs.ps1`, which makes a new one. Everybody is signed out of the site and every launcher has to link Discord again. |
 | Discord client secret | `discord.clientSecret` in `C:\Thornswood-Docs\config.json` | Discord sign in on the site: with the client id it turns a sign in into who somebody is. | The Discord application's owner resets it in the developer portal (OAuth2). Then `Set-DiscordLogin.ps1` takes it at a prompt and restarts the site. |
 | Discord bot token | `discord.botToken` in `C:\Thornswood-Docs\config.json` and `DISCORD_TOKEN` in `C:\Thornswood-Bot\bot.env.json`, the same token in both | Everything the bot may do in the Discord, and the site's reading of who holds which role, which is what decides who may play. | The application's owner resets it in the developer portal (Bot, Reset Token). Then `.\scripts\deploy\Rotate-BotToken.ps1`, one command: it asks at a prompt, writes both files or neither, restarts the bot and the site, and `-Check` afterwards says whether each file holds a token without showing it. `Install-Bot.ps1` and `Set-DiscordLogin.ps1` write it through the same writer, `scripts\vps\Write-BotToken.ps1`, so either one also updates both. Every backup made before the reset still holds the old token: the nightly ones in `C:\Thornswood-Backup` on the VPS and anything brought down to `local\backups` in the repository folder. |
@@ -43,13 +44,21 @@ writes `offlineMode` true into `server-settings.json` on every deploy, and in
 offline mode SkyMP lets a client connect as whatever profile id it names (the
 fork's `docs\docs_server_configuration_reference.md`, under offlineMode). The
 launcher's Discord check at Play stops people using our launcher, not a stock
-SkyMP client. What the server has of its own is the door in `gamemode.js`: it
-compares each connection's profile id with `private\allowed.json`, which it
-refreshes from the site every five minutes, and turns somebody away only when
-that file says `"enforce": true`. Until `Set-Door.ps1 -Enforce` sets that, it
-writes WOULD TURN AWAY in `private\door.log` and lets them stay. Even
-enforcing, it checks a number the client chose, so it keeps out somebody who
-does not know a listed profile id and not somebody who does.
+SkyMP client. What the server has of its own is the door and the join pass in
+`gamemode.js`. The door compares each connection's profile id with
+`private\allowed.json`, which it refreshes from the site every five minutes,
+and turns somebody away only when that file says `"enforce": true`. Until
+`Set-Door.ps1 -Enforce` sets that, it writes WOULD TURN AWAY in
+`private\door.log` and lets them stay. Even enforcing, it checks a number the
+client chose, so it keeps out somebody who does not know a listed profile id
+and not somebody who does. Beside the door, the server checks a join pass for
+every game in the world: the launcher gets one from the site (`/api/play/pass`),
+signed with the shared `passKey`, and sends it over the command relay. The server
+checks the signature, expiry, server, profile id and Discord account, ends a
+game that has no valid pass after three minutes, and ends a second game from an
+account already in the world. What the join pass does not check: it travels over
+the command relay rather than the game connection itself, so it does not stop a
+client from entering the world for up to three minutes before being ended.
 
 **Old launchers.** A launcher older than 1.0.197 read the join password out of
 `version.json` rather than asking the site. `Publish-Update.ps1` takes it out

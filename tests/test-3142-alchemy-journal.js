@@ -38,7 +38,7 @@ function yes(what, cond, why) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function lift(from, to, src) {
   src = src || gm;
@@ -55,7 +55,7 @@ const listsSrc = (function () {
   return (a >= 0 && b > a) ? gm.slice(a, b) : null;
 })();
 yes('J0 the alchemy block and the mixtures list are in the gamemode', !!ALCHEMY && !!listsSrc);
-if (fail) { done(); }
+if (fail) { done(); return; }
 
 // ------------------------------------------------------- a fake load order --
 function put32(v) { v = v >>> 0; return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }

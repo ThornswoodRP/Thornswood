@@ -73,7 +73,10 @@
   the start would have, and is then moved aside with the NPCs.
 
   WHERE IT GOES. Into changeForms\_discarded-<yyyyMMdd-HHmmss>, the folder a
-  character reset uses. The engine reads only the .json files directly in
+  character reset uses. A server that keeps its world in MongoDB (#6237) has
+  it read out first into world-mongo-<stamp>\changeForms in its folder
+  (World.ps1), the NPCs are moved aside there and then taken out of the
+  database; a survey reads it out, counts, and deletes the copy. The engine reads only the .json files directly in
   changeForms, so nothing in that folder is loaded, and the game server's
   server-log.js deletes it 30 days after its stamp (#3620). Moving them
   back undoes the reset.
@@ -187,14 +190,25 @@ function Read-ThornswoodSaveJournal([string]$Path) {
 # Surveys, or with -Move resets, the NPCs of the server in $Root, and says
 # so in the lines the header lists. A STOP or FAILED line is a failure.
 function Invoke-ThornswoodNpcReset([string]$Root, [string]$Stamp, [switch]$Move) {
-  $settings = Join-Path $Root 'server-settings.json'
-  $db = 'world'
-  if (Test-Path -LiteralPath $settings) {
-    try { $cfg = Read-ThornswoodJson $settings } catch { 'STOP|' + $settings + ' will not read, so where the world is saved is not known: ' + $_.Exception.Message; return }
-    $name = Get-ThornswoodField $cfg 'databaseName'
-    if ($name) { $db = [string]$name }
+  # Where server-settings.json keeps the world (World.ps1, #6237): its folder
+  # for the file driver, or read out of MongoDB into one of the same shape,
+  # written back once the NPCs are moved aside and gone again after a survey.
+  $world = Open-ThornswoodWorld $Root $Stamp
+  if ($world.Stop) { 'STOP|' + $world.Stop + '. Nothing was moved.'; return }
+  $forms = $world.Forms
+  $out = @(Invoke-ThornswoodNpcResetIn $world $forms $Stamp -Move:$Move)
+  $out
+  if ($world.Driver -ne 'mongodb') { return }
+  if (-not $Move -or @($out | Where-Object { "$_" -like 'STOP|*' }).Count) {
+    # Read only, or stopped before anything moved: the copy read out goes.
+    Remove-Item -LiteralPath (Split-Path -Parent $forms) -Recurse -Force
+    return
   }
-  $forms = Join-Path (Join-Path $Root $db) 'changeForms'
+  $saved = Save-ThornswoodWorld $world
+  if ($saved -like 'STOP|*') { 'FAILED|the world|' + $saved.Substring(5) + '. The NPCs are still in the world.'; return }
+  'the NPCs moved aside are out of ' + $world.Db + ' (' + $saved + ')'
+}
+function Invoke-ThornswoodNpcResetIn($world, [string]$forms, [string]$Stamp, [switch]$Move) {
   if (-not (Test-Path -LiteralPath $forms -PathType Container)) { 'NPCRESET|0|0|0|0'; 'nothing is saved at ' + $forms + ' yet, so there is nothing to reset'; return }
   $aside = Join-Path $forms ('_discarded-' + $Stamp)
   if (Test-Path -LiteralPath $aside) { 'STOP|' + $aside + ' is there already. Nothing was moved.'; return }

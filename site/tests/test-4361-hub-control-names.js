@@ -179,4 +179,4 @@ yes('C after the choice is taken off, none reads pressed (' + JSON.stringify(cle
     cleared.pass === 'false' && cleared.fail === 'false' && cleared.skip === 'false');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

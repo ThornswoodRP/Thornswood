@@ -31,7 +31,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(text, a, b) {
   const i = text.indexOf(a);
@@ -47,7 +47,7 @@ const SOCIAL_CMDS = between(src, "    if (word === '/friend' || word === '/party
 const WORK = between(src, 'function creditWork(actorId, key, n) {', '\nfunction economyGathered');
 yes('the rules, the character and social blocks, /yes and creditWork are in the gamemode',
     !!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS && WORK));
-if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS && WORK)) { done(); }
+if (!(RULES && CHARACTER && SOCIAL && SOCIAL_CMDS && WORK)) { done(); return; }
 
 // ---------------------------------------------------------------- server --
 const store = {};
@@ -119,7 +119,7 @@ new Function('globalThis', 'actorId', 'profileId', 'parts', 'word', 'toProfile',
 yes('B0 Lina has Eorlund as her Master in Platewright', !!C.masterFor(LINA, C.stateOf(LINA), 'platewright'));
 yes('B0 the character block hands out masterBeside and its numbers', typeof C.masterBeside === 'function' &&
     !!C.BESIDE && C.BESIDE.times === 1.5 && C.BESIDE.reach === 700);
-if (typeof C.masterBeside !== 'function') { done(); }
+if (typeof C.masterBeside !== 'function') { done(); return; }
 
 // B1: beside him, about 4 m away in the same place.
 at(LINA, 'town:X.esm', [300, 0, 0]);

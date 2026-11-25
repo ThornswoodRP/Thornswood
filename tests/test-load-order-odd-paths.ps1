@@ -51,7 +51,9 @@ try {
     $clone = Join-Path $T 'clone [x]'
     [void][IO.Directory]::CreateDirectory((Join-Path $clone 'scripts\mods'))
     [void][IO.Directory]::CreateDirectory((Join-Path $clone 'launcher\app'))
+    [void][IO.Directory]::CreateDirectory((Join-Path $clone 'scripts\release'))
     [IO.File]::Copy($lo, (Join-Path $clone 'scripts\mods\LoadOrder.ps1'))
+    [IO.File]::Copy((Join-Path $Repo 'scripts\release\SevenZip.ps1'), (Join-Path $clone 'scripts\release\SevenZip.ps1'))
     [IO.File]::Copy((Join-Path $Repo 'launcher\app\VortexProfileState.cs'), (Join-Path $clone 'launcher\app\VortexProfileState.cs'))
     $r = Child (". " + (Q (Join-Path $clone 'scripts\mods\LoadOrder.ps1')) + "; Import-VortexStateReader; 'TYPE=' + [bool]('Thornswood.VortexProfileState' -as [type])")
     Yes 'the shared Vortex state reader compiles from a clone in such a folder' ($r.Out -match 'TYPE=True')
