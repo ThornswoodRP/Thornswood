@@ -45132,7 +45132,7 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
                // are the J panel's lines, never typed (#1630). /hidename too,
                // which the P panel's Name buttons send and which was missing
                // here, so it ran before the character was in the world (#1628).
-               '/friend', '/party', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
+               '/friend', '/party', '/party-action-v1', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
                // Contracts between people (#4561): K's Contracts section
                // sends them. Never typed, so not in PLAYER_WORDS.
                '/contract',
@@ -46221,6 +46221,22 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/party-action-v1') {
+      if (!needCharacter()) return;
+      var partyApi = g.__thornswoodSocial;
+      var partyLine = typeof cmd.text === 'string' ? cmd.text : '';
+      var partyMatch = /^\/party-action-v1 (disband|kick) ([a-f0-9]{48}) ([a-f0-9]{48})(?: ([1-9][0-9]{0,15}))?$/.exec(partyLine);
+      var partyTarget = partyMatch && partyMatch[4] ? Number(partyMatch[4]) : 0;
+      var partyValid = partyMatch && partyMatch[0] === partyLine && (partyMatch[1] === 'kick'
+        ? Number.isSafeInteger(partyTarget) && partyTarget > 0 : !partyMatch[4]);
+      var partyAnswer = !partyValid ? 'That party request is invalid. Review the party and press again.'
+        : !partyApi ? 'Party actions are not available right now.'
+        : partyApi.confirmPartyAction(partyApi.profileOf(actorId), partyMatch[1], partyMatch[2], partyMatch[3], partyTarget);
+      toProfile(profileId, partyAnswer || (partyMatch[1] === 'kick' ? 'They left the party.' : 'The party is ended.'));
+      if (partyApi) partyApi.push(actorId, true);
+      return;
     }
 
     if (word === '/journal-write-v1') {
@@ -60391,6 +60407,17 @@ module.exports = {
   var inParty = {};      // pid -> partyId
   var nextParty = 1;
 
+  // Public only to party owners. These bind an intent, never grant authority.
+  // Retire the UI capability on entropy failure; ordinary party play continues.
+  function rotatePartyIntent(p, creating) {
+    p.intentVersion = '';
+    try {
+      var crypto = require('crypto');
+      if (creating) p.intentId = crypto.randomBytes(24).toString('hex');
+      p.intentVersion = crypto.randomBytes(24).toString('hex');
+    } catch (e) { slog('party confirmation is unavailable'); }
+  }
+
   function partyOf(pid) {
     var id = inParty[pid];
     if (!id) { return null; }
@@ -60404,12 +60431,14 @@ module.exports = {
     if (!p) {
       var id = 'p' + (nextParty++);
       p = { leader: leaderPid, members: [leaderPid], at: Date.now() };
+      rotatePartyIntent(p, true);
       parties[id] = p;
       inParty[leaderPid] = id;
     }
     if (p.members.length >= SOCIAL.mostParty) { return 'That party is full.'; }
     if (p.members.indexOf(pid) !== -1) { return 'They are already with you.'; }
     leaveParty(pid);
+    rotatePartyIntent(p, false);
     p.members.push(pid);
     inParty[pid] = inParty[leaderPid];
     return '';
@@ -60420,6 +60449,7 @@ module.exports = {
     if (!p) { return false; }
     var id = inParty[pid];
     var at = p.members.indexOf(pid);
+    rotatePartyIntent(p, false);
     if (at !== -1) { p.members.splice(at, 1); }
     delete inParty[pid];
     if (p.leader === pid) { p.leader = p.members[0] || 0; }
@@ -60479,6 +60509,7 @@ module.exports = {
     if (p.leader !== leaderPid) { return 'Only the leader can do that.'; }
     if (p.members.indexOf(whoPid) === -1) { return 'They are not in your party.'; }
     if (p.leader === whoPid) { return 'They already lead this party.'; }
+    rotatePartyIntent(p, false);
     p.leader = whoPid;
     pushMembers(p.members.slice());
     return '';
@@ -60494,6 +60525,23 @@ module.exports = {
     delete parties[id];
     pushMembers(left);
     return '';
+  }
+
+  function partyIntent(p) {
+    return p && /^[a-f0-9]{48}$/.test(p.intentId || '') && /^[a-f0-9]{48}$/.test(p.intentVersion || '')
+      ? { id: p.intentId, version: p.intentVersion } : null;
+  }
+
+  function confirmPartyAction(pid, action, id, version, whoPid) {
+    var p = partyOf(pid);
+    var current = partyIntent(p);
+    if (!current || current.id !== id || current.version !== version) {
+      return 'The party changed. Review the current party and press again.';
+    }
+    // The canonical operations still enforce leader and exact membership.
+    if (action === 'disband') return disbandParty(pid);
+    if (action === 'kick') return kickParty(pid, whoPid);
+    return 'That party action is not available.';
   }
 
   /*
@@ -60865,6 +60913,7 @@ module.exports = {
       journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
+      partyIntent: partyIntent(p),
       near: near,
       hidden: hidden,
       together: partyNear(actorId),
@@ -61037,6 +61086,7 @@ module.exports = {
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
+    confirmPartyAction: confirmPartyAction,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
     newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,

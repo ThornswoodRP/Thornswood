@@ -38,6 +38,7 @@
   var shown = false;
   var root = null;
   var askEl = null;
+  var destructiveArm = null, destructiveTimer = 0, destructiveHeld = '';
   // PartyKey as bound. P until the front says otherwise.
   var keyName = 'P';
 
@@ -49,8 +50,7 @@
   function net(line) {
     try {
       if (window.thornswoodNet && window.thornswoodNet.say) {
-        window.thornswoodNet.say(line);
-        return true;
+        return window.thornswoodNet.say(line) !== false;
       }
     } catch (e) { }
     return false;
@@ -106,7 +106,7 @@
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
     '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
-    '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:grid;gap:18px;',
+    '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px;',
     '  align-content:start;font-size:16px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);',
     '  display:flex;gap:10px;align-items:center;font-size:13.5px;font-style:italic;color:rgba(217,207,180,.7)}',
@@ -115,7 +115,7 @@
     '#' + ID + ' .row{display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:8px}',
     '#' + ID + ' .row .nm{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:17px}',
-    '#' + ID + ' .tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1 1 220px}',
+    '#' + ID + ' .tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1 1 220px;min-width:0}',
     '#' + ID + ' .kicker{display:block;font-size:11px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);margin-bottom:4px}',
     // online or not, drawn as the K panel draws a pip: a square with a gold
@@ -125,6 +125,7 @@
     '#' + ID + ' button{font-family:inherit;font-style:normal;font-weight:normal;cursor:pointer;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
+    '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .ask{border:1px solid #e9d19b;background:rgba(201,162,75,.16);',
@@ -340,6 +341,25 @@
       '<button id="' + ID + '-close">Close</button></div>' +
       '</div>';
     document.body.appendChild(root);
+    root.addEventListener('input', resetDestructive);
+    root.addEventListener('click', function (ev) {
+      if (destructiveArm && ev.target !== destructiveArm.button) resetDestructive();
+    }, true);
+    root.addEventListener('keydown', function (ev) {
+      if (!shown || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      var button = ev.target;
+      if (destructiveHeld) { ev.preventDefault(); ev.stopPropagation(); return; }
+      if (!button || button.tagName !== 'BUTTON' ||
+          ['disband', 'kick', 'drop'].indexOf(button.getAttribute('data-do')) < 0) return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.repeat) return;
+      destructiveHeld = ev.key;
+      button.click();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (ev.key === destructiveHeld) { destructiveHeld = ''; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', function () { destructiveHeld = ''; resetDestructive(); });
     askEl = document.createElement('div');
     askEl.id = 'ts-ask';
     document.body.appendChild(askEl);
@@ -371,7 +391,12 @@
     */
     document.addEventListener('keydown', function (ev) {
       if (!shown) { return; }
-      if (ev.key === 'Escape') { ev.preventDefault(); close(); return; }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if (ev.repeat) return;
+        if (destructiveArm) resetDestructive(); else close();
+        return;
+      }
       if (ev.repeat || ev.ctrlKey || ev.altKey || ev.metaKey || typing(ev.target)) { return; }
       if (keyName && String(ev.key || '').toUpperCase() === keyName.toUpperCase()) {
         ev.preventDefault();
@@ -405,6 +430,7 @@
   }
 
   function drawContents() {
+    resetDestructive();
     if (!root) { return; }
     var body = root.querySelector('#' + ID + '-body');
     var sub = root.querySelector('#' + ID + '-sub');
@@ -594,24 +620,79 @@
       buttons[k].onclick = function () {
         var verb = this.getAttribute('data-do');
         var who = this.getAttribute('data-who') || '';
+        if (verb === 'disband' || verb === 'kick' || verb === 'drop') {
+          confirmDestructive(this, verb, who); return;
+        }
         if (verb === 'yes') { net('/yes'); }
         else if (verb === 'no') { net('/no'); }
         else if (verb === 'leave') { net('/party leave'); }
-        else if (verb === 'disband') { net('/party disband'); }
-        else if (verb === 'kick') { net('/party kick ' + who); }
         else if (verb === 'lead') { net('/party lead ' + who); }
         else if (verb === 'ask') { net('/party ' + who); }
         else if (verb === 'mute') { net('/mute ' + who); }
         else if (verb === 'mtext') { net('/mute text ' + who); }
         else if (verb === 'mname') { net('/hidename ' + who); }
         else if (verb === 'nameall') { net('/hidename all'); }
-        else if (verb === 'drop') { net('/friend remove ' + who); }
         else if (verb === 'befriend') { net('/friend ' + who); }
         else if (verb === 'trade') { net('/trade ' + who); }
         else if (verb === 'raid') { net('/cart raid ' + who); }
         else if (verb === 'dye') { net('/hairdye offer ' + who + ' ' + (this.getAttribute('data-dye') || '')); }
       };
     }
+  }
+
+  function resetDestructive() {
+    if (destructiveArm) {
+      destructiveArm.button.textContent = destructiveArm.text;
+      destructiveArm.button.removeAttribute('data-confirm');
+    }
+    destructiveArm = null;
+    if (destructiveTimer) clearTimeout(destructiveTimer);
+    destructiveTimer = 0;
+  }
+
+  function destructiveTarget(verb, who) {
+    if (!data || !Number.isSafeInteger(data.me) || data.me <= 0) return null;
+    var rows = verb === 'drop' ? data.friends : data.party;
+    if (!Array.isArray(rows)) return null;
+    var target = null, leader = false;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].p) === who) target = rows[i];
+      if (rows[i].p === data.me && rows[i].me && rows[i].leader) leader = true;
+    }
+    if (verb === 'drop') {
+      return target && Number.isSafeInteger(target.p) && target.p > 0
+        ? { me: data.me, target: target, line: '/friend remove ' + target.p,
+            words: 'remove ' + target.name + ' from friends' } : null;
+    }
+    var intent = data.partyIntent;
+    if (!leader || !intent || !/^[a-f0-9]{48}$/.test(intent.id) || !/^[a-f0-9]{48}$/.test(intent.version)) return null;
+    if (verb === 'kick' && (!target || !Number.isSafeInteger(target.p) || target.p <= 0 || target.p === data.me)) return null;
+    return { me: data.me, party: rows, intent: intent,
+      line: '/party-action-v1 ' + verb + ' ' + intent.id + ' ' + intent.version + (verb === 'kick' ? ' ' + target.p : ''),
+      words: verb === 'kick' ? 'kick ' + target.name + ' from this party' : 'disband this party' };
+  }
+
+  function confirmDestructive(button, verb, who) {
+    if (!shown || !root.contains(button)) return;
+    var target = destructiveTarget(verb, who);
+    if (!target) {
+      resetDestructive();
+      root.querySelector('#' + ID + '-sub').textContent = 'That action is unavailable. Review the current list.';
+      return;
+    }
+    var snapshot = JSON.stringify(target);
+    var again = destructiveArm && destructiveArm.button === button &&
+      destructiveArm.snapshot === snapshot && Date.now() < destructiveArm.until;
+    resetDestructive();
+    if (again) {
+      if (!net(target.line)) root.querySelector('#' + ID + '-sub').textContent = 'Delivery not confirmed. Check the current list before trying again.';
+      return;
+    }
+    var armed = { button: button, text: button.textContent, snapshot: snapshot, until: Date.now() + 5000 };
+    destructiveArm = armed;
+    button.setAttribute('data-confirm', '');
+    button.textContent = 'Press again to ' + target.words;
+    destructiveTimer = setTimeout(function () { if (destructiveArm === armed) resetDestructive(); }, 5000);
   }
 
   /* Mute, Text and Name for one person, by profile id, the way a friend's are. */
@@ -660,6 +741,7 @@
 
   function close() {
     if (!shown) { return; }
+    resetDestructive(); destructiveHeld = '';
     shown = false;
     if (root) { root.className = ''; }
     tell('closed');

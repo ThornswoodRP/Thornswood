@@ -69,13 +69,15 @@ function panel() {
     const el = {
       tagName: tag, id: '', className: '', children: [], textContent: '', innerHTML: '',
       style: { cssText: '', display: '' },
-      appendChild: function (c) { el.children.push(c); return c; },
+      appendChild: function (c) { c.parentNode = el; el.children.push(c); return c; },
+      contains: function (c) { while (c) { if (c === el) return true; c = c.parentNode; } return false; },
       addEventListener: function () { }, removeEventListener: function () { },
       setAttribute: function () { },
-      querySelector: function (sel) { return cache[sel] || (cache[sel] = element('div')); },
+      querySelector: function (sel) { var c = cache[sel] || (cache[sel] = element('div')); c.parentNode = el; return c; },
       querySelectorAll: function (sel) {
         if (sel !== 'button[data-do]') { return []; }
         if (el.found && el.found.html === el.innerHTML) { return el.found.list; }
+        if (el.found) el.found.list.forEach(function (button) { button.parentNode = null; });
         const out = [];
         const re = /<button([^>]*)>([^<]*)<\/button>/g;
         let m;
@@ -83,7 +85,10 @@ function panel() {
           const attrs = {};
           m[1].replace(/([a-z-]+)="([^"]*)"/g, function (all, k, v) { attrs[k] = v; return all; });
           if (!attrs['data-do']) { continue; }
-          out.push({ label: m[2], attrs: attrs, getAttribute: function (k) { return this.attrs[k] || null; } });
+          out.push({ label: m[2], textContent: m[2], attrs: attrs, parentNode: el,
+            getAttribute: function (k) { return this.attrs[k] || null; },
+            setAttribute: function (k, v) { this.attrs[k] = String(v); },
+            removeAttribute: function (k) { delete this.attrs[k]; } });
         }
         el.found = { html: el.innerHTML, list: out };
         return out;
@@ -94,6 +99,7 @@ function panel() {
   }
   const sent = [];
   const window = {
+    listeners: {}, addEventListener: function (type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     thornswoodNet: { say: function (line) { sent.push(line); return true; } },
     skyrimPlatform: { sendMessage: function () { } }
   };
@@ -243,6 +249,7 @@ if (social && trade && branch && journal) {
     yes('P1 the panel draws her row under the name she is on now', /Lydia/.test(friends) && !/>Sera</.test(friends));
     const line = p.press('Ask to party', 102);
     yes('P2 Ask to party sends her profile id, not a name', line === '/party 102');
+    yes('P3 Remove first names her for confirmation and sends nothing', p.press('Remove', 102) === '');
     yes('P3 Remove beside her sends her profile id too', p.press('Remove', 102) === '/friend remove 102');
     yes('P4 Mute, Text and Name still send it',
         p.press('Mute', 102) === '/mute 102' && p.press('Text', 102) === '/mute text 102' &&
