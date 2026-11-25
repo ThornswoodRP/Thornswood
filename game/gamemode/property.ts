@@ -6195,7 +6195,7 @@
     };
   }
 
-  function postExact(kind, reward, title, body, actorId, profileId, toProfile) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
     if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
         (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
       toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
@@ -6204,7 +6204,7 @@
     // Same authoritative location, size, fee, reward and pack-first landing.
     // Only the legacy command boundary unescapes or normalizes text.
     return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
-                kind === 'job', {title:title,body:body});
+                kind === 'job', {title:title,body:body,hold:expectedHold});
   }
 
   function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
@@ -6217,6 +6217,10 @@
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*

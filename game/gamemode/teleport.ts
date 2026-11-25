@@ -1062,13 +1062,14 @@
 
     if (word === '/board-post-v1') {
       if (!needCharacter()) return;
-      var postPayload = savedTextPayload(cmd.text, word, 8200, 4);
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
       if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
-          postPayload[2].length > 60 || postPayload[3].length > 600) {
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
         toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
         return;
       }
@@ -1076,7 +1077,8 @@
         toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
         return;
       }
-      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3], actorId, profileId, toProfile);
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
       return;
     }
 

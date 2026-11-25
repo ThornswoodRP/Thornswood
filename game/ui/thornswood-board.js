@@ -478,7 +478,7 @@
       }
       rewardValue = Number(reward);
     }
-    var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text]);
+    var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text, b.hold]);
     pending = {hold:b.hold,title:title,body:text,kind:draft.kind,reward:rewardValue,top:topN(b)};
     say('Putting it up. If it cannot go up, the chat says why.');
     net(line);

@@ -144,7 +144,7 @@ function say(p, line) {
     const tell=function (pid,m){(by[pid]=by[pid]||[]).push(m);};
     if (line.startsWith('/board-post-v1 ')) {
       const payload=JSON.parse(line.slice('/board-post-v1 '.length));
-      W.postExact(payload[0],payload[1],payload[2],payload[3],p.a,p.pid,tell);
+      W.postExact(payload[0],payload[1],payload[2],payload[3],payload[4],p.a,p.pid,tell);
     } else W.command(parts[0].toLowerCase(), parts, p.a, p.pid, tell);
   });
   return { mine: (by[p.pid] || []).join(' '), by: by };

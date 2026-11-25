@@ -102,7 +102,8 @@ an empty or too long one with a plain line before any gold is taken.
 
 Posting keeps the title and body as written, including colons,
 backslashes, line breaks, repeated spaces and indentation. A refused
-post leaves that draft in the form.
+post leaves that draft in the form. If you reach another hold's board
+before the post arrives, nothing is posted and no gold is taken.
 
 A notice is 20 gold. It is read only. There is nothing to take.
 

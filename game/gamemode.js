@@ -28383,7 +28383,7 @@ module.exports = {
     };
   }
 
-  function postExact(kind, reward, title, body, actorId, profileId, toProfile) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
     if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
         (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
       toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
@@ -28392,7 +28392,7 @@ module.exports = {
     // Same authoritative location, size, fee, reward and pack-first landing.
     // Only the legacy command boundary unescapes or normalizes text.
     return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
-                kind === 'job', {title:title,body:body});
+                kind === 'job', {title:title,body:body,hold:expectedHold});
   }
 
   function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
@@ -28405,6 +28405,10 @@ module.exports = {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -45921,13 +45925,14 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
 
     if (word === '/board-post-v1') {
       if (!needCharacter()) return;
-      var postPayload = savedTextPayload(cmd.text, word, 8200, 4);
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
       if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
-          postPayload[2].length > 60 || postPayload[3].length > 600) {
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
         toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
         return;
       }
@@ -45935,7 +45940,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
         return;
       }
-      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3], actorId, profileId, toProfile);
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
       return;
     }
 
