@@ -45729,6 +45729,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     }
 
     if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
       if (!needCharacter()) return;
       var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
       var journals = g.__thornswoodSocial;
