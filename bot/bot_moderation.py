@@ -8,12 +8,12 @@ import json
 import os
 import traceback
 
-from bot_core import DATA_DIR, TROUBLE_FILE, _int_env, as_typed, client, log
+from bot_core import DATA_DIR, TROUBLE_FILE, _int_env, _state_write, as_typed, client, log
+from bot_offices import office_text
 from bot_reports import (copy_key, copy_state, forget_copies, remember_copy,
     report_say, source_key)
 
 MODERATION_POSTS = os.path.join(DATA_DIR, 'moderation-posts.json')
-from bot_offices import office_text
 
 
 # What a moderator did in the game (#412): /kick, /freeze, /silence, /warn and
@@ -227,8 +227,9 @@ async def watch_moderation():
                     continue
                 source = source_key(where, path)
                 if complete and state is not None:
-                    await forget_copies(MODERATION_POSTS, state, source,
-                                        {copy_key(line) for line in lines}, client)
+                    present = {copy_key(line) for line in lines}
+                    if await forget_copies(state, source, present, client):
+                        _state_write(MODERATION_POSTS, state)
                 if seen.get(where) is None:
                     seen[where] = set(lines)
                     continue
@@ -242,12 +243,11 @@ async def watch_moderation():
                         text = None
                     if text:
                         texts.append((l, text))
-                if len(texts) > MODERATION_AT_ONCE:
+                if texts and (state is None or len(texts) > MODERATION_AT_ONCE):
                     await report_say(
-                        '**%d staff actions on %s** since the last look, more '
-                        'than this channel should carry one at a time. They '
-                        'are in %s on the VPS.'
-                        % (len(texts),
+                        '**%d staff action%s on %s** since the last look. '
+                        'See %s on the VPS for details.'
+                        % (len(texts), '' if len(texts) == 1 else 's',
                            'the site' if where == 'site' else 'the %s server' % where,
                            path))
                 elif state is not None:
@@ -255,7 +255,9 @@ async def watch_moderation():
                         key = copy_key(line)
                         if key not in state.get(source, {}):
                             msg = await report_say(text)
-                            remember_copy(MODERATION_POSTS, state, source, key, msg)
+                            if msg is not None:
+                                remember_copy(state, source, key, msg)
+                                _state_write(MODERATION_POSTS, state)
         except Exception:
             log('moderation: the check itself failed, carrying on:\n'
                 + traceback.format_exc())

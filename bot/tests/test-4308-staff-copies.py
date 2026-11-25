@@ -91,6 +91,44 @@ class Copies(unittest.TestCase):
             self.assertEqual(set(self.room.posts), {1, 2})
             self.assertIn('Kept report', self.room.posts[2])
 
+    def test_bad_report_index_leaves_details_in_the_inbox(self):
+        source = self.folder / 'inbox.json'
+        index = self.folder / 'report-posts.json'
+        source.write_text('[]', encoding='utf-8')
+        index.write_text('[]', encoding='utf-8')
+
+        def add_report():
+            source.write_text(json.dumps([
+                {'id': 'one', 'kind': 'report', 'title': 'Private report detail'},
+            ]), encoding='utf-8')
+
+        with patch.object(self.reports, 'REPORTS_FILE', str(source)), \
+                patch.object(self.reports, 'REPORT_POSTS', str(index)):
+            self.run_watch(self.reports, self.reports.watch_reports, add_report)
+        self.assertEqual(set(self.room.posts), {1, 2})
+        self.assertIn('1 report', self.room.posts[2])
+        self.assertNotIn('Private report detail', self.room.posts[2])
+        self.assertEqual(index.read_text(encoding='utf-8'), '[]')
+
+    def test_bad_moderation_index_reports_a_count_without_details(self):
+        source = self.folder / 'moderation.log'
+        index = self.folder / 'moderation-posts.json'
+        source.write_text('', encoding='utf-8')
+        index.write_text('{', encoding='utf-8')
+
+        def add_action():
+            action = dict(at='2026-02-01T00:00:00Z', did='kick', by=1, who=2,
+                          why='Private moderation detail')
+            source.write_text(json.dumps(action) + '\n', encoding='utf-8')
+
+        with patch.object(self.moderation, 'MODERATION_LOGS', [('live', str(source))]), \
+                patch.object(self.moderation, 'MODERATION_POSTS', str(index)):
+            self.run_watch(self.moderation, self.moderation.watch_moderation, add_action)
+        self.assertEqual(set(self.room.posts), {1, 2})
+        self.assertIn('1 staff action', self.room.posts[2])
+        self.assertNotIn('Private moderation detail', self.room.posts[2])
+        self.assertEqual(index.read_text(encoding='utf-8'), '{')
+
     def test_moderation_expiry_after_restart(self):
         live = self.folder / 'live.log'
         dev = self.folder / 'dev.log'

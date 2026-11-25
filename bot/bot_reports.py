@@ -12,7 +12,7 @@ import traceback
 import discord
 
 from bot_core import (DATA_DIR, REPORTS_AT_ONCE, REPORTS_EVERY, REPORTS_FILE,
-    _state_read, _state_write, as_typed, client, log)
+    _state_write, as_typed, client, log)
 from bot_staff_channel import _trouble_channel
 
 REPORT_POSTS = os.path.join(DATA_DIR, 'report-posts.json')
@@ -27,26 +27,31 @@ def source_key(kind, path):
 
 
 def copy_state(path):
-    state = _state_read(path)
-    if state is None or not all(
+    try:
+        with open(path, encoding='utf-8') as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        log('staff copies: cannot read %s (%s)' % (path, type(e).__name__))
+        return None
+    if not isinstance(state, dict) or not all(
             isinstance(posts, dict) and all(
                 isinstance(post, dict) and all(
                     type(post.get(field)) is int and post[field] > 0
                     for field in ('channel', 'message'))
                 for post in posts.values())
             for posts in state.values()):
-        log('staff copies: cannot read the message index; no linked copies handled')
+        log('staff copies: invalid message index in %s' % path)
         return None
     return state
 
 
-def remember_copy(path, state, source, key, msg):
-    if msg is not None:
-        state.setdefault(source, {})[key] = {'channel': msg.channel.id, 'message': msg.id}
-        _state_write(path, state)
+def remember_copy(state, source, key, msg):
+    state.setdefault(source, {})[key] = {'channel': msg.channel.id, 'message': msg.id}
 
 
-async def forget_copies(path, state, source, present, client):
+async def forget_copies(state, source, present, client):
     """Act only on saved IDs for this source, never on channel history."""
     posts = state.get(source, {})
     changed = False
@@ -58,16 +63,15 @@ async def forget_copies(path, state, source, present, client):
         try:
             await ch.get_partial_message(post['message']).delete()
         except discord.NotFound:
-            pass
+            log('staff copies: linked message already removed')
         except Exception as e:
             log('staff copies: message removal failed (%s)' % type(e).__name__)
             continue
         del posts[key]
         changed = True
-    if changed:
-        if not posts:
-            del state[source]
-        _state_write(path, state)
+    if changed and not posts:
+        del state[source]
+    return changed
 
 
 def report_text(row):
@@ -187,24 +191,26 @@ async def watch_reports():
             rows = await loop.run_in_executor(None, read_all)
             state = copy_state(REPORT_POSTS) if rows is not None else None
             if state is not None and all(isinstance(r, dict) and r.get('id') for r in rows):
-                await forget_copies(REPORT_POSTS, state, source,
-                                    {copy_key(str(r['id'])) for r in rows}, client)
+                present = {copy_key(str(r['id'])) for r in rows}
+                if await forget_copies(state, source, present, client):
+                    _state_write(REPORT_POSTS, state)
             fresh = [r for r in (rows or []) if public(r) and r['id'] not in said]
             for r in fresh:
                 said.add(r['id'])
-            if len(fresh) > REPORTS_AT_ONCE:
+            if fresh and (state is None or len(fresh) > REPORTS_AT_ONCE):
                 await report_say(
-                    '**%d reports came in, from the site and the game,** since the '
-                    'last look, which is more than people send and more than '
-                    'this channel should carry one at a time. They are in the '
-                    'inbox on the site.' % len(fresh))
+                    '**%d report%s came in, from the site and the game,** since the '
+                    'last look. Open the site inbox for details.'
+                    % (len(fresh), '' if len(fresh) == 1 else 's'))
             elif state is not None:
                 # The file is newest first; the channel reads oldest first.
                 for r in reversed(fresh):
                     key = copy_key(str(r['id']))
                     if key not in state.get(source, {}):
                         msg = await report_say(report_text(r))
-                        remember_copy(REPORT_POSTS, state, source, key, msg)
+                        if msg is not None:
+                            remember_copy(state, source, key, msg)
+                            _state_write(REPORT_POSTS, state)
         except Exception:
             log('reports: the check itself failed, carrying on:\n'
                 + traceback.format_exc())
