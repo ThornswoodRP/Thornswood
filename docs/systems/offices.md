@@ -202,7 +202,9 @@ Evict, Set rent and No rent, and Rent paid beside each person who owes
 there, the holder or somebody who held it before (#3893, #3895); and their own hold's board, moved to where
 the steward stands. A steward no longer marks a container as a hold's
 box: the drop box on the board is the only one (Patrick, 15 Oct, #2298). Evict and moving a
-board ask for a second press. The Court, a Steward and a guard each see
+board ask for a second press. Office confirmations last five seconds and
+reset after an attempted send, another Office action, a page redraw or closing
+the panel. The Court, a Steward and a guard each see
 which hold they serve and what it lets them do, and a guard which jail
 they keep. A Jarl whose role another account holds too sees that they
 do not act, and why. The server checks every press again and answers in
