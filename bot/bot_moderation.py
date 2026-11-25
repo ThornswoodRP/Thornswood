@@ -70,6 +70,11 @@ _MOD_DID = {
     # An admin undoing a PK made by mistake (#1010, 29 September).
     'unpk': 'undid the PK of %s, so the character can be played again',
     'note': 'wrote a note on %s',
+    'docsave': 'saved page %s',
+    'inboxdismiss': 'marked inbox report not doing this: %s',
+    'inboxreopen': 'reopened inbox report %s',
+    'inboxdelete': 'deleted inbox report %s',
+    'uploaddelete': 'deleted upload %s',
     # Staff at a building's door, from the Office page of K (#2551, Patrick,
     # 17 Oct): the why names the building and its hold, and the rent set.
     'evict': 'ended the claim of %s',
@@ -163,6 +168,15 @@ def moderation_text(where, row):
     if row['did'] == 'gold':
         why = clean(row.get('why'), 600) or 'a big move of gold.'
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
+
+    if row['did'] == 'uploaddelete':
+        subject = clean(row.get('whoName'), 240) or 'an unnamed upload'
+        if row.get('phase') == 'metadata':
+            did = 'removed the upload listing for %s' % subject
+        else:
+            did = _MOD_DID['uploaddelete'] % subject
+        return ('**Staff on the site:** %s %s.'
+                % (person(row.get('byName'), None), did))[:1900]
 
     did = _MOD_DID[row['did']]
     gallery_phase = row.get('phase')

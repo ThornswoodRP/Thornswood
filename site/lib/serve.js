@@ -1566,12 +1566,17 @@ async function handle(req, res) {
     if (!w.admin) return sendJson(res, 403, { error: 'admins only' });
     const file = path.join(UP, rm[1]);
     if (!file.startsWith(UP + path.sep)) return sendJson(res, 400, { error: 'no' });
+    const existed = fs.existsSync(file);
     // A delete that fails is said, not answered ok (#2352, #2354), and the
     // file's note stays so the uploads list still shows what is on disk.
     const gone = deleteUpload(rm[1]);
     if (!gone.ok) return sendJson(res, 500, { ok: false, name: rm[1], fileKept: true, code: gone.code,
                                               error: 'The file could not be deleted (' + gone.code + '). It is still on the site.' });
+    // The file is gone even if the later metadata save is refused.
+    if (existed) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'file' });
     const meta = jsonFile(UPMETA, {});
+    const hadNote = Object.prototype.hasOwnProperty.call(meta, rm[1]);
     delete meta[rm[1]];
     // Said, not answered ok (#4379). Asking again finishes it: a file that is
     // already gone is no failure to deleteUpload.
@@ -1579,6 +1584,8 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: rm[1], fileDeleted: true,
         error: 'The file was deleted, but the site could not take it off the uploads list. Try again in a minute.' });
     }
+    if (!existed && hadNote) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'metadata' });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -3437,6 +3444,7 @@ async function handle(req, res) {
           message: 'Somebody saved this page after you opened it, so yours was not saved.' });
       }
       if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
+      if (text !== now) modLog({ did: 'docsave', byId: w.id, byName: w.name || w.id, whoName: md[1] });
       return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
@@ -3615,9 +3623,13 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'gone', inbox: list,
           message: 'That one is no longer in the inbox. It was deleted, aged out, or taken out by a deletion request.' });
       }
+      const priorState = list[at].state;
       if (act === 'delete') list.splice(at, 1);
       else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
       if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
+      if (act === 'delete' || priorState !== list[at].state) {
+        modLog({ did: 'inbox' + act, byId: w.id, byName: w.name || w.id, whoName: id });
+      }
       return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }
 
