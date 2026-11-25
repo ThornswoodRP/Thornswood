@@ -5,19 +5,25 @@
 
   This replaces the sequence you have been typing by hand: the content plugin,
   the SkyMP client (the recorded build only, through Sync-Client.ps1), the
-  creation menus, the body fix, the gamemode, the preflight check and the
-  launcher build. Each step names the files it must leave behind, and a step that exits
+  gamemode, the preflight check and the launcher build. Each step names the
+  files it must leave behind, and a step that exits
   cleanly without leaving them is treated as a failure, because those are the
   ones that reach five people before anybody notices.
 
+  By default the run ends by publishing a dev release: Ship.ps1 -Channel dev,
+  which builds the launcher itself and needs this machine's VPS access and
+  signing (docs/guide/set-up-a-machine.md, "Setting up a machine"). It never
+  publishes to main. -NoShip only installs: the steps run, the launcher is
+  built and put in place here, and nothing is published.
+
   Nothing here starts a server or a game. When it finishes, press Play.
 
-      .\Install-Thornswood.ps1              the lot
-      .\Install-Thornswood.ps1 -SkipBody    leave the body meshes alone
+      .\Install-Thornswood.ps1              the lot, then a dev release
+      .\Install-Thornswood.ps1 -NoShip      the lot, nothing published
       .\Install-Thornswood.ps1 -Only launcher,gamemode
 
   Step names for -Only and -Skip:
-      content  client  body  gamemode  check  launcher
+      content  client  gamemode  check  launcher
 #>
 #Requires -Version 7
 [CmdletBinding()]

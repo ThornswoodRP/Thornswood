@@ -476,7 +476,7 @@ namespace Thornswood
                 foreach (string line in File.ReadAllLines(InstalledKept))
                     if (line.Trim().Length > 0) all.Add(line.Trim());
             int before = all.Count;
-            foreach (string raw in File.ReadAllLines(list))
+            foreach (string raw in SetupOwnership.PathsIn(list, Paths.SteamCopy))
             {
                 string rel = (raw ?? "").Trim().Replace('/', '\\').TrimStart('\\');
                 if (rel.Length > 0 && Tidy(rel)) all.Add(rel);
@@ -557,7 +557,7 @@ namespace Thornswood
             foreach (string rel in Keep.Held()) set.Add(rel);
             // The installer's list, and the copy the clean up keeps of it.
             string list = Path.Combine(Paths.ProfileDir, "installed-into-game.txt");
-            if (File.Exists(list)) foreach (string line in File.ReadAllLines(list)) add(line);
+            if (File.Exists(list)) foreach (string line in SetupOwnership.PathsIn(list, Paths.SteamCopy)) add(line);
             if (File.Exists(InstalledKept)) foreach (string line in File.ReadAllLines(InstalledKept)) add(line);
             // The game files of the release this install synced to (Sync.cs):
             // on the machine that ships, the only record of the release's own
