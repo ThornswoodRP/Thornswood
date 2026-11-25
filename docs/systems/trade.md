@@ -36,6 +36,11 @@ Chips along the top narrow the list to one group, and a find box
 narrows it by name. The type is the same size as the rest of the K
 panel, large enough to read at the distance the window sits.
 
+At most 200 matching pack lines are shown at once. A notice gives
+the shown and matching counts when the list is longer; Find and the
+category chips can narrow it to a later item. A search with no hits
+says there are no matches.
+
 Each piece you are holding is its own line, under its own name. Two
 pieces of one thing that differ are two lines: a key to Breezehome and
 a key to Honeyside, a sword at 85% and a plain one. An enchantment, a
@@ -52,6 +57,13 @@ have offered has the same box, Take for that count, Take 1 when the
 count is more than one, and Take back for the whole line. Gold has
 Set for the amount in the box, All for every coin you are holding,
 and None.
+
+Unsent gold amounts and row counts stay in their boxes through updates
+to the same trade, with the editing cursor kept in place. Set, All and
+None submit the amount; later server views show what is actually offered,
+including after a refusal. Closing the trade or starting another one
+clears its drafts, search and category. A draft never carries to another
+trade, even when the person has the same name.
 
 ## What goes on the table
 
