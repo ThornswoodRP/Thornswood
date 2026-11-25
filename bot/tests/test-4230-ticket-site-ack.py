@@ -21,10 +21,13 @@ no staff channel, so Discord holds no copy:
   S2 the site refuses it (500, could not save): neither the message nor the
      reply says it is safe or in the inbox; the reply asks them to try again
      or message staff, and they may send it again at once.
-  S3 the site answers 200 without ok: the same as a refusal.
-  S4 no site key: the same, and the log still says the key is missing.
-  P  push itself says whether the site took it: True on 200 {"ok": true},
-     False on anything else.
+  S3 the site answers 200 without ok: delivery is unconfirmed and the
+     cooldown is kept.
+  S4 no site key: nothing was sent, and the log says the key is missing.
+  S5 the site saves the ticket but its reply times out: the person is told
+     the ticket may have been saved and the cooldown is kept.
+  P  push returns True for a confirmed save, False for a known refusal or
+     unsent request, and None for an unconfirmed delivery.
 
 Never connects to anything.
 """
@@ -157,7 +160,7 @@ class Answered(object):
         return False
 
 
-def site(events, gate, status=200, body=b'{"ok": true}', seen=None):
+def site(events, gate, status=200, body=b'{"ok": true}', seen=None, lost_reply=False):
     """urlopen standing in for the site's POST /api/ticket, held until the
        test lets it go (or HOLD passes), then answering as given."""
     def fake(req, timeout=None):
@@ -166,6 +169,9 @@ def site(events, gate, status=200, body=b'{"ok": true}', seen=None):
         events.append('site push starts')
         gate.wait(HOLD)
         events.append('site push finished')
+        if lost_reply:
+            events.append('site saved ticket')
+            raise TimeoutError('site reply timed out after save')
         if status >= 400:
             raise urllib.error.HTTPError(req.full_url, status, 'could not save', {},
                                          io.BytesIO(b'{"error": "could not save"}'))
@@ -177,7 +183,7 @@ TMP = tempfile.mkdtemp(prefix='thornswood-4230-')
 bot.OPEN_TICKETS = os.path.join(TMP, 'open-tickets.json')
 
 
-def submit(status=200, body=b'{"ok": true}', key='not-a-real-key'):
+def submit(status=200, body=b'{"ok": true}', key='not-a-real-key', lost_reply=False):
     out = {'events': [], 'lines': [], 'raised': None, 'seen': []}
     events = out['events']
     gate = threading.Event()
@@ -195,7 +201,7 @@ def submit(status=200, body=b'{"ok": true}', key='not-a-real-key'):
         keep = (bot.log, bot.KEY, urllib.request.urlopen)
         bot.log = lambda *a: out['lines'].append(' '.join(str(x) for x in a))
         bot.KEY = key
-        urllib.request.urlopen = site(events, gate, status, body, out['seen'])
+        urllib.request.urlopen = site(events, gate, status, body, out['seen'], lost_reply)
         try:
             modal = bot.TicketModal('help', 'I need help')
             modal.fields = [Answer(v) for v in ANSWERS]
@@ -253,9 +259,9 @@ try:
     # ---------------------------------------------------------------- S3 --
     r = submit(status=200, body=b'{"error": "odd"}')
     said = told(r)
-    yes('S3 a 200 without ok is not a yes (%s)' % said,
-        not any(w in said for w in SAFE_WORDS)
-        and any('try again' in s.lower() for s in r['followup'].said))
+    yes('S3 a 200 without ok leaves delivery unconfirmed and keeps the cooldown',
+        'could not confirm' in said.lower() and r['cooled'] is True
+        and not any(w in said for w in SAFE_WORDS))
 
     # ---------------------------------------------------------------- S4 --
     r = submit(key='')
@@ -266,6 +272,17 @@ try:
     yes('S4 and the log still says the key is not set',
         any('THORNSWOOD_KEY is not set' in l for l in r['lines']))
     yes('S4 and nothing was sent to the site', r['seen'] == [])
+
+    # ---------------------------------------------------------------- S5 --
+    r = submit(lost_reply=True)
+    said = told(r)
+    yes('S5 the site saved the ticket before the bot replied',
+        before(r['events'], 'site saved ticket', 'acknowledged'))
+    yes('S5 a lost acknowledgement does not say the ticket was lost',
+        'may have been saved' in said.lower() and 'staff' in said.lower()
+        and 'try again' not in said.lower() and not any(w in said for w in SAFE_WORDS))
+    yes('S5 the bot sends once and keeps the cooldown', len(r['seen']) == 1 and r['cooled'] is True)
+    yes('S5 nothing raised', r['raised'] is None)
 
     # ----------------------------------------------------------------- P --
     def push_with(status, body, key='not-a-real-key'):
@@ -281,9 +298,11 @@ try:
             (bot.log, bot.KEY, urllib.request.urlopen) = keep
     yes('P1 push says True when the site answers 200 {"ok": true}',
         push_with(200, b'{"ok": true}') is True)
-    yes('P2 and False on a refusal, a 200 without ok, or no key',
-        push_with(500, b'') is False and push_with(200, b'{"error": 1}') is False
-        and push_with(200, b'not json') is False and push_with(200, b'', key='') is False)
+    yes('P2 and False on a confirmed site refusal or no key',
+        push_with(500, b'') is False and push_with(200, b'', key='') is False)
+    yes('P3 and None when the response does not confirm storage or refusal',
+        push_with(502, b'') is None and push_with(201, b'{"ok": true}') is None
+        and push_with(200, b'{"error": 1}') is None and push_with(200, b'not json') is None)
 finally:
     shutil.rmtree(TMP, ignore_errors=True)
 

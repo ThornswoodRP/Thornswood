@@ -5,9 +5,11 @@ the log, escaping, pushing to the site, finding channels.
 Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
+import http.client
 import json
 import os
 import traceback
+import urllib.error
 import urllib.request
 
 import discord
@@ -389,13 +391,13 @@ def as_typed(v, n=1000):
 
 # ------------------------------------------------------------------ site --
 def push(kind, title, detail, by, discord_id, rules=None):
-    """Send a ticket to the site. Runs off the event loop. True only when the
-       site answered that it kept it: its POST /api/ticket answers 200
-       {"ok": true} once the inbox file is written, and nothing else is a
-       yes (#4230). False on anything else, with the reason in the log.
+    """Send a ticket to the site. Runs off the event loop.
+
+       True means the site confirmed a save. False means the request was not
+       sent or the ticket endpoint explicitly refused it. None means the
+       outcome is unknown: a reply can be lost after a save (#4230).
        Where Discord holds a copy, the thread is the record and nobody waits
-       on this; where it holds none, the site's answer is the only word that
-       the ticket is kept, and the reply waits for it.
+       on this. Where it holds none, the reply waits for the site's answer.
 
        rules is the application's answer to the rules question, as
        {'said': their words, 'yes': whether it read as a yes}, or None on a
@@ -406,9 +408,8 @@ def push(kind, title, detail, by, discord_id, rules=None):
         # Silent for as long as this has existed, which means a bot with no key
         # set looked exactly like a working one: the thread appeared, the site
         # inbox stayed empty, and nothing anywhere said why.
-        log('THORNSWOOD_KEY is not set, so this ticket did NOT reach the site '
-            'inbox. The thread in Discord is the only copy. Install-Bot.ps1 '
-            'sets the key in bot.env.json on the VPS.')
+        log('THORNSWOOD_KEY is not set, so the ticket was not sent to the site. '
+            'Install-Bot.ps1 sets the key in bot.env.json on the VPS.')
         return False
     sent = {
         'key': KEY, 'kind': kind, 'title': title,
@@ -422,28 +423,43 @@ def push(kind, title, detail, by, discord_id, rules=None):
         headers={'Content-Type': 'application/json'}, method='POST')
     try:
         with urllib.request.urlopen(req, timeout=12) as r:
-            said = r.read()
-    except Exception as e:
-        log('site push failed:', e)
-        return False
-    try:
-        kept = json.loads(said.decode('utf-8')).get('ok') is True
-    except (ValueError, AttributeError) as e:
-        log('site push failed: the site answered something that is not its '
-            'yes (%s): %r' % (type(e).__name__, said[:200]))
-        return False
-    if not kept:
-        log('site push failed: the site did not say it kept the ticket: %r' % said[:200])
-    return kept
+            status = r.status
+            answer = json.load(r)
+    except urllib.error.HTTPError as e:
+        log('site push failed: HTTP', e.code)
+        try:
+            with e:
+                problem = json.load(e)
+        except (OSError, ValueError, http.client.HTTPException):
+            return None
+        # These are the ticket endpoint's refusals before it saves the row.
+        # A proxy error or a reply we cannot read leaves storage unconfirmed.
+        refusals = {
+            400: ('bad json', 'no title'),
+            401: ('no',),
+            404: ('not set up',),
+            500: ('could not save',),
+        }
+        if isinstance(problem, dict) and problem.get('error') in refusals.get(e.code, ()):
+            return False
+        return None
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        log('site push failed: delivery unconfirmed (%s)' % type(e).__name__)
+        return None
+
+    if status == 200 and isinstance(answer, dict) and answer.get('ok') is True:
+        return True
+    log('site push failed: HTTP %s did not confirm storage' % status)
+    return None
 
 
 async def push_async(*a):
-    """push, off the event loop. Its answer: whether the site kept it."""
+    """Run push off the event loop and return its delivery result."""
     try:
         return await asyncio.get_running_loop().run_in_executor(None, push, *a)
     except Exception as e:
-        log('site push failed:', e)
-        return False
+        log('site push failed: delivery unconfirmed (%s)' % type(e).__name__)
+        return None
 
 
 # Site copies still on their way. The event loop holds a task only weakly, so a

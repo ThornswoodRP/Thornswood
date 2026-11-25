@@ -803,7 +803,7 @@ class TicketModal(discord.ui.Modal):
             kept = await push_async(
                 self.kind, '%s: %s' % (self.label_text, who.display_name),
                 detail, str(who), who.id, rules)
-            if kept:
+            if kept is True:
                 try:
                     await who.send(
                         'Your ticket reached staff, but Discord would not let '
@@ -812,13 +812,14 @@ class TicketModal(discord.ui.Modal):
                         'by message.')
                 except Exception as e:
                     log('could not even DM %s about the failed ticket: %s' % (who, e))
-            else:
-                # Nothing kept it, so it is no ticket, and the wait between
-                # tickets is for tickets: they may send it again straight away.
+            elif kept is False:
                 _last_ticket.pop(_ticket_key(guild, who), None)
                 log('ticket from %s was kept nowhere: no thread, no staff only '
-                    'channel, and the site did not take it. They were asked to '
-                    'try again or message staff.' % who)
+                    'channel, and the site did not take it.' % who)
+            else:
+                # A lost reply can follow a save. Keep the ordinary cooldown
+                # so the person can check with staff before sending another.
+                log('could not confirm delivery of a site-only ticket from %s' % who)
 
         # Where Discord holds a copy (the thread, or the staff only log
         # channel), the site copy is bookkeeping, and nobody waits on it. With
@@ -852,18 +853,22 @@ class TicketModal(discord.ui.Modal):
                 'to staff instead, somewhere only staff can read it. Somebody '
                 'will answer you by message.',
                 ephemeral=True)
-        elif kept:
+        elif kept is True:
             await interaction.followup.send(
                 'Sent to staff. Discord would not let a thread open for it, so '
                 'it is in the staff inbox on the site, and the answer will come '
                 'by message rather than in here.',
                 ephemeral=True)
+        elif kept is False:
+            await interaction.followup.send(
+                'This ticket did not reach staff. Please try again or message a '
+                'member of staff directly.',
+                ephemeral=True)
         else:
             await interaction.followup.send(
-                'This did not reach staff. Discord would not let a thread open '
-                'for it and the site did not take it either, so nothing kept '
-                'it. Please try again in a few minutes, or message a member of '
-                'staff directly.',
+                'I could not confirm whether the site received your ticket. It '
+                'may have been saved. Please message a member of staff to check '
+                'before submitting it again.',
                 ephemeral=True)
 
 
