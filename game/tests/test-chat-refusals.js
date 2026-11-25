@@ -156,8 +156,10 @@ const pollTimer = timers.filter(function (t) { return /\bpoll\(\)/.test(String(t
 yes('the command timer that polls the voice service is armed', !!pollTimer);
 
 let seq = 0;
-function send(text, pid) {
-  queue.push({ id: 'test:' + (++seq), profileId: pid || PID, name: 'Patrick', text: text });
+function send(text, pid, proven) {
+  const command = { id: 'test:' + (++seq), profileId: pid || PID, name: 'Patrick', text: text };
+  if (proven === true) command.proven = true;
+  queue.push(command);
   said.length = 0; placed.length = 0; moved.length = 0; destroyed.length = 0; created.length = 0;
   const before = logs.length;
   if (pollTimer) { pollTimer.fn(); }
@@ -209,8 +211,23 @@ if (loaded && pollTimer) {
   r = send('/spawn troll', OTHER);
   yes('nor can they /spawn: ' + one(r),
       r.said.length === 1 && /is not yours to run/.test(r.said[0]) && r.placed.length === 0);
+  const adminPackBefore = JSON.stringify(actors[ME].inventory);
   r = send('/give gold 5');
+  yes('an unproved admin request is refused without changing the pack',
+      r.said.length === 1 && /this connection has not/.test(r.said[0]) &&
+      JSON.stringify(actors[ME].inventory) === adminPackBefore);
+  r = send('/give gold 5', PID, true);
+  yes('a proved admin still needs a current launcher pass, even with the general hold off',
+      r.said.length === 1 && /launcher's pass/.test(r.said[0]) &&
+      JSON.stringify(actors[ME].inventory) === adminPackBefore);
+  const passBook = box.__thornswoodPassSeen.passes;
+  const oldPass = passBook[PID];
+  passBook[PID] = { x: Date.now() + 60000 };
+  try { r = send('/give gold 5', PID, true); }
+  finally { if (oldPass === undefined) delete passBook[PID]; else passBook[PID] = oldPass; }
   yes('while the admin, a playtester by design, can: ' + one(r), /^Given 5 Gold\.$/.test(r.said[0] || ''));
+  yes('the proved admin request adds exactly five gold to the actual pack',
+      actors[ME].inventory.entries.some(function (entry) { return entry.baseId === 15 && entry.count === 5; }));
   mpBase.get = online;
   // ------------------------- an unproven line runs nothing (#410, #1319) ---
   settings = { thornswoodPlaytesters: [PID], thornswoodRequirePass: true };
