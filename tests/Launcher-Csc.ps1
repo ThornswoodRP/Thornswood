@@ -12,9 +12,11 @@
   code under test itself does something only Windows has.
 
   It sets these variables, and the functions below them, and nothing else
-  (apart from $OnWindows, which it gets from tests\Windows.ps1, and its own
-  workings, whose names all start with launcher, so none can replace a
-  variable of the harness that dot-sources it):
+  (apart from $OnWindows, which it gets from tests\Windows.ps1, its seven
+  working variables $launcherRepo, $launcherProjPath, $launcherProjXml,
+  $launcherAppDir, $launcherCopied, $launcherPackages and $launcherResources,
+  whose names all start with launcher so none can replace a variable of the
+  harness that dot-sources it, and the helper Get-LauncherProjectValue):
 
     $LauncherDotnet       the dotnet that builds the launcher: the one on
                           PATH, else $env:DOTNET_ROOT's, else ~/.dotnet's.
@@ -102,7 +104,8 @@
 
   Add-Type and CodeDom were never the build's compiler (#2821): they compile
   with whatever runtime PowerShell runs on, not with the project's settings
-  and packages. Every harness compiles launcher code through here so a
+  and packages. Before issue #2821 eighteen harnesses compiled launcher code
+  that way. Every harness compiles launcher code through here so a
   harness and the build cannot drift. WHY ONE PLACE (#498): a harness that
   kept a compiler of its own passed code the build refused, or refused code
   the build took.
