@@ -49468,6 +49468,65 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return out;
     }
 
+    /* A staff repair is prepared without writes, kits or profession changes.
+       Every carried unit below sound is repaired. Stronger pieces retain
+       their condition, and the worn record must identify the exact old extra. */
+    function prepareTestingRepair(inventory, equipment) {
+      function no(line) { return { ok: false, line: line }; }
+      if (!inventory || !Array.isArray(inventory.entries) || !equipment ||
+          !equipment.inv || !Array.isArray(equipment.inv.entries)) {
+        return no('The server could not read your inventory and equipment. Nothing was requested.');
+      }
+      function valid(entry) {
+        return entry && Number.isInteger(entry.baseId) && entry.baseId > 0 && entry.baseId <= 0xffffffff &&
+          Number.isInteger(entry.count) && entry.count > 0 && entry.count <= 0xffffffff;
+      }
+      if (!inventory.entries.every(valid) || !equipment.inv.entries.every(valid)) {
+        return no('The saved inventory or equipment is invalid. Nothing was requested.');
+      }
+      function identity(entry) {
+        function ordered(value) {
+          if (Array.isArray(value)) { return value.map(ordered); }
+          if (!value || typeof value !== 'object') { return value; }
+          var sorted = {};
+          Object.keys(value).sort().forEach(function (key) { sorted[key] = ordered(value[key]); });
+          return sorted;
+        }
+        var extra = copy(entry);
+        delete extra.count; delete extra.worn; delete extra.wornLeft;
+        return JSON.stringify(ordered(extra));
+      }
+      var nextInventory = JSON.parse(JSON.stringify(inventory));
+      var nextEquipment = JSON.parse(JSON.stringify(equipment));
+      var identities = inventory.entries.map(identity), used = {};
+      var items = 0, stacks = 0;
+      for (var i = 0; i < inventory.entries.length; i++) {
+        var entry = inventory.entries[i];
+        if (pieceKind(entry.baseId) && conditionOf(entry) < CONDITION.sound) {
+          nextInventory.entries[i] = withCondition(entry, CONDITION.sound);
+          items += entry.count; stacks++;
+        }
+      }
+      if (!Number.isSafeInteger(items) || items > 0xffffffff) { return no('Too much equipment for one repair. Nothing was requested.'); }
+      for (var w = 0; w < equipment.inv.entries.length; w++) {
+        var worn = equipment.inv.entries[w];
+        if (!pieceKind(worn.baseId)) { continue; }
+        var key = identity(worn), matching = [];
+        for (var j = 0; j < identities.length; j++) {
+          if (identities[j] === key && inventory.entries[j].count - (used[j] || 0) >= worn.count) { matching.push(j); }
+        }
+        if (matching.length !== 1) {
+          return no('The worn equipment record does not identify one carried stack. Change equipment and try again.');
+        }
+        var index = matching[0]; used[index] = (used[index] || 0) + worn.count;
+        var renamed = nextInventory.entries[index];
+        if (renamed.name === undefined) { delete nextEquipment.inv.entries[w].name; }
+        else { nextEquipment.inv.entries[w].name = renamed.name; }
+      }
+      return { ok: true, items: items, stacks: stacks,
+        inventory: nextInventory, equipment: nextEquipment };
+    }
+
     /** The entries with n units of entries[i] set to that condition. */
     function setUnits(entries, i, n, cond) {
       var out = entries.map(copy);
@@ -50078,6 +50137,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       CONDITION: CONDITION, DULL_PER_DAY: DULL_PER_DAY, DAY_MS: DAY_MS,
       BREAK_CHANCE: BREAK_CHANCE, WEAR_PER_HIT: WEAR_PER_HIT, KITS: kits,
       pieceKind: pieceKind, conditionOf: conditionOf, withCondition: withCondition,
+      prepareTestingRepair: prepareTestingRepair,
       repairTo: repairTo, repairWithKit: repairWithKit, view: view, panel: panel,
       opened: opened, hit: hit, onHit: onHit, pressed: pressed, loading: loading
     };
@@ -64256,6 +64316,73 @@ module.exports = {
 })();
 // ==== end thornswood staff ====
 
+// ==== thornswood equipment testing repair ====
+(function () {
+  'use strict';
+  var g = globalThis, USAGE = 'Usage: /repairgear or /repairgear for <person>.';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/repairgear') { return false; }
+    var staff = g.__thornswoodStaff, refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor, targetPid = pid;
+    if (parts.length !== 1) {
+      if (parts.length < 3 || String(parts[1]).toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var D = g.__thornswoodDurability;
+    if (!D || !D.prepareTestingRepair || typeof mp.compareAndSetActorInventoryAndEquipment !== 'function' ||
+        typeof mp.getActorRuntimeIdentity !== 'function' || typeof mp.getNpcAIState !== 'function') {
+      staff.tell(pid, 'Equipment testing repair is unavailable on this server.'); return true;
+    }
+    var runtime, state, inventory, equipment, plan;
+    try {
+      runtime = mp.getActorRuntimeIdentity(target);
+      state = mp.getNpcAIState(target);
+      if (typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !state ||
+          state.profileId !== targetPid || !state.isHuman || !state.isConnected ||
+          !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0) {
+        staff.tell(pid, 'That character changed before repair. Nothing was requested.'); return true;
+      }
+      inventory = mp.get(target, 'inventory'); equipment = mp.get(target, 'equipment');
+      plan = D.prepareTestingRepair(inventory, equipment);
+    } catch (e) { staff.tell(pid, 'The server could not prepare that repair. Nothing was requested.'); return true; }
+    if (!plan.ok) { staff.tell(pid, plan.line); return true; }
+    if (!plan.items) { staff.tell(pid, 'No readable carried equipment needs repair.'); return true; }
+    var name = staff.nameOf(target), me = staff.nameOf(actor), changed;
+    try {
+      changed = mp.compareAndSetActorInventoryAndEquipment(target, targetPid, {
+        expectedInventory: inventory, replacementInventory: plan.inventory,
+        expectedEquipment: equipment, replacementEquipment: plan.equipment,
+        expectedLifeGeneration: state.lifeGeneration, expectedRuntimeIdentity: runtime
+      });
+    } catch (e) {
+      staff.tell(pid, 'Repair could not be confirmed. Have the server problem checked before trying again.'); return true;
+    }
+    if (changed !== true) { staff.tell(pid, 'The equipment changed before repair. Nothing was repaired; check it and try again.'); return true; }
+    staff.record('repair', pid, me, targetPid, name, 'restored equipment below sound to 100%', 0,
+      { items: plan.items, stacks: plan.stacks });
+    var pieces = plan.items + (plan.items === 1 ? ' piece' : ' pieces') + ' of equipment';
+    staff.tell(pid, 'Repaired ' + pieces + ' to 100% for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'An admin repaired ' + pieces + ' to 100% for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffRepair = { command: command };
+  g.__thornswoodCommandTools.register('repair', {
+    command: command,
+    help: [{ word: '/repairgear', role: 'playtester', syntax: '/repairgear',
+      text: 'Repair your carried equipment below 100% for testing, preserving stronger pieces and every item extra.' },
+      { word: '/repairgear', role: 'admin', syntax: '/repairgear for <person>',
+        text: 'Repair another character\'s carried equipment for testing.' }]
+  });
+})();
+// ==== end thornswood equipment testing repair ====
 // ==== thornswood staff progression ====
 // #6736: a test tool for one legal step on the character's current ladder.
 // Progression owns the rewards and character owns the saved record and view.

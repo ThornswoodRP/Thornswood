@@ -70,6 +70,7 @@
     "command-tools.ts",
     "staff-rename.ts",
     "staff.ts",
+    "staff-repair.ts",
     "staff-progression.ts",
     "take-back.ts",
     "staff-heal.ts",

@@ -391,6 +391,31 @@ try:
     yes('M15 no em dash and never the forbidden word',
         all(chr(0x2014) not in t and ('pla' + 'yer') not in t.lower() for t in (wp, wc, wd)))
 
+    # Testing repair records the carried equipment's owner, whether the
+    # invoking character or an admin's explicitly selected other person.
+    put(LIVE, [])
+    put(DEV, [])
+    repair_records = [
+        json.dumps(dict(json.loads(row('repair', who='Aela',
+            why='restored equipment below sound to 100%')), who=1001)),
+        row('repair', who='Bjorn', why='restored equipment below sound to 100%', n=1),
+    ]
+    ticks = drive([lambda: put(DEV, repair_records)])
+    yes('testing repairs reach the watcher with the correct self or other equipment owner',
+        ticks == [[], [
+            '**Staff on the dev server:** Aela (profile 1001) repaired equipment for '
+            'Aela (profile 1001): restored equipment below sound to 100%',
+            '**Staff on the dev server:** Aela (profile 1001) repaired equipment for '
+            'Bjorn (profile 2002): restored equipment below sound to 100%',
+        ]])
+    repair_escaped = bot.moderation_text('live', json.loads(row('repair', who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+    yes('testing repair escapes both names and its reason',
+        repair_escaped is not None and '@everyone' not in repair_escaped
+        and '<@111111111111111111>' not in repair_escaped
+        and '<@&111111111111111111>' not in repair_escaped
+        and '\\[x](http://e.invalid)' in repair_escaped and len(repair_escaped) <= 1900)
+
     # M16: staff on the crafting card, the Office page of K (#3167): each
     # press comes through the staff block's record, and reads as who did what
     # to whom, with the why the gamemode writes.
