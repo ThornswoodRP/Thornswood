@@ -38,8 +38,8 @@ if (!indexExcluded) {
     !/test-script-index\.ps1, which the nightly/.test(flat(index)));
   yes('  and neither does the text New-ScriptIndex.ps1 writes it from',
     !/test-script-index\.ps1, which the nightly/.test(flat(gen)));
-  yes('  and scripts/README.md says it runs on every pull request',
-    /test-script-index\.ps1[^|]{0,80}every pull request/.test(flat(index)));
+  yes('  and scripts/README.md says it runs in the pull request gate',
+    /test-script-index\.ps1[^|]{0,80}pull request gate/.test(flat(index)));
 }
 
 // ---- 2. nothing under scripts/ names build.yml as a pull request's run ---
@@ -77,4 +77,4 @@ for (const area of ['launcher', 'scripts', 'installer', 'site', 'voice', 'bot', 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

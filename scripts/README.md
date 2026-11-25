@@ -12,8 +12,8 @@ the script, then run
 
     .\scripts\dev\New-ScriptIndex.ps1
 
-and commit this file with it. tests\test-script-index.ps1, which the nightly
-checks run, fails when this file is not what that would write.
+and commit this file with it. tests\test-script-index.ps1 runs in the pull
+request gate and fails when this file is not what that would write.
 
 A script's options are not listed here. Get-Help reads them off its param
 block, so they are always all of them:
