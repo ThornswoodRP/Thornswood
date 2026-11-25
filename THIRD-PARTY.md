@@ -60,6 +60,8 @@ or the build check goes red.
 - [What is still missing](#what-is-still-missing)
 - Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
 
+- [Pion native Windows relay, operator-only](#pion-native-windows-relay-operator-only)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe
@@ -429,10 +431,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `d2995cc9` (in full, `d2995cc9ba8d6a959614acc2542ab6197e44e0f3`). That
+commit `f191e166` (in full, `f191e166d506e6ea6f7e96bba1e11e413cba2fe9`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...d2995cc9.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...f191e166.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -701,7 +703,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`d2995cc9`, the commit the client record names.
+`f191e166`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -1493,15 +1495,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `d2995cc9ba8d6a959614acc2542ab6197e44e0f3` on the public fork. The
+  name `f191e166d506e6ea6f7e96bba1e11e413cba2fe9` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...d2995cc9. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...f191e166. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `74cd1167c86ed30e30410b7c1a7592668ca1c0c4d3c63c39ed1af8c8494ab61c`, built
-  2026-11-18T14:57:14Z. This is the recorded next release, not a deployment
+  is `7d67a14ad32fddb1b52928237ae351b1079024cc6b02df1ad7db4265d722fe10`, built
+  2026-11-19T08:56:39Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1538,7 +1540,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/d2995cc9ba8d6a959614acc2542ab6197e44e0f3
+https://github.com/ThornswoodRP/skymp/tree/f191e166d506e6ea6f7e96bba1e11e413cba2fe9
 
 For the engine Main runs until then:
 
@@ -2186,3 +2188,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Pion native Windows relay, operator-only
+
+The operator-only Windows relay builds official Pion TURN v5.1.3 (MIT), source `f00fda475f1eb3eaa20daac3cd1c0f6a101b9db8`, with the SHA256-pinned official Go toolchain. Supplier source/module checksum pins are in `records/turn/pion-windows.json`; the transitive modules and their checksum-database hashes are locked in `tools/turn-relay/go.mod` and `go.sum`. Pion modules use MIT licences; Go and golang.org/x modules use BSD-3-Clause. Source/module licence files remain in the retained module cache and must accompany any separate redistribution. This package is not a launcher, mod or game dependency and contains no coturn/OpenSSL/DB/admin runtime. See [Windows TURN operations](docs/WINDOWS-TURN.md) for the narrowly permitted network mode and measured capacity/acceptance limits.

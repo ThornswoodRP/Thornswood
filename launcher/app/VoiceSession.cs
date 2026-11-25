@@ -87,7 +87,8 @@ namespace Thornswood
         readonly byte[] packet = new byte[1275];
         VoiceAudio audio;
         long audioSince;
-        volatile bool disposed;
+        int closing;
+        bool Closing => Volatile.Read(ref closing) != 0;
 
         public VoiceSession(Action<string, string> host, Config conf) : this(host, conf, new World()) { }
 
@@ -121,7 +122,7 @@ namespace Thornswood
 
         void Post(Action a)
         {
-            if (disposed) return;
+            if (Closing) return;
             loop.Add(a);
         }
 
@@ -291,7 +292,7 @@ namespace Thornswood
 
         void OpenMic()
         {
-            if (audio != null) return;
+            if (Closing || audio != null) return;
             audio = new VoiceAudio(mix, conf);
             audio.OnEvent = delegate (string kind, string text) { Post(delegate { Host(kind, text); }); };
             audio.OnFrame = Frame;
@@ -306,6 +307,7 @@ namespace Thornswood
         /// </summary>
         void Frame(float[] pcm)
         {
+            if (Closing) return;
             mix.Meter.Capture(pcm, micLive);
             long n = Interlocked.Increment(ref frames);
             if (!micLive) return;
@@ -563,6 +565,7 @@ namespace Thornswood
 
         void Connect()
         {
+            if (Closing) return;
             if (retry != null) { retry.Dispose(); retry = null; }
             if (cfg == null) return;
 
@@ -1271,17 +1274,22 @@ namespace Thornswood
 
         public void Dispose()
         {
-            if (disposed) return;
+            if (Interlocked.Exchange(ref closing, 1) != 0) return;
+            pinger.Dispose();
+            // Startup and cleanup are ordered on the same loop. If Windows
+            // holds an audio call past the caller's wait, the loop still owns
+            // the outstanding workers and their encoder until they return.
             loop.Finish(delegate
             {
-                if (retry != null) { retry.Dispose(); retry = null; }
-                foreach (int id in new List<int>(conns.Keys)) Drop(id);
-                if (ws != null) { Sock s = ws; ws = null; Close(s); }
+                audio?.Dispose();
+                try
+                {
+                    if (retry != null) { retry.Dispose(); retry = null; }
+                    foreach (int id in new List<int>(conns.Keys)) Drop(id);
+                    if (ws != null) { Sock s = ws; ws = null; Close(s); }
+                }
+                finally { encoder.Dispose(); }
             });
-            disposed = true;
-            pinger.Dispose();
-            if (audio != null) audio.Dispose();
-            encoder.Dispose();
         }
     }
 }

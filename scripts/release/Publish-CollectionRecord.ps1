@@ -39,7 +39,8 @@
     6. only then, New-NexusRevision.ps1 -Publish.
   Then -Out holds what the records that follow the publish are made from:
   the layout's layout.json, files.txt, plugins.txt and loadorder.txt, the
-  record of the new revision (collection.json), the dropped plugins for
+  record of the new revision (collection.json), its canonical server order
+  (load-order.json), the dropped plugins for
   records\collection-dropped.json (dropped.json), the draft's own
   collection.json for collection-permissions.js update (nexus-collection.json),
   last-rebuild.txt, the Last plugin's sources whose bytes the new revision
@@ -257,6 +258,10 @@ else {
     try { $got = New-CollectionRecordFromLayout $lay } catch { $why = $_.Exception.Message }
     if ($got) { $diff = @(Compare-CollectionRecord $want $got) }
     if ($diff.Count) { $why = "draft revision $draft is not what the record says" }
+    if (-not $why) {
+        try { $rebuildOrder = Get-PublishedCollectionOrderText $Repo $want $got $draft }
+        catch { $why = $_.Exception.Message }
+    }
 }
 # Check the downloaded draft too: a successful layout alone cannot prove tags.
 if ($RefreshTag.Count -and -not $why) {
@@ -286,10 +291,8 @@ $code = Invoke-RecordStep 'New-NexusRevision' ([ordered]@{ Publish = $draft; Slu
 if ($code -ne 0) { Stop-Record "New-NexusRevision.ps1 -Publish $draft stopped (exit $code); the draft is held to the record and waits." }
 $script:OnNexus.Clear()
 Say "  revision $draft is published" 'Green'
-# The workflow's later steps run only after a publish.
-if ($env:GITHUB_OUTPUT) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "published=$draft`n", $utf8) }
-
 # ------------------------------------------- what the records follow from --
+[IO.File]::WriteAllText((Join-Path $Out 'load-order.json'), $rebuildOrder, $utf8)
 foreach ($f in @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt')) { Copy-Item -LiteralPath (Join-Path $lay $f) -Destination (Join-Path $Out $f) }
 Copy-Item -LiteralPath (Join-Path $lay 'thornswood.wabbajack') -Destination (Join-Path $Out 'collection-modlist.wabbajack')
 $got.revision = $draft
@@ -320,6 +323,8 @@ if (Test-Path -LiteralPath $recipe -PathType Leaf) {
     }
 }
 [IO.File]::WriteAllText((Join-Path $Out 'last-rebuild.txt'), (($rebuild -join "`n") + "`n"), $utf8)
+# Allow the workflow's follow-up only after the rebuild inputs are written.
+if ($env:GITHUB_OUTPUT) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "published=$draft`n", $utf8) }
 Say ''
 Say ("  the records follow revision $draft from $Out" + $(if ($rebuild.Count) { "; the Last plugin reads $($rebuild.Count) plugin(s) it changes" } else { '' })) 'Green'
 exit 0

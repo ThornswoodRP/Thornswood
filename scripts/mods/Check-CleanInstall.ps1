@@ -69,6 +69,7 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'LoadOrder.ps1')
+. (Join-Path $Here 'SteamLibrary.ps1')
 
 function Say($m, $c = 'Gray') {
   if ($m -match '^\s*(STOP\.|PASS\b|NO\s|NOT THE SERVER)') { Write-Output $m }
@@ -79,31 +80,6 @@ function Stop-Check([string]$m) {
   Say "  STOP. $m" 'Red'
   Write-Host ''
   exit 2
-}
-
-# The Steam copy of Skyrim Special Edition, the same search Check-Build.ps1
-# makes: Steam's own folder from the registry, then every library it lists.
-function Get-SteamSkyrim {
-  $roots = @()
-  foreach ($k in 'HKCU:\Software\Valve\Steam', 'HKCU:\Software\Wow6432Node\Valve\Steam') {
-    try { $p = (Get-ItemProperty -Path $k -Name SteamPath -EA Stop).SteamPath } catch { continue }
-    if ($p) { $roots += ($p -replace '/', '\') }
-  }
-  try { $p = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Valve\Steam' -Name InstallPath -EA Stop).InstallPath } catch { $p = $null }
-  if ($p) { $roots += $p }
-  foreach ($r in @($roots)) {
-    $vdf = Join-Path $r 'config\libraryfolders.vdf'
-    if (-not (Test-Path -LiteralPath $vdf)) { continue }
-    foreach ($line in (Get-Content -LiteralPath $vdf)) {
-      $m = [regex]::Match($line, '^\s*"path"\s+"(.+)"\s*$')
-      if ($m.Success) { $roots += ($m.Groups[1].Value -replace '\\\\', '\') }
-    }
-  }
-  foreach ($r in ($roots | Select-Object -Unique)) {
-    $g = Join-Path $r 'steamapps\common\Skyrim Special Edition'
-    if (Test-Path -LiteralPath (Join-Path $g 'SkyrimSE.exe')) { return $g }
-  }
-  return ''
 }
 
 # A crc32 one byte at a time in PowerShell takes minutes on a big plugin;

@@ -612,10 +612,11 @@ chatPrune();
  * leaves a plain line reaching everybody rather than silencing the room.
  * /health says which it is.
  *
- * /me, /do, /w, /s and /ooc are local either way. They are not queued for
- * the game server. The line above the head uses those same distances even
- * while a plain line in the box still goes to everybody. Other slashes,
- * including /roll, are still queued.
+ * headlines.floatLine parses /me, /do, /w, /s and /ooc. They are local
+ * in the box and above the head, regardless of the plain chat setting:
+ * 1000 units for whispers, 12000 for shouts, and 4000 for the others.
+ * Plain lines above the head use 4000 units too. Other slashes, including
+ * /roll, are still queued for the game server.
  */
 function chatRangeOf(v) {
   const s = String(v == null ? '' : v).trim().toLowerCase();
@@ -624,42 +625,6 @@ function chatRangeOf(v) {
   return (s && isFinite(n) && n > 0) ? n : 0;
 }
 const CHAT_RANGE = chatRangeOf(process.env.THORNSWOOD_CHAT_RANGE);
-
-/*
- * /me and /do are how an attempt gets said as an attempt: "/me swings at
- * the guard" leaves whether it lands to the other person, which a plain
- * line cannot. Whisper and shout are their own distances in headlines.js
- * (1000 and 12000). chatReach below is only the box while the range is on,
- * and it is a quarter and three times that range, near the voice modes
- * (7, 30 and 85 metres in thornswood-voice.js). The head does not use it.
- */
-const CHAT_VERBS = {
-  '/me': 'me', '/do': 'do',
-  '/whisper': 'whisper', '/w': 'whisper',
-  '/shout': 'shout', '/s': 'shout', '/yell': 'shout', '/y': 'shout'
-};
-const CHAT_USAGE = {
-  me: 'Say /me and then what your character does, like /me draws a sword.',
-  do: 'Say /do and then what there is to see, like /do The door is barred.',
-  whisper: 'Say /w and then what you whisper.',
-  shout: 'Say /s and then what you shout.'
-};
-
-/* The verb a line starts with and the rest of it, or null for a plain line
-   and for every other slash, which still goes to the game server. */
-function chatVerb(text) {
-  const m = /^(\/[a-z]+)(?:\s+([\s\S]*))?$/i.exec(String(text == null ? '' : text));
-  if (!m) return null;
-  const kind = CHAT_VERBS[m[1].toLowerCase()];
-  if (!kind) return null;
-  return { kind: kind, text: String(m[2] || '').trim() };
-}
-
-function chatReach(kind) {
-  if (kind === 'whisper') return CHAT_RANGE / 4;
-  if (kind === 'shout') return CHAT_RANGE * 3;
-  return CHAT_RANGE;
-}
 
 /*
  * Who a line reaches: { to, placed }, or null for everybody.
@@ -3303,7 +3268,7 @@ server.on('upgrade', (req, socket, head) => {
         p.ws.send(copy);
       }
       if (CHAT_RANGE) {
-        const heard = hearers(myId, me, chatReach('say'));
+        const heard = hearers(myId, me, CHAT_RANGE);
         if (heard) {
           for (const p of heard.to) deliver(p);
           if (heard.to.length <= 1) {
