@@ -49841,13 +49841,28 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     /*
       WHAT THE PANEL AND THE INVENTORY KEY SEND, as the words after /repair.
       Nothing, the key: draw the panel. 'mend <base in hex> <condition>
-      <name>', a row's button: mend that piece, then draw the panel again.
+      <name>' is retained for old panels. New buttons send mend-name-v1 with
+      one percent-encoded name, keeping every space before the same repair.
       Answers the line to say in the chat, or '' for none.
     */
     function panel(actorId, words) {
       words = words || [];
       var line = '';
-      if (String(words[0] || '').toLowerCase() === 'mend') {
+      var action = String(words[0] || '').toLowerCase();
+      if (action === 'mend-name-v1') {
+        var name = null;
+        if (words.length === 4 && /^[0-9a-f]{1,8}$/i.test(String(words[1])) &&
+            parseInt(words[1], 16) > 0 && /^(0|[1-9][0-9]{0,2})$/.test(String(words[2])) &&
+            Number(words[2]) <= CONDITION.highest && String(words[3]).length <= 8000) {
+          try { name = decodeURIComponent(String(words[3])); } catch (e) { name = null; }
+        }
+        if (!name) { line = 'That repair request could not be read. Open the repair panel again.'; }
+        else {
+          line = repairWithKit(actorId, {
+            baseId: parseInt(words[1], 16), cond: Number(words[2]), name: name
+          }).line;
+        }
+      } else if (action === 'mend') {
         line = repairWithKit(actorId, {
           baseId: parseInt(String(words[1] || ''), 16) || 0,
           cond: Number(words[2]),

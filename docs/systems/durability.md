@@ -5,6 +5,9 @@ not the grindstone and it is not the armour table.
 
 Three kits. Smiths and tailors make them.
 
+The repair panel keeps an enchanted piece's exact name, including repeated
+spaces or spaces at either end, when choosing the piece to mend.
+
 | Kit | Who makes it | What it repairs |
 | --- | --- | --- |
 | Weapon Kit | Edgewright | Weapons |
