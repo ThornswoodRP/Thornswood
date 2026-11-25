@@ -208,8 +208,14 @@ async def watch_known_issues():
                     # One best-effort warning per condition episode. An unknown
                     # send outcome must not cause repeated staff posts.
                     warning_attempted = True
-                    await report_say('Known-issue and test-task updates are paused: ' + blocked +
-                                     ' No forum or site-list updates will run until it is restored.')
+                    try:
+                        await report_say('Known-issue and test-task updates are paused: ' + blocked +
+                                         ' No forum or site-list updates will run until it is restored.')
+                    except Exception as e:
+                        # A warning failure is not a failed forum pass: it must
+                        # never save dirty live metadata over the blocked index.
+                        log('known issues: staff warning could not be confirmed (%s); '
+                            'updates remain paused' % type(e).__name__)
                 await asyncio.sleep(KNOWN_EVERY)
                 continue
             if state is None:

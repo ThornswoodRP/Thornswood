@@ -171,6 +171,25 @@ class Recovery(unittest.TestCase):
         self.assertEqual(len(r.warnings), 1)
         self.assertEqual(len(r.calls), 3)
 
+    def test_warning_failure_cannot_save_dirty_state_over_corrupt_index(self):
+        r = Rig()
+        r.put_token()
+        r.fail_save = True
+        def damage_and_fail_warning():
+            r.fail_save = False
+            r.warning_raises = True
+            r.index.write_text('{', encoding='utf-8')
+        def verify_then_repair():
+            self.assertEqual(r.index.read_text(), '{')
+            self.assertEqual(len(r.calls), 1)
+            r.warning_raises = False
+            r.repair()
+        r.run(damage_and_fail_warning, verify_then_repair)
+        self.assertEqual(len(r.calls), 4)
+        self.assertEqual(r.snapshots[1]['marker'], 'live metadata')
+        self.assertTrue(r.snapshots[1]['_dirty'])
+        self.assertEqual(json.loads(r.index.read_text())['marker'], 'live metadata')
+
     def test_cancellation_propagates_while_waiting(self):
         r = Rig()
         with self.assertRaises(asyncio.CancelledError):
