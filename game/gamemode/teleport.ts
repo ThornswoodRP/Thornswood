@@ -1509,7 +1509,7 @@
         if (verb === 'refresh' || verb === 'ok') {
           tr2.refresh(actorId);
           if (verb === 'ok') {
-            toProfile(profileId, 'The trade window is out of date. Read both piles and press Agree again.');
+            toProfile(profileId, 'The trade window is out of date. Close the game, let the launcher update, then rejoin before trading.');
           }
           return true;
         }

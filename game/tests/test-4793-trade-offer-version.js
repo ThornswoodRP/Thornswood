@@ -40,7 +40,7 @@ if(w.loaded()){
     const snapshot=packs(), count=writes(), drawnAt=view(a).at;
     const answer=say(a,'/trade ok'+suffix);
     yes('a legacy click always refreshes without recording an agreement',
-      /out of date/i.test(answer)&&/press Agree again/i.test(answer)&&view(a).at>drawnAt&&view(a).offerVersion===changed&&
+      /out of date/i.test(answer)&&/close the game/i.test(answer)&&/launcher update/i.test(answer)&&view(a).at>drawnAt&&view(a).offerVersion===changed&&
       !trade().tradeOf(a).okA&&!trade().tradeOf(a).okB&&packs()===snapshot&&writes()===count);
   }
   say(c,'/trade agree '+changed);yes('a version never substitutes for membership in the trade',!trade().tradeOf(c)&&!trade().tradeOf(a).okA);
