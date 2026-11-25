@@ -12438,7 +12438,7 @@ log('gamemode loaded:',
   if (globalThis.__thornswoodRoster) {
     try { clearInterval(globalThis.__thornswoodRoster); } catch (e) { }
   }
-  globalThis.__thornswoodRoster = setInterval(function () {
+  function refresh() {
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
 
@@ -12489,7 +12489,9 @@ log('gamemode loaded:',
 
     // Still dirty when the write was refused: the file is behind the book.
     if (dirty) { dirty = !write(); }
-  }, EVERY_MS);
+  }
+  globalThis.__thornswoodRefreshRoster = refresh;
+  globalThis.__thornswoodRoster = setInterval(refresh, EVERY_MS);
 
   console.log('[thornswood] character roster published at ' + FILE);
 })();
@@ -18602,15 +18604,21 @@ log('gamemode loaded:',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
       '    if (st.thornswoodSkyId === id) { return; }',
-      '    st.thornswoodSkyId = id;',
+      // An id is applied only when its native operation completes. A form
+      // unavailable during loading must not suppress later owner updates.
       '    if (!id) {',
-      '      try { if (ctx.sp.Weather.releaseOverride) { ctx.sp.Weather.releaseOverride(); } } catch (e0) { }',
+      '      if (!ctx.sp.Weather.releaseOverride) { return; }',
+      '      ctx.sp.Weather.releaseOverride();',
+      '      st.thornswoodSkyId = id;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
       '    if (!form) { return; }',
       '    var weather = ctx.sp.Weather.from(form);',
-      '    if (weather && weather.forceActive) { weather.forceActive(true); }',
+      '    if (weather && weather.forceActive) {',
+      '      weather.forceActive(true);',
+      '      st.thornswoodSkyId = id;',
+      '    }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -26985,7 +26993,7 @@ module.exports = {
     the gate: Solitude, Whiterun, Windhelm, Riften and Markarth are walled
     cities, each its own worldspace inside the walls, and their numbers were
     read inside them. Measured 15 Oct:
-      - the game's own NPCs placed near each point (docs/NPC-SPAWNS.csv)
+      - the game's own NPCs placed near each point (game/data/NPC-SPAWNS.csv)
         stand in WhiterunWorld 1a26f, RiftenWorld 16bb4, WindhelmWorld 1691d
         and MarkarthWorld 16d71;
       - Solitude has no NPC within 3,000, so the cell its point falls in was
@@ -52332,6 +52340,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function read(actorId) {
     var v = null;
     try { v = mp.get(actorId, NEEDS_PROPERTY); } catch (e) { v = null; }
+    return normalizedNeeds(v);
+  }
+
+  function normalizedNeeds(v) {
     if (!v || typeof v !== 'object') { return null; }
     return {
       food: clamp(v.food), drink: clamp(v.drink), rest: clamp(v.rest),
@@ -52415,6 +52427,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /*
+    An explicit testing change brings every meter to the same clock, overrides
+    one value, and commits once. Existing malformed meters are refused rather
+    than silently replaced by read()'s compatibility defaults. Only a genuinely
+    absent record is initialized, because the caller explicitly asked to set it.
+  */
+  function setForTesting(actorId, key, value) {
+    if (['food', 'drink', 'rest', 'temp'].indexOf(key) === -1 ||
+        typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      return { ok: false, why: 'Choose a needs value from 0 to 100.' };
+    }
+    if (inCreation(actorId)) { return { ok: false, why: 'Finish creating your character before changing needs.' }; }
+    var raw;
+    try { raw = mp.get(actorId, NEEDS_PROPERTY); }
+    catch (e) { return { ok: false, why: 'The server could not read those needs. Nothing changed.' }; }
+    var now = Date.now();
+    if (raw === undefined || raw === null) { raw = fresh(); raw.at = now; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        ['food', 'drink', 'rest', 'temp'].some(function (meter) {
+          return typeof raw[meter] !== 'number' || !Number.isFinite(raw[meter]) || raw[meter] < 0 || raw[meter] > 100;
+        }) || typeof raw.at !== 'number' || !Number.isFinite(raw.at) || raw.at <= 0 || raw.at > now) {
+      return { ok: false, why: 'The saved needs are invalid or unavailable. Nothing changed.' };
+    }
+    var normalized = normalizedNeeds(raw), arriving = !here[actorId] && onlineNow(actorId);
+    var projected;
+    try {
+      var api = g.__thornswoodNeeds;
+      projected = api && api.ignoresNeeds && api.ignoresNeeds(actorId)
+        ? { needs: normalized, changed: false }
+        : projectNeeds(normalized, now, arriving, projectionEnvironment(actorId, true));
+    }
+    catch (e) { return { ok: false, why: 'The server could not read the needs context. Nothing changed.' }; }
+    // Preserve metadata this operation did not change, including fields added
+    // by another module. Apply exactly the canonical elapsed-time changes.
+    var next = Object.assign({}, raw);
+    Object.keys(projected.needs).forEach(function (field) {
+      if (JSON.stringify(projected.needs[field]) !== JSON.stringify(normalized[field])) {
+        next[field] = projected.needs[field];
+      }
+    });
+    next[key] = value;
+    next.at = now;
+    if (!write(actorId, next)) { return { ok: false, why: 'The server could not save those needs. Nothing changed.' }; }
+    if (arriving) { here[actorId] = true; }
+    /* Character refresh asks settle/view again. During this synchronous
+       delivery it must see the committed snapshot, not charge a few more
+       milliseconds and produce a second authoritative needs write. */
+    testingSnapshot[actorId] = next;
+    try {
+      projectionEffects(actorId, projected, true);
+      pushEffects(actorId, true);
+    } finally { delete testingSnapshot[actorId]; }
+    return { ok: true, from: raw[key], to: value };
+  }
+
+  /*
     Whether somebody is still making their character. The chargen block's own
     answer, through the global the way the character block reaches it, and no
     answer counts as not in creation, so a missing block never freezes anybody.
@@ -52463,7 +52530,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     land on the same number. The tick below only exists to make the change
     visible and to notice a band crossing; the arithmetic does not need it.
   */
+  var testingSnapshot = {};
   function settle(actorId, now) {
+    if (testingSnapshot[actorId]) { return Object.assign({}, testingSnapshot[actorId]); }
     now = now || Date.now();
     var n = read(actorId);
     var arriving = !here[actorId] && onlineNow(actorId);
@@ -52669,27 +52738,27 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
              hung: hung, pulled: pulled, slept: slept };
   }
 
-  function projectionEnvironment(actorId) {
+  function projectionEnvironment(actorId, savedOnly) {
     return {
-      workMultiplier: function () { return workMultiplier(actorId); },
-      restingGain: function (n) { return restingGain(actorId, n); },
-      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
+      restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
+      warmthTarget: function (n) { return warmthTarget(actorId, n, savedOnly); },
       outdoorCooling: outdoorCooling
     };
   }
 
-  function projectionEffects(actorId, projected) {
+  function projectionEffects(actorId, projected, savedOnly) {
     var hungBefore = projected.hungBefore, hung = projected.hung;
     var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       hangoverCare(actorId);
       if (hung) { notify(actorId, NEEDS.ale.hungLine); say(actorId, NEEDS.ale.hungLine); }
     }
     if (pulled) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, NEEDS.drug.withdrawal.line);
       say(actorId, NEEDS.drug.withdrawal.line);
     }
@@ -52701,7 +52770,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       */
       var beds = g.__thornswoodBeds;
       if (beds && beds.off) { beds.off(actorId); }
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, slept);
       say(actorId, slept);
     }
@@ -52768,11 +52837,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n) {
+  function warmthTarget(actorId, n, savedOnly) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52836,13 +52905,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId) {
+  function fireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
     var reach = NEEDS.fire.reach || 1;
     if (d >= reach) { return 0; }
-    var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
+    var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
   }
 
@@ -52863,15 +52932,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     The perk is the progression block's own answer, held at master in the
     half somebody picked. Nothing loaded answers no, which is an ordinary fire.
   */
-  function perkHeld(actorId, key) {
+  function projectionCharacter(actorId, savedOnly) {
+    var c = g.__thornswoodCharacter;
+    if (!savedOnly) { return c && c.stateOf ? c.stateOf(actorId) : null; }
+    var state = mp.get(actorId, (c && c.PROPERTY) || 'thornswoodCharacter');
+    return state && typeof state === 'object' && state.v === 1 ? state : null;
+  }
+
+  function perkHeld(actorId, key, savedOnly) {
     var P = g.__thornswoodProgression;
     var C = g.__thornswoodCharacter;
     if (!P || !P.perks || !C || !C.stateOf) { return false; }
-    try { return P.perks(C.stateOf(actorId)).indexOf(key) !== -1; } catch (e) { return false; }
+    try { return P.perks(projectionCharacter(actorId, savedOnly)).indexOf(key) !== -1; }
+    catch (e) { if (savedOnly) { throw e; } return false; }
   }
 
-  function carverFire(actorId) {
-    if (perkHeld(actorId, 'mastercarver')) { return true; }
+  function carverFire(actorId, savedOnly) {
+    if (perkHeld(actorId, 'mastercarver', savedOnly)) { return true; }
     var reach = NEEDS.fire.reach || 1;
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return false; }
@@ -52894,7 +52971,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       } catch (e) { continue; }
       var theirs = read(them);
       if (!theirs || !(theirs.fire >= 0) || theirs.fire >= reach) { continue; }
-      if (perkHeld(them, 'mastercarver')) { return true; }
+      if (perkHeld(them, 'mastercarver', savedOnly)) { return true; }
     }
     return false;
   }
@@ -53659,13 +53736,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** How much faster working drains rest, by the best rank this person holds. */
-  function workMultiplier(actorId) {
+  function workMultiplier(actorId, savedOnly) {
     var best = 'novice';
     try {
       var P = g.__thornswoodProgression;
       var C = g.__thornswoodCharacter;
       if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
+        var s = projectionCharacter(actorId, savedOnly);
         var ranks = (s && s.ranks) || {};
         var order = ['novice', 'advanced', 'expert', 'master'];
         for (var k in ranks) {
@@ -53673,16 +53750,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           if (order.indexOf(ranks[k]) > order.indexOf(best)) { best = ranks[k]; }
         }
       }
-    } catch (e) { }
+    } catch (e) { if (savedOnly) { throw e; } }
     return NEEDS.workRest[best] || NEEDS.workRest.novice;
   }
 
   /** What this person is recovering per hour, by where they are resting. */
-  function restingGain(actorId, n) {
+  function restingGain(actorId, n, savedOnly) {
     if (!n.resting) { return 0; }
     var base = NEEDS.recover[n.resting] || 0;
     if (!base) { return 0; }
-    if (bardNear(actorId)) { base += NEEDS.bard; }
+    if (bardNear(actorId, savedOnly)) { base += NEEDS.bard; }
     return base;
   }
 
@@ -53753,14 +53830,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
-  function bardNear(actorId) {
+  function bardNear(actorId, savedOnly) {
     var myCell = null;
     try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
     if (!myCell) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
-      if (now - BARDS[id] > BARD_FOR) { delete BARDS[id]; continue; }
+      if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
       var theirs = null;
@@ -54601,11 +54678,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     not change anything, and a band change is at most a handful of times an
     evening per person.
   */
-  function pushEffects(actorId) {
+  function pushEffects(actorId, savedOnly) {
     try {
       var c = g.__thornswoodCharacter;
       if (!c || !c.stateOf || !c.writeState) { return; }
-      var s = c.stateOf(actorId);
+      var s = projectionCharacter(actorId, savedOnly);
       if (!s) { return; }
       // redraw, because the rules state has not changed and the panel
       // signature would hold the write back. What changed is underneath it.
@@ -55329,7 +55406,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
     // The meters as last settled, without settling them again (#1383).
-    read: read,
+    read: read, setForTesting: setForTesting,
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
@@ -61830,6 +61907,12 @@ module.exports = {
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
 
   // A server move begins a new journey. Keep the cooldown and the last
   // successful escape's trap information, which are independent of steps.
@@ -62182,7 +62265,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
-    resetTrail: resetTrail,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -62287,6 +62370,96 @@ module.exports = {
     ]
   });
 })();
+// ==== thornswood admin rename ====
+// #6739: change the saved appearance name through the engine's normal
+// appearance binding, which persists it and reliably updates its listeners.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var MAX_NAME = 60;
+  // Refuse invisible controls, markup and malformed Unicode; never remove
+  // them and quietly save a different name. Ordinary spaces are normalized.
+  var UNSAFE = /[\p{C}\p{Zl}\p{Zp}<>]/u;
+  var NAME = /^[\p{L}\p{M}\p{N} .'\u2019-]+$/u;
+
+  function validateName(text) {
+    if (typeof text !== 'string' || UNSAFE.test(text)) {
+      return { why: 'A name cannot contain controls, invisible marks or markup.' };
+    }
+    var name = text.normalize('NFC').trim().replace(/ +/g, ' ');
+    if (!name || !/[\p{L}\p{N}]/u.test(name)) { return { why: 'A name needs at least one letter or number.' }; }
+    if (Array.from(name).length > MAX_NAME) { return { why: 'A name is at most 60 characters.' }; }
+    if (!NAME.test(name)) { return { why: 'Use letters, numbers, spaces, apostrophes, hyphens or periods in a name.' }; }
+    return { name: name, why: '' };
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rename') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.authorizeTool !== 'function') {
+      if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, 'Renaming is unavailable right now.'); }
+      return true;
+    }
+    // Self and other-character renames have exactly the same admin boundary.
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+    if (refused) { staff.tell(pid, refused); return true; }
+    if (UNSAFE.test(String(cmd.text || ''))) {
+      staff.tell(pid, 'A name cannot contain controls, invisible marks or markup.');
+      return true;
+    }
+    var words = parts.slice(1);
+    var target;
+    if (String(words[0] || '').toLowerCase() === 'self') {
+      target = { actorId: actorId, pid: pid, rest: words.slice(1) };
+    } else {
+      target = staff.takePerson(words);
+      if (!target.actorId) { staff.tell(pid, target.why || 'Name somebody who is in the world.'); return true; }
+    }
+    if (!target.rest.length) {
+      staff.tell(pid, 'Use /rename self <new name> or /rename <person> <new name>.');
+      return true;
+    }
+    var named = validateName(target.rest.join(' '));
+    if (named.why) { staff.tell(pid, named.why); return true; }
+    var saved;
+    try { saved = mp.get(target.actorId, 'appearance'); }
+    catch (eRead) { staff.tell(pid, 'The server could not read that character\'s saved appearance, so the name was not changed.'); return true; }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      staff.tell(pid, 'That character has no saved appearance to rename yet.');
+      return true;
+    }
+    var oldName = String(saved.name || '');
+    if (oldName === named.name) { staff.tell(pid, 'That character is already called ' + named.name + '.'); return true; }
+    // Take the requestor's name before a self rename changes it.
+    var byName = staff.nameOf(actorId);
+    var next = Object.assign({}, saved, { name: named.name });
+    try { mp.set(target.actorId, 'appearance', next); }
+    catch (eWrite) { staff.tell(pid, 'The server could not rename that character. Nothing was confirmed; try again later.'); return true; }
+    staff.record('rename', pid, byName, target.pid, oldName,
+      'Renamed to ' + named.name + '.', 0,
+      { character: target.actorId.toString(16), oldName: oldName, newName: named.name });
+    // Publish from the same saved appearance used by the normal roster and
+    // nearby views, including when somebody disconnects before their timer.
+    if (g.__thornswoodRefreshRoster) { g.__thornswoodRefreshRoster(); }
+    var social = g.__thornswoodSocial;
+    if (social && social.nearTick) { social.nearTick(); }
+    staff.tell(pid, 'Renamed ' + (target.actorId === actorId ? 'your character' : oldName) +
+      ' to ' + named.name + '. This is logged for staff.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin renamed your character to ' + named.name + '. This is logged for staff.'); }
+    return true;
+  }
+
+  g.__thornswoodRename = { command: command, validateName: validateName };
+  if (g.__thornswoodCommandTools) {
+    g.__thornswoodCommandTools.register('rename', {
+      command: command,
+      help: [{ word: '/rename', role: 'admin',
+        syntax: '/rename self <newname> | /rename <person> <newname>',
+        text: 'Renames the same saved character. Names use 1 to 60 characters: letters, numbers, spaces, apostrophes, hyphens or periods.' }]
+    });
+  }
+})();
+// ==== end thornswood admin rename ====
 // ==== thornswood staff ====
 /*
   WHAT A MODERATOR CAN DO IN THE WORLD. Issue #412, "A moderator has no powers
@@ -63660,6 +63833,68 @@ module.exports = {
   tblog('ready: asks from the hub are taken every', EVERY_MS / 1000, 's');
 })();
 // ==== end thornswood take back ====
+// Restore vitals for a self-only playtest or an admin's named target (#6733).
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Usage: /heal, or /heal for <person> for an admin.';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/heal') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    var args = parts.slice(1);
+    if (args.length) {
+      if (args.length < 2 || args[0].toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      target = staff.takePerson(args.slice(1));
+      if (!target.actorId || target.rest.length) { staff.tell(pid, target.why || USAGE); return true; }
+      if (target.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+    }
+    var dead, current;
+    try { dead = mp.get(target.actorId, 'isDead'); current = mp.get(target.actorId, 'percentages'); }
+    catch (e) { staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true; }
+    if (dead === true) { staff.tell(pid, 'That character is dead. Healing cannot undo death; use the normal wake or the appropriate admin process.'); return true; }
+    if (dead !== false || !current || ['health', 'magicka', 'stamina'].some(function (key) {
+      return typeof current[key] !== 'number' || !Number.isFinite(current[key]);
+    })) {
+      staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true;
+    }
+    if (current.health === 1 && current.magicka === 1 && current.stamina === 1) {
+      staff.tell(pid, target.name + ' already has full health, magicka and stamina.'); return true;
+    }
+    try {
+      mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
+      var confirmed = mp.get(target.actorId, 'percentages');
+      if (mp.get(target.actorId, 'isDead') !== false || !confirmed ||
+          confirmed.health !== 1 || confirmed.magicka !== 1 || confirmed.stamina !== 1) {
+        throw new Error('The native vitals write was not applied.');
+      }
+    }
+    catch (e) {
+      log('heal: could not confirm vitals for ' + target.actorId.toString(16) + ': ' + e);
+      staff.tell(pid, 'Healing could not be confirmed. The server recorded why; try again only after the problem is checked.');
+      return true;
+    }
+    var byName = staff.nameOf(actorId);
+    staff.record('heal', pid, byName, target.pid, target.name, 'restored health, magicka and stamina', 0);
+    staff.tell(pid, 'Restored health, magicka and stamina for ' + target.name + '.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin restored your health, magicka and stamina.'); }
+    return true;
+  }
+  g.__thornswoodHeal = { command: command };
+  g.__thornswoodCommandTools.register('heal', {
+    command: command,
+    help: [
+      { word: '/heal', role: 'playtester', syntax: '/heal', text: 'Restore your health, magicka and stamina for testing.' },
+      { word: '/heal', role: 'admin', syntax: '/heal for <person>', text: 'Restore another character\'s vitals without undoing death or permanent decisions.' }
+    ]
+  });
+})();
 // ==== thornswood staff crafting ====
 /*
   STAFF CRAFTING TOOLS, ON THE OFFICE PAGE OF K (#3167). Patrick, 22 Oct
@@ -63991,6 +64226,56 @@ module.exports = {
 })();
 // ==== end thornswood staff crafting ====
 
+// ==== thornswood needs testing tools ====
+(function () {
+  'use strict';
+  var g = globalThis;
+  var METERS = { hunger: 'food', thirst: 'drink', rest: 'rest', temperature: 'temp' };
+  var USAGE = 'Usage: /setneeds <hunger|thirst|rest|temperature> <0..100> [for <person>].';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/setneeds') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var meter = String(parts[1] || '').toLowerCase(), number = String(parts[2] || '');
+    if (!Object.prototype.hasOwnProperty.call(METERS, meter) || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(number) ||
+        !Number.isFinite(Number(number)) || Number(number) < 0 || Number(number) > 100 ||
+        (parts.length !== 3 && (parts.length < 5 || String(parts[3]).toLowerCase() !== 'for'))) {
+      staff.tell(pid, USAGE); return true;
+    }
+    var target = actor, targetPid = pid;
+    if (parts.length > 3) {
+      var person = staff.takePerson(parts.slice(4));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var needs = g.__thornswoodNeeds;
+    if (!needs || !needs.setForTesting) { staff.tell(pid, 'Needs testing is unavailable. Try again later.'); return true; }
+    var me = staff.nameOf(actor), name = staff.nameOf(target);
+    var result = needs.setForTesting(target, METERS[meter], Number(number));
+    if (!result.ok) { staff.tell(pid, result.why); return true; }
+    staff.record('setneeds', pid, me, targetPid, name, '', 0,
+      { meter: meter, from: result.from, to: result.to });
+    var label = meter.charAt(0).toUpperCase() + meter.slice(1);
+    staff.tell(pid, label + ' set to ' + result.to + '/100 for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'Staff set your ' + meter + ' to ' + result.to + '/100 for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffNeeds = { command: command };
+  g.__thornswoodCommandTools.register('setneeds', {
+    command: command,
+    help: [{ word: '/setneeds', role: 'playtester', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100>',
+      text: 'Set one of your needs for testing. Food, drink and rest are full at 100; temperature is comfortable at 50.' },
+      { word: '/setneeds', role: 'admin', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100> for <person>',
+        text: 'Set one need on another character for testing.' }]
+  });
+})();
+// ==== end thornswood needs testing tools ====
 // SHARED RESOURCE STOCK BEGIN
 function createSharedResourceStock(api, now) {
   const property='thornswoodResourceStock';
@@ -64071,6 +64356,114 @@ function createSharedResourceStock(api, now) {
 try { globalThis.__thornswoodResourceStock=createSharedResourceStock(mp,()=>Date.now()); }
 catch(error) { log('Shared resource stock could not start: '+error); }
 
+// ==== thornswood gameplay inspection ====
+// #6732: inspect the recorded gameplay state without settling or writing it.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function read(actor, property) {
+    try { return mp.get(actor, property); } catch (e) { return undefined; }
+  }
+  function text(value, most) {
+    if (typeof value !== 'string') { return 'unavailable'; }
+    var out = value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ').trim();
+    return out ? (out.length > most ? out.slice(0, most - 3) + '...' : out) : 'unavailable';
+  }
+  function number(value, scale, suffix) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(value * scale)) { return 'unavailable'; }
+    return String(Number((value * scale).toFixed(1))) + suffix;
+  }
+  function field(value, key, scale, suffix) {
+    return number(object(value) ? value[key] : undefined, scale, suffix);
+  }
+  function named(value, table) {
+    if (value === null || value === '') { return 'not chosen'; }
+    return typeof value === 'string' && table && Object.prototype.hasOwnProperty.call(table, value)
+      ? table[value].name : 'unavailable';
+  }
+  function rankLabels(table) {
+    var out = {};
+    Object.keys(table.classes).forEach(function (key) { out[key] = table.classes[key].name; });
+    Object.keys(table.professions).forEach(function (key) {
+      var halves = table.professions[key].halves;
+      Object.keys(halves || {}).forEach(function (half) { out[half] = halves[half]; });
+    });
+    table.schools.forEach(function (key) { out[key] = key.charAt(0).toUpperCase() + key.slice(1); });
+    return out;
+  }
+  function report(staff, pid, actor) {
+    var appearance = read(actor, 'appearance');
+    staff.tell(pid, 'Character: ' + text(object(appearance) ? appearance.name : undefined, 90) +
+      ' (form ' + actor.toString(16) + ').');
+    var pos = read(actor, 'pos');
+    staff.tell(pid, 'Location: ' + text(read(actor, 'worldOrCellDesc'), 120) + '; position ' +
+      [0,1,2].map(function (i) { return number(Array.isArray(pos) ? pos[i] : undefined, 1, ''); }).join(', ') + '.');
+    var vitals = read(actor, 'percentages');
+    staff.tell(pid, 'Health: ' + field(vitals, 'health', 100, '%') + '; Magicka: ' +
+      field(vitals, 'magicka', 100, '%') + '; Stamina: ' + field(vitals, 'stamina', 100, '%') + '.');
+    // Needs.read supplies defaults and stateOf can migrate. Read the saved
+    // properties themselves so missing or invalid values remain unavailable.
+    var needs = read(actor, 'thornswoodNeeds');
+    staff.tell(pid, 'Needs (last recorded): Food: ' + field(needs, 'food', 1, '/100') +
+      '; Drink: ' + field(needs, 'drink', 1, '/100') + '; Rest: ' + field(needs, 'rest', 1, '/100') +
+      '; Temperature: ' + field(needs, 'temp', 1, '/100') + '.');
+    var saved = read(actor, 'thornswoodCharacter');
+    var state = object(saved) && saved.v === 1 ? saved : null;
+    var progression = g.__thornswoodProgression;
+    var table = progression && progression.TABLE;
+    var labels = table ? rankLabels(table) : {};
+    staff.tell(pid, 'Class: ' + (state ? named(state.cls, table && table.classes) : 'unavailable') +
+      '; Profession: ' + (state ? named(state.prof, table && table.professions) : 'unavailable') +
+      '; Half: ' + (state && typeof state.half === 'string' && Object.prototype.hasOwnProperty.call(labels, state.half)
+        ? labels[state.half] : state && state.half === null ? 'not chosen' : 'unavailable') + '.');
+    var ranks = state && object(state.ranks) ? state.ranks : null;
+    var entries = ranks && table ? Object.keys(labels).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(ranks, key);
+    }).map(function (key) {
+      return labels[key] + ': ' + (table.ranks.indexOf(ranks[key]) !== -1 ? ranks[key] : 'unavailable');
+    }) : null;
+    var line = 'Ranks: ';
+    (entries || []).forEach(function (entry) {
+      if (line.length + entry.length > 250) { staff.tell(pid, line); line = 'Ranks: '; }
+      line += (line === 'Ranks: ' ? '' : '; ') + entry;
+    });
+    staff.tell(pid, line + (entries ? (entries.length ? '.' : 'none recorded.') : 'unavailable.'));
+    var godMode = read(actor, 'isGodMode');
+    staff.tell(pid, 'God mode: ' + (typeof godMode === 'boolean' ? (godMode ? 'on' : 'off') : 'unavailable') + '.');
+  }
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/inspect') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor;
+    if (parts.length !== 1) {
+      if (String(parts[1]).toLowerCase() !== 'for' || parts.length < 3) {
+        staff.tell(pid, 'Usage: /inspect or /inspect for <person>.'); return true;
+      }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, 'Usage: /inspect for <person>.'); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId;
+    }
+    report(staff, pid, target);
+    return true;
+  }
+  g.__thornswoodInspect = { command: command };
+  g.__thornswoodCommandTools.register('inspect', {
+    command: command,
+    help: [{ word: '/inspect', role: 'playtester', syntax: '/inspect',
+      text: 'Read your own recorded gameplay state without changing it.' },
+      { word: '/inspect', role: 'admin', syntax: '/inspect for <person>',
+        text: 'Read another character\'s recorded gameplay state without changing it.' }]
+  });
+})();
+// ==== end thornswood gameplay inspection ====
 // NPC MERCHANT PURSES BEGIN
 function createPrivateMerchantLedger(fs,path,settings,references,durableWriter) {
   return createPrivateEconomyLedger(fs,path,settings,'merchant',references,durableWriter);
@@ -64511,6 +64904,55 @@ function createNpcMerchantPurses(api,data,storage) {
 }
 // NPC MERCHANT PURSES END
 
+// Self-only person teleport for Playtesters on Dev and Main (#6757).
+(function () {
+  'use strict';
+  var g=globalThis,USAGE='Usage: /tpto <person>.';
+  function place(actor) {
+    var desc=mp.get(actor,'worldOrCellDesc'),pos=mp.get(actor,'pos'),rot=mp.get(actor,'angle');
+    function vector(value){return Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);}
+    if(typeof desc!=='string'||!desc||!vector(pos)||!vector(rot)){throw new Error('Authoritative location is unavailable.');}
+    return {desc:desc,pos:pos.slice(),rot:rot.slice()};
+  }
+  function command(cmd,word,parts,pid,actor) {
+    if(word!=='/tpto'){return false;}
+    var staff=g.__thornswoodStaff,refused=staff.authorizeTool(cmd,pid,actor,'playtester');
+    if(refused){staff.tell(pid,refused);return true;}
+    if(parts.length<2){staff.tell(pid,USAGE);return true;}
+    var person=staff.takePerson(parts.slice(1));
+    if(!person.actorId||person.rest.length){staff.tell(pid,person.why||USAGE);return true;}
+    if(person.actorId===actor||person.pid===pid){staff.tell(pid,'That is you.');return true;}
+    try {
+      if(mp.get(actor,'isDead')!==false||mp.get(person.actorId,'isDead')!==false){
+        staff.tell(pid,'Both characters must be alive to teleport.');return true;
+      }
+      var from=place(actor),to=place(person.actorId);
+      if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
+      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
+      if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
+        throw new Error('Movement safeguards are unavailable.');
+      }
+      if(cuffs.cuffedBy(actor)){staff.tell(pid,'You are cuffed, so you cannot teleport yourself.');return true;}
+      if(property.lockedJailHere(actor,pid)){staff.tell(pid,'A guard has a cell locked here, so you cannot teleport out of this jail.');return true;}
+      mp.set(actor,'locationalData',{cellOrWorldDesc:to.desc,pos:to.pos,rot:to.rot});
+      var confirmed=place(actor);
+      if(confirmed.desc!==to.desc||confirmed.pos.some(function(n,i){return n!==to.pos[i];})){
+        throw new Error('The native teleport was not applied.');
+      }
+      stuck.teleported(pid,actor);
+      staff.record('tpto',pid,staff.nameOf(actor),person.pid,person.name,'Self-only playtest teleport.',0,{from:from,to:to});
+      staff.tell(pid,'Sent to '+person.name+'.');
+    } catch(e) {
+      log('tpto: could not confirm teleport for '+actor.toString(16)+': '+e);
+      staff.tell(pid,'The teleport could not be confirmed. Staff can check the server log.');
+    }
+    return true;
+  }
+  g.__thornswoodPersonTeleport={command:command};
+  g.__thornswoodCommandTools.register('person-teleport',{command:command,
+    help:[{word:'/tpto',role:'playtester',syntax:'/tpto <person>',text:'Teleport yourself to an online person; restraints still apply.'}]});
+})();
 // NPC POPULATION POLICY BEGIN
 /*
   THALMOR PATROLS (#1390). docs/systems/thalmor.md: "A patrol is 2 to 4. They

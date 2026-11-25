@@ -4,7 +4,7 @@
       pwsh -NoProfile -File .\tests\test-5292-path-rule.ps1
 
   Issue #5292: a pull request that changes only docs, the site or the bot
-  starts no Windows job. The checks of the tree that need no Windows run in
+  starts no Windows launcher job. The independent bot suite (#5958) still runs. The checks of the tree that need no Windows run in
   build.yml's job "Tree checks" on Linux for every change; the pick says
   whether the job "Launcher builds" has anything to check
   (scripts\dev\Launcher-Reach.ps1), and when it has not, that job still runs,
@@ -103,7 +103,7 @@ $code = ($checks -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
 Yes '  and none of its steps needs Windows: no Windows PowerShell, no MSBuild, no backslash path handed to node' ($code -notmatch 'shell: powershell|Find-MSBuild|\bmsbuild\b|node\s+\S*\\|Scripts\\python\.exe')
 Yes 'the pick runs Launcher-Reach.ps1 with the base, and hands on launcher=' ($pick -match '(?m)^      launcher: \$\{\{ steps\.reach\.outputs\.launcher \}\}$' -and $pick -match '(?m)^          ./scripts/dev/Launcher-Reach\.ps1 -Base \$env:BASE$' -and $pick -match '(?m)^          BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$')
 $prResult = Get-Job $pr 'result'
-Yes 'Build check result needs the pick, the tree checks, the launcher build and the gate on both platforms' ($prResult -match '(?m)^    needs: \[pick, checks, launcher, gate, gate-linux\]$')
+Yes 'Build check result needs the pick, the tree checks, the launcher build and the gate on both platforms' ($prResult -match '(?m)^    needs: \[pick, checks, launcher, gate, gate-linux, bot\]$')
 
 # ---- 2. Build check result's script, run --------------------------------------
 $script = ''
@@ -141,13 +141,23 @@ else {
             @('a Linux share failed', 'success', 'success', 'success', 'success', 'true', '[1]', 'failure', '[1]', 1),
             @('a Linux share was cancelled', 'success', 'success', 'success', 'success', 'true', '[1]', 'cancelled', '[1]', 1))
         foreach ($c in $cases) {
+            $env:BOT = 'success'
             $env:PICK = $c[1]; $env:CHECKS = $c[2]; $env:BUILD = $c[3]; $env:GATE = $c[4]; $env:REACHES_LAUNCHER = $c[5]; $env:SHARES = $c[6]; $env:GATE_LINUX = $c[7]; $env:LINUX_SHARES = $c[8]
             $null = & $bash $file 2>&1
             $rc = $LASTEXITCODE
             Yes ("Build check result: {0}: {1}" -f $c[0], $(if ($c[9] -eq 0) { 'passes' } else { 'fails' })) ($rc -eq $c[9])
         }
+        # Run the real generated aggregate, with every old job green. An old
+        # successful result without the new bot job must not be enough.
+        $env:PICK = $env:CHECKS = $env:BUILD = $env:GATE = $env:GATE_LINUX = 'success'
+        $env:SHARES = $env:LINUX_SHARES = '[1]'
+        foreach ($state in 'failure', 'cancelled', 'skipped', '') {
+            $env:BOT = $state
+            $null = & $bash $file 2>&1
+            Yes ("Build check result rejects bot result '{0}'" -f $state) ($LASTEXITCODE -ne 0)
+        }
     } finally {
-        foreach ($n in 'PICK', 'CHECKS', 'BUILD', 'GATE', 'REACHES_LAUNCHER', 'SHARES', 'GATE_LINUX', 'LINUX_SHARES') { Remove-Item -LiteralPath "Env:$n" -ErrorAction SilentlyContinue }
+        foreach ($n in 'PICK', 'CHECKS', 'BUILD', 'GATE', 'REACHES_LAUNCHER', 'SHARES', 'GATE_LINUX', 'LINUX_SHARES', 'BOT') { Remove-Item -LiteralPath "Env:$n" -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $scratch0 -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

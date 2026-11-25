@@ -515,7 +515,12 @@ function wireLinked() {
       if (pid) bodyOf.profileId = Number(pid);
       if (act === 'note') bodyOf.text = (pick('notetext', id) || {}).value || '';
       if (act === 'ban') {
-        bodyOf.minutes = Number((pick('banlen', key) || {}).value || 0);
+        var length = pick('banlen', key), rawLength = length && length.value;
+        if (typeof rawLength !== 'string' || !/^(0|[1-9][0-9]*)$/.test(rawLength) || !isFinite(Number(rawLength))) {
+          alert('Choose a whole number of minutes, or 0 for good.');
+          return;
+        }
+        bodyOf.minutes = Number(rawLength);
         bodyOf.why = (pick('banwhy', key) || {}).value || '';
         if (!bodyOf.why.trim()) { alert('Say why they are banned.'); return; }
       }
