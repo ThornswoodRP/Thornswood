@@ -49,10 +49,16 @@ class LinenWrap(unittest.TestCase):
         self.assertEqual(unnamed, [])
         self.assertIn(b'linen', description.lower())
 
-    def test_proven_maker_removes_only_its_waiting_exception(self):
+    def test_waiting_exceptions_follow_the_authored_makers(self):
         waiting = json.loads((ROOT/'scripts/dev/Check-Makers.waiting.json').read_text())['items']
         self.assertFalse([r for r in waiting if r['desc'] == '34cd6:Skyrim.esm'])
-        self.assertTrue([r for r in waiting if r['desc'] == 'f2012:Skyrim.esm'])
+        bottle_made = any(
+            r.tag == b'COBJ' and (b'CNAM', struct.pack('<I', 0xf2012)) in CONTENT.subrecords(r.data)
+            for r in self.records
+        )
+        bottle_waiting = any(r['desc'] == 'f2012:Skyrim.esm' for r in waiting)
+        self.assertEqual(bottle_waiting, not bottle_made,
+                         'the bottle needs a waiting exception exactly while it has no recipe')
 
 
 if __name__ == '__main__':
