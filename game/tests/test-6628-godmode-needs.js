@@ -58,4 +58,10 @@ test('failed clear effects writes report failure and preserve the stored source'
   const r=setup();r.store.get(10).ale=5;r.fail(true);
   assert.throws(()=>r.api.clearIntoxication(10));assert.equal(r.store.get(10).ale,5);
 });
+test('a refused pause-clock save is observable and preserves the saved meters',()=>{
+  const r=setup(),before=JSON.stringify(r.store.get(10));
+  r.god(true);r.advance(60000);r.fail(true);
+  assert.throws(()=>r.api.settle(10),/paused needs clock.*saved/i);
+  assert.equal(JSON.stringify(r.store.get(10)),before);
+});
 console.log(checks+' needs checks passed');

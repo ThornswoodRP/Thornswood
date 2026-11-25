@@ -52369,7 +52369,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (ignoresNeeds(actorId)) {
       if (!n) { n = fresh(); }
       n.at = now;
-      write(actorId,n);
+      if (!write(actorId,n)) { throw new Error('The paused needs clock could not be saved.'); }
       return n;
     }
     var arriving = !here[actorId] && onlineNow(actorId);
