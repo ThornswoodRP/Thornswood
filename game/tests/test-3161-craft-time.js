@@ -54,6 +54,7 @@ function slice(start, end) {
 }
 
 const WORK_SRC = slice('/*\n  HOW LONG A CRAFT TAKES AT THE BENCH (#3161).', "mp.onCraft = guard('onCraft',");
+const METADATA_SRC = slice('function recipeMetadataRefusal(desc) {', '\n}\n') + '\n}\n';
 const ACTS = /const ACTS_AS = \{([^}]*)\}/.exec(gm);
 yes('the sizing block and mp.onCraftWork are in the gamemode, before mp.onCraft', !!WORK_SRC);
 if (!WORK_SRC) { done(); } else {
@@ -89,7 +90,7 @@ const box = {
 };
 box.globalThis = box;
 vm.createContext(box);
-vm.runInContext(WORK_SRC + '\nthis.CRAFT_SIZE_BY_FAMILY = CRAFT_SIZE_BY_FAMILY;', box);
+vm.runInContext(METADATA_SRC + WORK_SRC + '\nthis.CRAFT_SIZE_BY_FAMILY = CRAFT_SIZE_BY_FAMILY;', box);
 
 const ACTOR = 0xff000001;
 function work(recipeId, bench, out, inputs) {

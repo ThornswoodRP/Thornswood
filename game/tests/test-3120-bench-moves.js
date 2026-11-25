@@ -190,11 +190,11 @@ const movedAt = onCraft.indexOf('desc = recipeMovedInGame(');
 const recipelessAt = onCraft.indexOf('return recipelessCraft(');
 yes('O1 onCraft names a craft with no recipe id as a moved recipe after the recipes set in game, before treating it as recipeless',
     setAt > 0 && movedAt > setAt && recipelessAt > movedAt);
-const refuseAt = onCraft.indexOf('Object.prototype.hasOwnProperty.call(RECIPES_MOVED_IN_GAME, desc)');
+const refuseAt = onCraft.indexOf('const no = recipeMetadataRefusal(desc);');
 const descAt = onCraft.indexOf('desc = mp.getDescFromId(recipeId);');
 const refusal = refuseAt < 0 ? '' : onCraft.slice(refuseAt, onCraft.indexOf('return false;', refuseAt) + 13);
 yes('O2 and refuses a moved recipe crafted by its record at the bench its mod put it at, with a line saying so',
-    descAt > 0 && refuseAt > descAt && /is not made at this bench here/.test(refusal) && /notify\(actorId, no\)/.test(refusal) &&
+    descAt > 0 && refuseAt > descAt && /Object\.prototype\.hasOwnProperty\.call\(RECIPES_MOVED_IN_GAME, desc\)[\s\S]*is not made at this bench here/.test(take('function recipeMetadataRefusal(desc) {')) && /notify\(actorId, no\)/.test(refusal) &&
     /return false;$/.test(refusal));
 
 done();
