@@ -249,6 +249,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -471,6 +473,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {

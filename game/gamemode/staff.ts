@@ -280,6 +280,8 @@
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   // ------------------------------------------------------------ silence --
