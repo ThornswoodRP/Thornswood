@@ -30,6 +30,14 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 
 Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
 
+## Repair equipment for testing
+
+Playtesters, staff and admins can use `/repairgear` on themselves on both Dev and Main. Admins can use `/repairgear for <person>` on somebody else. A playtester may also name their own character unambiguously.
+
+The command restores every carried weapon, armour piece and garment below 100% to sound condition. Pieces above 100% keep their condition. Jewellery and tools keep their ordinary rules. Custom names, tempering, enchantments, charges, poisons, counts and ownership remain with each piece; no repair kits are spent. The worn record and pack change together, and the action is recorded.
+
+The command requires the server's equipment repair support. If the equipment changed while the repair was being prepared, it refuses rather than guessing which piece was meant. If the server cannot confirm a repair, staff should check that problem before repeating the command.
+
 ## For yourself
 
 | Command | What it does |

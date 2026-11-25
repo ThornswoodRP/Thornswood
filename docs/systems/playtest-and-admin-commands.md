@@ -20,7 +20,7 @@ These tools are for testing and administration. Ordinary play keeps its existing
 | inspect | Read your current character, or another character for an admin | command-access | #6732 |
 | restore-vitals | Restore health, magicka and stamina without reversing permanent decisions | command-access | #6733 |
 | set-needs | Set controlled hunger, thirst, rest and temperature values | command-access, canonical needs state | #6734 |
-| repair-equipment | Repair the intended equipment without losing item identity | command-access, canonical equipment state | #6735 |
+| repair-equipment | `/repairgear` restores your carried equipment below 100%; admins add `for <person>`. Preserve stronger pieces and every item extra, with pack and worn names committed together | command-access, canonical equipment state and native atomic operation | #6735 |
 | rank-up | Advance an existing class or profession track through its progression rules | command-access, canonical progression | #6736 |
 | change-class | Change a class and keep saved state and unlocks consistent | command-access, canonical progression | #6737 |
 | change-profession | Change a profession and keep crafting access consistent | command-access, canonical progression | #6738 |
