@@ -667,8 +667,11 @@
     // Held rather than dropped, and capped so a long outage does not grow
     // without limit.
     queue.push(item);
-    while (queue.length > 20) queue.shift();
-    if (notice) note('Not connected yet, that is queued.', C_WARN);
+    if (queue.length > 20) {
+      queue.shift();
+      // Even a quiet internal send can displace something somebody typed.
+      note('Chat queue is full. The oldest waiting line was removed. This one is queued.', C_WARN);
+    } else if (notice) note('Not connected yet, that is queued.', C_WARN);
     return false;
   }
 
