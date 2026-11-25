@@ -175,8 +175,21 @@ def _moderation_lines(path):
         return [], '', False
     except Exception as e:
         return None, '%s: %s' % (type(e).__name__, e), False
-    parts = data.decode('utf-8-sig', errors='replace').split('\n')
-    return [p.rstrip('\r') for p in parts[:-1] if p.strip()], '', not parts[-1]
+    try:
+        parts = data.decode('utf-8-sig').split('\n')
+    except UnicodeDecodeError as e:
+        return None, 'UnicodeDecodeError: %s' % e, False
+    lines = [p.rstrip('\r') for p in parts[:-1] if p.strip()]
+    complete, why = not parts[-1], ''
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            record = None
+        if not isinstance(record, dict):
+            complete, why = False, 'InvalidLineError: a complete line is not a JSON object'
+            break
+    return lines, why, complete
 
 
 def _moderation_unreadable(unread, where, path, why):
@@ -188,9 +201,10 @@ def _moderation_unreadable(unread, where, path, why):
     """
     if why and unread.get(where) != why:
         unread[where] = why
-        log('moderation: cannot read %s (%s), so staff actions on %s are not '
-            'said in the staff channel until it can be. Install-Bot.ps1 gives '
-            'the bot\'s account read on that folder.'
+        log('moderation: cannot read %s completely (%s), so source expiry on %s '
+            'cannot be proved. Repair corrupt input or read access before '
+            'private-copy cleanup can resume. Install-Bot.ps1 gives the bot\'s '
+            'account read on that folder.'
             % (path, why, 'the site' if where == 'site' else 'the %s server' % where))
     elif not why and where in unread:
         del unread[where]
@@ -226,7 +240,7 @@ async def watch_moderation():
                         _state_write(MODERATION_POSTS, state)
                 posts = state.get(source, {}) if state is not None else {}
                 texts = []
-                for line in lines:
+                for line in dict.fromkeys(lines):
                     if copy_key(line) in posts:
                         continue
                     try:

@@ -238,6 +238,16 @@ class Copies(unittest.TestCase):
                 self.assertFalse(r.records())
                 self.assertEqual(len(r.a.attempts), 1)
 
+    def test_duplicate_source_identity_is_delivered_only_once(self):
+        for r in self.each():
+            with self.subTest(r.mode):
+                row = r.row('duplicate')
+                r.put([row, row])
+                r.run()
+                self.assertEqual(len(r.a.messages), 1)
+                self.assertEqual(len(r.a.attempts), 1)
+                self.assertEqual(len(r.records()), 1)
+
     def test_pending_save_refusal_prevents_any_outbound(self):
         for r in self.each():
             with self.subTest(r.mode):
@@ -293,6 +303,28 @@ class Copies(unittest.TestCase):
         self.assertEqual(len(r.index()), 2)
         r.run()
         self.assertEqual(len(r.a.attempts), 2)
+
+    def test_fully_terminated_corrupt_action_log_cannot_prove_expiry(self):
+        for damaged in [b'not JSON\n', b'[]\n', b'\xff\n']:
+            with self.subTest(damaged):
+                r = Rig('moderation')
+                row = r.row('corrupt-source')
+                r.put([row])
+                r.run()
+                before = r.index()
+                r.source.write_bytes(damaged)
+                r.run()
+                self.assertEqual(r.index(), before)
+                self.assertEqual(len(r.a.messages), 1)
+                self.assertFalse(r.a.deleted)
+                self.assertTrue(any('cannot read' in line or 'corrupt' in line for line in r.logs))
+                r.put([row])
+                r.run()
+                self.assertEqual(len(r.a.attempts), 1)
+                r.put([])
+                r.run()
+                self.assertFalse(r.a.messages)
+                self.assertFalse(r.records())
 
     def test_corrupt_receipt_index_never_publishes_details(self):
         for r in self.each():

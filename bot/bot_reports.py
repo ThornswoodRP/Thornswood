@@ -324,7 +324,9 @@ async def watch_reports():
                     _state_write(REPORT_POSTS, state)
             posts = state.get(source, {})
             if not any('attempt' in post for post in posts.values()):
-                fresh = [r for r in rows if public(r) and copy_key(str(r['id'])) not in posts]
+                fresh_by_key = {copy_key(str(r['id'])): r for r in rows
+                                if public(r) and copy_key(str(r['id'])) not in posts}
+                fresh = list(fresh_by_key.values())
                 if len(fresh) > REPORTS_AT_ONCE:
                     await send_copy(REPORT_POSTS, state, source,
                                     [copy_key(str(r['id'])) for r in fresh],
