@@ -28,6 +28,7 @@ function rig(){
   vm.createContext(box);pluginPass.load(box,plugin,{filename:'thornswood-emotes.js'});
   function emit(name,event){(events[name]||[]).forEach(fn=>fn(event));}
   p.win.skyrimPlatform.sendMessage=(to,what)=>{p.told.push(to+' '+what);pending.push({arguments:[to,what]});};
+  p.run('bridge',fs.readFileSync(path.join(root,'game/ui/thornswood-bridge.js'),'utf8'));
   p.run('wheel',source);
   p.flush=()=>{pending.splice(0).forEach(message=>emit('browserMessage',message));emit('update');};
   p.open=()=>{if(!p.claimed)emit('buttonEvent',{device:0,code:34,isDown:true});emit('update');};
@@ -38,6 +39,7 @@ function rig(){
   p.controls=()=>p.doc.getElementById('thornswood-wheel').querySelectorAll('input,button,[tabindex="0"]');
   p.press=(key,more={})=>{
     const target=p.doc.activeElement,down=p.fire(target,'keydown',key,more);
+    if(!down.defaultPrevented&&(key.length===1||key==='Enter'))down.press=p.fire(target,'keypress',key,more);
     if(!down.defaultPrevented&&key==='Tab'){
       const controls=p.controls(),index=controls.indexOf(target),next=index+(more.shiftKey?-1:1);
       (controls[next]||p.doc.body).focus();
@@ -90,7 +92,7 @@ function rig(){
   p.open();p.filter('wave');const before=p.told.length;
   p.press('Enter',{repeat:true});yes('held Enter cannot select a search result',p.told.length===before&&p.claimed);
   for(const key of ['g','n','1']){
-    const event=p.press(key);yes('search keeps normal typing for '+key,!event.defaultPrevented&&p.claimed);
+    const event=p.press(key);yes('search keeps normal typing through the front bridge for '+key,!event.defaultPrevented&&event.press&&!event.press.defaultPrevented&&!event.press.stopped&&p.claimed);
   }
   p.press('Escape');yes('Escape in search uses actual close bridge',!p.claimed);
 }
