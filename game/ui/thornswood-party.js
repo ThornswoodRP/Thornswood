@@ -400,6 +400,11 @@
   }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     if (!root) { return; }
     var body = root.querySelector('#' + ID + '-body');
     var sub = root.querySelector('#' + ID + '-sub');

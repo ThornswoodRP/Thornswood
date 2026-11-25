@@ -52,14 +52,16 @@ furniture, maneuvers, help, merchant and ship panels call
 `window.thornswoodDialog.open(dialog, title)` from the bridge after drawing a
 closed panel into view. It names the dialog from its mounted title and focuses
 the first visible, enabled control. If there are no controls, it focuses the
-named dialog itself. It adds no modal declaration or focus trap; the merchant
-and ship keep their existing modal attributes.
+named dialog itself. The merchant and ship keep their existing modal
+attributes.
 
-Call it only when a panel changes from closed to open. An owner view or a
-redraw must not move typing focus. The character section rows and maneuvers use
-native buttons so Enter and Space activate the same actions as clicking;
-repeated keydown does not trigger another action. The away prompt keeps its
-separate alert-dialog and focus-restoration contract.
+Call it only when a panel changes from closed to open. Panels that replace a
+focused control during a redraw use `thornswoodDialog.redraw(root, draw)` to
+keep focus and the text selection on the matching control. If that control
+disappears, focus goes to the dialog. The character section rows and
+maneuvers use native buttons so Enter and Space activate the same actions as
+clicking. Repeated keydown does not trigger another action. The away prompt
+keeps its separate alert-dialog and focus-restoration behavior.
 
 `game/tests/test-4601-panel-dialog-focus.js` renders the actual pages with the
 bridge and checks their names, initial focus, reopening, owner updates and

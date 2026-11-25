@@ -205,6 +205,11 @@
   function plain(row) { return !row.letter && !row.haul; }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');

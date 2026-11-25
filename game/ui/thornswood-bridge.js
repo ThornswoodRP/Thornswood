@@ -77,6 +77,31 @@
       && (s.length === 6 || /\s/.test(s.charAt(6)));
   }
 
+  var DIALOG_CONTROL = 'button,input,select,textarea,a[href],[tabindex]';
+  function available(control, dialog) {
+    if (control.disabled || (control.matches && control.matches(':disabled')) ||
+        control.getAttribute('type') === 'hidden' || Number(control.getAttribute('tabindex')) < 0) return false;
+    for (var node = control; node && node !== dialog.parentNode; node = node.parentNode) {
+      var style = window.getComputedStyle ? window.getComputedStyle(node) : node.style;
+      if (node.hidden || node.hasAttribute('inert') || node.getAttribute('aria-hidden') === 'true' ||
+          (style && (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'))) return false;
+    }
+    return true;
+  }
+  function focusDialog(dialog) {
+    dialog.setAttribute('tabindex', '-1');
+    dialog.focus({preventScroll:true});
+  }
+  function controlKey(control) {
+    if (control.id) return 'id:' + control.id;
+    var named = control.getAttribute('data-focus-key');
+    if (named) return 'key:' + named;
+    var attrs = control.getAttributeNames().filter(function (attr) {
+      return /^data-/.test(attr) || attr === 'href' || attr === 'name' || attr === 'type';
+    }).sort().map(function (attr) { return [attr, control.getAttribute(attr)]; });
+    return JSON.stringify([control.tagName, attrs, control.textContent.trim()]);
+  }
+
   // Called once by each panel's closed-to-open boundary, after its real draw.
   // This declares a dialog, not a new modal or focus-trapping policy.
   window.thornswoodDialog = {
@@ -85,24 +110,41 @@
       if (!title.id) title.id = (dialog.id || dialog.parentNode.id) + '-dialog-title';
       dialog.setAttribute('role', 'dialog');
       dialog.setAttribute('aria-labelledby', title.id);
-      var controls = dialog.querySelectorAll('button,input,select,textarea,a[href],[tabindex]');
+      var controls = dialog.querySelectorAll(DIALOG_CONTROL);
       for (var i = 0; i < controls.length; i++) {
         var control = controls[i];
-        if (control.disabled || (control.matches && control.matches(':disabled')) ||
-            control.getAttribute('type') === 'hidden' || Number(control.getAttribute('tabindex')) < 0) continue;
-        var visible = true;
-        for (var node = control; node && node !== dialog.parentNode; node = node.parentNode) {
-          var style = window.getComputedStyle ? window.getComputedStyle(node) : node.style;
-          if (node.hidden || node.hasAttribute('inert') || node.getAttribute('aria-hidden') === 'true' ||
-              (style && (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'))) {
-            visible = false; break;
-          }
+        if (available(control, dialog) && typeof control.focus === 'function') {
+          control.focus();
+          if (document.activeElement === control) return;
         }
-        if (visible && typeof control.focus === 'function') { control.focus(); return; }
       }
       // An empty panel still announces its title; no invented action is added.
-      dialog.setAttribute('tabindex', '-1');
-      dialog.focus();
+      focusDialog(dialog);
+    },
+    redraw: function (root, draw) {
+      var active = document.activeElement;
+      var dialog = active && active.closest('[role="dialog"]');
+      if (!root || !dialog || !root.contains(dialog) || active === dialog) { draw(); return; }
+      var key = controlKey(active);
+      var start = active.selectionStart, end = active.selectionEnd, direction = active.selectionDirection;
+      draw();
+      // A replacement is safe only when this redraw removed focus itself.
+      var now = document.activeElement;
+      if (dialog.contains(active) || (now && now !== active && now !== document.body)) return;
+      var matches = Array.prototype.filter.call(dialog.querySelectorAll(DIALOG_CONTROL), function (node) {
+        return available(node, dialog) && controlKey(node) === key;
+      });
+      if (matches.length === 1) {
+        var next = matches[0];
+        next.focus({preventScroll:true});
+        if (document.activeElement === next) {
+          if (typeof start === 'number' && typeof next.setSelectionRange === 'function') {
+            next.setSelectionRange(start, end, direction);
+          }
+          return;
+        }
+      }
+      focusDialog(dialog);
     }
   };
 

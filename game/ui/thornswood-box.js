@@ -148,6 +148,11 @@
   }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     if (!root) { return; }
     var keptGold = field(ID + '-gold');
     var keptFor = field(ID + '-for');

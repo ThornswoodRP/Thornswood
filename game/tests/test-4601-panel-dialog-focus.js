@@ -32,6 +32,12 @@ for(const [name,word,data]of cases){
   yes(name+' label points to one mounted title',!!labelId&&p.doc.querySelectorAll('[id="'+labelId+'"]').length===1);
   yes(name+' keeps its existing modal policy',!!dialog&&dialog.hasAttribute('aria-modal')===(name==='merchant'||name==='ship'));
   yes(name+' moves initial focus to a mounted control inside its dialog',!!dialog&&!!p.doc.activeElement&&p.doc.activeElement!==sentinel&&dialog.contains(p.doc.activeElement)&&/^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/.test(p.doc.activeElement.tagName));
+  const inside=p.doc.activeElement;
+  feed();api.open();
+  const replacement=p.doc.activeElement;
+  yes(name+' redraw preserves focus inside the dialog on the same control',
+   !!dialog&&dialog.contains(replacement)&&inside.tagName===replacement.tagName&&inside.id===replacement.id&&
+    inside.textContent===replacement.textContent);
   sentinel.focus();feed();api.open();yes(name+' repeated open and owner view do not steal typing focus',p.doc.activeElement===sentinel);
   api.close();api.open();yes(name+' a later closed to open moves focus again',!!dialog&&dialog.contains(p.doc.activeElement)&&p.doc.activeElement!==sentinel);
  }catch(error){yes(name+' real page setup succeeds: '+error.stack,false);}
@@ -72,5 +78,21 @@ for(const name of ['skills','maneuvers']){
  yes('the shared helper adds no modal declaration or focus trap',!dialog.hasAttribute('aria-modal'));
  dialog.removeChild(first);p.win.thornswoodDialog.open(dialog,title);
  yes('an empty enabled-control list focuses the named dialog itself',p.doc.activeElement===dialog&&dialog.getAttribute('tabindex')==='-1');
+}
+// A regenerated action must follow its identity, not its previous row number.
+{
+ const p=makePage();
+ for(const file of ['bridge','maneuvers'])p.run(file,fs.readFileSync(path.join(ui,'thornswood-'+file+'.js'),'utf8'));
+ const api=p.win.thornswoodManeuvers;
+ const cover={key:'cover',name:'Cover',stamina:10,ready:true};
+ const other={key:'other',name:'Other',stamina:5,ready:true};
+ api.setRows([cover,other],'M');api.open();
+ api.setRows([other,{...cover,ready:false}],'M');
+ const focus=p.doc.activeElement;
+ yes('maneuver refresh keeps the same focused maneuver after rows reorder',
+  focus.getAttribute('data-focus-key')==='cover'&&focus.getAttribute('data-n')==='1');
+ api.setRows([other],'M');
+ yes('a disappeared maneuver returns focus to the named dialog without selecting another',
+  p.doc.activeElement===p.doc.getElementById('ts-maneuvers')&&!p.sent.length);
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

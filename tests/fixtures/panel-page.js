@@ -25,6 +25,7 @@ function makePage() {
       },
       insertBefore(c) { return this.appendChild(c); },
       getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
+      getAttributeNames() { return Object.keys(this.attrs); },
       setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'id') { this.id = v; } if (k === 'class') { this.className = v; } },
       removeAttribute(k) { delete this.attrs[k]; },
       hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
@@ -88,7 +89,7 @@ function makePage() {
       set(h) {
         this._html = String(h);
         this._text = '';
-        this.children.forEach(function (c) { c.parentNode = null; });
+        this.childNodes.forEach(function (c) { c.parentNode = null; });
         this.children = [];
         const self = this;
         this.kids = parse(this._html);

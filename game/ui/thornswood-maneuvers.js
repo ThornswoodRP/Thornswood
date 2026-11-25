@@ -95,11 +95,16 @@
   }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     build();
     var html = '<div class="title" id="' + ID + '-title">Maneuvers</div>';
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      html += '<button type="button" class="row" data-n="' + i + '">' +
+      html += '<button type="button" class="row" data-focus-key="' + esc(r.key) + '" data-n="' + i + '">' +
         '<span class="key">' + (i + 1) + '</span>' +
         '<span class="name">' + esc(r.name) + '</span>' +
         '<span class="cost">' + esc(r.stamina) + ' stamina</span>' +
@@ -126,6 +131,7 @@
   }
 
   function open() {
+    if (shown) return;
     if (!rows.length) { close(); return; }
     draw();
     root.className = 'on';
