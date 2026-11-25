@@ -47,7 +47,9 @@ namespace Thornswood
     // The install window (InstallWindow.cs, #4824) draws in Forge from here,
     // as the setup program it replaced did (#2851), so the first window a new
     // tester sees has the same colours as the launcher and cannot fall behind
-    // them. It uses nothing else from launcher\app.
+    // them, unless Windows has a contrast theme on: then it draws in
+    // Contrast below, the person's own colours (#4409). It uses nothing else
+    // from launcher\app.
     static class Themes
     {
         // The sixteen colour names, in the order the editor lays them out.
@@ -210,6 +212,121 @@ namespace Thornswood
                 && HasCustom(customColors))
                 return Custom(customColors, customLight);
             return Find(name);
+        }
+
+        // ---------------------------------------------- a Windows contrast theme
+        //
+        // Issue #4409. With a contrast theme on, Windows asks every window to
+        // draw in that theme's few colours and nothing else, and people who
+        // turn one on often cannot read anything that ignores it. The install
+        // window takes this theme in place of Forge then (InstallWindow.cs).
+        // Its colours are the person's own, read off Windows by SystemLook.cs
+        // and handed in as plain #RRGGBB, so there is no colour of the
+        // launcher's in it and this file still names nothing else from
+        // launcher\app.
+        //
+        // The sixteen names map the way Windows' own controls draw: text in
+        // WindowText on Window, borders in WindowText, the one strong thing
+        // in Highlight with HighlightText on it, and Ok, Warn and Bad in plain
+        // text, since a contrast theme has no state colours and the words
+        // already say which.
+        //
+        // The rest are the keys Avalonia's Fluent theme draws a control's
+        // other states in: a button under the pointer, pressed or off, a tick
+        // box ticked, the log's text box and the scroll bars. Left alone they
+        // would come out of Fluent's own dark palette in the middle of the
+        // person's theme. launcher\tests\test-4409-setup-look.ps1 draws the
+        // window in a planted contrast theme and names any brush on screen
+        // that is not one of its colours.
+
+        /// <summary>The colours SystemLook reads off Windows, by these names.</summary>
+        public static readonly string[] SystemNames = new string[] {
+            "Window", "WindowText", "Highlight", "HighlightText", "ButtonFace", "ButtonText", "GrayText", "HotLight"
+        };
+
+        public const string ContrastName = "Contrast";
+
+        /// <summary>The theme a Windows contrast theme asks for, out of its colours by SystemNames.</summary>
+        public static Theme Contrast(IReadOnlyDictionary<string, string> sys)
+        {
+            foreach (string n in SystemNames)
+                if (sys == null || !sys.ContainsKey(n) || string.IsNullOrEmpty(sys[n]))
+                    throw new ArgumentException("The contrast theme was handed no " + n + " colour.");
+
+            string win = sys["Window"], text = sys["WindowText"], hi = sys["Highlight"], hiText = sys["HighlightText"];
+            string face = sys["ButtonFace"], faceText = sys["ButtonText"], gray = sys["GrayText"];
+
+            var t = new Theme();
+            t.Name = ContrastName;
+            t.Note = "Windows' contrast theme.";
+            t.Light = Luminance(Color.Parse(win)) > 0.5;
+            string[] sixteen = new string[] {
+                "Bg", win, "Panel", win, "Card", win, "CardHover", win, "Deep", win,
+                "Line", text, "Edge", text, "Ink", text, "Muted", text, "Faint", text,
+                "Accent", hi, "AccentSoft", hi, "AccentInk", hiText,
+                "Ok", text, "Warn", text, "Bad", text
+            };
+            for (int i = 0; i < sixteen.Length; i += 2) t.Colors[sixteen[i]] = sixteen[i + 1];
+            t.Swatch = hi;
+
+            // Buttons: the person's button colours at rest, Highlight under
+            // the pointer and pressed, GrayText when off.
+            foreach (string s in new string[] { "", "PointerOver", "Pressed", "Disabled" })
+            {
+                bool lit = s == "PointerOver" || s == "Pressed";
+                bool off = s == "Disabled";
+                t.Colors["ButtonBackground" + s] = lit ? hi : face;
+                t.Colors["ButtonForeground" + s] = lit ? hiText : off ? gray : faceText;
+                t.Colors["ButtonBorderBrush" + s] = lit ? hi : off ? gray : faceText;
+                t.Colors["HyperlinkButtonBackground" + s] = win;
+                t.Colors["HyperlinkButtonForeground" + s] = off ? gray : hi;
+                t.Colors["HyperlinkButtonBorderBrush" + s] = win;
+
+                // Tick boxes, each of their three states in each of these.
+                foreach (string tick in new string[] { "Unchecked", "Checked", "Indeterminate" })
+                {
+                    bool on = tick != "Unchecked";
+                    string k = tick + s;
+                    t.Colors["CheckBoxForeground" + k] = off ? gray : text;
+                    t.Colors["CheckBoxBackground" + k] = win;
+                    t.Colors["CheckBoxBorderBrush" + k] = win;
+                    t.Colors["CheckBoxCheckBackgroundStroke" + k] = off ? gray : on ? hi : text;
+                    t.Colors["CheckBoxCheckBackgroundFill" + k] = off ? (on ? gray : win) : on ? hi : win;
+                    t.Colors["CheckBoxCheckGlyphForeground" + k] = off ? win : on ? hiText : win;
+                }
+
+                // The scroll bars.
+                t.Colors["ScrollBarBackground" + s] = win;
+                t.Colors["ScrollBarForeground" + s] = text;
+                t.Colors["ScrollBarBorderBrush" + s] = text;
+                t.Colors["ScrollBarTrackFill" + s] = win;
+                t.Colors["ScrollBarTrackStroke" + s] = text;
+                t.Colors["ScrollBarThumbFill" + s] = off ? gray : lit ? hi : text;
+                t.Colors["ScrollBarThumbBackground" + s] = off ? gray : lit ? hi : text;
+                t.Colors["ScrollBarPanningThumbBackground" + s] = off ? gray : text;
+                t.Colors["ScrollBarButtonBackground" + s] = lit ? hi : win;
+                t.Colors["ScrollBarButtonBorderBrush" + s] = text;
+                t.Colors["ScrollBarButtonArrowForeground" + s] = off ? gray : lit ? hiText : text;
+            }
+            // The corner between the two scroll bars, which Fluent draws in its
+            // own grey at 0.9.
+            t.Colors["ScrollViewerScrollBarsSeparatorBackground"] = win;
+
+            // The log: a read only text box, so only rest, the pointer and focus.
+            foreach (string s in new string[] { "", "PointerOver", "Focused", "Disabled" })
+            {
+                bool off = s == "Disabled";
+                t.Colors["TextControlBackground" + s] = win;
+                t.Colors["TextControlForeground" + s] = off ? gray : text;
+                t.Colors["TextControlBorderBrush" + s] = off ? gray : s == "Focused" ? hi : text;
+                t.Colors["TextControlPlaceholderForeground" + s] = gray;
+            }
+            t.Colors["TextControlSelectionHighlightColor"] = hi;
+
+            // The keyboard's focus ring, in the two colours Windows draws its own in.
+            t.Colors["SystemControlFocusVisualPrimaryBrush"] = text;
+            t.Colors["SystemControlFocusVisualSecondaryBrush"] = win;
+            return t;
         }
 
         // The contrast every text colour has to reach (#2771).
