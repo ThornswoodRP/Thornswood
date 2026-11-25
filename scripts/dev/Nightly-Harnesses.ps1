@@ -226,6 +226,16 @@ if ($Share -lt 1 -or $Share -gt $Throttle) { Write-Host "::error::-Share $Share 
 if ($StartLog) { $StartLog = [IO.Path]::GetFullPath($StartLog) }
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 $Root = [IO.Path]::GetFullPath($Root)
+function Get-RootEntries([string]$path) {
+    $entries = @{}
+    if (Test-Path -LiteralPath $path) {
+        foreach ($item in @(Get-ChildItem -LiteralPath $path -File -Force)) {
+            $entries[$item.Name] = "$($item.Length)|$($item.LastWriteTimeUtc.Ticks)"
+        }
+    }
+    return $entries
+}
+$rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
     $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
     $OutDir = Join-Path $base ('harness-out-' + $Shard)
@@ -807,11 +817,32 @@ if ($failed.Count) {
     Write-Host ("{0} harness(es) failed: {1}" -f $failed.Count, ($failed -join ', '))
 }
 $reportBad = $false
-if ($Report) { Write-Report $results $notRun }
+# Concurrent harnesses share this checkout. Report a lasting change against
+# the share, and leave the files available to diagnose where it came from.
+$rootAfter = Get-RootEntries $Root
+$rootDirty = @(
+    foreach ($name in ($rootAfter.Keys | Sort-Object)) {
+        if (-not $rootBefore.ContainsKey($name)) { "$name (added)" }
+        elseif ($rootAfter[$name] -ne $rootBefore[$name]) { "$name (modified)" }
+    }
+    foreach ($name in ($rootBefore.Keys | Sort-Object)) {
+        if (-not $rootAfter.ContainsKey($name)) { "$name (removed)" }
+    }
+)
+$reportRows = $results
+if ($rootDirty.Count) {
+    $rootFailure = 'the harness share changed the repository root: ' + ($rootDirty -join ', ')
+    Write-Host ('::error::' + $rootFailure)
+    $reportRows += [pscustomobject]@{
+        Name = 'harness share root audit'; Code = 1; TimedOut = $false; Secs = 0
+        Said = 'FAIL  ' + $rootFailure; Clock = 0
+    }
+}
+if ($Report) { Write-Report $reportRows $notRun }
 if ($Summary) {
     & (Join-Path $PSScriptRoot 'Merge-HarnessReports.ps1') -Path $Report -Expect 1 -Summary $Summary -Title $Title
     if ($LASTEXITCODE -ne 0) { $reportBad = $true; Write-Host '::error::the report could not be written to the run''s summary' }
 }
-if ($failed.Count -or $notRun.Count -or $reportBad) { exit 1 }
+if ($failed.Count -or $notRun.Count -or $reportBad -or $rootDirty.Count) { exit 1 }
 Write-Host 'every harness passed'
 exit 0

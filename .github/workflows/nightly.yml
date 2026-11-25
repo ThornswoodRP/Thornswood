@@ -149,6 +149,12 @@ jobs:
           $env:THORNSWOOD_FORK_REQUIRED = '1'
           node tests\test-2483-kept-npcs.js
           $code = $LASTEXITCODE
+          node game\tests\test-3080-flora-blocked.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
+          node scripts\tests\test-2262-equip-attempt-setting.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
+          node scripts\tests\test-3078-containers-empty.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
           git -c core.longpaths=true submodule deinit -q -f engine/skymp
           if ($code -eq 0 -and -not $fetched) { $code = 1 }
           exit $code

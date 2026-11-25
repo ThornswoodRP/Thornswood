@@ -27,7 +27,7 @@
   -InstallVoice reads another copy, so the same test runs on the one from
   before this change:
 
-      git show origin/main:scripts/deploy/Install-Voice.ps1 > $env:TEMP\voice-before.ps1
+      git show 54b5c92f:scripts/deploy/Install-Voice.ps1 > $env:TEMP\voice-before.ps1
       pwsh -NoProfile -File .\scripts\tests\test-voice-stray-tasks.ps1 -InstallVoice $env:TEMP\voice-before.ps1
 
   Registers and removes tasks named Thornswood stray harness <guid> ... (not

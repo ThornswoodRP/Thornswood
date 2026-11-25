@@ -756,8 +756,8 @@ The question no longer follows a downgrade, which never writes the Steam
 copy now.
 Play is never held on it.
 
-**The settings Play writes every time.** Enforce.cs (`SkyrimSoulsRE.ini` and
-`OpenAnimationReplacer.ini`, which those mods rewrite on exit; `SkyrimPlatform.ini`'s
+**The settings Play writes every time.** Enforce.cs (
+`OpenAnimationReplacer.ini`, which that mod rewrites on exit; `SkyrimPlatform.ini`'s
 log level and text window; the actor draw distance in `SkyrimPrefs.ini`), ThornIni.cs
 (`Thornswood.ini` from the template when missing), Mics.cs (the microphone
 name and voice address in `Thornswood.ini`), Display.cs
@@ -943,7 +943,7 @@ cleared at once.
 | 13 | `ShellPlay.cs:251 Verify.DeployPersonal` | `<Root>\Your Mods` copied into `Game\Data`, never a plugin. | those files in `Game\Data` |
 | 14 | `ShellPlay.cs:265 Display.MatchScreen` | Skipped when Lock resolution is ticked. The game's window size and Display Tweaks' resolution follow the screen. | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, `Profile\MyGames\SkyrimPrefs.ini`, each only when it changes |
 | 14a | `ShellPlay.cs:270 Display.PinMode` | Every Play, locked resolution or not. The mode the launcher shows (borderless unless the Display page says otherwise) written as Display Tweaks' own Fullscreen and Borderless lines. Commented out, as the collection ships them, Display Tweaks takes Skyrim's bFull Screen instead, and the game ran in exclusive full screen while the launcher said borderless (#5946). | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, only when the lines do not already say the mode |
-| 15 | `ShellPlay.cs:273 Enforce.Apply` | Settings two mods rewrite on the way out, put back; SkyrimPlatform at its normal log level with no text window; one actor draw distance for everybody (#963). Then `ShellPlay.cs:277 CrashDump.Apply`: the full crash snapshot on only when the person ticked it in Settings (#2626), and with it on, those whose crash staff marked looked at deleted, and any past the newest two (#2319). | `Game\Data\SKSE\Plugins\SkyrimSoulsRE.ini`, `OpenAnimationReplacer.ini`, `SkyrimPlatform.ini`, `CrashLogger.ini`, `Profile\MyGames\SkyrimPrefs.ini`; old `crash-*.dmp` in `Profile\MyGames\SKSE` deleted |
+| 15 | `ShellPlay.cs:273 Enforce.Apply` | Settings a mod rewrites on the way out, put back; SkyrimPlatform at its normal log level with no text window; one actor draw distance for everybody (#963). Then `ShellPlay.cs:277 CrashDump.Apply`: the full crash snapshot on only when the person ticked it in Settings (#2626), and with it on, those whose crash staff marked looked at deleted, and any past the newest two (#2319). | `Game\Data\SKSE\Plugins\OpenAnimationReplacer.ini`, `SkyrimPlatform.ini`, `CrashLogger.ini`, `Profile\MyGames\SkyrimPrefs.ini`; old `crash-*.dmp` in `Profile\MyGames\SKSE` deleted |
 | 16 | `ShellPlay.cs:284 AutoJoin.Apply` | `AutoJoin.cs:124 Apply()`: the server address and port, and where the client fetches the server's load order, through Hold.Around. SkyMP has no join screen; this file is the whole of joining. | `skymp5-client-settings.txt` when it changes |
 | 17 | `ShellPlay.cs:293 ThornIni.Ensure` | The template, if the file is missing. | `Game\Data\SKSE\Plugins\Thornswood.ini` |
 | 18 | `ShellPlay.cs:296 Mics.Apply` | This machine's microphone name, the voice port and the voice address. | `Thornswood.ini` |
@@ -989,7 +989,7 @@ Written or rewritten, when anything needed changing:
   put back, `thornswood-session.txt`, `thornswood-characters.json`,
   `UI\thornswood-characters.js`.
 - `Game\Data\SKSE\Plugins`: `SkyrimPlatform.ini`,
-  `SSEDisplayTweaks.ini`, `SkyrimSoulsRE.ini`, `OpenAnimationReplacer.ini`,
+  `SSEDisplayTweaks.ini`, `OpenAnimationReplacer.ini`,
   `Thornswood.ini`.
 - The files made from the game and the collection's mods (MadeFromGame),
   the behavior files and bodies built with the collection's Pandora and
