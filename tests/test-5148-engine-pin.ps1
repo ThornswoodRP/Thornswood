@@ -110,8 +110,8 @@ try {
 $H = '1111111111111111111111111111111111111111'
 $P = '2222222222222222222222222222222222222222'
 function New-World { return @{ head = $H; prs = @(); files = @{}; branchPin = $null; pinBehind = 0; pinCheck = $null; pinMergeable = $null; forkRuns = @(); arts = @{}; engineRuns = @(); compare = @{} } }
-$PinHead = '6666666666666666666666666666666666666666'
 function Get-Answer($w) {
+    $PinHead = '6666666666666666666666666666666666666666'
     return {
         param([string]$path)
         if ($path -eq 'repos/ThornswoodRP/Thornswood/branches/engine-pin%2Fnext') { return [pscustomobject]@{ commit = [pscustomobject]@{ sha = $PinHead } } }
@@ -311,6 +311,18 @@ Yes '  the workflow''s own token reads only' ($code -match '(?m)^permissions:\n 
 Yes '  four jobs, look, open, make and push' ($look -and $open -and $make -and $push)
 Yes '  make holds a token that only reads' ($make -match '(?m)^    permissions:\n      contents: read\n      actions: read\n(?!      )')
 Yes '  the npm build (Update-EnginePin.ps1, which runs Build-Front.ps1) is in make alone' ($make -match 'Update-EnginePin\.ps1' -and $look -notmatch 'Update-EnginePin|Build-Front|setup-node|yarn|npx' -and $push -notmatch 'Update-EnginePin|Build-Front|setup-node|yarn|npx')
+Yes '  the trusted Look checkout records the Main base for Make and Push' (
+    $look -match '(?m)^      base: \$\{\{ steps\.main\.outputs\.commit \}\}$' -and
+    $look -match '(?m)^        id: main\n        uses: actions/checkout@[^\n]+\n        with:\n          ref: main\n' -and
+    $make -match '(?m)^          ref: \$\{\{ needs\.look\.outputs\.base \}\}$' -and
+    $push -match '(?m)^          ref: \$\{\{ needs\.look\.outputs\.base \}\}$')
+Yes '  the maker hands back a bundle over that exact base and push checks against its local copy' (
+    $make -match 'git bundle create \$f "\$env:PIN_BASE\.\.engine-pin/next"' -and
+    $push -match 'git diff --name-only \$main engine-pin/next')
+Yes '  push refuses a stale Main before minting its write token' (
+    $push -match 'git/ref/heads/main' -and
+    $push -match '\$currentMain -ne \$main' -and
+    $push.IndexOf('git/ref/heads/main') -lt $push.IndexOf('id: app'))
 Yes '  push holds the pin to one commit on main with only a pin''s paths before it pushes' ($push -match 'is not one commit on main' -and $push -match 'changes more than a pin' -and $push.IndexOf('changes more than a pin') -lt $push.IndexOf('push --force'))
 Yes '  push pushes the branch, then opens or updates the pull request' ($push.IndexOf('push --force') -ge 0 -and $push.IndexOf('push --force') -lt $push.IndexOf('Open-EnginePinPr.ps1'))
 # #5256: the robot's own App token pushes and opens, so the pull request
