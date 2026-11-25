@@ -68,6 +68,24 @@ if (catalog) {
   const before = calls;
   catalog.command({ proven: false }, '/testexample', ['/testexample'], 103, TESTER);
   yes('the catalog refuses unproven commands before invoking a module', calls === before);
+  let variants = false;
+  try {
+    catalog.register('scoped-help-regression', {
+      command(cmd, word, parts, pid) { w.box().__thornswoodStaff.tell(pid, 'The scoped test tool ran.'); return true; },
+      help: [
+        { word: '/testvariant', role: 'admin', syntax: '/testvariant for <person>', text: 'Admin targeting syntax.' },
+        { word: '/testvariant', role: 'playtester', syntax: '/testvariant', text: 'Self-only syntax.' }
+      ]
+    });
+    variants = true;
+  } catch (_) { }
+  yes('one implemented tool may document a separate admin targeting form', variants);
+  if (variants) {
+    yes('playtest help excludes the admin-only usage of a shared command',
+      /\/testvariant: Self-only/.test(ask(TESTER, '/testhelp')) && !/\/testvariant for/.test(ask(TESTER, '/testhelp')));
+    yes('admin help includes the admin-only targeting usage', /\/testvariant for/.test(ask(ADMIN, '/adminhelp')));
+    yes('metadata order cannot elevate the minimum route above its self-only tier', /scoped test tool ran/.test(ask(TESTER, '/testvariant')));
+  }
 }
 
 const seen = w.box().__thornswoodPassSeen;

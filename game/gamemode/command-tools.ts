@@ -14,17 +14,20 @@
     var own = Object.create(null);
     var added = definition.help.map(function (entry) {
       if (!entry || typeof entry.word !== 'string' || !/^\/[a-z][a-z0-9-]*$/.test(entry.word) ||
+          typeof entry.role !== 'string' ||
           !Object.prototype.hasOwnProperty.call(levels, entry.role) ||
           typeof entry.syntax !== 'string' || !entry.syntax.trim() ||
-          typeof entry.text !== 'string' || !entry.text.trim() || routes[entry.word] || own[entry.word]) {
+          typeof entry.text !== 'string' || !entry.text.trim() || routes[entry.word] || own[entry.word + '|' + entry.role]) {
         throw new Error('Command help needs a unique command, a known role, syntax and a description.');
       }
-      own[entry.word] = true;
+      own[entry.word + '|' + entry.role] = true;
       return { word: entry.word, role: entry.role, syntax: entry.syntax, text: entry.text };
     });
     modules[id] = definition.command;
     added.forEach(function (entry) {
-      routes[entry.word] = { handler: definition.command, role: entry.role };
+      if (!routes[entry.word] || levels[entry.role] < levels[routes[entry.word].role]) {
+        routes[entry.word] = { handler: definition.command, role: entry.role };
+      }
       entries.push(entry);
       if (WORDS.indexOf(entry.word) === -1) { WORDS.push(entry.word); }
     });
