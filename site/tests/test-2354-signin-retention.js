@@ -27,7 +27,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -44,7 +43,7 @@ function yes(what, cond, why) {
 if (process.platform !== 'win32') {
   console.log('SKIP  a read only file stops the write only on Windows, where the site runs');
   console.log('\n0 passed, 0 failed');
-  process.exit(0);
+  return;
 }
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2354-'));
@@ -75,12 +74,6 @@ const NEW = { at: Date.now() - DAY, id: '998', handle: 'new-row-handle', ip: '20
 fs.writeFileSync(SIGNINS, JSON.stringify([NEW, OLD], null, 2));
 fs.chmodSync(SIGNINS, 0o444);
 
-function freePort() {
-  return new Promise((ok) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
-}
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 let PORT = 0;
 function ask(where) {
@@ -102,10 +95,10 @@ function ask(where) {
 }
 
 (async () => {
-  PORT = await freePort();
+  PORT = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   let out = '';
@@ -114,7 +107,7 @@ function ask(where) {
   try {
     let up = false;
     for (let i = 0; i < 100 && !up; i++) {
-      if (out.indexOf('listening on ') >= 0) { up = true; break; }
+      if (siteFiles.saidPort(out)) { PORT = siteFiles.saidPort(out); up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }
@@ -147,11 +140,11 @@ function ask(where) {
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
   try { fs.chmodSync(SIGNINS, 0o644); } catch (e) { }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

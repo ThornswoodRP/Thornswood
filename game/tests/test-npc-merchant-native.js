@@ -5,11 +5,10 @@ if(!process.argv[2]||!process.argv[3]){
   const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../game/gamemode.js'),'utf8');
   for(const m of ["NPC MERCHANT PURSES","NPC POPULATION POLICY","NPC POPULATION DATA"]){
     const b=src.indexOf('// '+m+' BEGIN'),e=src.indexOf('// '+m+' END');
-    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exit(1);}
+    if(b<0||e<=b){console.error('FAIL: gamemode.js section '+m+' missing');process.exitCode=1;}
   }
-  console.log('SKIP: merchant native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-merchant-native.js <addon> <installed.json>); gamemode sections present: NPC MERCHANT PURSES, NPC POPULATION POLICY, NPC POPULATION DATA');
-  process.exit(0);
-}
+  if(!process.exitCode)console.log('SKIP: merchant native check needs <built addon .node path> <installed record .json path> (node game/tests/test-npc-merchant-native.js <addon> <installed.json>); gamemode sections present: NPC MERCHANT PURSES, NPC POPULATION POLICY, NPC POPULATION DATA');
+} else {
 const addon=require(path.resolve(process.argv[2]));
 const installed=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
 assert.equal(installed.loadOrder.length,require('../../game/data/npc-population.json').loadOrder.length,'Use the current verified plugin cast');
@@ -21,7 +20,7 @@ const server=new addon.ScampServer(JSON.stringify({port:0,maxPlayers:2,offlineMo
   npcEnabled:true,npcAllowEssential:true,npcAllowCrimeFaction:true,npcSettings:{},
   bannedEspmCharacterRaceIds:[0x10760a],logLevel:'error'}));
 server._setSelf(server);
-const source=fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8');
+const source=require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8'));
 const ctx={Map,Set,Number,Math,JSON,require};vm.createContext(ctx);
 for(const marker of ['NPC MERCHANT PURSES','NPC POPULATION POLICY','NPC POPULATION DATA']) {
   vm.runInContext(source.slice(source.indexOf('// '+marker+' BEGIN'),source.indexOf('// '+marker+' END')),ctx);
@@ -67,4 +66,4 @@ restored.shutdown();
 const target=fs.realpathSync(fixture);
 assert.equal(path.dirname(target),fs.realpathSync(require('node:os').tmpdir()));
 process.chdir(require('node:os').tmpdir());fs.rmSync(target,{recursive:true,force:true});
-process.exit(0);
+}

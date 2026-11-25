@@ -292,8 +292,10 @@ can be read before it is picked. A page says three things:
 The facts are read out of `game\data\recipes.json`,
 `game\data\mine-buildings.json`, `game\data\hunts.json` and the
 gamemode's bench table, maneuvers and tuning by
-`scripts\dev\Build-ProfessionGuides.js`, which writes them into
-`game\ui\thornswood-skills.js`. Run it after any of those change;
+`scripts\dev\Build-ProfessionGuides.js`, which writes them into a file of
+their own, `game\ui\thornswood-profession-guides.js`, that the K panel
+reads when it draws a page. It is a step of the content chain, so a content
+build rebuilds the guides with the tables they come from;
 `game\tests\test-3165-profession-guides.js` fails while the page is behind.
 
 ## Everything has a maker
@@ -304,7 +306,7 @@ Ancient Nord burial set, which is found in a dungeon and nowhere else
 (Patrick, 26 October 2026, #3524). That covers
 what a chest or a body pays, the clothes and tool a new character is
 handed, and whatever a recipe asks for. [Who makes what the world hands
-out](lists/who-makes-it.md) lists each item and its maker, and the few
+out](who-makes-it.md) lists each item and its maker, and the few
 that have none yet, each with the issue that gives it one. The build
 fails when something new is handed out that nobody makes.
 

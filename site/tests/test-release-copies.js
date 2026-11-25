@@ -88,7 +88,7 @@ function asset(name, digestSha, size, extra) {
 }
 
 async function main() {
-  if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+  if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
   const mainDoc = { launcherVersion: '1.2.7', release: { id: '20261026-170000', channel: 'main', tag: TAG } };
 
   // ---- 1. a private repository, or no Release yet: the site sends the bytes
@@ -363,7 +363,59 @@ async function main() {
       !['Thornswood-Setup-notes.txt', 'licences.zip', 'files.json'].some(old));
   yes('/api/payload, the old setup program\'s, is gone', server.indexOf("'/api/payload'") < 0);
 
+  // ---- 8. the site's GitHub token (#6186): GitHub's installation tokens
+  // are ghs_<App id>_<a JWT> since its stateless tokens, about 520
+  // characters with dots and hyphens. The site took only letters, digits and
+  // _ up to 255, refused every one the admin service wrote, and asked
+  // GitHub without one, sixty calls an hour, until GitHub answered 403 and
+  // every /release/ file answered 503.
+  {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-site-token-'));
+    const file = path.join(tmp, 'github-token.json');
+    const was = process.env.THORNSWOOD_SITE_GITHUB_TOKEN;
+    process.env.THORNSWOOD_SITE_GITHUB_TOKEN = file;
+    const reader = (api) => {
+      const said = [];
+      const env = { https: null, feedFile: () => null, readJsonQuiet: () => null, fs, GITHUB_API: new URL(api || 'https://api.github.com') };
+      const made = new Function('env', 'console',
+        'const { https, feedFile, readJsonQuiet, fs, GITHUB_API } = env;\n' + block + '\nreturn { siteToken };')(env,
+        { log: (l) => said.push(l), error: (l) => said.push(l) });
+      return { siteToken: made.siteToken, said };
+    };
+    const write = (token, minutes) => fs.writeFileSync(file, JSON.stringify(
+      { token, expires_at: new Date(Date.now() + minutes * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z'), repository: 'ThornswoodRP/Thornswood' }) + '\n');
+    const b64url = (n) => { let o = ''; while (o.length < n) o += 'eyJhbGciOiJSUzI1NiJ9-_Ab09'; return o.slice(0, n); };
+    const stateless = 'ghs_5537924_' + b64url(36) + '.' + b64url(420) + '.' + b64url(43);
+    write(stateless, 60);
+    let r = reader();
+    yes('a stateless token (ghs_<App id>_<JWT>, ' + stateless.length + ' characters, dots and hyphens) is used', r.siteToken() === stateless);
+    yes('  and the log says the site is signed in', r.said.some((l) => /GitHub token: signed in/.test(l)));
+    const old = 'ghs_' + 'a1B2'.repeat(9);
+    write(old, 60);
+    r = reader();
+    yes('the old 40 character shape is still used', r.siteToken() === old);
+    let bad = 0;
+    for (const t of [stateless + '\r\nx-evil: 1', 'ghs_ab cd' + 'e'.repeat(30), stateless + '\n', 'ghs_' + 'é'.repeat(30), 'x'.repeat(4097)]) {
+      write(t, 60);
+      r = reader();
+      if (r.siteToken() === '' && r.said.some((l) => /not in the shape of a GitHub token/.test(l))) bad++;
+    }
+    yes('a token with a line break, a space, another letter or past 4096 characters is never sent, and the log says why', bad === 5);
+    write(stateless, 1);
+    r = reader();
+    yes('a token with less than two minutes left is not used, and the log says that, not its shape',
+        r.siteToken() === '' && r.said.some((l) => /less than two minutes left/.test(l)) && !r.said.some((l) => /shape/.test(l)));
+    fs.writeFileSync(file, JSON.stringify({ expires_at: '2099-01-01T00:00:00Z' }));
+    r = reader();
+    yes('a file with no token says it holds none', r.siteToken() === '' && r.said.some((l) => /holds no token,/.test(l)));
+    write(stateless, 60);
+    r = reader('https://example.invalid');
+    yes('the token goes to api.github.com only', r.siteToken() === '');
+    if (was === undefined) delete process.env.THORNSWOOD_SITE_GITHUB_TOKEN; else process.env.THORNSWOOD_SITE_GITHUB_TOKEN = was;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  ' + (e && e.stack)); process.exit(1); });
+main().catch((e) => { console.log('FAIL  ' + (e && e.stack)); process.exitCode = 1; });

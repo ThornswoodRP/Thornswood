@@ -318,4 +318,4 @@ yes('the activate chain answers the hive as the farmer, after the churn and befo
 process.chdir(prevCwd);
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-if (fail) { process.exit(1); }
+if (fail) { process.exitCode = 1; }

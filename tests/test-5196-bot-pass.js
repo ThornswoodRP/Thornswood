@@ -73,7 +73,6 @@ const crypto = require('crypto');
 const EventEmitter = require('events');
 const fs = require('fs');
 const http = require('http');
-const net = require('net');
 const os = require('os');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
@@ -82,14 +81,27 @@ const character = require(path.join(ROOT, 'scripts', 'bot', 'character.js'));
 const relay = require(path.join(ROOT, 'scripts', 'bot', 'relay.js'));
 
 let pass = 0, fail = 0;
+// The passes run() made since the last check. A FAIL prints their lines
+// under it, so a check that fails on a gate runner and not here says which
+// step the pass stopped at and what it said there (#6050: on the Linux gate
+// two checks failed with nothing to say why, and they pass on every run
+// here, under Node 22 and 24 and four copies at once on a loaded machine).
+let ran = [];
 function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
-  else { fail++; console.log('FAIL  ' + what); }
+  else {
+    fail++; console.log('FAIL  ' + what);
+    for (const x of ran) {
+      console.log('      the pass "' + x.name + '" said:');
+      for (const l of (x.r && x.r.lines) || []) { console.log('        ' + (l.ok ? 'PASS  ' : 'FAIL  ') + l.step + ': ' + l.detail); }
+    }
+  }
+  ran = [];
 }
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-5196p-'));
@@ -97,14 +109,6 @@ process.on('exit', () => { fs.rmSync(TMP, { recursive: true, force: true }); });
 
 const SPAWN = [133857, -61130, 14662];
 const WHITERUN = [20000, -5000, -2000];
-
-function freePort() {
-  return new Promise((ok, bad) => {
-    const srv = net.createServer();
-    srv.on('error', bad);
-    srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => ok(p)); });
-  });
-}
 
 // A server folder: settings, a gamemode, an empty world, a run folder of its
 // own (the server copy in server, the voice copy beside it in voice).
@@ -128,7 +132,10 @@ async function folder(name, settings) {
   fs.writeFileSync(path.join(root, 'private', 'merchant-ledger.initialized'), '1');
   fs.writeFileSync(path.join(root, 'server-settings.json'), JSON.stringify(Object.assign({
     port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world',
-    thornswoodVoicePort: await freePort(), thornswoodServer: 'dev'
+    // 0: the voice service binds a free port and says it, and the pass
+    // writes it here before the server starts (#6050). A port taken from
+    // freePort() and let go was taken by another socket in between.
+    thornswoodVoicePort: 0, thornswoodServer: 'dev'
   }, settings || {})));
   return root;
 }
@@ -181,19 +188,24 @@ function standIn(root, break_) {
   }
   function isGuard(pid) { const h = law().held['guard:falkreath']; return roleOf(pid) && !!(h && h['p:' + pid] && h['p:' + pid].pid === pid); }
   function cellLocked() { const c = law().cells; return Object.prototype.hasOwnProperty.call(c, CELL) ? c[CELL] === true : true; }
-  const settings0 = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
-  const vport = settings0.thornswoodVoicePort;
+  // The voice port, as the gamemode reads it: from server-settings.json once
+  // the pass has written the port the voice service took (#6050).
+  let vportRead = 0;
+  function vport() {
+    if (!vportRead) { vportRead = Number(JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8')).thornswoodVoicePort) || 0; }
+    return vportRead;
+  }
   // The gamemode's end of the relay: collect, acknowledge, run, answer.
   let polling = false;
   async function poll() {
     if (polling || !state.up) { return; }
     polling = true;
     try {
-      const r = await ask(vport, 'GET', '/commands?ack=1');
+      const r = await ask(vport(), 'GET', '/commands?ack=1');
       let doc = null;
       try { doc = JSON.parse(r.text); } catch (e) { doc = null; }
       const list = doc && Array.isArray(doc.commands) ? doc.commands : [];
-      if (list.length) { await ask(vport, 'POST', '/commands/ack', { ids: list.map((c) => c.id) }); }
+      if (list.length) { await ask(vport(), 'POST', '/commands/ack', { ids: list.map((c) => c.id) }); }
       for (const c of list) { await command(c); }
     } finally { polling = false; }
   }
@@ -211,16 +223,16 @@ function standIn(root, break_) {
     }
     if (parts[0] === '/pick' && parts[1] === 'town') {
       if (break_ === 'no home' || !cur || cur.stage() !== 'choosing' || parts[2] !== 'whiterun') {
-        await ask(vport, 'POST', '/say', { profileId: pid, text: 'No: there is no town called ' + parts[2] + '.' });
+        await ask(vport(), 'POST', '/say', { profileId: pid, text: 'No: there is no town called ' + parts[2] + '.' });
         return;
       }
       cur.arrive();
-      await ask(vport, 'POST', '/say', { profileId: pid, text: 'Welcome to Whiterun Hold, Safe Travels.' });
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: 'Welcome to Whiterun Hold, Safe Travels.' });
       return;
     }
     if (parts[0] === '/claim') {
       if (break_ === 'no claim' || !cur || !cur.atDoor()) {
-        await ask(vport, 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first. That is how the server knows which one it is.' });
+        await ask(vport(), 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first. That is how the server knows which one it is.' });
         return;
       }
       if (break_ !== 'no register') { hold({ by: pid, name: 'Bot', locked: false }); }
@@ -228,44 +240,44 @@ function standIn(root, break_) {
       if (break_ !== 'no deed') { pack.push({ baseId: 0x2015493, count: 1, name: 'Deed to Whiterun Stables, Whiterun' }); }
       if (break_ !== 'no master') { pack.push({ baseId: 0x20154e0, count: 1, name: 'Master key to Whiterun Stables, no. 1' }); }
       cur.push({ t: 28, inventory: { entries: pack } });
-      await ask(vport, 'POST', '/say', { profileId: pid, text: 'You claim Whiterun Stables. The deed is in your pack.' });
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: 'You claim Whiterun Stables. The deed is in your pack.' });
       return;
     }
     if ((parts[0] === '/lock' || parts[0] === '/unlock') && parts[1] === 'ef434') {
       const on = parts[0] === '/lock';
-      if (!cur || !cur.atCell() || !isGuard(pid)) { await ask(vport, 'POST', '/say', { profileId: pid, text: 'A cell is a guard\'s to lock.' }); return; }
+      if (!cur || !cur.atCell() || !isGuard(pid)) { await ask(vport(), 'POST', '/say', { profileId: pid, text: 'A cell is a guard\'s to lock.' }); return; }
       if (break_ !== 'cell unsaved') { const l = law(); l.cells[CELL] = on; setLaw(l); }
-      await ask(vport, 'POST', '/say', { profileId: pid, text: on ? 'You lock the cell. Only a guard of this hold opens it now; anybody else has to pick the lock.'
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: on ? 'You lock the cell. Only a guard of this hold opens it now; anybody else has to pick the lock.'
         : 'You unlock the cell. It opens for anybody now.' });
       cur.cellLine();
       return;
     }
     if (parts[0] === '/office' && parts[1] === 'hold') {
       if (break_ === 'no office' || !roleOf(pid) || parts[2] !== 'guard' || parts[3] !== 'falkreath') {
-        await ask(vport, 'POST', '/say', { profileId: pid, text: 'Your account does not hold the Guard of Falkreath role in Discord.' });
+        await ask(vport(), 'POST', '/say', { profileId: pid, text: 'Your account does not hold the Guard of Falkreath role in Discord.' });
         return;
       }
       const l = law(); l.held['guard:falkreath'] = { ['p:' + pid]: { pid, name: 'Bot' } }; setLaw(l);
-      await ask(vport, 'POST', '/say', { profileId: pid, text: 'This character holds Guard of Falkreath now. The cells of Falkreath Jail are yours to lock.' });
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: 'This character holds Guard of Falkreath now. The cells of Falkreath Jail are yours to lock.' });
       return;
     }
     if (parts[0] === '/lock') {
       const c = held();
-      if (!c || !cur || !cur.atDoor()) { await ask(vport, 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first.' }); return; }
+      if (!c || !cur || !cur.atDoor()) { await ask(vport(), 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first.' }); return; }
       if (break_ !== 'lock unsaved') { c.locked = true; hold(c); }
-      await ask(vport, 'POST', '/say', { profileId: pid, text: 'You lock Whiterun Stables. Whiterun Stables is locked for everyone now.' });
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: 'You lock Whiterun Stables. Whiterun Stables is locked for everyone now.' });
       cur.line();
       return;
     }
     if (parts[0] === '/pick' && parts[1] === 'profession') {
       const took = break_ !== 'no hammer' && parts[2] === 'smith' && parts[3] === 'platewright';
       if (took && cur) { cur.trade(); }
-      await ask(vport, 'POST', '/say', { profileId: pid, text: took ? 'You are handed a hammer. Keep it in your pack: the work needs it there.'
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: took ? 'You are handed a hammer. Keep it in your pack: the work needs it there.'
         : 'No: there is no such profession.' });
       return;
     }
     if (parts[0] === '/needs') {
-      await ask(vport, 'POST', '/say', { profileId: pid, text: break_ === 'no needs' ? 'That is not running on this server.'
+      await ask(vport(), 'POST', '/say', { profileId: pid, text: break_ === 'no needs' ? 'That is not running on this server.'
         : 'Hunger 100% (full), Thirst 100% (quenched), Rest 100% (rested), Temp comfortable 50. The Body page on K says what sets each one.' });
     }
   }
@@ -365,6 +377,26 @@ function standIn(root, break_) {
             if (c.customPacketType !== 'loginWithSkympIo') { return; }
             const pid = c.gameData.profileId;
             me = pid;
+            // The engine's tick throws while it takes the login (ts/index.ts,
+            // the tick's catch), and a flood of script warnings follows, as
+            // the world loads (#6346): no character comes.
+            // A throw the engine's custom packet handler caught and wrote out
+            // whole (index.ts, console.error(e)), as the login's is: no "in
+            // server.tick" line, a stack ending in the tick's own frame (#6346).
+            if (break_ === 'login caught') {
+              child0.stdout.emit('data', '[2026-11-16 00:28:42.100] [console] [error] Error: the spawn went wrong here\n' +
+                '    at Spawn.listenerFn (C:\\skymp5-server\\dist_back\\skymp5-server.js:9:9)\n    at EventEmitter.emit (node:events:518:28)\n' +
+                '    at C:\\skymp5-server\\ts\\index.ts:192:16\n    at runNextTicks (node:internal/process/task_queues:64:5)\n' +
+                Array.from({ length: 90 }, () => '[console] [warning] Script \'CWThreatTriggerScript\' not found in the script storage\n').join(''));
+              return;
+            }
+            if (break_ === 'tick throws') {
+              child0.stdout.emit('data', '[2026-11-16 00:28:42.100] [console] [error] in server.tick:\n' +
+                'Error: the login went wrong here\n    at PartOne::Login (C:\\skymp5-server\\x.cpp:1:1)\n' +
+                '    at C:\\skymp5-server\\ts\\index.ts:192:16\n' +
+                Array.from({ length: 90 }, () => '[console] [warning] Script \'CWThreatTriggerScript\' not found in the script storage\n').join(''));
+              return;
+            }
             let form = null;
             try { form = JSON.parse(fs.readFileSync(formFile, 'utf8')); } catch (e) { form = null; }
             if (form && form.profileId === pid) {
@@ -426,7 +458,7 @@ function standIn(root, break_) {
           }
           if (m.t === 6 && actor && m.data && m.data.target === 0x3a198) {
             const near = innAt && Math.hypot(innAt[0] - VALGA[0], innAt[1] - VALGA[1], innAt[2] - VALGA[2]) <= 400;
-            ask(vport, 'POST', '/say', { profileId: me, text: near ? 'Trading with Cook in Falkreath. Purse 250.' : 'You are not close enough to trade.' });
+            ask(vport(), 'POST', '/say', { profileId: me, text: near ? 'Trading with Cook in Falkreath. Purse 250.' : 'You are not close enough to trade.' });
             return;
           }
           if (m.t === 6 && actor && m.data && m.data.target === 0x3a196) {
@@ -449,7 +481,7 @@ function standIn(root, break_) {
           // E on the forge: the bench gate, then the bench.
           if (m.t === 6 && actor && m.data && m.data.target === 0xd6987) {
             // 'open to all': the gate says no, and the bench opens anyway.
-            if (!smith) { ask(vport, 'POST', '/say', { profileId: me, text: 'You have not chosen a profession yet, so there is nothing you can make here. Press K and choose one.' }); }
+            if (!smith) { ask(vport(), 'POST', '/say', { profileId: me, text: 'You have not chosen a profession yet, so there is nothing you can make here. Press K and choose one.' }); }
             if ((smith || break_ === 'open to all') && break_ !== 'stays shut') { out.push({ type: 'message', message: { t: 21, target: 0xd6987 } }); }
             return;
           }
@@ -484,7 +516,9 @@ async function run(name, break_, settings) {
   const said = [];
   const r = await botPass.pass({ root, spawn: s.spawn, addon: s.addon, loadMs: 2000, stepMs: 4000, log: (l) => said.push(l),
                                  voiceFrom: break_ === 'no voice' ? NO_VOICE : VOICE });
-  return { r, s, said, root, voiceDir: path.join(path.dirname(root), 'voice') };
+  const one = { name, r, s, said, root, voiceDir: path.join(path.dirname(root), 'voice') };
+  ran.push(one);
+  return one;
 }
 
 // Whether anything still answers on the copy's voice port.
@@ -594,6 +628,16 @@ function failedAt(r, step) {
     failedAt(held.r, 'loads') && held.s.state.runs === 0 && /not a bot pass copy/.test(held.r.lines[0].detail));
   const unset = await run('unset', null, { thornswoodRequirePass: undefined });
   yes('a server that does not say it holds no pass is refused too', failedAt(unset.r, 'loads') && unset.s.state.runs === 0);
+  const threw = await run('threw', 'tick throws');
+  yes('the server\'s tick throws as it takes the login: FAIL on login, carrying what it threw though the last lines are warnings (#6346)',
+    failedAt(threw.r, 'login') && /The server threw: Error: the login went wrong here at PartOne::Login .* at C:.*index\.ts:192:16/.test(threw.r.lines.find((l) => !l.ok).detail) &&
+    !threw.r.tail.some((l) => /in server\.tick/.test(l)));
+  const caught = await run('caught', 'login caught');
+  const caughtLine = (caught.r.lines.find((l) => !l.ok) || {}).detail || '';
+  yes('a throw caught inside the tick as it takes the login: FAIL on login, carrying its message and first frames, once (#6346)',
+    failedAt(caught.r, 'login') && /The server threw: Error: the spawn went wrong here at Spawn\.listenerFn .* at EventEmitter\.emit/.test(caughtLine) &&
+    (caughtLine.match(/the spawn went wrong/g) || []).length === 1);
+  yes('  and a FAIL with no throw in its step says nothing of one', nopass.r.lines.every((l) => !/server threw/.test(l.detail)));
   yes('not new: FAIL on new', failedAt((await run('notnew', 'not new')).r, 'new'));
   const stays = await run('stays', 'stays');
   yes('creation does not move on after the face: FAIL on face, saying what it waited for',

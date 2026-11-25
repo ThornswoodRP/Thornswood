@@ -52,7 +52,6 @@ const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in test
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -323,7 +322,7 @@ yes('the grace the README gives, ' + grace + ' hours, is GraceHours in Door.cs',
 // secret, so it has to say what the script does. The script reads the file,
 // sets the password and writes the rest back, and leaves a file that will not
 // parse alone. If that changes, this fails and the -Password sentence in the
-// README is what to change. tests\test-docs-password.ps1 runs the script itself.
+// README is what to change. scripts\tests\test-docs-password.ps1 runs the script itself.
 // The read, the set and the write are SiteConfigSet.ps1, which Deploy-Docs
 // shares with Rotate-ServerPassword (#2317).
 const configSet = read('scripts/deploy/SiteConfigSet.ps1') || '';
@@ -336,8 +335,8 @@ yes('Deploy-Docs.ps1 -Password sets the password in the config.json it read, and
     /will not read as JSON, an empty one included, is\s+left exactly as it is and the password is not changed/.test(readme) &&
     readme.indexOf('holding the password and nothing else') < 0);
 yes('the README names the harness that runs -Password, and it is there',
-    readme.indexOf('tests' + BS + 'test-docs-password.ps1') >= 0 &&
-    read('tests/test-docs-password.ps1') !== null);
+    readme.indexOf('scripts' + BS + 'tests' + BS + 'test-docs-password.ps1') >= 0 &&
+    read('scripts/tests/test-docs-password.ps1') !== null);
 yes('the README says the site is one node process', /one\s+node process/.test(readme));
 
 // ------------------------------------------------------------- the copies --
@@ -347,16 +346,6 @@ async function until(cond, ms) {
   while (Date.now() < end) { if (cond()) { return true; } await wait(20); }
   return cond();
 }
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', function () {
-      const p = s.address().port;
-      s.close(function () { ok(p); });
-    });
-  });
-}
 const made = [];
 function copy(tag, withConfig, patch) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-site-' + tag + '-'));
@@ -364,7 +353,7 @@ function copy(tag, withConfig, patch) {
   // server.js and its modules (#5357), with patch run over each file's text:
   // the anchor it changes is in one of them.
   siteFiles.copy(dir, null, patch ? function (src) { return patch(src); } : null);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
   // The written pages the copy serves. Since #1585 a written page with no
   // file behind it answers 404 rather than a 200 saying it does not exist
@@ -377,22 +366,22 @@ function copy(tag, withConfig, patch) {
   return dir;
 }
 async function start(dir) {
-  const port = await freePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(port),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat')
     })
   });
-  const run = { child: child, port: port, out: '', exited: false };
+  const run = { child: child, port: 0, out: '', exited: false };
   child.stdout.on('data', function (d) { run.out += d; });
   child.stderr.on('data', function (d) { run.out += d; });
   child.on('exit', function () { run.exited = true; });
-  run.up = await until(function () { return run.out.indexOf('listening on ') >= 0 || run.exited; }, 10000) &&
+  run.up = await until(function () { return siteFiles.saidPort(run.out) > 0 || run.exited; }, 10000) &&
            !run.exited;
+  run.port = siteFiles.saidPort(run.out);
   return run;
 }
 function stop(run) {
@@ -400,7 +389,7 @@ function stop(run) {
     if (!run || run.exited) { ok(); return; }
     run.child.once('exit', function () { ok(); });
     try { run.child.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 function ask(port, method, route, body, extra) {
@@ -651,5 +640,5 @@ function breakPages(src) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

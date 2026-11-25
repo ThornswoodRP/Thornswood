@@ -13,7 +13,7 @@
 //   - the load order itself, when this machine has one: the script is run
 //     against it and must read exactly what game\data\crime-factions.json
 //     says, so the committed table is the load order and not an old reading;
-//   - the plugin's NO_BOUNTY_FACTIONS block and the json, the same factions,
+//   - the client table NO_BOUNTY_FACTIONS and the json, the same factions,
 //     every one of them tracking crime, and every hold's crime faction the
 //     gamemode knows among them, with the ones that carry their own amounts;
 //   - the plugin's noBounty, run against a stand-in Skyrim Platform: all six
@@ -84,24 +84,28 @@ if (fs.existsSync(data) && fs.existsSync(plugins)) {
   console.log('      no load order on this machine (' + data + '), so the committed reading is what is checked');
 }
 
-/* ------------------------------------------- the json and the plugin block */
-const START = '  // ==== NO_BOUNTY_FACTIONS, generated ====';
+/* -------------------------------------------- the json and the client table */
+// The list is a plugin of its own since #5191 (scripts/dev/ClientTables.js),
+// which noBounty reads as clientTable('NO_BOUNTY_FACTIONS') when it runs.
+const START = '  const IGNORE_CRIMES = ';
 const END = "  sp.on('loadGame', guard('no bounty', noBounty));";
 const a = front.indexOf(START);
 const b = front.indexOf(END);
-yes('the front plugin carries the generated block and the function after it', a >= 0 && b > a);
+yes('the front plugin carries noBounty and its crimes', a >= 0 && b > a);
 yes('they are in the plugin once', front.indexOf(START, a + 1) < 0 && front.indexOf(END, b + 1) < 0);
 yes('the kill-only list it replaces is gone', front.indexOf('KILL_CRIME_FACTIONS') < 0 && front.indexOf('noKillBounty') < 0);
 const body = (a >= 0 && b > a) ? front.slice(a, b) : '';
+yes('noBounty reads the client table, and the plugin holds no copy of it',
+    /const NO_BOUNTY_FACTIONS = clientTable\('NO_BOUNTY_FACTIONS'\);/.test(body) && front.indexOf('NO_BOUNTY_FACTIONS = [') < 0);
 
 let rows = null;
-try { rows = new Function(body.slice(0, body.indexOf('  function noBounty(')) + '\nreturn NO_BOUNTY_FACTIONS;')(); } catch (e) { rows = null; }
-yes('the block is a list of [form id, plugin, editor id]', Array.isArray(rows) && rows.length > 0 &&
+try { rows = require('../../scripts/dev/ClientTables.js').read('NO_BOUNTY_FACTIONS'); } catch (e) { rows = null; }
+yes('the table is a list of [form id, plugin, editor id]', Array.isArray(rows) && rows.length > 0 &&
     rows.every(function (r) { return Array.isArray(r) && r.length === 3 && Number.isInteger(r[0]) &&
                                      typeof r[1] === 'string' && typeof r[2] === 'string'; }));
 const descs = (rows || []).map(function (r) { return r[0].toString(16) + ':' + r[1]; });
 const fromJson = table ? Object.keys(table.factions).sort() : [];
-yes('the block and the json list the same factions (' + descs.length + ')',
+yes('the table and the json list the same factions (' + descs.length + ')',
     descs.slice().sort().join(',') === fromJson.join(','));
 yes('and give each the same editor id', (rows || []).every(function (r) {
   const j = table && table.factions[r[0].toString(16) + ':' + r[1]];
@@ -200,7 +204,7 @@ function run(opts) {
     }
   };
   const say = function (t) { logged.push(t); };
-  const fn = new Function('sp', 'say', body + '\nreturn noBounty;')(sp, say);
+  const fn = new Function('sp', 'say', 'clientTable', body + '\nreturn noBounty;')(sp, say, function () { return rows; });
   fn();
   return { flags: flags, logged: logged };
 }
@@ -253,4 +257,4 @@ yes('no gamemode, plugin or page code adds a bounty or raises an alarm', adds.le
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

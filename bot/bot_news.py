@@ -6,13 +6,18 @@ Part of the bot: bot.py loads it (#5357).
 import asyncio
 import datetime
 import json
+import base64
 import os
 import re
+import shutil
+import subprocess
 import time
+from email.policy import HTTP as HEADER_POLICY
 
+import aiohttp
 import discord
 
-from bot_base import DATA_DIR, HERE
+from bot_base import CONTEXT, DATA_DIR, HERE
 from bot_core import SITE, _int_env, _state_read, _state_write, client, log
 from bot_task_text import strip_footer
 from bot_notices import _github_time
@@ -26,7 +31,7 @@ from bot_github import GITHUB_API, KNOWN_REPO, _github_get, pass_failure
 # NEWS_DIR as news-<environment>.json (tools\DeployAgent\News.cs), a folder
 # only SYSTEM, Administrators and this bot's account read. Each pass reads
 # them and posts each tag not said yet: a dev release (every merge, to Dev,
-# Site or Discord bot) in the dev updates channel, by the id in
+# Site or Discord bot) in #staff-news, by the id in
 # dev-channel.txt, and a main release in #news, by the id in news-channel.txt
 # (by id and never by name: there are two channels called news). One post a
 # tag, however many environments it reached, written down in news-said.json.
@@ -173,30 +178,63 @@ def is_main_server_change(files):
     return live
 
 
-_NOTE_LINE = re.compile(r'^\s*(\*\*)?Release note:(\*\*)?\s*(.*?)\s*$')
+# How a pull request's "Release note:" line is read is tools/ReleaseNotes/
+# NoteRules.cs, the one copy (#5354): PrNote.Read, which the "Release note"
+# check and Collect-ReleaseNotes.ps1 use. The bot has no reader of its own
+# (#6004). It asks that file, compiled by pwsh's Add-Type the way the
+# release scripts compile it, with every body on standard input as JSON, and
+# reads back one answer each. On the box the file is beside the bot
+# (Install-Bot.ps1 and App-Part.ps1 send it); in a checkout it is in tools.
+_READ_NOTES = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -LiteralPath $env:THORNSWOOD_NOTE_RULES
+$bodies = @([Console]::In.ReadToEnd() | ConvertFrom-Json)
+$answers = @(foreach ($b in $bodies) {
+    $n = [Thornswood.ReleaseNotes.PrNote]::Read([string]$b)
+    [ordered]@{ found = $n.Found; none = $n.None; headline = $n.Headline; details = @($n.Details) }
+})
+ConvertTo-Json -InputObject $answers -Depth 4 -Compress
+"""
 
 
-def pr_release_note(body):
-    """(headline, [details]) of a pull request body's Release note line, as
-       PrNote.Read in tools/ReleaseNotes/NoteRules.cs reads it, or None for
-       none or no line."""
-    text = re.sub(r'(?s)<!--.*?-->', '', str(body or ''))
-    lines = re.split(r'\r?\n', text)
-    for i, line in enumerate(lines):
-        m = _NOTE_LINE.match(line)
-        if not m:
-            continue
-        head = m.group(3).strip()
-        if not head or re.match(r'(?i)^none\.?$', head):
-            return None
-        details = []
-        for nxt in lines[i + 1:]:
-            if re.match(r'^\s*-\s+\S', nxt):
-                details.append(nxt.strip())
-            else:
-                break
-        return head, details
+def note_rules_file():
+    """NoteRules.cs beside the bot, or in the checkout's tools; None without."""
+    for path in (os.path.join(HERE, 'NoteRules.cs'),
+                 os.path.join(os.path.dirname(HERE), 'tools', 'ReleaseNotes', 'NoteRules.cs')):
+        if os.path.isfile(path):
+            return path
     return None
+
+
+def _pwsh():
+    return shutil.which('pwsh') or r'C:\Program Files\PowerShell\7\pwsh.exe'
+
+
+def pr_release_notes(bodies):
+    """For each pull request body, (headline, [details]) of its Release note
+       line as PrNote.Read in tools/ReleaseNotes/NoteRules.cs reads it, or
+       None for none or no line. Raises when the rules cannot be asked, so
+       the release is tried again next pass."""
+    bodies = [str(b or '') for b in bodies]
+    if not bodies:
+        return []
+    rules = note_rules_file()
+    if not rules:
+        raise RuntimeError('NoteRules.cs is not beside the bot, so no release note can be read')
+    script = base64.b64encode(_READ_NOTES.encode('utf-16-le')).decode('ascii')
+    env = dict(os.environ, THORNSWOOD_NOTE_RULES=rules)
+    done = subprocess.run([_pwsh(), '-NoProfile', '-NonInteractive', '-EncodedCommand', script],
+                          input=json.dumps(bodies).encode('utf-8'), capture_output=True,
+                          env=env, timeout=120)
+    if done.returncode != 0:
+        raise RuntimeError('the release note rules did not answer: '
+                           + done.stderr.decode('utf-8', 'replace').strip()[-400:])
+    answers = json.loads(done.stdout.decode('utf-8'))
+    if not isinstance(answers, list) or len(answers) != len(bodies):
+        raise RuntimeError('the release note rules gave %r answers for %d bodies'
+                           % (len(answers) if isinstance(answers, list) else answers, len(bodies)))
+    return [(a['headline'], list(a.get('details') or []))
+            if a.get('found') and not a.get('none') else None for a in answers]
 
 
 def _version(tag):
@@ -208,6 +246,41 @@ def _cut(body):
         cut = body[:4000].rsplit('\n', 1)[0]
         body = (cut if cut else body[:4000]).rstrip() + '\n...'
     return body
+
+
+def news_picture(line):
+    """One captioned first-party screenshot, matching the site and launcher."""
+    m = re.fullmatch(r'!\[([^\]\r\n]{1,160})\]\((https://thornswood\.net/news-[a-z0-9][a-z0-9-]{0,119}\.(?:png|jpg|webp))\)', line)
+    if not m:
+        return None
+    # ECMAScript's trim set, shared with the native and browser parsers.
+    alt = m[1].strip('\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff')
+    if not alt or len(m[1].encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
+        return None
+    return {'url': m[2], 'alt': alt}
+
+
+def _news_literal(text):
+    # Keep backticks themselves outside the code spans rather than replacing
+    # them. Everything else, including links and Discord tags, stays literal.
+    return '\\`'.join('`' + part + '`' if part else '' for part in text.split('`'))
+
+
+def _news_picture_lines(lines):
+    image, rest = None, []
+    for line in lines:
+        said = line.strip()
+        bullet = said.startswith('- ')
+        if bullet:
+            said = said[2:].strip()
+        picture = news_picture(said) if bullet and image is None else None
+        if picture:
+            image = picture
+        else:
+            # Invalid image notation is literal, never a masked external
+            # link or a spoiler. A code span also stops URL auto-linking.
+            rest.append(_news_literal(line) if '![' in said else line)
+    return image, rest
 
 
 def news_post_parts(channel, doc, areas=None):
@@ -234,7 +307,9 @@ def news_post_parts(channel, doc, areas=None):
     if areas:
         footer.append(', '.join(areas))
     footer.append('build ' + _version(tag))
+    image, rest = _news_picture_lines(rest)
     return {'title': title, 'description': _cut('\n'.join(rest).strip()),
+            'image': image,
             'footer': ' \u00b7 '.join(footer),
             'color': DEV_COLOUR if dev else MAIN_COLOUR,
             'author': 'Thornswood dev' if dev else 'Thornswood',
@@ -245,7 +320,9 @@ def main_server_parts(note, areas, at=None):
     """A Main Server change's post in #news: its headline, its lines, and
        the footer "Main Server · Discord"."""
     head, details = note
+    image, details = _news_picture_lines(details)
     return {'title': head[:250], 'description': _cut('\n'.join(details)),
+            'image': image,
             'footer': ' \u00b7 '.join(['Main Server'] + ([', '.join(areas)] if areas else [])),
             'color': MAIN_COLOUR, 'author': 'Thornswood', 'at': at}
 
@@ -256,7 +333,8 @@ def release_about(tag, get=None):
        Server changes that have a note}. The pull requests are the merges
        since the published build Release before it, as
        Collect-ReleaseNotes.ps1 reads them. None for a tag that is not a
-       build-1.3.<n>. Raises when GitHub does not answer."""
+       build-1.3.<n>. Raises when GitHub does not answer, or when the
+       release note rules cannot be asked (pr_release_notes)."""
     get = get or _github_get
     m = TAG_NUMBER.match(str(tag or '').strip())
     if not m:
@@ -289,11 +367,11 @@ def release_about(tag, get=None):
             if len(got) < 100:
                 break
         if is_main_server_change(files):
-            note = pr_release_note(pr.get('body'))
-            if note:
-                live.append((number, note, areas_of(files)))
+            live.append((number, pr.get('body'), areas_of(files)))
         else:
             areas.update(areas_of(files))
+    notes = pr_release_notes([body for _n, body, _a in live])
+    live = [(number, note, where) for (number, _b, where), note in zip(live, notes) if note]
     return {'areas': [a for a in AREA_ORDER if a in areas], 'live': live}
 
 
@@ -376,9 +454,21 @@ async def news_once(state, docs, send, save, now=None, about=None):
     return done
 
 
+async def _news_picture_ready(image):
+    """Do not announce a screenshot before the site has deployed its file."""
+    timeout = aiohttp.ClientTimeout(total=8, ceil_threshold=9)
+    async with aiohttp.ClientSession(timeout=timeout, cookie_jar=aiohttp.DummyCookieJar()) as session:
+        async with session.head(image['url'], allow_redirects=False, ssl=CONTEXT,
+                                headers={'User-Agent': 'ThornswoodNews/1'}) as response:
+            types = response.headers.getall('Content-Type', [])
+            kind = HEADER_POLICY.header_factory('Content-Type', types[0]) if len(types) == 1 else None
+            return (response.status == 200 and str(response.url) == image['url'] and kind is not None
+                    and not kind.defects and kind.content_type in ('image/png', 'image/jpeg', 'image/webp'))
+
+
 async def _news_send(channel, parts, said_once):
     cid = DEV_NEWS_ID if channel == 'dev' else MAIN_NEWS_ID
-    where = 'the dev updates channel' if channel == 'dev' else '#news'
+    where = '#staff-news' if channel == 'dev' else '#news'
     ch = client.get_channel(cid) if cid else None
     if ch is None:
         if channel not in said_once:
@@ -388,18 +478,38 @@ async def _news_send(channel, parts, said_once):
                    % ('dev-channel.txt' if channel == 'dev' else 'news-channel.txt')))
             said_once.add(channel)
         return None
+    if parts.get('image'):
+        deadline = time.monotonic() + 8
+        try:
+            ready = await asyncio.wait_for(_news_picture_ready(parts['image']), timeout=8)
+        except Exception as ex:
+            if channel not in said_once:
+                log('news: screenshot unavailable (%s); the %s post waits for the site' % (type(ex).__name__, channel))
+            said_once.add(channel)
+            return None
+        if not ready or time.monotonic() >= deadline:
+            if channel not in said_once:
+                log('news: screenshot is not served as an image yet; the %s post waits for the site' % channel)
+            said_once.add(channel)
+            return None
     logo = SITE + '/logo.png'
     e = discord.Embed(title=parts['title'], url=SITE + '/news',
                       description=parts['description'], color=parts['color'])
     e.set_author(name=parts['author'], url=SITE, icon_url=logo)
     e.set_thumbnail(url=logo)
     e.set_footer(text=parts['footer'], icon_url=logo)
+    if parts.get('image'):
+        e.set_image(url=parts['image']['url'])
+        caption = _news_literal(parts['image']['alt'])
+        e.add_field(name='Screenshot', value=caption + '\n[Open full screenshot](' + parts['image']['url'] + ')', inline=False)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)
-    # A post in #news pings News Pings, the role its button in #welcome
-    # promises (bot_pings.py); nothing pinged it before 12 Nov 2026. The dev
-    # channel pings nobody.
-    role = ping_role(getattr(ch, 'guild', None), NEWS_PING_ROLE) if channel != 'dev' else None
+    # A post pings News Pings, the role its button in #welcome promises
+    # (bot_pings.py); nothing pinged it before 12 Nov 2026. #staff-news, the
+    # staff side of #news, pings it too, so staff who took the role hear of
+    # a dev release the way everybody hears of a main one (Patrick, 15 Nov
+    # 2026). Only staff see #staff-news, so only staff are pinged there.
+    role = ping_role(getattr(ch, 'guild', None), NEWS_PING_ROLE)
     try:
         msg = await ch.send(content=role.mention if role else None, embed=e,
                             allowed_mentions=discord.AllowedMentions(

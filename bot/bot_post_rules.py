@@ -199,8 +199,6 @@ def github_say(number, text):
         return json.loads(r.read().decode('utf-8'))
 
 
-CHANNEL_NAMES = {'dev': 'dev-test-tasks', 'main': 'test-tasks',
-                 'known': 'known-issues'}
 # Where each kind of post goes, as the refusal comment says it.
 POST_PLACES = {'dev': 'in #dev-test-tasks', 'main': 'in #test-tasks',
                'known': 'in #known-issues', 'roadmap': "on the site's roadmap"}
@@ -247,18 +245,40 @@ def refuse(state, channel, num, problems, say=None):
     return True
 
 
+def latest_main_release(get):
+    """The tag of the newest published main Release, or None when there is
+       none. Main has gone out through promote-main.yml since 3 Nov 2026,
+       which publishes main's files on a Release named main-<build> (Put
+       main's launcher package out); the release/main/<id> tags a main Ship
+       made stopped at release/main/20261102-121621. Read from the tags
+       alone, every Main test task for a fix merged after 2 Nov was refused
+       as "not in the latest main release": the 24 issues build-1.3.55 closed
+       on 15 Nov 2026 each got that refusal instead of a post. GitHub lists
+       Releases newest first, and a draft is not out."""
+    for page in range(1, 11):
+        rels = get('%s/repos/%s/releases?per_page=100&page=%d'
+                   % (GITHUB_API, KNOWN_REPO, page)) or []
+        for r in rels:
+            if not isinstance(r, dict) or r.get('draft'):
+                continue
+            tag = str(r.get('tag_name') or '')
+            if tag.startswith('main-') or tag.startswith('release/main/'):
+                return tag
+        if len(rels) < 100:
+            return None
+    return None
+
+
 def fix_in_main(prs, commits, get=None):
     """True when a fix commit of the issue (a merged pull request's merge
-       commit, or a commit naming it) is in the newest release/main tag,
-       False when none is, None when that cannot be read."""
+       commit, or a commit naming it) is in the newest main Release
+       (latest_main_release), False when none is, None when that cannot be
+       read."""
     get = get or _github_get
     try:
-        refs = get('%s/repos/%s/git/matching-refs/tags/release/main/'
-                   % (GITHUB_API, KNOWN_REPO)) or []
-        tags = sorted(str(r.get('ref') or '') for r in refs if isinstance(r, dict))
-        if not tags:
+        tag = latest_main_release(get)
+        if not tag:
             return None
-        tag = tags[-1][len('refs/tags/'):]
         shas = list(commits or [])
         for pr in prs or []:
             if pr.get('merged_at'):

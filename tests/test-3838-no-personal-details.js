@@ -80,9 +80,9 @@ const NOT_ADDRESSES = [
   [[192, 135, 119, 166].join('.'), "the old product's server, which the docs check refuses", /^tests\/test-repo-docs\.js$/],
   [[128, 0, 0, 1].join('.'), 'a made-up caller next to loopback, for the sign-in address check', /^site\/tests\/test-2187-signin-addr\.js$/],
   [[104, 28, 0, 1].join('.'), 'the first address past a Cloudflare range, for the range check', /^tests\/test-2995-cloudflare-front\.ps1$/],
-  [[13, 0, 0, 4].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
-  [[13, 0, 0, 5].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
-  [[13, 0, 0, 6].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
+  [[13, 0, 0, 4].join('.'), 'a made-up block list entry for the runner firewall check', /^scripts\/tests\/test-runner-offbox\.ps1$/],
+  [[13, 0, 0, 5].join('.'), 'a made-up block list entry for the runner firewall check', /^scripts\/tests\/test-runner-offbox\.ps1$/],
+  [[13, 0, 0, 6].join('.'), 'a made-up block list entry for the runner firewall check', /^scripts\/tests\/test-runner-offbox\.ps1$/],
 ];
 const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^installer\/licences\/(?!README\.txt$)/, /^tests\/fixtures\/ui-front-build\.js$/];
 
@@ -247,4 +247,4 @@ for (const [rel, why] of WAITING) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

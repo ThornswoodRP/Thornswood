@@ -108,7 +108,13 @@ has been drawn, and `StateChanged`. So:
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
   ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
-  ShellVortexWatch.cs, Waiting.cs and Stall.cs.
+  ShellVortexWatch.cs, ShellAudioSettings.cs, Waiting.cs and Stall.cs.
+
+  Opening Settings also refreshes the active recording-input list through
+  `Mics.All`. `AudioDevicePicker` keeps an unavailable saved input selected;
+  only an explicit selection saves `Config.MicrophoneName` through the usual
+  config save path. It does not replace a running audio worker. The choice
+  applies after restarting the launcher.
 
 Message boxes are Windows' own, through Ask.cs (MessageBoxW): Avalonia has
 none, and every caller waits for the answer on its next line. They work
@@ -688,6 +694,28 @@ only a file whose bytes are Thornswood's. Nothing Vortex deployed, nothing of
 Skyrim's own, the person's own mods and the client's shared settings file
 stay. It notes what it did in `Profile\OwnGame\steam-copy-cleaned.txt` and
 never runs again; a file it could not delete keeps it running at each start.
+Once the collection's modlist installs into the portable Mod Organizer 2 in
+`<Root>\Mods` (ModlistSetup.cs, #6244), the mods come from there in place of
+Vortex: `DeploysInto` names `<Root>\Mods`, the game itself still comes from
+the Steam copy or the Downgrade, and the install's record
+`<Root>\Mods\thornswood-deployment.txt` (`ModlistSetup.Deployment`: each path
+in the game folder, its mod, its path in the mod's folder and its xxHash64,
+the mod higher in the profile's modlist.txt winning a shared path) stands
+where Vortex's deployment record stood (`OwnGame.ModsStaged`). The record is
+set aside (`thornswood-deployment-last.txt`) before a changed modlist is
+installed and written once every file is in, so a folder is never made from
+half an install; its V lines in `files.txt` are the modlist's mods. Pandora's
+build reads the same record (`ModsDeployed` in Generated.cs). The last whole
+install's record also says which of a mod's settings files (.ini, .toml) the
+person changed in Mod Organizer 2 since: those are kept as they left them,
+and the rest take the new modlist's copy (`ModlistInstall.Changed`). The
+install itself starts from Diagnostics (ShellModlist.cs): a card beside
+Vortex's offers it, and once the mods come from Mod Organizer 2 the
+collection card and the bar's button are that install's, with the
+revision its record names (`OwnGame.ModsRevision`, which
+`Checks.CollectionRevision` reads in place of Vortex's). It installs the
+modlist of the Release the channel is on (`Updater.ChannelOn`,
+`ModlistSetup.FromRelease`), off the window's thread, with a Stop.
 
 **ClientRuntime** (ClientRuntime.cs). The six files that are the SkyMP client,
 checked by SHA-256 against `records\client-build.json`, which is compiled into
@@ -909,8 +937,9 @@ cleared at once.
 | 9 | `ShellChars.cs:130 PlayAsync` | Into PlayAsync in ShellPlay.cs, awaited. Its first lines check `updatePending`, `collectionBarUp`, `ownGameBusy` and `OwnGameRefreshIfDue` again, because the button is not the only way in: Play() starts the same PlayAsync for those. | |
 | 9b | `ShellPlay.cs:158 OwnGameRefreshIfDue` | Same as step 3b, for the ways in that are not the button. | |
 | 10 | `ShellPlay.cs:160 Paths.Loader` | `Game\skse64_loader.exe` has to exist, and `ShellPlay.cs:161 Paths.MpClient` (`Game\Data\SKSE\Plugins\MpClientPlugin.dll`). | |
-| 11 | `ShellPlay.cs:166 ClearStuckGame` | A Skyrim with no window is closed; one on screen is asked about. Then, off the window's thread and awaited, `ShellPlay.cs:178 OwnGame.CheckShared`: every archive the folder shares with the Steam copy still has the bytes on record (the change time is read, and the bytes only when it moved). One that changed stops Play and brings up the Downgrade card. | `Profile\OwnGame\shared.txt` and `changed.txt`, when anything moved |
-| 12 | `ShellPlay.cs:192 Verify.Run` | Off the window's thread, awaited. Reads the plugin list, the server's manifest and the plugins' bytes. Any problem that would get the person refused: the Diagnostics page (Scan and Fix) opens with a message saying what to do, and Play stops. | nothing |
+| 11 | `ShellPlay.cs:192 ClearStuckGame` | A Skyrim with no window is closed; one on screen is asked about. Then, off the window's thread and awaited, `ShellPlay.cs:204 OwnGame.CheckShared`: every archive the folder shares with the Steam copy still has the bytes on record (the change time is read, and the bytes only when it moved). One that changed stops Play and brings up the Downgrade card. | `Profile\OwnGame\shared.txt` and `changed.txt`, when anything moved |
+| 11b | `ShellPlay.cs:224 MadeFromGame.Ensure` | The main menu, the notice board's two meshes and the collection's menus with no gold values (#3113) made from this machine's game and mod archives, only those missing or changed. A game that cannot make them still plays, and the log line says which file differs. Before Verify.Run, because the server's plugin list names Thornswood-Last.esp: judged first, a game that had not made it yet was refused as a mod that is not installed (#6181). | `Game\Data\Interface\startmenu.swf`, `Game\Data\meshes\thornswood\noticeboard01.nif` and `dropbox01.nif`; `Game\Data\Interface\skyui\config.txt` and `itemcard.swf`, `Game\Data\Interface\hudmenu.swf`, `AHZHudInfo.swf` and `exported\AHZHudInfo.swf`; `Game\Data\Interface\quest_journal.swf` (#3127); `Game\Data\Thornswood-Last.esp` from the release's recipe and the person's own plugins (#2791) |
+| 12 | `ShellPlay.cs:235 Verify.Run` | Off the window's thread, awaited. Reads the plugin list, the server's manifest and the plugins' bytes. Any problem that would get the person refused: the Diagnostics page (Scan and Fix) opens with a message saying what to do, and Play stops. | nothing |
 | 13 | `ShellPlay.cs:251 Verify.DeployPersonal` | `<Root>\Your Mods` copied into `Game\Data`, never a plugin. | those files in `Game\Data` |
 | 14 | `ShellPlay.cs:265 Display.MatchScreen` | Skipped when Lock resolution is ticked. The game's window size and Display Tweaks' resolution follow the screen. | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, `Profile\MyGames\SkyrimPrefs.ini`, each only when it changes |
 | 14a | `ShellPlay.cs:270 Display.PinMode` | Every Play, locked resolution or not. The mode the launcher shows (borderless unless the Display page says otherwise) written as Display Tweaks' own Fullscreen and Borderless lines. Commented out, as the collection ships them, Display Tweaks takes Skyrim's bFull Screen instead, and the game ran in exclusive full screen while the launcher said borderless (#5946). | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, only when the lines do not already say the mode |
@@ -919,7 +948,6 @@ cleared at once.
 | 17 | `ShellPlay.cs:293 ThornIni.Ensure` | The template, if the file is missing. | `Game\Data\SKSE\Plugins\Thornswood.ini` |
 | 18 | `ShellPlay.cs:296 Mics.Apply` | This machine's microphone name, the voice port and the voice address. | `Thornswood.ini` |
 | 18a | `ShellPlay.cs:311 GeneratedHere.Ensure` | Off the window's thread, awaited. The behavior files and the covered bodies (#3715), built with the collection's own Pandora and BodySlide only when `generated.txt` is missing or stale: the mod list, the files the tools read, the build list compiled into the launcher, or a built file changed. A build that stops, or any body in the folder that is nude, stops Play with a message box saying why (#405). | when it builds: `Game\Data\meshes\actors\*\behaviors`, `characters`, `animationdatasinglefile.txt` and `animationsetdatasinglefile.txt`, the six bodies in `character assets`, BodySlide's own copies of its settings, presets and groups, and `Profile\OwnGame\generated.txt`; `Profile\OwnGame\build-generated` while it runs |
-| 18b | `ShellPlay.cs:334 MadeFromGame.Ensure` | The main menu, the notice board's two meshes and the collection's menus with no gold values (#3113) made from this machine's game and mod archives, only those missing or changed. A game that cannot make them still plays, and the log line says which file differs. | `Game\Data\Interface\startmenu.swf`, `Game\Data\meshes\thornswood\noticeboard01.nif` and `dropbox01.nif`; `Game\Data\Interface\skyui\config.txt` and `itemcard.swf`, `Game\Data\Interface\hudmenu.swf`, `AHZHudInfo.swf` and `exported\AHZHudInfo.swf`; `Game\Data\Interface\quest_journal.swf` (#3127); `Game\Data\Thornswood-Last.esp` from the release's recipe and the person's own plugins (#2791) |
 | 19 | `ShellPlay.cs:341 EnsureServer` | `ShellPlay.cs:106 EnsureServer()`: `SkyMp.Up` connects to the resources port. A server elsewhere that does not answer is asked about; one on this machine is started. | `Profile\server.pid` and `server.log`, local server only |
 | 20 | `ShellPlay.cs:348 Keep.Restore` | Last thing before the game that can still say no, so nothing is left parked by a refusal. Our Data\Platform files back from `Profile\Keep`; other servers' plugins parked. | changed files in `Game\Data\Platform`; `Profile\Parked\*` and `parked.txt` |
 | 21 | `ShellPlay.cs:350 Keep.LeaveNote` | The note that says this session is ours. The plugins idle without it. | `Game\Data\Platform\thornswood-session.txt` |

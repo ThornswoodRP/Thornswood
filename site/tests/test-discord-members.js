@@ -136,5 +136,5 @@ const reset = (g) => { calls = []; guild = g; membersCache = { at: 0, byId: null
   Date.now = realNow;
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

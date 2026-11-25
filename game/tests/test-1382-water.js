@@ -169,4 +169,4 @@ yes('no /water command: gameplay is never a slash command', !!wm && wm[1].indexO
 yes('and no panel button sends one', UI.indexOf('/water') < 0 && UI.indexOf('Fill water') < 0);
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

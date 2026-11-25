@@ -40,4 +40,4 @@ yes('the lock script locks every door property wants shut, on its own', /r\.lock
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

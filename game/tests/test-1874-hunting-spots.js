@@ -47,7 +47,7 @@ for (const name of ["python", "python3"]) {
   if (!r.error && r.status === 0 && r.stdout.trim() === "3") { PY = name; break; }
 }
 yes("a Python 3 to run the writers (" + (PY || "none found") + ")", PY !== null);
-if (!PY) { console.log(""); console.log(pass + " passed, " + fail + " failed"); process.exit(1); }
+if (!PY) { console.log(""); console.log(pass + " passed, " + fail + " failed"); process.exitCode = 1; } else {
 
 // The first row that differs, so a failure says where.
 function firstDiff(a, b) {
@@ -88,7 +88,7 @@ function done() {
   temps.forEach(function (t) { try { fs.rmSync(t, { recursive: true, force: true }); } catch (e) { } });
   console.log("");
   console.log(pass + " passed, " + fail + " failed");
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const committed = readRepo(CSV);
@@ -201,9 +201,10 @@ yes("a body the hunt table leaves out (#1808) is not a Hunter row: the Spectral 
   const tmp = stage("full"); temps.push(tmp);
   fs.writeFileSync(path.join(tmp, CSV), "untouched\n");
   const r = huntingOnly(tmp, []);
-  yes("without --hunting-only it refuses when --settings and --strings-dir are missing (exit " + r.status + ")",
-      r.status === 2 && /--settings and --strings-dir are required/.test(r.stderr || ""));
+  yes("without --hunting-only it refuses when neither --data nor --settings and --strings-dir is given (exit " + r.status + ")",
+      r.status === 2 && /--data, or --settings and --strings-dir, unless --hunting-only/.test(r.stderr || ""));
   yes("and writes nothing", fs.readFileSync(path.join(tmp, CSV), "utf8") === "untouched\n");
 }
 
 done();
+}

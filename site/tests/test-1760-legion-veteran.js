@@ -81,4 +81,4 @@ yes('and that a Legion veteran can be played', /A Legion veteran who served in t
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

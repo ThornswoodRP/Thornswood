@@ -229,7 +229,8 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
     /// serverZip, when given, is the server build the Deployment swaps dev
     /// onto (#5219), held to the signed manifest too: the copy runs that
     /// engine and not dev's, so the pass checks what dev will run.</summary>
-    public async Task<Outcome> Run(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, CancellationToken ct, string? serverZip = null, string name = "")
+    public async Task<Outcome> Run(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, CancellationToken ct, string? serverZip = null, string name = "",
+        IReadOnlyDictionary<string, string>? staged = null, IReadOnlyList<string>? order = null)
     {
         if (!bot.Contains(Runs)) return new Outcome("failure", $"not applied: the Release's bot part has no {Runs}, and dev's deploys wait on the bot pass");
         foreach (var n in bot.Concat(Server.ReloadFiles))
@@ -238,7 +239,7 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         using (var turn = TakeTurn(log, out why))
         {
             if (turn == null) return new Outcome("failure", "not applied: " + why);
-            try { why = Prepare(files, bot, log, serverZip, name); }
+            try { why = Prepare(files, bot, log, serverZip, name, staged, order); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidDataException) { why = e.Message; }
         }
         if (why != "") return new Outcome("failure", "not applied: the bot pass copy could not be made: " + why);
@@ -323,8 +324,14 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException) { why = e.Message; return null; }
     }
 
-    /// <summary>The copy, made fresh: "" when it is ready, else why not.</summary>
-    public string Prepare(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, string? serverZip = null, string passName = "")
+    /// <summary>The copy, made fresh: "" when it is ready, else why not.
+    /// staged is what the Deployment puts in beside the gamemode, by its path
+    /// under the server's root ("plugins/Thornswood-Content.esp", ServerPlugins
+    /// and ServerOrder): each plugin of it is read from there, not from dev.
+    /// order, when given, is the load order the Deployment writes (#6209),
+    /// read in place of dev's.</summary>
+    public string Prepare(IReadOnlyDictionary<string, string> files, IReadOnlyCollection<string> bot, Action<string> log, string? serverZip = null, string passName = "",
+        IReadOnlyDictionary<string, string>? staged = null, IReadOnlyList<string>? order = null)
     {
         if (!Directory.Exists(RunDir)) return $"{RunDir} is not there; Install-DeployAgent.ps1 makes it with the task";
         // The folder stays, with the rights the installer gave the task on it;
@@ -380,13 +387,16 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         }
 
         string Resolve(string entry) => Path.IsPathRooted(entry) || entry.Contains(":\\") ? entry : Path.Combine(devData, entry);
-        var order = settings["loadOrder"] is JsonArray lo ? lo.Select(x => x!.GetValue<string>()).ToList() : FiveMasters.ToList();
+        var loads = order?.ToList() ?? (settings["loadOrder"] is JsonArray lo ? lo.Select(x => x!.GetValue<string>()).ToList() : FiveMasters.ToList());
+        if (order != null) log($"the copy loads the {loads.Count} plugins of the order the Deployment writes, not dev's");
         var copied = 0;
         var placed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         string Cache(string entry, string what)
         {
             var from = Resolve(entry);
             var name = Path.GetFileName(from.Replace('\\', '/').TrimEnd('/'));
+            // What the Deployment puts in is read from its stage (#6175, #6209).
+            if (staged != null && staged.TryGetValue(ServerPlugins.Dir + "/" + name, out var put)) from = put;
             if (!File.Exists(from)) throw new InvalidDataException($"{entry} is in dev's {what} but not on disk at {from}");
             if (placed.TryGetValue(name, out var other) && !string.Equals(other, from, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"dev's {what} names two files called {name} ({other} and {from})");
@@ -403,7 +413,7 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
             return to;
         }
         var newOrder = new JsonArray();
-        foreach (var p in order) newOrder.Add(Cache(p, "load order"));
+        foreach (var p in loads) newOrder.Add(Cache(p, "load order"));
         settings["loadOrder"] = newOrder;
         if (settings["archives"] is JsonArray ar)
         {

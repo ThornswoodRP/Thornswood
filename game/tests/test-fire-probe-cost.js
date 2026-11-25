@@ -53,8 +53,8 @@ yes('the walk has its own frame handler', /sp\.on\('update', guard\('fire walk',
 yes('the place tick no longer walks the cell whole (no refsInCell)', src.indexOf('refsInCell(') === -1);
 if (walk === null || fires === null) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // A native call, at the audit's measured cost.
 const CALL_MS = 1 / 3;
@@ -125,12 +125,12 @@ function harness(start, precise) {
   // where it does not; both read the pretend clock, Date.now in whole ms.
   const perf = precise ? { now: function () { return clock.t; } } : undefined;
   const date = { now: function () { return 1700000000000 + Math.floor(clock.t); } };
-  const fn = new Function('sp', 'log', 'FIRE_BASES', 'FIRE_FILES', 'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'PLACED_WATERS', 'WADE_DEEP',
+  const fn = new Function('sp', 'log', 'FIRE_BASES', 'FIRE_FILES', 'FIRE_REACH', 'FIRE_INSIDE', 'performance', 'Date', 'clientTable', 'WADE_DEEP',
     walk + fires +
     '\nreturn { distance: fireDistance, tick: fireWalkTick,' +
     ' walking: function () { return !!fireWalk; },' +
     ' walked: function () { return fireWalked; }, hits: function () { return fireHits; } };');
-  const api = fn(sp, log, BASES, ['Skyrim.esm'], 300, 90, perf, date, [], 70);
+  const api = fn(sp, log, BASES, ['Skyrim.esm'], 300, 90, perf, date, function () { return []; }, 70);
   api.logs = logs;
   api.me = me;
   api.where = where;
@@ -234,4 +234,5 @@ function frame(h, x, stats) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

@@ -45,7 +45,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function block(name) {
   const a = src.indexOf('// ==== thornswood ' + name + ' ====');
@@ -57,7 +57,7 @@ const DOOR = block('door');
 const JP = block('join pass');
 yes('the door block is in gamemode.js between its markers', !!DOOR);
 yes('the join pass block is in gamemode.js between its markers', !!JP);
-if (!DOOR || !JP) { done(); }
+if (!DOOR || !JP) { done(); } else {
 
 // The few seconds the join pass refusal waits between its sentence and its kick.
 const jpWait = /function refuseLater\([^)]*\) \{[\s\S]*?\}, (\d+)\);\n  \}/.exec(JP);
@@ -386,3 +386,4 @@ let DEV = '';
 })();
 
 done();
+}

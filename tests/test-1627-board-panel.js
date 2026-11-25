@@ -58,7 +58,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -80,7 +80,7 @@ const social = slice(gm, '// ==== thornswood social:', '// ==== end thornswood s
 const chat = slice(gm, '// ==== thornswood chat commands ====', '// ==== end thornswood chat commands ====');
 const character = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
 yes('the property, social, chat and character blocks are in the gamemode', !!prop && !!social && !!chat && !!character);
-if (!prop || !social || !chat || !character) { done(); }
+if (!prop || !social || !chat || !character) { done(); return; }
 
 /* One function out of the property block, by name, once. */
 function fn(name) {
@@ -118,7 +118,7 @@ yes('the fees, the ten ledgers, the board seeding and what each character is rea
 const chargenLine = gm.split('\n').find(function (l) { return l.indexOf('const CHARGEN = ') === 0; });
 const PASSAGES = chargenLine ? JSON.parse(chargenLine.slice('const CHARGEN = '.length).replace(/;$/, '')).towns : null;
 yes('the chargen town table reads', !!PASSAGES);
-if (missing.length || !fees || !holds || !COMPANY || !seeding || !reads || !PASSAGES) { done(); }
+if (missing.length || !fees || !holds || !COMPANY || !seeding || !reads || !PASSAGES) { done(); return; }
 
 const GOLD = 15;
 const TAMRIEL = '3c:Skyrim.esm';

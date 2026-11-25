@@ -29,10 +29,12 @@ function lift(fnName) {
 }
 
 yes('no guessed feet slack is left', !/FEET_SLACK/.test(src));
-const m = /^  const PLACED_WATERS = (.*);$/m.exec(src);
-yes('the client carries the placed water table', !!m);
+// The table is a plugin of its own since #5191 (scripts/dev/ClientTables.js),
+// which the front plugin reads as clientTable('PLACED_WATERS').
+yes('the client carries the placed water table, and the front plugin reads it',
+    /const PLACED_WATERS = clientTable\('PLACED_WATERS'\);/.test(src));
 let rows = [];
-try { rows = JSON.parse(m[1]); } catch (e) { rows = null; }
+try { rows = require('../../scripts/dev/ClientTables.js').read('PLACED_WATERS'); } catch (e) { rows = null; }
 yes('and it is a list of [plugin, id, x1, y1, x2, y2]', Array.isArray(rows) &&
     rows.every(function (r) { return r.length === 6 && typeof r[0] === 'string' && r[2] < r[4] && r[3] < r[5]; }));
 const pool = (rows || []).filter(function (r) { return r[0] === 'Skyrim.esm' && r[1] === 0x74ee9; })[0];
@@ -49,8 +51,8 @@ if (resolve && at && wade && pool) {
             getFormFromFile: function () { return null; } },
     Form: { from: function (r) { return r ? { getFormID: function () { return r.id; } } : null; } }
   };
-  const api = new Function('sp', 'PLACED_WATERS',
-    'let waterBox = null;\n' + resolve + at + '\nreturn { resolve: resolveWaterIds, at: placedWaterAt };')(sp, [pool]);
+  const api = new Function('sp', 'clientTable',
+    'let waterBox = null;\n' + resolve + at + '\nreturn { resolve: resolveWaterIds, at: placedWaterAt };')(sp, function () { return [pool]; });
   api.resolve();
   const D = Number(wade[1]);
   const here = [[0, 0, 48, 0x74ee9]];   // the temple pool, at its placed z
@@ -67,4 +69,4 @@ yes('the cell plane counts only above the feet', /wading = deep > 0 && deep < WA
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

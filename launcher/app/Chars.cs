@@ -368,7 +368,7 @@ namespace Thornswood
             catch (Exception ex)
             {
                 throw new Exception("The character list could not be written for the game's menu (" +
-                                    ex.Message.TrimEnd('.') + "), so the game was not started. " +
+                                    Failure.Why("Chars, the Saves link before Play", ex) + "), so the game was not started. " +
                                     "Check that Data\\Platform is not read only.");
             }
 
@@ -602,7 +602,7 @@ namespace Thornswood
             try { Ask("", 0, 0, out fetched); }
             catch (Exception ex)
             {
-                throw new Exception(ex.Message.TrimEnd('.') + ". Your characters are kept with your Discord account on " +
+                throw new Exception(Failure.Why("Chars, the Saves folder", ex) + ". Your characters are kept with your Discord account on " +
                                     "thornswood.net, so the game was not started without them.");
             }
 
@@ -617,7 +617,7 @@ namespace Thornswood
             if (IsLink(live))
             {
                 try { Directory.Delete(live); }
-                catch (Exception ex) { trouble = "the old link would not come off: " + ex.Message; }
+                catch (Exception ex) { trouble = "the old link would not come off: " + Failure.Why("Chars, the old Saves link", ex); }
             }
             else if (Directory.Exists(live))
             {
@@ -633,7 +633,7 @@ namespace Thornswood
                 if (empty)
                 {
                     try { Directory.Delete(live); }
-                    catch (Exception ex) { trouble = "the empty Saves folder would not come off: " + ex.Message; }
+                    catch (Exception ex) { trouble = "the empty Saves folder would not come off: " + Failure.Why("Chars, the empty Saves folder", ex); }
                 }
                 else
                 {
@@ -645,7 +645,7 @@ namespace Thornswood
                     }
                     catch (Exception ex2)
                     {
-                        trouble = "the Saves folder has files in it and would not move aside (" + ex2.Message.TrimEnd('.') + ")";
+                        trouble = "the Saves folder has files in it and would not move aside (" + Failure.Why("Chars, moving the Saves folder aside", ex2) + ")";
                     }
                 }
             }

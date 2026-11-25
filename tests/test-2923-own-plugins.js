@@ -224,8 +224,12 @@ for (const s of steps) {
   const src = read(s.tool);
   for (const f of (s.reads || []).concat(s.readsBack || [], s.uses || [], s.writes || [])) {
     // A gamemode table (#5191) is named in its builder by its constant's
-    // name, which GamemodeTables turns into the file's.
-    const named = /^game\/gamemode-tables\//.test(f) ? path.basename(f, '.json') : path.basename(f);
+    // name, which GamemodeTables turns into the file's, and a client table
+    // (game/plugins/thornswood-table-<name>.js) by its name, which
+    // ClientTables turns into the plugin's.
+    const client = /^game\/plugins\/thornswood-table-(.+)\.js$/.exec(f);
+    const named = /^game\/gamemode-tables\//.test(f) ? path.basename(f, '.json')
+      : client ? client[1].toUpperCase().replace(/-/g, '_') : path.basename(f);
     if (src.indexOf(named) < 0) { unnamed.push(s.tool + ' ' + f); }
   }
 }
@@ -295,12 +299,15 @@ const written = [].concat.apply([], steps.map((s) => s.writes || []));
 const badUses = [];
 for (const s of steps) {
   for (const f of s.uses || []) {
-    if (!fs.existsSync(path.join(ROOT, f)) || !fs.statSync(path.join(ROOT, f)).isFile()) { badUses.push(s.tool + ' uses ' + f + ', which is not a file here'); }
+    // A folder too: Build-MerchantTables.js reads the gamemode's progression
+    // block out of its source folder, game/gamemode (#6195), and a folder
+    // goes up whole, as git ls-tree gives it (ContentPaths.ps1).
+    if (!fs.existsSync(path.join(ROOT, f))) { badUses.push(s.tool + ' uses ' + f + ', which is not a file or folder here'); }
     if (under(f, written)) { badUses.push(s.tool + ' uses ' + f + ', which a step writes: that is a read'); }
     if (under(f, SENT) || /^scripts\//.test(f)) { badUses.push(s.tool + ' uses ' + f + ', which goes up anyway'); }
   }
 }
-yes('C11 each use is a file here that no step writes and the box would not get otherwise' + (badUses.length ? ' (' + badUses.slice(0, 3).join('; ') + ')' : ''),
+yes('C11 each use is a file or folder here that no step writes and the box would not get otherwise' + (badUses.length ? ' (' + badUses.slice(0, 3).join('; ') + ')' : ''),
     badUses.length === 0);
 
 const script = read('scripts/mods/Rebuild-ContentTables.ps1');
@@ -317,7 +324,12 @@ if (!shell) {
   if (shell.status !== 0) { console.log(said + shell.stderr); }
 }
 
-const recordedOrder = JSON.parse(read('game/data/npc-population.json')).loadOrder.map((r) => r.name);
+// The order the commit records (#5191): records/load-order.json at the
+// revision records/collection-plugins.json names, as ContentPaths.ps1 reads it.
+const rootText = "'" + ROOT.replace(/'/g, "''") + "'";
+const recordShell = run(['pwsh', 'powershell'], ['-NoProfile', '-Command',
+  '. (Join-Path ' + rootText + ' "scripts/mods/ContentPaths.ps1"); (Get-ThornswoodContentOrder -Repo ' + rootText + ').Names -join "|"']);
+const recordedOrder = recordShell && recordShell.status === 0 ? recordShell.stdout.trim().split('|') : [];
 const sameList = path.join(TMP, 'same-3105.txt');
 fs.writeFileSync(sameList, recordedOrder.slice(5).map((n) => '*' + n).join('\r\n') + '\r\n');
 const otherList = path.join(TMP, 'other-3105.txt');
@@ -329,14 +341,14 @@ const refused3105 = run(['pwsh', 'powershell'], ['-NoProfile', '-ExecutionPolicy
 if (!listed3105 || !refused3105) {
   console.log('SKIP  C12-C13: no PowerShell here');
 } else {
-  yes('C12 #3105: every builder that takes a plugin list is given the load order npc-population.json records (' + recordedOrder.length + '), not a profile\'s',
+  yes('C12 #3105: every builder that takes a plugin list is given the load order the commit records (' + recordedOrder.length + '), not a profile\'s',
       listed3105.status === 0 && listed3105.stdout.indexOf(js.loadOrderName(recordedOrder)) >= 0 &&
-      steps.filter((s) => s.plugins).every((s) => new RegExp(s.plugins.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + ' \\S*thornswood-loadorder-[0-9a-f]{12}[\\\\/]plugins\\.txt').test(listed3105.stdout)));
+      steps.filter((s) => s.plugins).every((s) => new RegExp(s.plugins.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + ' \\S*thornswood-loadorder-[0-9a-f]{12}[\\\\/](without-last[\\\\/])?plugins\\.txt').test(listed3105.stdout)));
   // PowerShell prints a throw in its error view: colour codes, a "|" gutter,
   // and on Windows the message folded at the console's width, between words or
   // inside one. The sentence is read with those and every space taken out.
   const refusal = (refused3105.stdout + refused3105.stderr).replace(/\x1b\[[0-9;]*m/g, '').replace(/\r?\n\s*\|/g, '').replace(/\s+/g, '');
-  const c13 = refused3105.status !== 0 && /isnottheloadordergame.data.npc-population\.jsonrecords/.test(refusal) &&
+  const c13 = refused3105.status !== 0 && /isnottheloadorderthecommitrecords/.test(refusal) &&
       /Thornswood-Last\.esp/.test(refusal);
   yes('C13 and a -PluginsTxt that is not that load order stops the run before any builder, naming where they part', c13);
   if (!c13) { console.log('      exit ' + refused3105.status + ': ' + JSON.stringify(refused3105.stdout + refused3105.stderr).slice(0, 3000)); }
@@ -427,4 +439,4 @@ yes('O4 no builder writes the plugin list it was given into its table' + (pathIn
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

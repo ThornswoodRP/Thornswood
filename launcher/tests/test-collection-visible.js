@@ -34,6 +34,9 @@ const SHELL = read('Shell.cs');
 const UPDATE = read('ShellUpdate.cs');
 const PAGES = read('Pages.cs');
 const PACKS = read('ShellCollection.cs');
+// The host is filled by DrawCollectionCards since #6244, which also draws it
+// again as the launcher's own install goes.
+const MODLIST = read('ShellModlist.cs');
 const XAML = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', 'MainWindow.axaml'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -63,15 +66,17 @@ yes('the collection host is not under the readings heading',
     collectionHost >= 0 && readingsHead > collectionHost);
 
 const diag = PAGES.slice(PAGES.indexOf('static void BuildDiag()'));
-const hostClear = diag.indexOf('diagCollection.Children.Clear();');
-const card = diag.indexOf('diagCollection.Children.Add(CollectionStatusCard());');
+const draw = MODLIST.slice(MODLIST.indexOf('static void DrawCollectionCards()'));
+const hostClear = draw.indexOf('diagCollection.Children.Clear();');
+const added = draw.indexOf('diagCollection.Children.Add(CollectionStatusCard());');
+const card = diag.indexOf('DrawCollectionCards();');
 const readingsClear = diag.indexOf('diagReadings.Children.Clear();');
 const rows = diag.indexOf('diagReadings.Children.Add(ReadingRow(r));');
-yes('BuildDiag adds the collection card to the host after StatusList', card > 0);
+yes('BuildDiag adds the collection card to the host after StatusList', card > 0 && hostClear >= 0 && added > hostClear);
 yes('that add is not into DiagReadings, so the line cannot sit under the Vortex section',
     diag.indexOf('diagReadings.Children.Add(CollectionStatusCard());') < 0);
 yes('the host is filled before the readings are rebuilt',
-    hostClear >= 0 && card > hostClear && readingsClear > card && rows > readingsClear);
+    card > 0 && readingsClear > card && rows > readingsClear);
 
 const status = PACKS.slice(PACKS.indexOf('static Control CollectionStatusCard()'));
 yes('CollectionStatusCard exists', PACKS.indexOf('static Control CollectionStatusCard()') > 0);
@@ -112,4 +117,4 @@ yes('the bar\'s button opens the collection for the note but not over an update'
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

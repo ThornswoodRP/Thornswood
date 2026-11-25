@@ -77,4 +77,4 @@ yes('the plugin places one water bucket for each row (' + onBank.length + ')', o
 yes('and the server lists it as the river activator', /riverActivators: \['18031:Thornswood-Content\.esp'\]/.test(gm));
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

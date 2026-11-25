@@ -11,8 +11,8 @@ import time
 import discord
 
 from bot_base import DATA_DIR
-from bot_core import _int_env, _state_read, _state_write, client, log
-from bot_news import DEV_NEWS_ID, NEWS_DIR
+from bot_core import WATCH_ID, _int_env, _state_read, _state_write, client, log
+from bot_news import NEWS_DIR
 from bot_notices import _github_time
 
 
@@ -29,11 +29,13 @@ from bot_notices import _github_time
 # RestartNotice.cs), then waits out its lead (five minutes for main) before
 # the stop. Each pass here reads them and, for each id:
 #   - "coming": posted once, ahead, with the time it goes down in each
-#     reader's own clock, pinging Updates Pings for the live server;
+#     reader's own clock, pinging Updates Pings;
 #   - "back", "down" or "off": posted once after its "coming" was, saying the
 #     server is back, did not come back, or the restart was called off.
-# A live server's notice goes to #updates, a dev one to the dev updates
-# channel. A "coming" whose time is over RESTART_STALE gone is written down
+# A live server's notice goes to #updates, a dev one to #staff-updates, the
+# staff side of the same pair (Patrick, 15 Nov 2026: a dev restart is an
+# update, not news). Until then dev's went to #staff-news, the id in
+# dev-channel.txt, among the dev release posts. A "coming" whose time is over RESTART_STALE gone is written down
 # unposted, and so is an end whose "coming" was never posted: news of a
 # restart nobody was warned of helps nobody after the fact. With no
 # restarts-said.json yet, what is there is written down unposted, so a first
@@ -80,8 +82,8 @@ def restart_docs(folder=None):
 
 
 def restart_channel_of(env):
-    """The live server's restarts go to #updates, every other one's to the
-       dev updates channel."""
+    """The live server's restarts go to #updates, every other one's to
+       #staff-updates."""
     return 'main' if str(env or '').lower() == 'main' else 'dev'
 
 
@@ -193,8 +195,9 @@ async def _restart_send(channel, doc, what, said_once):
         ch = updates_channel()
         where = '#updates'
     else:
-        ch = client.get_channel(DEV_NEWS_ID) if DEV_NEWS_ID else None
-        where = 'the dev updates channel'
+        # By id, from staff-channel.txt (bot_core.WATCH_ID), never by name.
+        ch = client.get_channel(WATCH_ID) if WATCH_ID else None
+        where = '#staff-updates'
     if ch is None:
         if channel not in said_once:
             log('restarts: %s is not a channel this bot can see, so restart '
@@ -204,7 +207,11 @@ async def _restart_send(channel, doc, what, said_once):
     if ('found ' + channel) not in said_once:
         log('restarts: %s is channel %d' % (where, ch.id))
         said_once.add('found ' + channel)
-    role = _ping_role(ch) if (channel == 'main' and what == 'coming') else None
+    # A "coming" pings Updates Pings in both: #staff-updates is the staff side
+    # of #updates, so staff who took the role hear of a dev restart the way
+    # everybody hears of a live one (Patrick, 15 Nov 2026). Only staff see
+    # #staff-updates, so only staff are pinged there.
+    role = _ping_role(ch) if what == 'coming' else None
     text = restart_text(doc, what, ping=role.mention if role else '')
     try:
         msg = await ch.send(text, allowed_mentions=discord.AllowedMentions(

@@ -36,7 +36,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function fnOf(head, end) {
@@ -65,7 +65,7 @@ const PURSE = Number((/\n  var PURSE = (\d+);/.exec(src) || [])[1]) || 0;
 for (const k of Object.keys(PIECES)) { yes(k + ' is in the file', !!PIECES[k]); }
 yes('created() is in the file', !!created);
 yes('and so are the shift, the hall and the purse', !!CHARGEN_SRC && !!HALL_SRC && !!PROP && PURSE > 0);
-if (fail) { done(); }
+if (fail) { done(); } else {
 
 const CHARGEN = JSON.parse(CHARGEN_SRC);
 const HALL = new Function('return ' + HALL_SRC)();
@@ -189,3 +189,4 @@ function world(ownedIds) {
 }
 
 done();
+}

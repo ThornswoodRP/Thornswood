@@ -38,7 +38,7 @@ function done() {
   if (dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // ================================================ the tables the server carries
@@ -51,7 +51,7 @@ const BUILDING_NAME = table('BUILDING_NAME');
 const WAY_OUT = table('WAY_OUT');
 yes('U0 the door table, the names and the ways out are in the gamemode',
     !!BUILDING_BY_DOOR && !!BUILDING_NAME && !!WAY_OUT);
-if (!BUILDING_BY_DOOR || !BUILDING_NAME || !WAY_OUT) { done(); }
+if (!BUILDING_BY_DOOR || !BUILDING_NAME || !WAY_OUT) { done(); } else {
 // The town gates are added to the same tables at start (#2484), and a gate
 // is held the way a house is, so they are run in too.
 {
@@ -71,7 +71,7 @@ const propBlock = (function () {
   return a >= 0 && b > a ? gm.slice(a, b) : null;
 })();
 yes('U0 the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 const HOUR = 3600000;
 const clock = { t: Date.UTC(2026, 9, 27, 20, 0, 0) };
@@ -219,7 +219,7 @@ const box = boot();
 const W = box.__thornswoodProperty;
 yes('U0 the property block publishes the labels', !!W && typeof W.keyLabel === 'function' &&
     typeof W.placeOf === 'function' && !!W.LABEL_NO);
-if (!W || !W.keyLabel || !W.placeOf || !W.LABEL_NO) { done(); }
+if (!W || !W.keyLabel || !W.placeOf || !W.LABEL_NO) { done(); } else {
 
 // ========================================================= U. the build check
 {
@@ -274,7 +274,7 @@ function holder(b) { const c = W.claims()[b]; return c ? c.by : 0; }
 function shutTo(p, door) { return W.shutFor(p.a, p.pid).shut.indexOf(idOf(door)) !== -1; }
 
 yes('B0 a street door into each of two Halls of the Dead: ' + W_DOOR + ', ' + M_DOOR, !!W_DOOR && !!M_DOOR);
-if (!W_DOOR || !M_DOOR) { done(); }
+if (!W_DOOR || !M_DOOR) { done(); } else {
 {
   claim(HULDA, W_DOOR);
   claim(CAROL, M_DOOR);
@@ -329,3 +329,4 @@ if (!W_DOOR || !M_DOOR) { done(); }
 }
 
 done();
+}}}}

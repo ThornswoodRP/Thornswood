@@ -39,7 +39,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(text, a, b) {
   const i = text.indexOf(a);
@@ -51,7 +51,7 @@ const RULES = between(gm, '// ==== thornswood progression ====', '// ==== end th
 const PROPERTY = between(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 const CHARACTER = between(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
 yes('the progression, property and character blocks are in the gamemode', !!(RULES && PROPERTY && CHARACTER));
-if (!(RULES && PROPERTY && CHARACTER)) { done(); }
+if (!(RULES && PROPERTY && CHARACTER)) { done(); } else {
 
 // ------------------------------------------------------------- the world --
 const clock = { t: Date.UTC(2026, 9, 4, 20, 0, 0) };
@@ -145,7 +145,7 @@ inDir(function () {
 const W = ctx.__thornswoodProperty, C = ctx.__thornswoodCharacter;
 yes('the three blocks run together, and the character block registers its property with an updateOwner script',
     booted && !!W && !!C && !!made[C.PROPERTY] && typeof made[C.PROPERTY].updateOwner === 'string');
-if (!(booted && W && C && made[C.PROPERTY])) { done(); }
+if (!(booted && W && C && made[C.PROPERTY])) { done(); } else {
 refs[CAROL.a].inventory.entries.push({ baseId: idOf(KEY_DESC), count: 1, name: W.keyLabel(SHOP) });
 
 // --------------------------------------------------------------- the page --
@@ -203,7 +203,7 @@ const pages = {};
 pages[CAROL.a] = makePage();
 pages[ALICE.a] = makePage();
 yes('the K panel runs in a stand-in document', !!pages[CAROL.a] && !!pages[ALICE.a]);
-if (!pages[CAROL.a] || !pages[ALICE.a]) { done(); }
+if (!pages[CAROL.a] || !pages[ALICE.a]) { done(); } else {
 const carol = pages[CAROL.a], alice = pages[ALICE.a];
 
 /*
@@ -333,3 +333,4 @@ function send(p, text) {
 }
 
 done();
+}}}

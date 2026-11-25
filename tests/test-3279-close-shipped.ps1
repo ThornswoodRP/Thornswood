@@ -49,6 +49,11 @@
    11. with -Dev and a dev release's name (#5199), a carried Dev block with
        no Dev test task after its merge is written with its Build: line
        naming that release, a Main one waits, and nothing is closed;
+   13. an open issue with a person's "Fixed by" line is closed when the
+       release carries its merge even though the board does not have its
+       card in Done (#5185 put only merged test tasks there), found through
+       GitHub's issue search; one the search finds with no such line is
+       passed over without a word, and a refused search is a stop;
    12. something runs it once main and dev run a release (#5530): main has
        gone out through promote-main.yml since 3 Nov 2026, not a Ship, so
        .github\workflows\close-shipped.yml runs it when the box marks a
@@ -305,6 +310,39 @@ try {
         $r.Code -eq 1 -and @($r.Writes | Where-Object { $_ -match '/issues/9[ /]' }).Count -eq 0 -and $r.Out -match '#9: .*which is not on main \(GitHub answered GET .*403')
     $script:boardFile = $keepBoard
 
+    # ---- 13: Fixed by lines the board leaves out of Done (#3411, #5185) ----------
+    # Since #5185 a card's Status follows what GitHub knows, and a Fixed by
+    # line is not one of those facts, so its card is In Progress or Todo and
+    # a read of Done alone never reached it (#3314, #3751 and #3752 stayed
+    # open through three main releases). The open issues whose comments say
+    # "Fixed by" are found with the issue search too.
+    $search = 'GET search/issues?q=' + [uri]::EscapeDataString(('repo:{0} is:issue is:open in:comments "Fixed by"' -f $Slug)) + '&per_page=100&page=1'
+    $keepBoard = $script:boardFile
+    $script:boardFile = Join-Path $work 'board-30.json'
+    [IO.File]::WriteAllText($script:boardFile, ([ordered]@{ read_at = '2026-11-15T20:00:00Z'; items = @((Card 30 'In Progress'), (Card 33)) } | ConvertTo-Json -Depth 6))
+    $hand = @{
+        $search   = [ordered]@{ total_count = 4; items = @([ordered]@{ number = 30 }, [ordered]@{ number = 31 }, [ordered]@{ number = 32; pull_request = [ordered]@{ url = 'a pull request' } }, [ordered]@{ number = 33 }) }
+        (Page 30) = @((Hand $mergeA 3340))
+        (Page 31) = @((Person 'This may be fixed by the forge change.'))
+        (Page 33) = @((Robot $mergeA 3341))
+    }
+    $r = Run @() $hand
+    $w = $r.Writes
+    $c30 = @($w | Where-Object { $_ -like "POST repos/$Slug/issues/30/comments *" })
+    Yes ("13 a run that finds Fixed by lines passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
+    Yes '13 it asks the issue search for the open issues whose comments say Fixed by' (@($r.Calls | Where-Object { $_ -like "$search *" }).Count -eq 1)
+    Yes '13 #30, In Progress on the board with a Fixed by line whose merge is carried, gets its test task and is closed' (
+        $c30.Count -eq 1 -and ($c30[0].Substring($c30[0].IndexOf('{')) | ConvertFrom-Json).body -ceq $handTask -and
+        @($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/30 *" }).Count -eq 1)
+    Yes '13 #31, which the search found with no Fixed by line, gets nothing and is named nowhere' (
+        @($w | Where-Object { $_ -match '/issues/31[ /]' }).Count -eq 0 -and $r.Out -notmatch '#31\b')
+    Yes '13 #32, a pull request, is not read' (@($r.Calls | Where-Object { $_ -match '/issues/32[ /]' }).Count -eq 0)
+    Yes '13 #33, in Done and found by the search too, is closed once' (@($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/33 *" }).Count -eq 1)
+    Yes '13 and it says how many the board did not have in Done' ($r.Out -match '2 more open issue\(s\) with a Fixed by line')
+    $r = Run @() @{ $search = [ordered]@{ total_count = 1; items = @([ordered]@{ number = 30 }) }; (Page 30) = @((Hand $mergeA 3340)) } @($search)
+    Yes '13 a search GitHub refuses is a stop that closes nothing' ($r.Code -eq 1 -and $r.Writes.Count -eq 0 -and $r.Out -match 'issue search for the Fixed by lines did not answer')
+    $script:boardFile = $keepBoard
+
     # ---- 11: a dev release (-Dev, #5199) ---------------------------------------
     # #10's Dev block is carried and has only a Main test task after it, so it
     # is written with its Build: line set to the release; #15's has a newer
@@ -353,7 +391,7 @@ $on = [regex]::Match($wf, '(?ms)^on:\n(.*?)\n\S')
 Yes '12 it starts on a Deployment status and on nothing else' ($on.Success -and ($on.Groups[1].Value.Trim() -eq 'deployment_status:'))
 $if = [regex]::Match($wf, '(?ms)^    if: >-\n(.*?)\n    runs-on:')
 $cond = if ($if.Success) { $if.Groups[1].Value } else { '' }
-Yes '12 only on a success the box deploy agent wrote, with its log beside it' ($cond -match "deployment_status\.state == 'success'" -and $cond -match "deployment_status\.log_url != ''")
+Yes '12 only on a success of a Deployment whose payload names a Release, never GitHub''s own for the waiting job' ($cond -match "deployment_status\.state == 'success'" -and $cond -match "deployment\.payload\.release != ''" -and $cond -notmatch 'log_url')
 Yes '12 only for Main and Dev, never Site or Discord bot' ($cond -match "environment == 'Main'" -and $cond -match "environment == 'Dev'" -and $cond -notmatch 'Site|Discord')
 Yes '12 from main''s whole history, so git can say what the commit carries' ($wf -match '(?m)^\s+ref: main$' -and $wf -match '(?m)^\s+fetch-depth: 0$')
 Yes '12 with issues write for the closes and actions write for the board read' ($wf -match '(?m)^\s+issues: write$' -and $wf -match '(?m)^\s+actions: write$')

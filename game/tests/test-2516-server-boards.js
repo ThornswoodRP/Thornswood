@@ -50,7 +50,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -60,7 +60,7 @@ function slice(src, start, end) {
 }
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 const TAMRIEL = '3c:Skyrim.esm';
 const NETCH = '17ec0:Dragonborn.esm';
@@ -193,7 +193,7 @@ function plus(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
 let W = makeBlock();
 yes('the property block runs, with the server\'s boards in it', !!W && typeof W.standBoards === 'function' &&
     typeof W.standBoard === 'function' && typeof W.boardActivated === 'function' && typeof W.boardAngle === 'function');
-if (!W) { done(); }
+if (!W) { done(); } else {
 function standAll() { inDir(function () { W.standBoards(); }); }
 
 const wr = W.boards().whiterun;
@@ -333,3 +333,4 @@ yes('S10 there is no timer: boardTick, somebodyIn and the ten second check are g
 }
 
 done();
+}}

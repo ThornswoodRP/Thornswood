@@ -57,7 +57,7 @@ function note(what) { skip++; console.log('SKIP  ' + what); }
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed' + (skip ? ', ' + skip + ' skipped' : ''));
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 /* From the opening brace at or after `from` to its matching closing brace. */
@@ -104,7 +104,7 @@ const band = method(ART, 'public static ImageBrush BandBrush(IImageBrushSource s
 yes('Art.BandBrush, the one brush maker for the band, is in Art.cs', band.length > 0);
 const video = method(SHELL, 'static void StartHeaderVideo()');
 yes('StartHeaderVideo is in Shell.cs', video.length > 0);
-if (!header || !band || !video) done();
+if (!header || !band || !video) { done(); return; }
 
 yes('the still is painted through BandBrush', /header = BandBrush\(bi\);/.test(header));
 yes('and so is the video, each frame as it is put up', /layer\.Background = Art\.BandBrush\(shown\);/.test(video));
@@ -156,7 +156,7 @@ yes('and after the last frame comes the first, for ever, as it always was',
 // ---- what the named crop works out to ---------------------------------------
 const rect = /public static readonly RelativeRect HeaderCrop = new RelativeRect\(([^)]+), RelativeUnit\.Relative\);/.exec(ART);
 yes('HeaderCrop reads as four numbers', rect !== null && rect[1].split(',').length === 4);
-if (!rect) done();
+if (!rect) { done(); return; }
 const n = rect[1].split(',').map(function (s) { return parseFloat(s.trim()); });
 const cropX = n[0], cropY = n[1], cropW = n[2], cropH = n[3];
 yes('the crop takes the whole width of the art, so nothing is lost off the sides by the crop itself',
@@ -179,7 +179,7 @@ function jpegSize(file) {
 }
 const art = jpegSize(path.join(REPO_DIR, 'launcher', 'launcher-header.jpg'));
 yes('the art behind the title is a readable JPEG', art !== null);
-if (!art) done();
+if (!art) { done(); return; }
 
 // The window's own numbers, so a change to any of them is checked against the crop.
 const minWidth = parseInt(/MinWidth="(\d+)"/.exec(XAML)[1], 10);

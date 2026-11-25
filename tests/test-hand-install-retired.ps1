@@ -14,7 +14,7 @@
   Done when each stops (pattern of Add-Bodies.ps1) or is deleted, held here.
 
   What it checks:
-    1. each mods/* and oneoff hand-install listed in #1179 has a throw STOP as
+    1. each oneoff hand-install listed in #1179 has a throw STOP as
        its first statement after param, names #1179, and opens RETIRED;
     2. a dry run of one of them exits non-zero and says STOP (touches nothing);
     3. Install-SkyMPClient.ps1 is gone (Sync-Client.ps1 replaced it, #1001);
@@ -42,14 +42,14 @@ function Yes([string]$what, [bool]$cond) {
 $Utf8 = New-Object Text.UTF8Encoding($false)
 
 $stopScripts = @(
-    'scripts\mods\Add-Accuracy.ps1',
-    'scripts\mods\Add-CartTravel.ps1',
-    'scripts\mods\Add-McmShortcut.ps1',
-    'scripts\mods\Enable-MCM.ps1',
-    'scripts\mods\Fix-QuickLoot.ps1',
-    'scripts\mods\Fix-MaleBody.ps1',
-    'scripts\mods\Remove-Plugin.ps1',
-    'scripts\mods\Set-UnboundMenu.ps1',
+    'scripts\oneoff\Add-Accuracy.ps1',
+    'scripts\oneoff\Add-CartTravel.ps1',
+    'scripts\oneoff\Add-McmShortcut.ps1',
+    'scripts\oneoff\Enable-MCM.ps1',
+    'scripts\oneoff\Fix-QuickLoot.ps1',
+    'scripts\oneoff\Fix-MaleBody.ps1',
+    'scripts\oneoff\Remove-Plugin.ps1',
+    'scripts\oneoff\Set-UnboundMenu.ps1',
     'scripts\oneoff\Add-SkyrimUnbound.ps1',
     'scripts\oneoff\Fix-PluginProblems.ps1',
     'scripts\oneoff\Run-Everything.ps1'
@@ -80,7 +80,7 @@ foreach ($rel in $stopScripts) {
 }
 
 # One dry run: Add-Accuracy against nothing real; NoPause so it does not wait.
-$acc = Join-Path $Repo 'scripts\mods\Add-Accuracy.ps1'
+$acc = Join-Path $Repo 'scripts\oneoff\Add-Accuracy.ps1'
 $pwsh = (Get-Process -Id $PID).Path
 $out = & $pwsh -NoProfile -ExecutionPolicy Bypass -File $acc -NoPause 2>&1 | Out-String
 $code = $LASTEXITCODE
@@ -108,11 +108,12 @@ Yes 'Install-Thornswood.ps1 no longer runs Fix-MaleBody as a step' ($install -no
 Yes 'and still runs Sync-Client for the client step' ($install -match "Sync-Client\.ps1")
 Yes 'and still runs Install-ThornswoodContent for content' ($install -match "Install-ThornswoodContent\.ps1")
 
-# Index rows
-$index = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\README.md'), $Utf8)
-foreach ($name in @('mods/Add-Accuracy.ps1', 'mods/Add-CartTravel.ps1', 'mods/Fix-MaleBody.ps1', 'mods/Set-UnboundMenu.ps1')) {
-    $row = @($index -split "`r?`n" | Where-Object { $_.Contains("]($name)") })
-    Yes ("scripts\README.md lists $name as RETIRED") ($row.Count -ge 1 -and ($row[0] -match 'RETIRED\. DO NOT RUN'))
+# Index rows: scripts\oneoff\README.md, the one-off folder's own index, since
+# #4740 moved these out of scripts\mods and its list.
+$index = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\oneoff\README.md'), $Utf8)
+foreach ($name in @('Add-Accuracy.ps1', 'Add-CartTravel.ps1', 'Fix-MaleBody.ps1', 'Set-UnboundMenu.ps1')) {
+    $row = @($index -split "`r?`n" | Where-Object { $_.StartsWith('| `' + $name + '`') })
+    Yes ("scripts\oneoff\README.md lists $name as refusing to run") ($row.Count -ge 1 -and ($row[0] -match 'refuses to run'))
 }
 
 Write-Host ''

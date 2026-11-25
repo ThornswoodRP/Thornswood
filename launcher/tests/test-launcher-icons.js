@@ -101,7 +101,8 @@ yes('site/public/favicon.ico is there', fs.existsSync(FAV));
 if (!fs.existsSync(APP) || !fs.existsSync(DEV) || !fs.existsSync(FAV)) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 let app, dev, fav;
@@ -129,7 +130,8 @@ try {
 if (!app || !dev || !fav) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 const sizes = app.frames.map(function (f) { return f.w; }).join(',');
@@ -175,4 +177,4 @@ yes('no em dash in this harness', self.indexOf('\u2014') < 0);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

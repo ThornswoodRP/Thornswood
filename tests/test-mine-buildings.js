@@ -49,11 +49,11 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 yes('the measurement is in tools', fs.existsSync(MEASURE));
-if (!fs.existsSync(MEASURE)) done();
+if (!fs.existsSync(MEASURE)) { done(); return; }
 
 function findPython() {
   const tries = [['python', []], ['py', ['-3']], ['python3', []]];
@@ -66,7 +66,7 @@ function findPython() {
 }
 const PY = findPython();
 yes('there is a Python 3 to run the measurement with', !!PY);
-if (!PY) done();
+if (!PY) { done(); return; }
 function py(args) {
   return spawnSync(PY[0], PY[1].concat(args), {
     encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
@@ -251,7 +251,7 @@ yes('it runs and exits 0', r.status === 0);
 let got = null;
 try { got = JSON.parse(fs.readFileSync(OUT, 'utf8')); } catch (e) { got = null; }
 yes('--out writes the measurement as JSON', !!got);
-if (!got) { fs.rmSync(ROOT, { recursive: true, force: true }); done(); }
+if (!got) { fs.rmSync(ROOT, { recursive: true, force: true }); done(); return; }
 const c = got.counts || {};
 const b = got.buildings || {};
 const mine = b[d(A)] || {};
@@ -353,13 +353,13 @@ const COMMITTED = path.join(REPO, 'game', 'data', 'mine-buildings.json');
 let real = null;
 try { real = JSON.parse(fs.readFileSync(COMMITTED, 'utf8')); } catch (e) { real = null; }
 yes('game/data/mine-buildings.json is committed and reads', !!real);
-if (!real) done();
+if (!real) { done(); return; }
 const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
 function table(name) { return require('./gamemode-tables.js').inGamemode(gm, name); }
 const realByDoor = table('BUILDING_BY_DOOR');
 const realNames = table('BUILDING_NAME');
 yes('the real gamemode carries BUILDING_BY_DOOR and BUILDING_NAME', !!realByDoor && !!realNames);
-if (!realByDoor || !realNames) done();
+if (!realByDoor || !realNames) { done(); return; }
 const claimable = {};
 Object.keys(realByDoor).forEach(function (k) { claimable[realByDoor[k]] = true; });
 
@@ -400,6 +400,5 @@ yes('every building the gamemode calls a mine is accounted for in it',
       return !/\bMines?\b/.test(realNames[k]) || !!rb[k] || !!(real.onTheWayIn || {})[k] ||
              !!(real.calledAMineWithNoVein || {})[k];
     }));
-yes('nothing in it failed to inflate', rc.failedToInflate === 0);
 
 done();

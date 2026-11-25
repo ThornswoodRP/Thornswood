@@ -85,12 +85,18 @@ LocTypeHold, which in this load order is the nine holds and Solstheim. Anybody
 none of these place is under "no hold", which is mostly holding cells, test
 cells, Sovngarde and the arenas mods build in worlds of their own.
 
-WHAT IT READS. Nothing but the plugins, the five masters then plugins.txt,
-last one wins, the same reader Build-DoorTable.py uses. A plugin that names
-its master as Hearthfires.esm and one that names it HearthFires.esm mean the
-same file, so masters are matched to the load order without case: without
-that, CFTO's override of a Hearthfire carriage driver reads as a second
-driver.
+WHAT IT READS. The plugins, the five masters then plugins.txt, last one wins,
+the same reader Build-DoorTable.py uses. A plugin that names its master as
+Hearthfires.esm and one that names it HearthFires.esm mean the same file, so
+masters are matched to the load order without case: without that, CFTO's
+override of a Hearthfire carriage driver reads as a second driver.
+
+Never Thornswood-Last.esp, in the order or not: this is built before it
+(#5191), and it is the deleting, so read as an input it would list every cut
+actor as off at the start. The places it gives a hold (#2551) come from the
+list it is made from, placeHolds in game\\data\\last-plugin-policy.json: each
+location there gets its parent and each room its location, as the plugin
+gives them, so the table is the same with the plugin in the order or not.
 
 WHAT IT WRITES. game\\data\\cast.json, and nothing else.
 
@@ -185,8 +191,10 @@ CRIME_HOLD = {
 
 NO_HOLD = 'no hold'
 # Built from what this and Build-NpcPopulation.py read: it switches off every
-# placed actor the catalogue cuts (#2468), so its actors are never read here.
+# placed actor the catalogue cuts (#2468). This is built before it (#5191) and
+# never reads it; the places it gives a hold come from its policy's placeHolds.
 LAST_PLUGIN = 'Thornswood-Last.esp'
+POLICY = os.path.join(HERE, '..', '..', 'game', 'data', 'last-plugin-policy.json')
 WANTED = (b'FACT', b'NPC_', b'LVLN', b'RACE', b'KYWD', b'LCTN', b'CELL', b'WRLD')
 
 
@@ -493,8 +501,60 @@ class Cast(object):
             'open ground in %s' % (self.t[b'WRLD'].get(a.get('world'), {}).get('edid') or 'a worldspace'))
 
 
-def build(data, plugins_txt, say):
-    order = own_plugins.load_order(plugins_txt)
+def place_holds(t, rules):
+    """The places Thornswood-Last.esp gives a hold (#2551), set in t from the
+    policy's placeHolds the plugin is made from: a location's parent, a room's
+    location. Answers what stops the build, or None. A place no plugin has, or
+    one some other plugin already puts in a hold, means the list is out of
+    date, as Build-LastPlugin.py's place_holds says."""
+    loc, cells = t[b'LCTN'], t[b'CELL']
+    kw = dict((d, r.get('edid')) for d, r in t[b'KYWD'].items())
+
+    def hold(at):
+        seen = set()
+        while at and at not in seen and at in loc:
+            seen.add(at)
+            if 'LocTypeHold' in [kw.get(k) for k in loc[at].get('keywords', [])]:
+                return loc[at].get('edid')
+            at = loc[at].get('parent')
+        return None
+
+    def edid(d):
+        return loc.get(d, {}).get('edid')
+
+    for row in rules.get('locations', []):
+        if row['location'] not in loc or edid(row['location']) != row['edid']:
+            return 'the policy gives %s (%s) a hold, and no plugin has that location' % (row['location'], row['edid'])
+        if row['parent'] not in loc or edid(row['parent']) != row['parentEdid']:
+            return 'the policy gives %s the parent %s (%s), which no plugin has' % (
+                row['edid'], row['parent'], row['parentEdid'])
+        if hold(loc[row['location']].get('parent')):
+            return '%s is in %s already, through its parent; take it out of the policy' % (
+                row['edid'], hold(loc[row['location']].get('parent')))
+    for row in rules.get('cells', []):
+        c = cells.get(row['cell'])
+        if c is None or c.get('edid') != row['edid']:
+            return 'the policy gives cell %s (%s) a location, and no plugin has that cell' % (row['cell'], row['edid'])
+        if c.get('location'):
+            return 'cell %s (%s) has a location of its own now, %s; decide it again in the policy' % (
+                row['cell'], row['edid'], c['location'])
+        if row['location'] not in loc or edid(row['location']) != row['locationEdid']:
+            return 'the policy gives cell %s the location %s (%s), which no plugin has' % (
+                row['cell'], row['location'], row['locationEdid'])
+    for row in rules.get('locations', []):
+        loc[row['location']]['parent'] = row['parent']
+    for row in rules.get('cells', []):
+        cells[row['cell']]['location'] = row['location']
+    for row in rules.get('locations', []) + rules.get('cells', []):
+        got = hold(row.get('location'))
+        if got != row['holdEdid']:
+            return 'the policy puts %s in %s, and it comes out in %s' % (row['edid'], row['holdEdid'], got)
+    return None
+
+
+def build(data, plugins_txt, say, policy=POLICY):
+    # Never Thornswood-Last.esp (#5191): see WHAT IT READS.
+    order = [n for n in own_plugins.load_order(plugins_txt) if n.lower() != LAST_PLUGIN.lower()]
     missing = [n for n in order if not os.path.isfile(own_plugins.plugin_path(data, n))]
     if missing:
         say('STOP. %d plugin(s) are not in %s: %s' % (len(missing), data, ', '.join(missing[:6])))
@@ -503,39 +563,31 @@ def build(data, plugins_txt, say):
 
     t = dict((k, {}) for k in WANTED)
     t[b'ACHR'], t[b'REFR'] = {}, {}
-    failed = tables = 0
+    tables = 0
     for name in order:
         pl = Plugin(own_plugins.plugin_path(data, name), name)
-        if not pl.ok:
-            continue
         pl.masters = [canon.get(m.lower(), m) for m in pl.masters]
         if pl.localised:
             pl.strings = bsa.load_strings(data, name)
             if pl.strings:
                 tables += 1
-        if name == LAST_PLUGIN:
-            # This is the cast as it stands before anything is deleted, and
-            # Thornswood-Last.esp is the deleting: read as an input it would
-            # list every cut actor as off at the start. Its places are read,
-            # as Build-NpcPopulation.py reads them (#2551): its locations over
-            # the ones before it, and of its cells only the location.
-            places = dict((k, {}) for k in t)
-            places[b'LCTN'] = t[b'LCTN']
-            read(pl, places)
-            failed += pl.failed
-            for d, row in places[b'CELL'].items():
-                if row.get('location') and d in t[b'CELL']:
-                    t[b'CELL'][d]['location'] = row['location']
-            continue
         read(pl, t)
-        failed += pl.failed
+
+    with io.open(policy, encoding='utf-8') as fh:
+        rules = json.load(fh).get('placeHolds') or {}
+    stop = place_holds(t, rules)
+    if stop:
+        say('STOP. %s, in %s. Nothing was written.' % (stop, policy))
+        return None
+    say('%d location(s) and %d room(s) given their hold from placeHolds (#2551), as Thornswood-Last.esp gives them'
+        % (len(rules.get('locations', [])), len(rules.get('cells', []))))
 
     cast = Cast(t)
     holds = {}
     counts = {'placed': 0, 'deleted': 0, 'notPeople': 0, 'people': 0, 'offAtStart': 0,
               'traders': 0, 'transport': 0, 'guards': 0, 'everyoneElse': 0,
               'uniqueTraders': 0, 'uniqueTransport': 0,
-              'noHold': 0, 'failedToInflate': failed, 'stringTables': tables}
+              'noHold': 0, 'stringTables': tables}
     how, sellers = {}, {}
     for ref in sorted(t[b'ACHR']):
         a = t[b'ACHR'][ref]
@@ -610,13 +662,15 @@ def main():
     ap.add_argument('--data', default=r'C:\Thornswood\Game\Data')
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\Default\plugins.txt')
     ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'game', 'data', 'cast.json'))
+    ap.add_argument('--policy', default=POLICY,
+                    help='the Last plugin policy, whose placeHolds give places their hold')
     ap.add_argument('--check', action='store_true', help='say what it found, write nothing')
     args = ap.parse_args()
 
     def say(s):
         print(s)
 
-    got = build(args.data, args.plugins, say)
+    got = build(args.data, args.plugins, say, args.policy)
     if got is None:
         return 1
     c, holds = got['counts'], got['holds']
@@ -630,8 +684,6 @@ def main():
     say('  %s are not people: animals, monsters, draugr and mannequins' % f(c['notPeople']))
     say('  %s are people, and %s of those start switched off, by their own flag or an enable parent'
         % (f(c['people']), f(c['offAtStart'])))
-    if c['failedToInflate']:
-        say('  %d compressed record(s) would not inflate, so this is incomplete' % c['failedToInflate'])
     say('')
     say('The people standing in the world')
     say('  %s trader(s), who survive, %s of them with a name of their own'
@@ -700,4 +752,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

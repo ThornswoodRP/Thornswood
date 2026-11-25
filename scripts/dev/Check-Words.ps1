@@ -99,8 +99,8 @@ $Rules = @(
     @{ Id = 'banned-word'; Case = 'IgnoreCase'; For = 'people'
        Re = '\bplayers?\b'
        Say = 'the word player. Say customers, clients, people, testers or partners.' },
-    # `gavin/` is a branch prefix from before 17 Sep, a name in git. Any other
-    # "Gavin" is the old owner name. Until #1052 the name on the signing
+    # The branch prefix from before 17 Sep is a name in git, so it passes. Any
+    # other use of that word is the owner's real name. Until #1052 the name on the signing
     # certificate was let through here; no page names it now (signer-name).
     @{ Id = 'old-owner'; Case = 'IgnoreCase'; For = 'people'
        Re = '\bgavin\b(?!/)'

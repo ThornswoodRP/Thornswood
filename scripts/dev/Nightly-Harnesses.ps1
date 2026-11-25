@@ -128,7 +128,8 @@
   Which share to run, from 1.
 
 .PARAMETER Of
-  How many shares there are. nightly.yml passes the length of its matrix.
+  How many shares there are. nightly.yml types the number into its -Of and
+  job name to match its shard list (#4298).
 
 .PARAMETER BudgetSeconds
   How long this may take in all. A harness starts only when the time used so
@@ -169,8 +170,8 @@
   test points it at a copy.
 
 .PARAMETER OutDir
-  Where each harness's output is kept while it runs. harness-out under the
-  runner's temp folder, or under TEMP off a runner.
+  Where each harness's output is kept while it runs. harness-out-<share>
+  under the runner's temp folder, or under TEMP off a runner.
 
 .PARAMETER Report
   A JUnit file to write when the run ends: a test case for each check every
@@ -203,6 +204,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# No PowerShell this run starts rewrites the shared start-up profile (#5752).
+# Every pwsh reads StartupProfileData-NonInteractive (~/.cache/powershell,
+# or LOCALAPPDATA\Microsoft\PowerShell) as it starts and, as it exits,
+# writes it again in place: opened with O_TRUNC and written in about two
+# hundred small writes, with no lock and no rename (strace of pwsh 7.6.9 on
+# 15 Nov 2026). With harnesses side by side, one pwsh starts while another
+# is halfway through that write and reads a torn assembly name, and .NET's
+# start-up JIT thread aborts on it (exit 134, "The given assembly name was
+# invalid", 'PublicKeyToken=b03f5f7f11d' cut short) or crashes (exit 139).
+# That is PowerShell/PowerShell#26528 and dotnet/runtime#121977, open
+# upstream. The Linux gate lost #5750's and #5996's merge queue runs and a
+# share of #6098's to it between 10 and 15 Nov. With this setting each pwsh still reads
+# the profile but never writes it, so there is nothing torn to read; the
+# harnesses and all they start inherit it.
+$env:DOTNET_MultiCoreJitNoProfileGather = '1'
 if ($Of -lt 1 -or $Shard -lt 1 -or $Shard -gt $Of) { Write-Host "::error::-Shard $Shard -Of $Of names no share"; exit 2 }
 if ($Throttle -lt 1 -or $Throttle -gt 16) { Write-Host "::error::-Throttle $Throttle is not 1 to 16"; exit 2 }
 if ($Share -eq 0) { $Share = $Throttle }
@@ -472,20 +488,71 @@ function Start-One($t) {
 # command's message takes %0A for a new line, and % itself as %25.
 $FAIL_LINES = 10
 $FAIL_LINE_CHARS = 300
+# A harness says why a check failed on indented lines under its FAIL line
+# (#6137: test-4389 prints its site copy's own output there). The annotation
+# is the only part of a failed run a Bot can read, so up to this many of
+# those lines go with each FAIL line shown.
+$FAIL_REASON_LINES = 8
+# A child process that dies prints how, and then the harness prints a FAIL
+# line about what it did not get (#5752): exit 139 on Linux share 2 of
+# 4 for #5781, where the FAIL lines alone said only that a child was gone.
+# So up to DEATH_LINES of the lines the runtime or the OS write as a
+# process dies go in after the FAIL lines: .NET's "Unhandled exception.",
+# "Process terminated." (a fail fast), "Fatal error." and "Stack
+# overflow.", and a shell's "Segmentation fault" and "Aborted", with
+# "(core dumped)" or without. Only what the harness printed: a child's
+# output that the harness kept to itself is not here to carry.
+$DEATH_LINES = 5
+$DEATH_SAYS = '^(Unhandled exception\.|Process terminated\.|Fatal error\.|Stack overflow\.|Aborted\b)|Segmentation fault|\(core dumped\)'
 function Get-FailSaid([string]$printed) {
-    $lines = @($printed -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    $fails = @($lines | Where-Object { $_ -match '^FAIL\b' })
+    $raw = @($printed -split "`r?`n")
+    $lines = @($raw | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $cut = { param($s) if ($s.Length -gt $FAIL_LINE_CHARS) { $s.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $s } }
+    # Each FAIL line, with the indented lines straight under it. A line that
+    # is not indented ends what belongs to the FAIL line above; a blank one
+    # does not.
+    $fails = New-Object System.Collections.Generic.List[object]
+    $open = $null
+    foreach ($line in $raw) {
+        $t = $line.Trim()
+        if (-not $t) { continue }
+        if ($t -match '^FAIL\b') { $open = [pscustomobject]@{ Line = $t; Why = New-Object System.Collections.Generic.List[string] }; $fails.Add($open); continue }
+        if ($null -ne $open -and $line -match '^\s') { $open.Why.Add($t); continue }
+        $open = $null
+    }
     $head = 'its FAIL lines'
     if (-not $fails.Count) {
-        $fails = @($lines | Select-Object -Last $FAIL_LINES)
-        $head = 'no FAIL line; its last lines'
-        if (-not $fails.Count) { return ': it printed nothing' }
+        $show = @($lines | Select-Object -Last $FAIL_LINES | ForEach-Object { & $cut $_ })
+        if (-not $show.Count) { return ': it printed nothing' }
+        $text = ': no FAIL line; its last lines' + "`n" + ($show -join "`n")
+        return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
     }
     $more = $fails.Count - $FAIL_LINES
-    $show = @($fails | Select-Object -First $FAIL_LINES | ForEach-Object {
-        if ($_.Length -gt $FAIL_LINE_CHARS) { $_.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $_ }
-    })
-    if ($more -gt 0) { $show += ('and {0} more FAIL line(s), in the job log' -f $more) }
+    $show = New-Object System.Collections.Generic.List[string]
+    $shown = New-Object System.Collections.Generic.List[string]
+    foreach ($f in @($fails | Select-Object -First $FAIL_LINES)) {
+        $show.Add((& $cut $f.Line)); $shown.Add($f.Line)
+        foreach ($w in @($f.Why | Select-Object -First $FAIL_REASON_LINES)) { $show.Add('    ' + (& $cut $w)); $shown.Add($w) }
+        $over = $f.Why.Count - $FAIL_REASON_LINES
+        if ($over -gt 0) { $show.Add(('    and {0} more line(s) under it, in the job log' -f $over)) }
+    }
+    if ($more -gt 0) { $show.Add(('and {0} more FAIL line(s), in the job log' -f $more)) }
+    # A header that ends at its full stop (.NET 10 prints "Process
+    # terminated." and the fail fast's message on the next line, measured on
+    # #5785's Linux share) takes that next line with it, unless it is a line
+    # of the stack or a harness's own.
+    $deaths = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $d = $lines[$i]
+        if ($d -cnotmatch $DEATH_SAYS -or $shown -ccontains $d) { continue }
+        if ($d -cmatch '^(Unhandled exception|Process terminated|Fatal error)\.$' -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -cnotmatch '^(at |FAIL\b|PASS\b|SKIP\b|NOT RUN\b)') { $d += ' ' + $lines[$i + 1] }
+        if (-not $deaths.Contains($d)) { $deaths.Add($d) }
+    }
+    if ($deaths.Count) {
+        $show.Add('and what it printed of a process dying')
+        foreach ($d in @($deaths | Select-Object -First $DEATH_LINES)) { $show.Add((& $cut $d)) }
+        if ($deaths.Count -gt $DEATH_LINES) { $show.Add(('and {0} more such line(s), in the job log' -f ($deaths.Count - $DEATH_LINES))) }
+    }
     $text = ': ' + $head + "`n" + ($show -join "`n")
     return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
 }

@@ -54,10 +54,12 @@ How to use it:
 - Work that fits an existing issue is an edit or a comment on it, not a
   second issue. Say in it what is left; what was measured goes with the
   evidence ("How an issue and a comment are written", below). A new issue
-  whose title is like an open one's gets a comment naming it
-  (`.github\workflows\duplicate-check.yml`, #5185); if it is the same
-  problem, close the new one as a duplicate of the old, and if not, say on
-  it how it differs. Nothing is closed for you.
+  with the same title as an open one, or asking for the same `deploy\after`
+  step, is closed as a duplicate of it, with a comment naming it
+  (`.github\workflows\duplicate-check.yml`, #5185); reopen it and say how
+  it differs if it is not the same. One whose title is only like an open
+  one's gets a comment naming it; if it is the same problem, close the new
+  one as a duplicate of the old, and if not, say on it how it differs.
 - Uncommitted changes sitting in the repo are outstanding work and belong on
   the board too.
 - Labels: `area:` is the part of the project, `needs: patrick` marks what
@@ -72,7 +74,8 @@ How to use it:
   marks an issue whose title did not say which part it is:
   `.github\workflows\area-label.yml` gives a new issue with no `area:` label
   the one its title names, or this one, and a person swaps it for the right
-  area. `weekly-review` marks what the weekly project review found,
+  area. Every `area:` label is in "Area labels", below, and no other is
+  used. `weekly-review` marks what the weekly project review found,
   `Suggestion` an idea somebody asked for, and `bug` something broken;
   nothing reads these three, they are for people sorting the board.
   `claimed: Bramble`, `claimed: Echo`, `claimed: Magpie`, `claimed: Rift`,
@@ -125,7 +128,8 @@ How to use it:
   `No test task: nobody would notice this fix.` The Ship reads that line as
   it reads done-on-merge's comment, from anybody, the newer of the two
   winning, and closes the issue when the release carries that merge (#3411).
-  A line with neither a test task nor the no-task line keeps the issue open,
+  It finds the line by searching the open issues' comments, so the issue
+  closes whether or not the board had put its card in Done. A line with neither a test task nor the no-task line keeps the issue open,
   and the Ship names it as trouble. To see what a main Ship
   would close, without closing anything:
   `.\scripts\release\Close-ShippedIssues.ps1 -Commit origin/main -Check`.
@@ -143,6 +147,45 @@ How to use it:
   missed. A step file under `deploy\after` writes the comment by itself
   when its step ends 0, and the issue it names is held the same way. A main
   Ship's `Close-ShippedIssues.ps1` leaves such an issue open and names it.
+
+### Area labels
+
+One label for each part of the project, each with what it covers, and the
+same words are each label's description on GitHub. An issue may carry more
+than one. `.github\workflows\area-label.yml` puts on the one area a new
+issue's title names, from a table of words for each of these and no other,
+and `tests\test-4144-area-labels.ps1` holds that table to this list and to
+real titles (#4144). A new area is a row here and a line in that table, in
+one pull request, and the label itself made with this description.
+
+| Label | What it covers |
+|---|---|
+| `area: Accessibility` | Using any part with a keyboard, a screen reader, high contrast or larger text. |
+| `area: Client` | The game client: in-game panels, the front and emote plugins, crashes in the game. |
+| `area: Content` | Our plugins, the records in them and the content tables built from them. |
+| `area: Discord` | The Discord bot, its posts, tickets, cards and commands, and the server's layout. |
+| `area: Docs` | Docs, guides and READMEs, and help text that says how things work. |
+| `area: Engine` | The SkyMP engine fork: its builds, the pin, and what only the engine can change. |
+| `area: Gamemode` | The gamemode on the server: quests, trade, guilds, saves, joining and its rules. |
+| `area: GitHub & CI` | Workflows, checks, the gate's harness runs, runners and GitHub's settings. |
+| `area: In-game` | Things to do in the world: crafting, recipes, benches, professions, couriers. |
+| `area: Launcher` | The launcher and the setup window: installing, playing, updating, uninstalling. |
+| `area: Legal` | Licences, permissions, privacy and the terms. |
+| `area: Load order` | The plugin load order, light plugins and the checks that hold them. |
+| `area: Moderation` | Staff tools: bans, silences, freezes and reports. |
+| `area: Mods` | The Nexus collection, the mods in it and their settings, and Vortex. |
+| `area: Operations` | The box and its services: deploys, backups, restores, the watchdog, outages. |
+| `area: Packaging` | Building and packing what ships: the installer, zips and VirusTotal. |
+| `area: Performance` | Something slow or heavy: load times, frame cost, page weight. |
+| `area: Release` | Releases and Ships: the feeds, tags, manifests, rollback and scrub. |
+| `area: Security` | Secrets, tokens, sign-ins and anything that could let someone in. |
+| `area: Server` | The game server process: its load, its ticks and its sessions. |
+| `area: Testing` | Tests and harnesses that check the code, and flaky ones. |
+| `area: Tools` | Scripts and tools people run by hand. |
+| `area: Voice` | Voice and typed chat, captions and emotes, and the voice service. |
+| `area: Website` | The public site and the staff hub. |
+| `area: World` | The world and its people: NPCs, travel, weather, guards, property. |
+| `area: triage` | No area yet: the title did not say which part of the project. A person picks one. |
 
 ## How an issue and a comment are written
 
@@ -194,8 +237,8 @@ Dev: no step a Claude, the Desk, logs, the box, a harness, a workflow or a
 command could do (a Dev test task is only for what a human dev must do in
 the game; the rest is a "Check (Claude):" comment with its result), and not
 ordinary playtester steps with no staff or dev command (that is Main). Main:
-the fix commit is in the newest `release/main/` tag, and no staff or dev
-command. Known issues: open, no merged pull request names it, no test task.
+the fix commit is in the newest main Release (`main-build-...`, or an older
+`release/main/` tag), and no staff or dev command. Known issues: open, no merged pull request names it, no test task.
 One post per issue per forum. The bot's token needs issues write to comment.
 
 The same rules run on a pull request before it merges (#5199). The check
@@ -206,8 +249,11 @@ its Server line names. It also refuses what only a pull request gets wrong:
 two of one kind for one issue, a Main one longer than the bot's first post,
 a body that also says `Closes #N` for that issue (the merge would close it
 before the test task is copied), and an issue that is closed or is not an
-issue. Main's ruleset requires it beside `Build check result`. A body with
-no test task passes. When it is red, edit the body; the edit runs it again.
+issue, and a test task in another shape (a `## Test task` heading or a
+`Main test task` line with no `Test task for #N:` line), which done-on-merge
+never copies, so its issue would never close. Main's ruleset requires it
+beside `Build check result`. A body with no test task passes, and so does
+one that says none (`No test task: nobody would notice this fix.`). When it is red, edit the body; the edit runs it again.
 To run it on a body before you push:
 `python bot\pr_tasks.py --file <the body, saved as a file>`.
 
@@ -217,6 +263,17 @@ things that only devs can test and can still be there while on main; main
 is for just regular testing for our playtesters, only when it's on main",
 and known issues are what is on the board whose fix has not landed yet
 (Patrick, 26 Oct, #3140). Test tasks never go on the report page; they go in Discord.
+
+Use `/test-queue` in Discord for a private list of active Main tests.
+Choose Dev if you can read the staff test forum. Search by words in the title
+or choose a page and change the order. Each entry opens its forum post.
+Tests with no result or replies appear first on each page. Mark the opening
+post ✅ for a pass, ❌ for a failure, or 📌 when it partly works, and use the
+thread to say what you saw. A result with conflicting marks needs review.
+Read the replies before retiring a post, including one marked passed.
+Staff record the result and link any follow-up fix on GitHub before taking a
+finished or blocked task out of the queue. A new build carrying a follow-up
+fix gets a fresh test task.
 
 - **#test-tasks, Main test tasks.** An ordinary check any playtester can do
   with the normal game. If a playtester could do it once it is on main, it

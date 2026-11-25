@@ -45,7 +45,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -78,7 +78,7 @@ const pub = rd(path.join(REPO, 'scripts', 'release', 'Publish-Server.ps1')) || '
 yes('Publish-Server sends the writer beside the installer', /scp (@ssh )?\$serverLog "\$\{target\}:C:\/Server-Log\.js"/.test(pub));
 yes('  and refuses it uncommitted', pub.indexOf("'scripts/vps/Server-Log.js'") >= 0);
 
-if (!fs.existsSync(WRITER)) done();
+if (!fs.existsSync(WRITER)) { done(); return; }
 const W = require(WRITER);
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-2349-'));
@@ -122,9 +122,9 @@ try {
   if (process.platform === 'win32') {
     const held = log + '.20250101000000000';
     fs.writeFileSync(held, allOld);
-    const hold = cp.spawn('powershell.exe', ['-NoProfile', '-Command',
+    const hold = cp.spawn('pwsh', ['-NoProfile', '-Command',
       "$f = [IO.File]::Open('" + held.replace(/'/g, "''") + "', 'Open', 'Read', 'Read'); 'held'; Start-Sleep -Seconds 20"], { stdio: ['ignore', 'pipe', 'ignore'] });
-    // The sweep runs once Windows PowerShell says it holds the file, never on
+    // The sweep runs once pwsh says it holds the file, never on
     // a clock: on a busy runner its start alone took over 15 seconds, and a
     // sweep before the hold deleted the file (gate run 41502686958).
     let saidHeld = '';
@@ -134,7 +134,7 @@ try {
     });
     waitHeld.then((isHeld) => {
       if (!isHeld) {
-        yes('a rolled file another program holds is named with the error, and left for the next pass (Windows PowerShell ended without holding it)', false);
+        yes('a rolled file another program holds is named with the error, and left for the next pass (pwsh ended without holding it)', false);
         fs.rmSync(held, { force: true });
         runPart();
         return;
@@ -164,7 +164,7 @@ function runPart() {
     const srv = path.join(tmp, 'server');
     fs.mkdirSync(path.join(srv, 'dist_back'), { recursive: true });
     fs.writeFileSync(path.join(srv, 'dist_back', 'skymp5-server.js'),
-      "console.log('" + stamp(now).trim() + " stand-in server up');\nconsole.error('stand-in on stderr');\nprocess.exit(3);\n");
+      "console.log('" + stamp(now).trim() + " stand-in server up');\nconsole.error('stand-in on stderr');\nprocess.exitCode = 3;\n");
     const log = path.join(srv, 'server.log');
     const yesterday = stamp(now - DAY) + 'yesterday\n';
     fs.writeFileSync(log, yesterday);

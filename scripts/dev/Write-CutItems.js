@@ -50,7 +50,8 @@ const ALREADY_CUT = tableIsCut();
 if (ALREADY_CUT && !cutFile) {
   console.log('STOP. game/data/recipes.json is already cut and there is no docs/systems/cut-items.json to start from.');
   console.log('The rules cannot sort a table that is already cut, so nothing was written.');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 function clean(s) {
@@ -546,7 +547,8 @@ if (ALREADY_CUT) {
   if (fresh.length && !keptFile) {
     console.log('STOP. There is no docs/systems/cut-kept.json, so the ' + fresh.length + ' row(s) of the recipe table outside the cut file');
     console.log('cannot be told apart: kept by the rules, or added by a plugin since. Nothing was written.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   // What this file takes away: the output of every reference in it, unless a
   // row that stays in the open book makes it too. The same reading as

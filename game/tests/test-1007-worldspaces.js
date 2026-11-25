@@ -1,7 +1,7 @@
 // test-1007-worldspaces.js
 //
-// #1007. DATA.worldspaces (game/data/data.json, installed as the DATA line of
-// game/gamemode.js by scripts/dev/Install-GamemodeConsts.js) is the set
+// #1007. DATA.worldspaces (game/data/worldspaces.json, written into the DATA
+// table by scripts/dev/Build-WorldspaceTable.js) is the set
 // resolveArrival and the stuck and arrival code read as "outdoors". It listed
 // 3c, 1691d and 1b44a under Dragonborn.esm beside the Skyrim.esm entries with
 // the same low ids. Measured on 5 October against the Main install's load
@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(String.fromCharCode(13)).join('');
-const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'data.json'), 'utf8'));
+const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'worldspaces.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -34,7 +34,7 @@ const m = require('../../tests/gamemode-tables.js').lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
 const ws = data.worldspaces || [];
-yes('the gamemode\'s DATA line holds the same worldspaces as data.json (' + ws.length + ')',
+yes('the gamemode\'s DATA line holds the same worldspaces as worldspaces.json (' + ws.length + ')',
   !!DATA && JSON.stringify(DATA.worldspaces) === JSON.stringify(ws));
 yes('no entry is listed twice', new Set(ws).size === ws.length);
 for (const d of ['3c:Dragonborn.esm', '1691d:Dragonborn.esm', '1b44a:Dragonborn.esm']) {
@@ -45,4 +45,4 @@ yes('Solstheim and Apocrypha, the WRLD records Dragonborn.esm defines, are liste
   ws.indexOf('800:Dragonborn.esm') >= 0 && ws.indexOf('1c0b2:Dragonborn.esm') >= 0);
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

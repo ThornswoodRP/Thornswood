@@ -9,32 +9,7 @@ Healing a person and the strain of casting too often are on
 [Potions and restoration](../../potions.md). This page is which spells
 exist. That page is what repeated healing costs.
 
-<!-- detail:begin -->
-
-## The book
-
-Generated from the spell book and the gamemode's `SPELL_IDS` table by `scripts/dev/Write-SystemLists.js`. Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.
-
-| Spell | Rank | Id |
-| --- | --- | --- |
-| Healing | novice | `12fcc:Skyrim.esm` |
-| Lesser Ward | novice | `13018:Skyrim.esm` |
-| Healing Hands | advanced | `4d3f2:Skyrim.esm` |
-| Fast Healing | advanced | `2f3b8:Skyrim.esm` |
-| Steadfast Ward | advanced | `211f1:Skyrim.esm` |
-| Turn Undead | advanced | `5dd5d:Skyrim.esm` |
-| Close Wounds | advanced | `b62ef:Skyrim.esm` |
-| Heal Other | advanced | `12fd2:Skyrim.esm` |
-| Greater Ward | advanced | `211f0:Skyrim.esm` |
-| Repel Lesser Undead | advanced | `4d3f8:Skyrim.esm` |
-| Grand Healing | expert | `b62ee:Skyrim.esm` |
-| Circle of Protection | expert | `5312d:Skyrim.esm` |
-| Repel Undead | expert | `5dd60:Skyrim.esm` |
-| Turn Greater Undead | expert | `5dd5e:Skyrim.esm` |
-| Guardian Circle | master | `e0ccf:Skyrim.esm` |
-| Bane of the Undead | master | `8c1ab:Skyrim.esm` |
-
-<!-- detail:end -->
+The book, each spell with its rank and id: [the Restoration book](../../lists/mage-restoration.md).
 
 ## What this school is not
 
@@ -50,5 +25,5 @@ world placed is the spell.
 
 ## Where this is
 
-These 16 names are the server's book. The strain numbers on the
+The book above shows every name and whether the server has an id for it. The strain numbers on the
 potions page are the plan, and they are not in the server yet.

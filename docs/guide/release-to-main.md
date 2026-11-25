@@ -72,7 +72,7 @@ That is the dev release: version 2026.1101.1745.1, .2, .3, pack ids ending `-dev
 dev feed and the dev baseline (`feed-dev` in the VPS store), the dev ports,
 and the dev server told. It runs from
 any branch on any developer's machine. There is no installer for it, and it
-posts to the dev updates channel in Discord and the dev launcher's News tab,
+posts to #staff-news in Discord and the dev launcher's News tab,
 never #news. There is one dev feed and the last dev Ship wins, so a Dev says in #dev-coordination before taking it. Main and Dev have independent feeds and baselines. A Main
 Ship leaves Dev's release unchanged; advance Dev through its own Ship. What a
 Main Ship does change on the dev feed is which notes are marked DEV and its
@@ -90,8 +90,8 @@ git pull
 ```
 
 Nothing moves the version first: Ship works the launcher's number out from
-git, the time its sources last changed on main (The version comes from the
-build, above, #5179).
+git, the time its sources last changed on main ([The version comes from the
+build](#the-version-comes-from-the-build), #5179).
 
 Ship writes nothing to this repository. It refuses a main release with
 anything uncommitted, with a file under `scripts` or another folder a release

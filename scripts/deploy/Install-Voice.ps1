@@ -38,9 +38,9 @@ param(
   # The site the voice service asks, on every voice and chat join, whether
   # the Discord ticket it was sent owns the profile it wants a token for
   # (/token, #1303, #1315). It becomes THORNSWOOD_SITE on the service's
-  # command line. There is no join without it, so an empty one, or one that
-  # is not https, is refused before anything is sent (VoiceSite.ps1, #4467).
-  [string]$Site = 'https://thornswood.net',
+  # command line. The Site on this VPS is checked on loopback so joins do
+  # not depend on the public proxy. A remote Site must use HTTPS.
+  [string]$Site = 'http://127.0.0.1:3001',
     [string]$VpsHost  = '',
     [string]$VpsUser  = '',
     [string]$Root     = 'C:\Thornswood-Voice',
@@ -390,10 +390,8 @@ if ('$Bind' -eq '127.0.0.1') {
     Sync-ThornswoodFirewall
 }
 
-# THORNSWOOD_SITE is what lets /choose check that a character creation choice
-# actually came from the person who owns that profile. That endpoint has to be
-# reachable from every person's machine, so it cannot be locked to the loopback,
-# and without this it takes anybody's word for anything.
+# THORNSWOOD_SITE is the voice service's ownership endpoint origin. Only
+# this service has to reach it. Clients still use Caddy's HTTPS endpoint.
 #
 # set is used rather than a scheduled task environment block because a task
 # action has nowhere to put one, and this is the whole command line anyway.
@@ -598,7 +596,7 @@ function StartIt {
             # 5, the same I/O and memory priority as at 4. Never 0, which is
             # realtime. Never the default of 7 either (#1968): BelowNormal,
             # I/O priority 1 (low) and memory priority 2, which held the game
-            # server's reads back (#1931). tests\test-service-task-priority.ps1
+            # server's reads back (#1931). scripts\tests\test-service-task-priority.ps1
             # measures all three.
             `$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 1
             # LOCAL SERVICE, Limited, with a SID of its own and the grants on
@@ -676,13 +674,18 @@ function Why {
   -TaskOnly (#2491): the task again with this install's settings, and
   nothing sent. The same StopIt, StartIt, Healthy, Answer and Why as an
   install, after the same lines above, in place of the swap: what answers
-  now is what must answer again, under the new task, and if it does not, the
-  task it had goes back, exported above exactly as it was, and is started.
+  now must answer again under the new task and be able to ask the Site
+  about a join. If either check fails, the previous task is restored.
   The last line is TASK OK or TASK ROLLED BACK. StopIt ends what it stops
   through StopAndMove.ps1 (Swap.ps1's $ThornswoodStopAndMoveText), which goes
   in front, as it does in front of the swap.
 #>
-$taskOnlyBlock = @'
+$taskOnlyJoin = @"
+function CheckTaskJoin {
+$(Get-VoiceJoinCheck $Port)
+}
+"@
+$taskOnlyBlock = $taskOnlyJoin + "`r`n" + @'
 $Rolling = $false
 $wantBuild = Build
 # Held while it is stopped (#5155, ServerHold.ps1), so the watchdog leaves
@@ -691,7 +694,13 @@ Set-ThornswoodHold -Target $HoldTarget -Why 'registering voice''s task again' -B
 StopIt
 if (-not (StoppedAll)) { Clear-ThornswoodHold -Target $HoldTarget; 'what the stop ended has not all exited, so voice was not started again'; 'TASK NOT STARTED'; exit 1 }
 StartIt
-if (Healthy) {
+$ready = Healthy
+if ($ready) {
+  $joinReply = CheckTaskJoin
+  $joinReply
+  $ready = "$joinReply".Trim() -ceq 'JOIN 403 ticket'
+}
+if ($ready) {
   Clear-ThornswoodHold -Target $HoldTarget
   'PASS: ' + (Answer)
   foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -EA SilentlyContinue)) {
@@ -706,7 +715,7 @@ if (Healthy) {
   'TASK OK'
   exit 0
 }
-'FAIL: it did not answer within ' + $Wait + ' seconds under the new task'
+'FAIL: voice did not pass its health and join checks under the new task'
 Why
 StopIt
 $Rolling = $true
@@ -816,9 +825,7 @@ if ($TaskOnly) {
     $vars = $ThornswoodHoldText + (ServiceSwapVars $Root 'none' 'none' $Wait ([ordered]@{}) @() $TaskName) + '$KeepTask = $false' + "`r`n"
     $taskOut = @(Remote (@($vars, $ThornswoodStopAndMoveText, $voiceTools, $remote, $taskOnlyBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
     if ($taskOut -notcontains 'TASK OK') { Die 'voice was not restarted under a new task. The lines above say what is running.' }
-    Say 'registered again, and voice answers under the new task' 'Green'
-    # The new task carries this -Site, so it is held to a join as an install is (#4467).
-    Assert-VoiceJoin
+    Say 'registered again, and voice answers and checks joins under the new task' 'Green'
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0
 }
@@ -828,7 +835,8 @@ $pick = ''
 if ($PutBack) { $keepTask = '$KeepTask = $true'; $pick = $putBackPick }
 $vars = (ServiceSwapVars $Root $stageName $prevName $Wait $hashes @() $TaskName) + $keepTask + "`r`n" + $pick
 $swapOut = @(Remote (@($vars, $voiceTools, $remote, $serviceSwapBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
-if (-not (Show-SwapResult $swapOut "$Root\.prev-<stamp>")) { Die 'voice was not swapped in. The lines above say what is running.' }
+$prevWhere = if ($PutBack) { "$Root\.undone-<stamp>" } else { "$Root\.prev-<stamp>" }
+if (-not (Show-SwapResult $swapOut $prevWhere)) { Die 'voice was not swapped in. The lines above say what is running.' }
 
 # ---------------------------------------------------------------- verify ----
 Head 'Checking from here'
@@ -888,7 +896,8 @@ if ($Bind -eq '127.0.0.1') {
     # Through the site /health says only ok (#3806): the build, bind and auth
     # go to a caller on the box, and the build was read there above.
     if (-not $reachable) {
-        $via = $Site + $(if ($Port -eq 7778) { '/voice' } else { '/voice-dev' })
+        $healthSite = if ($Site -ceq 'http://127.0.0.1:3001') { 'https://thornswood.net' } else { $Site }
+        $via = $healthSite + $(if ($Port -eq 7778) { '/voice' } else { '/voice-dev' })
         try {
             $h = Invoke-RestMethod ($via + '/health') -TimeoutSec 10
             if ($h -and $h.PSObject.Properties['ok'] -and $h.ok -eq $true) {

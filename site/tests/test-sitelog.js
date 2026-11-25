@@ -16,7 +16,8 @@ const a = text.indexOf('function makeLog(dir, name, maxBytes, keep, opts) {');
 const b = text.indexOf('// Four megabytes is a few days');
 if (a < 0 || b < 0) {
   console.error('the site log block is not in server.js the way this expects');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 eval(text.slice(a, b));
 
@@ -84,4 +85,4 @@ check('a very long line is fine', log.write('x'.repeat(5000)), true);
 check('an empty line is fine', log.write(''), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

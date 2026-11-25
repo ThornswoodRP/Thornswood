@@ -49,4 +49,4 @@ yes('and the reverted cycle is not back: nothing in the gamemode equips a pack-o
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

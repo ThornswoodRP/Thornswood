@@ -82,9 +82,14 @@ function Unprotect-ThornswoodSealed([byte[]]$Sealed, [string]$PrivateB64) {
 
 # The runner's half: zips everything in $Folder (output.txt and files\),
 # seals it to $RecipientB64 and writes it to $To. Returns how many files went.
+# ZipFile, not Compress-Archive: Compress-Archive makes no archive at all from
+# a folder that holds only empty folders, and says nothing, so a run whose
+# verb said nothing (a gate that did not answer, 15 Nov 2026) ended on "Could
+# not find file ...out.zip" and the reason it stopped never reached anyone.
 function Save-ThornswoodSealed([string]$Folder, [string]$RecipientB64, [string]$To) {
     $zip = $Folder.TrimEnd('\', '/') + '.zip'
-    Compress-Archive -Path (Join-Path $Folder '*') -DestinationPath $zip -Force
+    Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+    [IO.Compression.ZipFile]::CreateFromDirectory($Folder, $zip)
     try {
         $sealed = Protect-ThornswoodSealed ([IO.File]::ReadAllBytes($zip)) $RecipientB64
         New-Item -ItemType Directory -Path (Split-Path -Parent $To) -Force | Out-Null
@@ -117,13 +122,22 @@ function Write-ThornswoodSealedLog([string]$From) {
 function Read-ThornswoodSealedLog([string]$Repo, [long]$Run) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
-        $jobs = @(& gh api "repos/$Repo/actions/runs/$Run/jobs" --jq '.jobs[].id' 2>&1 | ForEach-Object { "$_" })
+        # Each job as "<id> <conclusion>". A skipped job never ran and GitHub
+        # keeps no log for it: asking for one answers 404 (BlobNotFound), and
+        # box-run.yml's "Patrick's word for a live verb" job is skipped on
+        # every run that is not a live verb. When the API listed it before
+        # "Ask the gate", the read stopped there and a run that ended 0 came
+        # back unread (16 Nov 2026, run 43791090690). So a skipped job is
+        # passed over, not read.
+        $jobs = @(& gh api "repos/$Repo/actions/runs/$Run/jobs" --jq '.jobs[] | "\(.id) \(.conclusion)"' 2>&1 | ForEach-Object { "$_" })
         if ($LASTEXITCODE -ne 0) { return @{ Bytes = $null; Why = ('the run''s jobs could not be read: ' + ($jobs -join ' ')) } }
         # The log keeps the runner's colours, which a newer gh hands over
         # only when told (Get-GhLogFlags, #5202).
         $flags = @(Get-GhLogFlags)
-        foreach ($job in $jobs) {
-            if ($job -notmatch '^[0-9]+$') { continue }
+        foreach ($row in $jobs) {
+            if ($row -notmatch '^([0-9]+)(?: (\S+))?$') { continue }
+            if ($Matches[2] -eq 'skipped') { continue }
+            $job = $Matches[1]
             $log = @(& gh api "repos/$Repo/actions/jobs/$job/logs" @flags 2>&1 | ForEach-Object { "$_" })
             if ($LASTEXITCODE -ne 0) { return @{ Bytes = $null; Why = ('the log of job ' + $job + ' could not be read: ' + ((($log | Select-Object -Last 1) -join '') -replace "`e", '')) } }
             $parts = @{}; $end = $null

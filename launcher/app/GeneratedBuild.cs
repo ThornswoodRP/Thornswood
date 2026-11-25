@@ -252,7 +252,7 @@ namespace Thornswood
                 CoveredResult all = CoveredBodies.Check(game, true, Say);
                 if (all.Nude > 0 || all.Unread > 0)
                     throw new GeneratedStop("A body in " + game + " is nude, or cannot be read (see above), so nothing was recorded and the game does not start on it (issue #405). " +
-                        "The mesh named above comes from a mod in Vortex: take that mod out of the Thornswood profile, deploy, and play again.");
+                        "The mesh named above comes from a mod in Vortex: take that mod out of the Thornswood profile, deploy, and play again.", all.Errors.Count > 0 ? all.Errors[0] : null);
             }
 
             // ------------------------------------------------------------ the record
@@ -597,7 +597,7 @@ namespace Thornswood
             // The bodies it built, read before any is put in place.
             CoveredResult covered = CoveredBodies.Check(stageRoot, false, Say);
             if (covered.Nude > 0 || covered.Unread > 0)
-                throw new GeneratedStop("A body BodySlide built is not covered, or cannot be read (see above). Nothing was put in the folder (issue #405).");
+                throw new GeneratedStop("A body BodySlide built is not covered, or cannot be read (see above). Nothing was put in the folder (issue #405).", covered.Errors.Count > 0 ? covered.Errors[0] : null);
 
             foreach (string f in built) outputs.Add(PutOutput(f, "Data\\" + f.Substring(stageData.Length + 1)));
             Line(string.Format(CultureInfo.InvariantCulture, "  built {0} file(s) and put them in the folder", built.Length), "Green");
@@ -630,7 +630,16 @@ namespace Thornswood
                     if (m.Success) src = m.Groups[1].Value.Trim();
                 }
             string vm = src.Length > 0 ? Path.Combine(src, "Data\\vortex.deployment.json") : "";
-            if (vm.Length > 0 && File.Exists(vm))
+            string whose = "Vortex's";
+            // Or Mod Organizer 2's own copy, by its record, once the mods come from there (#6244).
+            string mr = src.Length > 0 ? Generated.Under(src, ModsDeployed.Name) : "";
+            if (mr.Length > 0 && File.Exists(mr))
+            {
+                whose = "Mod Organizer 2's";
+                foreach (ModsDeployed d in ModsDeployed.Read(mr))
+                    staged[d.Rel] = Generated.Under(src, "mods\\" + d.Mod + "\\" + d.Under);
+            }
+            else if (vm.Length > 0 && File.Exists(vm))
                 foreach (VortexFile vf in VortexFile.Read(vm))
                     staged["Data\\" + vf.RelPath.TrimStart('\\')] = Path.Combine(Path.Combine(vf.StagingPath, vf.Source), vf.RelPath.TrimStart('\\'));
             foreach (string rel in dropped)
@@ -641,7 +650,7 @@ namespace Thornswood
                 if (staged.TryGetValue(rel, out from) && File.Exists(from))
                 {
                     File.Copy(from, dest);
-                    Line("  " + rel + " is Vortex's again", "DarkGray");
+                    Line("  " + rel + " is " + whose + " again", "DarkGray");
                 }
                 else Line("  " + rel + " taken out", "DarkGray");
             }

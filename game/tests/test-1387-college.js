@@ -50,7 +50,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -65,7 +65,7 @@ const COLLEGE = between('// ==== thornswood college ====', '// ==== end thornswo
 const ONHIT = between("mp['onPapyrusEvent:OnHit'] = guard(", '\n});');
 const ok = RULES && CHARACTER && TOMES && COLLEGE && ONHIT;
 yes('the rules, the character store, the tomes block, the college block and the OnHit handler are in the gamemode', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 // ------------------------------------------------------- a fake load order --
 const PLUG = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm',
@@ -719,3 +719,4 @@ person(srv, OUT, 13, 'smith', 'platewright', function (s) {
 }
 
 done();
+}

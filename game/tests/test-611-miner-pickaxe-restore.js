@@ -60,4 +60,4 @@ yes('B3 a mismatched tool id is not restored',
   decideRestore({ tool: 0xe3c16, end: true }, { thornswoodSwingHadTool: 0x1019d4 }) === 0);
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

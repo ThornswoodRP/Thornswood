@@ -206,6 +206,21 @@ function Run {
     $at = [DateTimeOffset]::Parse('2026-11-01T23:10:44Z', [Globalization.CultureInfo]::InvariantCulture)
     $body = "Downloads page names the publisher`r`n- The line under the installer's button now names who signed it.`r`n- The mods button opens Vortex at the server's revision`r`n`r`nA line that is not a bullet.`r`n"
     $n = $mNote.Invoke($null, @($body, [Nullable[DateTimeOffset]]$at))
+    $pictureCases = Get-Content -Raw -LiteralPath (Join-Path $Here 'tests/fixtures/news-picture-cases.json') | ConvertFrom-Json
+    foreach ($case in $pictureCases) {
+        $pictureBody = "A clearer character panel`n- Keep this text`n- " + $case.line
+        $note = $mNote.Invoke($null, @($pictureBody, $null))
+        if ($null -eq $case.image) {
+            Yes ('screenshot refused: ' + $case.line) ($null -eq $note.image -and $note.details[1] -eq $case.line)
+        } else {
+            Yes ('screenshot read: ' + $case.line) ($note.image.Url -eq $case.image.url -and $note.image.Alt -eq $case.image.alt -and $note.details.Count -eq 1)
+        }
+        Yes 'the screenshot never removes the text detail' ($note.details[0] -eq 'Keep this text')
+    }
+    $bareImage = '![Panel](https://thornswood.net/news-panel.png)'
+    $bareBody = "A clearer character panel`n" + $bareImage
+    $bareNote = $mNote.Invoke($null, @($bareBody, $null))
+    Yes 'a bare image line remains text' ($null -eq $bareNote.image -and $bareNote.body -eq $bareImage)
     Yes ('the first line is the title: ' + $n.title) ($n.title -eq 'Downloads page names the publisher')
     Yes '  each "- " line is a line of what changed, without its dash' (@($n.details).Count -eq 2 -and $n.details[0] -eq "The line under the installer's button now names who signed it." -and $n.details[1] -eq "The mods button opens Vortex at the server's revision")
     Yes '  any other line is the note''s text' ($n.body -eq 'A line that is not a bullet.')

@@ -22,7 +22,6 @@ const fs = require('fs');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const { spawn } = require('child_process');
 
@@ -37,7 +36,6 @@ function yes(what, cond) {
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-home-html-'));
 let srv = null;
-let started = false;
 let finished = false;
 function clean() { try { fs.rmSync(work, { recursive: true, force: true }); } catch (e) { } }
 function stop() {
@@ -52,7 +50,6 @@ function done() {
   finished = true;
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  if (!started) process.exit(fail ? 1 : 0);
   process.exitCode = fail ? 1 : 0;
   stop();
 }
@@ -85,50 +82,7 @@ fs.writeFileSync(path.join(work, 'config.json'), JSON.stringify({
   onlineFile: path.join(work, 'online.json')
 }));
 
-function freePort() {
-  return new Promise(function (resolve, reject) {
-    const s = net.createServer();
-    s.once('error', reject);
-    s.listen(0, '127.0.0.1', function () {
-      const p = s.address().port;
-      s.close(function () { resolve(p); });
-    });
-  });
-}
 
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 
 function raw(port, reqPath, method) {
   return new Promise(function (resolve) {
@@ -158,21 +112,20 @@ function bothWordings(text) {
     done();
   }, 20000);
 
-  const port = await freePort();
+  let port = 0;
   let log = '';
   srv = spawn(process.execPath, ['server.js'], {
     cwd: work,
     env: Object.assign({}, process.env, {
       THORNSWOOD_DOCS_LOCAL: '1',
-      THORNSWOOD_DOCS_PORT: String(port),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1'
     })
   });
-  started = true;
   srv.stdout.on('data', function (d) { log += d; });
   srv.stderr.on('data', function (d) { log += d; });
   let up = false;
-  try { await listening(srv, port); up = true; } catch (e) { log = e.message; }
+  try { await siteFiles.listening(srv).then((r) => (port = r.port, r)); up = true; } catch (e) { log = e.message; }
   clearTimeout(watchdog);
   yes('a copy of server.js came up on 127.0.0.1', up);
   if (!up) {

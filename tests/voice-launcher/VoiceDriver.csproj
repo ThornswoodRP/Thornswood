@@ -49,8 +49,12 @@
     <Compile Include="../../launcher/app/VoiceIce.cs" Link="launcher/VoiceIce.cs" />
     <Compile Include="../../launcher/app/VoiceStun.cs" Link="launcher/VoiceStun.cs" />
     <Compile Include="../../launcher/app/VoiceMix.cs" Link="launcher/VoiceMix.cs" />
+    <Compile Include="../../launcher/app/VoiceMeter.cs" Link="launcher/VoiceMeter.cs" />
     <Compile Include="../../launcher/app/VoiceHrtf.cs" Link="launcher/VoiceHrtf.cs" />
     <Compile Include="../../launcher/app/Swallow.cs" Link="launcher/Swallow.cs" />
+    <!-- How a caught exception becomes words (#4633), which the voice
+         files' catches call. -->
+    <Compile Include="../../launcher/app/Failure.cs" Link="launcher/Failure.cs" />
     <!-- The HRTF responses, under the name VoiceHrtf.cs asks for, as the
          launcher embeds them. -->
     <EmbeddedResource Include="../../launcher/hrtf-composite.wav" LogicalName="hrtf-composite.wav" />

@@ -102,7 +102,7 @@ function Get-LooseFiles([string]$dir) {
     try { return @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force) }
     catch {
         Write-Host ''
-        Write-Host ('STOP. A folder under ' + $dir + ' cannot be read: ' + $_.Exception.Message) -ForegroundColor Red
+        Write-Output ('STOP. A folder under ' + $dir + ' cannot be read: ' + $_.Exception.Message)
         Write-Host 'Nothing was written. Give this account read access to it and run this again.' -ForegroundColor Yellow
         exit 1
     }

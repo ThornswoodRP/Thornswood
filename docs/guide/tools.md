@@ -331,7 +331,7 @@ node --version
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
 
 ### Learn more about Node
 
@@ -351,9 +351,10 @@ Leave Vortex's own files alone. A Ship packs Thornswood's files. It leaves Vorte
 
 1. Install Vortex from the Nexus page below, and sign Vortex into a Nexus account.
 2. Point Vortex at Skyrim Special Edition.
-3. Add the Thornswood collection. Its address is https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf
-4. Use a profile named Thornswood. Deploy that profile so the mods land on the Steam copy.
-5. Open the Thornswood launcher. On the Play page, the server list at the lower right has Dev. The picture is in [H. Dev Build](#h-dev-build). Choose Dev, then let that install make its game folder. Settings, Maintenance has "Make it".
+3. In Vortex, turn on profile management: Settings, Interface, and switch "Enable Profile Management" on. (Profiles only appears in the sidebar once this is turned on.)
+4. Go to Profiles and create or select a profile named Thornswood before adding the collection.
+5. Add the Thornswood collection. Its address is https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf. When Vortex asks which profile to install into, choose the Thornswood profile. Deploy that profile so the mods land on the Steam copy.
+6. Open the Thornswood launcher. On the Play page, the server list at the lower right has Dev. The picture is in [H. Dev Build](#h-dev-build). Choose Dev, then let that install make its game folder. Settings, Maintenance has "Make it".
 
 Publishing a new revision of the collection is done from Patrick's Nexus account. Installing a revision that is already published is any developer's Nexus account. The history of this choice is [docs/COLLECTION-METHOD.md](../COLLECTION-METHOD.md).
 
@@ -512,11 +513,11 @@ These are part of a normal week and do not each need a letter of their own. Pyth
 
 ### Python
 
-The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs 3.11) with `discord.py` and `Pillow`. [Setting up a machine](set-up-a-machine.md#setting-up-a-machine) names that install. The bot deploy is [I. Bot](#i-bot).
+The bot scripts support Python 3.11 and 3.12 (the bot runs on 3.12) with `discord.py` and `Pillow`. [Setting up a machine](set-up-a-machine.md#setting-up-a-machine) names that install. The bot deploy is [I. Bot](#i-bot).
 
 ### The .NET Framework
 
-Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)), and C# that Windows PowerShell 5.1 compiles with Add-Type stays C# 5. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
+Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)); the few launcher files a script loads with Add-Type compile with pwsh 7's Add-Type too. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
 
 ### SkyMP
 
@@ -577,7 +578,7 @@ Run one check from the repository folder:
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`.
 
 An overlay change uses the same `Go.ps1 -SkipServer` as the HTML section, with the game closed. A new overlay is named `thornswood-*.js` and listed in the `OVERLAYS` list at the top of `game\plugins\thornswood-front.js`. That list is what loads it. There is no build step for these files.
 

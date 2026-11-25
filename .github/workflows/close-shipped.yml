@@ -24,8 +24,13 @@
 #   - Dev (merge-release.yml): each Dev test task it carries is written with
 #     a "Build: dev release <tag>" line, for #dev-test-tasks; nothing closes.
 # The Deployment's sha is the commit its Release was built from, and its
-# payload names the Release. GitHub's own status on the Deployment it lists
-# for promote-main's waiting job has no log, and starts nothing here.
+# payload names the Release. GitHub also makes a Deployment of its own for
+# promote-main's job that waits on the Main environment, with an empty
+# payload, and marks it a success when that job ends. Its status carries the
+# job's log as log_url, so a log beside the status does not tell the two
+# apart: on 15 Nov 2026 it started run 43744376534 18 seconds after the real
+# close, which went red on "the Deployment names no build Release ()". Only a
+# Deployment whose payload names a Release starts this.
 # Site and Discord bot Deployments close nothing: a site fix's issue closes
 # with the next main release, which carries its merge too, never before.
 #
@@ -58,7 +63,7 @@ jobs:
     name: Close the issues it carries, or write its Dev test tasks
     if: >-
       ${{ github.event.deployment_status.state == 'success' &&
-          github.event.deployment_status.log_url != '' &&
+          github.event.deployment.payload.release != '' &&
           (github.event.deployment.environment == 'Main' || github.event.deployment.environment == 'Dev') }}
     runs-on: ubuntu-latest
     # The board read is most of it (Read-Board.ps1 waits up to 15 minutes).
@@ -68,7 +73,8 @@ jobs:
       issues: write
       actions: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0

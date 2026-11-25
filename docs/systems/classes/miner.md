@@ -146,35 +146,6 @@ are only in the Pale. Mine them there, or trade for them anywhere
 else. Outside the Pale the seams are not in the world at all. Every
 other hold's own are plants: see [Gatherer](gatherer.md).
 
-<!-- detail:begin -->
-
-## Every record
-
-Generated from the work tables by `scripts/dev/Write-SystemLists.js`. The same rows are in [miner](../lists/miner.md).
-
-| Name | Rank | Records | You receive | Yield novice, advanced, expert, master |
-| --- | --- | --- | --- | --- |
-| Clay | novice | 5 | Clay | 1-2, 1-2, 1-2, 1-2 |
-| Iron Ore | novice | 82 | Iron Ore | 1-2, 1-2, 1-2, 1-2 |
-| Quarried Stone | novice | 1 | Quarried Stone | 1-2, 1-2, 1-2, 1-2 |
-| Corundum Ore | advanced | 81 | Corundum Ore | 0-0, 1-2, 1-2, 1-2 |
-| Orichalcum Ore | advanced | 76 | Orichalcum Ore | 0-0, 1-2, 1-2, 1-2 |
-| Quicksilver Ore | advanced | 76 | Quicksilver Ore | 0-0, 1-2, 1-2, 1-2 |
-| Shellbug Chitin | advanced | 1 | Shellbug Chitin | 0-0, 1-2, 1-2, 1-2 |
-| Silver Ore | advanced | 76 | Silver Ore | 0-0, 1-2, 1-2, 1-2 |
-| Gold Ore | expert | 76 | Gold Ore | 0-0, 0-0, 1-2, 1-2 |
-| Malachite Ore | expert | 7 | Malachite Ore | 0-0, 0-0, 1-2, 1-2 |
-| Moonstone Ore | expert | 76 | Moonstone Ore | 0-0, 0-0, 1-2, 1-2 |
-| Amethyst | master | 3 | Amethyst | 0-0, 0-0, 0-0, 1-2 |
-| Ebony Ore | master | 6 | Ebony Ore | 0-0, 0-0, 0-0, 1-2 |
-| Emerald | master | 3 | Emerald | 0-0, 0-0, 0-0, 1-2 |
-| Heart Stone | master | 4 | Heart Stone | 0-0, 0-0, 0-0, 1-2 |
-| Ruby | master | 3 | Ruby | 0-0, 0-0, 0-0, 1-2 |
-| Sapphire | master | 3 | Sapphire | 0-0, 0-0, 0-0, 1-2 |
-| Stalhrim | master | 2 | Stalhrim | 0-0, 0-0, 0-0, 1-2 |
-
-<!-- detail:end -->
-
 ## Where this is
 
 The server has 581 veins and a deposit of 20. A swing takes 1, and
@@ -188,5 +159,5 @@ the turn-in. A swing at a scarce place gives 1, without the chance of
 one more. The open quest, what it has drawn, and the cooldown are
 kept on the character, so a restart of the server keeps them. No
 trader offers the quest in the game yet, so every rare vein still
-answers shut in play. The table under Every record is that server
-book. The numbers above it are the plan.
+answers shut in play. The table in [lists/miner.md](../lists/miner.md)
+is that server book. The numbers on this page are the plan.
