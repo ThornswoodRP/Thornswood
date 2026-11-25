@@ -131,7 +131,8 @@ class Builder(unittest.TestCase):
 
     def test_malformed_preferences_fail_before_either_output_is_written(self):
         for bad in [None, {}, [], 3, {'wrong':['Wrong']}, {'wrong':['Wrong', 5]},
-                    {'Wrong':['Wrong','a:Skyrim.esm']}, {'wrong':['Wrong','not a descriptor']}]:
+                    {'Wrong':['Wrong','a:Skyrim.esm']}, {'wrong':['Wrong','not a descriptor']},
+                    {'wrong':['Wrong','0:Skyrim.esm']}, {'wrong':['Wrong','00000000:Skyrim.esm']}]:
             with self.subTest(bad=bad):
                 self.write_canonical(bad)
                 for name in ['ADMIN_ITEMS', 'ADMIN_ACTORS']:

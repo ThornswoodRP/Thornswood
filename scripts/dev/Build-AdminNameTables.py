@@ -162,7 +162,8 @@ def item_preferences(folder=None):
         if (not isinstance(key, str) or not isinstance(row, list) or len(row) != 2
                 or not all(isinstance(value, str) and value.strip() for value in row)
                 or key != row[0].lower()
-                or not re.fullmatch(r'[0-9a-f]{1,8}:[^:\x00-\x1f]+\.(?:esm|esp|esl)', row[1], re.I)):
+                or not re.fullmatch(r'[0-9a-f]{1,8}:[^:\x00-\x1f]+\.(?:esm|esp|esl)', row[1], re.I)
+                or int(row[1].split(':', 1)[0], 16) == 0):
             raise ValueError('Invalid ITEM_NAMES entry')
     return {key: row[1] for key, row in names.items()}
 
