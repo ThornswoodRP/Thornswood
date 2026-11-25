@@ -12,8 +12,8 @@
   window.thornswoodNet.say. There is no second protocol. The labels are
   words. The lines are how the panel talks to the server, and nobody is told
   to type one (Patrick, 4 Oct: no chat commands for anything people do).
-  Make a post sends /notice and /job (#2554); Take, Take down, Put it back
-  and Pay the reward send /take, /unpin, /dropjob and /job done (#1627,
+  Make a post sends /board-post-v1 (#4771); Take, Take down, Put it back
+  and Pay the reward send /take, /board-unpin-v1, /dropjob and /job done (#1627,
   #2554); Send a haul and Confirm send /haul (#1393); Write a letter sends
   /letter-post-v1 (#4412).
 
@@ -37,6 +37,7 @@
   var data = null;
   var shown = false;
   var root = null;
+  var takedownArm = null, takedownTimer = 0, takedownHeld = '';
 
   /*
     WHAT MAKE A POST KEEPS. The draft is kept here as it is typed, so a
@@ -127,6 +128,8 @@
     '#' + ID + ' button{font-family:inherit;font-style:normal;font-weight:normal;cursor:pointer;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
+    '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
+    '#' + ID + ' .action-status{flex:1;min-width:0;overflow-wrap:anywhere;color:#e9d19b}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
@@ -157,9 +160,27 @@
     // the posts above it scroll (#2554).
     root.innerHTML =
       '<div class="panel"><h2>Notice board</h2><div class="body"></div>' +
-      '<div class="foot"><button class="go make" data-do="compose">Make a post</button>' +
+      '<div class="foot"><span class="action-status" id="' + ID + '-action-status" role="status" aria-live="polite"></span>' +
+      '<button class="go make" data-do="compose">Make a post</button>' +
       '<button class="shut" data-do="close">Close</button></div></div>';
     document.body.appendChild(root);
+    root.addEventListener('input', resetTakedown);
+    root.addEventListener('click', function (ev) {
+      if (takedownArm && ev.target !== takedownArm.button) resetTakedown();
+    }, true);
+    root.addEventListener('keydown', function (ev) {
+      if (!shown || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      if (takedownHeld) { ev.preventDefault(); ev.stopPropagation(); return; }
+      var b = ev.target;
+      if (!b || b.tagName !== 'BUTTON' || b.getAttribute('data-do') !== 'unpin') return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.repeat) return;
+      takedownHeld = ev.key; b.click();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (ev.key === takedownHeld) { takedownHeld = ''; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', function () { takedownHeld = ''; resetTakedown(); });
     root.addEventListener('click', function (e) {
       if (e.target === root) { close(); }
     });
@@ -203,6 +224,7 @@
   }
 
   function drawContents() {
+    resetTakedown();
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -530,7 +552,7 @@
     }
     if (verb === 'take' && n) { net('/take ' + n); return; }
     if (verb === 'paid' && n) { net('/job done ' + n); return; }
-    if (verb === 'unpin' && n) { net('/unpin ' + n); return; }
+    if (verb === 'unpin' && n) { confirmTakedown(this, n); return; }
     if (verb === 'drop' && n) { net('/dropjob ' + n); return; }
     if (verb === 'submit') {
       var id = this.getAttribute('data-id');
@@ -549,8 +571,59 @@
     tell('opened');
   }
 
+  function resetTakedown() {
+    if (takedownArm) {
+      takedownArm.button.textContent = takedownArm.text;
+      takedownArm.button.removeAttribute('data-confirm');
+    }
+    takedownArm = null;
+    if (takedownTimer) clearTimeout(takedownTimer);
+    takedownTimer = 0;
+  }
+
+  function actionStatus(text) {
+    var el = root.querySelector('#' + ID + '-action-status');
+    if (el) el.textContent = text;
+  }
+
+  function takedownTarget(n) {
+    var b = data && data.board;
+    if (!data || !Number.isSafeInteger(data.me) || data.me <= 0 || !b || !b.here || typeof b.hold !== 'string') return null;
+    var wall = b.wall || [];
+    for (var i = 0; i < wall.length; i++) {
+      var row = wall[i];
+      if (String(row.n) !== n) continue;
+      if (!Number.isSafeInteger(row.n) || row.n <= 0 || !Number.isSafeInteger(row.at) || row.at < 0 ||
+          !((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard)) return null;
+      return { me: data.me, hold: b.hold, here: b.here, guard: !!b.guard, steward: !!b.steward, row: row,
+        line: '/board-unpin-v1 ' + JSON.stringify([b.hold, row.n, row.at]),
+        words: (row.letter ? 'letter #' + row.n : row.haul ? 'haul #' + row.n : '"' + row.title + '"') + ' from ' + (b.where || b.hold) };
+    }
+    return null;
+  }
+
+  function confirmTakedown(button, n) {
+    if (!shown || !root.contains(button)) return;
+    var target = takedownTarget(n);
+    if (!target) { resetTakedown(); actionStatus('That post is unavailable. Review the current board.'); return; }
+    var snapshot = JSON.stringify(target);
+    var again = takedownArm && takedownArm.button === button && takedownArm.snapshot === snapshot && Date.now() < takedownArm.until;
+    resetTakedown(); actionStatus('');
+    if (again) {
+      var uncertain = 'Delivery not confirmed. Check the current board before trying again.';
+      try { if (window.thornswoodNet && window.thornswoodNet.say && window.thornswoodNet.say(target.line) === true) return; }
+      catch (e) { actionStatus(uncertain); return; }
+      actionStatus(uncertain);
+      return;
+    }
+    var armed = { button: button, text: button.textContent, snapshot: snapshot, until: Date.now() + 5000 };
+    takedownArm = armed; button.setAttribute('data-confirm', ''); button.textContent = 'Press again to take down ' + target.words;
+    takedownTimer = setTimeout(function () { if (takedownArm === armed) resetTakedown(); }, 5000);
+  }
+
   function close() {
     if (!shown) { return; }
+    resetTakedown(); takedownHeld = '';
     shown = false;
     if (root) { root.className = ''; }
     tell('closed');
@@ -558,7 +631,10 @@
 
   document.addEventListener('keydown', function (ev) {
     if (!shown) { return; }
-    if (ev.key === 'Escape') { close(); }
+    if (ev.key === 'Escape') {
+      ev.preventDefault(); if (ev.repeat) return;
+      if (takedownArm) resetTakedown(); else close();
+    }
   });
 
   var foot = null;

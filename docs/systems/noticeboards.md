@@ -195,6 +195,12 @@ who is away is paid when they are next in the world. A letter's 15 is
 paid when it is delivered to the named person, from gold the sender
 already put up.
 
+Take down asks for a second fresh press within five seconds, naming the
+post and board. A held key does not confirm. A changed board or post,
+another action, editing a field, or closing the panel cancels it. If the
+post changes before the request arrives, review the current board and
+confirm again. Nothing is retried automatically.
+
 Take down is the poster's. The fee stays with the hold, and a job's
 reward comes back to the poster. A job somebody has taken stays up until
 they hand it back.

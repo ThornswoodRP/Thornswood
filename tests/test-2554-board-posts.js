@@ -429,7 +429,9 @@ function standIn() {
       return hit;
     }
   };
+  const windowEvents = {};
   const win = { skyrimPlatform: { sendMessage: function () { } },
+                addEventListener: function (name, fn) { (windowEvents[name] || (windowEvents[name] = [])).push(fn); },
                 thornswoodNet: { say: function (line) { sent.push(line); return true; } } };
   vm.runInNewContext(page, { window: win, document: doc, console: console, isFinite: isFinite, JSON: JSON, Date: FakeDate });
   return { win: win, doc: doc, sent: sent, board: win.thornswoodBoard,
@@ -472,8 +474,10 @@ attempt('the page', function () {
 
   // Make a post sits in the foot, apart from the list.
   const make = p.root().querySelector('.make');
+  const foot = /<div class="foot">([\s\S]*?)<\/div>/.exec(p.root()._html);
   yes('P4 Make a post is in the foot, not in the list',
-      !!make && make.parent === p.root() && p.root()._html.indexOf('<div class="foot"><button class="go make" data-do="compose">Make a post</button>') > 0 &&
+      !!make && make.parent === p.root() && !!foot &&
+      foot[1].indexOf('<button class="go make" data-do="compose">Make a post</button>') >= 0 &&
       p.body().innerHTML.indexOf('Make a post') < 0);
   yes('P4 and the two one line boxes are gone', page.indexOf('placeholder="the notice"') < 0 && page.indexOf('placeholder="the job"') < 0);
   make.click();

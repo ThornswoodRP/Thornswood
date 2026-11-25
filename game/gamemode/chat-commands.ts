@@ -21,7 +21,7 @@
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
