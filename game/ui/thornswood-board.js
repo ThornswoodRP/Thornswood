@@ -38,7 +38,7 @@
   var shown = false;
   var root = null;
   var takedownArm = null, takedownTimer = 0, takedownHeld = '';
-  var haulFieldError = null;
+  var boardFieldError = null;
 
   /*
     WHAT MAKE A POST KEEPS. The draft is kept here as it is typed, so a
@@ -166,9 +166,9 @@
       '<button class="shut" data-do="close">Close</button></div></div>';
     document.body.appendChild(root);
     root.addEventListener('input', resetTakedown);
-    function editHaul(ev) { if (haulFieldError && ev.target === haulFieldError.field) clearHaulFieldError(); }
-    root.addEventListener('input', editHaul);
-    root.addEventListener('change', editHaul);
+    function editBoardField(ev) { if (boardFieldError && (!boardFieldError.field || ev.target === boardFieldError.field)) clearBoardFieldError(); }
+    root.addEventListener('input', editBoardField);
+    root.addEventListener('change', editBoardField);
     root.addEventListener('click', function (ev) {
       if (takedownArm && ev.target !== takedownArm.button) resetTakedown();
     }, true);
@@ -195,41 +195,55 @@
     return el ? String(el.value || '').trim() : '';
   }
 
-  // Restore only this local missing-field error, preserving hints and newer errors.
-  function clearHaulFieldError() {
-    var error = haulFieldError;
+  // Own the exact note, description token and native error installed here.
+  // Replaced notes, newer messages and other validation owners survive cleanup.
+  function clearBoardFieldError() {
+    var error = boardFieldError;
     if (!error) return;
-    haulFieldError = null;
+    boardFieldError = null;
     var field = error.field;
-    var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
-    var newerError = field.validity.customError && !ownsValidity;
-    if (ownsValidity) field.setCustomValidity(error.custom);
-    if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
-      if (error.invalid == null) field.removeAttribute('aria-invalid');
-      else field.setAttribute('aria-invalid', error.invalid);
+    if (field) {
+      var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
+      var newerError = field.validity.customError && !ownsValidity;
+      if (ownsValidity) field.setCustomValidity(error.custom);
+      if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
+        if (error.invalid == null) field.removeAttribute('aria-invalid');
+        else field.setAttribute('aria-invalid', error.invalid);
+      }
+      var currentNote = root.querySelector('#' + error.token);
+      if (error.added && (!currentNote || currentNote === error.note)) {
+        var now = field.getAttribute('aria-describedby');
+        var remaining = now === error.installed ? error.described :
+          String(now || '').split(/\s+/).filter(function (id) { return id && id !== error.token; }).join(' ');
+        if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
+        else field.setAttribute('aria-describedby', remaining);
+      }
     }
-    if (error.added) {
-      var now = field.getAttribute('aria-describedby');
-      var remaining = now === error.installed ? error.described :
-        String(now || '').split(/\s+/).filter(function (id) { return id && id !== ID + '-haul-reason'; }).join(' ');
-      if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
-      else field.setAttribute('aria-describedby', remaining);
+    if (error.note.textContent === error.reason) {
+      error.note.textContent = ''; error.note.style.display = 'none';
     }
-    var note = root.querySelector('#' + ID + '-haul-reason');
-    if (note) { note.textContent = ''; note.style.display = 'none'; }
   }
 
-  function needHaulField(id, value, reason) {
+  function showBoardReason(noteId, reason) {
+    var note = root.querySelector('#' + ID + '-' + noteId);
+    if (!note || !root.contains(note)) return null;
+    boardFieldError = {field:null,reason:reason,note:note,token:note.id};
+    note.textContent = reason; note.style.display = 'block';
+    return boardFieldError;
+  }
+
+  function needBoardField(id, value, reason, noteId) {
     var field = root.querySelector('#' + ID + '-' + id);
     if (!field || !root.contains(field)) return false;
     if (value) return true;
+    var error = showBoardReason(noteId, reason);
+    if (!error) return false;
     var described = field.getAttribute('aria-describedby');
-    var added = String(described || '').split(/\s+/).indexOf(ID + '-haul-reason') < 0;
-    var installed = added ? (described ? described + ' ' : '') + ID + '-haul-reason' : described;
-    haulFieldError = {field:field,reason:reason,custom:field.validity.customError ? field.validationMessage : '',
-      invalid:field.getAttribute('aria-invalid'),described:described,added:added,installed:installed};
-    var note = root.querySelector('#' + ID + '-haul-reason');
-    note.textContent = reason; note.style.display = 'block';
+    var added = String(described || '').split(/\s+/).indexOf(error.token) < 0;
+    var installed = added ? (described ? described + ' ' : '') + error.token : described;
+    error.field = field; error.custom = field.validity.customError ? field.validationMessage : '';
+    error.invalid = field.getAttribute('aria-invalid'); error.described = described;
+    error.added = added; error.installed = installed;
     field.setAttribute('aria-invalid', 'true');
     field.setAttribute('aria-describedby', installed);
     field.setCustomValidity(reason); field.focus(); field.reportValidity();
@@ -270,7 +284,7 @@
 
   function drawContents() {
     resetTakedown();
-    clearHaulFieldError();
+    clearBoardFieldError();
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -399,6 +413,7 @@
     out += '<div class="line"><input id="' + ID + '-to" aria-label="Letter recipient" maxlength="60" placeholder="who it is for"></div>';
     out += '<div class="line"><input id="' + ID + '-letter" aria-label="Letter text" maxlength="300" placeholder="the letter">' +
       '<button class="go" data-do="letter">Post the letter</button></div>';
+    out += '<div class="said" id="' + ID + '-letter-reason" role="status" aria-live="polite" style="display:none"></div>';
     out += '<div class="note">35 gold: 20 for the board, and 15 held for whoever carries it, paid to them ' +
       'when they hand it over. Up to 300 characters. Only the person it is for reads it. ' +
       'Taken down before then, the 15 comes back to you.</div>';
@@ -576,24 +591,27 @@
       return;
     }
     if (verb === 'letter') {
+      if (!shown || !root.contains(this)) return;
+      clearBoardFieldError();
       var to = document.getElementById(ID + '-to').value;
       var words = document.getElementById(ID + '-letter').value;
-      if (!to.trim() || !words.trim()) { say('Say who the letter is for and what it says.'); return; }
+      if (!needBoardField('to', to.trim(), 'Say who the letter is for.', 'letter-reason') ||
+          !needBoardField('letter', words.trim(), 'Write what the letter says.', 'letter-reason')) return;
       var letterLine;
       try { letterLine = '/letter-post-v1 ' + encodeURIComponent(to) + ' ' + encodeURIComponent(words); }
-      catch (eLetter) { say('That letter contains invalid text. Nothing was sent; keep your draft.'); return; }
+      catch (eLetter) { showBoardReason('letter-reason', 'That letter contains invalid text. Nothing was sent; keep your draft.'); return; }
       net(letterLine);
       return;
     }
     if (verb === 'haul') {
       if (!shown || !root.contains(this)) return;
-      clearHaulFieldError();
+      clearBoardFieldError();
       var pay = field(ID + '-pay').replace(/[^0-9]/g, '');
       var dest = field(ID + '-dest');
       var what = field(ID + '-haul');
-      if (!needHaulField('pay', pay, 'Enter the haul pay in gold.') ||
-          !needHaulField('dest', dest, 'Choose the haul destination.') ||
-          !needHaulField('haul', what, 'Say what the haul carries.')) return;
+      if (!needBoardField('pay', pay, 'Enter the haul pay in gold.', 'haul-reason') ||
+          !needBoardField('dest', dest, 'Choose the haul destination.', 'haul-reason') ||
+          !needBoardField('haul', what, 'Say what the haul carries.', 'haul-reason')) return;
       net('/haul ' + pay + ' ' + dest + ' ' + what);
       return;
     }
@@ -676,7 +694,7 @@
   function close() {
     if (!shown) { return; }
     resetTakedown(); takedownHeld = '';
-    clearHaulFieldError();
+    clearBoardFieldError();
     shown = false;
     if (root) { root.className = ''; }
     tell('closed');
