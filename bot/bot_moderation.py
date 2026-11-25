@@ -84,6 +84,7 @@ _MOD_DID = {
     # Staff on the crafting card, the Office page of K (#3167): the why says
     # which rank from what to what, or what was given back and why.
     'craftrank': 'raised a rank of %s',
+    'setclass': 'changed the class of %s',
     'craftrecipes': 'handed the newer recipe list to the game of %s',
     'setprofession': 'changed the profession of %s',
     'craftgive': 'gave back to %s',
