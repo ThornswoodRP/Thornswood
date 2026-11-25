@@ -49,7 +49,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Install-Gate.ps1](deploy/Install-Gate.ps1) | Puts the deploy gate on the box (#2841): the account thornswood-deploy, which has no administrator rights, its forced command, and the broker that runs the verbs. |
 | [deploy/Install-Mongo.ps1](deploy/Install-Mongo.ps1) | Puts MongoDB on the box (#6237): the game servers keep their worlds there instead of one JSON file per form. mongod runs as the task Thornswood Mongo, listening on 127.0.0.1 only, with authorization on, and every program that signs in has a user of its own. |
 | [deploy/Install-Runner.ps1](deploy/Install-Runner.ps1) | Puts a GitHub Actions runner on the VPS, so the build check runs on every pull request without paying for minutes. |
-| [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the game folder's Data and puts it into the install's plugin lists, in front of the plugin -Before names. |
+| [deploy/Install-ThornswoodContent.ps1](deploy/Install-ThornswoodContent.ps1) | Copies Thornswood-Content.esp into the requested game Data folder. |
 | [deploy/Install-ThornswoodServer.ps1](deploy/Install-ThornswoodServer.ps1) | Run this ON THE VPS, after Bootstrap-VPS.ps1, as Administrator. |
 | [deploy/Install-Tunnel.ps1](deploy/Install-Tunnel.ps1) | Puts the site behind a Cloudflare Tunnel (#5334): cloudflared runs on the box as the task "Thornswood Tunnel" and keeps an outbound connection open to Cloudflare, and Cloudflare sends thornswood.net and www down it to Caddy on 127.0.0.1:443. |
 | [deploy/Install-Voice.ps1](deploy/Install-Voice.ps1) | Puts the proximity voice service on the VPS beside the game server. |

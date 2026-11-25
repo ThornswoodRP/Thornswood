@@ -92,7 +92,7 @@ const WELLS = table('WELLS');
 const WEATHER = table('WEATHER');
 const WARMTH = table('WARMTH');
 const FOODS = table('FOODS');
-const FOOD_GROUPS = {"items":{"10211a:Skyrim.esm":"raw","10394d:Skyrim.esm":"ingredient","10d666:Skyrim.esm":"ingredient","117ff:HearthFires.esm":"cooked","11801:HearthFires.esm":"cooked","12010f:WindhelmSSE.esp":"prepared","12f9c4:WindhelmSSE.esp":"ingredient","1391d:Dawnguard.esm":"drugs","13f593:WindhelmSSE.esp":"ale","14dc4:Dawnguard.esm":"ingredient","17167b:WindhelmSSE.esp":"drink","18001:Thornswood-Content.esp":"tea","18002:Thornswood-Content.esp":"tea","18003:Thornswood-Content.esp":"tea","19010:Thornswood-Content.esp":"soup","19011:Thornswood-Content.esp":"cooked","19012:Thornswood-Content.esp":"cooked","19013:Thornswood-Content.esp":"cooked","19014:Thornswood-Content.esp":"cooked","19015:Thornswood-Content.esp":"soup","19016:Thornswood-Content.esp":"soup","19017:Thornswood-Content.esp":"soup","19018:Thornswood-Content.esp":"soup","19019:Thornswood-Content.esp":"cooked","1901a:Thornswood-Content.esp":"soup","1901b:Thornswood-Content.esp":"soup","1901c:Thornswood-Content.esp":"cooked","1901d:Thornswood-Content.esp":"cooked","1901e:Thornswood-Content.esp":"soup","1901f:Thornswood-Content.esp":"soup","19020:Thornswood-Content.esp":"soup","19021:Thornswood-Content.esp":"soup","19022:Thornswood-Content.esp":"soup","19023:Thornswood-Content.esp":"cooked","19024:Thornswood-Content.esp":"cooked","19025:Thornswood-Content.esp":"cooked","19026:Thornswood-Content.esp":"cooked","19027:Thornswood-Content.esp":"cooked","19028:Thornswood-Content.esp":"cooked","19029:Thornswood-Content.esp":"cooked","1902a:Thornswood-Content.esp":"cooked","1902b:Thornswood-Content.esp":"cooked","1902c:Thornswood-Content.esp":"cooked","1902d:Thornswood-Content.esp":"cooked","1902e:Thornswood-Content.esp":"soup","1902f:Thornswood-Content.esp":"soup","19030:Thornswood-Content.esp":"cooked","19031:Thornswood-Content.esp":"cooked","19032:Thornswood-Content.esp":"cooked","19033:Thornswood-Content.esp":"cooked","19034:Thornswood-Content.esp":"cooked","19035:Thornswood-Content.esp":"cooked","19036:Thornswood-Content.esp":"cooked","19037:Thornswood-Content.esp":"cooked","19038:Thornswood-Content.esp":"cooked","19039:Thornswood-Content.esp":"cooked","1903a:Thornswood-Content.esp":"cooked","1903b:Thornswood-Content.esp":"cooked","1903c:Thornswood-Content.esp":"cooked","1903d:Thornswood-Content.esp":"cooked","1903e:Thornswood-Content.esp":"cooked","1903f:Thornswood-Content.esp":"cooked","19040:Thornswood-Content.esp":"cooked","19041:Thornswood-Content.esp":"cooked","19042:Thornswood-Content.esp":"cooked","19043:Thornswood-Content.esp":"cooked","19044:Thornswood-Content.esp":"cooked","19045:Thornswood-Content.esp":"cooked","19046:Thornswood-Content.esp":"soup","19047:Thornswood-Content.esp":"soup","19048:Thornswood-Content.esp":"soup","19049:Thornswood-Content.esp":"soup","1904a:Thornswood-Content.esp":"soup","1904b:Thornswood-Content.esp":"soup","1904c:Thornswood-Content.esp":"soup","1904d:Thornswood-Content.esp":"soup","1904e:Thornswood-Content.esp":"cooked","1a010:Thornswood-Content.esp":"feast","1a011:Thornswood-Content.esp":"feast","1a012:Thornswood-Content.esp":"feast","1a013:Thornswood-Content.esp":"feast","1a030:Thornswood-Content.esp":"feast","1a031:Thornswood-Content.esp":"feast","1a032:Thornswood-Content.esp":"feast","1a033:Thornswood-Content.esp":"feast","1a040:Thornswood-Content.esp":"ale","1a041:Thornswood-Content.esp":"ale","1a042:Thornswood-Content.esp":"ale","1a043:Thornswood-Content.esp":"ale","206e7:Dragonborn.esm":"ingredient","2844d3:Triumvirate - Mage Archetypes.esp":"potion","3206fc:WindhelmSSE.esp":"ale","3533:HearthFires.esm":"cooked","3534:HearthFires.esm":"drink","3537:HearthFires.esm":"cooked","3538:HearthFires.esm":"ingredient","3539:HearthFires.esm":"cooked","353a:HearthFires.esm":"cooked","353b:HearthFires.esm":"cooked","353c:HearthFires.esm":"ingredient","353d:HearthFires.esm":"soup","353e:HearthFires.esm":"soup","353f:HearthFires.esm":"cooked","3540:HearthFires.esm":"raw","3541:HearthFires.esm":"cooked","3bd14:Dragonborn.esm":"raw","3bd15:Dragonborn.esm":"raw","3cd5b:Dragonborn.esm":"soup","3cf72:Dragonborn.esm":"cooked","3d125:Dragonborn.esm":"raw","3f4bd:Skyrim.esm":"drugs","4477e9:WindhelmSSE.esp":"prepared","4477ea:WindhelmSSE.esp":"prepared","57a7a:Skyrim.esm":"drugs","64b2e:Skyrim.esm":"ingredient","64b2f:Skyrim.esm":"ingredient","64b30:Skyrim.esm":"cooked","64b31:Skyrim.esm":"prepared","64b32:Skyrim.esm":"prepared","64b33:Skyrim.esm":"prepared","64b34:Skyrim.esm":"prepared","64b35:Skyrim.esm":"prepared","64b36:Skyrim.esm":"prepared","64b38:Skyrim.esm":"cooked","64b39:Skyrim.esm":"prepared","64b3a:Skyrim.esm":"cooked","64b3b:Skyrim.esm":"cooked","64b3c:Skyrim.esm":"cooked","64b3d:Skyrim.esm":"cooked","64b3e:Skyrim.esm":"cooked","64b3f:Skyrim.esm":"ingredient","64b40:Skyrim.esm":"ingredient","64b41:Skyrim.esm":"ingredient","64b42:Skyrim.esm":"ingredient","64b43:Skyrim.esm":"cooked","65c37:Skyrim.esm":"ale","65c38:Skyrim.esm":"ale","65c39:Skyrim.esm":"ale","65c97:Skyrim.esm":"cooked","65c98:Skyrim.esm":"prepared","65c99:Skyrim.esm":"raw","65c9a:Skyrim.esm":"raw","65c9b:Skyrim.esm":"raw","65c9c:Skyrim.esm":"raw","65c9d:Skyrim.esm":"raw","65c9e:Skyrim.esm":"raw","65c9f:Skyrim.esm":"raw","669a2:Skyrim.esm":"raw","669a3:Skyrim.esm":"prepared","669a4:Skyrim.esm":"raw","669a5:Skyrim.esm":"ingredient","721e8:Skyrim.esm":"cooked","7224c:Skyrim.esm":"cooked","7224e:Skyrim.esm":"cooked","722b0:Skyrim.esm":"cooked","722bb:Skyrim.esm":"cooked","722bd:Skyrim.esm":"cooked","722c2:Skyrim.esm":"cooked","722c7:Skyrim.esm":"cooked","80d:Gourmet.esp":"cooked","810:Gourmet.esp":"cooked","815:Gourmet.esp":"cooked","816:Gourmet.esp":"soup","817:Gourmet.esp":"soup","818:Gourmet.esp":"soup","81c:Gourmet.esp":"soup","822:Gourmet.esp":"ale","8aa:Gourmet.esp":"cooked","8ac:Gourmet.esp":"raw","8ae:Gourmet.esp":"raw","8b1:Gourmet.esp":"soup","8b3:Gourmet.esp":"soup","8e2:Gourmet.esp":"cooked","8e4:Gourmet.esp":"cooked","8ea:Gourmet.esp":"soup","8eb:Gourmet.esp":"soup","8f5:Gourmet.esp":"soup","8f6:Gourmet.esp":"soup","8f7:Gourmet.esp":"soup","901:Gourmet.esp":"cooked","902:Gourmet.esp":"cooked","903:Gourmet.esp":"cooked","936:Gourmet.esp":"drugs","981:Gourmet.esp":"cooked","9db:HearthFires.esm":"cooked","9dc:HearthFires.esm":"cooked","9df:Gourmet.esp":"soup","9e0:Gourmet.esp":"soup","9e1:Gourmet.esp":"soup","9e2:Gourmet.esp":"soup","9e3:Gourmet.esp":"soup","9e4:Gourmet.esp":"soup","9e5:Gourmet.esp":"soup","9e6:Gourmet.esp":"soup","aed90:Skyrim.esm":"drugs","cadfb:Skyrim.esm":"prepared","cd614:Skyrim.esm":"cooked","dc172:Skyrim.esm":"drugs","e8448:Skyrim.esm":"cooked","e8947:Skyrim.esm":"cooked","eba01:Skyrim.esm":"soup","eba02:Skyrim.esm":"soup","eba03:Skyrim.esm":"raw","edb2e:Skyrim.esm":"raw","f2011:Skyrim.esm":"raw","f4314:Skyrim.esm":"soup","f4315:Skyrim.esm":"soup","f431b:Skyrim.esm":"soup","f431c:Skyrim.esm":"soup","f431d:Skyrim.esm":"soup","f431e:Skyrim.esm":"soup","f4320:Skyrim.esm":"cooked"},"strip":{"groups":["raw","cooked","soup","ingredient","prepared","drink"],"keep":{"12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour: Resist Frost 3 for 60s rides with Restore Health 1","12010f:WindhelmSSE.esp":"Frostwheat Bread: Resist Frost 5 for 60s rides with Restore Health 3","17167b:WindhelmSSE.esp":"Snowberry Juice: Resist Frost 5 for 30s rides with Restore Stamina 5"}},"season":{"plain":{"soup":"warm"},"extras":{"34d22:Skyrim.esm":"guard","34cdf:Skyrim.esm":"stamina"},"dishes":{}},"quality":{"burnt":"19000:Thornswood-Content.esp","fine":{"3cd5b:Dragonborn.esm":"19010:Thornswood-Content.esp","3cf72:Dragonborn.esm":"19011:Thornswood-Content.esp","80d:Gourmet.esp":"19012:Thornswood-Content.esp","810:Gourmet.esp":"19013:Thornswood-Content.esp","815:Gourmet.esp":"19014:Thornswood-Content.esp","816:Gourmet.esp":"19015:Thornswood-Content.esp","817:Gourmet.esp":"19016:Thornswood-Content.esp","818:Gourmet.esp":"19017:Thornswood-Content.esp","81c:Gourmet.esp":"19018:Thornswood-Content.esp","8aa:Gourmet.esp":"19019:Thornswood-Content.esp","8b1:Gourmet.esp":"1901a:Thornswood-Content.esp","8b3:Gourmet.esp":"1901b:Thornswood-Content.esp","8e2:Gourmet.esp":"1901c:Thornswood-Content.esp","8e4:Gourmet.esp":"1901d:Thornswood-Content.esp","8ea:Gourmet.esp":"1901e:Thornswood-Content.esp","8eb:Gourmet.esp":"1901f:Thornswood-Content.esp","8f5:Gourmet.esp":"19020:Thornswood-Content.esp","8f6:Gourmet.esp":"19021:Thornswood-Content.esp","8f7:Gourmet.esp":"19022:Thornswood-Content.esp","901:Gourmet.esp":"19023:Thornswood-Content.esp","902:Gourmet.esp":"19024:Thornswood-Content.esp","903:Gourmet.esp":"19025:Thornswood-Content.esp","981:Gourmet.esp":"19026:Thornswood-Content.esp","9db:HearthFires.esm":"19027:Thornswood-Content.esp","9dc:HearthFires.esm":"19028:Thornswood-Content.esp","3533:HearthFires.esm":"19029:Thornswood-Content.esp","3537:HearthFires.esm":"1902a:Thornswood-Content.esp","3539:HearthFires.esm":"1902b:Thornswood-Content.esp","353a:HearthFires.esm":"1902c:Thornswood-Content.esp","353b:HearthFires.esm":"1902d:Thornswood-Content.esp","353d:HearthFires.esm":"1902e:Thornswood-Content.esp","353e:HearthFires.esm":"1902f:Thornswood-Content.esp","353f:HearthFires.esm":"19030:Thornswood-Content.esp","117ff:HearthFires.esm":"19031:Thornswood-Content.esp","11801:HearthFires.esm":"19032:Thornswood-Content.esp","64b30:Skyrim.esm":"19033:Thornswood-Content.esp","64b38:Skyrim.esm":"19034:Thornswood-Content.esp","64b3a:Skyrim.esm":"19035:Thornswood-Content.esp","64b3b:Skyrim.esm":"19036:Thornswood-Content.esp","64b3c:Skyrim.esm":"19037:Thornswood-Content.esp","64b3d:Skyrim.esm":"19038:Thornswood-Content.esp","64b3e:Skyrim.esm":"19039:Thornswood-Content.esp","64b43:Skyrim.esm":"1903a:Thornswood-Content.esp","65c97:Skyrim.esm":"1903b:Thornswood-Content.esp","721e8:Skyrim.esm":"1903c:Thornswood-Content.esp","7224c:Skyrim.esm":"1903d:Thornswood-Content.esp","7224e:Skyrim.esm":"1903e:Thornswood-Content.esp","722b0:Skyrim.esm":"1903f:Thornswood-Content.esp","722bb:Skyrim.esm":"19040:Thornswood-Content.esp","722bd:Skyrim.esm":"19041:Thornswood-Content.esp","722c2:Skyrim.esm":"19042:Thornswood-Content.esp","722c7:Skyrim.esm":"19043:Thornswood-Content.esp","e8448:Skyrim.esm":"19044:Thornswood-Content.esp","e8947:Skyrim.esm":"19045:Thornswood-Content.esp","eba01:Skyrim.esm":"19046:Thornswood-Content.esp","eba02:Skyrim.esm":"19047:Thornswood-Content.esp","f4314:Skyrim.esm":"19048:Thornswood-Content.esp","f4315:Skyrim.esm":"19049:Thornswood-Content.esp","f431b:Skyrim.esm":"1904a:Thornswood-Content.esp","f431c:Skyrim.esm":"1904b:Thornswood-Content.esp","f431d:Skyrim.esm":"1904c:Thornswood-Content.esp","f431e:Skyrim.esm":"1904d:Thornswood-Content.esp","f4320:Skyrim.esm":"1904e:Thornswood-Content.esp","1a010:Thornswood-Content.esp":"1a030:Thornswood-Content.esp","1a011:Thornswood-Content.esp":"1a031:Thornswood-Content.esp","1a012:Thornswood-Content.esp":"1a032:Thornswood-Content.esp","1a013:Thornswood-Content.esp":"1a033:Thornswood-Content.esp"}},"feasts":{"1a010:Thornswood-Content.esp":"stamina","1a011:Thornswood-Content.esp":"guard","1a012:Thornswood-Content.esp":"stamina","1a013:Thornswood-Content.esp":"warm"},"inSeason":{"45c28:Skyrim.esm":["spring","summer"],"6ac4a:Skyrim.esm":["summer","autumn"],"1b3bd:Skyrim.esm":["autumn","winter"],"5076e:Skyrim.esm":["winter","spring"]},"spoil":{"days":{"raw":7,"ingredient":7,"cooked":14,"soup":14,"prepared":14,"feast":14},"keeps":{"10394d:Skyrim.esm":"Honey","12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour","14dc4:Dawnguard.esm":"Soul Husk","3538:HearthFires.esm":"Sack of Flour","4477ea:WindhelmSSE.esp":"Nord Chocolate","64b31:Skyrim.esm":"Goat Cheese Wedge","64b32:Skyrim.esm":"Eidar Cheese Wedge","64b33:Skyrim.esm":"Goat Cheese Wheel","64b34:Skyrim.esm":"Eidar Cheese Wheel","64b35:Skyrim.esm":"Sliced Goat Cheese Wheel","64b36:Skyrim.esm":"Sliced Eidar Cheese Wheel","64b39:Skyrim.esm":"Long Taffy Treat","669a3:Skyrim.esm":"Mammoth Cheese Bowl","cadfb:Skyrim.esm":"Spiced Beef"},"extra":{"3534:HearthFires.esm":7,"353c:HearthFires.esm":14,"19000:Thornswood-Content.esp":14},"preserve":["raw"],"salt":"34cdf:Skyrim.esm","firewood":"6f993:Skyrim.esm","spoiled":"19100:Thornswood-Content.esp","names":{"10211a:Skyrim.esm":"Mammoth Snout","10d666:Skyrim.esm":"Gourd","117ff:HearthFires.esm":"Jazbay Dumpling","11801:HearthFires.esm":"Snowberry Dumpling","12010f:WindhelmSSE.esp":"Frostwheat Bread","19000:Thornswood-Content.esp":"Burnt Meal","19010:Thornswood-Content.esp":"Fine Ash Yam Soup","19011:Thornswood-Content.esp":"Fine Cooked Boar Meat","19012:Thornswood-Content.esp":"Fine Juniper Berry Dumpling","19013:Thornswood-Content.esp":"Fine Mammoth Cheese Fondue","19014:Thornswood-Content.esp":"Fine Eidar Cheese Fondue","19015:Thornswood-Content.esp":"Fine Ash Hopper Stew","19016:Thornswood-Content.esp":"Fine Boar Stew","19017:Thornswood-Content.esp":"Fine Mammoth Stew","19018:Thornswood-Content.esp":"Fine Goat Stew","19019:Thornswood-Content.esp":"Fine Cooked Dog","1901a:Thornswood-Content.esp":"Fine Gourd Soup","1901b:Thornswood-Content.esp":"Fine Carrot Soup","1901c:Thornswood-Content.esp":"Fine Roasted Carrots","1901d:Thornswood-Content.esp":"Fine Roasted Yams","1901e:Thornswood-Content.esp":"Fine Rabbit Stew","1901f:Thornswood-Content.esp":"Fine Pheasant Stew","19020:Thornswood-Content.esp":"Fine Mushroom Stew","19021:Thornswood-Content.esp":"Fine Wild Mushroom Stew","19022:Thornswood-Content.esp":"Fine Glowing Mushroom Stew","19023:Thornswood-Content.esp":"Fine Roasted Mushrooms","19024:Thornswood-Content.esp":"Fine Roasted Wild Mushrooms","19025:Thornswood-Content.esp":"Fine Roasted Glowing Mushroom","19026:Thornswood-Content.esp":"Fine Jelly Dumpling","19027:Thornswood-Content.esp":"Fine Braided Bread","19028:Thornswood-Content.esp":"Fine Garlic Bread","19029:Thornswood-Content.esp":"Fine Apple Dumpling","1902a:Thornswood-Content.esp":"Fine Potato Bread","1902b:Thornswood-Content.esp":"Fine Juniper Berry Crostata","1902c:Thornswood-Content.esp":"Fine Jazbay Crostata","1902d:Thornswood-Content.esp":"Fine Snowberry Crostata","1902e:Thornswood-Content.esp":"Fine Potato Soup","1902f:Thornswood-Content.esp":"Fine Clam Chowder","19030:Thornswood-Content.esp":"Fine Steamed Mudcrab Legs","19031:Thornswood-Content.esp":"Fine Jazbay Dumpling","19032:Thornswood-Content.esp":"Fine Snowberry Dumpling","19033:Thornswood-Content.esp":"Fine Boiled Creme Treat","19034:Thornswood-Content.esp":"Fine Honey Nut Treat","19035:Thornswood-Content.esp":"Fine Baked Potatoes","19036:Thornswood-Content.esp":"Fine Salmon Steak","19037:Thornswood-Content.esp":"Fine Slaughterfish Steak","19038:Thornswood-Content.esp":"Fine Sweet Roll","19039:Thornswood-Content.esp":"Fine Grilled Leeks","1903a:Thornswood-Content.esp":"Fine Apple Pie","1903b:Thornswood-Content.esp":"Fine Bread Loaf","1903c:Thornswood-Content.esp":"Fine Cooked Beef","1903d:Thornswood-Content.esp":"Fine Goat Roast","1903e:Thornswood-Content.esp":"Fine Horker Loaf","1903f:Thornswood-Content.esp":"Fine Horse Haunch","19040:Thornswood-Content.esp":"Fine Mammoth Steak","19041:Thornswood-Content.esp":"Fine Venison Chop","19042:Thornswood-Content.esp":"Fine Rabbit Haunch","19043:Thornswood-Content.esp":"Fine Pheasant Roast","19044:Thornswood-Content.esp":"Fine Cooked Skeever","19045:Thornswood-Content.esp":"Fine Grilled Chicken Breast","19046:Thornswood-Content.esp":"Fine Cabbage and Tomato Soup","19047:Thornswood-Content.esp":"Fine Cabbage Soup","19048:Thornswood-Content.esp":"Fine Beef Stew","19049:Thornswood-Content.esp":"Fine Horker Stew","1904a:Thornswood-Content.esp":"Fine Cabbage Potato Soup","1904b:Thornswood-Content.esp":"Fine Tomato Soup","1904c:Thornswood-Content.esp":"Fine Venison Stew","1904d:Thornswood-Content.esp":"Fine Vegetable Soup","1904e:Thornswood-Content.esp":"Fine Goat Cheese Fondue","1a010:Thornswood-Content.esp":"First Planting Loaf","1a011:Thornswood-Content.esp":"Midyear Jazbay Tart","1a012:Thornswood-Content.esp":"Harvest's End Roast","1a013:Thornswood-Content.esp":"Saturalia Spice Cake","1a030:Thornswood-Content.esp":"Fine First Planting Loaf","1a031:Thornswood-Content.esp":"Fine Midyear Jazbay Tart","1a032:Thornswood-Content.esp":"Fine Harvest's End Roast","1a033:Thornswood-Content.esp":"Fine Saturalia Spice Cake","206e7:Dragonborn.esm":"Ash Yam","3533:HearthFires.esm":"Apple Dumpling","3534:HearthFires.esm":"Jug of Milk","3537:HearthFires.esm":"Potato Bread","3539:HearthFires.esm":"Juniper Berry Crostata","353a:HearthFires.esm":"Jazbay Crostata","353b:HearthFires.esm":"Snowberry Crostata","353c:HearthFires.esm":"Butter","353d:HearthFires.esm":"Potato Soup","353e:HearthFires.esm":"Clam Chowder","353f:HearthFires.esm":"Steamed Mudcrab Legs","3540:HearthFires.esm":"Mudcrab Legs","3541:HearthFires.esm":"Salmon Steak","3bd14:Dragonborn.esm":"Boar Meat","3bd15:Dragonborn.esm":"Ash Hopper Meat","3cd5b:Dragonborn.esm":"Ash Yam Soup","3cf72:Dragonborn.esm":"Cooked Boar Meat","3d125:Dragonborn.esm":"Ash Hopper Leg","4477e9:WindhelmSSE.esp":"Nord Rolled Cake","64b2e:Skyrim.esm":"Red Apple","64b2f:Skyrim.esm":"Green Apple","64b30:Skyrim.esm":"Boiled Creme Treat","64b38:Skyrim.esm":"Honey Nut Treat","64b3a:Skyrim.esm":"Baked Potatoes","64b3b:Skyrim.esm":"Salmon Steak","64b3c:Skyrim.esm":"Slaughterfish Steak","64b3d:Skyrim.esm":"Sweet Roll","64b3e:Skyrim.esm":"Grilled Leeks","64b3f:Skyrim.esm":"Cabbage","64b40:Skyrim.esm":"Carrot","64b41:Skyrim.esm":"Potato","64b42:Skyrim.esm":"Tomato","64b43:Skyrim.esm":"Apple Pie","65c97:Skyrim.esm":"Bread Loaf","65c98:Skyrim.esm":"Bread","65c99:Skyrim.esm":"Raw Beef","65c9a:Skyrim.esm":"Goat Meat","65c9b:Skyrim.esm":"Horker Meat","65c9c:Skyrim.esm":"Horse Meat","65c9d:Skyrim.esm":"Pheasant Breast","65c9e:Skyrim.esm":"Raw Rabbit Leg","65c9f:Skyrim.esm":"Salmon Meat","669a2:Skyrim.esm":"Venison","669a4:Skyrim.esm":"Mammoth Snout","669a5:Skyrim.esm":"Leek","721e8:Skyrim.esm":"Cooked Beef","7224c:Skyrim.esm":"Goat Roast","7224e:Skyrim.esm":"Horker Loaf","722b0:Skyrim.esm":"Horse Haunch","722bb:Skyrim.esm":"Mammoth Steak","722bd:Skyrim.esm":"Venison Chop","722c2:Skyrim.esm":"Rabbit Haunch","722c7:Skyrim.esm":"Pheasant Roast","80d:Gourmet.esp":"Juniper Berry Dumpling","810:Gourmet.esp":"Mammoth Cheese Fondue","815:Gourmet.esp":"Eidar Cheese Fondue","816:Gourmet.esp":"Ash Hopper Stew","817:Gourmet.esp":"Boar Stew","818:Gourmet.esp":"Mammoth Stew","81c:Gourmet.esp":"Goat Stew","8aa:Gourmet.esp":"Cooked Dog","8ac:Gourmet.esp":"Skeever Meat","8ae:Gourmet.esp":"Slaughterfish Meat","8b1:Gourmet.esp":"Gourd Soup","8b3:Gourmet.esp":"Carrot Soup","8e2:Gourmet.esp":"Roasted Carrots","8e4:Gourmet.esp":"Roasted Yams","8ea:Gourmet.esp":"Rabbit Stew","8eb:Gourmet.esp":"Pheasant Stew","8f5:Gourmet.esp":"Mushroom Stew","8f6:Gourmet.esp":"Wild Mushroom Stew","8f7:Gourmet.esp":"Glowing Mushroom Stew","901:Gourmet.esp":"Roasted Mushrooms","902:Gourmet.esp":"Roasted Wild Mushrooms","903:Gourmet.esp":"Roasted Glowing Mushroom","981:Gourmet.esp":"Jelly Dumpling","9db:HearthFires.esm":"Braided Bread","9dc:HearthFires.esm":"Garlic Bread","9df:Gourmet.esp":"Hot Goat Stew","9e0:Gourmet.esp":"Hot Mammoth Stew","9e1:Gourmet.esp":"Hot Pheasant Stew","9e2:Gourmet.esp":"Hot Rabbit Stew","9e3:Gourmet.esp":"Hot Mushroom Stew","9e4:Gourmet.esp":"Hot Wild Mushroom Stew","9e5:Gourmet.esp":"Hot Glowing Mushroom Stew","9e6:Gourmet.esp":"Hot Ash Hopper Stew","cd614:Skyrim.esm":"Homecooked Meal","e8448:Skyrim.esm":"Cooked Skeever","e8947:Skyrim.esm":"Grilled Chicken Breast","eba01:Skyrim.esm":"Cabbage and Tomato Soup","eba02:Skyrim.esm":"Cabbage Soup","eba03:Skyrim.esm":"Clam Meat","edb2e:Skyrim.esm":"Dog Meat","f2011:Skyrim.esm":"Chicken Breast","f4314:Skyrim.esm":"Beef Stew","f4315:Skyrim.esm":"Horker Stew","f431b:Skyrim.esm":"Cabbage Potato Soup","f431c:Skyrim.esm":"Tomato Soup","f431d:Skyrim.esm":"Venison Stew","f431e:Skyrim.esm":"Vegetable Soup","f4320:Skyrim.esm":"Goat Cheese Fondue"}}};
+const FOOD_GROUPS = {"items":{"10211a:Skyrim.esm":"raw","10394d:Skyrim.esm":"ingredient","10d666:Skyrim.esm":"ingredient","117ff:HearthFires.esm":"cooked","11801:HearthFires.esm":"cooked","12010f:WindhelmSSE.esp":"prepared","12f9c4:WindhelmSSE.esp":"ingredient","1391d:Dawnguard.esm":"drugs","13f593:WindhelmSSE.esp":"ale","14dc4:Dawnguard.esm":"ingredient","17167b:WindhelmSSE.esp":"drink","18001:Thornswood-Content.esp":"tea","18002:Thornswood-Content.esp":"tea","18003:Thornswood-Content.esp":"tea","19010:Thornswood-Content.esp":"soup","19011:Thornswood-Content.esp":"cooked","19012:Thornswood-Content.esp":"cooked","19013:Thornswood-Content.esp":"cooked","19014:Thornswood-Content.esp":"cooked","19015:Thornswood-Content.esp":"soup","19016:Thornswood-Content.esp":"soup","19017:Thornswood-Content.esp":"soup","19018:Thornswood-Content.esp":"soup","19019:Thornswood-Content.esp":"cooked","1901a:Thornswood-Content.esp":"soup","1901b:Thornswood-Content.esp":"soup","1901c:Thornswood-Content.esp":"cooked","1901d:Thornswood-Content.esp":"cooked","1901e:Thornswood-Content.esp":"soup","1901f:Thornswood-Content.esp":"soup","19020:Thornswood-Content.esp":"soup","19021:Thornswood-Content.esp":"soup","19022:Thornswood-Content.esp":"soup","19023:Thornswood-Content.esp":"cooked","19024:Thornswood-Content.esp":"cooked","19025:Thornswood-Content.esp":"cooked","19026:Thornswood-Content.esp":"cooked","19027:Thornswood-Content.esp":"cooked","19028:Thornswood-Content.esp":"cooked","19029:Thornswood-Content.esp":"cooked","1902a:Thornswood-Content.esp":"cooked","1902b:Thornswood-Content.esp":"cooked","1902c:Thornswood-Content.esp":"cooked","1902d:Thornswood-Content.esp":"cooked","1902e:Thornswood-Content.esp":"soup","1902f:Thornswood-Content.esp":"soup","19030:Thornswood-Content.esp":"cooked","19031:Thornswood-Content.esp":"cooked","19032:Thornswood-Content.esp":"cooked","19033:Thornswood-Content.esp":"cooked","19034:Thornswood-Content.esp":"cooked","19035:Thornswood-Content.esp":"cooked","19036:Thornswood-Content.esp":"cooked","19037:Thornswood-Content.esp":"cooked","19038:Thornswood-Content.esp":"cooked","19039:Thornswood-Content.esp":"cooked","1903a:Thornswood-Content.esp":"cooked","1903b:Thornswood-Content.esp":"cooked","1903c:Thornswood-Content.esp":"cooked","1903d:Thornswood-Content.esp":"cooked","1903e:Thornswood-Content.esp":"cooked","1903f:Thornswood-Content.esp":"cooked","19040:Thornswood-Content.esp":"cooked","19041:Thornswood-Content.esp":"cooked","19042:Thornswood-Content.esp":"cooked","19043:Thornswood-Content.esp":"cooked","19044:Thornswood-Content.esp":"cooked","19045:Thornswood-Content.esp":"cooked","19046:Thornswood-Content.esp":"soup","19047:Thornswood-Content.esp":"soup","19048:Thornswood-Content.esp":"soup","19049:Thornswood-Content.esp":"soup","1904a:Thornswood-Content.esp":"soup","1904b:Thornswood-Content.esp":"soup","1904c:Thornswood-Content.esp":"soup","1904d:Thornswood-Content.esp":"soup","1904e:Thornswood-Content.esp":"cooked","1a010:Thornswood-Content.esp":"feast","1a011:Thornswood-Content.esp":"feast","1a012:Thornswood-Content.esp":"feast","1a013:Thornswood-Content.esp":"feast","1a030:Thornswood-Content.esp":"feast","1a031:Thornswood-Content.esp":"feast","1a032:Thornswood-Content.esp":"feast","1a033:Thornswood-Content.esp":"feast","1a040:Thornswood-Content.esp":"ale","1a041:Thornswood-Content.esp":"ale","1a042:Thornswood-Content.esp":"ale","1a043:Thornswood-Content.esp":"ale","206e7:Dragonborn.esm":"ingredient","2844d3:Triumvirate - Mage Archetypes.esp":"potion","3206fc:WindhelmSSE.esp":"ale","3533:HearthFires.esm":"cooked","3534:HearthFires.esm":"drink","3537:HearthFires.esm":"cooked","3538:HearthFires.esm":"ingredient","3539:HearthFires.esm":"cooked","353a:HearthFires.esm":"cooked","353b:HearthFires.esm":"cooked","353c:HearthFires.esm":"ingredient","353d:HearthFires.esm":"soup","353e:HearthFires.esm":"soup","353f:HearthFires.esm":"cooked","3540:HearthFires.esm":"raw","3541:HearthFires.esm":"cooked","3bd14:Dragonborn.esm":"raw","3bd15:Dragonborn.esm":"raw","3cd5b:Dragonborn.esm":"soup","3cf72:Dragonborn.esm":"cooked","3d125:Dragonborn.esm":"raw","3f4bd:Skyrim.esm":"drugs","4477e9:WindhelmSSE.esp":"prepared","4477ea:WindhelmSSE.esp":"prepared","57a7a:Skyrim.esm":"drugs","64b2e:Skyrim.esm":"ingredient","64b2f:Skyrim.esm":"ingredient","64b30:Skyrim.esm":"cooked","64b31:Skyrim.esm":"prepared","64b32:Skyrim.esm":"prepared","64b33:Skyrim.esm":"prepared","64b34:Skyrim.esm":"prepared","64b35:Skyrim.esm":"prepared","64b36:Skyrim.esm":"prepared","64b38:Skyrim.esm":"cooked","64b39:Skyrim.esm":"prepared","64b3a:Skyrim.esm":"cooked","64b3b:Skyrim.esm":"cooked","64b3c:Skyrim.esm":"cooked","64b3d:Skyrim.esm":"cooked","64b3e:Skyrim.esm":"cooked","64b3f:Skyrim.esm":"ingredient","64b40:Skyrim.esm":"ingredient","64b41:Skyrim.esm":"ingredient","64b42:Skyrim.esm":"ingredient","64b43:Skyrim.esm":"cooked","65c37:Skyrim.esm":"ale","65c38:Skyrim.esm":"ale","65c39:Skyrim.esm":"ale","65c97:Skyrim.esm":"cooked","65c98:Skyrim.esm":"prepared","65c99:Skyrim.esm":"raw","65c9a:Skyrim.esm":"raw","65c9b:Skyrim.esm":"raw","65c9c:Skyrim.esm":"raw","65c9d:Skyrim.esm":"raw","65c9e:Skyrim.esm":"raw","65c9f:Skyrim.esm":"raw","669a2:Skyrim.esm":"raw","669a3:Skyrim.esm":"prepared","669a4:Skyrim.esm":"raw","669a5:Skyrim.esm":"ingredient","721e8:Skyrim.esm":"cooked","7224c:Skyrim.esm":"cooked","7224e:Skyrim.esm":"cooked","722b0:Skyrim.esm":"cooked","722bb:Skyrim.esm":"cooked","722bd:Skyrim.esm":"cooked","722c2:Skyrim.esm":"cooked","722c7:Skyrim.esm":"cooked","80d:Gourmet.esp":"cooked","810:Gourmet.esp":"cooked","815:Gourmet.esp":"cooked","816:Gourmet.esp":"soup","817:Gourmet.esp":"soup","818:Gourmet.esp":"soup","81c:Gourmet.esp":"soup","822:Gourmet.esp":"ale","8aa:Gourmet.esp":"cooked","8ac:Gourmet.esp":"raw","8ae:Gourmet.esp":"raw","8b1:Gourmet.esp":"soup","8b3:Gourmet.esp":"soup","8e2:Gourmet.esp":"cooked","8e4:Gourmet.esp":"cooked","8ea:Gourmet.esp":"soup","8eb:Gourmet.esp":"soup","8f5:Gourmet.esp":"soup","8f6:Gourmet.esp":"soup","8f7:Gourmet.esp":"soup","901:Gourmet.esp":"cooked","902:Gourmet.esp":"cooked","903:Gourmet.esp":"cooked","936:Gourmet.esp":"drugs","981:Gourmet.esp":"cooked","9db:HearthFires.esm":"cooked","9dc:HearthFires.esm":"cooked","9df:Gourmet.esp":"soup","9e0:Gourmet.esp":"soup","9e1:Gourmet.esp":"soup","9e2:Gourmet.esp":"soup","9e3:Gourmet.esp":"soup","9e4:Gourmet.esp":"soup","9e5:Gourmet.esp":"soup","9e6:Gourmet.esp":"soup","aed90:Skyrim.esm":"drugs","cadfb:Skyrim.esm":"prepared","cd614:Skyrim.esm":"cooked","dc172:Skyrim.esm":"drugs","e8448:Skyrim.esm":"cooked","e8947:Skyrim.esm":"cooked","eba01:Skyrim.esm":"soup","eba02:Skyrim.esm":"soup","eba03:Skyrim.esm":"raw","edb2e:Skyrim.esm":"raw","f2011:Skyrim.esm":"raw","f4314:Skyrim.esm":"soup","f4315:Skyrim.esm":"soup","f431b:Skyrim.esm":"soup","f431c:Skyrim.esm":"soup","f431d:Skyrim.esm":"soup","f431e:Skyrim.esm":"soup","f4320:Skyrim.esm":"cooked"},"strip":{"groups":["raw","cooked","soup","ingredient","prepared","drink"],"keep":{"12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour: Resist Frost 3 for 60s","12010f:WindhelmSSE.esp":"Frostwheat Bread: Resist Frost 5 for 60s","17167b:WindhelmSSE.esp":"Snowberry Juice: Resist Frost 5 for 30s"}},"season":{"plain":{"soup":"warm"},"extras":{"34d22:Skyrim.esm":"guard","34cdf:Skyrim.esm":"stamina"},"dishes":{}},"quality":{"burnt":"19000:Thornswood-Content.esp","fine":{"3cd5b:Dragonborn.esm":"19010:Thornswood-Content.esp","3cf72:Dragonborn.esm":"19011:Thornswood-Content.esp","80d:Gourmet.esp":"19012:Thornswood-Content.esp","810:Gourmet.esp":"19013:Thornswood-Content.esp","815:Gourmet.esp":"19014:Thornswood-Content.esp","816:Gourmet.esp":"19015:Thornswood-Content.esp","817:Gourmet.esp":"19016:Thornswood-Content.esp","818:Gourmet.esp":"19017:Thornswood-Content.esp","81c:Gourmet.esp":"19018:Thornswood-Content.esp","8aa:Gourmet.esp":"19019:Thornswood-Content.esp","8b1:Gourmet.esp":"1901a:Thornswood-Content.esp","8b3:Gourmet.esp":"1901b:Thornswood-Content.esp","8e2:Gourmet.esp":"1901c:Thornswood-Content.esp","8e4:Gourmet.esp":"1901d:Thornswood-Content.esp","8ea:Gourmet.esp":"1901e:Thornswood-Content.esp","8eb:Gourmet.esp":"1901f:Thornswood-Content.esp","8f5:Gourmet.esp":"19020:Thornswood-Content.esp","8f6:Gourmet.esp":"19021:Thornswood-Content.esp","8f7:Gourmet.esp":"19022:Thornswood-Content.esp","901:Gourmet.esp":"19023:Thornswood-Content.esp","902:Gourmet.esp":"19024:Thornswood-Content.esp","903:Gourmet.esp":"19025:Thornswood-Content.esp","981:Gourmet.esp":"19026:Thornswood-Content.esp","9db:HearthFires.esm":"19027:Thornswood-Content.esp","9dc:HearthFires.esm":"19028:Thornswood-Content.esp","3533:HearthFires.esm":"19029:Thornswood-Content.esp","3537:HearthFires.esm":"1902a:Thornswood-Content.esp","3539:HearthFires.esm":"1902b:Thornswood-Content.esp","353a:HearthFires.esm":"1902c:Thornswood-Content.esp","353b:HearthFires.esm":"1902d:Thornswood-Content.esp","353d:HearthFires.esm":"1902e:Thornswood-Content.esp","353e:HearthFires.esm":"1902f:Thornswood-Content.esp","353f:HearthFires.esm":"19030:Thornswood-Content.esp","117ff:HearthFires.esm":"19031:Thornswood-Content.esp","11801:HearthFires.esm":"19032:Thornswood-Content.esp","64b30:Skyrim.esm":"19033:Thornswood-Content.esp","64b38:Skyrim.esm":"19034:Thornswood-Content.esp","64b3a:Skyrim.esm":"19035:Thornswood-Content.esp","64b3b:Skyrim.esm":"19036:Thornswood-Content.esp","64b3c:Skyrim.esm":"19037:Thornswood-Content.esp","64b3d:Skyrim.esm":"19038:Thornswood-Content.esp","64b3e:Skyrim.esm":"19039:Thornswood-Content.esp","64b43:Skyrim.esm":"1903a:Thornswood-Content.esp","65c97:Skyrim.esm":"1903b:Thornswood-Content.esp","721e8:Skyrim.esm":"1903c:Thornswood-Content.esp","7224c:Skyrim.esm":"1903d:Thornswood-Content.esp","7224e:Skyrim.esm":"1903e:Thornswood-Content.esp","722b0:Skyrim.esm":"1903f:Thornswood-Content.esp","722bb:Skyrim.esm":"19040:Thornswood-Content.esp","722bd:Skyrim.esm":"19041:Thornswood-Content.esp","722c2:Skyrim.esm":"19042:Thornswood-Content.esp","722c7:Skyrim.esm":"19043:Thornswood-Content.esp","e8448:Skyrim.esm":"19044:Thornswood-Content.esp","e8947:Skyrim.esm":"19045:Thornswood-Content.esp","eba01:Skyrim.esm":"19046:Thornswood-Content.esp","eba02:Skyrim.esm":"19047:Thornswood-Content.esp","f4314:Skyrim.esm":"19048:Thornswood-Content.esp","f4315:Skyrim.esm":"19049:Thornswood-Content.esp","f431b:Skyrim.esm":"1904a:Thornswood-Content.esp","f431c:Skyrim.esm":"1904b:Thornswood-Content.esp","f431d:Skyrim.esm":"1904c:Thornswood-Content.esp","f431e:Skyrim.esm":"1904d:Thornswood-Content.esp","f4320:Skyrim.esm":"1904e:Thornswood-Content.esp","1a010:Thornswood-Content.esp":"1a030:Thornswood-Content.esp","1a011:Thornswood-Content.esp":"1a031:Thornswood-Content.esp","1a012:Thornswood-Content.esp":"1a032:Thornswood-Content.esp","1a013:Thornswood-Content.esp":"1a033:Thornswood-Content.esp"}},"feasts":{"1a010:Thornswood-Content.esp":"stamina","1a011:Thornswood-Content.esp":"guard","1a012:Thornswood-Content.esp":"stamina","1a013:Thornswood-Content.esp":"warm"},"inSeason":{"45c28:Skyrim.esm":["spring","summer"],"6ac4a:Skyrim.esm":["summer","autumn"],"1b3bd:Skyrim.esm":["autumn","winter"],"5076e:Skyrim.esm":["winter","spring"]},"spoil":{"days":{"raw":7,"ingredient":7,"cooked":14,"soup":14,"prepared":14,"feast":14},"keeps":{"10394d:Skyrim.esm":"Honey","12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour","14dc4:Dawnguard.esm":"Soul Husk","3538:HearthFires.esm":"Sack of Flour","4477ea:WindhelmSSE.esp":"Nord Chocolate","64b31:Skyrim.esm":"Goat Cheese Wedge","64b32:Skyrim.esm":"Eidar Cheese Wedge","64b33:Skyrim.esm":"Goat Cheese Wheel","64b34:Skyrim.esm":"Eidar Cheese Wheel","64b35:Skyrim.esm":"Sliced Goat Cheese Wheel","64b36:Skyrim.esm":"Sliced Eidar Cheese Wheel","64b39:Skyrim.esm":"Long Taffy Treat","669a3:Skyrim.esm":"Mammoth Cheese Bowl","cadfb:Skyrim.esm":"Spiced Beef"},"extra":{"3534:HearthFires.esm":7,"353c:HearthFires.esm":14,"19000:Thornswood-Content.esp":14},"preserve":["raw"],"salt":"34cdf:Skyrim.esm","firewood":"6f993:Skyrim.esm","spoiled":"19100:Thornswood-Content.esp","names":{"10211a:Skyrim.esm":"Mammoth Snout","10d666:Skyrim.esm":"Gourd","117ff:HearthFires.esm":"Jazbay Dumpling","11801:HearthFires.esm":"Snowberry Dumpling","12010f:WindhelmSSE.esp":"Frostwheat Bread","19000:Thornswood-Content.esp":"Burnt Meal","19010:Thornswood-Content.esp":"Fine Ash Yam Soup","19011:Thornswood-Content.esp":"Fine Cooked Boar Meat","19012:Thornswood-Content.esp":"Fine Juniper Berry Dumpling","19013:Thornswood-Content.esp":"Fine Mammoth Cheese Fondue","19014:Thornswood-Content.esp":"Fine Eidar Cheese Fondue","19015:Thornswood-Content.esp":"Fine Ash Hopper Stew","19016:Thornswood-Content.esp":"Fine Boar Stew","19017:Thornswood-Content.esp":"Fine Mammoth Stew","19018:Thornswood-Content.esp":"Fine Goat Stew","19019:Thornswood-Content.esp":"Fine Cooked Dog","1901a:Thornswood-Content.esp":"Fine Gourd Soup","1901b:Thornswood-Content.esp":"Fine Carrot Soup","1901c:Thornswood-Content.esp":"Fine Roasted Carrots","1901d:Thornswood-Content.esp":"Fine Roasted Yams","1901e:Thornswood-Content.esp":"Fine Rabbit Stew","1901f:Thornswood-Content.esp":"Fine Pheasant Stew","19020:Thornswood-Content.esp":"Fine Mushroom Stew","19021:Thornswood-Content.esp":"Fine Wild Mushroom Stew","19022:Thornswood-Content.esp":"Fine Glowing Mushroom Stew","19023:Thornswood-Content.esp":"Fine Roasted Mushrooms","19024:Thornswood-Content.esp":"Fine Roasted Wild Mushrooms","19025:Thornswood-Content.esp":"Fine Roasted Glowing Mushroom","19026:Thornswood-Content.esp":"Fine Jelly Dumpling","19027:Thornswood-Content.esp":"Fine Braided Bread","19028:Thornswood-Content.esp":"Fine Garlic Bread","19029:Thornswood-Content.esp":"Fine Apple Dumpling","1902a:Thornswood-Content.esp":"Fine Potato Bread","1902b:Thornswood-Content.esp":"Fine Juniper Berry Crostata","1902c:Thornswood-Content.esp":"Fine Jazbay Crostata","1902d:Thornswood-Content.esp":"Fine Snowberry Crostata","1902e:Thornswood-Content.esp":"Fine Potato Soup","1902f:Thornswood-Content.esp":"Fine Clam Chowder","19030:Thornswood-Content.esp":"Fine Steamed Mudcrab Legs","19031:Thornswood-Content.esp":"Fine Jazbay Dumpling","19032:Thornswood-Content.esp":"Fine Snowberry Dumpling","19033:Thornswood-Content.esp":"Fine Boiled Creme Treat","19034:Thornswood-Content.esp":"Fine Honey Nut Treat","19035:Thornswood-Content.esp":"Fine Baked Potatoes","19036:Thornswood-Content.esp":"Fine Salmon Steak","19037:Thornswood-Content.esp":"Fine Slaughterfish Steak","19038:Thornswood-Content.esp":"Fine Sweet Roll","19039:Thornswood-Content.esp":"Fine Grilled Leeks","1903a:Thornswood-Content.esp":"Fine Apple Pie","1903b:Thornswood-Content.esp":"Fine Bread Loaf","1903c:Thornswood-Content.esp":"Fine Cooked Beef","1903d:Thornswood-Content.esp":"Fine Goat Roast","1903e:Thornswood-Content.esp":"Fine Horker Loaf","1903f:Thornswood-Content.esp":"Fine Horse Haunch","19040:Thornswood-Content.esp":"Fine Mammoth Steak","19041:Thornswood-Content.esp":"Fine Venison Chop","19042:Thornswood-Content.esp":"Fine Rabbit Haunch","19043:Thornswood-Content.esp":"Fine Pheasant Roast","19044:Thornswood-Content.esp":"Fine Cooked Skeever","19045:Thornswood-Content.esp":"Fine Grilled Chicken Breast","19046:Thornswood-Content.esp":"Fine Cabbage and Tomato Soup","19047:Thornswood-Content.esp":"Fine Cabbage Soup","19048:Thornswood-Content.esp":"Fine Beef Stew","19049:Thornswood-Content.esp":"Fine Horker Stew","1904a:Thornswood-Content.esp":"Fine Cabbage Potato Soup","1904b:Thornswood-Content.esp":"Fine Tomato Soup","1904c:Thornswood-Content.esp":"Fine Venison Stew","1904d:Thornswood-Content.esp":"Fine Vegetable Soup","1904e:Thornswood-Content.esp":"Fine Goat Cheese Fondue","1a010:Thornswood-Content.esp":"First Planting Loaf","1a011:Thornswood-Content.esp":"Midyear Jazbay Tart","1a012:Thornswood-Content.esp":"Harvest's End Roast","1a013:Thornswood-Content.esp":"Saturalia Spice Cake","1a030:Thornswood-Content.esp":"Fine First Planting Loaf","1a031:Thornswood-Content.esp":"Fine Midyear Jazbay Tart","1a032:Thornswood-Content.esp":"Fine Harvest's End Roast","1a033:Thornswood-Content.esp":"Fine Saturalia Spice Cake","206e7:Dragonborn.esm":"Ash Yam","3533:HearthFires.esm":"Apple Dumpling","3534:HearthFires.esm":"Jug of Milk","3537:HearthFires.esm":"Potato Bread","3539:HearthFires.esm":"Juniper Berry Crostata","353a:HearthFires.esm":"Jazbay Crostata","353b:HearthFires.esm":"Snowberry Crostata","353c:HearthFires.esm":"Butter","353d:HearthFires.esm":"Potato Soup","353e:HearthFires.esm":"Clam Chowder","353f:HearthFires.esm":"Steamed Mudcrab Legs","3540:HearthFires.esm":"Mudcrab Legs","3541:HearthFires.esm":"Salmon Steak","3bd14:Dragonborn.esm":"Boar Meat","3bd15:Dragonborn.esm":"Ash Hopper Meat","3cd5b:Dragonborn.esm":"Ash Yam Soup","3cf72:Dragonborn.esm":"Cooked Boar Meat","3d125:Dragonborn.esm":"Ash Hopper Leg","4477e9:WindhelmSSE.esp":"Nord Rolled Cake","64b2e:Skyrim.esm":"Red Apple","64b2f:Skyrim.esm":"Green Apple","64b30:Skyrim.esm":"Boiled Creme Treat","64b38:Skyrim.esm":"Honey Nut Treat","64b3a:Skyrim.esm":"Baked Potatoes","64b3b:Skyrim.esm":"Salmon Steak","64b3c:Skyrim.esm":"Slaughterfish Steak","64b3d:Skyrim.esm":"Sweet Roll","64b3e:Skyrim.esm":"Grilled Leeks","64b3f:Skyrim.esm":"Cabbage","64b40:Skyrim.esm":"Carrot","64b41:Skyrim.esm":"Potato","64b42:Skyrim.esm":"Tomato","64b43:Skyrim.esm":"Apple Pie","65c97:Skyrim.esm":"Bread Loaf","65c98:Skyrim.esm":"Bread","65c99:Skyrim.esm":"Raw Beef","65c9a:Skyrim.esm":"Goat Meat","65c9b:Skyrim.esm":"Horker Meat","65c9c:Skyrim.esm":"Horse Meat","65c9d:Skyrim.esm":"Pheasant Breast","65c9e:Skyrim.esm":"Raw Rabbit Leg","65c9f:Skyrim.esm":"Salmon Meat","669a2:Skyrim.esm":"Venison","669a4:Skyrim.esm":"Mammoth Snout","669a5:Skyrim.esm":"Leek","721e8:Skyrim.esm":"Cooked Beef","7224c:Skyrim.esm":"Goat Roast","7224e:Skyrim.esm":"Horker Loaf","722b0:Skyrim.esm":"Horse Haunch","722bb:Skyrim.esm":"Mammoth Steak","722bd:Skyrim.esm":"Venison Chop","722c2:Skyrim.esm":"Rabbit Haunch","722c7:Skyrim.esm":"Pheasant Roast","80d:Gourmet.esp":"Juniper Berry Dumpling","810:Gourmet.esp":"Mammoth Cheese Fondue","815:Gourmet.esp":"Eidar Cheese Fondue","816:Gourmet.esp":"Ash Hopper Stew","817:Gourmet.esp":"Boar Stew","818:Gourmet.esp":"Mammoth Stew","81c:Gourmet.esp":"Goat Stew","8aa:Gourmet.esp":"Cooked Dog","8ac:Gourmet.esp":"Skeever Meat","8ae:Gourmet.esp":"Slaughterfish Meat","8b1:Gourmet.esp":"Gourd Soup","8b3:Gourmet.esp":"Carrot Soup","8e2:Gourmet.esp":"Roasted Carrots","8e4:Gourmet.esp":"Roasted Yams","8ea:Gourmet.esp":"Rabbit Stew","8eb:Gourmet.esp":"Pheasant Stew","8f5:Gourmet.esp":"Mushroom Stew","8f6:Gourmet.esp":"Wild Mushroom Stew","8f7:Gourmet.esp":"Glowing Mushroom Stew","901:Gourmet.esp":"Roasted Mushrooms","902:Gourmet.esp":"Roasted Wild Mushrooms","903:Gourmet.esp":"Roasted Glowing Mushroom","981:Gourmet.esp":"Jelly Dumpling","9db:HearthFires.esm":"Braided Bread","9dc:HearthFires.esm":"Garlic Bread","9df:Gourmet.esp":"Hot Goat Stew","9e0:Gourmet.esp":"Hot Mammoth Stew","9e1:Gourmet.esp":"Hot Pheasant Stew","9e2:Gourmet.esp":"Hot Rabbit Stew","9e3:Gourmet.esp":"Hot Mushroom Stew","9e4:Gourmet.esp":"Hot Wild Mushroom Stew","9e5:Gourmet.esp":"Hot Glowing Mushroom Stew","9e6:Gourmet.esp":"Hot Ash Hopper Stew","cd614:Skyrim.esm":"Homecooked Meal","e8448:Skyrim.esm":"Cooked Skeever","e8947:Skyrim.esm":"Grilled Chicken Breast","eba01:Skyrim.esm":"Cabbage and Tomato Soup","eba02:Skyrim.esm":"Cabbage Soup","eba03:Skyrim.esm":"Clam Meat","edb2e:Skyrim.esm":"Dog Meat","f2011:Skyrim.esm":"Chicken Breast","f4314:Skyrim.esm":"Beef Stew","f4315:Skyrim.esm":"Horker Stew","f431b:Skyrim.esm":"Cabbage Potato Soup","f431c:Skyrim.esm":"Tomato Soup","f431d:Skyrim.esm":"Venison Stew","f431e:Skyrim.esm":"Vegetable Soup","f4320:Skyrim.esm":"Goat Cheese Fondue"}}};
 const RACES = table('RACES');
 
 const PREFER_SLOT = 'temple';
@@ -5898,6 +5898,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -6120,6 +6122,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {
@@ -31319,6 +31323,8 @@ module.exports = {
       pos: [stop.pos[0], stop.pos[1], stop.pos[2]],
       rot: [0, 0, stop.rot]
     });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   function answer(line, from, went) {
@@ -46023,6 +46029,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       names no person goes on to the branches below, and /ooc or /roll from
       somebody staff silenced stops here.
     */
+    var commandTools = g.__thornswoodCommandTools;
+    if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
     var staffCmd = g.__thornswoodStaff;
     if (staffCmd) {
       try {
@@ -46116,6 +46124,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
         });
+        var stuck = globalThis.__thornswoodStuck;
+        if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
       } catch (e) {
         toProfile(profileId, 'That did not work: ' + e);
         return;
@@ -46293,6 +46303,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -46370,18 +46382,19 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -46390,7 +46403,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -52395,9 +52408,26 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
+    var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    if (!projected.changed) { return projected.needs; }
+    write(actorId, projected.needs);
+    projectionEffects(actorId, projected);
+    return projected.needs;
+  }
+
+  /*
+    Stage the existing elapsed-time calculation without saving needs or sending
+    effects. The supplied environment owns all outside reads: the ordinary
+    path retains its existing character migration and bard-cache behavior.
+    Callers preparing a staff change must supply read-only context instead.
+    Helpers are asked at their original points, including warmth after crashes.
+    The input stays untouched; event flags are delivered only after a save.
+  */
+  function projectNeeds(before, now, arriving, environment) {
+    var n = Object.assign({}, before);
     var away = now - n.at;
     var hours = (now - n.at) / 3600000;
-    if (hours <= 0) { return n; }
+    if (hours <= 0) { return { needs: n, changed: false }; }
     // A session that has been away for a week does not starve to death twice
     // over; the meters bottom out at 0 anyway, and this keeps the arithmetic
     // sane for anything that reads the difference.
@@ -52426,7 +52456,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
     var restRate = NEEDS.drain.rest;
     if (n.worked && (now - n.worked) < NEEDS.workFor) {
-      restRate = restRate * workMultiplier(actorId);
+      restRate = restRate * environment.workMultiplier();
     }
     /*
       THE TIME AWAY GAINS NO REST (#1764). On an arrival n.resting is still
@@ -52438,7 +52468,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       may. The time away drains; the fill for the beds that give it is
       arrived(), below, and the beds' first sight of them gets them up.
     */
-    var gain = arriving ? 0 : restingGain(actorId, n);
+    var gain = arriving ? 0 : environment.restingGain(n);
     /*
       A DRUG HOLDS THE REST DRAIN AT ZERO while its window lasts (#1382), for
       the part of this stretch before drugUntil. Resting still gains.
@@ -52515,19 +52545,22 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     */
     if (!arriving) {
       var end = n.at + hours * 3600000;
-      var fireEnd = burningUntil(actorId);
-      // A delayed tick must not heat its whole elapsed interval. The fire
-      // contributes only through the existing report deadline, then ambient.
-      if (fireEnd > n.at && fireEnd <= end) {
-        approachTemperature(n, warmthTarget(actorId, n, fireEnd - 1), fireEnd - n.at);
-        approachTemperature(n, warmthTarget(actorId, n, end), end - fireEnd);
-      } else {
-        approachTemperature(n, warmthTarget(actorId, n, end), end - n.at);
+      var fireFrom = Number(environment.burningFrom) || 0;
+      var fireEnd = Number(environment.burningUntil) || 0;
+      var cursor = n.at;
+      function temperatureTo(until, onFire) {
+        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        cursor = until;
       }
+      // The environment supplies the interval. No runtime state is read by
+      // projection, and a refused pre-fire save cannot heat earlier time.
+      if (fireFrom > cursor) { temperatureTo(Math.min(end, fireFrom), false); }
+      if (cursor < end && fireFrom <= cursor && fireEnd > cursor) { temperatureTo(Math.min(end, fireEnd), true); }
+      if (cursor < end) { temperatureTo(end, false); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
-    var slept = arriving ? arrived(actorId, n, away) : '';
+    var slept = arriving ? arrived(n, away) : '';
     var hungBefore = n.hangoverUntil > now;
     /*
       DRUNK WEARS OFF INTO A HANGOVER (#3153). n.drunk is still what the last
@@ -52549,7 +52582,24 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     n.drugged = n.drugUntil > now;
 
     n.at = now;
-    write(actorId, n);
+    return { needs: n, changed: true, hungBefore: hungBefore,
+             hung: hung, pulled: pulled, slept: slept };
+  }
+
+  function projectionEnvironment(actorId, savedOnly) {
+    return {
+      workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
+      restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
+      warmthTarget: function (n, onFire) { return warmthTarget(actorId, n, savedOnly, onFire ? NEEDS.fire.at : 0); },
+      burningFrom: burnStarts && burnStarts[actorId] || 0,
+      burningUntil: burningUntil(actorId),
+      outdoorCooling: outdoorCooling
+    };
+  }
+
+  function projectionEffects(actorId, projected) {
+    var hungBefore = projected.hungBefore, hung = projected.hung;
+    var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
@@ -52574,7 +52624,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       notify(actorId, slept);
       say(actorId, slept);
     }
-    return n;
   }
 
   /*
@@ -52638,19 +52687,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function approachTemperature(n, target, ms) {
+  function approachTemperature(n, target, ms, coolingShare) {
     // The same documented half-gap curve, including winter cooling.
     var half = target > n.temp ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-      : NEEDS.settleMinutes / outdoorCooling(n);
+      : NEEDS.settleMinutes / coolingShare;
     var k = Math.min(1, 1 - Math.pow(0.5, ms / (half * 60000)));
     if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
   }
 
-  function warmthTarget(actorId, n, at) {
+  function warmthTarget(actorId, n, savedOnly, bodyFireWorth) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, at) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly, bodyFireWorth) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52714,13 +52763,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function nearbyFireWarmth(n, actorId) {
+  function nearbyFireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
     var reach = NEEDS.fire.reach || 1;
     if (d >= reach) { return 0; }
-    var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
+    var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
   }
 
@@ -52729,9 +52778,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       ? burning[actorId] + NEEDS.burn.every * 3 : 0;
   }
 
-  function fireWarmth(n, actorId, at) {
-    var body = burningUntil(actorId) > (at === undefined ? Date.now() : at) ? NEEDS.fire.at : 0;
-    return Math.max(nearbyFireWarmth(n, actorId), body);
+  function fireWarmth(n, actorId, savedOnly, bodyFireWorth) {
+    var body = bodyFireWorth === undefined ? (burningUntil(actorId) > Date.now() ? NEEDS.fire.at : 0) : bodyFireWorth;
+    return Math.max(nearbyFireWarmth(n, actorId, savedOnly), body);
   }
 
   /*
@@ -52951,10 +53000,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     2026: vanilla food's extra magic effects go, except temperature ones, so
     alchemy matters more. FOOD_GROUPS.strip says which groups lose them and
     which records keep them. The engine scales a record's effects as a whole
-    (EatItemEvent, eatItemScale), so a record whose temperature effect rides
-    with another effect is kept whole until the engine can drop one effect
-    and keep another. Hunger and thirst are this block's own numbers, not
-    record effects, and are not touched.
+    (EatItemEvent, eatItemScale). Thornswood-Last.esp removes the recovery
+    effects from the three foods that keep frost resistance (#4612).
+    Hunger and thirst come from this block's own numbers.
   */
   var stripIndex = null;
 
@@ -54371,7 +54419,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     caller, and that call was never written; the first commit of this
     repository already has it without one.
   */
-  function arrived(actorId, n, away) {
+  function arrived(n, away) {
     if (!(away >= NEEDS.sleptFor)) { return ''; }
     var row = awayRow(n.resting);
     var rest = Number(row.rest) || 0, food = Number(row.food) || 0, drink = Number(row.drink) || 0;
@@ -54974,6 +55022,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
+  var burnStarts = {};     // actual start, independent of whether needs saved
 
   function burnIdentity(actorId) {
     try {
@@ -55003,6 +55052,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     delete burning[actorId];
     delete burnIdentities[actorId];
+    delete burnStarts[actorId];
     publishBurnVisual(actorId, false);
     if (hadFire && online) { pushEffects(actorId); }
   }
@@ -55015,6 +55065,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
+      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
@@ -55218,6 +55269,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // How a cook comes out, and the records it can come out as (#2906).
     cookedAs: cookedAs, fineOf: fineOf, isFine: isFine, burntMeal: burntMeal,
     settle: settle, view: view, effects: effects,
+    // Stage a needs snapshot; saving and delivery remain the caller's job.
+    project: projectNeeds,
     // The bars as a line of text, for /needs (#2267).
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
@@ -61249,8 +61302,10 @@ module.exports = {
 
   THE TRAIL. Every 3 seconds, for each character in the world who is alive
   and not still being made: a new point when they are 200 units or more from
-  the last one, or in another cell, 10 kept. A sample that dropped more than
-  300 units since the last one is a fall and never becomes a point, so
+  the last one, or in another cell, at most 10 kept for one minute. A death,
+  carriage ride or server teleport starts this trail over (#4838).
+  A sample that dropped more than 300 units since the last one is a fall
+  and never becomes a point, so
   somebody who fell through the world is not sent back into the air.
 
   WHICH POINT. The newest one at least 256 units from where they are now (any
@@ -61291,6 +61346,7 @@ module.exports = {
   var TICK_MS = 1000;
   var TRAIL_MS = 3000;            // between trail samples
   var TRAIL_KEEP = 10;
+  var TRAIL_MAX_MS = 60000;       // only the last minute's steps are recent
   var TRAIL_STEP = 200;           // units from the last point before a new one
   var SAME_PLACE = 256;           // units: closer than this is the same place
   var FALL = 300;                 // units dropped between samples: a fall
@@ -61421,6 +61477,16 @@ module.exports = {
     return state.chars[k];
   }
 
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
+
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
     var seen = g.__thornswoodPassSeen;
@@ -61444,7 +61510,8 @@ module.exports = {
   /* One character, every few seconds: the trail. */
   function trailOne(actorId, now) {
     var c = charOf(actorId);
-    if (isDead(actorId) || inCreation(actorId)) { c.last = null; return; }
+    if (isDead(actorId) || inCreation(actorId)) { resetTrail(actorId); return; }
+    expireTrail(c, now);
     var here = placeOf(actorId);
     if (!here) { return; }
     var falling = !!(c.last && c.last.desc === here.desc && c.last.pos[2] - here.pos[2] > FALL);
@@ -61495,6 +61562,7 @@ module.exports = {
   /* The spot a few steps back, or null. */
   function backSpot(actorId, here) {
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     var before = state.used[hex(actorId)];
     // Still where the last /stuck put them: that spot is the stuck place.
     if (before && before.to && samePlace(before.to, here)) { return null; }
@@ -61512,6 +61580,7 @@ module.exports = {
     var f = frameOf(here.desc);
     if (f) { return { frame: f, x: here.pos[0], y: here.pos[1] }; }
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     for (var i = c.trail.length - 1; i >= 0; i--) {
       var tf = frameOf(c.trail[i].desc);
       if (tf) { return { frame: tf, x: c.trail[i].pos[0], y: c.trail[i].pos[1] }; }
@@ -61759,6 +61828,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    resetTrail: resetTrail,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -61771,6 +61841,98 @@ module.exports = {
 })();
 // ==== end thornswood stuck ====
 
+// Registered playtest/admin tools and their role-specific help (#6731).
+// Only modules loaded by the server can register an implemented command.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var levels = { playtester: 1, staff: 2, admin: 3 };
+  var modules = Object.create(null), routes = Object.create(null), entries = [];
+
+  function register(id, definition) {
+    if (typeof id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(id) || modules[id] || !definition ||
+        typeof definition.command !== 'function' || !Array.isArray(definition.help) || !definition.help.length) {
+      throw new Error('A command module needs a unique name, a handler and help entries.');
+    }
+    var own = Object.create(null);
+    var added = definition.help.map(function (entry) {
+      if (!entry || typeof entry.word !== 'string' || !/^\/[a-z][a-z0-9-]*$/.test(entry.word) ||
+          typeof entry.role !== 'string' ||
+          !Object.prototype.hasOwnProperty.call(levels, entry.role) ||
+          typeof entry.syntax !== 'string' || !entry.syntax.trim() ||
+          typeof entry.text !== 'string' || !entry.text.trim() || routes[entry.word] || own[entry.word + '|' + entry.role]) {
+        throw new Error('Command help needs a unique command, a known role, syntax and a description.');
+      }
+      own[entry.word + '|' + entry.role] = true;
+      return { word: entry.word, role: entry.role, syntax: entry.syntax, text: entry.text };
+    });
+    modules[id] = definition.command;
+    added.forEach(function (entry) {
+      if (!routes[entry.word] || levels[entry.role] < levels[routes[entry.word].role]) {
+        routes[entry.word] = { handler: definition.command, role: entry.role };
+      }
+      entries.push(entry);
+      if (WORDS.indexOf(entry.word) === -1) { WORDS.push(entry.word); }
+    });
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    var route = routes[word];
+    if (!route) { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff) { throw new Error('The staff authorization boundary is not available.'); }
+    var refused = staff.authorizeTool(cmd, pid, actorId, route.role);
+    if (refused) { staff.tell(pid, refused); return true; }
+    route.handler(cmd, word, parts, pid, actorId);
+    return true;
+  }
+
+  function help(role) {
+    var level = levels[role] || 0;
+    return entries.filter(function (entry) { return levels[entry.role] <= level; })
+      .map(function (entry) { return { word: entry.word, role: entry.role, syntax: entry.syntax, text: entry.text }; });
+  }
+  g.__thornswoodCommandTools = { register: register, command: command, help: help };
+
+  // These predate the module catalog and are implemented by the existing
+  // router/staff blocks. Their canonical detailed reference is the guide.
+  var legacy = [
+    { role: 'playtester', syntax: '/give <item> [count]', text: 'Give yourself an item; for example /give iron ore 5.' },
+    { role: 'playtester', syntax: '/spawn <creature> [count] [keep]', text: 'Spawn nearby; for example /spawn troll 2.' },
+    { role: 'playtester', syntax: '/tp <place>, /goto <place>', text: 'Move yourself; for example /tp whiterun.' },
+    { role: 'playtester', syntax: '/where', text: 'Read your current location and facing.' },
+    { role: 'staff', syntax: '/silence <person> [length] [why], /unsilence <person>', text: 'Silence or restore speech.' },
+    { role: 'staff', syntax: '/freeze <person> [why], /unfreeze <person>', text: 'Hold someone in place or release them.' },
+    { role: 'staff', syntax: '/goto <person>, /bring <person>, /tp <person> <place>', text: 'Move yourself to someone, or move them.' },
+    { role: 'staff', syntax: '/give <person> <item> [count], /spawnat <person> <creature> [count]', text: 'Give items or spawn nearby.' },
+    { role: 'staff', syntax: '/warn <person> <why>, /kick <person> [why]', text: 'Warn someone or end their session.' },
+    { role: 'staff', syntax: '/ban <person> <length> <why>, /banaccount <person> <length> <why>', text: 'Ban one character or their account.' },
+    { role: 'staff', syntax: '/unban <person>, /unbanaccount <person>, /note <person> <text>', text: 'Lift a ban or keep a staff note.' },
+    { role: 'staff', syntax: '/pk <person> <why>', text: 'Record a permanent character death.' },
+    { role: 'staff', syntax: '/hurt <person> [what], /despawn', text: 'Inspect or set a scene injury, or remove a spawned creature.' },
+    { role: 'admin', syntax: '/unpk <person or character> <why>', text: 'Undo a permanent death made by mistake.' },
+    { role: 'admin', syntax: '/embassy, /remnant', text: 'Read and manage the corresponding rolls.' }
+  ];
+
+  function showHelp(cmd, word, parts, pid, actorId) {
+    var role = word === '/adminhelp' ? 'admin' : word === '/staffhelp' ? 'staff' : 'playtester';
+    var staff = g.__thornswoodStaff;
+    if (parts.length !== 1) { staff.tell(pid, 'Usage: ' + word); return true; }
+    var title = role === 'admin' ? 'Admin commands' : role === 'staff' ? 'Staff commands' : 'Playtest commands';
+    staff.tell(pid, title + ': self-only playtest tools work on both Dev and Main.');
+    legacy.filter(function (entry) { return levels[entry.role] <= levels[role]; })
+      .concat(help(role)).forEach(function (entry) { staff.tell(pid, entry.syntax + ': ' + entry.text); });
+    return true;
+  }
+  register('help', {
+    command: showHelp,
+    help: [
+      { word: '/testhelp', role: 'playtester', syntax: '/testhelp', text: 'Show your self-only test commands.' },
+      { word: '/staffhelp', role: 'staff', syntax: '/staffhelp', text: 'Show the staff moderation commands.' },
+      { word: '/adminhelp', role: 'admin', syntax: '/adminhelp', text: 'Show the admin commands and the lower tiers.' }
+    ]
+  });
+})();
 // ==== thornswood staff ====
 /*
   WHAT A MODERATOR CAN DO IN THE WORLD. Issue #412, "A moderator has no powers
@@ -61875,7 +62037,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
@@ -62053,6 +62215,8 @@ module.exports = {
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   // ------------------------------------------------------------ silence --

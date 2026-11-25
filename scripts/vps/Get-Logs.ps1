@@ -104,11 +104,11 @@ $logs = @(
     # (Roll-Log, the site's in-process roll), or for server.log as
     # server.log.<when> (server-log.js, #2349), and they come down too.
     # door.log has no Rolls: it does not roll.
-    @{ Name = 'server.log'; Path = (Join-Path $srvRoot 'server.log'); What = 'the game server'; Rolls = $true }
+    @{ Name = 'server.log'; Path = "$srvRoot\server.log"; What = 'the game server'; Rolls = $true }
     # Thornswood's own lines and nothing else. server.log is about four fifths
     # engine noise on a normal day, so this is the one to read first and
     # server.log is where you go when the answer is not in it.
-    @{ Name = 'thornswood.log'; Path = (Join-Path $srvRoot 'thornswood.log'); What = 'the gamemode, without the engine noise'; Rolls = $true }
+    @{ Name = 'thornswood.log'; Path = "$srvRoot\thornswood.log"; What = 'the gamemode, without the engine noise'; Rolls = $true }
     <#
       THE DOOR'S OWN LOG, WHICH HAS NEVER COME DOWN WITH THE REST.
 
@@ -122,8 +122,8 @@ $logs = @(
       21 September: "still can't tp says no list". The answer to that was in
       private, and nothing fetched private.
     #>
-    @{ Name = 'door.log'; Path = (Join-Path $srvRoot 'private\door.log'); What = 'the door: who it let in and what the site said' }
-    @{ Name = 'voice.log';  Path = (Join-Path $voiceRoot 'voice.log');   What = 'voice and the character register'; Rolls = $true }
+    @{ Name = 'door.log'; Path = "$srvRoot\private\door.log"; What = 'the door: who it let in and what the site said' }
+    @{ Name = 'voice.log';  Path = "$voiceRoot\voice.log";   What = 'voice and the character register'; Rolls = $true }
     <#
       The site, added 23 September. It printed everything it worked out into
       a handle nobody held: no redirect on the task and no file anywhere on
@@ -134,11 +134,11 @@ $logs = @(
       keeping five, so site.log.1 to .5 are the older ones if the answer is
       not in the current one.
     #>
-    @{ Name = 'site.log';   Path = (Join-Path $docsRoot 'site.log');     What = 'the website and the Discord door'; Rolls = $true }
+    @{ Name = 'site.log';   Path = "$docsRoot\site.log";     What = 'the website and the Discord door'; Rolls = $true }
     # The bot has written this all along and nothing ever fetched it, which
     # is why the site watcher's startup line had to be read over ssh by hand.
     # In the bot's data folder since #1104, the one folder its account writes.
-    @{ Name = 'bot.log';    Path = (Join-Path $botRoot 'data\bot.log');  What = 'the Discord bot, the panel and the site watcher'; Rolls = $true }
+    @{ Name = 'bot.log';    Path = "$botRoot\data\bot.log";  What = 'the Discord bot, the panel and the site watcher'; Rolls = $true }
 )
 
 <#
@@ -154,7 +154,7 @@ $logs = @(
   own names, the tail asked for as with every log; each is one
   Deployment's, a few hundred lines at most.
 #>
-$deployDir = Join-Path $srvRoot 'data'
+$deployDir = "$srvRoot\data"
 $deployLeaf = '^deploy-[A-Za-z0-9._-]+\.log$'
 
 <#

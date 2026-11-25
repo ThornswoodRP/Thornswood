@@ -60,6 +60,22 @@ yes('"Patrick confirmed it (#3656)" is named for the number and for the name',
 yes('a channel name such as #lore or #test-findings is not a number',
     C.not_public('The full history is in #lore, and bugs go in #test-findings.') == [])
 
+yes('"issue <n>" without hash is refused as an issue or pull request number',
+    any(w == 'an issue or pull request number' for w, _ in C.not_public('See issue 3656.')))
+yes('"PR <n>" without hash is refused as an issue or pull request number',
+    any(w == 'an issue or pull request number' for w, _ in C.not_public('Fixed in PR 4510.')))
+
+NAMES_3693 = [
+    'Patrick', 'Djinn', 'Gav\x69n', 'Jhinswife', 'WiccanDjinn',
+    'Claude', 'Grok', 'Codex', 'ChatGPT', 'Smeagle', 'Anvil',
+    'Herald', 'Waystone', 'Wyrd', 'Cursor',
+]
+for index, name in enumerate(NAMES_3693, 1):
+    for case, variant in enumerate((name.lower(), name.upper(), name), 1):
+        hit = C.not_public('Confirmed by %s.' % variant)
+        yes('name %d is refused in casing %d' % (index, case),
+            any('a name of somebody on the team' in w for w, _ in hit))
+
 # Planted, in memory only: the file is never written.
 draft = 'DEVRULES'
 saved_drafts = C.DRAFTS

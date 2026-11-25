@@ -45,7 +45,7 @@ yes('the stripped groups are the six food groups, not drugs, ale or potion',
   !!strip && JSON.stringify((strip.groups || []).slice().sort()) ===
   JSON.stringify(['cooked', 'drink', 'ingredient', 'prepared', 'raw', 'soup']));
 const KEEP = ['12010f:WindhelmSSE.esp', '12f9c4:WindhelmSSE.esp', '17167b:WindhelmSSE.esp'];
-yes('the kept records are the three whose Resist Frost rides with another effect',
+yes('the three frost foods are exempt from whole-record scaling',
   !!strip && !!strip.keep && JSON.stringify(Object.keys(strip.keep).sort()) === JSON.stringify(KEEP) &&
   KEEP.every(function (d) { return /Resist Frost/.test(strip.keep[d]) && !!GROUPS.items[d]; }));
 // A fine dish (#2906) is in its plain dish's group, so it loses its own
