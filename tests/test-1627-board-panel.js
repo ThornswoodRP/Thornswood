@@ -407,7 +407,9 @@ attempt('the panels', function () {
   yes('U4 the panel still posts, takes and takes down with its buttons',
       page.indexOf("var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text, b.hold]);") !== -1 &&
       page.indexOf('rewardValue = Number(reward);') !== -1 && page.indexOf('net(line);') !== -1 &&
-      page.indexOf("net('/take ") !== -1 && page.indexOf("net('/unpin ") !== -1);
+      page.indexOf("net('/take ") !== -1 &&
+      page.indexOf("if (verb === 'unpin' && n) { confirmTakedown(this, n); return; }") !== -1 &&
+      page.indexOf("line: '/board-unpin-v1 ' + JSON.stringify([b.hold, row.n, row.at])") !== -1);
   const boardView = { journals: [{ id: 'j', title: 'Journal', pages: [{ id: 'p', title: 'Page', text: 'Saved' }] }],
     boards: { list: [{ hold: 'whiterun', where: 'Whiterun' }] } };
   const editor = require('./fixtures/journal-editor')({ journalId: 'j', pageId: 'p', view: () => boardView });

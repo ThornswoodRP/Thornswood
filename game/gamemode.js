@@ -29011,10 +29011,17 @@ module.exports = {
     return n;
   }
 
-  function unpin(parts, actorId, profileId, toProfile) {
+  function unpin(parts, actorId, profileId, toProfile, expected) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at the board you put it on.');
+      return true;
+    }
+    // Resolve the board once. New page intents bind this captured board and
+    // its original creation before any authority, refund or haul operation.
+    if (expected && (!Object.prototype.hasOwnProperty.call(boards, expected.hold) || expected.hold !== hold)) {
+      toProfile(profileId, 'The board changed. Review the current board and press again.');
+      refreshPanel(actorId);
       return true;
     }
     var list = notices[hold] || [];
@@ -29024,6 +29031,11 @@ module.exports = {
       return true;
     }
     var n = list[at];
+    if (expected && (!n || !Number.isSafeInteger(n.at) || n.at < 0 || n.at !== expected.at)) {
+      toProfile(profileId, 'That post changed. Review the current board and press again.');
+      refreshPanel(actorId);
+      return true;
+    }
     if (n.down) {
       toProfile(profileId, 'That one is already down.');
       return true;
@@ -31007,7 +31019,7 @@ module.exports = {
     rentDue: rentDue, funds: function () { return funds; },
     // Rent still owed on a place by somebody who no longer holds it (#3893).
     arrears: function () { return arrears; },
-    notices: function () { return notices; }, takedown: takedown,
+    notices: function () { return notices; }, takedown: takedown, unpin: unpin,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
     boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
@@ -44948,7 +44960,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -46003,7 +46015,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   function commandParts(text) {
     var raw = String(text || '').trim();
     var head = /^\S+/.exec(raw);
-    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1')) return [head[0]];
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1')) return [head[0]];
     return raw.split(/\s+/);
   }
 
@@ -46281,6 +46293,25 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       }
       propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
                               postPayload[4], actorId, profileId, toProfile);
+      return;
+    }
+
+    if (word === '/board-unpin-v1') {
+      if (!needCharacter()) return;
+      var unpinPayload = savedTextPayload(cmd.text, word, 8200, 3);
+      var unpinProperty = g.__thornswoodProperty;
+      if (!unpinPayload || typeof unpinPayload[0] !== 'string' ||
+          !Number.isSafeInteger(unpinPayload[1]) || unpinPayload[1] <= 0 ||
+          !Number.isSafeInteger(unpinPayload[2]) || unpinPayload[2] < 0) {
+        toProfile(profileId, 'That Take down request is invalid. Review the current board and press again.');
+        return;
+      }
+      if (!unpinProperty || !unpinProperty.unpin) {
+        toProfile(profileId, 'Taking posts down is unavailable right now. Review the board later.');
+        return;
+      }
+      unpinProperty.unpin(['/unpin', String(unpinPayload[1])], actorId, profileId, toProfile,
+                          { hold: unpinPayload[0], at: unpinPayload[2] });
       return;
     }
 

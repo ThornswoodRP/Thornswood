@@ -263,7 +263,8 @@ if (block !== null) {
         page.indexOf('rewardValue = Number(reward);') !== -1 &&
         page.indexOf("net('/job done ") !== -1 &&
         page.indexOf("net('/take ") !== -1 &&
-        page.indexOf("net('/unpin ") !== -1 &&
+        page.indexOf("if (verb === 'unpin' && n) { confirmTakedown(this, n); return; }") !== -1 &&
+        page.indexOf("line: '/board-unpin-v1 ' + JSON.stringify([b.hold, row.n, row.at])") !== -1 &&
         page.indexOf("net('/dropjob ") !== -1 &&
         page.indexOf("net('/book submit ") !== -1);
     yes('the list is left at the board, not from the journal',

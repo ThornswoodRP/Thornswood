@@ -55,7 +55,7 @@ if (resolve && at && wade && pool) {
     'let waterBox = null;\n' + resolve + at + '\nreturn { resolve: resolveWaterIds, at: placedWaterAt };')(sp, function () { return [pool]; });
   api.resolve();
   const D = Number(wade[1]);
-  const here = [[0, 0, 48, 0x74ee9]];   // the temple pool, at its placed z
+  const here = [[0, 0, 48, 0x74ee9, 1, 0, 0, 0]];   // the temple pool, at its placed z
   const inPool = api.at(10, -20, 32, here, D);
   yes('standing in the temple pool on its floor (feet 32, surface 48) is wading, 16 deep',
       !!inPool && inPool.id === 0x74ee9 && inPool.deep === 16);
@@ -63,7 +63,7 @@ if (resolve && at && wade && pool) {
   yes('standing beside the pool is not', api.at(900, 0, 32, here, D) === null);
   yes('standing on the rim above the surface is not', api.at(0, 0, 60, here, D) === null);
   yes('deeper than wading is not wading', api.at(0, 0, 48 - D - 1, here, D) === null);
-  yes('water nobody resolved counts for nothing', api.at(0, 0, 32, [[0, 0, 48, 0x123]], D) === null);
+  yes('water nobody resolved counts for nothing', api.at(0, 0, 32, [[0, 0, 48, 0x123, 1, 0, 0, 0]], D) === null);
 }
 yes('the cell plane counts only above the feet', /wading = deep > 0 && deep < WADE_DEEP;/.test(src));
 
