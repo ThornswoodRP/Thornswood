@@ -253,6 +253,33 @@ try:
     note = bot.moderation_text('dev', json.loads(row('note', why='asked twice about the bridge')))
     yes('M10 a note says what it says', 'wrote a note on Bjorn (profile 2002): asked twice' in note)
 
+    # Scene tools act on the person who ran them. The three character
+    # changes carry their own target and the reason given by the game.
+    scene_actions = (
+        ('fly', 'on', 'changed their flight mode: on'),
+        ('phase', 'Forward in the same cell.', 'used /phase: Forward in the same cell.'),
+        ('godmode', 'off', 'changed their invulnerability: off'),
+        ('invisible', 'on', 'changed their visibility: on'),
+        ('cleareffects', 'Alcohol and drug effects cleared.',
+         'used /cleareffects: Alcohol and drug effects cleared.'),
+        ('killall', 'Nearby hostile NPCs only.', 'used /killall: Nearby hostile NPCs only.'),
+    )
+    for action, why, expected in scene_actions:
+        record = json.loads(row(action, who='Aela', why=why))
+        record['who'] = 1001
+        yes('scene tool /%s names the actor and keeps the reason' % action,
+            bot.moderation_text('dev', record) == '**Staff on the dev server:** Aela (profile 1001) ' + expected)
+    character_actions = (
+        ('setclass', 'hunter', 'changed the class of Bjorn (profile 2002): hunter'),
+        ('setprofession', 'Enchanter', 'changed the profession of Bjorn (profile 2002): Enchanter'),
+        ('repair', 'restored equipment below sound to 100%',
+         'repaired equipment for Bjorn (profile 2002): restored equipment below sound to 100%'),
+    )
+    for action, why, expected in character_actions:
+        yes('character tool /%s names the target and keeps the reason' % action,
+            bot.moderation_text('dev', json.loads(row(action, why=why))) ==
+            '**Staff on the dev server:** Aela (profile 1001) ' + expected)
+
     # M11: somebody's own /stuck (#414) says the server, the person and the
     # gamemode's whole sentence, not "Staff on", and pings nobody.
     stuck = bot.moderation_text('dev', {
