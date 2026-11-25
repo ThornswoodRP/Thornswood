@@ -240,7 +240,6 @@ namespace Thornswood
             o["KeepLauncherOpen"] = c.KeepLauncherOpen;
             o["AutoJoin"] = c.AutoJoin;
             o["AutoUpdate"] = c.AutoUpdate;
-            o["VoiceAuto"] = c.VoiceAuto;
             return o;
         }
 
@@ -268,7 +267,6 @@ namespace Thornswood
                 if (o["KeepLauncherOpen"] != null) c.KeepLauncherOpen = (bool)o["KeepLauncherOpen"];
                 if (o["AutoJoin"] != null) c.AutoJoin = (bool)o["AutoJoin"];
                 if (o["AutoUpdate"] != null) c.AutoUpdate = (bool)o["AutoUpdate"];
-                if (o["VoiceAuto"] != null) c.VoiceAuto = (bool)o["VoiceAuto"];
             }
             catch (Exception ex) { Swallow.Note("YourSettings.ApplyLauncher, a field of the wrong kind", ex); }
             string after = LauncherChoices(c).ToJsonString();
