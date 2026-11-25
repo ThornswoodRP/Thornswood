@@ -42,6 +42,7 @@ The command requires the server's equipment repair support. If the equipment cha
 
 | Command | What it does |
 | --- | --- |
+| `/repairgear` | Repair your carried gear. Admins may name another character. |
 | `/tp` | Lists the towns you can name |
 | `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
