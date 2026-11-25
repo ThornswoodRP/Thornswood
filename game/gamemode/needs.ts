@@ -1241,7 +1241,9 @@
       var fireEnd = Number(environment.burningUntil) || 0;
       var cursor = n.at;
       function temperatureTo(until, onFire) {
-        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        var target = environment.warmthTarget(n, onFire);
+        var coolingShare = target > n.temp ? 1 : environment.outdoorCooling(n);
+        approachTemperature(n, target, until - cursor, coolingShare);
         cursor = until;
       }
       // The environment supplies the interval. No runtime state is read by

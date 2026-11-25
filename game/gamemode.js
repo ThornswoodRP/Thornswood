@@ -28506,7 +28506,19 @@ module.exports = {
     };
   }
 
-  function post(parts, actorId, profileId, toProfile, isJob) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
+    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+        (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
+      toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
+      return true;
+    }
+    // Same authoritative location, size, fee, reward and pack-first landing.
+    // Only the legacy command boundary unescapes or normalizes text.
+    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
+                kind === 'job', {title:title,body:body,hold:expectedHold});
+  }
+
+  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
     /*
       AT THE BOARD, because that is what makes it a board rather than a
       command. It is the same rule as claiming at a door: the place is the
@@ -28516,6 +28528,10 @@ module.exports = {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -28536,9 +28552,9 @@ module.exports = {
       }
       from = 2;
     }
-    var words = postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
+    var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
     var what = isJob ? 'the job' : 'the notice';
-    if (!words.title) {
+    if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
     }
@@ -28547,7 +28563,7 @@ module.exports = {
                 words.title.length + '. Nothing was taken.');
       return true;
     }
-    if (!words.body) {
+    if (!words.body.trim()) {
       toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
                                  : 'Say what the notice says. Nothing was taken.');
       return true;
@@ -30951,7 +30967,7 @@ module.exports = {
     notices: function () { return notices; }, takedown: takedown,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
-    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel,
+    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,
@@ -44889,7 +44905,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -45356,7 +45372,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   /** Every line from the voice service, on its way to handle(). */
   function dispatch(cmd) {
     var profileId = Number(cmd && cmd.profileId) || 0;
-    var parts = String((cmd && cmd.text) || '').trim().split(/\s+/);
+    var parts = commandParts(cmd && cmd.text);
     var word = parts[0].toLowerCase();
     // The launcher's join pass, from the front plugin (#937). Needs no
     // character and answers nothing; see the join pass block.
@@ -45940,6 +45956,21 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
+  // These payloads are JSON strings, never words to reconstruct with spaces.
+  function commandParts(text) {
+    var raw = String(text || '').trim();
+    var head = /^\S+/.exec(raw);
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1')) return [head[0]];
+    return raw.split(/\s+/);
+  }
+
+  function savedTextPayload(text, word, maximum, fields) {
+    if (typeof text !== 'string' || text.length > maximum || text.indexOf(word + ' ') !== 0) return null;
+    var value;
+    try { value = JSON.parse(text.slice(word.length + 1)); } catch (e) { return null; }
+    if (!Array.isArray(value) || value.length !== fields) return null;
+    return value;
+  }
   function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
@@ -46076,7 +46107,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     var profileId = Number(cmd.profileId) || 0;
     if (!profileId) { return; }
 
-    var parts = String(cmd.text || '').trim().split(/\s+/);
+    var parts = commandParts(cmd.text);
     var word = parts[0].toLowerCase();
     var arg = (parts[1] || '').toLowerCase();
 
@@ -46147,6 +46178,51 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
+      if (!needCharacter()) return;
+      var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
+      var journals = g.__thornswoodSocial;
+      if (!journalPayload || !journalPayload.every(function (x) { return typeof x === 'string'; }) ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[0]) ||
+          !(journalPayload[1] === '' || /^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[1])) ||
+          journalPayload[2].length > 60 || journalPayload[3].length > 4000) {
+        toProfile(profileId, 'That page could not be saved: the request is invalid or too long. Your draft is still in J.');
+        return;
+      }
+      if (!journals || !journals.writePageExact) {
+        toProfile(profileId, 'Saving pages is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
+      if (journalWhy) toProfile(profileId, journalWhy);
+      journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-post-v1') {
+      if (!needCharacter()) return;
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
+      var propertyPosts = g.__thornswoodProperty;
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+          !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
+          (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
+          typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
+        toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
+        return;
+      }
+      if (!propertyPosts || !propertyPosts.postExact) {
+        toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
+      return;
     }
 
     // A lockpick that broke in somebody's game.
@@ -52459,7 +52535,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
       if (pidHere !== Number(pid)) { continue; }
       if (typeof notify === 'function') {
-        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not log a line to', hex(online[i]) + ':', e3); }
+      }
+      if (typeof say === 'function') {
+        try { say(online[i], line); } catch (e4) { plog('furniture: could not say a line to', hex(online[i]) + ':', e4); }
       }
       return;
     }
@@ -53866,7 +53945,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var fireEnd = Number(environment.burningUntil) || 0;
       var cursor = n.at;
       function temperatureTo(until, onFire) {
-        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        var target = environment.warmthTarget(n, onFire);
+        var coolingShare = target > n.temp ? 1 : environment.outdoorCooling(n);
+        approachTemperature(n, target, until - cursor, coolingShare);
         cursor = until;
       }
       // The environment supplies the interval. No runtime state is read by
@@ -59653,8 +59734,7 @@ module.exports = {
 
   function write(actorId, s) {
     s.at = Date.now();
-    if (tickMemo) { tickMemo['s' + actorId] = s; }
-    try { mp.set(actorId, SOCIAL_PROPERTY, s); return true; }
+    try { mp.set(actorId, SOCIAL_PROPERTY, s); if (tickMemo) { tickMemo['s' + actorId] = s; } return true; }
     catch (e) { return false; }
   }
 
@@ -59699,7 +59779,11 @@ module.exports = {
   function online() {
     return memo('online', function () {
       var all = [];
-      try { all = mp.get(0, 'onlinePlayers') || []; } catch (e) { return []; }
+      try { all = mp.get(0, 'onlinePlayers'); } catch (e) { return []; }
+      // Raw membership also proves disconnects for private save outcomes.
+      // Keep it only for this pass, before hiding faces still being created.
+      if (tickMemo && Array.isArray(all)) tickMemo.onlineRaw = all;
+      all = all || [];
       var chargen = g.__thornswoodChargen;
       if (!chargen || !chargen.hasStoredAppearance) { return all; }
       var out = [];
@@ -60439,8 +60523,34 @@ module.exports = {
     return null;
   }
 
-  function writePage(actorId, journalId, pageId, title, text) {
-    var s = stateOf(actorId);
+  // Kept through a gamemode reload, never persisted. One result per online
+  // actor, fenced to the owner/runtime so recycled form ids expose no prose.
+  var journalSaves = g.__thornswoodJournalSaveState || (g.__thornswoodJournalSaveState = {});
+  function journalSaveState(actorId, create) {
+    var profile, runtime;
+    try { profile = profileOf(actorId); runtime = mp.getActorRuntimeIdentity(actorId); } catch (e) { return null; }
+    if (!Number.isSafeInteger(profile) || !(profile > 0) || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+    var state = journalSaves[actorId];
+    if (state && (state.profile !== profile || state.runtime !== runtime)) { delete journalSaves[actorId]; state = null; }
+    if (!state && create) state = journalSaves[actorId] = {profile:profile,runtime:runtime,uncertain:false,result:null};
+    return state;
+  }
+  function writePageExact(actorId, journalId, pageId, title, text) {
+    if (typeof title !== 'string' || typeof text !== 'string' || title.length > 60 || text.length > SOCIAL.pageChars) {
+      return 'That page is too long or invalid. Nothing was saved.';
+    }
+    return writePage(actorId, journalId, pageId, title, text, true);
+  }
+
+  function writePage(actorId, journalId, pageId, title, text, exact) {
+    var resultState = exact ? journalSaveState(actorId, true) : null;
+    if (exact && !resultState) return 'The page save cannot be confirmed right now. Keep your unsaved draft.';
+    // Prepare on a clone: a refused property write must not mutate the cached
+    // page and publish it as an authoritative successful save.
+    var current = exact ? readNow(actorId) : stateOf(actorId);
+    if (!current) return 'That journal cannot be read right now. Your draft has not been saved.';
+    var s = JSON.parse(JSON.stringify(current));
+    var previous = JSON.stringify(s);
     var j = findJournal(s, journalId);
     if (!j) { return 'No such journal.'; }
     /*
@@ -60463,10 +60573,34 @@ module.exports = {
       page = { id: 'p' + Date.now().toString(36) + j.pages.length, shared: {} };
       j.pages.push(page);
     }
-    page.title = String(title || 'Page').slice(0, 60);
+    page.title = exact ? title : String(title || 'Page').slice(0, 60);
     page.text = body;
     page.at = Date.now();
-    write(actorId, s);
+    var ok = write(actorId, s);
+    var status = ok ? 'saved' : 'refused';
+    var digest = '';
+    if (ok && resultState) {
+      try { digest = require('crypto').createHash('sha256').update(JSON.stringify(s)).digest('hex'); }
+      catch (eDigest) { status = 'uncertain'; }
+      // An identical-value setter queues nothing. Only our prior successful
+      // queue of this exact full snapshot can qualify that no-op as accepted.
+      if (JSON.stringify(s) === previous && (!digest || resultState.confirmedDigest !== digest)) status = 'uncertain';
+    }
+    if (!ok) {
+      if (tickMemo) delete tickMemo['s' + actorId];
+      // The native setter may apply before RequestSave/publication throws.
+      // Readback only classifies live state, never proves queued persistence.
+      try { if (JSON.stringify(mp.get(actorId, SOCIAL_PROPERTY)) !== previous) status = 'uncertain'; }
+      catch (eReadback) { status = 'uncertain'; }
+    }
+    if (resultState) {
+      if (status === 'uncertain') resultState.uncertain = true;
+      else if (status === 'saved') { resultState.uncertain = false; resultState.confirmedDigest = digest; }
+      resultState.result = {journalId:journalId,pageId:page.id,title:page.title,text:body,status:status};
+    }
+    if (!ok || status === 'uncertain') return status === 'uncertain'
+      ? 'The page save could not be confirmed. Keep the unsaved draft and check it before trying again.'
+      : 'That page could not be saved. Your draft has not been saved.';
     return '';
   }
 
@@ -60480,6 +60614,14 @@ module.exports = {
       }
     }
     return false;
+  }
+
+  function pushJournalSave(actorId) {
+    // A failed input read must not call stateOf's first-use initializer.
+    var current = readNow(actorId);
+    if (!current) return;
+    if (tickMemo) tickMemo['s' + actorId] = current;
+    push(actorId);
   }
 
   /*
@@ -60670,6 +60812,7 @@ module.exports = {
     var offerNow = standingOffer(mine);
     return {
       me: mine,
+      journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
       near: near,
@@ -60775,6 +60918,12 @@ module.exports = {
     try { partyTick(); } catch (e) { slog('party tick:', e); }
     try { pushTextMutes(); } catch (e) { slog('text mute:', e); }
     var all = online();
+    // The public list can fail or omit a face still loading. Only a successful
+    // raw online read retires outcomes; an unknown read is not a disconnect.
+    var saveOnline = tickMemo && tickMemo.onlineRaw;
+    if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
+      if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
+    }
     for (var i = 0; i < all.length; i++) {
       try { push(all[i]); } catch (e) { }
     }
@@ -60839,7 +60988,7 @@ module.exports = {
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
-    newJournal: newJournal, writePage: writePage, dropJournal: dropJournal,
+    newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
     partyTick: partyTick, PARTY_PROPERTY: PARTY_PROPERTY
