@@ -1299,6 +1299,7 @@
       character's there once the launcher has fetched it (passProfile).
   */
   function pickedAgain(id) {
+    if (T.localCritterGate) T.localCritterGate.selectProfile(id);
     T.js('try{window.thornswoodNet&&window.thornswoodNet.rejoinAs(' + id + ',"");}catch(e){}');
     let jp = null;
     try { jp = sp.storage.thornswoodJoinPass; } catch (e) { jp = null; }
@@ -2826,6 +2827,113 @@
     say('browser backend: could not ask (' + e + ')');
   }
 
+  // LOCAL TORCHBUG GATE BEGIN
+  // Skyrim.esm ACTI CritterFirefly: VMAD FireFly, lootable Torchbug Thorax.
+  // These insects are normally spawned locally, with no remote reference.
+  // This gate never reports a catch or asks the server to grant an item.
+  function createLocalTorchbugGate() {
+    let classKey = null, baseId = 0, resolved = false, profileId = null;
+    const tracked = new Map();
+    function matches(ref) {
+      if (!ref) return false;
+      if (!resolved) {
+        const form = sp.Game.getFormFromFile(0xc2d3f, 'Skyrim.esm');
+        baseId = form ? form.getFormID() : 0;
+        resolved = true;
+      }
+      const base = ref.getBaseObject();
+      return !!baseId && !!base && base.getFormID() === baseId;
+    }
+    function release(row) {
+      if (!row.owned) return;
+      if (row.ref.isActivationBlocked()) row.ref.blockActivation(false);
+      row.owned = row.ref.isActivationBlocked();
+      if (row.owned) say('torchbug gate: could not restore its activation block');
+    }
+    function eachOwned(action) {
+      tracked.forEach((row, id) => {
+        try {
+          const ref = sp.ObjectReference.from(sp.Game.getFormEx(id));
+          if (!ref || !matches(ref)) { tracked.delete(id); return; }
+          row.ref = ref;
+          action(row, id);
+        } catch (error) {
+          tracked.delete(id);
+          say('torchbug gate: discarded an unavailable local reference: ' + error);
+        }
+      });
+    }
+    function observe(ref) {
+      if (!matches(ref)) return false;
+      const id = ref.getFormID();
+      let row = tracked.get(id);
+      if (classKey === 'gatherer') {
+        if (row) { release(row); if (!row.owned) tracked.delete(id); }
+      }
+      else if (!ref.isActivationBlocked()) {
+        ref.blockActivation(true);
+        if (ref.isActivationBlocked()) tracked.set(id, { ref: ref, owned: true });
+        else say('torchbug gate: could not block the local insect');
+      }
+      return true;
+    }
+    function scan(cell) {
+      if (!cell) return;
+      // Unload events can arrive after a temporary form has disappeared.
+      // Keep only live references whose activation flag this gate owns.
+      eachOwned(() => {});
+      const n = cell.getNumRefs(24);
+      for (let i = 0; i < n; i++) observe(cell.getNthRef(i, 24));
+    }
+    function scanHere() {
+      const pc = sp.Game.getPlayer();
+      if (pc) scan(pc.getParentCell());
+    }
+    function setClass(value) {
+      const next = typeof value === 'string' ? value : null;
+      if (next === classKey) return;
+      classKey = next;
+      eachOwned(row => observe(row.ref));
+      scanHere();
+    }
+    function reset() { classKey = null; eachOwned(row => observe(row.ref)); scanHere(); }
+    function selectProfile(id) { if (profileId !== id) { profileId = id; reset(); } }
+    function beforeLoad() {
+      eachOwned(row => release(row));
+      tracked.clear(); classKey = null; baseId = 0; resolved = false;
+    }
+    function loaded() { tracked.clear(); classKey = null; baseId = 0; resolved = false; scanHere(); }
+    function unload(ref) {
+      if (!ref) return;
+      const row = tracked.get(ref.getFormID());
+      if (row) { release(row); tracked.delete(ref.getFormID()); }
+    }
+    function activate(ref) {
+      if (!observe(ref)) return false;
+      if (classKey !== 'gatherer') {
+        sp.Debug.notification(classKey ? 'Only a Gatherer can catch torchbugs.' : 'Your character is still loading. Wait before catching torchbugs.');
+      }
+      // A qualified insect runs its own original activation, once. It is not
+      // a lever needing the generic ACTI reactivation below.
+      return true;
+    }
+    return { setClass, reset, selectProfile, beforeLoad, loaded, unload, observe, scan, scanHere, activate };
+  }
+  const localTorchbugs = createLocalTorchbugGate();
+  T.localCritterGate = localTorchbugs;
+  T.localCritterClass = guard('torchbug class', value => localTorchbugs.setClass(value));
+  sp.on('objectLoaded', guard('torchbug loaded', e => {
+    if (!e || !e.object) return;
+    const ref = sp.ObjectReference.from(e.object);
+    if (e.isLoaded) localTorchbugs.observe(ref); else localTorchbugs.unload(ref);
+  }));
+  sp.on('cellFullyLoaded', guard('torchbug cell', e => { if (e && e.cell) localTorchbugs.scan(e.cell); }));
+  sp.once('update', guard('torchbug start', () => localTorchbugs.scanHere()));
+  sp.on('update', guard('torchbug target', () => localTorchbugs.observe(sp.Game.getCurrentCrosshairRef())));
+  sp.on('preLoadGame', guard('torchbug before load', () => localTorchbugs.beforeLoad()));
+  sp.on('loadGame', guard('torchbug after load', () => localTorchbugs.loaded()));
+  // LOCAL TORCHBUG GATE END
+
   /*
     Beds are sleepable for everybody (#839).
 
@@ -3099,6 +3207,9 @@
     if (type === 40) { return; }
 
     if (type !== 24) { return; }
+
+    const critters = globalThis.Thornswood && globalThis.Thornswood.localCritterGate;
+    if (critters && critters.activate(e.target)) { return; }
 
     // The server already answers for this one, and the client forwards the
     // re-activation too, so asking again is what made every press count twice.
@@ -5351,7 +5462,7 @@
              '<span style="color:' + (on ? '#8fb85e' : '#efe4cc') + '">' + what + '</span></div>';
     };
     const html =
-      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + row.n +
+      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + escapeHtml(row.n) +
       (row.y ? '<span style="color:#8fb85e;font-size:18px"> &middot; your party</span>' : '') +
       '</div>' +
       /*

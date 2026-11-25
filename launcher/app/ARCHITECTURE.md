@@ -257,6 +257,48 @@ site, and the Skyrim build pin (`Config.PinnedExeBytes` and the depots
 between the pin's markers in Downgrade.cs). A new collection or pin goes out
 as a new launcher.
 
+The thirty-two keys in `config.json` and what reads each:
+
+| Key | Default | What reads it | Set by Settings |
+|---|---|---|---|
+| `ServerAddress` | `"play.thornswood.net"` | `Config.VoiceSocket()`, `Shell.cs` ping and status checks, `Checks.cs`, `SkyMp.cs`, `AutoJoin.cs` | No |
+| `ServerPort` | `"7777"` | `Config.VoiceSocket()`, `AutoJoin.cs`, `Shell.cs` ping checks, `SkyMp.cs` | No |
+| `CollectionUrl` | `Config.Collection` | `ShellCollection.cs` (opens the collection link in browser) | No |
+| `ServerFolder` | `""` | `SkyMp.cs` (where it looks for a local server) | No |
+| `VoicePort` | `"7778"` | `Config.VoiceSocket()`, `Voice.cs` proximity voice socket port | No |
+| `VoiceUrl` | `""` | `Config.VoiceBase()`, `Config.VoiceSocket()`, `Voice.cs` | No |
+| `MicrophoneName` | `""` | `Mics.cs` (copied into `Thornswood.ini` at Play), `ShellAudioSettings.cs` | Yes (recording input selector) |
+| `AudioOutputId` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
+| `AudioOutputName` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
+| `AudioOutputConfigured` | `false` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (marked when output chosen) |
+| `MaxOnline` | `0` | `Shell.cs` (format string for awake count) | No |
+| `UpdateBranch` | `"main"` | `Velo.cs`, `Updater.cs` (fallback channel name) | No |
+| `Theme` | `"Forge"` | `Themes.cs:Apply`, `Shell.cs` | Yes (theme selector buttons) |
+| `CustomColors` | `null` | `Themes.cs:ApplyCustom` | Yes (custom theme color editor) |
+| `CustomLight` | `false` | `Themes.cs:ApplyCustom` | Yes (custom theme light toggle) |
+| `Channel` | `""` | `Config.cs` (`IsDev`, `BuildName`, `VoiceSocket()`), `DevBuild.cs`, `Updater.cs`, `Shell.cs` | Yes (server card dev switch) |
+| `DiscordAppId` | `"1549251507361292418"` | `Discord.cs` (Discord RPC client initialization) | No |
+| `SiteUrl` | `"https://thornswood.net"` | `Discord.cs` (presence links), `Shell.cs` | No |
+| `PresenceImage` | `"https://thornswood.net/presence.png"` | `Discord.cs` (presence image link) | No |
+| `DisplaySet` | `false` | `Shell.cs` (checks whether resolution has ever been auto-matched) | No |
+| `KeepLauncherOpen` | `false` | `ShellPlay.cs` (keeps launcher open instead of minimizing during play) | Yes (checkbox) |
+| `CrashSnapshots` | `false` | `CrashDump.cs`, `Shell.cs` (controls full memory crash dumps) | Yes (checkbox) |
+| `CrashSnapshotFolder` | `""` | `CrashDump.cs` (folder for crash snapshots) | No |
+| `LockResolution` | `false` | `Display.cs`, `Shell.cs` (prevents auto-matching screen resolution) | Yes (checkbox) |
+| `MusicOff` | `false` | `Shell.cs` (`StartMenuMusic`), `AudioPlayer.cs` | Yes (music toggle) |
+| `MusicLevel` | `"50"` | `Shell.cs` (`StartMenuMusic`), `AudioPlayer.cs` | Yes (volume slider) |
+| `VortexGame` | `""` | `Paths.cs`, `OwnGame.cs` (override path for Vortex deployment staging) | No |
+| `MakeOwnGame` | `true` | `ShellOwnGame.cs` (whether to make own game folder without prompting) | No |
+| `BrowserBackend` | `""` | `Chars.cs` (written to `SkyrimPlatform.ini`), `YourSettings.cs`, `Diag.cs` | No |
+| `StopServerOnExit` | `true` | `Shell.cs` (stops local server when launcher closes) | No |
+| `AutoUpdate` | `true` | `Updater.cs`, `VeloUpdate.cs`, `ShellUpdate.cs` (downloads and stages updates) | Yes (checkbox) |
+| `AutoJoin` | `true` | `AutoJoin.cs`, `ShellChars.cs` (auto login into game; reset to true on start) | Yes (checkbox) |
+
+Environment variables and registry reads outside `config.json`:
+- Environment variables: `PATH` is read by `SkyMp.cs` to locate `node.exe` when launching a local server; `ProgramFiles(x86)` is read by `Uninstall.cs` as a fallback location for the Steam copy; `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` was previously used when menu music ran through WebView2 before the launcher migrated to Avalonia and native audio.
+- Registry reads: `HKCU\Software\Valve\Steam` (`SteamExe`, `SteamPath`) and `HKLM\SOFTWARE\Wow6432Node\Valve\Steam` (`InstallPath`) are read by `Steam.cs` to find the Steam client and Skyrim installation; `HKCR\nxm\shell\open\command` is read by `Checks.cs` to check whether Vortex is registered for NXM links; `HKLM\SOFTWARE\Microsoft\Cryptography` (`MachineGuid`) is read by `Discord.cs` to build the machine identifier hash for join passes; and `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` is managed by `Register.cs` for the Windows Installed apps entry.
+- Command-line switches: `-root <path>` overrides the install root folder, and `-uninstall` opens the launcher in uninstall mode on the Settings page.
+
 **Updater** (Updater.cs, Sync.cs, SyncPackage.cs, UpdateStages.cs,
 VeloUpdate.cs, GitHub.cs, ReleaseNews.cs, MainVersion.cs). Every update, held
 on GitHub (#5608, Patrick, 11 Nov 2026: the site or the VPS being down may
@@ -853,7 +895,11 @@ for the support report), Secrets.cs (DPAPI and locking a file to this account), 
 Skyrim), Online.cs (the headcount the server publishes), Art.cs (the art inside the exe, and the
 moving strip behind the title, `launcher-header.webp`, an animated WebP that
 `HeaderFrames` decodes a frame at a time with SkiaSharp),
-Themes.cs (every colour; the install window is drawn in its Forge too, #2851), Gallery.cs (the pictures the site shows from the world, read
+Themes.cs (every colour; the install window is drawn in its Forge too, #2851,
+or in Contrast, the person's own colours, when Windows has a contrast theme
+on, #4409), SystemLook.cs (what Windows asks of a window's look: its contrast
+theme, that theme's colours and its text size, read once for the install
+window, #4409), Gallery.cs (the pictures the site shows from the world, read
 from `/api/public` for Play's rotating spotlight and the Gallery page; the
 Gallery page uploads via `/api/gallery/submit` and then sends the picture's
 800 and 1600 pixel JPEG copies to `/api/gallery/copy` (#3218), reports via

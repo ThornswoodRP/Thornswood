@@ -3229,7 +3229,7 @@ async function handle(req, res) {
         return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' });
       }
       marks[id] = { status: o.status, notes: String(o.notes == null ? '' : o.notes).slice(0, 1000),
-                    by: String(o.by == null ? '' : o.by).slice(0, 60), at: Date.now() };
+                    by: String(w.name || '').slice(0, 60), at: Date.now() };
       if (!putJson(RESULTS, marks)) return sendJson(res, 500, { error: 'could not save' });
       return sendJson(res, 200, { ok: true, results: marks });
     }

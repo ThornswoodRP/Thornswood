@@ -1695,7 +1695,7 @@
     var v = null;
     if (mine) { v = {}; for (var k in mine) if (!NOT_DRAWN[k]) v[k] = mine[k]; }
     return JSON.stringify([tableGen, sections, section, rowAt, picked, later, marked, markedStaff, v, progressShape(),
-                           candidate, endArmed, dyeTarget, guideAt]);
+                           candidate, endArmed, dyeTarget, guideAt, section === 'tree' && pickInFlight('tree')]);
   }
 
   function draw() {
@@ -3551,7 +3551,7 @@
           refuses only at the cap, and this page decides none of it.
         */
         var allPlaced = given > 0 && given >= have;
-        var plus = el('div', 'plus' + ((pts > 0 && !full) ? '' : ' off'), '+');
+        var plus = el('div', 'plus' + ((pts > 0 && !full && !pickInFlight('tree')) ? '' : ' off'), '+');
         plus.title = (full && allPlaced) ? s.name + ' came with what you chose.'
                    : 'Put a point in ' + s.name +
                      (given ? '. ' + given + ' of these came with what you chose and do not move.' : '');
@@ -3998,15 +3998,22 @@
     answer never leaves the button dead.
   */
   function homeInFlight() {
+    return pickInFlight('home');
+  }
+  function pickInFlight(sec) {
     for (var i = 0; i < pending.length; i++) {
-      if (pending[i].section === 'home' && Date.now() - pending[i].at < PENDING_MS) return true;
+      if (pending[i].section === sec && Date.now() - pending[i].at < PENDING_MS) return true;
     }
     return false;
+  }
+  function redrawAfterPick(sec) {
+    setTimeout(function () { if (!pickInFlight(sec)) draw(); }, PENDING_MS + 50);
   }
   function canConfirm() {
     if (creating()) return section === 'review' && !!softHome() && !homeInFlight();
     if (section === 'spells') return canLearn();
     if (section === 'staff') return canUnlockStaff();
+    if (pickInFlight(section)) return false;
     var p = picked[section];
     if (!p || !p.row) return false;
     if (section === 'class') return !haveClass();
@@ -4061,6 +4068,7 @@
     if (section === 'staff') { unlockStaff(); return; }
     var p = picked[section];
     send(section, section === 'class' ? 'class ' + p.row : 'profession ' + p.row + ' ' + p.subs.join(','));
+    redrawAfterPick(section);
     status = 'Sent. The server is checking.'; statusKind = '';
     draw();
   }
@@ -4088,9 +4096,11 @@
   }
 
   function spend(skill) {
+    if (pickInFlight('tree')) return;
     if (!mine || !(Number(mine.points) > 0)) return;
     send('tree', 'spend ' + skill);
-    status = 'Sent.'; statusKind = '';
+    redrawAfterPick('tree');
+    status = 'Sent. The server is checking.'; statusKind = '';
     draw();
   }
 
@@ -4256,7 +4266,11 @@
         markedStaff[p.spell] = false;
         cleared = true;
       }
-      else if (p.section === 'tree') { status = 'Spent.'; statusKind = 'ok'; }
+      else if (p.section === 'tree' &&
+          Number((after.tree || {})[p.words.slice('spend '.length)] || 0) >
+          Number(((before && before.tree) || {})[p.words.slice('spend '.length)] || 0)) {
+        status = 'Spent.'; statusKind = 'ok';
+      }
       else if (p.section === 'perk' && perkRunning('fontofmagic')) { status = 'Font of Magic: for 15 seconds, a spell costs nothing.'; statusKind = 'ok'; }
       else if (p.section === 'weave' && after.weave && after.weave !== (before && before.weave)) {
         status = after.weave === 'armour' ? 'The garments you make now carry hidden armour.' : 'The garments you make now keep the weather off.';
@@ -4348,6 +4362,7 @@
       closeByHand(); e.preventDefault(); return;
     }
     if (e.key === 'Enter') {
+      if (e.repeat) { e.preventDefault(); return; }
       if (section === 'tree') {
         var flat = [];
         rows().forEach(function (a) { (a.subs || []).forEach(function (s) { flat.push(s.key); }); });

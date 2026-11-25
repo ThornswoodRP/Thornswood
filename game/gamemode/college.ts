@@ -74,9 +74,8 @@
   the character is not in it, because the server does not see those. The
   moment it ends is kept on the character, so a relog or a restart does not
   end it early. Waiting the 30 minutes clears it. The page's other clear, a
-  cooked meal and a bed, is not built here: the needs block has known a
-  cooked meal since #1382 (NEEDS.foodGroup.cooked), and nothing in this
-  block ends withered on one and a rest in a bed yet (#6239).
+  cooked meal followed by a bed rest, uses the needs block's accepted cooked
+  meal and the beds block's new validated rest session (#6239).
 */
 (function () {
   'use strict';
@@ -533,17 +532,43 @@
     return {
       drank: Array.isArray(rec.drank) ? rec.drank.filter(isFinite) : [],
       cast: Array.isArray(rec.cast) ? rec.cast.filter(isFinite) : [],
-      until: Number(rec.until) || 0
+      until: Number(rec.until) || 0,
+      mealAt: Number(rec.mealAt) || 0
     };
   }
 
   function witheredWrite(actorId, rec) {
-    try { mp.set(actorId, WITHERED_PROPERTY, rec); } catch (e) { clog('could not write withered for', hex(actorId) + ':', e); }
+    try { mp.set(actorId, WITHERED_PROPERTY, rec); return true; }
+    catch (e) { clog('could not write withered for', hex(actorId) + ':', e); return false; }
   }
 
   /** True while this person is withered. */
   function isWithered(actorId, at) {
     return witheredRead(actorId).until > (at || now());
+  }
+
+  // Only an accepted cooked meal during this withering can precede its cure.
+  function cookedMeal(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t) { return false; }
+    rec.mealAt = t;
+    return witheredWrite(actorId, rec);
+  }
+
+  // Called only for a new rest in validated bed furniture, including bedrolls.
+  function bedRested(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t || rec.mealAt <= 0 || rec.mealAt > t ||
+        rec.mealAt < rec.until - WITHERED.minutes * 60000) { return false; }
+    rec.until = 0;
+    rec.mealAt = 0;
+    if (!witheredWrite(actorId, rec)) { return false; }
+    delete witherTimers[actorId];
+    tell(actorId, 'Your meal and bed rest have cleared the withering. Your health and magicka are your own again.');
+    push(actorId);
+    return true;
   }
 
   /* The end of it, on its own clock, and the map written again when it comes. */
@@ -576,6 +601,7 @@
     var set = rec.drank.length >= WITHERED.potions || rec.cast.length >= WITHERED.casts;
     if (set) {
       rec.until = t + WITHERED.minutes * 60000;
+      rec.mealAt = 0;
       rec.drank = [];
       rec.cast = [];
     }
@@ -673,7 +699,7 @@
     reanimates: reanimates, hit: hit,
     isRestoration: isRestoration, cast: cast, effects: effects, strain: strain,
     WITHERED: WITHERED, WITHERED_PROPERTY: WITHERED_PROPERTY, drank: drank, isWithered: isWithered,
-    witheredAtLogin: witheredAtLogin,
+    witheredAtLogin: witheredAtLogin, cookedMeal: cookedMeal, bedRested: bedRested,
     takeScript: takeScript, laydownScript: laydownScript
   };
   clog('ready');
