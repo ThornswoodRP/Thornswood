@@ -229,7 +229,8 @@
     var edid = '';
     var names = g.__thornswoodProperty;
     if (names && typeof names.baseItemName === 'function') {
-      try { label = names.baseItemName(baseId); } catch (eName) { }
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
     }
     try {
       var res = mp.lookupEspmRecordById(baseId);
