@@ -2764,12 +2764,13 @@
 
     // A recipe: what the craft gate says, and what their game was handed.
     var rc = el('div', 'card');
-    rc.appendChild(el('div', 'name', 'A recipe they cannot make'));
-    rc.appendChild(el('div', 'desc', 'Type part of the name of what it makes. The server says whether ' + who +
+    rc.appendChild(el('div', 'name', 'Owned recipes and kept smelts'));
+    rc.appendChild(el('div', 'desc', 'This check searches only profession-owned recipes and the kept smelting recipes. ' +
+      'Unowned recipes are outside this check. Type part of the name of what it makes. For a match, the server says whether ' + who +
       ' may make it, and why not, and whether their game lists it.'));
     var ask = document.createElement('input');
-    ask.setAttribute('aria-label', 'Recipe output name');
-    ask.placeholder = 'what it makes';
+    ask.setAttribute('aria-label', 'Owned recipe or kept smelt output name');
+    ask.placeholder = 'owned recipe output';
     var check = officeButton('Check', function () {
       var w = String(ask.value || '').trim();
       if (!w) { status = 'Type part of the name of what the recipe makes.'; statusKind = 'no'; drawFoot(); return ''; }
@@ -2780,7 +2781,7 @@
     var ch = them.check;
     if (ch) {
       var rows = Array.isArray(ch.rows) ? ch.rows : [];
-      if (!rows.length) rc.appendChild(el('div', 'inn', 'No recipe anybody owns makes anything called ' + String(ch.want) + '.'));
+      if (!rows.length) rc.appendChild(el('div', 'inn', 'This check found no owned recipe or kept smelt making ' + String(ch.want) + '. Unowned recipes are outside this check.'));
       var stale = false;
       rows.forEach(function (x) {
         var what = x.half ? String(x.half) + (x.rank ? ', ' + cap(x.rank) : '') : '';
