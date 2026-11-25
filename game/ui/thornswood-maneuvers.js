@@ -47,7 +47,9 @@
     '#' + ID + '.on{display:block}',
     '#' + ID + ' .title{font-size:13px;letter-spacing:.38em;text-transform:uppercase;color:#c6aa6d;margin:0 0 8px}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:12px;padding:7px 8px;cursor:pointer;',
+    '  width:100%;font-family:inherit;color:inherit;background:none;text-align:left;border-radius:0;',
     '  border:1px solid transparent;font-size:19px}',
+    '#' + ID + ' .row:focus-visible{outline:2px solid #d9ab52;outline-offset:1px}',
     '#' + ID + ' .row:hover{border-color:rgba(198,170,109,.40);background:rgba(198,170,109,.08)}',
     '#' + ID + ' .key{display:inline-block;min-width:28px;text-align:center;border:2px solid rgba(217,171,82,.75);',
     '  border-radius:6px;padding:1px 6px;color:#d9ab52}',
@@ -80,6 +82,10 @@
         close();
         return;
       }
+      if (ev.target && ev.target.tagName === 'BUTTON' && (k === 'Enter' || k === ' ')) {
+        if (ev.repeat) ev.preventDefault();
+        return;
+      }
       if (/^[1-9]$/.test(k)) {
         ev.preventDefault();
         pick(Number(k) - 1);
@@ -90,15 +96,15 @@
 
   function draw() {
     build();
-    var html = '<div class="title">Maneuvers</div>';
+    var html = '<div class="title" id="' + ID + '-title">Maneuvers</div>';
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      html += '<div class="row" data-n="' + i + '">' +
+      html += '<button type="button" class="row" data-n="' + i + '">' +
         '<span class="key">' + (i + 1) + '</span>' +
         '<span class="name">' + esc(r.name) + '</span>' +
         '<span class="cost">' + esc(r.stamina) + ' stamina</span>' +
         (r.ready ? '<span class="ready">ready</span>' : '<span class="wait">waiting</span>') +
-        '</div>';
+        '</button>';
     }
     html += '<div class="foot">A number or a click starts one. ' +
       (keyName ? esc(keyName) + ' or ' : '') + 'Escape closes this.</div>';
@@ -123,7 +129,11 @@
     if (!rows.length) { close(); return; }
     draw();
     root.className = 'on';
-    if (!shown) { shown = true; tell('maneuvers:opened'); }
+    if (!shown) {
+      shown = true;
+      if (window.thornswoodDialog) window.thornswoodDialog.open(root, root.querySelector('.title'));
+      tell('maneuvers:opened');
+    }
   }
   function close() {
     if (root) { root.className = ''; }

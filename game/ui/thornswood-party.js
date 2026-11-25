@@ -649,6 +649,7 @@
     shown = true;
     root.className = 'on';
     draw();
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 

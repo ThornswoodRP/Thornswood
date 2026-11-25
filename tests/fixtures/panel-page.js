@@ -118,8 +118,15 @@ function makePage() {
     const out = [];
     const open = [];
     const tag = /<(\/?)([a-z0-9]+)((?:\s+[a-z-]+(?:="[^"]*")?)*)\s*(\/?)>/gi;
-    let m;
+    let m, end = 0;
+    function words(text) {
+      if (!text) return;
+      const n = Node('#text'); n.nodeType = 3; n.textContent = unesc(text);
+      const up = open[open.length - 1];
+      if (up) { n.parentNode = up; up.kids.push(n); } else out.push(n);
+    }
     while ((m = tag.exec(html))) {
+      words(html.slice(end, m.index)); end = tag.lastIndex;
       const name = m[2].toLowerCase();
       if (m[1]) {
         for (let i = open.length - 1; i >= 0; i--) {
@@ -137,6 +144,7 @@ function makePage() {
       if (up) { el.parentNode = up; up.kids.push(el); } else { out.push(el); }
       if (!m[4] && VOID.indexOf(name) < 0) { open.push(el); }
     }
+    words(html.slice(end));
     return out;
   }
 

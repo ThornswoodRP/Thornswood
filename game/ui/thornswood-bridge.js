@@ -77,6 +77,35 @@
       && (s.length === 6 || /\s/.test(s.charAt(6)));
   }
 
+  // Called once by each panel's closed-to-open boundary, after its real draw.
+  // This declares a dialog, not a new modal or focus-trapping policy.
+  window.thornswoodDialog = {
+    open: function (dialog, title) {
+      if (!dialog || !title) return;
+      if (!title.id) title.id = (dialog.id || dialog.parentNode.id) + '-dialog-title';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-labelledby', title.id);
+      var controls = dialog.querySelectorAll('button,input,select,textarea,a[href],[tabindex]');
+      for (var i = 0; i < controls.length; i++) {
+        var control = controls[i];
+        if (control.disabled || (control.matches && control.matches(':disabled')) ||
+            control.getAttribute('type') === 'hidden' || Number(control.getAttribute('tabindex')) < 0) continue;
+        var visible = true;
+        for (var node = control; node && node !== dialog.parentNode; node = node.parentNode) {
+          var style = window.getComputedStyle ? window.getComputedStyle(node) : node.style;
+          if (node.hidden || node.hasAttribute('inert') || node.getAttribute('aria-hidden') === 'true' ||
+              (style && (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'))) {
+            visible = false; break;
+          }
+        }
+        if (visible && typeof control.focus === 'function') { control.focus(); return; }
+      }
+      // An empty panel still announces its title; no invented action is added.
+      dialog.setAttribute('tabindex', '-1');
+      dialog.focus();
+    }
+  };
+
   var sp = (window.skyrimPlatform = window.skyrimPlatform || {});
 
   if (typeof sp.sendMessage !== 'function') {
