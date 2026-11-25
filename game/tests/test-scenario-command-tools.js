@@ -1,4 +1,9 @@
 'use strict';
+/*
+  Scenario: systems/playtest-and-admin-commands.md
+  Actual queued role help, implemented-tool discovery, execution permissions,
+  connection proof and launcher-pass refusal over the whole gamemode.
+*/
 // Exercise role-specific help through the actual queued command path.
 const standIn = require('../../tests/stand-in-server.js');
 const t = standIn.checks(), yes = t.yes;
