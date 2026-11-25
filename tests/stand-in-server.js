@@ -615,6 +615,15 @@ function world(opts) {
         }
         case 'isOpen': case 'isOnline': case 'onlinePlayers': case 'type': case 'neighbors': case 'actorNeighbors':
           throw new Error('Property \'' + k + '\' is read-only');
+        case 'percentages': {
+          // PercentagesBinding::Set -> MpActor::NetSetPercentages: a write that
+          // takes health to nothing asks onDying first (fork #101), and one it
+          // lets through is SetPercentages' Kill, with nobody named.
+          const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {}, copy(v));
+          if (!(p.health > 0) && !row.isDead) { toNothing(id, p, 0); return; }
+          row.percentages = p;
+          return;
+        }
         default: row[k] = copy(v);
       }
     },
@@ -1369,14 +1378,10 @@ function world(opts) {
   */
   function maxHealthOf(row) { return Number(row.maxHealth) > 0 ? Number(row.maxHealth) : 100; }
   w.health = function (actorId) { const r = store.get(actorId >>> 0); return r && r.percentages ? r.percentages.health : undefined; };
-  w.hurtBy = function (actorId, points, killerId) {
-    actorId = actorId >>> 0;
+  /* Health written to nothing, by a blow or by the gamemode's own write (NetSetPercentages, then SetPercentages' Kill). */
+  function toNothing(actorId, p, killerId) {
     const row = store.get(actorId);
-    if (!row || row.isDead) { return; }
-    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
-    p.health = Math.max(0, p.health - points / maxHealthOf(row));
     row.percentages = p;
-    if (p.health > 0) { return; }
     if (fire('onDying', [actorId, killerId || 0]) === false) {
       row.percentages = Object.assign({}, p, { health: Number(row.dyingHealth) > 0 ? Number(row.dyingHealth) : 0.1 });
       return;
@@ -1386,6 +1391,16 @@ function world(opts) {
     fire('onDeath', [actorId, killerId || 0]);
     const lies = Number(row.spawnDelay);
     engineTimers.push({ at: clock + (lies >= 0 ? lies : 25) * 1000, fn: function () { w.respawn(actorId); } });
+  }
+  w.toNothing = toNothing;
+  w.hurtBy = function (actorId, points, killerId) {
+    actorId = actorId >>> 0;
+    const row = store.get(actorId);
+    if (!row || row.isDead) { return; }
+    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
+    p.health = Math.max(0, p.health - points / maxHealthOf(row));
+    if (p.health > 0) { row.percentages = p; return; }
+    toNothing(actorId, p, killerId);
   };
   /*
     A blow (ActionListener::OnWeaponHit): the server decides a block, sends
