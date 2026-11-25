@@ -182,7 +182,7 @@
       The scroll in front of the choice, Djinn, 24 September. The painting
       plays with the sealed "To Start" scroll resting on the ledge by the
       warrior; clicking it breaks the seal, the scroll rises and unrolls, and
-      clicking Continue brings up the slots. No key does either, see introKey.
+      clicking Continue brings up the slots. Guarded keys do the same, see introKey.
       The stage below is 16:9 and covers the window the way the loop does
       (object-fit:cover), so the scroll sits on the same spot of the ledge at
       any size. Same rules as the rest of this page: no hover, no cursor
