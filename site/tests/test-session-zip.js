@@ -44,7 +44,7 @@ function grab(name) {
   throw new Error('unbalanced braces reading ' + name);
 }
 
-eval(['crc32', 'dosStamp', 'zipStore', 'serverLogName', 'chatFileName', 'chatText',
+eval(['crc32', 'dosStamp', 'zipStore', 'serverLogName', 'chatFileName', 'sessionTime', 'chatText',
       'sessionFiles', 'provenanceText', 'sessionZipStem', 'sessionAt', 'bytesFor']
   .map(grab).join('\n'));
 
