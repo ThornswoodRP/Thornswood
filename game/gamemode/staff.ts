@@ -180,6 +180,11 @@
     if (!Buffer.from(text, 'utf8').equals(bytes)) { throw new Error('restraint book is not UTF-8'); }
     return text;
   }
+  function encodeRestraints(doc) {
+    var bytes = JSON.stringify(doc);
+    if (Buffer.byteLength(bytes, 'utf8') > 4 * 1024 * 1024) { throw new Error('staged restraint book exceeds 4 MiB'); }
+    return bytes;
+  }
   function acceptRestraints(doc, bytes) {
     state.frozen = doc.frozen; state.silenced = doc.silenced;
     restraintRevision = doc.revision; restraintBytes = bytes; restraintsReady = true;
@@ -196,7 +201,7 @@
         // First upgrade can carry real in-process restraints from the former
         // memory-only module. Validate them before their first durable save.
         var initial = restraintDocument({ version: 1, revision: 0, frozen: state.frozen, silenced: state.silenced });
-        bytes = JSON.stringify(initial);
+        bytes = encodeRestraints(initial);
         fs.mkdirSync(path.dirname(restraintFile), { recursive: true });
         try { mp.writeFileWhole(restraintFile, bytes); }
         catch (writeError) { if (readRestraintBytes() !== bytes) { throw writeError; } }
@@ -214,7 +219,7 @@
       var doc = restraintDocument({ version: 1, revision: restraintRevision + 1, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes });
       change(doc);
       doc = restraintDocument(doc);
-      var next = JSON.stringify(doc);
+      var next = encodeRestraints(doc);
       var writeError = null;
       try { mp.writeFileWhole(restraintFile, next); } catch (e) { writeError = e; }
       var observed = readRestraintBytes();
@@ -312,7 +317,10 @@
 
   function tell(pid, text) {
     var t = g.__thornswoodToProfile;
-    if (t && pid) { t(pid, text); }
+    if (t && pid) {
+      try { t(pid, text); }
+      catch (e) { log('staff: notification could not reach profile ' + pid + ': ' + e); }
+    }
   }
 
   function online() {

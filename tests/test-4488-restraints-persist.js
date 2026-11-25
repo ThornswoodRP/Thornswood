@@ -65,7 +65,10 @@ function boot(w, prior) {
     setInterval: (fn, every) => { r.timers.push({ fn, every }); return r.timers.length; },
     clearInterval() {}, setTimeout: fn => { r.timers.push({ fn }); return r.timers.length; }, clearTimeout() {},
     require: name => name === 'fs' ? io : name === 'http' ? { request } : require(name),
-    __thornswoodToProfile: (pid, text) => r.told.push({ pid, text }),
+    __thornswoodToProfile: (pid, text) => {
+      if (w.noticeFault && pid === (w.noticeFaultPid || PID)) throw new Error('injected notice transport failure');
+      r.told.push({ pid, text });
+    },
     mp: {
       getServerSettings: () => {
         if (w.settingsFault) throw new Error('injected unavailable server settings');
@@ -266,6 +269,29 @@ try {
     assert.doesNotMatch(one.command('/freeze ' + TARGET), /Froze/);
     assert.equal(fs.readFileSync(w.file, 'utf8'), bytes);
   });
+  test('a valid near-limit book cannot be replaced with bytes beyond its own read limit', () => {
+    const w = fresh(); boot(w);
+    const doc = JSON.parse(fs.readFileSync(w.file, 'utf8')); doc.revision = 100;
+    const targetBytes = 4 * 1024 * 1024 - 10;
+    let size = Buffer.byteLength(JSON.stringify(doc)), last = [];
+    for (let pid = 3000; size <= targetBytes; pid++) {
+      const key = String(pid), row = { desc: 'x'.repeat(512), pos: [0, 0, 0], rot: [0, 0, 0], by: PID };
+      size += Buffer.byteLength(JSON.stringify({ [key]: row })) - 2 + (last.length ? 1 : 0);
+      doc.frozen[key] = row; last.push(key);
+    }
+    let excess = size - targetBytes;
+    for (const key of last.slice(-2).reverse()) {
+      const remove = Math.min(511, excess); doc.frozen[key].desc = doc.frozen[key].desc.slice(remove); excess -= remove;
+    }
+    assert.equal(excess, 0);
+    const bytes = JSON.stringify(doc); assert.equal(Buffer.byteLength(bytes), targetBytes);
+    fs.writeFileSync(w.file, bytes);
+    const one = boot(w), before = w.writes.length;
+    assert.doesNotMatch(one.command('/freeze ' + TARGET), /Froze/);
+    assert.equal(w.writes.length, before, 'oversized candidate is rejected before native placement');
+    assert.equal(fs.readFileSync(w.file, 'utf8'), bytes);
+    assert.equal(one.box.__thornswoodStaffState.frozen[TARGET], undefined);
+  });
   for (const line of ['/bring ' + TARGET, '/tp ' + TARGET + ' town']) {
     test(line + ': confirmed frozen move updates the durable anchor exactly once without a later return', () => {
       const w = fresh(), one = boot(w);
@@ -323,6 +349,24 @@ try {
       assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
     });
   }
+  test('a failed pending-move diagnostic cannot bypass identity-fenced target termination', () => {
+    const w = fresh(), one = boot(w); one.command('/freeze ' + TARGET);
+    w.afterMove = () => { w.fault = 'before'; w.noticeFault = true; };
+    assert.doesNotThrow(() => one.command('/bring ' + TARGET));
+    assert.deepEqual(one.kicked, [2]);
+    assert.equal(w.moves.length, 1);
+    assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET].pending);
+    assert.equal(one.box.mp.onThornswoodLogin({ userId: 1, profileId: PID, proof: null }), PID);
+    assert.ok(one.logs.some(x => /notice|notification/.test(x) && /failed|could not/.test(x)));
+  });
+  for (const noticePid of [PID, TARGET]) test('postcommit notice to ' + noticePid + ' cannot refuse or omit the committed restraint audit', () => {
+    const w = fresh(), one = boot(w); w.noticeFault = true; w.noticeFaultPid = noticePid;
+    assert.doesNotThrow(() => one.command('/freeze ' + TARGET));
+    assert.ok(JSON.parse(fs.readFileSync(w.file, 'utf8')).frozen[TARGET]);
+    const audit = fs.readFileSync(path.join(w.dir, 'for-bot/moderation.log'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(audit.filter(x => x.did === 'freeze').length, 1);
+    assert.equal(w.moves.length, 0);
+  });
   function releaseRequest(w, extra) {
     const done = Object.fromEntries(['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'].map(k => [k, w.now]));
     fs.writeFileSync(path.join(w.dir, 'deleted-characters.json'), JSON.stringify({ profiles: [], actors: [], done, ...extra }));
