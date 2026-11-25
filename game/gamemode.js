@@ -68552,7 +68552,7 @@ function createQuestTransactions(deps) {
   function identity(actor) {
     return active ? actorIdentity(mp,actor) : null;
   }
-  function commit(actor,expectedRecord,nextRecord,changes,admission) {
+  function commit(actor,expectedRecord,nextRecord,changes,admission,abandoned) {
     if(!available())return {ok:false,why:'unavailable'};
     try {
       var token=identity(actor);
@@ -68560,6 +68560,17 @@ function createQuestTransactions(deps) {
       // Match the addon's JSON boundary, including omitted optional fields.
       nextRecord=JSON.parse(JSON.stringify(nextRecord));
       if(!Array.isArray(changes))throw new Error('Invalid quest goods.');
+      var collecting=changes.some(function(change){return change && change.upTo!==undefined;});
+      if(collecting || abandoned!==undefined) {
+        if(!collecting || !abandoned || typeof abandoned!=='object' || Array.isArray(abandoned) ||
+            Object.keys(abandoned).sort().join(',')!=='quest,until' ||
+            typeof abandoned.quest!=='string' || !/^[a-z][a-z0-9-]{0,127}$/.test(abandoned.quest) ||
+            abandoned.until!==null && (!Number.isSafeInteger(abandoned.until) || abandoned.until<=0) ||
+            !expectedRecord || !expectedRecord.open || !Object.prototype.hasOwnProperty.call(expectedRecord.open,abandoned.quest) ||
+            !nextRecord.open || Object.prototype.hasOwnProperty.call(nextRecord.open,abandoned.quest) ||
+            !changes.length || changes.some(function(change){return !change || change.count>=0 || change.upTo!==true;}))
+          throw new Error('Invalid quest abandonment.');
+      }
       if(changes.length===0) {
         var metadataOwner=JSON.parse(token);
         if(!available() || identity(actor)!==token)return {ok:false,why:'identity'};
@@ -68603,14 +68614,31 @@ function createQuestTransactions(deps) {
           sequence=oldReceipt.sequence+1;
         }
         if(!Number.isSafeInteger(sequence))throw new Error('Quest inventory receipt sequence is exhausted.');
-        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before;
+        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before,short=false;
         changes.forEach(function(change){
           if(!Number.isSafeInteger(change.count) || change.count===0)throw new Error('Invalid quest goods.');
+          if(change.upTo!==undefined && (change.upTo!==true || change.count>0))throw new Error('Invalid quest collection.');
           var baseId=mp.getIdFromDesc(change.item);
           if(!Number.isInteger(baseId) || baseId<=0 || baseId>0xffffffff)throw new Error('Quest goods are unavailable.');
-          next=change.count<0?inventoryTools.takeEntries(next,baseId,-change.count).inventory:
-            inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
+          if(change.count<0) {
+            var amount=-change.count;
+            // Only abandonment requests up-to collection. Plan it from this
+            // locked snapshot; the final CAS fences both goods and quest.
+            if(change.upTo===true) {
+              amount=Math.min(amount,next.entries.reduce(function(n,row){return row.baseId===baseId?n+row.count:n;},0));
+              if(amount < -change.count)short=true;
+            }
+            if(amount>0)next=inventoryTools.takeEntries(next,baseId,amount).inventory;
+          } else next=inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
         });
+        if(short) {
+          if(!abandoned || abandoned.until===null || !nextRecord.cool || typeof nextRecord.cool!=='object' || Array.isArray(nextRecord.cool))
+            throw new Error('The normal quest cooldown is unavailable.');
+          var previous=nextRecord.cool[abandoned.quest];
+          if(previous!==undefined && (!Number.isSafeInteger(previous) || previous<0))throw new Error('The quest cooldown cannot be verified.');
+          nextRecord.cool[abandoned.quest]=Math.max(previous || 0,abandoned.until);
+          if(Buffer.byteLength(JSON.stringify(nextRecord),'utf8')>16384)throw new Error('The quest record is too large.');
+        }
         var nextReceipt=JSON.stringify({actor:human.desc,profile:human.profileId,sequence:sequence});
         if(!stillActive() || !available() || identity(actor)!==token)return {ok:false,why:'identity'};
         if(admission!==undefined && (typeof admission!=='function' || admission()!==true))return {ok:false,why:'session'};
@@ -70117,7 +70145,7 @@ function createMerchantTrading(deps) {
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
-      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what you drew and leave the work.') :
+      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
         reasons[result.why] || 'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
@@ -70970,7 +70998,7 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
       });
       return next;
     }
-    function keep(actor, b, changes, eligible) {
+    function keep(actor, b, changes, eligible, abandoned) {
       try {
         if (!active || deps.available && !deps.available() || deps.identity(actor)!==b.owner) return false;
         var after={open:b.open,cool:b.cool};
@@ -70984,7 +71012,7 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
         // Only the captured callback-free session check follows that read.
         if(eligible)admission=function(){return admitted(original) && eligible() && admitted(finalSession);};
         if(!admitted(admission))return false;
-        return deps.commit(actor, b.expected, next, changes || [],admission).ok === true;
+        return deps.commit(actor, b.expected, next, changes || [],admission,abandoned).ok === true;
       } catch (e) {
         note('could not write the quests of', actor + ', so nothing changed:', e);
         return false;
@@ -71298,15 +71326,21 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
       }
       var open = b.open[id];
       if (!open) return { ok: false, why: 'none' };
+      var hours=byId[id] && byId[id].hours, now=deps.now(), until=now+hours*3600000;
+      // Use only this work's existing normal duration. A partial collection
+      // with unavailable terms must fail closed inside the locked snapshot.
+      var abandoned={quest:id,until:typeof hours==='number' && isFinite(hours) && hours>0 &&
+        Number.isSafeInteger(until) && until>now ? until : null};
       if(id==='mammoth') {
-        var abandoned=huntBundles && huntBundles.mammothAbandon(open);
-        if(!abandoned || !abandoned.ok)return {ok:false,why:'unavailable'};
+        var bundle=huntBundles && huntBundles.mammothAbandon(open);
+        if(!bundle || !bundle.ok)return {ok:false,why:'unavailable'};
+        var changes=bundle.changes.map(function(change){return Object.assign({},change,{upTo:true});});
         delete b.open[id];
-        return keep(actor,b,abandoned.changes) ? {ok:true} : {ok:false,why:'unwritten'};
+        return keep(actor,b,changes,undefined,changes.length?abandoned:undefined) ? {ok:true} : {ok:false,why:'unwritten'};
       }
-      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn}] : [];
+      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn, upTo: true}] : [];
       delete b.open[id];
-      if (!keep(actor, b, changes)) return { ok: false, why: 'unwritten' };
+      if (!keep(actor, b, changes, undefined, changes.length?abandoned:undefined)) return { ok: false, why: 'unwritten' };
       return { ok: true };
     }
     function offer(actor,id,opts,held) {
