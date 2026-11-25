@@ -56,7 +56,7 @@ trap { $script:fail++; Write-Host ('FAIL  the harness itself stopped: ' + $_.Exc
 function Q([string]$s) { return '"' + (($s -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"' }
 New-Item -ItemType Directory -Force -Path (Join-Path $T 'records') | Out-Null
 $rec = Join-Path (Join-Path $T 'records') 'collection-plugins.json'
-function Rec([int]$n) { [IO.File]::WriteAllText($rec, ('{ "collection": "7essxf", "revision": ' + $n + ', "plugins": [] }'), (New-Object Text.UTF8Encoding($false))) }
+function Rec([int]$n) { [IO.File]::WriteAllText($rec, ('{"version":1,"collection":"7essxf","revision":' + $n + ',"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')) }
 
 # ---- 1. NexusPublished.ps1 against the stand-in -------------------------------------
 Write-Host 'NexusPublished.ps1'
@@ -205,10 +205,10 @@ Yes "all four on 6: the issue is closed as done, saying so ($said)" ((Rebuilds).
 $copy = Join-Path $T 'copy'
 $crel = Join-Path (Join-Path $copy 'scripts') 'release'
 New-Item -ItemType Directory -Force -Path $crel, (Join-Path $copy 'records') | Out-Null
-foreach ($f in 'Check-CollectionRevisions.ps1', 'CollectionRevision.ps1') { Copy-Item -LiteralPath (Join-Path $rel $f) -Destination $crel }
+foreach ($f in 'Check-CollectionRevisions.ps1', 'CollectionRevision.ps1', 'RecordShape.ps1', 'Read-JsonFile.ps1') { Copy-Item -LiteralPath (Join-Path $rel $f) -Destination $crel }
 [IO.File]::WriteAllText((Join-Path $crel 'NexusPublished.ps1'), "param([string]`$Slug, [string]`$Game)`r`nif (`$env:TS_4068_NEXUS -eq 'none') { throw 'no answer' }`r`nreturn [int]`$env:TS_4068_NEXUS`r`n")
 [IO.File]::WriteAllText((Join-Path $crel 'ReleaseRevision.ps1'), "function Get-ChannelReleaseRevision([string]`$Channel, [string]`$Repo) { return [pscustomobject]@{ Tag = 'build-1.3.1'; Revision = [int]`$env:TS_4068_FEEDS } }`r`n")
-[IO.File]::WriteAllText((Join-Path (Join-Path $copy 'records') 'collection-plugins.json'), '{ "collection": "7essxf", "revision": 7, "plugins": [] }')
+[IO.File]::WriteAllText((Join-Path (Join-Path $copy 'records') 'collection-plugins.json'), ('{"version":1,"collection":"7essxf","revision":7,"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}'))
 $shell = (Get-Process -Id $PID).Path
 function Invoke-Check([string]$nexus, [string]$feeds) {
     $env:TS_4068_NEXUS = $nexus; $env:TS_4068_FEEDS = $feeds
