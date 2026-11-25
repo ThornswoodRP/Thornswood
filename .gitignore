@@ -197,9 +197,9 @@ bot/data/
 /game/data/crime-factions.json
 /game/plugins/thornswood-table-no-bounty-factions.js
 /game/data/resource-locations.json
-/docs/FISHING-SPOTS.csv
-/docs/HANGING-GAME-SPOTS.csv
-/docs/HUNTING-SPOTS.csv
+/game/data/FISHING-SPOTS.csv
+/game/data/HANGING-GAME-SPOTS.csv
+/game/data/HUNTING-SPOTS.csv
 /game/data/building-holds.json
 /game/data/woodworking-benches.json
 /game/data/market-stalls.json

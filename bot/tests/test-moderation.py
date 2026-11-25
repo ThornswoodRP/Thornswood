@@ -237,7 +237,7 @@ try:
     yes('M8 every emitted staff record formats' + (': missing ' + ', '.join(missing) if missing else ''),
         not missing)
 
-    # Match the row shapes the five commands actually write. The despawn
+    # Match the row shapes the commands actually write. The despawn
     # target is in why, while the company's terms take the place of a name.
     cases = (
         ('despawn', '', 0, 'kept wolf ff000001', 'despawned a creature: kept wolf ff000001'),
@@ -249,6 +249,15 @@ try:
          "dropped proposed changes to the company's terms: from Aela: fee to 20"),
         ('companyconfirm', "the company's terms", 0, 'from Aela: fee to 20',
          "confirmed changes to the company's terms: from Aela: fee to 20"),
+        ('heal', 'Bjorn', 2002, 'restored health, magicka and stamina',
+         'used /heal on Bjorn (profile 2002): restored health, magicka and stamina'),
+        ('rankup', 'Bjorn', 2002, 'class hunter',
+         'advanced a rank for Bjorn (profile 2002): class hunter'),
+        ('rename', 'Bjorn', 2002, 'Renamed to Torsten.',
+         'renamed Bjorn (profile 2002): Renamed to Torsten.'),
+        ('setneeds', 'Bjorn', 2002, '', 'changed a need for Bjorn (profile 2002).'),
+        ('tpto', 'Bjorn', 2002, 'Self-only playtest teleport.',
+         'teleported to Bjorn (profile 2002) for testing: Self-only playtest teleport.'),
     )
     put(LIVE, [])
     put(DEV, [])
@@ -292,6 +301,33 @@ try:
                 'character can be played again: made by mistake')
     note = bot.moderation_text('dev', json.loads(row('note', why='asked twice about the bridge')))
     yes('M10 a note says what it says', 'wrote a note on Bjorn (profile 2002): asked twice' in note)
+
+    # Scene tools act on the person who ran them. The three character
+    # changes carry their own target and the reason given by the game.
+    scene_actions = (
+        ('fly', 'on', 'changed their flight mode: on'),
+        ('phase', 'Forward in the same cell.', 'used /phase: Forward in the same cell.'),
+        ('godmode', 'off', 'changed their invulnerability: off'),
+        ('invisible', 'on', 'changed their visibility: on'),
+        ('cleareffects', 'Alcohol and drug effects cleared.',
+         'used /cleareffects: Alcohol and drug effects cleared.'),
+        ('killall', 'Nearby hostile NPCs only.', 'used /killall: Nearby hostile NPCs only.'),
+    )
+    for action, why, expected in scene_actions:
+        record = json.loads(row(action, who='Aela', why=why))
+        record['who'] = 1001
+        yes('scene tool /%s names the actor and keeps the reason' % action,
+            bot.moderation_text('dev', record) == '**Staff on the dev server:** Aela (profile 1001) ' + expected)
+    character_actions = (
+        ('setclass', 'hunter', 'changed the class of Bjorn (profile 2002): hunter'),
+        ('setprofession', 'Enchanter', 'changed the profession of Bjorn (profile 2002): Enchanter'),
+        ('repair', 'restored equipment below sound to 100%',
+         'repaired equipment for Bjorn (profile 2002): restored equipment below sound to 100%'),
+    )
+    for action, why, expected in character_actions:
+        yes('character tool /%s names the target and keeps the reason' % action,
+            bot.moderation_text('dev', json.loads(row(action, why=why))) ==
+            '**Staff on the dev server:** Aela (profile 1001) ' + expected)
 
     # M11: somebody's own /stuck (#414) says the server, the person and the
     # gamemode's whole sentence, not "Staff on", and pings nobody.

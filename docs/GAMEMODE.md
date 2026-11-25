@@ -393,7 +393,7 @@ because each reads the one before.
 | `ORES_BY_BASE` | `Build-OreTable.ps1` | `ores.json` | `Build-OreTable.ps1:Write-GamemodeTable 'ORES_BY_BASE'` |
 | `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE` | `Build-HarvestTable.ps1` | `harvests.json` | `Build-HarvestTable.ps1:Write-GamemodeTable 'HARVESTS_BY_BASE'`, one file for each of the four |
 | `HUNTS_BY_BASE` | `Build-HuntTable.ps1` | `hunts.json` | `Build-HuntTable.ps1:Write-GamemodeTable 'HUNTS_BY_BASE'` |
-| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `docs/systems/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:Write-GamemodeTable 'RECIPES_BY_ID'` |
+| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `game/data/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:Write-GamemodeTable 'RECIPES_BY_ID'` |
 | `STAFF_SPELLS` (staff spells block) | `Build-RecipeTable.ps1`, with each spell's school and rank | none | `Build-RecipeTable.ps1:Write-GamemodeTable 'STAFF_SPELLS'` |
 | `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT` | `Build-DoorTable.py` | `doors.json` | `Build-DoorTable.py:changed = gamemode_tables.write(name` |
 | `BENCH_BY_BASE`, `BENCH_ACCESS` | `Build-BenchTable.py`, from `recipes.json` | none | `Build-BenchTable.py:gamemode_tables.write('BENCH_BY_BASE'` |

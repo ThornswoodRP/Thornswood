@@ -729,7 +729,7 @@ namespace Thornswood
         internal static readonly string[] LicenceFiles =
         {
             "GPL-3.0.txt", "AGPL-3.0.txt",
-            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "BouncyCastle-LICENSE.txt",
+            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "SharpDTLS-LICENSE.txt", "BouncyCastle-LICENSE.txt",
             "dotnet-LICENSE.txt", "dotnet-THIRD-PARTY-NOTICES.txt",
             "Avalonia-LICENSE.txt", "MicroCom-LICENSE.txt", "Tmds.DBus-LICENSE.txt",
             "SkiaSharp-LICENSE.txt", "SkiaSharp-THIRD-PARTY-NOTICES.txt", "ANGLE-LICENSE.txt",

@@ -400,15 +400,21 @@
       '    var st = ctx.state;',
       '    if (!st) { return; }',
       '    if (st.thornswoodSkyId === id) { return; }',
-      '    st.thornswoodSkyId = id;',
+      // An id is applied only when its native operation completes. A form
+      // unavailable during loading must not suppress later owner updates.
       '    if (!id) {',
-      '      try { if (ctx.sp.Weather.releaseOverride) { ctx.sp.Weather.releaseOverride(); } } catch (e0) { }',
+      '      if (!ctx.sp.Weather.releaseOverride) { return; }',
+      '      ctx.sp.Weather.releaseOverride();',
+      '      st.thornswoodSkyId = id;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
       '    if (!form) { return; }',
       '    var weather = ctx.sp.Weather.from(form);',
-      '    if (weather && weather.forceActive) { weather.forceActive(true); }',
+      '    if (weather && weather.forceActive) {',
+      '      weather.forceActive(true);',
+      '      st.thornswoodSkyId = id;',
+      '    }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
