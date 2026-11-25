@@ -33,7 +33,7 @@
     4. A link inside the old Payload to a folder outside it: the folder it
        points at, and its file, are still there afterwards.
 
-  HOW. InstallSteps.cs and the three install files it uses are built with a
+  HOW. InstallSteps.cs and its launcher dependencies are built with a
   driver by the .NET SDK the launcher builds with (tests\Launcher-Csc.ps1),
   with records\skyrim-files.json embedded as the launcher embeds it, and the
   driver runs the steps. On every machine: nothing it runs here needs
@@ -139,7 +139,7 @@ $dll = $null
 try {
     $dll = Build-LauncherCode -Exe -Source $driver -File @(
         (Join-Path $App 'InstallSteps.cs'), (Join-Path $App 'InstallAgreements.cs'),
-        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs')) `
+        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs'), (Join-Path $App 'PathFence.cs')) `
         -Resource @{ 'skyrim-files.json' = (Join-Path (Join-Path $Repo 'records') 'skyrim-files.json') }
 } catch { Yes 'the install steps build with a driver' $false $_.Exception.Message; Done }
 Yes 'the install steps build with a driver' ($null -ne $dll)
