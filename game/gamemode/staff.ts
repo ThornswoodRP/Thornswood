@@ -127,6 +127,37 @@
   // Bans lifted here, so the door's list, which can carry a lifted ban for up
   // to its five minute refresh, does not end their session again meanwhile.
   if (!state.lifted) { state.lifted = {}; }
+  migrateScopes(state.banned);
+  migrateScopes(state.lifted);
+
+  // Existing hot reloads can carry a single receipt or lift per character.
+  function migrateScopes(records) {
+    Object.keys(records).forEach(function (pid) {
+      var record = records[pid];
+      if (!record.scope && record.at === undefined && record.until === undefined) { return; }
+      var scopes = {};
+      scopes[record.scope || 'account'] = record;
+      records[pid] = scopes;
+    });
+  }
+  function recordScope(records, pid, scope, record) {
+    if (!records[pid]) { records[pid] = {}; }
+    records[pid][scope] = record;
+  }
+  function forgetScope(records, pid, scope) {
+    var scopes = records[pid];
+    if (!scopes) { return; }
+    delete scopes[scope];
+    if (!scopes.account && !scopes.character) { delete records[pid]; }
+  }
+  function pruneScopes(records, expired) {
+    Object.keys(records).forEach(function (pid) {
+      var scopes = records[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        if (expired(scopes[scope])) { forgetScope(records, pid, scope); }
+      });
+    });
+  }
 
   function settings() {
     try { return mp.getServerSettings() || {}; } catch (e) { return {}; }
@@ -564,10 +595,9 @@
     if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
       bansRead.list = confirmedBans.list = list;
       bansRead.banAt = confirmedBans.requestedAt = bansRequested;
-      for (var b in state.banned) {
-        if (Object.prototype.hasOwnProperty.call(state.banned, b) &&
-            bansRequested > (Number(state.banned[b].at) || bansLoadedAt)) { delete state.banned[b]; }
-      }
+      pruneScopes(state.banned, function (ban) {
+        return bansRequested > (Number(ban.at) || bansLoadedAt);
+      });
     } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
       // Read old door files until the first confirmed snapshot arrives. A
       // broken file cannot erase the last known list or its ban-specific time.
@@ -575,9 +605,7 @@
       bansRead.banAt = written;
     }
     // A lift the door's ban list has caught up with needs remembering no longer.
-    for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && bansRead.banAt > state.lifted[k].at) { delete state.lifted[k]; }
-    }
+    pruneScopes(state.lifted, function (lift) { return bansRead.banAt > lift.at; });
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
     for (var p in state.pk) {
@@ -600,6 +628,18 @@
     }
     return out;
   }
+  // Account bans govern the whole account. Within one kind, keep the
+  // longest active ban; a permanent ban outlasts every timed one.
+  function preferredBan(have, next) {
+    if (!have) { return next; }
+    var account = (have.scope || 'account') === 'account';
+    var nextAccount = (next.scope || 'account') === 'account';
+    if (account !== nextAccount) { return nextAccount ? next : have; }
+    var until = Number(have.until) || 0;
+    var nextUntil = Number(next.until) || 0;
+    if (until && (!nextUntil || nextUntil > until)) { return next; }
+    return have;
+  }
   function bansNow(now) {
     readDoor(now);
     var out = {};
@@ -612,19 +652,19 @@
       for (var j = 0; j < ps.length; j++) {
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
-        var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= bansRead.banAt) { continue; }
-        // A ban on the whole account says more than one on the character.
-        if (out[p] && out[p].scope === 'account') { continue; }
-        out[p] = { why: String(b.why || ''), until: until, scope: scope };
+        var lifts = state.lifted[p];
+        var lift = lifts && lifts[scope];
+        if (lift && lift.at >= bansRead.banAt) { continue; }
+        out[p] = preferredBan(out[p], { why: String(b.why || ''), until: until, scope: scope });
       }
     }
-    for (var k in state.banned) {
-      if (!Object.prototype.hasOwnProperty.call(state.banned, k)) { continue; }
-      var s = state.banned[k];
-      if (s.until && s.until <= now) { delete state.banned[k]; continue; }
-      out[Number(k)] = s;
-    }
+    pruneScopes(state.banned, function (ban) { return ban.until && ban.until <= now; });
+    Object.keys(state.banned).forEach(function (pid) {
+      var scopes = state.banned[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        out[pid] = preferredBan(out[pid], scopes[scope]);
+      });
+    });
     return out;
   }
 
@@ -717,10 +757,10 @@
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }
-          state.banned[p] = ban;
-          delete state.lifted[p];
+          recordScope(state.banned, p, ban.scope, ban);
+          forgetScope(state.lifted, p, ban.scope);
           var a = (p === them.pid && them.actorId) || actorFor(p);
-          if (a) { endBanned(p, a, ban, now); }
+          if (a) { endBanned(p, a, bansNow(now)[p], now); }
         }
         tell(pid, whole
           ? ('Banned ' + them.name + '\'s whole account, every character on it and any new one, ' + untilText(until) + '.')
@@ -739,11 +779,11 @@
           var covers = wholeU && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
           for (var i = 0; i < covers.length; i++) {
             var p = Number(covers[i]);
-            var had = state.banned[p];
-            if (had && (had.scope || 'account') === (wholeU ? 'account' : 'character')) { delete state.banned[p]; }
+            var scope = wholeU ? 'account' : 'character';
+            forgetScope(state.banned, p, scope);
             delete state.ending[p];
             // The door's list can still carry it for a few minutes.
-            if (v.was) { state.lifted[p] = { at: now, scope: wholeU ? 'account' : 'character' }; }
+            if (v.was) { recordScope(state.lifted, p, scope, { at: now }); }
           }
           if (wholeU) {
             tell(pid, v.was ? ('The ban on ' + them.name + '\'s account is lifted.') : (them.name + '\'s account was not banned.'));

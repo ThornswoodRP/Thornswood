@@ -212,7 +212,7 @@ section(function () {
     line(src, '  var HOLD_FOR = '), line(src, '  var HOLD_MAX = '), line(src, '  var HOLD_ALL = '),
     line(src, '  var MOMENTS = '), line(src, '  var unprovenSaid = '), line(src, '  var UNPROVEN_SAY_MS = '),
     fnText(src, '  function passHeld('), fnText(src, '  function runsNow('), fnText(src, '  function heldCount('),
-    fnText(src, '  function dispatch(cmd) {'), fnText(src, '  function drainHeld() {')
+    fnText(src, '  function commandParts('), fnText(src, '  function dispatch(cmd) {'), fnText(src, '  function drainHeld() {')
   ];
   yes('dispatch(), drainHeld() and their queue are in gamemode.js', at >= 0 && parts.every(function (p) { return p.length > 0; }));
   const st = { requiring: true, held: {}, ran: [], told: [], logged: [], taken: [], actors: { 700: 1, 800: 2 } };

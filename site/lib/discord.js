@@ -170,7 +170,13 @@ function discordGet(path) {
           catch (e) { return settle({ ok: false, status: 200, body: null, why: 'unreadable answer' }); }
         }
         if (res.statusCode === 404) {
-          return settle({ ok: false, status: 404, body: null, why: 'not found' });
+          let error;
+          try { error = JSON.parse(out); }
+          catch (e) { error = null; }
+          const code = error && !Array.isArray(error) && Number.isInteger(error.code) ? error.code : null;
+          const why = 'Discord answered 404' + (code === null ? ' without a readable error code' : ' (code ' + code + ')');
+          if (code !== 10007 && code !== 10026) console.error('[thornswood] discord ' + path + ': ' + why);
+          return settle({ ok: false, status: 404, code, body: null, why });
         }
         let msg = 'Discord answered ' + res.statusCode;
         if (res.statusCode === 401) msg = 'the bot token is wrong or has been reset';
