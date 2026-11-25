@@ -26,6 +26,18 @@ def source_key(kind, path):
     return copy_key(kind + '\n' + os.path.normcase(os.path.abspath(path)))
 
 
+def copy_post_valid(post):
+    """One confirmed receipt or durable uncertain attempt, never both."""
+    if not isinstance(post, dict) or type(post.get('channel')) is not int or post['channel'] <= 0:
+        return False
+    if set(post) == {'channel', 'message'}:
+        return type(post['message']) is int and post['message'] > 0
+    return (set(post) == {'channel', 'attempt', 'cursor'}
+            and isinstance(post['attempt'], str) and len(post['attempt']) == 32
+            and all(c in '0123456789abcdef' for c in post['attempt'])
+            and type(post['cursor']) is int and post['cursor'] >= 0)
+
+
 def copy_state(path):
     try:
         with open(path, encoding='utf-8') as f:
@@ -35,17 +47,8 @@ def copy_state(path):
     except (OSError, ValueError) as e:
         log('staff copies: cannot read %s (%s)' % (path, type(e).__name__))
         return None
-    def valid(post):
-        if not isinstance(post, dict) or type(post.get('channel')) is not int or post['channel'] <= 0:
-            return False
-        if set(post) == {'channel', 'message'}:
-            return type(post['message']) is int and post['message'] > 0
-        return (set(post) == {'channel', 'attempt', 'cursor'}
-                and isinstance(post['attempt'], str) and len(post['attempt']) == 32
-                and all(c in '0123456789abcdef' for c in post['attempt'])
-                and type(post['cursor']) is int and post['cursor'] >= 0)
     if not isinstance(state, dict) or not all(
-            isinstance(posts, dict) and all(valid(post) for post in posts.values())
+            isinstance(posts, dict) and all(copy_post_valid(post) for post in posts.values())
             for posts in state.values()):
         log('staff copies: invalid message index in %s' % path)
         return None

@@ -443,6 +443,15 @@ Unreadable indexes expose counts only, and unreadable or incomplete source
 files cannot remove saved private copies. The local regression is
 `bot\tests\test-4247-staff-copy-receipts.py`.
 
+Failed-session alerts use that same delivery protocol in their existing
+`data\trouble-posts.json` store (#4943). A missing channel or permission found
+before sending can recover on a later pass. Uncertain sends remain pending
+for exact-reference reconciliation or manual review; they do not count as
+delivered and are not blindly resent. Existing startup backlog suppression,
+legacy confirmed receipts and cleanup when the source session expires stay
+in place. Malformed source data cannot prove expiry. The local watcher
+regression is `bot\tests\test-4943-trouble-receipts.py`.
+
 `#staff-news` (the staff `#news` until #3317, then staff-announcements
 until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
 `#council-decisions`, `#staff-updates` (dev server restarts, the staff side of

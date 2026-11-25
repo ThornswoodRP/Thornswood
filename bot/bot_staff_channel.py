@@ -165,6 +165,23 @@ def _trouble_sessions(rows):
                if isinstance(r, dict) and r.get('session'))
 
 
+def _trouble_rows_valid(rows):
+    return isinstance(rows, list) and all(isinstance(row, dict)
+        and isinstance(row.get('session'), str) and bool(row['session']) for row in rows)
+
+
+def _trouble_copy_state():
+    # bot_reports uses this module's channel resolver; defer the shared
+    # protocol import until the bot's modules have finished loading.
+    from bot_reports import copy_post_valid
+    state = _state_read(TROUBLE_POSTS)
+    if (not isinstance(state, dict) or not isinstance(state.get('posts', {}), dict)
+            or not all(copy_post_valid(post) for post in state.get('posts', {}).values())):
+        log('trouble: receipt index cannot be trusted; private delivery is paused.')
+        return None
+    return state
+
+
 def trouble_remember(sid, msg, path=None):
     """Writes down which message said session sid went wrong."""
     path = path or TROUBLE_POSTS
@@ -205,6 +222,9 @@ async def trouble_forget(rows, path=None):
     """
     if rows is None:
         return 0, 0
+    if not _trouble_rows_valid(rows):
+        log('trouble: invalid source rows cannot prove a session expired; no post was deleted.')
+        return 0, 1
     path = path or TROUBLE_POSTS
     state = _state_read(path)
     if state is None:
@@ -217,6 +237,8 @@ async def trouble_forget(rows, path=None):
     changed = False
     for sid in [k for k in posts if k not in present]:
         rec = posts.get(sid) if isinstance(posts.get(sid), dict) else {}
+        if 'attempt' in rec:
+            continue  # Reconcile a possibly accepted private post before expiry cleanup.
         try:
             cid, mid = int(rec.get('channel')), int(rec.get('message'))
         except (TypeError, ValueError):
@@ -282,6 +304,9 @@ async def trouble_backfill(rows, path=None):
     """
     if rows is None:
         return 0, 0
+    if not _trouble_rows_valid(rows):
+        return 0, 1
+    from bot_reports import copy_marker
     path = path or TROUBLE_POSTS
     state = _state_read(path)
     if state is None or state.get('backfilled'):
@@ -302,6 +327,10 @@ async def trouble_backfill(rows, path=None):
             content = getattr(m, 'content', '') or ''
             if not content.startswith(TROUBLE_HEAD) or str(m.id) in known:
                 continue
+            if any(isinstance(post, dict) and post.get('channel') == ch.id
+                   and 'attempt' in post and content.endswith(copy_marker(post['attempt']))
+                   for post in posts.values()):
+                continue  # The canonical reconciler owns pending marked messages.
             row = next((r for r in rows if str(r['session']) not in posts
                         and _trouble_post_matches(content, r)), None)
             if row is not None:
@@ -352,9 +381,11 @@ async def watch_trouble():
     a watcher that dies quietly looks exactly like everything being fine.
     """
     await client.wait_until_ready()
+    from bot_reports import copy_notice, reconcile_copies, send_copy
 
     loop = asyncio.get_running_loop()
-    said = _trouble_sessions(await loop.run_in_executor(None, _trouble_rows) or [])
+    initial = await loop.run_in_executor(None, _trouble_rows)
+    said = _trouble_sessions(initial) if _trouble_rows_valid(initial) else set()
     ch = _trouble_channel()
     log('trouble: watching %s every %ds, speaking in %s, %d already there and '
         'treated as said'
@@ -366,19 +397,38 @@ async def watch_trouble():
     while not client.is_closed():
         try:
             rows = await loop.run_in_executor(None, _trouble_rows)
+            if not _trouble_rows_valid(rows):
+                copy_notice(('trouble', 'source'),
+                            'trouble: source rows are unavailable; delivery and expiry cleanup are paused.')
+                await asyncio.sleep(TROUBLE_EVERY)
+                continue
+            state = _trouble_copy_state()
+            if state is None:
+                if rows and copy_notice(('trouble', 'index'),
+                                       'trouble: unreadable receipts pause private failed-session delivery.'):
+                    await trouble_say('**%d failed session%s remain recorded on the site.** Staff copies are '
+                                      'paused because their saved receipts cannot be read.'
+                                      % (len(rows), '' if len(rows) == 1 else 's'))
+                await asyncio.sleep(TROUBLE_EVERY)
+                continue
+            if await reconcile_copies(state, 'posts', client):
+                _state_write(TROUBLE_POSTS, state)
             if first:
                 first = False
                 await trouble_backfill(rows)
-            for row in rows or []:
-                if not isinstance(row, dict):
+                state = _trouble_copy_state()
+                if state is None:
+                    await asyncio.sleep(TROUBLE_EVERY)
                     continue
-                sid = row.get('session') or ''
-                if not sid or sid in said:
-                    continue
-                said.add(sid)
-                msg = await trouble_say(_trouble_line(row))
-                if msg is not None:
-                    trouble_remember(sid, msg)
+            posts = state.setdefault('posts', {})
+            if not any('attempt' in post for post in posts.values()):
+                for row in rows:
+                    sid = row['session']
+                    if sid in said or sid in posts:
+                        continue
+                    if not await send_copy(TROUBLE_POSTS, state, 'posts', [sid], _trouble_line(row), client):
+                        break
+                    said.add(sid)
             await trouble_forget(rows)
         except Exception:
             log('trouble: the check itself failed, carrying on:\n'
