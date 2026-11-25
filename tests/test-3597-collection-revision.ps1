@@ -34,7 +34,10 @@ function Yes([string]$what, [bool]$cond) {
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-3597-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '\[repo] & x')
 [void][IO.Directory]::CreateDirectory((Join-Path $T 'records'))
 $rec = Join-Path (Join-Path $T 'records') 'collection-plugins.json'
-function Rec([string]$text) { [IO.File]::WriteAllText($rec, $text, (New-Object Text.UTF8Encoding($false))) }
+$pluginRows = '[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]'
+function Rec([string]$text, [bool]$bom = $false) {
+    [IO.File]::WriteAllText($rec, $text.Replace('"plugins": []', ('"version": 1, "plugins": ' + $pluginRows)), [Text.UTF8Encoding]::new($bom))
+}
 function Problem([int]$built, [string]$slug = '7essxf') {
     return (Get-ShipCollectionRevisionProblem -RepoDir $T -Path $rec -Built $built -Slug $slug -Source 'the stand-in source' -Remedy 'THE REMEDY.')
 }
@@ -50,7 +53,7 @@ try {
     Yes 'no record is refused, saying nothing names the revision' ($stop -match 'There is no' -and $stop -match 'which collection revision')
     Rec '{ "collection": "7essxf", "revision": 5, '
     $stop = ''; try { $null = Get-ShipRecordedCollectionRevision $T $rec } catch { $stop = $_.Exception.Message }
-    Yes 'a record that does not read is refused' ($stop -match 'does not read as JSON')
+    Yes 'a record that does not read is refused' ($stop.StartsWith($rec) -and $stop -match 'is not valid JSON')
     foreach ($bad in @('"5"', '0', '-1', 'null', 'true', '2.5')) {
         Rec ('{ "collection": "7essxf", "revision": ' + $bad + ', "plugins": [] }')
         $stop = ''; try { $null = Get-ShipRecordedCollectionRevision $T $rec } catch { $stop = $_.Exception.Message }
@@ -59,7 +62,7 @@ try {
     Rec '{ "revision": 5, "plugins": [] }'
     $stop = ''; try { $null = Get-ShipRecordedCollectionRevision $T $rec } catch { $stop = $_.Exception.Message }
     Yes 'a record naming no collection is refused' ($stop -match 'names no collection')
-    [IO.File]::WriteAllText($rec, '{ "collection": "7essxf", "revision": 5, "plugins": [] }', (New-Object Text.UTF8Encoding($true)))
+    Rec '{ "collection": "7essxf", "revision": 5, "plugins": [] }' $true
     $r = Get-ShipRecordedCollectionRevision $T $rec
     Yes 'a record with a byte order mark reads the same' ($r.Slug -eq '7essxf' -and $r.Revision -eq 5)
 
