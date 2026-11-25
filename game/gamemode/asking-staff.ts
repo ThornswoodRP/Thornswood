@@ -172,7 +172,8 @@
     bridge". Names have spaces, so the longest name of somebody in the world
     that the line starts with wins; then a first name that only one person in
     the world has; and failing both, the first word, kept as typed, because a
-    person who has already logged off can still be reported.
+    person who has already logged off can still be reported. A name shared
+    by several people here is refused before any delivery or cooldown (#4749).
 
     could is everybody in the world the name could mean (#4922), whichever
     one is picked or none: anybody a word of whose name starts with the first
@@ -193,24 +194,29 @@
   function whoAbout(words, people) {
     var line = words.join(' ').toLowerCase();
     var could = couldBe(words, people);
-    var best = null, bestName = '';
+    var first = String(words[0] || '').toLowerCase();
+    var same = [];
+    var best = null, bestName = '', bestCount = 0;
     for (var i = 0; i < people.length; i++) {
       var n = String(people[i].name || '').toLowerCase().trim();
       if (!n) { continue; }
+      if (n.split(/\s+/, 1)[0] === first) { same.push(people[i]); }
       if ((line === n || line.indexOf(n + ' ') === 0) && n.length > bestName.length) {
         best = people[i];
         bestName = n;
+        bestCount = 1;
+      } else if (best && n === bestName) {
+        bestCount++;
       }
     }
     if (best) {
+      // A one-word full name can also be another person's first name.
+      if (bestCount > 1 || (bestName === first && same.length > 1)) { return { ambiguous: true }; }
       var used = bestName.split(/\s+/).length;
       if (could.indexOf(best) < 0) { could.push(best); }
       return { name: best.name, person: best, could: could, rest: words.slice(used).join(' ').trim() };
     }
-    var first = String(words[0] || '').toLowerCase();
-    var same = people.filter(function (p) {
-      return String(p.name || '').toLowerCase().trim().split(/\s+/)[0] === first;
-    });
+    if (same.length > 1 || could.length > 1) { return { ambiguous: true }; }
     if (first && same.length === 1) {
       return { name: same[0].name, person: same[0], could: could, rest: words.slice(1).join(' ').trim() };
     }
@@ -292,6 +298,11 @@
         return;
       }
       about = whoAbout(words, people);
+      if (about.ambiguous) {
+        toProfile(profileId, 'That name matches more than one person. Use their full name. ' +
+          'If their full names are the same, use /helpme to explain which person you mean. Nothing was sent.');
+        return;
+      }
       said = about.rest;
       if (!said) {
         toProfile(profileId, 'Say what ' + about.name + ' did after the name, so staff know ' +
