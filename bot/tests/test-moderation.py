@@ -59,14 +59,25 @@ class AsyncioShim(object):
         return self._on_sleep(seconds)
 
 
+from types import SimpleNamespace
+from staff_copy_fixture import Room
+
+
 class FakeClient(object):
     guilds = []
+    user = SimpleNamespace(id=50)
+
+    def __init__(self, room):
+        self.room = room
 
     async def wait_until_ready(self):
         return None
 
     def is_closed(self):
         return False
+
+    def get_channel(self, cid):
+        return self.room if cid == self.room.id else None
 
 
 WORK = tempfile.mkdtemp(prefix='thornswood-moderation-')
@@ -98,9 +109,31 @@ def drive(steps):
     ticks = []
     state = {'i': 0}
     del LOGGED[:]
+    room = Room()
+    receipt_path = os.path.join(WORK, 'moderation-posts.json')
+    receipts = {}
+    for where, path in [('live', LIVE), ('dev', DEV)]:
+        try:
+            with open(path, encoding='utf-8') as prior:
+                lines = prior.read().splitlines()
+        except OSError:
+            continue
+        source = bot.source_key(where, path)
+        for line in lines:
+            try:
+                text = bot.moderation_text(where, json.loads(line))
+            except ValueError:
+                continue
+            if text:
+                message = room.add(text)
+                bot.remember_copy(receipts, source, bot.copy_key(line), message)
+    bot._state_write(receipt_path, receipts)
 
-    async def fake_say(text):
+    async def fake_say(text, *, channel=None, strict=False):
+        assert channel is None or channel is room
+        message = await room.send(text)
         said.append(text)
+        return message
 
     def on_sleep(seconds):
         ticks.append(list(said))
@@ -110,10 +143,13 @@ def drive(steps):
         steps[state['i']]()
         state['i'] += 1
 
-    keep = (bot.MODERATION_LOGS, bot.report_say, bot.client, bot.asyncio, bot.log)
+    keep = (bot.MODERATION_LOGS, bot.report_say, bot.client, bot.asyncio, bot.log,
+            bot.MODERATION_POSTS, bot._trouble_channel)
     bot.MODERATION_LOGS = [('live', LIVE), ('dev', DEV)]
     bot.report_say = fake_say
-    bot.client = FakeClient()
+    bot.client = FakeClient(room)
+    bot.MODERATION_POSTS = receipt_path
+    bot._trouble_channel = lambda: room
     bot.asyncio = AsyncioShim(on_sleep)
     bot.log = lambda *a: LOGGED.append(' '.join(str(x) for x in a))
     try:
@@ -122,7 +158,8 @@ def drive(steps):
         except Stop:
             pass
     finally:
-        (bot.MODERATION_LOGS, bot.report_say, bot.client, bot.asyncio, bot.log) = keep
+        (bot.MODERATION_LOGS, bot.report_say, bot.client, bot.asyncio, bot.log,
+         bot.MODERATION_POSTS, bot._trouble_channel) = keep
     return ticks
 
 
@@ -130,13 +167,13 @@ try:
     yes('bot.py has the watcher', all(hasattr(bot, n) for n in
         ('watch_moderation', 'moderation_text', 'MODERATION_LOGS', 'MODERATION_EVERY')))
 
-    # M1: what is there at start is said already.
+    # M1: explicitly confirmed prior copies do not repeat on restart.
     old = [row('warn', why='old', n=1)]
     put(LIVE, old)
     if os.path.exists(DEV):
         os.remove(DEV)
     ticks = drive([lambda: None])
-    yes('M1 nothing already in the file is said on start', all(t == [] for t in ticks))
+    yes('M1 actions with saved confirmed receipts do not repeat on start', all(t == [] for t in ticks))
 
     # M2: a new line is said once, with the server it came from.
     put(LIVE, old)
@@ -219,8 +256,11 @@ try:
                for i, (d, name, pid, why, _) in enumerate(cases)]
     ticks = drive([lambda: put(DEV, records)])
     yes('M8 the staff watcher says all five actions with their actor and details',
-        ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
-                       for _, _, _, _, words in cases]])
+        len(ticks) == 2 and ticks[0] == []
+        and [re.sub(r'\n-# Copy reference: [0-9a-f]{32}$', '', text) for text in ticks[1]]
+            == ['**Staff on the dev server:** Aela (profile 1001) ' + words
+                for _, _, _, _, words in cases]
+        and all(re.search(r'\n-# Copy reference: [0-9a-f]{32}$', text) for text in ticks[1]))
     # The site is server.js over its modules in site/lib since #5357; the hub's
     # writes are in those modules.
     site_dir = os.path.join(HERE, '..', 'site')
@@ -413,8 +453,9 @@ try:
         len(refused) == 1 and DEV in refused[0] and 'the dev server' in refused[0] and 'Error' in refused[0])
     yes('M13 said once, not at every look', len(refused) == 1)
     yes('M13 and once more when it can be read', len([l for l in LOGGED if 'can be read again' in l and DEV in l]) == 1)
-    yes('M13 nothing is said in the channel while it cannot be read, and a line after it opens is',
-        len(said) == 1 and 'removed Bjorn' in said[0] and said[0].startswith('**Staff on the dev server:**'))
+    yes('M13 unreadable input stays quiet; unacknowledged recovered and later actions are both said',
+        len(said) == 2 and 'before the bot could read it' in said[0]
+        and 'removed Bjorn' in said[1] and all(text.startswith('**Staff on the dev server:**') for text in said))
     if os.path.isdir(DEV):
         os.rmdir(DEV)
 finally:

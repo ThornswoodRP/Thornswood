@@ -62,14 +62,25 @@ class AsyncioShim(object):
         return self._on_sleep(seconds)
 
 
+from types import SimpleNamespace
+from staff_copy_fixture import Room
+
+
 class FakeClient(object):
     guilds = []
+    user = SimpleNamespace(id=50)
+
+    def __init__(self, room):
+        self.room = room
 
     async def wait_until_ready(self):
         return None
 
     def is_closed(self):
         return False
+
+    def get_channel(self, cid):
+        return self.room if cid == self.room.id else None
 
 
 WORK = tempfile.mkdtemp(prefix='thornswood-reports-')
@@ -100,7 +111,7 @@ def ticket(i):
             'from': 'the Discord bot'}
 
 
-def drive(start, steps):
+def drive(start, steps, acknowledged=None):
     """
     Run watch_reports over a file that starts as `start` and becomes each of
     `steps` in turn, one per sleep. Returns (seconds slept, what was said
@@ -110,9 +121,22 @@ def drive(start, steps):
     said = []
     ticks = []
     state = {'i': 0}
+    room = Room()
+    receipt_path = os.path.join(WORK, 'report-posts.json')
+    prior = start if acknowledged is None else acknowledged
+    receipts = {}
+    source = bot.source_key('reports', FILE)
+    for item in prior if isinstance(prior, list) else []:
+        if isinstance(item, dict) and item.get('id') and item.get('kind') not in ('ticket', 'problem'):
+            message = room.add(bot.report_text(item))
+            bot.remember_copy(receipts, source, bot.copy_key(str(item['id'])), message)
+    bot._state_write(receipt_path, receipts)
 
-    async def fake_say(text):
+    async def fake_say(text, *, channel=None, strict=False):
+        assert channel is None or channel is room
+        message = await room.send(text)
         said.append(text)
+        return message
 
     def on_sleep(seconds):
         ticks.append((seconds, list(said)))
@@ -123,11 +147,12 @@ def drive(start, steps):
         state['i'] += 1
 
     keep = (bot.REPORTS_FILE, bot.report_say, bot.client, bot._trouble_channel,
-            bot.asyncio)
+            bot.asyncio, bot.REPORT_POSTS)
     bot.REPORTS_FILE = FILE
     bot.report_say = fake_say
-    bot.client = FakeClient()
-    bot._trouble_channel = lambda: None
+    bot.client = FakeClient(room)
+    bot.REPORT_POSTS = receipt_path
+    bot._trouble_channel = lambda: room
     bot.asyncio = AsyncioShim(on_sleep)
     try:
         try:
@@ -136,7 +161,7 @@ def drive(start, steps):
             pass
     finally:
         (bot.REPORTS_FILE, bot.report_say, bot.client, bot._trouble_channel,
-         bot.asyncio) = keep
+         bot.asyncio, bot.REPORT_POSTS) = keep
     return ticks
 
 
@@ -153,11 +178,11 @@ if not HAS:
 try:
     EVERY = bot.REPORTS_EVERY
 
-    # R1: what is already there when the bot starts is treated as said, so a
-    #     restart is not the last two thousand reports all over again.
+    # R1: confirmed saved receipts keep previously posted reports from repeating.
+    # Unindexed offline arrivals are covered by test-4247-staff-copy-receipts.
     first = [report(2), report(1), ticket(1)]
     ticks = drive(first, [first, first])
-    yes('R1 nothing already in the file is said on start',
+    yes('R1 reports with confirmed saved receipts do not repeat on start',
         all(s == [] for _, s in ticks))
     yes('R1 and it looks again every REPORTS_EVERY seconds',
         [t for t, _ in ticks] == [EVERY, EVERY, EVERY])
@@ -201,10 +226,10 @@ try:
 
     # R6: the same at startup. The bot waits for a file it can read rather
     #     than starting from nothing and announcing everything in it.
-    ticks = drive('{half', [first, first])
+    ticks = drive('{half', [first, first], acknowledged=first)
     yes('R6 a file that will not parse at start is waited out',
         ticks[0][0] == 5)
-    yes('R6 and what was in it once it parsed is treated as said',
+    yes('R6 confirmed prior messages do not repeat when the source recovers',
         all(s == [] for _, s in ticks))
 
     # R7: no file at all is a site that has never had a report, and the first
