@@ -42,6 +42,15 @@ yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.
 yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
     !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
 yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
+const prTree = (/\n  checks:\n[\s\S]*?(?=\n  \w[\w-]*:\n|$)/.exec(pr) || [''])[0];
+yes('PR role derivation checks can read the retained commit without persisting credentials',
+    /persist-credentials: false\n\s+fetch-depth: 0\n\s+filter: blob:none/.test(prTree) &&
+    /python scripts\/dev\/Check-MerchantRoleCandidate\.py --allow-candidate/.test(prTree) &&
+    !/secrets\.|GH_TOKEN:|GITHUB_TOKEN:/.test(code(prTree)));
+yes('the Main build still checks exact generated merchant role data',
+    /python tests\/test-merchant-role-data\.py/.test(build) &&
+    /python scripts\/dev\/Build-MerchantRoleTables\.py --check/.test(build) &&
+    !/Check-MerchantRoleCandidate\.py/.test(build));
 // No workflow runs a pull request on the VPS, and none runs on
 // pull_request_target.
 const others = fs.readdirSync(WF).filter(f => /\.ya?ml$/.test(f)).filter(f => {

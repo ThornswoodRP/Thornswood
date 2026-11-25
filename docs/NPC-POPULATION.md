@@ -8,7 +8,7 @@ These are source policies and counts. Release proof is recorded separately.
 Named pets and named enemies are excluded even when their source record lacks the Unique flag.
 Merchant traders and exterior transport services remain available.
 
-[All retained spawn coordinates](NPC-SPAWNS.csv) and [animal habitat coordinates](HUNTING-SPOTS.csv)
+[All retained spawn coordinates](../game/data/NPC-SPAWNS.csv) and [animal habitat coordinates](../game/data/HUNTING-SPOTS.csv)
 list source identities, species, location, tier, cap, return interval and home radius.
 Each row is one authored identity, not a per-person spawn. A dead identity returns once after its
 listed interval; the deadline persists through restart. A corpse yields one shared dressing per life.

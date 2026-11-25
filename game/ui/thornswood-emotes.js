@@ -62,7 +62,7 @@
     '#thornswood-wheel .pins button,#thornswood-wheel .row button{box-sizing:border-box;font-family:inherit;cursor:pointer;',
     'border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
     'padding:0;width:28px;height:28px;font-size:14px}',
-    '#thornswood-wheel .pins button.on,#thornswood-wheel button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
+    '#thornswood-wheel .pins button.on,#thornswood-wheel button.go,#thornswood-wheel .row .nm:focus{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#thornswood-wheel .rows{overflow:auto;flex:1;min-height:0;border-top:1px solid rgba(198,170,109,.22);padding-top:8px}',
     '#thornswood-wheel .row{display:flex;align-items:center;margin-bottom:4px;',
     'border-bottom:1px solid rgba(198,170,109,.14)}',
@@ -97,7 +97,7 @@
     '<text id="thornswood-hubtext" x="0" y="1" font-family="Palatino Linotype, Palatino, Georgia, serif" font-size="13">STOP</text>' +
     '</svg></div>' +
     '<div class="side">' +
-    '<input id="thornswood-emote-find" placeholder="Search" autocomplete="off">' +
+    '<input id="thornswood-emote-find" placeholder="Search" aria-label="Search emotes" autocomplete="off">' +
     '<div class="pins" id="thornswood-emote-pins"></div>' +
     '<div class="rows" id="thornswood-emote-rows"></div>' +
     '</div>';
@@ -182,14 +182,19 @@
   }
 
   function drawPins() {
-    var html = '';
-    for (var i = 0; i < (slots.length || 8); i++) {
-      html += '<button data-pin="' + (i + 1) + '"' + (pin === i + 1 ? ' class="on"' : '') + '>' +
-              (i + 1) + '</button>';
-    }
-    pins.innerHTML = html;
     var buttons = pins.querySelectorAll('button');
+    if (buttons.length !== (slots.length || 8)) {
+      var html = '';
+      for (var i = 0; i < (slots.length || 8); i++) {
+        html += '<button data-pin="' + (i + 1) + '" aria-label="Assign to slot ' + (i + 1) + '">' +
+                (i + 1) + '</button>';
+      }
+      pins.innerHTML = html;
+      buttons = pins.querySelectorAll('button');
+    }
     for (var b = 0; b < buttons.length; b++) {
+      buttons[b].className = pin === b + 1 ? 'on' : '';
+      buttons[b].setAttribute('aria-pressed', pin === b + 1 ? 'true' : 'false');
       buttons[b].onclick = function () {
         var n = Number(this.getAttribute('data-pin'));
         pin = pin === n ? 0 : n;
@@ -274,14 +279,47 @@
   */
   document.addEventListener('keydown', function (e) {
     if (!open()) return;
-    if (e.repeat) return;
-    if (e.repeat) { e.preventDefault(); return; }
     var k = e.key || '';
-    if (searching() && k !== 'Escape' && k !== 'Tab') { return; }
+    // Repeating navigation is useful; repeating an activation must not play
+    // or assign another emote. Ordinary search text still belongs to the input.
+    if (searching() && k !== 'Escape' && k !== 'Tab' && k !== 'Enter' &&
+        k !== 'ArrowDown' && k !== 'ArrowUp') { return; }
+    if (e.repeat && k !== 'Tab' && k.indexOf('Arrow') !== 0) { e.preventDefault(); return; }
     if (k === 'Escape' || e.keyCode === 27) { e.preventDefault(); say('__close'); return; }
     if (k === 'Tab' || e.keyCode === 9) {
+      // Keep native traversal through every control. Only entering the wheel
+      // or crossing its ends needs an explicit focus move.
+      var controls = host.querySelectorAll('input,button,[tabindex="0"]');
+      var at = Array.prototype.indexOf.call(controls, document.activeElement);
+      if (at < 0 || (!e.shiftKey && at === controls.length - 1) || (e.shiftKey && at === 0)) {
+        e.preventDefault();
+        controls[e.shiftKey ? controls.length - 1 : 0].focus();
+      }
+      return;
+    }
+    var pinButtons = pins.querySelectorAll('button');
+    var rowButtons = rows.querySelectorAll('button[data-play]');
+    var pinAt = Array.prototype.indexOf.call(pinButtons, document.activeElement);
+    var rowAt = Array.prototype.indexOf.call(rowButtons, document.activeElement);
+    if (searching() && k === 'Enter') {
       e.preventDefault();
-      try { find.focus(); } catch (err) { }
+      if (rowButtons.length) { rowButtons[0].click(); }
+      return;
+    }
+    if ((k === 'ArrowLeft' || k === 'ArrowRight') && pinAt >= 0) {
+      e.preventDefault();
+      var nextPin = Math.max(0, Math.min(pinButtons.length - 1, pinAt + (k === 'ArrowLeft' ? -1 : 1)));
+      pinButtons[nextPin].focus();
+      return;
+    }
+    if ((k === 'ArrowDown' || k === 'ArrowUp') && (searching() || pinAt >= 0 || rowAt >= 0)) {
+      e.preventDefault();
+      if (k === 'ArrowUp' && (pinAt >= 0 || rowAt === 0)) { find.focus(); }
+      else if (rowButtons.length) {
+        var nextRow = rowAt < 0 ? (k === 'ArrowUp' ? rowButtons.length - 1 : 0) :
+                      Math.max(0, Math.min(rowButtons.length - 1, rowAt + (k === 'ArrowUp' ? -1 : 1)));
+        rowButtons[nextRow].focus();
+      }
       return;
     }
     if (!searching() && standChar && k.toLowerCase() === standChar) {

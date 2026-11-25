@@ -446,6 +446,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
 
       # What the box's content build writes is never committed (#5191,
       # stage 4e): the plugin and table checks below read the newest a merge
@@ -589,13 +591,13 @@ jobs:
       - name: Check inactive merchant role data
         shell: pwsh
         run: |
-          & python tests/test-merchant-role-data.py
+          & python tests/test-merchant-role-candidate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python scripts/dev/Check-MerchantRoleCandidate.py --allow-candidate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python tests/test-merchant-roster.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python tests/test-merchant-roster-activation.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & python scripts/dev/Build-MerchantRoleTables.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check the bot's keeping times
