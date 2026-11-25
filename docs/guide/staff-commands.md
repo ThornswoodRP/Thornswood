@@ -65,7 +65,7 @@ Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourse
 | `/bring <person>` | Moves them to you |
 | `/goto <person>` | Moves you to them |
 
-Somebody frozen stays frozen where they are sent.
+Somebody frozen stays frozen where another staff member sends them. Their own teleport commands are refused until they are released.
 
 ## Spawned creatures
 
