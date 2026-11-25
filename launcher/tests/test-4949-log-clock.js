@@ -41,4 +41,4 @@ namespace Thornswood {
  }
 }`;
 const dll=lc.build({sources:[code],files:[path.join(app,'Swallow.cs'),path.join(app,'LocalKeep.cs')],exe:true});
-const r=lc.run(dll);process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status||0;
+const r=lc.run(dll);process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status===0?0:1;
