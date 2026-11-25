@@ -835,7 +835,8 @@ $pick = ''
 if ($PutBack) { $keepTask = '$KeepTask = $true'; $pick = $putBackPick }
 $vars = (ServiceSwapVars $Root $stageName $prevName $Wait $hashes @() $TaskName) + $keepTask + "`r`n" + $pick
 $swapOut = @(Remote (@($vars, $voiceTools, $remote, $serviceSwapBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
-if (-not (Show-SwapResult $swapOut "$Root\.prev-<stamp>")) { Die 'voice was not swapped in. The lines above say what is running.' }
+$prevWhere = if ($PutBack) { "$Root\.undone-<stamp>" } else { "$Root\.prev-<stamp>" }
+if (-not (Show-SwapResult $swapOut $prevWhere)) { Die 'voice was not swapped in. The lines above say what is running.' }
 
 # ---------------------------------------------------------------- verify ----
 Head 'Checking from here'

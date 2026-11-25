@@ -120,7 +120,8 @@ def row(i, at, text='**Thing is down.** It stopped.'):
 T = 1790000000
 lines = ['not json', '{"id": "no-text", "at": %d}' % T, row('a', T),
          row('a', T + 1), row('old', T - 24 * 3600 - 1), row('b', T + 2),
-         '{"id": "", "at": %d, "text": "x"}' % T]
+         '{"id": "", "at": %d, "text": "x"}' % T,
+         row('blank', T, '   ')]
 got = bot.watch_alerts_due(lines, set(), T + 5)
 yes('W3 a line that is not a message is skipped, not the end of the rest',
     [g[0] for g in got] == ['a', 'b'])
