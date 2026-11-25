@@ -22,6 +22,9 @@ using one is anybody's.
   done the inputs are taken and the dye is in the pack. If the pack holds
   the inputs of more than one dye, the first in the list is made. One steep
   at a time, and a relog loses one under way.
+  The shared crafting check runs before starting and again before the inputs
+  are spent. Rest under 15 or a disease gone bad refuses the steep. Injury
+  follows the cooking spot's usual rule, which permits one-handed work.
 - **Why the cooking spot and not the loom.** A dye steeps in hot water,
   and the steep keeps the boil's rule that walking away from the fire loses
   it. The loom is the Tailor's own bench but has no fire, so a dye steeps at

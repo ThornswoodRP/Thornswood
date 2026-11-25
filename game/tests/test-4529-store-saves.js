@@ -146,7 +146,7 @@ function fnText(text, head) {
 }
 const P = block.property;
 const STORES = [
-  ['the property register', P, "var registerRead = storeRead(registerPath(), ", 'function save() {', /storeWrite\(registerPath\(\),[\s\S]*registerRead\)/, /writeFileSync\(registerPath\(\)/],
+  ['the property register', P, "var registerRead = storeRead(registerPath(), ", 'function save(durable) {', /storeWrite\(registerPath\(\), text, registerRead\)/, /writeFileSync\(registerPath\(\)/],
   ['law.json, the jail cells and held offices', P, "var lawRead = storeRead(lawPath(), ", 'function saveLaw() {', /storeWrite\(lawPath\(\),[\s\S]*lawRead\)/, /writeFileSync\(lawPath\(\)/],
   ['beds.json, the inn guests and kept takings', P, "var bedRead = storeRead(bedBookPath(), ", 'function saveBedBook() {', /storeWrite\(bedBookPath\(\),[\s\S]*bedRead\)/, /writeFileSync\(file, JSON\.stringify\(\{ guests/],
   ['benches.json', P, "var benchRead = storeRead(benchBookPath(), ", 'function saveBenchRefs() {', /storeWrite\(benchBookPath\(\),[\s\S]*benchRead\)/, /writeFileSync\(benchBookPath\(\)/],
