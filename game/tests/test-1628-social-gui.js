@@ -157,7 +157,7 @@ function world() {
     return new Function(
       'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
-      'JSON', 'isFinite', 'parseInt',
+      'JSON', 'isFinite', 'parseInt', 'require',
       require('../../tests/fixtures/ordinary-quest-items') + block)(
       g, mp, { now: function () { return clock.now; } },
       { log: function () { } },
@@ -165,7 +165,7 @@ function world() {
       function (n, f) { return f; },
       function (id, line) { said.push({ to: id, line: line }); },
       function (id, line) { said.push({ to: id, line: line }); },
-      Math, Number, String, Object, Array, JSON, isFinite, parseInt);
+      Math, Number, String, Object, Array, JSON, isFinite, parseInt, require);
   }
   run(social);
   run(trade);

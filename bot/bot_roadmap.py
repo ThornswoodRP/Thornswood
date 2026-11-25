@@ -5,11 +5,12 @@ forums and the lists.
 Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
+import json
 import os
 import re
 import urllib.parse
 
-from bot_core import _state_read, _state_write, client, log
+from bot_core import _state_write, client, log
 from bot_testing import (DEV_TASKS_NAME, KNOWN_NAME, KNOWN_STATE, SETUP_STATE,
     TASKS_NAME, _channel_named, _setup_rec, _utc_stamp, dev_tasks_forum)
 from bot_github import (GITHUB_API, KNOWN_EVERY, KNOWN_REPO, _github_get,
@@ -17,6 +18,7 @@ from bot_github import (GITHUB_API, KNOWN_EVERY, KNOWN_REPO, _github_get,
 from bot_task_text import _marked, strip_footer
 from bot_post_rules import post_problems, refuse
 from bot_forums import dev_tasks_once, known_issues_once, test_tasks_once
+from bot_reports import report_say
 
 
 # Issue #3140 (Patrick): the site's Known Issues page and its roadmap are built
@@ -172,21 +174,56 @@ def _known_save(state, path=None):
     state.pop('_dirty', None)
 
 
+def _known_read():
+    """This index must be an object; broken input is never an empty index."""
+    try:
+        with open(KNOWN_STATE, encoding='utf-8') as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return {}  # Preserve the first-start behavior before an index exists.
+    except (OSError, ValueError):
+        return None
+    return state if isinstance(state, dict) else None
+
+
 async def watch_known_issues():
     await client.wait_until_ready()
-    if not github_token():
-        log('known issues: no GitHub token (GITHUB_TOKEN_FILE or GITHUB_TOKEN), so #%s, #%s and '
-            '#%s are not kept' % (KNOWN_NAME, TASKS_NAME, DEV_TASKS_NAME))
-        return
-    state = _state_read(KNOWN_STATE)
-    if state is None:
-        log('known issues: %s will not read, so nothing is posted until it is '
-            'fixed by hand (posting from empty would double every post)'
-            % KNOWN_STATE)
-        return
+    state = None
+    blocked_before = ''
+    warning_attempted = False
     said_text = said_dev = said_lists = False
     while not client.is_closed():
         try:
+            token_ready = bool(github_token())
+            disk_state = _known_read() if token_ready else None
+            blocked = ('no GitHub token is available (GITHUB_TOKEN_FILE or GITHUB_TOKEN).'
+                       if not token_ready else
+                       'the saved known-issues index cannot be read as an object. Repair known-issues.json.'
+                       if disk_state is None else '')
+            if blocked:
+                if blocked != blocked_before:
+                    blocked_before, warning_attempted = blocked, False
+                    log('known issues: updates paused: ' + blocked)
+                if not warning_attempted:
+                    # One best-effort warning per condition episode. An unknown
+                    # send outcome must not cause repeated staff posts.
+                    warning_attempted = True
+                    try:
+                        await report_say('Known-issue and test-task updates are paused: ' + blocked +
+                                         ' No forum or site-list updates will run until it is restored.')
+                    except Exception as e:
+                        # A warning failure is not a failed forum pass: it must
+                        # never save dirty live metadata over the blocked index.
+                        log('known issues: staff warning could not be confirmed (%s); '
+                            'updates remain paused' % type(e).__name__)
+                await asyncio.sleep(KNOWN_EVERY)
+                continue
+            if state is None:
+                state = disk_state
+            # Readability probes never replace live partial-save metadata.
+            if blocked_before:
+                log('known issues: prerequisites restored; updates are resuming')
+                blocked_before = ''
             known = tasks = dev = None
             for g in client.guilds:
                 known = known or _channel_named(g, KNOWN_NAME, ('forum',))
@@ -248,7 +285,7 @@ async def watch_known_issues():
             log('known issues: a pass failed: %s' % pass_failure(e))
             # What it read before it failed is kept, so the next pass does
             # not read it again, after a restart as well (#5184).
-            if state.get('_dirty'):
+            if state is not None and state.get('_dirty'):
                 try:
                     _known_save(state)
                 except OSError as e2:

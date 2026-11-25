@@ -10,7 +10,7 @@ let pass=0,fail=0;
 function yes(name,ok){console.log((ok?'PASS ':'FAIL ')+name);ok?pass++:fail++;}
 function rig(){
   const p=makePage();p.run('bridge',bridge);p.run('trade',source);
-  const view={open:true,them:'Aldis',myGold:12,theirGold:5,heldGold:100,iAgreed:false,theyAgreed:true,
+  const view={open:true,offerVersion:'a'.repeat(48),them:'Aldis',myGold:12,theirGold:5,heldGold:100,iAgreed:false,theyAgreed:true,
     pack:[{n:'Iron Sword',c:3,k:'Weapons',id:'12eb7'}],mine:[{n:'Iron Sword',c:1,id:'12eb7'}],theirs:[]};
   p.win.thornswoodTrade.setData(view);p.view=view;
   p.api=p.win.thornswoodTrade;
@@ -58,6 +58,6 @@ for(const name of ['gold','find']){
   const p=rig();p.doc.getElementById('ts-trade-cancel').click();
   yes('the explicit Walk away button still cancels the trade',p.sent.length===1&&p.sent[0]==='/trade cancel');
   const q=rig();q.doc.getElementById('ts-trade-ok').click();
-  yes('the explicit Agree button retains its existing request',q.sent.length===1&&q.sent[0]==='/trade ok');
+  yes('the explicit Agree button sends the displayed offer version',q.sent.length===1&&q.sent[0]==='/trade agree '+q.view.offerVersion);
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

@@ -24238,6 +24238,115 @@ module.exports = {
     return true;
   }
 
+  // The blank and named mold may belong to different people. Every write
+  // compares the actual inventory and receipt; a publication exception is
+  // classified by readback, never assumed to mean the write was refused.
+  function handMold(actorId, profileId, owner, building) {
+    var merchants = globalThis.__thornswoodMerchantTrade;
+    var untouched = 'The mold could not be handed over. Your blank was not spent.';
+    var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
+    var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
+      'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
+        !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
+      return {ok:false,why:untouched};
+    }
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    function identity(s) {
+      return Number(mp.get(s.actor, 'profileId')) === s.profile &&
+        mp.getActorRuntimeIdentity(s.actor) === s.runtime;
+    }
+    function read(actor) {
+      var profile = Number(mp.get(actor, 'profileId')), runtime = mp.getActorRuntimeIdentity(actor);
+      var desc = mp.getDescFromId(actor), receipt = mp.getInventoryReceipt(actor);
+      var inventory = mp.get(actor, 'inventory');
+      if (!Number.isSafeInteger(profile) || profile <= 0 || typeof runtime !== 'string' ||
+          !/^[1-9][0-9]{0,19}$/.test(runtime) || typeof desc !== 'string' || !desc ||
+          typeof receipt !== 'string' || mp.validateInventoryTransaction(inventory) !== true) {
+        throw new Error('Mold inventory is unavailable');
+      }
+      var old = JSON.parse(receipt), sequence = old === null ? 1 : old.sequence + 1;
+      if (old !== null && (!old || Object.keys(old).length !== 3 || old.actor !== desc ||
+          old.profile !== profile || !Number.isSafeInteger(old.sequence) || old.sequence < 1) ||
+          !Number.isSafeInteger(sequence)) { throw new Error('Mold receipt is unavailable'); }
+      var s = {actor:actor,profile:profile,runtime:runtime,desc:desc,receipt:receipt,sequence:sequence,
+        inventory:JSON.parse(JSON.stringify(inventory))};
+      if (!identity(s)) { throw new Error('Mold actor changed'); }
+      return s;
+    }
+    function matches(s) {
+      return identity(s) && mp.getInventoryReceipt(s.actor) === s.receipt &&
+        same(mp.get(s.actor, 'inventory'), s.inventory);
+    }
+    function replace(s, next, alive) {
+      try {
+        if (!alive() || !matches(s) || mp.validateInventoryTransaction(next) !== true) {
+          return {state:'unknown'};
+        }
+        try {
+          mp.compareAndSetInventory(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile);
+        } catch (e) {
+          plog('mold inventory write needs readback for', s.actor.toString(16));
+        }
+        var committed = Object.assign({}, s, {inventory:next,sequence:s.sequence+1,
+          receipt:JSON.stringify({actor:s.desc,profile:s.profile,sequence:s.sequence})});
+        if (alive() && matches(committed)) { return {state:'committed',snapshot:committed}; }
+        if (alive() && matches(s)) { return {state:'unchanged'}; }
+      } catch (e) { /* Unknown writes are never replayed or compensated. */ }
+      return {state:'unknown'};
+    }
+    try {
+      var entered = false;
+      function handover(human, alive, recipient) {
+        entered = true;
+        var source, target, debit, named;
+        try {
+          source = read(actorId);
+          target = self ? source : read(owner.actorId);
+          if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
+              target.profile !== owner.profileId ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
+              mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
+              mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
+            return {ok:false,why:untouched};
+          }
+          debit = blankMoldAfter(source.inventory);
+          if (!debit) { return {ok:false,why:untouched}; }
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
+          named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
+          if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
+            return {ok:false,why:untouched};
+          }
+        } catch (e) { return {ok:false,why:untouched}; }
+        if (self) {
+          var converted = replace(source, named, alive);
+          return converted.state === 'committed' ? {ok:true} :
+            {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
+              uncertain:converted.state === 'unknown'};
+        }
+        var taken = replace(source, debit, alive);
+        if (taken.state !== 'committed') {
+          return {ok:false,why:taken.state === 'unchanged' ? untouched : unknown,
+            uncertain:taken.state === 'unknown'};
+        }
+        var handed = replace(target, named, alive);
+        if (handed.state === 'committed') { return {ok:true}; }
+        if (handed.state !== 'unchanged') { return {ok:false,why:unknown,uncertain:true}; }
+        var restored = replace(taken.snapshot, source.inventory, alive);
+        return restored.state === 'committed' ?
+          {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
+          {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
+            uncertain:restored.state === 'unknown'};
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
+      return entered ? result : {ok:false,why:untouched};
+    } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
+  }
+
   /*
     May this person walk through that building's doors.
 
@@ -24510,13 +24619,17 @@ module.exports = {
       over by hand, which is the point: the switch is the plugin.
     */
     if (blankMoldsExist()) {
-      if (!takeBlankMold(actorId)) {
+      if (!carriesBlankMold(actorId)) {
         toProfile(profileId, 'You are carrying no blank key mold. Forge one at a forge, one iron ' +
                              'ingot, then bring it back to this door.');
         return true;
       }
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
+      var stamped = handMold(actorId, profileId, owner, building);
+      if (!stamped.ok) {
+        toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
+        return true;
+      }
+    } else if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
       toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
       return true;
     }
@@ -24644,13 +24757,9 @@ module.exports = {
                            'from that one.');
       return true;
     }
-    if (!takeBlankMold(actorId)) {
-      toProfile(profileId, 'You are carrying no blank key mold. A smith forges one at a forge ' +
-                           'out of one iron ingot.');
-      return true;
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
-      toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
+    var stamped = handMold(actorId, profileId, owner, building);
+    if (!stamped.ok) {
+      toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
       return true;
     }
     plog('a mold for', nameOf(building), 'was pressed at the door for', held.name);
@@ -25039,17 +25148,26 @@ module.exports = {
     if (!baseId) { return false; }
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { return false; }
-    var entries = (inv && inv.entries) || [];
+    var next = blankMoldAfter(inv);
+    if (!next) { return false; }
+    try { mp.set(actorId, 'inventory', next); } catch (e2) { return false; }
+    return true;
+  }
+
+  /** A replacement which spends one blank, retaining every other entry. */
+  function blankMoldAfter(inv) {
+    var baseId = idOf(MOLD);
+    if (!baseId || !inv || !Array.isArray(inv.entries)) { return null; }
+    var next = JSON.parse(JSON.stringify(inv)), entries = next.entries;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (!e || !(e.count > 0) || e.baseId !== baseId) { continue; }
       if (e.name) { continue; }
       if (e.count > 1) { e.count = e.count - 1; }
       else { entries.splice(i, 1); }
-      try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return false; }
-      return true;
+      return next;
     }
-    return false;
+    return null;
   }
 
   /** The building whose mold is in this pack, or null. One at a time is enough. */
@@ -46457,24 +46575,28 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       /*
         A trade that is already open takes verbs rather than a name.
 
-        add, remove, gold, ok and cancel, and the panel sends exactly the same
-        lines, the same way the J panel sends /journal. One way in.
+        add, remove, gold, agree and cancel, and the panel sends exactly the
+        same lines. Agree names a version with a verb older servers never
+        interpret as an approval.
       */
       if (word === '/trade') {
         var tr2 = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTrade;
         if (!tr2) { toProfile(profileId, 'Trading is not running on this server.'); return true; }
-        if (String(parts[1] || '').toLowerCase() === 'refresh') {
+        var verb = String(parts[1] || '').toLowerCase();
+        if (verb === 'refresh' || verb === 'ok') {
           tr2.refresh(actorId);
+          if (verb === 'ok') {
+            toProfile(profileId, 'The trade window is out of date. Close the game, let the launcher update, then rejoin before trading.');
+          }
           return true;
         }
         var live = tr2.tradeOf(actorId);
-        var verb = String(parts[1] || '').toLowerCase();
-        if (live || verb === 'cancel' || verb === 'ok' || verb === 'add' ||
+        if (live || verb === 'cancel' || verb === 'agree' || verb === 'add' ||
             verb === 'remove' || verb === 'gold' || verb === 'pack' || verb === 'sale') {
           if (!live) { toProfile(profileId, 'You are not trading.'); return true; }
           var out = '';
           if (verb === 'cancel') { out = tr2.cancel(actorId); }
-          else if (verb === 'ok') { out = tr2.confirm(actorId); }
+          else if (verb === 'agree') { out = tr2.confirm(actorId, parts.length === 3 ? parts[2] : undefined); }
           else if (verb === 'gold') { out = tr2.gold(actorId, parts[2]); }
           // The panel's Buy for the company (#1393). Never typed.
           else if (verb === 'sale') { out = tr2.sale(actorId); }
@@ -61061,6 +61183,11 @@ module.exports = {
     if (t.a === actorId) { t.okA = v; } else { t.okB = v; }
   }
 
+  // A public offer identifier, not an ownership credential. Fresh random
+  // versions scope every session and mutation across reloads/restarts without
+  // a resettable counter or an overflow. Crypto failure never falls back.
+  function freshOfferVersion() { return require('crypto').randomBytes(24).toString('hex'); }
+
   /*
     Any change to either pile takes BOTH confirmations back.
 
@@ -61069,7 +61196,14 @@ module.exports = {
     swap goes through on an agreement that no longer describes what is in the
     piles.
   */
-  function unconfirm(t) { t.okA = false; t.okB = false; t.at = Date.now(); }
+  function unconfirm(t, saleCuts) {
+    // Invalidate first: if minting fails, the changed pile can never retain
+    // an old valid approval or version. An unversioned offer cannot agree.
+    t.offerVersion = '';
+    t.okA = false; t.okB = false; t.at = Date.now();
+    t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
+    t.offerVersion = freshOfferVersion();
+  }
 
   function begin(aActor, bActor) {
     if (open[aActor]) { return 'You are already trading.'; }
@@ -61079,8 +61213,10 @@ module.exports = {
       a: aActor, b: bActor,
       offerA: [], offerB: [], goldA: 0, goldB: 0,
       okA: false, okB: false, at: Date.now(),
+      offerVersion: freshOfferVersion(),
       // The company worker buying, when it is a sale out of Skyrim (#1393).
       sale: 0,
+      saleCuts: null,
       // The number the panel names each piece by, for this trade (#1718).
       keys: {}, pieces: []
     };
@@ -61444,18 +61580,49 @@ module.exports = {
     return '';
   }
 
-  /* The split of the price as the panel shows it to either side. */
-  function saleView(t, actorId) {
+  // Read the one canonical policy and snapshot only its actual payout. No
+  // guessed/default split is safe to agree to when terms are unavailable.
+  function currentSaleCuts(t) {
+    if (!t.sale) { return null; }
     var pr = g.__thornswoodProperty;
     var price = t.sale === t.a ? t.goldA : t.goldB;
-    var cuts = (pr && pr.saleCuts && pr.saleCuts(price)) || { price: price, worker: 0, gone: 0, seller: price };
-    return { mine: t.sale === actorId, worker: nameOf(t.sale), price: cuts.price,
-             cut: cuts.worker, gone: cuts.gone, seller: cuts.seller };
+    if (!(price > 0) || !pr || typeof pr.saleCuts !== 'function') { return null; }
+    var cuts = pr.saleCuts(price);
+    if (!cuts || !['price', 'worker', 'gone', 'seller'].every(function (key) {
+      return Number.isSafeInteger(cuts[key]) && cuts[key] >= 0;
+    }) || cuts.price !== price || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
+    return { price: cuts.price, worker: cuts.worker, gone: cuts.gone, seller: cuts.seller };
   }
 
-  function confirm(actorId) {
+  function sameSaleCuts(a, b) {
+    return !!a && !!b && a.price === b.price && a.worker === b.worker && a.gone === b.gone && a.seller === b.seller;
+  }
+
+  /* The captured split this version shows, never a live unapproved split. */
+  function saleView(t, actorId) {
+    var cuts = t.saleCuts;
+    return { mine: t.sale === actorId, worker: nameOf(t.sale), available: !!cuts,
+             price: t.sale === t.a ? t.goldA : t.goldB,
+             cut: cuts ? cuts.worker : null, gone: cuts ? cuts.gone : null, seller: cuts ? cuts.seller : null };
+  }
+
+  function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
+        offerVersion !== t.offerVersion) {
+      refresh(actorId);
+      return 'The trade offer changed or the window is out of date. Read both piles and press Agree again.';
+    }
+    if (t.sale) {
+      var cuts = currentSaleCuts(t);
+      if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+        unconfirm(t, cuts); push(t);
+        if (!((t.sale === t.a ? t.goldA : t.goldB) > 0)) { return nameOf(t.sale) + ' has put up no gold for it.'; }
+        return cuts ? 'The company payout changed. Read the trade and press Agree again.'
+          : 'The company payout is unavailable. Put up a valid price and read the trade again before agreeing.';
+      }
+    }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
     push(t);
@@ -61589,8 +61756,11 @@ module.exports = {
         return refuse(nameOf(seller) + ' does not have the ' + things[i].n + ' any more.');
       }
     }
-    var cuts = pr.saleCuts(price);
-    if (!cuts) { return refuse('The company\'s terms are not loaded on this server. Say so in the dev channel.'); }
+    var cuts = currentSaleCuts(t);
+    if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+      unconfirm(t, cuts); push(t);
+      return 'The company payout changed or is unavailable. Read the trade and press Agree again.';
+    }
     var cost = cuts.price - cuts.worker;
     var sold = saleById(seller, worker, things, cuts.seller, cost);
     if (sold === false) {
@@ -61610,14 +61780,14 @@ module.exports = {
     var me = nameOf(worker), them = nameOf(seller);
     try {
       say(seller, 'Sold to the Free Skyrim Trading Company for ' + cuts.price + ' gold. ' + what +
-          ' left Skyrim. ' + (cuts.worker
+          ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'You receive ' + cuts.seller + ': ' + cuts.worker + ' went to ' + me + ' for handling it, and ' +
               cuts.gone + ' left the world.'
-            : 'Under 10 gold nothing is cut, and you receive the whole ' + cuts.price + '.'));
-      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut, and you receive the whole ' : 'Nothing is cut, and you receive the whole ') + cuts.price + '.'));
+      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'It cost you ' + cost + ': your ' + cuts.worker + ' for handling it stays with you, ' + cuts.gone +
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
-            : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut: ' : 'Nothing is cut: ') + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
     ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
@@ -61676,9 +61846,11 @@ module.exports = {
     for (var i = 0; i < things.length; i++) { pairs.push([things[i].id, things[i].c, things[i].x]); }
     var gone = withoutPairs((sellerInv.entries || []).slice(), pairs);
     var paid = withoutPairs((workerInv.entries || []).slice(), [[GOLD, cost]]);
-    if (!gone || !paid || !(share > 0) || !(cost >= share)) { return false; }
-    var landed = false;
-    for (var k = 0; k < gone.length; k++) {
+    if (!gone || !paid || !(share >= 0) || !(cost >= share)) { return false; }
+    // Canonical terms may leave the seller zero. Credit no coins in that
+    // case, preserving existing coin metadata and never creating count 0.
+    var landed = share === 0;
+    for (var k = 0; share > 0 && k < gone.length; k++) {
       if (gone[k] && gone[k].baseId === GOLD && !gone[k].worn) {
         gone[k] = { baseId: GOLD, count: (gone[k].count || 1) + share };
         landed = true;
@@ -61894,6 +62066,7 @@ module.exports = {
     var meA = t.a === actorId;
     return {
       open: true,
+      offerVersion: t.offerVersion,
       them: nameOf(other(t, actorId)),
       mine: shown(t, meA ? t.offerA : t.offerB),
       theirs: shown(t, meA ? t.offerB : t.offerA),
@@ -65101,7 +65274,8 @@ module.exports = {
                  point, a mage's spell point, an Enchanter's staff spell
                  point. The count toward the next rank starts again at 0, as
                  it does when work raises the rank (professions.md).
-    A recipe     recipes asked by what they make, for that person. A recipe
+    A recipe     owned recipes and kept smelts asked by what they make, for that person.
+                 Unowned recipes are outside this check. A recipe
                  is stuck for one of four reasons, and the card names which:
                    - the craft gate refuses it, and says why (a rank, a half,
                      a race, a roll), which the rank tool or the person's own
@@ -65132,7 +65306,7 @@ module.exports = {
   /craftstaff is a line the page sends, never one anybody is told to type:
     pick <profile>|-                     the person the card is for, or nobody
     raise <profile> <key>                one rank up in that class, half or school
-    recipe <profile> <words>             what the gate says about recipes making that
+    recipe <profile> <words>             what the gate says about owned recipes and kept smelts making that
     recipes <profile>                    hand their game the gate's list now
     give <profile> <n> <item> | <why>    give back n of an item, with the reason
 */
@@ -65332,7 +65506,7 @@ module.exports = {
       var asked = words.slice(2).join(' ').trim().slice(0, ASK_MOST);
       if (!asked) { tell(pid, 'Type part of the name of what the recipe makes, then press Check.'); return true; }
       state.checks[pid] = { pid: whoPid, want: asked };
-      if (!recipeRows(asked).rows.length) { tell(pid, 'No recipe anybody owns makes anything called ' + asked + '.'); }
+      if (!recipeRows(asked).rows.length) { tell(pid, 'This check found no owned recipe or kept smelt making ' + asked + '. Unowned recipes are outside this check.'); }
       redraw(actorId);
       return true;
     }
@@ -68252,12 +68426,13 @@ function createSettlement(deps) {
       return all;
     } catch(error) {active=false;throw error;}
   }
-  function admitted(human, reference, reserveCapacity) {
+  function admitted(human, reference, reserveCapacity, recipientKey) {
     var pending = records(), key = humanKey(human);
     if (!key || reserveCapacity!==false && pending.length >= MAX_PENDING) return false;
     return pending.every(function (record) {
       var other = record.state.pending.human;
-      return humanKey(other) && humanKey(other) !== key && record.reference !== reference;
+      var otherKey = humanKey(other);
+      return otherKey && otherKey !== key && otherKey !== recipientKey && record.reference !== reference;
     });
   }
   function save(id, state, next, intentId, caller) {
@@ -68491,20 +68666,38 @@ function createSettlement(deps) {
       return changed;
     } finally { busy = false; }
   }
-  function withInventoryMutation(actorId,change) {
+  function inventoryMutationLease(actorId,change,recipientId) {
     if(!available() || busy)return {ok:false,why:'unavailable'};
     busy=true;
     var leased=true;
     try {
       var human=transfer.identity(actorId);
-      if(!human || !admitted(human,'',false))return {ok:false,why:'waiting'};
+      var recipient, recipientKey;
+      if (recipientId !== undefined) {
+        recipient = transfer.identity(recipientId);
+        recipientKey = humanKey(recipient);
+        if (!recipientKey || recipientKey === humanKey(human)) return {ok:false,why:'waiting'};
+      }
+      if(!human || !admitted(human,'',false,recipientKey))return {ok:false,why:'waiting'};
       if(transfer.saved(actorId)!==transfer.receipt(actorId))return {ok:false,why:'waiting'};
+      if(recipient && transfer.saved(recipientId)!==transfer.receipt(recipientId))return {ok:false,why:'waiting'};
       if(!active)return {ok:false,why:'unavailable'};
-      var result=change(human,function(){return active && leased;});
+      var alive = function(){return active && leased;};
+      var result = recipient ? change(human,alive,recipient) : change(human,alive);
       // Unknown receipts revoke all writers until a reload reads durable state.
       if(result && result.uncertain)active=false;
       return result;
     } finally {leased=false;busy=false;}
+  }
+  function withInventoryMutation(actorId,change) {
+    return inventoryMutationLease(actorId,change);
+  }
+  // A saved receipt alone does not prove that the next sequence is free.
+  // Hold both identities against the same pending-record check and lease.
+  function withPairedInventoryMutation(actorId,recipientId,change) {
+    if (!Number.isInteger(recipientId) || recipientId <= 0 || recipientId > 0xffffffff || recipientId === actorId)
+      return {ok:false,why:'unavailable'};
+    return inventoryMutationLease(actorId,change,recipientId);
   }
   function canInventoryMutation(actorId) {
     if(!available() || busy)return false;
@@ -68548,7 +68741,8 @@ function createSettlement(deps) {
     return how;
   }
   return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
-    withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
+    withInventoryMutation:withInventoryMutation,withPairedInventoryMutation:withPairedInventoryMutation,
+    canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 
 module.exports = {createSettlement:createSettlement,stockRows:stockRows,inventory:inventory,takeEntries:takeEntries,
@@ -70794,6 +70988,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;

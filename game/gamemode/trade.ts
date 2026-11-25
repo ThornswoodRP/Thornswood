@@ -89,6 +89,11 @@
     if (t.a === actorId) { t.okA = v; } else { t.okB = v; }
   }
 
+  // A public offer identifier, not an ownership credential. Fresh random
+  // versions scope every session and mutation across reloads/restarts without
+  // a resettable counter or an overflow. Crypto failure never falls back.
+  function freshOfferVersion() { return require('crypto').randomBytes(24).toString('hex'); }
+
   /*
     Any change to either pile takes BOTH confirmations back.
 
@@ -97,7 +102,14 @@
     swap goes through on an agreement that no longer describes what is in the
     piles.
   */
-  function unconfirm(t) { t.okA = false; t.okB = false; t.at = Date.now(); }
+  function unconfirm(t, saleCuts) {
+    // Invalidate first: if minting fails, the changed pile can never retain
+    // an old valid approval or version. An unversioned offer cannot agree.
+    t.offerVersion = '';
+    t.okA = false; t.okB = false; t.at = Date.now();
+    t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
+    t.offerVersion = freshOfferVersion();
+  }
 
   function begin(aActor, bActor) {
     if (open[aActor]) { return 'You are already trading.'; }
@@ -107,8 +119,10 @@
       a: aActor, b: bActor,
       offerA: [], offerB: [], goldA: 0, goldB: 0,
       okA: false, okB: false, at: Date.now(),
+      offerVersion: freshOfferVersion(),
       // The company worker buying, when it is a sale out of Skyrim (#1393).
       sale: 0,
+      saleCuts: null,
       // The number the panel names each piece by, for this trade (#1718).
       keys: {}, pieces: []
     };
@@ -472,18 +486,49 @@
     return '';
   }
 
-  /* The split of the price as the panel shows it to either side. */
-  function saleView(t, actorId) {
+  // Read the one canonical policy and snapshot only its actual payout. No
+  // guessed/default split is safe to agree to when terms are unavailable.
+  function currentSaleCuts(t) {
+    if (!t.sale) { return null; }
     var pr = g.__thornswoodProperty;
     var price = t.sale === t.a ? t.goldA : t.goldB;
-    var cuts = (pr && pr.saleCuts && pr.saleCuts(price)) || { price: price, worker: 0, gone: 0, seller: price };
-    return { mine: t.sale === actorId, worker: nameOf(t.sale), price: cuts.price,
-             cut: cuts.worker, gone: cuts.gone, seller: cuts.seller };
+    if (!(price > 0) || !pr || typeof pr.saleCuts !== 'function') { return null; }
+    var cuts = pr.saleCuts(price);
+    if (!cuts || !['price', 'worker', 'gone', 'seller'].every(function (key) {
+      return Number.isSafeInteger(cuts[key]) && cuts[key] >= 0;
+    }) || cuts.price !== price || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
+    return { price: cuts.price, worker: cuts.worker, gone: cuts.gone, seller: cuts.seller };
   }
 
-  function confirm(actorId) {
+  function sameSaleCuts(a, b) {
+    return !!a && !!b && a.price === b.price && a.worker === b.worker && a.gone === b.gone && a.seller === b.seller;
+  }
+
+  /* The captured split this version shows, never a live unapproved split. */
+  function saleView(t, actorId) {
+    var cuts = t.saleCuts;
+    return { mine: t.sale === actorId, worker: nameOf(t.sale), available: !!cuts,
+             price: t.sale === t.a ? t.goldA : t.goldB,
+             cut: cuts ? cuts.worker : null, gone: cuts ? cuts.gone : null, seller: cuts ? cuts.seller : null };
+  }
+
+  function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
+        offerVersion !== t.offerVersion) {
+      refresh(actorId);
+      return 'The trade offer changed or the window is out of date. Read both piles and press Agree again.';
+    }
+    if (t.sale) {
+      var cuts = currentSaleCuts(t);
+      if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+        unconfirm(t, cuts); push(t);
+        if (!((t.sale === t.a ? t.goldA : t.goldB) > 0)) { return nameOf(t.sale) + ' has put up no gold for it.'; }
+        return cuts ? 'The company payout changed. Read the trade and press Agree again.'
+          : 'The company payout is unavailable. Put up a valid price and read the trade again before agreeing.';
+      }
+    }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
     push(t);
@@ -617,8 +662,11 @@
         return refuse(nameOf(seller) + ' does not have the ' + things[i].n + ' any more.');
       }
     }
-    var cuts = pr.saleCuts(price);
-    if (!cuts) { return refuse('The company\'s terms are not loaded on this server. Say so in the dev channel.'); }
+    var cuts = currentSaleCuts(t);
+    if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+      unconfirm(t, cuts); push(t);
+      return 'The company payout changed or is unavailable. Read the trade and press Agree again.';
+    }
     var cost = cuts.price - cuts.worker;
     var sold = saleById(seller, worker, things, cuts.seller, cost);
     if (sold === false) {
@@ -638,14 +686,14 @@
     var me = nameOf(worker), them = nameOf(seller);
     try {
       say(seller, 'Sold to the Free Skyrim Trading Company for ' + cuts.price + ' gold. ' + what +
-          ' left Skyrim. ' + (cuts.worker
+          ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'You receive ' + cuts.seller + ': ' + cuts.worker + ' went to ' + me + ' for handling it, and ' +
               cuts.gone + ' left the world.'
-            : 'Under 10 gold nothing is cut, and you receive the whole ' + cuts.price + '.'));
-      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut, and you receive the whole ' : 'Nothing is cut, and you receive the whole ') + cuts.price + '.'));
+      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'It cost you ' + cost + ': your ' + cuts.worker + ' for handling it stays with you, ' + cuts.gone +
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
-            : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut: ' : 'Nothing is cut: ') + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
     ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
@@ -704,9 +752,11 @@
     for (var i = 0; i < things.length; i++) { pairs.push([things[i].id, things[i].c, things[i].x]); }
     var gone = withoutPairs((sellerInv.entries || []).slice(), pairs);
     var paid = withoutPairs((workerInv.entries || []).slice(), [[GOLD, cost]]);
-    if (!gone || !paid || !(share > 0) || !(cost >= share)) { return false; }
-    var landed = false;
-    for (var k = 0; k < gone.length; k++) {
+    if (!gone || !paid || !(share >= 0) || !(cost >= share)) { return false; }
+    // Canonical terms may leave the seller zero. Credit no coins in that
+    // case, preserving existing coin metadata and never creating count 0.
+    var landed = share === 0;
+    for (var k = 0; share > 0 && k < gone.length; k++) {
       if (gone[k] && gone[k].baseId === GOLD && !gone[k].worn) {
         gone[k] = { baseId: GOLD, count: (gone[k].count || 1) + share };
         landed = true;
@@ -922,6 +972,7 @@
     var meA = t.a === actorId;
     return {
       open: true,
+      offerVersion: t.offerVersion,
       them: nameOf(other(t, actorId)),
       mine: shown(t, meA ? t.offerA : t.offerB),
       theirs: shown(t, meA ? t.offerB : t.offerA),

@@ -1,3 +1,4 @@
+const observedOfferVersion = require('./fixtures/trade-version');
 // test-one-mint.js
 //
 // Authorized coin sources are explicit and bounded. A character gets forty
@@ -398,8 +399,9 @@ for (const at of Object.keys(WRITERS)) {
 
 {
   /*
-    Three profile-bound CAS writers, each read here: the merchant's, and
-    packFirst (#4901), the same text in the property and furniture blocks,
+    The merchant and mold CAS writers and the property-bound quest and pack
+    writers are each counted here. packFirst (#4901) uses the same text in the
+    property and furniture blocks,
     which writes only the entries a cut made out of the pack it read. Its
     cuts only take: goldCut takes a count of gold out of one stack,
     furniture's cutOne takes one item, and the drop box's lays a stack out
@@ -408,10 +410,16 @@ for (const at of Object.keys(WRITERS)) {
   const calls = code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
   const markedCalls = code.match(/\b\w+\.compareAndSetInventoryAndProperty\(/g) || [];
   const packDebit = /mp\.compareAndSetInventoryAndProperty\(actorId, \{ entries: before \}, receipt, \{ entries: out\.entries \},\s*sequence, who\.profileId, \{ name: markerField, expected: previousMarker, replacement: marker,/g;
-  yes('merchant CAS remains profile-bound and both pack debit writers save a private operation marker',
-    calls.length === 1 && /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
+  yes('merchant and mold CAS writers remain profile-bound and both pack debit writers save a private operation marker',
+    calls.length === 2 && calls.every(call => call === 'mp.compareAndSetInventory(') &&
+    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
+    /mp\.compareAndSetInventory\(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile\)/.test(code) &&
     markedCalls.length === 3 && (code.match(packDebit) || []).length === 2 &&
     /mp\.compareAndSetInventoryAndProperty\(actor,before,receipt,next,sequence,human\.profileId,/.test(code));
+  yes('the mold writer adds only one named mold after selecting a blank, and refunds its original snapshot',
+    /debit = blankMoldAfter\(source.inventory\)/.test(code) &&
+    /named.entries.push\(\{baseId:idOf\(MOLD\),count:1,name:moldLabel\(building\)\}\)/.test(code) &&
+    /replace\(taken.snapshot, source.inventory, alive\)/.test(code));
   const goldCut = lift('  function goldCut(amount, refusal) {', '\n  }\n') || '';
   const cutOne = lift('  function cutOne(entries, itemDesc) {', '\n  }\n') || '';
   yes('packFirst\'s cuts only take: goldCut lowers one stack of gold, cutOne one furniture item, and the drop box\'s stack refuses gold',
@@ -791,9 +799,12 @@ function goldDescriptors(text) {
   const sceneGold = goldDescriptors(sceneQuest || '');
   yes('scene finish gold is the named GOLD_DESC row, and those lines stay in the scan',
       !!sceneQuest && sceneGold.gold.length === 0 &&
+      (sceneQuest.match(/\bitem:\s*GOLD_DESC\b/g) || []).length === 3 &&
       (sceneQuest.match(/\{item: GOLD_DESC, count: row\.gold\}/g) || []).length === 2 &&
+      (sceneQuest.match(/\{item:GOLD_DESC,count:open\.terms\.gold\}/g) || []).length === 1 &&
+      /!paid\.ok \|\| paid\.gold!==open\.terms\.gold/.test(sceneQuest) &&
       !/addItem\(actor, GOLD_DESC/.test(sceneQuest) &&
-      /if \(!keep\(actor, b, changes\)\)/.test(sceneQuest) &&
+      /if \(!keep\(actor, b, changes,eligible\)\)/.test(sceneQuest) &&
       /var GOLD_DESC = deps\.goldDesc;/.test(sceneQuest));
   yes('the testers\' two tables were found and set aside', !!outside);
   const inside = goldDescriptors(src);
@@ -939,9 +950,9 @@ function tradeWorld() {
     }
   });
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('./fixtures/ordinary-quest-items') + tradeBlock)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function () { } }, function () { return 1; }, function () { },
     function (n, f) { return f; }, function () { }, function () { });
   return {
     trade: g.__thornswoodTrade,
@@ -964,8 +975,8 @@ if (tradeBlock !== null) {
     w.trade.gold(A, 40);
     w.trade.gold(B, 5);
     w.trade.add(B, 'Leek', 3);
-    w.trade.confirm(A);
-    w.trade.confirm(B);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin going both ways in one trade lands where it was sent',
         w.gold(A) === 65 && w.gold(B) === 40);
     yes('and there is exactly as much gold after the trade as before it',
@@ -978,9 +989,9 @@ if (tradeBlock !== null) {
     w.trade.begin(A, B);
     w.trade.gold(A, 40);
     w.trade.add(B, 'Leek', 1);
-    w.trade.confirm(A);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
     w.store[A].inventory = { entries: [{ baseId: GOLD, count: 10 }] };   // spent it meanwhile
-    w.trade.confirm(B);
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin that is gone by the time both agree moves nothing at all',
         w.gold(A) === 10 && w.gold(B) === 0);
   });
@@ -1022,8 +1033,8 @@ if (tradeBlock !== null) {
     const opened = w.trade.begin(A, A) === '';
     if (opened) {
       w.trade.gold(A, 40);
-      w.trade.confirm(A);
-      w.trade.confirm(A);
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
     }
     yes('a trade with yourself can never have both sides agreed, so nothing moves',
         w.gold(A) === 100 && (!opened || !!w.trade.tradeOf(A)));

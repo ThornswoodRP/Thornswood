@@ -35,12 +35,17 @@ def copy_state(path):
     except (OSError, ValueError) as e:
         log('staff copies: cannot read %s (%s)' % (path, type(e).__name__))
         return None
+    def valid(post):
+        if not isinstance(post, dict) or type(post.get('channel')) is not int or post['channel'] <= 0:
+            return False
+        if set(post) == {'channel', 'message'}:
+            return type(post['message']) is int and post['message'] > 0
+        return (set(post) == {'channel', 'attempt', 'cursor'}
+                and isinstance(post['attempt'], str) and len(post['attempt']) == 32
+                and all(c in '0123456789abcdef' for c in post['attempt'])
+                and type(post['cursor']) is int and post['cursor'] >= 0)
     if not isinstance(state, dict) or not all(
-            isinstance(posts, dict) and all(
-                isinstance(post, dict) and all(
-                    type(post.get(field)) is int and post[field] > 0
-                    for field in ('channel', 'message'))
-                for post in posts.values())
+            isinstance(posts, dict) and all(valid(post) for post in posts.values())
             for posts in state.values()):
         log('staff copies: invalid message index in %s' % path)
         return None
@@ -52,26 +57,154 @@ def remember_copy(state, source, key, msg):
 
 
 async def forget_copies(state, source, present, client):
-    """Act only on saved IDs for this source, never on channel history."""
+    """Delete only saved IDs, after the last retained member of a summary expires."""
     posts = state.get(source, {})
     changed = False
-    for key in posts.keys() - present:
-        post = posts[key]
-        ch = client.get_channel(post['channel'])
-        if ch is None:
+    groups = {}
+    for key, post in posts.items():
+        if 'message' in post:
+            groups.setdefault((post['channel'], post['message']), []).append(key)
+    for (channel, message), keys in groups.items():
+        expired = [key for key in keys if key not in present]
+        if not expired:
             continue
-        try:
-            await ch.get_partial_message(post['message']).delete()
-        except discord.NotFound:
-            log('staff copies: linked message already removed')
-        except Exception as e:
-            log('staff copies: message removal failed (%s)' % type(e).__name__)
-            continue
-        del posts[key]
+        if not any(key in present for key in keys):
+            ch = client.get_channel(channel)
+            if ch is None:
+                continue
+            try:
+                await ch.get_partial_message(message).delete()
+            except discord.NotFound:
+                log('staff copies: linked message already removed')
+            except Exception as e:
+                log('staff copies: message removal failed (%s)' % type(e).__name__)
+                continue
+        for key in expired:
+            del posts[key]
         changed = True
+    # Unresolved pending attempts stay indexed even after source expiry: they
+    # may name a private message that still needs to be found and removed.
     if changed and not posts:
         del state[source]
     return changed
+
+
+_COPY_NOTICES = set()
+COPY_HISTORY_PAGE = 100
+
+
+def copy_notice(key, text):
+    """An actionable diagnostic once per condition, never a delivery receipt."""
+    if key in _COPY_NOTICES:
+        return False
+    _COPY_NOTICES.add(key)
+    log(text)
+    return True
+
+
+def copy_marker(attempt):
+    return '\n-# Copy reference: ' + attempt
+
+
+async def reconcile_copies(state, source, client):
+    """Find pending attempts by exact bot-owned marker in the captured channel.
+
+    Missing or incomplete history never proves a send was refused. A bounded
+    page advances the cursor, but an unresolved attempt is never resent.
+    """
+    posts = state.get(source, {})
+    attempts = {}
+    for key, post in posts.items():
+        if 'attempt' in post:
+            attempts.setdefault(post['attempt'], []).append(key)
+    changed = False
+    for attempt, keys in attempts.items():
+        post = posts[keys[0]]
+        ch = client.get_channel(post['channel'])
+        found, cursor = None, post['cursor']
+        try:
+            if ch is None:
+                raise RuntimeError('captured channel is unavailable')
+            async for msg in ch.history(limit=COPY_HISTORY_PAGE,
+                                        after=discord.Object(id=cursor), oldest_first=True):
+                cursor = max(cursor, msg.id)
+                if (getattr(getattr(msg, 'author', None), 'id', None) == client.user.id
+                        and getattr(getattr(msg, 'channel', None), 'id', None) == post['channel']
+                        and str(getattr(msg, 'content', '')).endswith(copy_marker(attempt))):
+                    found = msg
+                    break
+        except Exception as e:
+            copy_notice((source, attempt, 'history'),
+                        'staff copies: pending %s cannot read captured channel %s (%s); '
+                        'delivery remains uncertain and will not be resent.'
+                        % (attempt, post['channel'], type(e).__name__))
+            continue
+        if found is not None:
+            for key in keys:
+                remember_copy(state, source, key, found)
+            changed = True
+        else:
+            for key in keys:
+                if posts[key]['cursor'] != cursor:
+                    posts[key]['cursor'] = cursor
+                    changed = True
+            copy_notice((source, attempt, 'pending'),
+                        'staff copies: no confirmed message for pending %s in channel %s; '
+                        'delivery remains uncertain and will not be resent. Check its copy reference.'
+                        % (attempt, post['channel']))
+    return changed
+
+
+async def send_copy(path, state, source, keys, text, client):
+    """Persist intent before sending; acknowledge only a confirmed saved receipt."""
+    ch = _trouble_channel()
+    if ch is None:
+        copy_notice((source, 'channel'),
+                    'staff copies: no staff channel is available; nothing was sent. '
+                    'Repair the staff channel configuration before the next pass.')
+        return False
+    member = getattr(getattr(ch, 'guild', None), 'me', None)
+    if member is not None:
+        permissions = ch.permissions_for(member)
+        can_send = (permissions.send_messages_in_threads if isinstance(ch, discord.Thread)
+                    else permissions.send_messages)
+        if not (permissions.view_channel and permissions.read_message_history and can_send):
+            copy_notice((source, 'channel-permissions'),
+                        'staff copies: staff channel permissions prevent delivery or reconciliation; '
+                        'nothing was sent. Restore channel access before the next pass.')
+            return False
+    cursor = 0
+    try:
+        async for msg in ch.history(limit=1):
+            cursor = msg.id
+    except Exception as e:
+        copy_notice((source, 'before-history'),
+                    'staff copies: cannot read staff channel history (%s); nothing was sent. '
+                    'Restore Read Message History before the next pass.' % type(e).__name__)
+        return False
+    attempt = os.urandom(16).hex()
+    for key in keys:
+        state.setdefault(source, {})[key] = dict(channel=ch.id, attempt=attempt, cursor=cursor)
+    _state_write(path, state)  # A refusal here must prevent the outbound send.
+    marker = copy_marker(attempt)
+    try:
+        msg = await report_say(text[:1900 - len(marker)] + marker, channel=ch, strict=True)
+    except Exception as e:
+        # discord.py retries the POST internally after some resets and 5xx
+        # responses. Even a final 4xx says nothing about an earlier attempt.
+        copy_notice((source, attempt, 'send'),
+                    'staff copies: delivery %s is uncertain (%s); pending is saved '
+                    'for reconciliation and will not be resent.' % (attempt, type(e).__name__))
+        return False
+    if (type(getattr(msg, 'id', None)) is not int or msg.id <= 0
+            or getattr(getattr(msg, 'channel', None), 'id', None) != ch.id):
+        copy_notice((source, attempt, 'response'),
+                    'staff copies: delivery %s returned no usable receipt; it remains pending.' % attempt)
+        return False
+    for key in keys:
+        remember_copy(state, source, key, msg)
+    _state_write(path, state)  # On failure, disk still has the pending marker.
+    return True
 
 
 def report_text(row):
@@ -121,9 +254,9 @@ def report_text(row):
                ('\n' + detail) if detail else ''))
 
 
-async def report_say(text):
+async def report_say(text, *, channel=None, strict=False):
     """Same channel as trouble_say, with every mention switched off."""
-    ch = _trouble_channel()
+    ch = channel if channel is not None else _trouble_channel()
     if ch is None:
         return
     try:
@@ -132,27 +265,16 @@ async def report_say(text):
     except Exception:
         log('reports: could not post in #%s:\n' % getattr(ch, 'name', '?')
             + traceback.format_exc())
+        if strict:
+            raise
 
 
 async def watch_reports():
-    """
-    Say in the staff channel when somebody sends something in on the public
-    report page.
+    """Deliver retained unacknowledged reports, including arrivals while offline.
 
-    The page tells them "Somebody will read it", and until this the only place
-    it could be read was the inbox on the hub, which nobody opens unless they
-    already know something is there, and the To Do List has the hub going
-    altogether. The site writes inbox.json on this same box, so this reads it
-    the way watch_trouble reads trouble.json.
-
-    Tickets are in that file as well and are left alone: they came from
-    Discord, and their thread is already where staff read them.
-
-    The ids already there when this starts are treated as said, for the same
-    reason as watch_trouble. A file that is on disk but will not parse, which
-    is what a read in the middle of the site writing it looks like, is waited
-    out rather than read as empty, because empty would make every row in it
-    new on the next look.
+    Confirmed receipt IDs survive restarts. Uncertain sends remain pending
+    until the captured channel proves their exact bot-owned copy reference.
+    Tickets and issue-filed problems use their own established delivery path.
     """
     await client.wait_until_ready()
 
@@ -178,39 +300,45 @@ async def watch_reports():
     while rows is None:
         await asyncio.sleep(5)
         rows = await loop.run_in_executor(None, read_all, [])
-    said = set(row['id'] for row in rows if public(row))
-    ch = _trouble_channel()
-    log('reports: watching %s every %ds, speaking in %s, %d already there and '
-        'treated as said'
-        % (REPORTS_FILE, REPORTS_EVERY,
-           ('#' + ch.name) if ch is not None else 'NOWHERE, see above',
-           len(said)))
+    log('reports: watching %s every %ds using persisted delivery receipts'
+        % (REPORTS_FILE, REPORTS_EVERY))
 
     while not client.is_closed():
         try:
             rows = await loop.run_in_executor(None, read_all)
             state = copy_state(REPORT_POSTS) if rows is not None else None
-            if state is not None and all(isinstance(r, dict) and r.get('id') for r in rows):
+            if state is None:
+                count = sum(1 for row in rows or [] if public(row))
+                if count and copy_notice((source, 'corrupt', count),
+                                         'reports: receipt index unreadable; private copies are paused.'):
+                    await report_say('**%d report%s remain in the site inbox.** Staff copies are '
+                                     'paused because their saved receipts cannot be read.'
+                                     % (count, '' if count == 1 else 's'))
+                await asyncio.sleep(REPORTS_EVERY)
+                continue
+            if await reconcile_copies(state, source, client):
+                _state_write(REPORT_POSTS, state)
+            if all(isinstance(r, dict) and r.get('id') for r in rows):
                 present = {copy_key(str(r['id'])) for r in rows}
                 if await forget_copies(state, source, present, client):
                     _state_write(REPORT_POSTS, state)
-            fresh = [r for r in (rows or []) if public(r) and r['id'] not in said]
-            for r in fresh:
-                said.add(r['id'])
-            if fresh and (state is None or len(fresh) > REPORTS_AT_ONCE):
-                await report_say(
-                    '**%d report%s came in, from the site and the game,** since the '
-                    'last look. Open the site inbox for details.'
-                    % (len(fresh), '' if len(fresh) == 1 else 's'))
-            elif state is not None:
-                # The file is newest first; the channel reads oldest first.
-                for r in reversed(fresh):
-                    key = copy_key(str(r['id']))
-                    if key not in state.get(source, {}):
-                        msg = await report_say(report_text(r))
-                        if msg is not None:
-                            remember_copy(state, source, key, msg)
-                            _state_write(REPORT_POSTS, state)
+            posts = state.get(source, {})
+            if not any('attempt' in post for post in posts.values()):
+                fresh_by_key = {copy_key(str(r['id'])): r for r in rows
+                                if public(r) and copy_key(str(r['id'])) not in posts}
+                fresh = list(fresh_by_key.values())
+                if len(fresh) > REPORTS_AT_ONCE:
+                    await send_copy(REPORT_POSTS, state, source,
+                                    [copy_key(str(r['id'])) for r in fresh],
+                                    '**%d report%s came in, from the site and the game,** since the '
+                                    'last look. Open the site inbox for details.'
+                                    % (len(fresh), '' if len(fresh) == 1 else 's'), client)
+                else:
+                    # The file is newest first; staff read oldest first.
+                    for row in reversed(fresh):
+                        if not await send_copy(REPORT_POSTS, state, source,
+                                               [copy_key(str(row['id']))], report_text(row), client):
+                            break
         except Exception:
             log('reports: the check itself failed, carrying on:\n'
                 + traceback.format_exc())
