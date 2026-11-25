@@ -1953,6 +1953,7 @@
   }
 
   function drawBody() {
+    resetOfficeArm();
     elBody.textContent = '';
     progRows = [];   // whatever was on the page is gone with it
     progKey = '';
@@ -2550,13 +2551,27 @@
     return card;
   }
 
-  /* A button on the Office page. With twice, the first press only says what the second does. */
+  var OFFICE_ARM_MS = 5000;
+  var officeArmed = null;
+  function resetOfficeArm() {
+    if (officeArmed) { officeArmed.button.textContent = officeArmed.text; }
+    officeArmed = null;
+  }
+
+  /* Only one Office action may await its second press, for five seconds. */
   function officeButton(text, line, twice) {
     var b = el('span', 'stop', text);
-    var armed = false;
     b.onclick = function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (twice && !armed) { armed = true; b.textContent = twice; return; }
+      var again = officeArmed && officeArmed.button === b && Date.now() < officeArmed.until;
+      resetOfficeArm();
+      if (twice && !again) {
+        var armed = { button: b, text: text, until: Date.now() + OFFICE_ARM_MS };
+        officeArmed = armed;
+        b.textContent = twice;
+        setTimeout(function () { if (officeArmed === armed) resetOfficeArm(); }, OFFICE_ARM_MS);
+        return;
+      }
       var said = typeof line === 'function' ? line() : line;
       if (said) officeSay(said);
     };
@@ -4445,6 +4460,7 @@
       if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
+      resetOfficeArm();
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)
