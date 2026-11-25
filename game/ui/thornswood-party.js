@@ -623,8 +623,10 @@
         if (verb === 'disband' || verb === 'kick' || verb === 'drop') {
           confirmDestructive(this, verb, who); return;
         }
-        if (verb === 'yes') { net('/yes'); }
-        else if (verb === 'no') { net('/no'); }
+        if (verb === 'yes' || verb === 'no') {
+          if (!shown || !root.contains(this) || !data || !data.offer) return;
+          net(verb === 'yes' ? '/yes' : '/no');
+        }
         else if (verb === 'leave') { net('/party leave'); }
         else if (verb === 'lead') { net('/party lead ' + who); }
         else if (verb === 'ask') { net('/party ' + who); }
@@ -715,7 +717,7 @@
 
   function drawAsk() {
     if (!askEl) { return; }
-    if (!data || !data.offer) { askEl.innerHTML = ''; return; }
+    if (shown || !data || !data.offer) { askEl.innerHTML = ''; return; }
     askEl.innerHTML =
       '<div class="card"><span class="who"><span class="kicker">Request</span><b>' + esc(data.offer.name) + '</b> ' +
       offerWords(data.offer.kind, data.offer.about) + '</span>' +
@@ -724,6 +726,7 @@
     var buttons = askEl.querySelectorAll('button[data-do]');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].onclick = function () {
+        if (shown || !askEl.contains(this) || !data || !data.offer) return;
         net(this.getAttribute('data-do') === 'yes' ? '/yes' : '/no');
       };
     }
@@ -734,6 +737,7 @@
     if (shown) { return; }
     shown = true;
     root.className = 'on';
+    drawAsk();
     draw();
     if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
@@ -743,7 +747,13 @@
     if (!shown) { return; }
     resetDestructive(); destructiveHeld = '';
     shown = false;
-    if (root) { root.className = ''; }
+    if (root) {
+      // Retire only this request's controls; unrelated party rows stay intact.
+      var inline = root.querySelector('.ask');
+      if (inline) inline.innerHTML = '';
+      root.className = '';
+    }
+    drawAsk();
     tell('closed');
   }
 

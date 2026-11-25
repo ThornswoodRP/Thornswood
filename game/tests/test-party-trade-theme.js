@@ -99,6 +99,8 @@ function makeEl(tag) {
   return e;
 }
 function matcher(sel) {
+  const cls = /^\.([\w-]+)$/.exec(sel);
+  if (cls) return function (el) { return el.className.split(/\s+/).indexOf(cls[1]) !== -1; };
   const m = /^([a-z0-9]*)(?:#([\w-]+))?(?:\[([\w-]+)\])?$/i.exec(sel);
   if (!m) { throw new Error('the stand-in page cannot read the selector ' + sel); }
   return function (el) {
@@ -428,6 +430,9 @@ const P = rules(party.css);
   const panelAsk = allHtml(pr);
   yes('#1591: a book invite on the P panel reads as one and names the book, escaped',
       /Ingrid<\/b> invites you into the business The &lt;Bee&gt;/.test(panelAsk) && !/offering to trade/.test(panelAsk));
+  yes('#1591: the floating card is inactive while the book invite is on P',
+      party.doc.body.children.filter(function (c) { return c.id === 'ts-ask'; })[0].html === '');
+  party.win.thornswoodParty.close();
   const askCard = party.doc.body.children.filter(function (c) { return c.id === 'ts-ask'; })[0];
   yes('#1591: and the ask card says the same, not a trade',
       !!askCard && /Ingrid<\/b> invites you into the business The &lt;Bee&gt;\./.test(askCard.html) &&
@@ -441,8 +446,10 @@ const P = rules(party.css);
     me: 'p1', offer: { kind: 'book', name: 'Ingrid' }, party: [], together: 0, bonus: 10, friends: []
   });
   yes('#1591: an invite with no book named still reads as a group book',
-      /invites you into a group book\./.test(askCard ? askCard.html : '') &&
-      /invites you into a group book/.test(allHtml(pr)));
+      /invites you into a group book\./.test(askCard ? askCard.html : ''));
+  party.win.thornswoodParty.open();
+  yes('#1591: the same unnamed group book invite is available inline when P opens',
+      /invites you into a group book/.test(allHtml(pr)) && askCard.html === '');
   party.win.thornswoodParty.close();
 }
 
