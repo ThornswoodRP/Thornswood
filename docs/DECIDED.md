@@ -851,6 +851,10 @@ issue where the card did.
   answered: a moved or added collection entry is checked against the rest of
   the revision.** (dec_BtxAK7ZxWgqHFvPaheYEFQ) 12 Nov 2026,
   [#4200](https://github.com/ThornswoodRP/Thornswood/issues/4200#issuecomment-6840852921).
+- **#5645 closes unmerged: the collection's load order is made from the
+  record now, so its check has nothing left to catch.**
+  (dec_Nw0TPsxhjDPdE2nOtAfagQ) 16 Nov 2026,
+  [#6403](https://github.com/ThornswoodRP/Thornswood/issues/6403#issuecomment-6922564684).
 
 ### The launcher and updates
 
