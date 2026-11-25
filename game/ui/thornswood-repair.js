@@ -34,8 +34,7 @@
   function net(line) {
     try {
       if (window.thornswoodNet && window.thornswoodNet.say) {
-        window.thornswoodNet.say(line);
-        return true;
+        return window.thornswoodNet.say(line) !== false;
       }
     } catch (e) { }
     return false;

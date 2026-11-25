@@ -78,6 +78,13 @@ for (const name of [' '.repeat(2700), '\ud800']) {
     w.page.sent.length === 0 && w.writes === 0 && JSON.stringify(w.pack) === before);
 }
 {
+  const w = world('Iron  Sword');
+  w.page.win.thornswoodNet.say = () => false;
+  w.send();
+  yes('an explicit local transport refusal leaves Mend usable',
+    w.page.doc.querySelector('button[data-n]').disabled === false && w.writes === 0);
+}
+{
   const w = world('Iron  Sword'); w.pack[1].count = 0;
   const reply = w.handle('/repair mend-name-v1 100001 40 Iron%20%20Sword');
   yes('an exact name grants no repair kit', w.writes === 0 && /you have none/.test(reply));
