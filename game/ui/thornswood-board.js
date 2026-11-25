@@ -330,8 +330,8 @@
       held to 60, the same as a post's title.
     */
     out += '<h3>Write a letter</h3>';
-    out += '<div class="line"><input id="' + ID + '-to" maxlength="60" placeholder="who it is for"></div>';
-    out += '<div class="line"><input id="' + ID + '-letter" maxlength="300" placeholder="the letter">' +
+    out += '<div class="line"><input id="' + ID + '-to" aria-label="Letter recipient" maxlength="60" placeholder="who it is for"></div>';
+    out += '<div class="line"><input id="' + ID + '-letter" aria-label="Letter text" maxlength="300" placeholder="the letter">' +
       '<button class="go" data-do="letter">Post the letter</button></div>';
     out += '<div class="note">35 gold: 20 for the board, and 15 held for whoever carries it, paid to them ' +
       'when they hand it over. Up to 300 characters. Only the person it is for reads it. ' +
@@ -344,13 +344,13 @@
     var dests = b.dests || [];
     if (dests.length) {
       out += '<h3>Send a haul</h3>';
-      out += '<div class="line"><input class="pay" id="' + ID + '-pay" placeholder="pay">' +
+      out += '<div class="line"><input class="pay" id="' + ID + '-pay" aria-label="Haul pay in gold" placeholder="pay">' +
         '<select id="' + ID + '-dest">';
       for (var d = 0; d < dests.length; d++) {
         out += '<option value="' + esc(dests[d].hold) + '">' + esc(dests[d].where) + '</option>';
       }
       out += '</select></div>';
-      out += '<div class="line"><input id="' + ID + '-haul" placeholder="what it carries">' +
+      out += '<div class="line"><input id="' + ID + '-haul" aria-label="Haul cargo" placeholder="what it carries">' +
         '<button class="go" data-do="haul">Send a haul</button></div>';
       out += '<div class="note">30 gold for the board, and the pay, both held with this hold. ' +
         'At the town it goes to, you or a steward confirm it on that board, and the hauler is paid. ' +
@@ -417,11 +417,11 @@
       '<h3>Make a post</h3>' +
       '<div class="line"><button data-do="kind" data-kind="notice" id="' + ID + '-k-notice">Notice</button>' +
       '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button></div>' +
-      '<div class="line"><input id="' + ID + '-title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
-      '<div class="line"><textarea id="' + ID + '-text" maxlength="' + BODY_CHARS +
+      '<div class="line"><input id="' + ID + '-title" aria-label="Post title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
+      '<div class="line"><textarea id="' + ID + '-text" aria-label="Post text" maxlength="' + BODY_CHARS +
       '" placeholder="what it says"></textarea></div>' +
       '<div class="line" id="' + ID + '-rewardline"><input class="pay" id="' + ID +
-      '-reward" placeholder="reward"><span class="note">gold, for whoever does the job</span></div>' +
+      '-reward" aria-label="Job reward in gold" placeholder="reward"><span class="note">gold, for whoever does the job</span></div>' +
       '<div class="note">The title is up to ' + TITLE_CHARS + ' characters and what it says up to ' +
       BODY_CHARS + '.</div>' +
       '<div class="note" id="' + ID + '-cost"></div>' +

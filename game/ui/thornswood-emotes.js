@@ -97,7 +97,7 @@
     '<text id="thornswood-hubtext" x="0" y="1" font-family="Palatino Linotype, Palatino, Georgia, serif" font-size="13">STOP</text>' +
     '</svg></div>' +
     '<div class="side">' +
-    '<input id="thornswood-emote-find" placeholder="Search" autocomplete="off">' +
+    '<input id="thornswood-emote-find" aria-label="Search emotes" placeholder="Search" autocomplete="off">' +
     '<div class="pins" id="thornswood-emote-pins"></div>' +
     '<div class="rows" id="thornswood-emote-rows"></div>' +
     '</div>';
