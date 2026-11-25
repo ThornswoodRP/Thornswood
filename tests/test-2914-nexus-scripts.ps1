@@ -481,11 +481,11 @@ function AddSpec([string]$fileId, [string]$plugin, [string]$after) {
     $p = if ($plugin) { ',"plugins":[{"name":' + (ConvertTo-Json $plugin) + ',"after":[' + (ConvertTo-Json $after) + ']}]' } else { '' }
     return '{"add":true,"modId":"1932","fileId":"' + $fileId + '","version":"1.3","md5":"' + $md5 + '","fileSize":52221104,"logicalFilename":"KS Hairdos Lite SE NoNPCs","name":"KS Hairdos Lite SE NoNPCs","author":"Brataccas","category":"Body, Face, and Hair","tag":"hairTag1234"' + $p + '}'
 }
-Put $addJson ('[' + (AddSpec '8662' $hair 'Dragonborn.esm') + ',' + (AddSpec '809224' 'cheddars_mashups.esl' $hair) + ']')
+Put $addJson ('[' + (AddSpec '8662' $hair 'Dragonborn.esm') + ',' + (AddSpec '809224' 'cheddars_mashups.esl' 'Dragonborn.esm') + ']')
 $o1 = Join-Path $T 'add-collection.json'; $o2 = Join-Path $T 'add-payload.json'
 $said = NodeSaid $js $cj $addJson $o1 $o2
-Yes 'nexus-collection.js adds two mods and their plugins, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('KS Hairdos Lite SE NoNPCs' + "`tadded`t`tfile 8662|" + $hair + "`tplugin`t`tafter Dragonborn.esm|KS Hairdos Lite SE NoNPCs`tadded`t`tfile 809224|cheddars_mashups.esl`tplugin`t`tafter " + $hair))
-& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const e=b.mods[4];const want={name:'KS Hairdos Lite SE NoNPCs',version:'1.3',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:1932,fileId:8662,md5:process.argv[3],fileSize:52221104,logicalFilename:'KS Hairdos Lite SE NoNPCs',updatePolicy:'exact',tag:'hairTag1234'},author:'Brataccas',details:{category:'Body, Face, and Hair',type:''},phase:0};if(JSON.stringify(e)!==JSON.stringify(want)){process.exitCode=2;return};if(JSON.stringify(b.plugins)!==JSON.stringify([{name:process.argv[4],enabled:true},{name:'cheddars_mashups.esl',enabled:true}])){process.exitCode=3;return};if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:process.argv[4].toLowerCase(),after:['dragonborn.esm']},{name:'cheddars_mashups.esl',after:[process.argv[4].toLowerCase()]}])){process.exitCode=4;return};b.mods.splice(4,2);b.plugins=[];b.pluginRules.plugins=[];process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj $o1 $md5 $hair
+Yes 'nexus-collection.js adds two mods and their plugins, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('KS Hairdos Lite SE NoNPCs' + "`tadded`t`tfile 8662|" + $hair + "`tplugin`t`tafter Dragonborn.esm|KS Hairdos Lite SE NoNPCs`tadded`t`tfile 809224|cheddars_mashups.esl`tplugin`t`tafter Dragonborn.esm"))
+& $node.Source -e "(()=>{const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const e=b.mods[4];const want={name:'KS Hairdos Lite SE NoNPCs',version:'1.3',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:1932,fileId:8662,md5:process.argv[3],fileSize:52221104,logicalFilename:'KS Hairdos Lite SE NoNPCs',updatePolicy:'exact',tag:'hairTag1234'},author:'Brataccas',details:{category:'Body, Face, and Hair',type:''},phase:0};if(JSON.stringify(e)!==JSON.stringify(want)){process.exitCode=2;return};if(JSON.stringify(b.plugins)!==JSON.stringify([{name:'cheddars_mashups.esl',enabled:true},{name:process.argv[4],enabled:true}])){process.exitCode=3;return};if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:process.argv[4].toLowerCase(),after:['dragonborn.esm']},{name:'cheddars_mashups.esl',after:['dragonborn.esm']}])){process.exitCode=4;return};b.mods.splice(4,2);b.plugins=[];b.pluginRules.plugins=[];process.exitCode=JSON.stringify(a)===JSON.stringify(b)?0:1})()" $cj $o1 $md5 $hair
 Yes 'the entry is written as Vortex writes a basic install, each plugin goes on the end switched on, and its rule is lower case; nothing else changes' ($LASTEXITCODE -eq 0)
 foreach ($case in @(
         @((AddSpec '8662' $hair 'Nowhere.esp'), 'a plugin to load after one the list does not name'),
@@ -870,7 +870,12 @@ $eyesArc = Join-Path $T 'eyes.7z'
 Push-Location $fx; & $sz a -t7z -y $eyesArc '*' | Out-Null; Pop-Location
 $dgChoice = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add-ons","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
 function AddEyes([string[]]$plugins, [string]$choices) {
-    $p = '[' + ((@($plugins) | ForEach-Object { '{"name":"' + $_ + '","after":["Dragonborn.esm"]}' }) -join ',') + ']'
+    $after = 'Dragonborn.esm'
+    $rows = foreach ($name in $plugins) {
+        [ordered]@{ name = $name; after = @($after) }
+        $after = $name
+    }
+    $p = ConvertTo-Json -InputObject @($rows) -Depth 4 -Compress
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyesArc) + ',"plugins":' + $p + $(if ($choices) { ',"choices":' + $choices } else { '' }) + '}]')
     Control @{ serve = @{ '8662' = @{ path = $eyesArc; name = (Split-Path -Leaf $eyesArc) } } }
 }
@@ -957,7 +962,7 @@ $eyes2Arc = Join-Path $T 'eyes2.7z'
 Push-Location $fx2; & $sz a -t7z -y $eyes2Arc '*' | Out-Null; Pop-Location
 $given = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
 $vortexForm = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Human","groups":[{"name":"Choose Version","choices":[]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]},{"name":"Werewolf Eyes","choices":[]}]}]}'
-$eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Dragonborn.esm"]},{"name":"EyesFull.esp","after":["Dragonborn.esm"]}]'
+$eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Eyes.esp"]},{"name":"EyesFull.esp","after":["EyesDG.esp"]}]'
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":' + $eyes2Plugins + ',"choices":' + $given + '}]')
 Control @{ serve = @{ '8662' = @{ path = $eyes2Arc; name = (Split-Path -Leaf $eyes2Arc) } } }
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')

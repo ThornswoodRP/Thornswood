@@ -508,7 +508,12 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
         # The current LevelDB metadata survives compaction; transition text does not.
         Import-VortexStateReader
         try { return [Thornswood.VortexProfileState]::Find($st, $profilesRoot, $Name) }
-        catch { throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.' }
+        catch {
+            # PowerShell wraps exceptions from the shared reader's method call.
+            $cause = $_.Exception.GetBaseException()
+            if ($cause -is [Thornswood.VortexProfileState+DuplicateProfileException]) { throw $cause }
+            throw 'Vortex profile metadata cannot be verified. Finish its deployment, close Vortex, then retry. Do not create another profile to work around unreadable state.'
+        }
     }
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     if (Test-Path -LiteralPath $st) {
@@ -542,7 +547,7 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
 function Assert-VortexProfile([string]$Name = 'Thornswood') {
     $dir = Get-VortexProfileDir $Name
     if (-not $dir) {
-        throw ("Vortex profile '$Name' was not found. In Vortex, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+        throw ("Vortex profile '$Name' was not found. In Vortex, turn on Profile Management under Settings, Interface, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
     }
     # A profile folder with no plugins.txt is one Vortex never deployed the
     # collection into: there is no load order in it to read or check (#4387).

@@ -138,7 +138,9 @@ if (answer) {
       idle.length === 0);
 
   // ------------------------------------------------- 3. rows come and go --
-  const others = answer.rows.filter((r, i) => used.has(i) && r.words && r.words !== 'the welcome letter');
+  const welcomeRow = rowOf('BOOK ThornswoodWelcome');
+  yes('3 the welcome letter has its own description row', welcomeRow >= 0);
+  const others = answer.rows.filter((r, i) => used.has(i) && r.words && i !== welcomeRow);
   yes('3 with the welcome letter gone, its words leave the description: ' + JSON.stringify(noWelcome.text),
       noWelcome.unnamed.length === 0 && noWelcome.text.indexOf('welcome letter') < 0);
   yes('3 and every other row\'s words stay', others.every(r => noWelcome.text.indexOf(r.words) >= 0));

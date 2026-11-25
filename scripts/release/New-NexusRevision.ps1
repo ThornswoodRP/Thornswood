@@ -574,6 +574,7 @@ if ($Publish) {
   if ($nowLatest -ne $Publish) { Die ('Nexus said the publish succeeded, but the latest published revision still reads as ' + $nowLatest + '.') }
   Write-Host ''
   Say ('Revision ' + $Publish + ' is published: https://www.nexusmods.com/games/' + $Game + '/collections/' + $Slug) 'Green'
+  Say '  Next: update the collection records for this revision, then rebuild the Last plugin, NPC catalogue and load order tables. Follow docs/COLLECTION-REVISIONS.md.'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
@@ -1052,6 +1053,13 @@ if ($adds.Count -or $rules.Count -or $Remove.Count) {
     if ([string]$rec.collection -eq $Slug -and [int]$rec.revision -eq $start -and $startStatus -eq 'published') {
       $unlisted = @(@($rec.plugins) | Where-Object { $_ -and $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
       if ($unlisted.Count) { Say ('  installed off the list, by the record: ' + ($unlisted -join ', ')) 'DarkGray' }
+      if ($adds.Count) {
+        $masterFlags = [ordered]@{}
+        foreach ($p in @($rec.plugins)) {
+          if ($p -and $p.name -and $p.master -is [bool]) { $masterFlags[[string]$p.name] = $p.master }
+        }
+        if ($masterFlags.Count) { $swaps.Add([ordered]@{ masterFlags = $masterFlags }) }
+      }
       if ($Remove.Count) {
         $masters = [ordered]@{}
         foreach ($p in @($rec.plugins | Where-Object { $_ -and $_.name })) { $masters[[string]$p.name] = [string[]]@(@($p.masters) | Where-Object { $_ } | ForEach-Object { [string]$_ }) }

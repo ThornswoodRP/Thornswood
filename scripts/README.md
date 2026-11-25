@@ -153,6 +153,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Run-OnBox.ps1](mods/Run-OnBox.ps1) | Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders. |
 | [mods/Send-GameArchives.ps1](mods/Send-GameArchives.ps1) | Puts Skyrim's own archives that the content tools read on the VPS box, in C:\Thornswood-GameData, each checked against records\skyrim-files.json on this machine before it goes and on the box after it lands, and the loose string tables records\game-strings.json names, held to that record the same way. |
 | [mods/Set-LoadOrder.ps1](mods/Set-LoadOrder.ps1) | Writes records\load-order.json, the load order the servers run and every content build reads (#5191), moved to the collection revision records\collection-plugins.json names. |
+| [mods/SteamLibrary.ps1](mods/SteamLibrary.ps1) | Finds the Steam copy of Skyrim Special Edition without changing any files. |
 | [ops/Chargen-Log.ps1](ops/Chargen-Log.ps1) | What the server thinks is happening to your character. |
 | [ops/Check-Board.ps1](ops/Check-Board.ps1) | Holds the board's cards to the rules docs/guide/the-board.md gives them, from a board.json Read-Board.ps1 wrote, and names every card that breaks one. |
 | [ops/Check-Chargen.ps1](ops/Check-Chargen.ps1) | Preflight for character creation. Everything it looks at is something that silently produces a broken first join rather than an error message, so it is worth thirty seconds before starting the server. |
@@ -288,6 +289,14 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Wait-Deployment.ps1](release/Wait-Deployment.ps1) | A release counts as shipped only when the box says it is running it. |
 | [release/Where.ps1](release/Where.ps1) | Says where the engine fork and the build output are, so every script asks one place instead of carrying its own copy of a path. |
 | [release/Write-EnginePinText.ps1](release/Write-EnginePinText.ps1) | Writes the engine pin's lines in THIRD-PARTY.md and site\data\site\credits.md from the records, or with -Check says which ones differ from them. |
+| [turn/Install-PionRelay.ps1](turn/Install-PionRelay.ps1) | Run locally on the Windows game VPS only, after reviewed cutover proof. |
+| [turn/New-PionPackage.ps1](turn/New-PionPackage.ps1) | Builds the Windows relay from an immutable source commit and the pinned portable Go archive. |
+| [turn/PionHost.ps1](turn/PionHost.ps1) | Windows host controls shared by the reviewed installer and runtime gate. |
+| [turn/PionPackage.ps1](turn/PionPackage.ps1) | Windows TURN package checks shared by the builder and installer. |
+| [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | Requires -Version 7 The public policy contains no secret, performs no I/O and opens no listener. |
+| [turn/Run-Pion.ps1](turn/Run-Pion.ps1) | Foreground native UDP relay, under its canonical restricted task identity. |
+| [turn/Switch-DevTurnRelay.ps1](turn/Switch-DevTurnRelay.ps1) | Existing Dev issuer only. Never changes Main or a relay firewall/task. |
+| [turn/Switch-MainTurnRelay.ps1](turn/Switch-MainTurnRelay.ps1) | Requires -Version 7 |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
 | [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |

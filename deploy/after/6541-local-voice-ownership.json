@@ -1,0 +1,7 @@
+{
+  "issue": 6541,
+  "environment": "dev",
+  "steps": [
+    { "run": "Set-DevVoiceSite" }
+  ]
+}

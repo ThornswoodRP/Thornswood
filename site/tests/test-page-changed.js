@@ -112,7 +112,7 @@ for (const name of PAGES) {
   rows.forEach(function (row) { bySha[row.sha256] = row.changed; });
   [false, true].forEach(function (open) {
     const lf = raw.replace(/\r\n/g, '\n');
-    [lf, lf.replace(/\n/g, '\r\n')].forEach(function (text) {
+    [raw, lf].forEach(function (text) {
       const digest = sha(forMode(text, open));
       const which = open ? 'open' : 'alpha';
       yes(name + ' as served (' + which + ') is listed as ' + day, bySha[digest] === day);
