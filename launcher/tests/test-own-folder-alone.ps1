@@ -90,7 +90,7 @@ Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDot
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
 # Config and OwnGame read their JSON through LooseString since the move to System.Text.Json, and
 # Downgrade opens the clipboard for Ask.Owner, the window its boxes belong to (#4823).
-$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
+$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'PathFence.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 foreach ($f in $real) {
     Yes "launcher\app\$([IO.Path]::GetFileName($f)) is there" (Test-Path -LiteralPath $f)
@@ -910,6 +910,44 @@ namespace Thornswood
                 !File.Exists(Path.Combine(own, "Data\\FromDepot.esp")));
         }
         // ---- 7: what Build-Generated.ps1 made in the folder (#1247) ------------
+        // What a refresh said and left about one file, for a check on it that
+        // failed (#4134): the refresh's own line (or that it threw), the
+        // file's line in each of the folder's records, the deployment the
+        // folder has on record against Vortex's newest, and what the folder
+        // holds at that name. A file kept as it was reads one way (files.txt
+        // still has the old size and time, nothing in left-out.txt), a file
+        // that could not be brought over another (left-out.txt says why).
+        static void RefreshSaid(string said, string rel, string at, string vortexCopy)
+        {
+            Console.WriteLine("      the refresh said: " + (said ?? "(nothing: it threw, as printed above)"));
+            foreach (string name in new string[] { "files.txt", "left-out.txt", "vortex.txt", "made.txt" })
+            {
+                string f = Path.Combine(OwnGame.Dir, name);
+                string find = name == "made.txt" ? "deployment=" : rel;
+                var found = new List<string>();
+                try
+                {
+                    if (!File.Exists(f)) found.Add("(no " + name + ")");
+                    else foreach (string l in File.ReadAllLines(f)) if (l.IndexOf(find, StringComparison.OrdinalIgnoreCase) >= 0) found.Add(l);
+                }
+                catch (Exception ex) { found.Add("(" + name + " could not be read: " + ex.Message + ")"); }
+                if (found.Count == 0) found.Add("(no line)");
+                foreach (string l in found) Console.WriteLine("      " + name + ": " + l);
+            }
+            string vortexRecord = Path.Combine(Paths.SteamCopy, "Data\\vortex.deployment.json");
+            Console.WriteLine("      Vortex's record written at: " + (File.Exists(vortexRecord) ? File.GetLastWriteTimeUtc(vortexRecord).Ticks.ToString() : "(none)"));
+            Console.WriteLine("      Vortex's copy: " + (Text(vortexCopy) ?? "(unreadable)") + ", written at " +
+                              (File.Exists(vortexCopy) ? File.GetLastWriteTimeUtc(vortexCopy).Ticks.ToString() : "(none)"));
+            string held = "(none)";
+            if (File.Exists(at))
+            {
+                string same;
+                try { same = Id(at) == Id(vortexCopy) ? "the same file as Vortex's copy" : "a file of its own"; }
+                catch (Exception ex) { same = "(its id could not be read: " + ex.Message + ")"; }
+                held = (Text(at) ?? "(unreadable)") + ", " + same;
+            }
+            Console.WriteLine("      the folder holds: " + held);
+        }
         static void GeneratedStays()
         {
             Scene s = NewScene("generated", false);
@@ -975,7 +1013,11 @@ namespace Thornswood
             vortexBringsOut("VORTEX-DDS-THREE");
             string second = null;
             try { second = OwnGame.Refresh(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Refresh said: " + ex.Message); }
-            Yes("without the record, a refresh puts Vortex's new file in its place", second != null && Text(atBody) == "VORTEX-DDS-THREE");
+            bool replaced = second != null && Text(atBody) == "VORTEX-DDS-THREE";
+            Yes("without the record, a refresh puts Vortex's new file in its place", replaced);
+            // It failed once on a build machine with nothing printed, so which
+            // way the refresh went was never known (#4134): print it.
+            if (!replaced) RefreshSaid(second, body, atBody, staged);
             Yes("and takes out the one from the Steam copy as none of the three kinds", second != null && !File.Exists(atBehavior));
 
             // A folder made anew holds nothing Build-Generated made, so the
