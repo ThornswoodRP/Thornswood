@@ -91,19 +91,6 @@
   }
 
   /*
-    THE LINE IS ONE LINE (#2554), as the journal's pages are: the server
-    splits the title from the body at the first ::, so a newline in the body
-    goes over as a backslash and n, a backslash as two, and a colon in the
-    title as a backslash and a colon. postWords in the gamemode puts them back.
-  */
-  function slashBody(s) {
-    return String(s).replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n');
-  }
-  function slashTitle(s) {
-    return String(s).replace(/\\/g, '\\\\').replace(/:/g, '\\:');
-  }
-
-  /*
     THE LOOK IS THE PARTY PANEL'S, which is the K panel's. Every colour
     below is one that panel already uses. No :hover and no transitions.
   */
@@ -470,23 +457,22 @@
   function send() {
     var b = data && data.board;
     if (!b || !b.here) { return; }
-    var title = draft.title.replace(/\s+/g, ' ').trim();
-    var text = draft.body.trim();
-    if (!title) { say('Give it a title.'); return; }
+    var title = draft.title;
+    var text = draft.body;
+    if (!title.trim()) { say('Give it a title.'); return; }
     if (title.length > TITLE_CHARS) { say('A title is up to ' + TITLE_CHARS + ' characters.'); return; }
-    if (!text) { say('Write what it says.'); return; }
+    if (!text.trim()) { say('Write what it says.'); return; }
     if (text.length > BODY_CHARS) { say('What it says is up to ' + BODY_CHARS + ' characters.'); return; }
-    var line;
+    var rewardValue = 0;
     if (draft.kind === 'job') {
       var reward = draft.reward.trim();
       if (!/^\d+$/.test(reward) || !(Number(reward) > 0)) {
         say('A job\'s reward is a whole number of gold, above nothing.');
         return;
       }
-      line = '/job ' + Number(reward) + ' ' + slashTitle(title) + ' :: ' + slashBody(text);
-    } else {
-      line = '/notice ' + slashTitle(title) + ' :: ' + slashBody(text);
+      rewardValue = Number(reward);
     }
+    var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text]);
     pending = { title: title, top: topN(b) };
     say('Putting it up. If it cannot go up, the chat says why.');
     net(line);

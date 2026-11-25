@@ -1182,6 +1182,9 @@ function world(opts) {
     waiting.push({ profileId: row.profileId, text: text, proven: true });
     w.run(2000);
   };
+  // Integration harnesses may hand over the actual authenticated relay result,
+  // retaining its profile, provenance and command id through the real queue.
+  w.relayCommand = function (command) { waiting.push(copy(command)); w.run(2000); };
   w.heard = function (actorId) {
     const pid = store.get(actorId >>> 0).profileId;
     return w.said.filter(function (s) { return s.profileId === pid; }).map(function (s) { return s.text; });
