@@ -520,8 +520,6 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
 
     async def withdraw(key):
         have = rec[key]
-        if have.get('withdrawal') == 'archived':
-            return
         thread = await _main_task_thread(forum, rec, key, me_id)
         if thread is None:
             return

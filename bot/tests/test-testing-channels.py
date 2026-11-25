@@ -2404,6 +2404,35 @@ for version in [1, 2]:
         versions.append((active[0], active[0].text()))
 
 
+for omitted in [False, True]:
+    forum, state, thread, original_edit, _, read, g = reclosed_task('not_planned', omitted=omitted)
+    thread.archived = False
+    run(thread.send('A follow-up in the retired task'))
+    history = thread.text()
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: an active-again withdrawn task is rearchived on the next normal pass',
+        result == ([], [], [5515]) and thread.archived and thread.text() == history
+        and len(thread.more) == 2)
+    thread.archived = False
+    thread.owner_id = 22
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: a stale archived marker cannot bypass current owner verification',
+        result == ([], [], []) and not thread.archived and thread.text() == history)
+    thread.owner_id = g.me.id
+    async def denied_again(**kwargs):
+        raise Refused('Missing permission to archive again')
+    thread.edit = denied_again
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: refused rearchiving keeps pending intent and every follow-up reply',
+        result == ([], [], []) and not thread.archived and thread.text() == history
+        and state['tasks']['5515']['withdrawal'] == 'pending')
+    thread.edit = original_edit
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    yes('5515: normal retry confirms rearchiving after the refusal',
+        result == ([], [], [5515]) and thread.archived and thread.text() == history
+        and state['tasks']['5515']['withdrawal'] == 'archived')
+
+
 def denied_save(state):
     raise OSError('Unable to replace the forum index')
 
