@@ -44,10 +44,10 @@ tanning rack burns nothing.
 | Armor Kit | 1 Poor Charcoal |
 | Sewing Kit | Nothing |
 
-The Sewing Kit was first offered as linen wrap and leather strips.
-No class supplies linen wrap, so tundra cotton, a gatherer's, takes
-its place. The tanning rack, because the loom comes from a mod and
-these recipes use only Skyrim's own records.
+The Sewing Kit recipe was settled when linen wrap had no maker, so it uses
+the gatherer's tundra cotton directly. The Haberdasher can now also make
+linen wrap from cotton at the loom. The kit uses the tanning rack and
+Skyrim's own records.
 
 ## Using a kit
 
