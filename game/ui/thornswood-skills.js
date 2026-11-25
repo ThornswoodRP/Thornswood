@@ -2205,11 +2205,12 @@
       ' 50 is comfortable.'));
     var fire = (Number(v.fireAway) >= 0)
       ? 'a fire ' + Number(v.fireAway) + ' away, worth ' + (Number(v.fireWorth) || 0)
-      : 'no fire in reach';
+      : (v.burning ? 'no nearby fire in reach' : 'no fire in reach');
     card.appendChild(el('div', 'inn',
       'You are ' + (PLACE_WORDS[v.place] || 'somewhere the server does not know yet') +
       (v.roof ? ', under a roof' : ', with no roof') + (v.night ? ', at night' : '') + ', with ' + fire + '. ' +
       'Weather and height are worth ' + (Number(v.exposure) || 0) + '. ' +
+      (v.burning ? 'You are on fire. It counts as a fire at your feet. ' : '') +
       // A blizzard or a heavy storm (#3176), the server's own number.
       (Number(v.storm) > 0 ? 'The storm slows you by ' + Number(v.storm) + ' per cent while you are out in it. ' : '') +
       'What you are wearing covers ' + (Number(v.cover) || 0) + ' per cent of you.'));

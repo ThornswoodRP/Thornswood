@@ -52514,15 +52514,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = warmthTarget(actorId, n);
-      // Winter out under the sky cools a quarter faster (#3144), so its half
-      // life is the cooling one cut by that share. Warming is left alone.
-      var half = (target > n.temp)
-        ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / outdoorCooling(n);
-      var k = 1 - Math.pow(0.5, (hours * 60) / half);
-      if (k > 1) { k = 1; }
-      if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+      var end = n.at + hours * 3600000;
+      var fireEnd = burningUntil(actorId);
+      // A delayed tick must not heat its whole elapsed interval. The fire
+      // contributes only through the existing report deadline, then ambient.
+      if (fireEnd > n.at && fireEnd <= end) {
+        approachTemperature(n, warmthTarget(actorId, n, fireEnd - 1), fireEnd - n.at);
+        approachTemperature(n, warmthTarget(actorId, n, end), end - fireEnd);
+      } else {
+        approachTemperature(n, warmthTarget(actorId, n, end), end - n.at);
+      }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
@@ -52637,11 +52638,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n) {
+  function approachTemperature(n, target, ms) {
+    // The same documented half-gap curve, including winter cooling.
+    var half = target > n.temp ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
+      : NEEDS.settleMinutes / outdoorCooling(n);
+    var k = Math.min(1, 1 - Math.pow(0.5, ms / (half * 60000)));
+    if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+  }
+
+  function warmthTarget(actorId, n, at) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, at) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52705,7 +52714,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId) {
+  function nearbyFireWarmth(n, actorId) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
@@ -52713,6 +52722,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (d >= reach) { return 0; }
     var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
+  }
+
+  function burningUntil(actorId) {
+    return burning && Object.prototype.hasOwnProperty.call(burning, actorId)
+      ? burning[actorId] + NEEDS.burn.every * 3 : 0;
+  }
+
+  function fireWarmth(n, actorId, at) {
+    var body = burningUntil(actorId) > (at === undefined ? Date.now() : at) ? NEEDS.fire.at : 0;
+    return Math.max(nearbyFireWarmth(n, actorId), body);
   }
 
   /*
@@ -53738,7 +53757,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       tempTarget: Math.round(warmthTarget(actorId, n)),
       roof: !!n.roof, night: !!n.night,
       fireAway: (typeof n.fire === 'number' && n.fire >= 0) ? Math.round(n.fire) : -1,
-      fireWorth: Math.round(fireWarmth(n, actorId)),
+      fireWorth: Math.round(nearbyFireWarmth(n, actorId)),
+      burning: burningUntil(actorId) > Date.now(),
       exposure: Math.round(weathered(actorId, n)),
       // How much slower a storm makes you right now, 0 when not in one (#3176).
       storm: stormy(n) ? NEEDS.weather.storm : 0,
@@ -54973,18 +54993,32 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   function clearBurning(actorId) {
+    var hadFire = Object.prototype.hasOwnProperty.call(burning, actorId);
+    var online = onlineNow(actorId);
+    // Bank heat before removing it. An offline character keeps the saved
+    // reading; their next settle is an arrival, never time spent in fire.
+    if (hadFire) {
+      if (online) { settle(actorId); }
+      else { delete here[actorId]; }
+    }
     delete burning[actorId];
     delete burnIdentities[actorId];
     publishBurnVisual(actorId, false);
+    if (hadFire && online) { pushEffects(actorId); }
   }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
     var identity = on ? burnIdentity(actorId) : '';
     if (on && identity) {
+      var wasBurning = burningUntil(actorId) > Date.now();
+      // A new fire cannot warm the time before the report. A heartbeat also
+      // banks the old interval before extending its deadline.
+      settle(actorId);
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
+      if (!wasBurning) { pushEffects(actorId); }
     } else { clearBurning(actorId); }
   }
 
