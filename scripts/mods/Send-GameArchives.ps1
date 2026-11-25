@@ -1,6 +1,8 @@
 <#
-  Send-GameArchives.ps1
+.SYNOPSIS
+  Puts Skyrim's own archives that the content tools read on the VPS box, in C:\Thornswood-GameData, each checked against records\skyrim-files.json on this machine before it goes and on the box after it lands, and the loose string tables records\game-strings.json names, held to that record the same way.
 
+.DESCRIPTION
   Puts Skyrim's own archives that the content tools read on the VPS box, in
   C:\Thornswood-GameData, each checked against records\skyrim-files.json on
   this machine before it goes and on the box after it lands, and the loose

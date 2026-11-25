@@ -70,6 +70,7 @@
     "command-tools.ts",
     "staff.ts",
     "staff-tools.ts",
+    "staff-progression.ts",
     "take-back.ts",
     "staff-crafting.ts",
     "shared-resource-stock.ts",

@@ -159,13 +159,24 @@
     root.querySelector('#' + ID + '-sale').onclick = function () { net('/trade sale'); };
     root.querySelector('#' + ID + '-ok').onclick = function () { net('/trade ok'); };
     /*
-      Escape WALKS AWAY rather than hiding the panel, and that is deliberate.
+      Escape outside an editing field WALKS AWAY rather than hiding the panel.
       A trade you cannot see is a trade you have forgotten you are in, holding
-      somebody else standing there waiting.
+      somebody else standing there waiting. In a text box its first press
+      only leaves that edit; a fresh second press can then walk away.
     */
     document.addEventListener('keydown', function (ev) {
       if (!shown) { return; }
-      if (ev.key === 'Escape') { ev.preventDefault(); net('/trade cancel'); }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if (ev.repeat) { return; }
+        var field = ev.target || document.activeElement;
+        if (field && root.contains(field) &&
+            (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.isContentEditable)) {
+          field.blur();
+          return;
+        }
+        net('/trade cancel');
+      }
     });
     return root;
   }
@@ -320,7 +331,18 @@
 
     var find = root.querySelector('#' + ID + '-find');
     if (find) {
-      find.oninput = function () { filter = this.value; draw(); this.focus(); };
+      find.oninput = function () {
+        var start = this.selectionStart, end = this.selectionEnd;
+        filter = this.value;
+        draw();
+        var field = root.querySelector('#' + ID + '-find');
+        if (field) {
+          field.focus();
+          if (typeof start === 'number' && typeof end === 'number' && field.setSelectionRange) {
+            field.setSelectionRange(start, end);
+          }
+        }
+      };
     }
     var chips = pack.querySelectorAll('button[data-cat]');
     for (var ci = 0; ci < chips.length; ci++) {

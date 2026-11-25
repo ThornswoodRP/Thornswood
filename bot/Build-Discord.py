@@ -3863,6 +3863,7 @@ async def rename_category(guild, catname):
 
 @client.event
 async def on_ready():
+    global completed
     try:
         guild = None
         if GUILD:
@@ -3874,14 +3875,16 @@ async def on_ready():
             for g in client.guilds:
                 print('  %-40s %s' % (g.name, g.id))
             print('\n  $env:DISCORD_GUILD = "<that number>"')
-            return await client.close()
+            return
 
         if AUDIT:
             await audit(guild)
+            completed = True
             return
 
         if GIVE:
             await give(guild)
+            completed = True
             return
 
         print('\n  Building %s\n' % guild.name)
@@ -3896,7 +3899,8 @@ async def on_ready():
             say('roles only', 'nothing else was touched')
             print('')
             print('  made %d, already there %d' % (len(made), len(kept)))
-            return await client.close()
+            completed = True
+            return
 
         found = {}
         posts = []
@@ -3984,6 +3988,7 @@ async def on_ready():
                 for f in failed:
                     print('    ' + f)
             print('')
+            completed = True
             return
 
         await keep_order(guild)
@@ -4115,6 +4120,7 @@ async def on_ready():
                 print('  Nothing was deleted. -Prune is what deletes, and it')
                 print('  goes through #staff-updates before anybody runs it.')
         print('')
+        completed = True
     except Exception as e:
         print('\n  stopped: %r' % (e,))
     finally:
@@ -4144,9 +4150,15 @@ if __name__ == '__main__':
                  '. Nothing was asked of Discord.')
     if not TOKEN:
         sys.exit('No token. Set DISCORD_TOKEN first, or run Setup-Discord.ps1.')
+    # Discord dispatches on_ready separately. A clean client shutdown is not
+    # proof that the requested operation finished or that all its steps worked.
+    completed = False
     try:
         client.run(TOKEN, log_handler=None)
-        if GIVE and failed:
+        if not completed:
+            print('The Discord operation did not finish.', file=sys.stderr)
+            sys.exit(1)
+        if failed:
             sys.exit(1)
     except discord.LoginFailure:
         sys.exit('Discord refused that token.')

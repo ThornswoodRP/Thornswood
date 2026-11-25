@@ -58,7 +58,7 @@ if (scales) {
     where.indexOf('records/client-build.json') >= 0 && /\bmain server runs\b[^.]*\b[0-9a-f]{8}\b/.test(where));
 }
 
-// B. The cooked meal is known; the clear on one is what is not built.
+// B. The cooked-meal and bed-rest recovery.
 const cooked = /foodGroup:\s*\{[\s\S]*?cooked:\s*\{\s*food:\s*\d+/.test(needs);
 yes('the needs block knows a cooked meal (NEEDS.foodGroup.cooked)', cooked);
 if (cooked) {
@@ -66,7 +66,7 @@ if (cooked) {
   none('potions.md does not say the server cannot tell a cooked meal', potions, stale);
   const comment = college.slice(0, college.indexOf('*/'));
   none('college.ts\'s comment does not say the server cannot tell a cooked meal', comment, stale);
-  yes('both name the issue that holds the clear (#6239)', potions.indexOf('#6239') >= 0 && comment.indexOf('#6239') >= 0);
+  yes('the guide and implementation cite the recovery work (#6239)', potions.indexOf('#6239') >= 0 && comment.indexOf('#6239') >= 0);
 }
 
 // C. The feed page.

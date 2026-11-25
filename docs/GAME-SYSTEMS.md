@@ -14,6 +14,9 @@ generated from the recipe, harvest, ore and hunt tables. [Who makes what
 the world hands out](systems/who-makes-it.md) is generated from the same
 tables by the makers check.
 
+[Testing progression](systems/testing-progression.md) describes the approved
+playtest tools for advancing a current class or profession and their access rules.
+
 ## Contents
 
 - [Buttons, not commands](#buttons-not-commands)

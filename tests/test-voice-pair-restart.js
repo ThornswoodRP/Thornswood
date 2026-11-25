@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '..');
 const files = ['VoiceSession', 'VoiceLoop', 'VoicePeer', 'VoiceStun', 'VoiceMix', 'VoiceMeter', 'VoiceHrtf', 'Swallow', 'Failure']
   .map((n) => path.join(root, 'launcher', 'app', n + '.cs'));
 files.push(path.join(__dirname, 'voice-launcher', 'StandIns.cs'), path.join(__dirname, 'voice-launcher', 'Driver.cs'), path.join(__dirname, 'voice-launcher', 'HrtfTool.cs'),
+  path.join(__dirname, 'voice-launcher', 'ShutdownCases.cs'),
   path.join(__dirname, 'voice-pair-restart', 'PairRestartCases.cs'));
 const ice = fs.readFileSync(path.join(root, 'launcher', 'app', 'VoiceIce.cs'), 'utf8');
 const binding = 'bound = DefaultLocal();';
