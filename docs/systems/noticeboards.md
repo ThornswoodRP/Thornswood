@@ -100,6 +100,11 @@ the body, up to 600, and Job or Notice. Both the title and the body are
 needed. The server checks both lengths as well as the page, and refuses
 an empty or too long one with a plain line before any gold is taken.
 
+Posting keeps the title and body as written, including colons,
+backslashes, line breaks, repeated spaces and indentation. A refused
+post leaves that draft in the form. If you reach another hold's board
+before the post arrives, nothing is posted and no gold is taken.
+
 A notice is 20 gold. It is read only. There is nothing to take.
 
 A job is 30 gold and its reward, a whole number of gold above nothing,

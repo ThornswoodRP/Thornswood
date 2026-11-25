@@ -164,6 +164,22 @@ S.nameOfPerson(ids[4]); S.nameOfPerson(ids[4]);
 counting = false;
 yes('D2 and outside a pass nothing is held: two asks are two reads', reads.appearance === 2);
 
+// Outcome expiry uses raw membership, not the appearance-filtered near list.
+const saves=g.__thornswoodJournalSaveState, absent=0xff009999;
+const oldFace=store[NOFACE].appearance;store[NOFACE].appearance=null;
+saves[NOFACE]={result:{status:'uncertain'}};onePass();
+yes('D3 loading faces retain their save outcome while raw online membership remains',!!saves[NOFACE]);
+const originalGet=mp.get;
+for(const failure of ['null','throw']){
+ saves[absent]={result:{status:'uncertain'}};
+ mp.get=function(id,key){const got=originalGet(id,key);if(id===0&&key==='onlinePlayers'){if(failure==='throw')throw Error('online unavailable');return null;}return got;};
+ const counted=onePass();
+ yes('D4 unknown online presence retains outcomes and is read once ('+failure+')',!!saves[absent]&&!!saves[NOFACE]&&counted.onlinePlayers===1);
+}
+mp.get=originalGet;onePass();
+yes('D5 a fresh known raw list retires a disconnected outcome and retains a loading face',!saves[absent]&&!!saves[NOFACE]);
+store[NOFACE].appearance=oldFace;
+
 // ------------------------------------------------------------ the wiring --
 yes('E1 the publish test and the name share one read a pass: online() asks hasStoredAppearance of it, ' +
     'and nothing in the social block calls publishedForOthers',

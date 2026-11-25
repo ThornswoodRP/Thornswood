@@ -869,7 +869,10 @@
       try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
       if (pidHere !== Number(pid)) { continue; }
       if (typeof notify === 'function') {
-        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not log a line to', hex(online[i]) + ':', e3); }
+      }
+      if (typeof say === 'function') {
+        try { say(online[i], line); } catch (e4) { plog('furniture: could not say a line to', hex(online[i]) + ':', e4); }
       }
       return;
     }

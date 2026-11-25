@@ -62,7 +62,7 @@ const HERE = __dirname;
 // that string is the only way to tell which copy is running. It
 // stayed at owners-5 across the chat log going in on 22 September, so the
 // health check answered identically before and after and proved nothing.
-const BUILD = 'cull-1-command-ack-1-chat-limit-1-chat-local-1-turn-key-1-backpressure-1-keepalive-2-moved-1-deploy-1-line-close-1-head-1-hush-1-auth-on-1-owns-limit-1-masked-1-relay-shapes-1-origin-1-doors-1-ice-relay-1-proxied-1-token-once-1-tls-only-1-ice-socket-1-no-page-1-most-1-roster-once-1-long-command-1-captions-2-line-log-1-own-reports-1-seated-voice-1-health-here-1';
+const BUILD = 'cull-1-command-ack-1-chat-limit-1-chat-local-1-turn-key-1-backpressure-1-keepalive-2-moved-1-deploy-1-line-close-1-head-1-hush-1-auth-on-1-owns-limit-1-masked-1-relay-shapes-1-origin-1-doors-1-ice-relay-1-proxied-1-token-once-1-tls-only-1-ice-socket-1-no-page-1-most-1-roster-once-1-long-command-1-captions-2-line-log-1-own-reports-1-seated-voice-1-health-here-1-exact-text-1';
 
 // ==== thornswood deploy record ====
 // Which commit this copy came from (#459): Install-Voice.ps1 leaves the deploy
@@ -251,16 +251,21 @@ const COMMAND_REFUSED_EVERY_MS = 10000;
   the end of the body without a word, and the gamemode, which checks the
   lengths, could never see what was missing.
 
-  The longest command is a journal page (#2563): "/journal page " (14), two
+  The legacy journal command (#2563) is "/journal page " (14), two
   ids of about 12 each, a title of up to 60, " :: " (4) and a page of up to
   SOCIAL.pageChars (4,000) with every newline sent as two characters, so
   8,000 at worst. 2,000 cut any page past about 1,900 without a word. 8,200
-  carries the longest page whole (tests/test-2563-journal-length.js holds the
-  sum to this number); the queue still holds at most COMMAND_CAP of them, so
-  about 1.6 MB at the very most.
+  carries that old form whole (tests/test-2563-journal-length.js holds the
+  sum to this number). Only /journal-write-v1 gets the separate 25,000 cap:
+  JSON can escape each code unit as six characters. Oversize exact requests
+  are refused, never cut into a different saved page. The queue still holds
+  at most COMMAND_CAP lines, at most 5 MB of exact command characters.
 */
 const SAID_CHARS = 400;
 const COMMAND_CHARS = 8200;
+// Only the versioned exact-page codec needs JSON's six-character escapes.
+// Its max 4000-character body, 60-character title and bounded ids fit whole.
+const JOURNAL_COMMAND_CHARS = 25000;
 
 // What the gamemode is handed. The offer count is this service's business.
 // proven says this connection's join token checked out, which the gamemode's
@@ -532,6 +537,7 @@ function pluginReport(text) {
    command. Every "/line" still goes to the game server: this decides the log
    and nothing else. */
 function commandLogText(me, text, press) {
+  if (/^\/journal-write-v1(?:\s|$)/i.test(text)) return '/journal-write-v1 [private page]';
   if (press === true && pluginReport(text)) return '';
   if (/^\/joinpass\b/i.test(text)) return '/joinpass [pass]';
   if (/^\/line\s*$/i.test(text) && me && me.inLine) return '';
@@ -3113,7 +3119,21 @@ server.on('upgrade', (req, socket, head) => {
       const me = peers.get(myId);
       // A slash line that is not speech (/me, /do, /w, /s and /ooc are) is a
       // command, and keeps up to COMMAND_CHARS. Everything said keeps 400.
-      const long = pageText(msg.text).slice(0, COMMAND_CHARS);
+      const rawCommand = pageText(msg.text);
+      // This private opcode is never speech, including a malformed outer prefix.
+      // Refuse before either logging or broadcasting; leave the JSON untouched.
+      if (/^\s+\/journal-write-v1(?:\s|$)/i.test(rawCommand)) {
+        ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
+          text:'That page command has an invalid prefix. It was not sent; keep your unsaved draft.'});
+        return;
+      }
+      const exactJournal = /^\/journal-write-v1(?: |$)/.test(rawCommand);
+      if (exactJournal && rawCommand.length > JOURNAL_COMMAND_CHARS) {
+        ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
+          text:'That page request is too long. It was not sent to the game server; keep your unsaved draft.'});
+        return;
+      }
+      const long = exactJournal ? rawCommand : rawCommand.slice(0, COMMAND_CHARS);
       const text = (long.charAt(0) === '/' && !headlines.floatLine(long)) ? long : long.slice(0, SAID_CHARS);
       if (!text) return;
 

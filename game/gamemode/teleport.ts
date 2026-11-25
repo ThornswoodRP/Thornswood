@@ -229,7 +229,7 @@
   /** Every line from the voice service, on its way to handle(). */
   function dispatch(cmd) {
     var profileId = Number(cmd && cmd.profileId) || 0;
-    var parts = String((cmd && cmd.text) || '').trim().split(/\s+/);
+    var parts = commandParts(cmd && cmd.text);
     var word = parts[0].toLowerCase();
     // The launcher's join pass, from the front plugin (#937). Needs no
     // character and answers nothing; see the join pass block.
@@ -813,6 +813,21 @@
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
+  // These payloads are JSON strings, never words to reconstruct with spaces.
+  function commandParts(text) {
+    var raw = String(text || '').trim();
+    var head = /^\S+/.exec(raw);
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1')) return [head[0]];
+    return raw.split(/\s+/);
+  }
+
+  function savedTextPayload(text, word, maximum, fields) {
+    if (typeof text !== 'string' || text.length > maximum || text.indexOf(word + ' ') !== 0) return null;
+    var value;
+    try { value = JSON.parse(text.slice(word.length + 1)); } catch (e) { return null; }
+    if (!Array.isArray(value) || value.length !== fields) return null;
+    return value;
+  }
   function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
@@ -949,7 +964,7 @@
     var profileId = Number(cmd.profileId) || 0;
     if (!profileId) { return; }
 
-    var parts = String(cmd.text || '').trim().split(/\s+/);
+    var parts = commandParts(cmd.text);
     var word = parts[0].toLowerCase();
     var arg = (parts[1] || '').toLowerCase();
 
@@ -1020,6 +1035,51 @@
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
+      if (!needCharacter()) return;
+      var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
+      var journals = g.__thornswoodSocial;
+      if (!journalPayload || !journalPayload.every(function (x) { return typeof x === 'string'; }) ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[0]) ||
+          !(journalPayload[1] === '' || /^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[1])) ||
+          journalPayload[2].length > 60 || journalPayload[3].length > 4000) {
+        toProfile(profileId, 'That page could not be saved: the request is invalid or too long. Your draft is still in J.');
+        return;
+      }
+      if (!journals || !journals.writePageExact) {
+        toProfile(profileId, 'Saving pages is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
+      if (journalWhy) toProfile(profileId, journalWhy);
+      journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-post-v1') {
+      if (!needCharacter()) return;
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
+      var propertyPosts = g.__thornswoodProperty;
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+          !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
+          (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
+          typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
+        toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
+        return;
+      }
+      if (!propertyPosts || !propertyPosts.postExact) {
+        toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
+      return;
     }
 
     // A lockpick that broke in somebody's game.

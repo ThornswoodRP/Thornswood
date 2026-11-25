@@ -180,12 +180,13 @@ function standingFrom(over) {
 // may not read the list). Every path asked is kept in asked.
 function discordFrom(world) {
   return async function (p) {
+    if (p.indexOf('/bans/') < 0) throw new Error('unexpected Discord resource');
     if (world && world.asked) world.asked.push(p);
     const id = decodeURIComponent(p.slice(p.lastIndexOf('/') + 1));
     const s = (world && world.bans) ? world.bans[id] : undefined;
     if (s === 200) return { ok: true, status: 200, body: { user: { id: id } } };
     if (s) return { ok: false, status: s, body: null, why: 'Discord answered ' + s };
-    return { ok: false, status: 404, body: null, why: 'not found' };
+    return { ok: false, status: 404, code: 10026, body: null, why: 'not found' };
   };
 }
 const SITE_CFG = { botKey: 'door-key',

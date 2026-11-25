@@ -382,8 +382,17 @@ attempt('Write a letter', function () {
   const voice = read('voice/voice-server.js');
   const longest = ('/letter "' + 'x'.repeat(60) + '" ' + 'y'.repeat(300)).length;
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
+  const cutLines = /(const rawCommand = pageText\(msg\.text\);[\s\S]*?const text = [^\n]+)/.exec(voice);
+  const pageTextFn = (/function pageText\(v\) \{[\s\S]*?\r?\n\}/.exec(voice) || [''])[0];
+  function carried(line) {
+    const box = {msg:{text:line},COMMAND_CHARS:cap,JOURNAL_COMMAND_CHARS:Number((/const JOURNAL_COMMAND_CHARS = (\d+);/.exec(voice)||[])[1]),SAID_CHARS:400,
+      ws:{send:function(){}},headlines:{floatLine:function(){return null;}},out:null};
+    vm.runInNewContext(pageTextFn+'\n(function(){'+cutLines[1]+'\nout=text;})();',box);return box.out;
+  }
+  const longestLine='/letter "'+'x'.repeat(60)+'" '+'y'.repeat(300);
   yes('B4 the longest line the form can send fits what the chat socket carries for a command (' + cap + ')',
-      /pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
+      !!cutLines && !!pageTextFn && carried(longestLine)===longestLine && longest <= 400 && cap >= 400);
+  yes('B4 ordinary letter commands still keep their original command bound',carried('/letter '+'x'.repeat(cap)).length===cap);
   // Run the branch: what it sends for a name with quotes and spaces in it.
   if (branch) {
     const sent = [];

@@ -78,7 +78,7 @@ const discord = http.createServer((req, res) => {
     if (/\/members\?limit=/.test(u)) return out(403, { message: 'Missing Access' });
     const id = u.slice(u.lastIndexOf('/') + 1);
     const m = MEMBERS[id];
-    if (!m) return out(404, { message: 'Unknown Member' });
+    if (!m) return out(404, { code: 10007, message: 'Unknown Member' });
     return out(200, { user: { id, username: 'u' + id, global_name: 'Visitor ' + id }, nick: null,
                       roles: m === 'play' ? ['r1'] : (m === 'banned' ? ['r2'] : []) });
   };
