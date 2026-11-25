@@ -88,7 +88,8 @@
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);padding:8px 10px;margin:10px 0}',
     '#' + ID + ' input{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(0,0,0,.25);',
-    '  border:1px solid rgba(198,170,109,.30);padding:6px 8px;outline:none}',
+    '  border:1px solid rgba(198,170,109,.30);padding:6px 8px}',
+    '#' + ID + ' input:focus,#' + ID + ' select:focus{outline:2px solid #e9d19b;outline-offset:2px}',
     '#' + ID + ' input.n{width:80px}',
     '#' + ID + ' input.find{flex:1;min-width:160px}',
     '#' + ID + ' select{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(11,10,8,.94);',
@@ -128,7 +129,7 @@
     for (var i = 0; i < found.length; i++) {
       opts += '<option value="' + esc(found[i].base) + '">' + esc(found[i].name) + '</option>';
     }
-    return '<input class="n" id="' + prefix + '-amt" placeholder="price">' +
+    return '<input class="n" id="' + prefix + '-amt" aria-label="Price per item" placeholder="price">' +
       '<select id="' + prefix + '-kind">' + opts + '</select>';
   }
   function priceWords(prefix) {
@@ -168,7 +169,7 @@
         out += '<div class="row"><span class="nm">' + esc(l.count > 1 ? l.count + ' ' : '') + esc(l.what) +
           ', ' + esc(l.words) + ' a piece</span><span class="tools">' + pricePicker(p, found) +
           '<button data-do="price" data-n="' + esc(l.n) + '">Set price</button>' +
-          '<input class="n" id="' + ID + '-back-' + esc(l.n) + '" placeholder="' + (l.count > 1 ? 'all' : '1') + '">' +
+          '<input class="n" id="' + ID + '-back-' + esc(l.n) + '" aria-label="Count to take back" placeholder="' + (l.count > 1 ? 'all' : '1') + '">' +
           '<button data-do="back" data-n="' + esc(l.n) + '" data-all="' + esc(l.count) + '">Take back</button></span></div>';
       }
       out += '<h3>Lay out from your pack</h3>';
@@ -182,12 +183,12 @@
             (pack[k].count > 1 ? ' (' + esc(pack[k].count) + ')' : '') + '</option>';
         }
         out += '<div class="line"><select id="' + ID + '-slot">' + opts + '</select>' +
-          '<input class="n" id="' + ID + '-count" placeholder="1"></div>';
+          '<input class="n" id="' + ID + '-count" aria-label="Count to lay out" placeholder="1"></div>';
         out += '<div class="line">' + pricePicker(ID + '-lay', found) +
           '<span class="note">a piece</span><button class="go" data-do="lay">Lay it out</button></div>';
       }
       out += '<h3>Ask for goods instead of gold</h3>';
-      out += '<div class="line"><input class="find" id="' + ID + '-find" placeholder="the name of what you want in return">' +
+      out += '<div class="line"><input class="find" id="' + ID + '-find" aria-label="Goods wanted in return" placeholder="the name of what you want in return">' +
         '<button data-do="find">Find</button></div>';
       out += '<div class="note">What you find joins the list beside each price, so a piece can cost, say, 2 Iron Ingot ' +
         'instead of gold.</div>';
@@ -203,7 +204,7 @@
         var w = lines[j];
         out += '<div class="row"><span class="nm">' + esc(w.count > 1 ? w.count + ' ' : '') + esc(w.what) +
           ', ' + esc(w.words) + ' a piece</span><span class="tools">' +
-          (w.count > 1 ? '<input class="n" id="' + ID + '-buy-' + esc(w.n) + '" placeholder="1">' : '') +
+          (w.count > 1 ? '<input class="n" id="' + ID + '-buy-' + esc(w.n) + '" aria-label="Count to buy" placeholder="1">' : '') +
           '<button class="go" data-do="buy" data-n="' + esc(w.n) + '"' + (d.keeperHere ? '' : ' disabled') + '>Buy</button>' +
           '</span></div>';
       }

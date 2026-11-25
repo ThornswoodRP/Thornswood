@@ -52,6 +52,15 @@ The other needs first account for their elapsed time. The selected value is then
 
 The count is the last word, and only when it is a number with a name in front of it.
 
+## Restore vitals for testing
+
+| Command | Who | What it does |
+| --- | --- | --- |
+| `/heal` | Playtesters, staff and admins, on Dev and Main | Restores your current health, magicka and stamina |
+| `/heal for <person>` | Admins for another character; the self-only permission still permits your own named character | Restores the named online character's vitals |
+
+Healing does not undo death, change progression, repair equipment or remove injury decisions. It uses the current character's actual vitals and records a successful change. An invalid command or a refused write never reports a successful heal.
+
 ## At somebody else
 
 Staff. With no person named, `/give`, `/spawn` and `/tp` are the ones for yourself, above.

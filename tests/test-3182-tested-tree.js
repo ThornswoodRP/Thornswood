@@ -89,7 +89,8 @@ function jobs(id, name, conclusion, stepConclusion, shares, tree) {
   return [{ id: id * 10, name: name, conclusion: conclusion, steps: steps }].concat(
     gate.map((g, i) => Object.assign({ id: id * 100 + i, steps: [{ name: 'Run the gate harnesses', conclusion: g.conclusion }] }, g)),
     tree === null ? [] : [{ id: id * 1000, name: 'Tree checks', conclusion: tree || 'success', steps: [{ name: 'Lint (warnings only)', conclusion: 'success' }] }],
-    [{ id: 1, name: 'Build check result', conclusion: conclusion, steps: [] }]);
+    [{ id: 1, name: 'Build check result', conclusion: conclusion, steps: [] },
+     { id: 2, name: 'Bot harnesses', conclusion: 'success', steps: [] }]);
 }
 function shares(fix) { return [1, 2, 3, 4, 5].map(n => ({ name: 'Gate harnesses (' + n + ' of 5)', conclusion: 'success' })).map(fix); }
 // A job's log as GitHub hands it over: timestamps, the step's echo of its
@@ -119,6 +120,14 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   let r = await ask(good);
   yes('a green build of this tree, for the head of the pull request merged as HEAD, counts, and names its run: ' + r.why,
       r.run === 'https://github.com/' + REPO_NAME + '/actions/runs/11' && /#3190/.test(r.why));
+  for (const state of ['failure', 'cancelled', 'skipped', 'missing']) {
+    const w = world(11);
+    w.jobs[11] = state === 'missing' ? w.jobs[11].filter(x => x.name !== 'Bot harnesses') :
+      w.jobs[11].map(x => x.name === 'Bot harnesses' ? Object.assign({}, x, { conclusion: state }) : x);
+    r = await ask(w);
+    yes('a green aggregate cannot reuse a tree whose bot job is ' + state + ': ' + r.why,
+      r.run === '' && /its Bot harnesses job did not pass/.test(r.why));
+  }
   r = await ask(world(12, 'Launcher builds (VPS fallback)'));
   yes('the box\'s old fallback job does not (it never wrote the note, #3874; gone since #4983)', r.run === '');
   r = await ask(good, OTHER);

@@ -41,6 +41,7 @@
       node game\tests\test-scenario-noticeboards.js
 */
 const standIn = require('../../tests/stand-in-server.js');
+const { attachScenarioReservation } = require('../../tests/fixtures/pack-first');
 const t = standIn.checks();
 const yes = t.yes;
 
@@ -81,6 +82,7 @@ const HROKI = w.person(0xff000802, { profileId: 2000, name: 'Hroki', town: 'wind
 
 yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
+attachScenarioReservation(w);
 [BRENNA, ALDIS, HROKI].forEach(w.arrive);
 w.run(30000);
 const P = () => w.box().__thornswoodProperty;
@@ -114,6 +116,7 @@ yes('B2 the box\'s panel is written, and the board\'s is not written again',
 let g0 = gold(BRENNA);
 const fund0 = Number(P().funds().windhelm) || 0;
 w.say(BRENNA, '/notice Lost cat::Grey, answers to Whiskers');
+w.run(1300);
 const n0 = noticesOnDisk();
 yes('C1 a notice: 20 gold leave her pack (' + g0 + ' to ' + gold(BRENNA) + ')', gold(BRENNA) === g0 - 20);
 yes('C1 the notice is on the board, title and body', n0.length === 1 && n0[0].title === 'Lost cat' && n0[0].text === 'Grey, answers to Whiskers' && !n0[0].job);
@@ -128,6 +131,7 @@ w.moveTo(ALDIS, CITY, by(-100, 50));
 // -------------------------------------------------------------- D. job --
 g0 = gold(BRENNA);
 w.say(BRENNA, '/job 15 Firewood::Ten logs to the Palace of the Kings');
+w.run(1300);
 const job = noticesOnDisk()[1];
 yes('D1 a job with a 15 gold reward: 45 gold leave her pack', gold(BRENNA) === g0 - 45 && !!job && job.job && job.pay === 15);
 w.say(BRENNA, '/take 2');
@@ -145,6 +149,7 @@ yes('E1 at her door the rent line says 50 owed (' + last(BRENNA) + ')', /50 gold
 w.moveTo(BRENNA, CITY, by(100, 0));
 g0 = gold(BRENNA);
 w.say(BRENNA, '/dropbox gold 60');
+w.run(1300);
 yes('E2 60 gold into the box leave her pack, and 50 of it pays the rent (' + last(BRENNA) + ')',
     gold(BRENNA) === g0 - 60 && claimOnDisk().rent.owed === 0);
 const view = w.prop(BRENNA, 'thornswoodBoxView');
@@ -174,6 +179,7 @@ const keep = JSON.stringify(w.readPrivate('property.json'));
 function placedCount() { return w.did.filter(function (d) { return d[2] === 'placed'; }).length; }
 const placedBefore = placedCount();
 const r = w.restart();
+if (r) { attachScenarioReservation(w); }
 yes('F1 the server restarts and the gamemode loads again', r.loaded);
 [BRENNA, ALDIS, HROKI].forEach(w.arrive);
 w.run(30000);

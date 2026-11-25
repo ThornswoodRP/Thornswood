@@ -250,6 +250,8 @@ function makeEl(tag) {
     id: '', className: '', textContent: '', value: '', onclick: null,
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
+    setAttribute(n, value) { this.attrs[n] = String(value); },
+    removeAttribute(n) { delete this.attrs[n]; },
     focus() { },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });
@@ -342,7 +344,9 @@ attempt('C', function () {
   yes('C3 a topic\'s button shows that topic',
       /Office page on K/.test(texts.land) && /\/stuck/.test(texts.help) && /maneuvers open on 9/.test(texts.work));
   allText = Object.keys(texts).map(function (t) { return texts[t]; }).join(' ');
-  yes('C3 and the one shown is marked', root.querySelector('#ts-help-nav').html.indexOf('data-topic="help" class="go"') !== -1);
+  const currentTopic = nav.filter(function (b) { return b.getAttribute('aria-current') === 'page'; });
+  yes('C3 and the one shown is marked visually and as current', currentTopic.length === 1 &&
+      currentTopic[0].getAttribute('data-topic') === 'help' && currentTopic[0].className === 'go');
   yes('C3 Talking names the voice lock as a fresh install has it, O (#4548)',
       /\bO locks the microphone open\b/.test(texts.talking));
   yes('C3 Living names the stop key as a fresh install has it, N (#4548)',

@@ -380,7 +380,19 @@ async def ensure_problem_panel(guild):
                 if getattr(th, 'archived', False) or not getattr(getattr(th, 'flags', None), 'pinned', False):
                     await th.edit(archived=False, pinned=True)
                 return
+            # This panel describes the form, not an individual Main/Dev
+            # finding. Use the forum's first configured tag only if required;
+            # do not invent a tag or change the forum's settings (#5241).
+            applied = []
+            if getattr(getattr(ch, 'flags', None), 'require_tag', False):
+                applied = list(getattr(ch, 'available_tags', None) or [])[:1]
+                if not applied:
+                    log('#%s requires a tag but has no available tags. Add a tag '
+                        'in the forum settings before the Report a problem panel '
+                        'can be posted.' % ch.name)
+                    return
             made = await ch.create_thread(name='Report a problem', content=PROBLEM_PANEL,
+                                          applied_tags=applied,
                                           view=ProblemPanel(),
                                           allowed_mentions=discord.AllowedMentions.none(),
                                           reason='Report a problem (#3155)')
