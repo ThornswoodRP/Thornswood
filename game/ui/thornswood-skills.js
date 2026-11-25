@@ -684,7 +684,7 @@
     // nav: the first row's text sits 22px under the head line, level with the body's lead,
     // and 32px in from the panel's edge, level with the head and the body
     '#ts-skills .nav{grid-column:1;min-width:0;border-right:1px solid rgba(198,170,109,.22);padding:8px 0;overflow:auto}',
-    '#ts-skills .navrow{padding:14px 20px 13px 29px;border-left:3px solid transparent;cursor:pointer}',
+    '#ts-skills .navrow{display:block;width:100%;font:inherit;text-align:inherit;color:inherit;background:none;border:0;border-radius:0;padding:14px 20px 13px 29px;border-left:3px solid transparent;cursor:pointer}',
     '#ts-skills .navrow.on{border-left-color:#e9d19b;background:rgba(120,94,44,.24)}',
     '#ts-skills .navrow .k{font-size:16px;color:#d9cfb4;letter-spacing:.02em}',
     '#ts-skills .navrow.on .k{color:#f6e9c8}',
@@ -864,6 +864,7 @@
 
   var style = document.createElement('style');
   style.id = 'ts-skills-css';
+  css += '\n#ts-skills button.navrow:focus-visible{outline:2px solid #d9ab52;outline-offset:-2px;}';
   style.textContent = css;
   document.head.appendChild(style);
 
@@ -1945,11 +1946,16 @@
   function drawNav() {
     elNav.textContent = '';
     sections.forEach(function (sec) {
-      var row = el('div', 'navrow' + (sec === section ? ' on' : ''));
+      var row = el('button', 'navrow' + (sec === section ? ' on' : ''));
       row.appendChild(el('div', 'k', titleOf(sec)));
       var v = navValue(sec);
       row.appendChild(el('div', 'v ' + v.c, v.t));
-      row.onclick = function () { goTo(sec); draw(); };
+      row.type = 'button';
+      row.onclick = function () {
+        var focused = document.activeElement === row;
+        goTo(sec); draw();
+        if (focused) elNav.querySelectorAll('.navrow')[sections.indexOf(sec)].focus();
+      };
       elNav.appendChild(row);
     });
   }
@@ -4381,7 +4387,10 @@
     if (root.className === 'gone') return;
     // Native footer buttons own Enter and Space; the row shortcuts below
     // must not turn keyboard navigation into a choice or confirmation.
-    if ((e.target === elBack || e.target === elNext) && (e.key === 'Enter' || e.key === ' ')) return;
+    if (e.target && e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) {
+      if (e.repeat) e.preventDefault();
+      return;
+    }
     // A number being typed into the Office page's rent (#1638) is the box's,
     // Enter and the arrows included. Escape still closes. And the terms of a
     // contract (#4561), K among them: a contract may say "keep".
@@ -4476,6 +4485,7 @@
       root.className = '';
       fit();
       draw();
+      if (window.thornswoodDialog) window.thornswoodDialog.open(elPanel, elTitle);
       tell('opened');
       tell('refresh');   // the server says again what this character is
     },
