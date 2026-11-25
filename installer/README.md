@@ -80,6 +80,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-4680-collection-load-order.ps1` | A missing plugin list is no failed check while the launcher's own folder is not made, since Vortex writes it with the collection, and is still one once the folder is made: the real InstallSteps, run with no plugin list in AppData | Pull request and nightly |
 | `launcher/tests/test-4681-install-room.ps1` | What the install window says about room on each drive is what the install refuses: the window's line, its Install button and InstallSteps all read InstallPlace.Rooms and InstallPlace.Short, held over a spread of free space on both drives | Pull request and nightly |
 | `launcher/tests/test-4693-setup-reader.ps1` | A screen reader can use the install window: each drive is a radio button named by its letter and free space and reads as chosen or not, the links name their pages, the progress bar and log have names, and the bar's value and each status line are told to Windows as they change, read through the real window's automation peers on Avalonia's headless platform | Pull request and nightly |
+| `launcher/tests/test-4696-reinstall-config.ps1` | Exercises setup's saved configuration and its folder choice across reinstalls | Pull request and nightly |
 | `launcher/tests/test-4697-setup-ownership.ps1` | Runs setup's copy stage and uninstall in scratch folders: a collision leaves the existing file alone, failed copies do not become owned, and the list keeps files from earlier setups and launcher updates | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
@@ -205,8 +206,9 @@ a folder the launcher already made), with an old `Game` folder parked as
 Skyrim's when the files go there); the files copied, stopping with both
 folders named when one will not copy; the profile folders, the load order when
 the package carries one, `applied.txt`, `SOURCE CODE.txt`, the licence texts;
-`config.json` merged, never wiping a filled field with a blank one, and kept to
-this Windows account; `Thornswood.lnk` in the install folder; and the checks at
+`config.json` merged, updating only the package's channel and feed fields and
+keeping the person's settings unless they change a choice on the setup card;
+the file is kept to this Windows account; `Thornswood.lnk` in the install folder; and the checks at
 the end, where the script extender and the address library are the
 collection's to install next, and a wrong Skyrim build is the launcher's
 Downgrade button's to fix.
