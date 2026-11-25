@@ -47,5 +47,7 @@ ownership API is invented for a stationary ACTI reference.
 Automated tests exercise actual activation and draw paths, native empty-gem
 fields, generated production exports, actor replacement, actual profession,
 late eligibility changes, stock, caps, extras, abandonment and write refusals.
-Pearl/crimson, existing quest/trade and startup regressions remain required.
+The pearl, crimson and geode work have their own harnesses,
+`game/tests/test-merchant-pearl-bed.js`, `game/tests/test-merchant-crimson.js`
+and `game/tests/test-merchant-geode.js`, beside the quest and trade ones.
 A release can follow only after the source merges with required green CI.

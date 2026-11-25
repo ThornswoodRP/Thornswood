@@ -54,10 +54,10 @@ function done() {
   temps.forEach(function (d) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { console.log('      could not remove ' + d + ': ' + e.message); } });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 yes('0 the books block is in the gamemode', block.length > 1000);
-if (block.length <= 1000) { done(); }
+if (block.length <= 1000) { done(); return; }
 
 // The labels the item table knows, as __thornswoodResolveItem answers them:
 // "Iron Ingots" is the same item as "Iron Ingot".

@@ -146,7 +146,7 @@ try {
 const fs = require('fs');
 let o;
 try { o = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); }
-catch (e) { console.log('THROWS ' + e.message); process.exit(0); }
+catch (e) { console.log('THROWS ' + e.message); return; }
 const want = fs.readFileSync(process.argv[3], 'utf8');
 console.log((o && o.ticket === 'tk1.x.y' ? 'TICKET ' : 'NOTICKET ') +
             (o && o.logs && o.logs['launcher.log'] === want ? 'SAME' : 'DIFFERENT'));

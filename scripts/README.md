@@ -153,6 +153,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Run-OnBox.ps1](mods/Run-OnBox.ps1) | Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders. |
 | [mods/Send-GameArchives.ps1](mods/Send-GameArchives.ps1) | Puts Skyrim's own archives that the content tools read on the VPS box, in C:\Thornswood-GameData, each checked against records\skyrim-files.json on this machine before it goes and on the box after it lands, and the loose string tables records\game-strings.json names, held to that record the same way. |
 | [mods/Set-LoadOrder.ps1](mods/Set-LoadOrder.ps1) | Writes records\load-order.json, the load order the servers run and every content build reads (#5191), moved to the collection revision records\collection-plugins.json names. |
+| [mods/SteamLibrary.ps1](mods/SteamLibrary.ps1) | Finds the Steam copy of Skyrim Special Edition without changing any files. |
 | [ops/Chargen-Log.ps1](ops/Chargen-Log.ps1) | What the server thinks is happening to your character. |
 | [ops/Check-Board.ps1](ops/Check-Board.ps1) | Holds the board's cards to the rules docs/guide/the-board.md gives them, from a board.json Read-Board.ps1 wrote, and names every card that breaks one. |
 | [ops/Check-Chargen.ps1](ops/Check-Chargen.ps1) | Preflight for character creation. Everything it looks at is something that silently produces a broken first join rather than an error message, so it is worth thirty seconds before starting the server. |
@@ -160,6 +161,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Check-Roster.ps1](ops/Check-Roster.ps1) | What is in each server's private folder, by name and size only. |
 | [ops/Discord-Hook.ps1](ops/Discord-Hook.ps1) | The Discord webhooks releases post through, kept in one place on the VPS instead of a file on each machine that ships. |
 | [ops/List-Untouched.ps1](ops/List-Untouched.ps1) | Lists the open issues nobody has touched for a month, oldest first, for the weekly board review to re-rank (#5185). |
+| [ops/MainGameplayPolicies.ps1](ops/MainGameplayPolicies.ps1) | Stages the two fixed Main gameplay policies while preserving other settings. |
 | [ops/Mark-Spot.ps1](ops/Mark-Spot.ps1) | Reads the spots you marked in game and prints them in the shape the content table wants. |
 | [ops/Move-World.ps1](ops/Move-World.ps1) | Moves one game server's world out of the file driver and into its own database in the box's MongoDB (#6237), with the engine's own move, and starts the server on it. |
 | [ops/New-Character.ps1](ops/New-Character.ps1) | Throws the test character away so the next connect builds a fresh one. |
@@ -177,6 +179,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Set-Door.ps1](ops/Set-Door.ps1) | Turns the game server's door on, off, or tells you what it has been seeing. |
 | [ops/Set-Ref.ps1](ops/Set-Ref.ps1) | Makes a release tag, or deletes a branch or a tag, on GitHub for a session whose git cannot write refs: a cloud Claude thread (#3107, #3314). |
 | [ops/Set-Server.ps1](ops/Set-Server.ps1) | Sets the server everyone connects to, in the two places that decide it, and sends the feed to the VPS (#907). |
+| [ops/Stage-MainGameplayPolicies.ps1](ops/Stage-MainGameplayPolicies.ps1) | Stages Main's audited Dev gameplay policies without restarting a process. |
 | [ops/Wipe-Saves.ps1](ops/Wipe-Saves.ps1) | Starts the world over. Everybody begins again, nothing is claimed, nothing has been looted, and every container in the province is holding what Bethesda put in it. |
 | [ops/WorkflowRun.ps1](ops/WorkflowRun.ps1) | Starts a workflow on main and reads the answer its runner left, for a script whose session cannot make the change itself: Set-Ref.ps1 (a ref write, which a cloud session's proxy refuses) and Set-BuildRunners.ps1 (a runner label, which needs the box's GitHub App). |
 | [release/Add-VirusTotalComment.ps1](release/Add-VirusTotalComment.ps1) | Optional manual tool: leaves one community comment on a build's VirusTotal report, or says plainly that it is not commenting and carries on. |
@@ -230,7 +233,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/New-ClientLicenceRecord.ps1](release/New-ClientLicenceRecord.ps1) | Records which libraries are in the client files, vcpkg's and the others, with each one's licence text, into records\client-licences.json and records\client-licences\. |
 | [release/New-CollectionRecord.ps1](release/New-CollectionRecord.ps1) | Writes records\collection.json, the collection as it should be (#5189), from a revision laid out by Install-NexusRevision.ps1 -Record -KeepPlugins. |
 | [release/New-FeedRoot.ps1](release/New-FeedRoot.ps1) | Stages the folder a release from the feed is built from: every file the channel's last release left installed, from the site, by its sha256. |
-| [release/New-NexusRevision.ps1](release/New-NexusRevision.ps1) | Makes the next revision of the Thornswood collection on Nexus Mods (slug 7essxf), as a draft, from the revision published now with mods moved to a new Nexus file (-Mod), added (-Add), given new installer answers (-Answers) or taken out (-Remove), plugins given a new load rule (-Rule) or their light flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft (-Publish) or discards one (-Discard) (#2914). |
+| [release/New-NexusRevision.ps1](release/New-NexusRevision.ps1) | Makes the next revision of the Thornswood collection on Nexus Mods (slug 7essxf), as a draft, from the revision published now with mods moved to a new Nexus file (-Mod), added (-Add), given new installer answers (-Answers), given fresh reference tags (-RefreshTag) or taken out (-Remove), plugins given a new load rule (-Rule) or their light flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft (-Publish) or discards one (-Discard) (#2914). |
 | [release/New-ServerBuildRecord.ps1](release/New-ServerBuildRecord.ps1) | Records every server file the fork builds and the one commit they were built from, into records\server-build.json. |
 | [release/New-SignedManifest.ps1](release/New-SignedManifest.ps1) | Writes the manifest a Release for the box deploy agent carries (#5180), and the catalog over it that Sign-OnRunner.ps1 then signs. |
 | [release/New-SkyrimFilesRecord.ps1](release/New-SkyrimFilesRecord.ps1) | Records every file of the pinned Skyrim build, from the depot manifests the Downgrade asks Steam for, into records\skyrim-files.json. |
@@ -286,6 +289,14 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Wait-Deployment.ps1](release/Wait-Deployment.ps1) | A release counts as shipped only when the box says it is running it. |
 | [release/Where.ps1](release/Where.ps1) | Says where the engine fork and the build output are, so every script asks one place instead of carrying its own copy of a path. |
 | [release/Write-EnginePinText.ps1](release/Write-EnginePinText.ps1) | Writes the engine pin's lines in THIRD-PARTY.md and site\data\site\credits.md from the records, or with -Check says which ones differ from them. |
+| [turn/Install-PionRelay.ps1](turn/Install-PionRelay.ps1) | Run locally on the Windows game VPS only, after reviewed cutover proof. |
+| [turn/New-PionPackage.ps1](turn/New-PionPackage.ps1) | Builds the Windows relay from an immutable source commit and the pinned portable Go archive. |
+| [turn/PionHost.ps1](turn/PionHost.ps1) | Windows host controls shared by the reviewed installer and runtime gate. |
+| [turn/PionPackage.ps1](turn/PionPackage.ps1) | Windows TURN package checks shared by the builder and installer. |
+| [turn/PionPolicy.ps1](turn/PionPolicy.ps1) | Requires -Version 7 The public policy contains no secret, performs no I/O and opens no listener. |
+| [turn/Run-Pion.ps1](turn/Run-Pion.ps1) | Foreground native UDP relay, under its canonical restricted task identity. |
+| [turn/Switch-DevTurnRelay.ps1](turn/Switch-DevTurnRelay.ps1) | Existing Dev issuer only. Never changes Main or a relay firewall/task. |
+| [turn/Switch-MainTurnRelay.ps1](turn/Switch-MainTurnRelay.ps1) | Requires -Version 7 |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
 | [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |

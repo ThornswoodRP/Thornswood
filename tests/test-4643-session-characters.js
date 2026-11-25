@@ -135,5 +135,5 @@ async function main() {
 
 main().catch((e) => yes('the harness ran to the end: ' + (e && e.stack || e), false)).then(() => {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 });

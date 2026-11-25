@@ -112,4 +112,4 @@ yes('the Python helper writes an edit into its part and builds', pr.status === 0
 yes('and reads and writes a plain file as it is', fs.existsSync(plain) && fs.readFileSync(plain, 'utf8') === 'plain two\n');
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

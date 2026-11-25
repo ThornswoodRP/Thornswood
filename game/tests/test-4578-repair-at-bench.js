@@ -39,13 +39,13 @@ function yes(what, cond, detail) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const start = gm.indexOf('// ==== thornswood durability ====');
 const end = gm.indexOf('// ==== end thornswood durability ====');
 yes('the durability block is in the gamemode', start >= 0 && end > start);
-if (!(start >= 0 && end > start)) { done(); }
+if (!(start >= 0 && end > start)) { done(); } else {
 const block = gm.slice(start, end);
 
 const RECIPES = T.table('RECIPES_BY_ID');
@@ -69,7 +69,7 @@ const SWORD_ROW = madeAt(FORGE, 'Smith', 'WEAP', 'Swords');
 const ROBE_ROW = madeAt(LOOM, 'Tailor', 'ARMO');
 yes('T1 the recipe table has a smith\'s weapon made at a forge, and a tailor\'s garment at a loom',
     !!SWORD_ROW && !!ROBE_ROW && ACCESS[FORGE].name === 'CraftingSmithingForge' && ACCESS[LOOM].name === 'MCE_CraftingLoom');
-if (!SWORD_ROW || !ROBE_ROW) { done(); }
+if (!SWORD_ROW || !ROBE_ROW) { done(); } else {
 
 const KIT_ITEMS = { weapon: '154b0:Thornswood-Content.esp', armour: '154b1:Thornswood-Content.esp',
                     clothing: '154b2:Thornswood-Content.esp' };
@@ -111,7 +111,7 @@ fbox.globalThis = fbox;
 vm.runInNewContext(block, fbox);
 const create = fbox.__thornswoodDurabilityCreate;
 yes('A0 the block hands over its factory', typeof create === 'function');
-if (typeof create !== 'function') { done(); }
+if (typeof create !== 'function') { done(); } else {
 
 function world() {
   const w = { packs: {}, states: {}, at: {}, writes: 0, shown: [] };
@@ -350,3 +350,4 @@ function runBlock(e, state) {
 }
 
 done();
+}}}

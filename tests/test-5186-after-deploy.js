@@ -136,5 +136,5 @@ function fakeGitHub() {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch(e => { console.log('FAIL  ' + e.stack); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch(e => { console.log('FAIL  ' + e.stack); process.exitCode = 1; });

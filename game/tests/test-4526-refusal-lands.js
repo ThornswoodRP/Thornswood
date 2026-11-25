@@ -38,7 +38,7 @@ function mint(o) {
 const a = src.indexOf('// ==== thornswood join pass ====');
 const b = src.indexOf('// ==== end thornswood join pass ====');
 yes('the join pass block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!(a >= 0 && b > a)) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; } else {
 
 const PRIV = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4526-'));
 fs.writeFileSync(path.join(PRIV, 'door.json'), JSON.stringify({ site: 'https://thornswood.net/dev', key: 'door-key', passKey: KEY }));
@@ -137,4 +137,5 @@ for (const how of ['lost', 'throw']) {
 try { fs.rmSync(PRIV, { recursive: true, force: true }); } catch (e) { }
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

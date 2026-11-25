@@ -147,6 +147,7 @@ function join(token, msg, keep) {
     const finish = (v) => {
       if (answered) return;
       answered = true;
+      clearTimeout(late);
       if (!(keep && v.t === 'welcome')) { try { ws.close(); } catch (e) {} }
       if (keep) { v.ws = ws; }
       done(v);
@@ -159,7 +160,7 @@ function join(token, msg, keep) {
     };
     ws.onerror = () => finish({ t: 'refused' });
     ws.onclose = () => finish({ t: 'refused' });
-    setTimeout(() => finish({ t: 'nothing came back' }), 4000);
+    const late = setTimeout(() => finish({ t: 'nothing came back' }), 4000);
   });
 }
 
@@ -366,9 +367,8 @@ async function ready() {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  // Kill, then let the loop drain before exiting. Calling process.exit while
-  // the child's pipes are still closing trips a libuv assertion on Windows,
-  // which looks like a failure and is not one.
+  // Node ends once cleanUp has stopped the services and closed the site,
+  // with no call to its exit function (#6036).
   process.exitCode = fail ? 1 : 0;
   } finally {
     await cleanUp();
@@ -394,7 +394,4 @@ async function cleanUp() {
     try { fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
     catch (e) { console.error('could not remove ' + d + ': ' + e.message); process.exitCode = 1; }
   }
-  // Let the loop drain before exiting: process.exit while the children's
-  // pipes are still closing trips a libuv assertion on Windows.
-  setTimeout(() => {}, 150);
 }

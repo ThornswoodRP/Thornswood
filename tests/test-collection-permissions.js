@@ -52,7 +52,7 @@ function yes(what, cond, more) {
 // 1. the record and its shape
 let record = null;
 try { record = cp.readRecord(); } catch (e) { yes('records/collection-permissions.json reads: ' + e.message, false); }
-if (!record) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!record) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
 const shape = cp.shapeProblems(record);
 yes('every mod in the record has every field, and every reading a date, a reader, a known collections value and the page\'s words', shape.length === 0, shape.slice(0, 8).join('; '));
 
@@ -187,4 +187,4 @@ yes('New-NexusRevision.ps1 checks the revision it builds and the draft it publis
 yes('the record is the text update itself would write', fs.readFileSync(cp.RECORD, 'utf8').replace(/\r\n/g, '\n') === cp.text(record));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

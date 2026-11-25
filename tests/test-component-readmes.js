@@ -368,6 +368,14 @@ SIX.forEach(function (d) {
       !!inst && t.indexOf('`' + inst + '`') >= 0);
   yes('installer: the README says the script and the batch files are gone and nothing falls back to them',
       /Setup-Thornswood/.test(t) && /nothing falls back to them/.test(t));
+  const installerEntries = fs.readdirSync(path.join(ROOT, 'installer')).filter(function (e) { return e !== 'README.md'; });
+  yes('installer: the README names every file and folder in installer/ (' + installerEntries.join(', ') + ')',
+      installerEntries.length > 0 && installerEntries.every(function (e) { return t.indexOf(e) >= 0; }));
+  const setupReadme = read('installer/setup/README.md');
+  yes('installer: installer README does not share the setup README title',
+      !setupReadme || t.split('\n')[0].trim() !== setupReadme.split('\n')[0].trim());
+  yes('installer: the README describes the licences folder and how it differs from the payload licences',
+      t.indexOf('payload') >= 0 && t.indexOf('client') >= 0 && t.indexOf('SOURCE CODE.txt') >= 0);
 }
 
 // ------------------------------------------- nothing carries a README out --
@@ -519,4 +527,4 @@ SIX.forEach(function (d) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -33,7 +33,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function fnOf(head) {
@@ -53,7 +53,7 @@ const created = createdAt >= 0 && createdEnd >= 0
 yes('tellKeptCharacter is in gamemode.js', !!tell);
 yes('and its property and its line', !!PROP && typeof LINE === 'string' && LINE.length > 0);
 yes('and created(), which spawn calls when it makes a new character', !!created);
-if (fail) { done(); }
+if (fail) { done(); } else {
 
 /*
   The engine, as far as these calls reach it. kept is what the fork's
@@ -206,3 +206,4 @@ for (const how of ['drop', 'throw']) {
 }
 
 done();
+}

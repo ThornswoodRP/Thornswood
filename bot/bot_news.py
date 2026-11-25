@@ -12,10 +12,12 @@ import re
 import shutil
 import subprocess
 import time
+from email.policy import HTTP as HEADER_POLICY
 
+import aiohttp
 import discord
 
-from bot_base import DATA_DIR, HERE
+from bot_base import CONTEXT, DATA_DIR, HERE
 from bot_core import SITE, _int_env, _state_read, _state_write, client, log
 from bot_task_text import strip_footer
 from bot_notices import _github_time
@@ -246,6 +248,41 @@ def _cut(body):
     return body
 
 
+def news_picture(line):
+    """One captioned first-party screenshot, matching the site and launcher."""
+    m = re.fullmatch(r'!\[([^\]\r\n]{1,160})\]\((https://thornswood\.net/news-[a-z0-9][a-z0-9-]{0,119}\.(?:png|jpg|webp))\)', line)
+    if not m:
+        return None
+    # ECMAScript's trim set, shared with the native and browser parsers.
+    alt = m[1].strip('\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff')
+    if not alt or len(m[1].encode('utf-16-le', errors='surrogatepass')) > 320 or re.search(r'[\x00-\x1f\x7f]', alt):
+        return None
+    return {'url': m[2], 'alt': alt}
+
+
+def _news_literal(text):
+    # Keep backticks themselves outside the code spans rather than replacing
+    # them. Everything else, including links and Discord tags, stays literal.
+    return '\\`'.join('`' + part + '`' if part else '' for part in text.split('`'))
+
+
+def _news_picture_lines(lines):
+    image, rest = None, []
+    for line in lines:
+        said = line.strip()
+        bullet = said.startswith('- ')
+        if bullet:
+            said = said[2:].strip()
+        picture = news_picture(said) if bullet and image is None else None
+        if picture:
+            image = picture
+        else:
+            # Invalid image notation is literal, never a masked external
+            # link or a spoiler. A code span also stops URL auto-linking.
+            rest.append(_news_literal(line) if '![' in said else line)
+    return image, rest
+
+
 def news_post_parts(channel, doc, areas=None):
     """The embed's title, description, footer, colour and time: the note's
        headline as the title, the rest under it, blue for dev and gold for
@@ -270,7 +307,9 @@ def news_post_parts(channel, doc, areas=None):
     if areas:
         footer.append(', '.join(areas))
     footer.append('build ' + _version(tag))
+    image, rest = _news_picture_lines(rest)
     return {'title': title, 'description': _cut('\n'.join(rest).strip()),
+            'image': image,
             'footer': ' \u00b7 '.join(footer),
             'color': DEV_COLOUR if dev else MAIN_COLOUR,
             'author': 'Thornswood dev' if dev else 'Thornswood',
@@ -281,7 +320,9 @@ def main_server_parts(note, areas, at=None):
     """A Main Server change's post in #news: its headline, its lines, and
        the footer "Main Server · Discord"."""
     head, details = note
+    image, details = _news_picture_lines(details)
     return {'title': head[:250], 'description': _cut('\n'.join(details)),
+            'image': image,
             'footer': ' \u00b7 '.join(['Main Server'] + ([', '.join(areas)] if areas else [])),
             'color': MAIN_COLOUR, 'author': 'Thornswood', 'at': at}
 
@@ -413,6 +454,18 @@ async def news_once(state, docs, send, save, now=None, about=None):
     return done
 
 
+async def _news_picture_ready(image):
+    """Do not announce a screenshot before the site has deployed its file."""
+    timeout = aiohttp.ClientTimeout(total=8, ceil_threshold=9)
+    async with aiohttp.ClientSession(timeout=timeout, cookie_jar=aiohttp.DummyCookieJar()) as session:
+        async with session.head(image['url'], allow_redirects=False, ssl=CONTEXT,
+                                headers={'User-Agent': 'ThornswoodNews/1'}) as response:
+            types = response.headers.getall('Content-Type', [])
+            kind = HEADER_POLICY.header_factory('Content-Type', types[0]) if len(types) == 1 else None
+            return (response.status == 200 and str(response.url) == image['url'] and kind is not None
+                    and not kind.defects and kind.content_type in ('image/png', 'image/jpeg', 'image/webp'))
+
+
 async def _news_send(channel, parts, said_once):
     cid = DEV_NEWS_ID if channel == 'dev' else MAIN_NEWS_ID
     where = '#staff-news' if channel == 'dev' else '#news'
@@ -425,12 +478,30 @@ async def _news_send(channel, parts, said_once):
                    % ('dev-channel.txt' if channel == 'dev' else 'news-channel.txt')))
             said_once.add(channel)
         return None
+    if parts.get('image'):
+        deadline = time.monotonic() + 8
+        try:
+            ready = await asyncio.wait_for(_news_picture_ready(parts['image']), timeout=8)
+        except Exception as ex:
+            if channel not in said_once:
+                log('news: screenshot unavailable (%s); the %s post waits for the site' % (type(ex).__name__, channel))
+            said_once.add(channel)
+            return None
+        if not ready or time.monotonic() >= deadline:
+            if channel not in said_once:
+                log('news: screenshot is not served as an image yet; the %s post waits for the site' % channel)
+            said_once.add(channel)
+            return None
     logo = SITE + '/logo.png'
     e = discord.Embed(title=parts['title'], url=SITE + '/news',
                       description=parts['description'], color=parts['color'])
     e.set_author(name=parts['author'], url=SITE, icon_url=logo)
     e.set_thumbnail(url=logo)
     e.set_footer(text=parts['footer'], icon_url=logo)
+    if parts.get('image'):
+        e.set_image(url=parts['image']['url'])
+        caption = _news_literal(parts['image']['alt'])
+        e.add_field(name='Screenshot', value=caption + '\n[Open full screenshot](' + parts['image']['url'] + ')', inline=False)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)
     # A post pings News Pings, the role its button in #welcome promises

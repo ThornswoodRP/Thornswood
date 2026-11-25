@@ -281,9 +281,14 @@ function run(root, write) {
 module.exports = { measure: measure, page: page, run: run };
 
 if (require.main === module) {
+  process.exitCode = cli();
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const result = run(null, process.argv.indexOf('--write') >= 0);
   const none = result.rows.filter(r => !r.makers.length).length;
   console.log(result.rows.length + ' items handed out, ' + (result.rows.length - none) + ' with a maker, ' + none + ' waiting.');
   for (const p of result.problems) console.log('FAIL  ' + p);
-  process.exit(result.problems.length ? 1 : 0);
+  return result.problems.length ? 1 : 0;
 }

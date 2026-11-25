@@ -41,6 +41,7 @@ namespace Thornswood
         static string mixerName = "Thornswood";
         static string mixerIcon;
         static Action<string> log;
+        static string audioOutputId;
 
         /// <summary>
         /// How many times the playback has been made this session, and closed.
@@ -60,10 +61,12 @@ namespace Thornswood
         /// music, not here: a launcher that starts while the game runs, or
         /// with the music off in Settings, never makes one at all.
         /// </summary>
-        public static void Start(string file, double volume, string name, string icon, Action<string> say)
+        public static void Start(string file, double volume, string name, string icon, Action<string> say,
+            string outputId = null)
         {
             log = say;
             trackPath = file;
+            audioOutputId = outputId;
             wantVol = Clamp(volume);
             if (!string.IsNullOrEmpty(name)) mixerName = name;
             mixerIcon = icon;
@@ -130,7 +133,7 @@ namespace Thornswood
             if (string.IsNullOrEmpty(trackPath)) return;
             try
             {
-                var p = new Playback(trackPath, mixerName, mixerIcon);
+                var p = new Playback(trackPath, mixerName, mixerIcon, audioOutputId);
                 p.Set(wantPlay, wantVol);
                 playback = p;
                 Opened++;
@@ -169,7 +172,7 @@ namespace Thornswood
             const int Buffers = 4;
             const int FramesPerBuffer = 4410;
 
-            readonly string path, name, icon;
+            readonly string path, name, icon, outputId;
             readonly AutoResetEvent done = new AutoResetEvent(false);
             readonly AutoResetEvent wake = new AutoResetEvent(false);
             // Set once the thread has closed the track, or never had it.
@@ -177,11 +180,12 @@ namespace Thornswood
             volatile bool play, stop, begun;
             double vol;
 
-            public Playback(string path, string name, string icon)
+            public Playback(string path, string name, string icon, string outputId)
             {
                 this.path = path;
                 this.name = name;
                 this.icon = icon;
+                this.outputId = outputId;
             }
 
             public void Set(bool play, double volume)
@@ -240,7 +244,11 @@ namespace Thornswood
                         Bits = 16,
                         Extra = 0
                     };
-                    int r = waveOutOpen(out dev, WaveMapper, ref fmt, done.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, CallbackEvent);
+                    var completion = done.SafeWaitHandle.DangerousGetHandle();
+                    int output = AudioOutput.WaveOutIndex(outputId);
+                    int r = waveOutOpen(out dev, output, ref fmt, completion, IntPtr.Zero, CallbackEvent);
+                    if (r != 0 && output != AudioOutput.WaveMapper)
+                        r = waveOutOpen(out dev, AudioOutput.WaveMapper, ref fmt, completion, IntPtr.Zero, CallbackEvent);
                     if (r != 0)
                     {
                         dev = IntPtr.Zero;
@@ -479,7 +487,6 @@ namespace Thornswood
 
         // ------------------------------------------------------------ waveOut
 
-        const int WaveMapper = -1;
         const int CallbackEvent = 0x00050000;
         const int HeaderDone = 0x00000001;
         static readonly int HeaderSize = Marshal.SizeOf<WaveHeader>();

@@ -31,7 +31,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function lift(from, to) {
@@ -50,6 +50,7 @@ const limitSrc = lift('/*\n  THE TAKE LIMIT: A FEW THINGS', '})();\n// end of th
 yes('gamemode.js has guard(), the take watcher and the take limit',
     guardSrc !== null && watchSrc !== null && limitSrc !== null);
 if (guardSrc === null || watchSrc === null || limitSrc === null) done();
+else {
 
 // The constants are named at the top of the block, where Patrick can change them.
 yes('TAKE_LIMIT is 3', /var TAKE_LIMIT = 3;/.test(limitSrc));
@@ -331,3 +332,4 @@ yes('the block publishes the take limit', !!(s.limit && typeof s.limit.take === 
 
 try { fs.rmSync(box, { recursive: true, force: true }); } catch (e) { }
 done();
+}

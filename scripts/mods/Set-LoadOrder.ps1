@@ -34,7 +34,7 @@ if (-not $Repo) { $Repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '.
 
 $path = Join-Path $Repo 'records\load-order.json'
 try { $order = Get-ThornswoodContentOrder -Repo $Repo }
-catch { Write-Host ('STOP. ' + $_.Exception.Message + ' Nothing was written.'); exit 1 }
+catch { Write-Output ('STOP. ' + $_.Exception.Message + ' Nothing was written.'); exit 1 }
 $text = Format-ThornswoodLoadOrderRecord -Slug $order.Slug -Revision $order.Revision -Order $order.Names
 $now = if (Test-Path -LiteralPath $path -PathType Leaf) { [IO.File]::ReadAllText($path) } else { '' }
 $say = "collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +

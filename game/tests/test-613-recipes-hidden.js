@@ -41,7 +41,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -76,7 +76,7 @@ const PROPERTY = (/^var RECIPES_HIDDEN_PROPERTY = '([^']+)';$/m.exec(src) || [])
 const ok = RULES && CHARACTER && GATE_PARTS.concat(HIDE_PARTS).every(function (p) { return p !== null; }) &&
            PER_FRAME > 0 && !!PROPERTY;
 yes('the rules, the character store, the craft gate and the recipe list block are in the gamemode', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
@@ -394,3 +394,4 @@ const COOK = person(0xff000205, 0x13746, 'cook', 'hearthcook');
 }
 
 done();
+}

@@ -32,7 +32,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function fnOf(head) {
   const a = src.indexOf(head);
@@ -61,7 +61,7 @@ yes('the human shift is still the Belted Tunic and the Boots',
   !!CHARGEN && JSON.stringify(CHARGEN.shift) === JSON.stringify([['1be1a:Skyrim.esm', 1], ['1be1b:Skyrim.esm', 1]]));
 yes('beginChoosing, the step after the race menu, gives the shift for the race',
   !!chooseSrc && /giveShift\(actorId\)/.test(chooseSrc));
-if (fail) { done(); }
+if (fail) { done(); } else {
 
 // ------------------------------------------------------------- the stand-in
 const IDS = {
@@ -174,3 +174,4 @@ yes('the cut file names them with the riekling pieces that stay',
   ['Riekling LoinCloth 1', 'Riekling Cloth Hand Wraps'].every(n => cut.rieklingKept.indexOf(n) < 0));
 
 done();
+}
