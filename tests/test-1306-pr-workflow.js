@@ -42,22 +42,6 @@ yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.
 yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
     !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
 yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
-// #5958: an independent job, outside the JS/PS gate's path selection. The
-// runner's real process behavior is exercised by test-5958-bot-runner.ps1.
-for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly', read(path.join(WF, 'nightly.yml'))]]) {
-  const match = /\n  bot:\n([\s\S]*?)(?=\n  [a-z][\w-]*:\n|$)/.exec(workflow);
-  const bot = match ? match[1] : '';
-  yes(what + ' runs the same complete bot suite on hosted Windows with Python 3.12',
-    /name: Bot harnesses/.test(bot) && /runs-on: windows-latest/.test(bot) &&
-    /python-version: '3.12'/.test(bot) && /& \.\/scripts\/dev\/Run-BotHarnesses\.ps1 -Python \$py/.test(bot));
-  yes(what + ' installs the bot lock with hashes and refuses installation failures',
-    /--require-hashes --only-binary :all: -r bot\\requirements\.txt/.test(bot) &&
-    /if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}/.test(bot));
-  if (what === 'pull request') {
-    yes('the bot job has no path-selection or conditional skip on a pull request',
-      !/^    (needs|if):/m.test(bot));
-  }
-}
 // No workflow runs a pull request on the VPS, and none runs on
 // pull_request_target.
 const others = fs.readdirSync(WF).filter(f => /\.ya?ml$/.test(f)).filter(f => {
@@ -117,5 +101,21 @@ yes('the pull request build does not use always() either', code(pr).indexOf('alw
 // it; a pull request's newer push still cancels its older run.
 yes('main waits for the build in progress, one group a ref', /\nconcurrency:\n(?:#.*\n)*  group: build-\$\{\{ github\.ref \}\}\n  cancel-in-progress: false\n/.test(build));
 yes('a pull request cancels its older run', /\nconcurrency:\n(?:#.*\n)*  group: build-pr-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n/.test(pr));
+// #5958: an independent job, outside the JS/PS gate's path selection. The
+// runner's real process behavior is exercised by test-5958-bot-runner.ps1.
+for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly', read(path.join(WF, 'nightly.yml'))]]) {
+  const match = /\n  bot:\n([\s\S]*?)(?=\n  [a-z][\w-]*:\n|$)/.exec(workflow);
+  const bot = match ? match[1] : '';
+  yes(what + ' runs the same complete bot suite on hosted Windows with Python 3.12',
+    /name: Bot harnesses/.test(bot) && /runs-on: windows-latest/.test(bot) &&
+    /python-version: '3.12'/.test(bot) && /& \.\/scripts\/dev\/Run-BotHarnesses\.ps1 -Python \$py/.test(bot));
+  yes(what + ' installs the bot lock with hashes and refuses installation failures',
+    /--require-hashes --only-binary :all: -r bot\\requirements\.txt/.test(bot) &&
+    /if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}/.test(bot));
+  if (what === 'pull request') {
+    yes('the bot job has no path-selection or conditional skip on a pull request',
+      !/^    (needs|if):/m.test(bot));
+  }
+}
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
