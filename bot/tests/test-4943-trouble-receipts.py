@@ -186,11 +186,15 @@ class TroubleReceipts(unittest.TestCase):
         self.assertNotIn('session-two', rig.records())
 
     def test_corrupt_index_pauses_private_delivery_without_overwrite(self):
-        for malformed in ['{', json.dumps(dict(admitted=[]))]:
-            rig = Rig(); rig.receipts.write_text(malformed, encoding='utf-8')
-            rig.run(lambda: rig.put([rig.row()]), lambda: None)
-            self.assertEqual(rig.receipts.read_text(encoding='utf-8'), malformed)
-            self.assertFalse(any('Private fixture' in text for text in rig.a.posts.values()))
+        for malformed in ['{', '[]', 'null', '5', json.dumps(dict(admitted=[]))]:
+            with self.subTest(malformed=malformed):
+                rig = Rig(); rig.receipts.write_text(malformed, encoding='utf-8')
+                old = rig.a.add(bot.TROUBLE_HEAD + ' Preserve until the index can be read.')
+                rig.run(lambda: rig.put([rig.row()]), lambda: None)
+                self.assertEqual(rig.receipts.read_text(encoding='utf-8'), malformed)
+                self.assertFalse(any('Private fixture' in text for text in rig.a.posts.values()))
+                self.assertIn(old.id, rig.a.posts)
+                self.assertEqual(rig.a.deleted, [])
 
     def test_malformed_source_cannot_prove_expiry(self):
         rig = Rig(); rig.run(lambda: rig.put([rig.row()]))
@@ -240,6 +244,16 @@ class TroubleReceipts(unittest.TestCase):
             rig = Rig(); rig.a.mode = mode
             rig.run(lambda: rig.put([rig.row()]), lambda: None)
             self.assertFalse(any('Private fixture' in line for line in rig.logs))
+
+    def test_strict_send_redacts_private_sdk_error_details(self):
+        rig = Rig()
+        async def refused(text, **options):
+            raise TimeoutError('SDK error echoing Private fixture log')
+        rig.a.send = refused
+        rig.run(lambda: rig.put([rig.row()]), lambda: None)
+        self.assertIn('attempt', rig.records()['session-one'])
+        self.assertTrue(any('TimeoutError' in line for line in rig.logs))
+        self.assertFalse(any('Private fixture log' in line for line in rig.logs))
 
 
 if __name__ == '__main__':

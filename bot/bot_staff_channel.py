@@ -12,7 +12,7 @@ import traceback
 import discord
 
 from bot_core import (TROUBLE_EVERY, TROUBLE_FILE, TROUBLE_ID, TROUBLE_POSTS,
-    WATCH_ID, _state_read, _state_write, client, log)
+    WATCH_ID, _state_write, client, log)
 
 
 # Where the watchdog's messages are said: #staff-updates, by WATCH_ID from
@@ -176,12 +176,19 @@ def _trouble_admitted_valid(state):
                                             for sid, value in admitted.items())
 
 
-def _trouble_copy_state():
+def _trouble_copy_state(path):
     # bot_reports uses this module's channel resolver; defer the shared
     # protocol import until the bot's modules have finished loading.
     from bot_reports import copy_post_valid
-    state = _state_read(TROUBLE_POSTS)
-    if (not _trouble_admitted_valid(state) or not isinstance(state.get('posts', {}), dict)
+    try:
+        with open(path, encoding='utf-8') as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        state = None
+    if (not _trouble_admitted_valid(state) or type(state.get('backfilled', False)) is not bool
+            or not isinstance(state.get('posts', {}), dict)
             or not all(copy_post_valid(post) for post in state.get('posts', {}).values())):
         log('trouble: receipt index cannot be trusted; private delivery is paused.')
         return None
@@ -191,7 +198,7 @@ def _trouble_copy_state():
 def trouble_remember(sid, msg, path=None):
     """Writes down which message said session sid went wrong."""
     path = path or TROUBLE_POSTS
-    state = _state_read(path)
+    state = _trouble_copy_state(path)
     if state is None:
         log('trouble: %s cannot be read, so the post for session %s is not '
             'written down and will not be deleted when its logs go'
@@ -232,13 +239,10 @@ async def trouble_forget(rows, path=None):
         log('trouble: invalid source rows cannot prove a session expired; no post was deleted.')
         return 0, 1
     path = path or TROUBLE_POSTS
-    state = _state_read(path)
+    state = _trouble_copy_state(path)
     if state is None:
         log('trouble: %s cannot be read, so no post was deleted this pass'
             % path)
-        return 0, 1
-    if not _trouble_admitted_valid(state):
-        log('trouble: source admissions are invalid; no receipt or admission was removed.')
         return 0, 1
     posts = state.get('posts') or {}
     present = _trouble_sessions(rows)
@@ -249,17 +253,10 @@ async def trouble_forget(rows, path=None):
         del admitted[sid]
         changed = True
     for sid in [k for k in posts if k not in present]:
-        rec = posts.get(sid) if isinstance(posts.get(sid), dict) else {}
+        rec = posts[sid]
         if 'attempt' in rec:
             continue  # Reconcile a possibly accepted private post before expiry cleanup.
-        try:
-            cid, mid = int(rec.get('channel')), int(rec.get('message'))
-        except (TypeError, ValueError):
-            log('trouble: the post for session %s has no message written down, '
-                'so it is taken off the list' % sid)
-            del posts[sid]
-            changed = True
-            continue
+        cid, mid = rec['channel'], rec['message']
         ch = client.get_channel(cid)
         if ch is None:
             failed += 1
@@ -321,8 +318,10 @@ async def trouble_backfill(rows, path=None):
         return 0, 1
     from bot_reports import copy_marker
     path = path or TROUBLE_POSTS
-    state = _state_read(path)
-    if state is None or state.get('backfilled'):
+    state = _trouble_copy_state(path)
+    if state is None:
+        return 0, 1
+    if state.get('backfilled'):
         return 0, 0
     ch = _trouble_channel()
     bot_id = getattr(client.user, 'id', None)
@@ -415,7 +414,7 @@ async def watch_trouble():
                             'trouble: source rows are unavailable; delivery and expiry cleanup are paused.')
                 await asyncio.sleep(TROUBLE_EVERY)
                 continue
-            state = _trouble_copy_state()
+            state = _trouble_copy_state(TROUBLE_POSTS)
             if state is None:
                 if rows and copy_notice(('trouble', 'index'),
                                        'trouble: unreadable receipts pause private failed-session delivery.'):
@@ -429,7 +428,7 @@ async def watch_trouble():
             if first:
                 first = False
                 await trouble_backfill(rows)
-                state = _trouble_copy_state()
+                state = _trouble_copy_state(TROUBLE_POSTS)
                 if state is None:
                     await asyncio.sleep(TROUBLE_EVERY)
                     continue

@@ -266,10 +266,10 @@ async def report_say(text, *, channel=None, strict=False):
         return await ch.send(text[:1900], suppress_embeds=True,
                              allowed_mentions=discord.AllowedMentions.none())
     except Exception:
+        if strict:
+            raise  # The receipt protocol logs the error class without private response details.
         log('reports: could not post in #%s:\n' % getattr(ch, 'name', '?')
             + traceback.format_exc())
-        if strict:
-            raise
 
 
 async def watch_reports():
