@@ -61360,16 +61360,6 @@ module.exports = {
     while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
   }
 
-  // A server move begins a new journey. Keep the cooldown and the last
-  // successful escape's trap information, which are independent of steps.
-  function resetTrail(actorId) {
-    var c = state.chars[hex(actorId)];
-    if (c) { c.trail = []; c.last = null; }
-  }
-  function expireTrail(c, now) {
-    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
-  }
-
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
     var seen = g.__thornswoodPassSeen;
