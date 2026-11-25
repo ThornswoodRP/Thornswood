@@ -1515,7 +1515,7 @@
           if (!live) { toProfile(profileId, 'You are not trading.'); return true; }
           var out = '';
           if (verb === 'cancel') { out = tr2.cancel(actorId); }
-          else if (verb === 'ok') { out = tr2.confirm(actorId); }
+          else if (verb === 'ok') { out = tr2.confirm(actorId, parts.length === 3 ? parts[2] : undefined); }
           else if (verb === 'gold') { out = tr2.gold(actorId, parts[2]); }
           // The panel's Buy for the company (#1393). Never typed.
           else if (verb === 'sale') { out = tr2.sale(actorId); }

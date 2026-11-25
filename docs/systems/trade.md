@@ -59,7 +59,10 @@ sees it on the table under the same name. You cannot put up more gold
 than you are holding. Each side can put up 24 lines. A person uses
 the buttons; nobody types a command for any of it.
 
-Both press Agree. Any change to either pile clears both
+Both press Agree. Agree applies only to the offer shown when it was pressed.
+If a change crosses that press, the window is refreshed and you are asked to
+read both piles and press Agree again. A change to the company's payout in
+a sale also asks both of you to read the trade again. Any change to either pile clears both
 confirmations. One side does not get to swap a sword for a worse one
 after the other has already agreed.
 
