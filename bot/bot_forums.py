@@ -411,7 +411,8 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     comment was written after since. Every post is tagged Main (TASK_TAG).
     A rewritten comment edits the post, and so does a record made with an
     older form of the post (TASK_FORM), once; an issue that is reopened
-    loses it. An issue whose last test task says Server: Dev, from the day
+    or closed without a completed fix loses it. An issue whose last test task
+    says Server: Dev, from the day
     #dev-test-tasks began (state['dev_since']), gets no post here: it is
     in #dev-test-tasks. Returns the issue numbers posted, edited and removed.
     """
@@ -461,6 +462,14 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         issue = closed[num]
         have = rec.get(key)
         if (issue.get('state_reason') or 'completed') != 'completed':
+            if have:
+                try:
+                    await _forum_drop(forum, have['thread_id'])
+                except discord.HTTPException:
+                    continue
+                rec.pop(key, None)
+                state['_dirty'] = True
+                removed.append(num)
             continue
         if (have and have.get('updated') == issue.get('updated_at')
                 and have.get('form') == TASK_FORM):
@@ -538,7 +547,9 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         except Exception:
             continue            # not read this pass: the post stays as it is
-        if str(issue.get('state')) == 'open':
+        if (str(issue.get('state')) == 'open'
+                or (str(issue.get('state')) == 'closed'
+                    and (issue.get('state_reason') or 'completed') != 'completed')):
             try:
                 await _forum_drop(forum, have['thread_id'])
             except discord.HTTPException:

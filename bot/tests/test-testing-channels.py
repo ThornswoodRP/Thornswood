@@ -2145,6 +2145,82 @@ yes('  with --apply the extra one is deleted, the owned ones and a lone hand '
     and names(tf).count('Gates open') == 2 and any('1 deleted' in l for l in did))
 
 
+# ---------------- 5515: a completed task later closed without a fix --
+# There is no pass seeing the issue open: both reads see it closed.
+def reclosed_task(reason, *, omitted=False, refuse_delete=False, unreadable=False):
+    ISSUES.clear()
+    COMMENTS.clear()
+    TIMELINE.clear()
+    g, *_ = server()
+    run(bot.channel_setup(g, apply=True, path=os.path.join(TMP, 'reclosed-%s.json' % UPD[0])))
+    forum = bot._channel_named(g, 'test-tasks', ('forum',))
+    state = {'since': '2026-10-01T00:00:00Z'}
+    issue(5515, 'A completed fix', [], state='closed', reason='completed',
+          closed_at='2026-10-15T00:00:00Z')
+    COMMENTS[5515] = [{'body': 'Test task: Try the completed fix\nServer: Main\n1. Try it.\nIt works.'}]
+    first = run(bot.test_tasks_once(forum, state, gh, me_id=g.me.id))
+    yes('5515: the first pass posts the actual completed task',
+        first == ([5515], [], []) and len(forum.threads) == 1)
+    # Persist and restart so no live reopen event or memory can remove it.
+    path = os.path.join(TMP, 'reclosed-state.json')
+    bot._known_save(state, path)
+    state = bot._state_read(path)
+    thread = forum.threads[0]
+    issue(5515, 'No longer a completed fix', [], state='closed', reason=reason,
+          closed_at='2026-10-16T00:00:00Z')
+    state.pop('_dirty', None)
+    ASKED[:] = []
+    def read(url):
+        if omitted and 'state=closed' in url:
+            return []  # an adopted post older than the list's since cutoff
+        if unreadable and '/issues/5515' in url and '/comments' not in url:
+            raise bot.urllib.error.HTTPError(url, 503, 'Unavailable', {}, None)
+        return gh(url)
+    original_delete = thread.delete
+    if refuse_delete:
+        async def denied():
+            raise Refused('Missing permission to remove the post')
+        thread.delete = denied
+    result = run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+    return forum, state, thread, original_delete, result, read, g
+
+
+for reason, omitted in [('not_planned', False), ('duplicate', False),
+                        ('not_planned', True), ('duplicate', True)]:
+    forum, state, thread, _, result, read, g = reclosed_task(reason, omitted=omitted)
+    yes('5515: %s closed issue is removed through %s with its receipt forgotten'
+        % (reason, 'direct read' if omitted else 'closed list'),
+        result == ([], [], [5515]) and not forum.threads
+        and '5515' not in state['tasks'] and state.get('_dirty'))
+    yes('5515: removal needs no task comment read or repost',
+        not any('/comments' in url for url in ASKED))
+    yes('5515: another normal pass does not remove or post twice',
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], []))
+
+for omitted in [False, True]:
+    forum, state, thread, original, result, read, g = reclosed_task(
+        'not_planned', omitted=omitted, refuse_delete=True)
+    yes('5515: Discord refusal retains the thread and receipt for a later pass',
+        result == ([], [], []) and forum.threads == [thread]
+        and state['tasks']['5515']['thread_id'] == thread.id)
+    thread.delete = original
+    yes('5515: the next normal pass retries the refused deletion',
+        run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [5515])
+        and not forum.threads and '5515' not in state['tasks'])
+
+for reason in ['completed', None]:
+    forum, state, thread, _, result, _, _ = reclosed_task(reason)
+    yes('5515: completed or legacy absent reason retains its task',
+        result == ([], [], []) and forum.threads == [thread]
+        and '5515' in state['tasks'])
+
+forum, state, thread, _, result, _, _ = reclosed_task(
+    'not_planned', omitted=True, unreadable=True)
+yes('5515: a failed direct GitHub read cannot prove the task should be removed',
+    result == ([], [], []) and forum.threads == [thread]
+    and '5515' in state['tasks'])
+
+
 wsrc = inspect.getsource(bot.watch_known_issues)
 yes('the watcher finds #dev-test-tasks by the id the setup recorded, never by '
     'its name, and keeps it each pass',
