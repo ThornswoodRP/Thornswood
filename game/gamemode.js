@@ -31851,6 +31851,30 @@ module.exports = {
     return { line: line, from: from, went: !!went };
   }
 
+  // A displayed route grants no permission to move a now-frozen or dead rider.
+  function riderCheck(actorId, profileId, expected) {
+    var unavailable = { line: 'Your character is unavailable. Open the ride panel again.' };
+    var ai, runtime;
+    try {
+      ai = mp.getNpcAIState(actorId);
+      runtime = mp.getActorRuntimeIdentity(actorId);
+    } catch (e) { return unavailable; }
+    if (!Number.isSafeInteger(profileId) || profileId <= 0 || !ai || ai.isHuman !== true ||
+        ai.profileId !== profileId || !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+        typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) ||
+        runtime.length === 20 && runtime > '18446744073709551615') { return unavailable; }
+    var identity = JSON.stringify([actorId, profileId, ai.lifeGeneration, runtime]);
+    if (expected && identity !== expected) { return unavailable; }
+    if (ai.isDead === true) { return { line: 'You are dead, so you cannot ride. Nothing was taken.' }; }
+    if (ai.isDead !== false) { return unavailable; }
+    var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
+    if (!frozen || typeof frozen !== 'object' || Array.isArray(frozen)) { return unavailable; }
+    if (frozen[profileId]) {
+      return { line: 'Staff have you frozen in place, so you cannot ride. Nothing was taken.' };
+    }
+    return { line: '', identity: identity };
+  }
+
   /** A ride, and the move when it goes: the line to say back, the stop it was asked at, and whether it went. */
   function ride(actorId, profileId, wanted) {
     var from = stopHere(actorId);
@@ -31867,10 +31891,14 @@ module.exports = {
       plog('a ride was asked for and the hold ledger is not loaded');
       return answer('The hold\'s ledger is not running on this server, so nobody rides. Say so in the dev channel.', from);
     }
+    var rider = riderCheck(actorId, profileId);
+    if (rider.line) { return answer(rider.line, from); }
     // A pack that is short keeps all of it and stays where it is.
     if (!canPay(actorId, price)) {
       return answer('The ride to ' + to.name + ' is ' + price + ' gold and you do not have it. Nothing was taken.', from);
     }
+    var current = riderCheck(actorId, profileId, rider.identity);
+    if (current.line) { return answer(current.line, from); }
     /*
       THE MOVE, THEN THE FARE, so a move the server could not make costs
       nothing and no coin ever has to go back into a pack. The pack was read a

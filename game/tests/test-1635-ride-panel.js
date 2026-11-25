@@ -82,6 +82,12 @@ function rig() {
   const views = [];
   const made = {};
   const mp = {
+    getNpcAIState: function (id) {
+      const f = forms[id];
+      if (!f) throw new Error('no actor ' + id);
+      return { profileId: f.pid || -1, isHuman: f.pid > 0, isDead: !!f.isDead, lifeGeneration: 0 };
+    },
+    getActorRuntimeIdentity: function (id) { return String(id); },
     getIdFromDesc: function () { return 0; },
     makeProperty: function (name, opts) { made[name] = opts; },
     get: function (id, key) {
@@ -105,6 +111,7 @@ function rig() {
   const L = ledger(mp);
   const box = { mp: mp, console: { log: function () { } }, Date: { now: function () { return clock; } } };
   box.globalThis = box;
+  box.__thornswoodStaffState = { frozen: {} };
   box.__thornswoodProperty = { takeGold: L.takeGold, deposit: L.deposit, boxFare: L.boxFare };
   vm.runInNewContext(block, box);
   return { forms: forms, views: views, made: made, L: L, C: box.__thornswoodCarriages };
@@ -113,6 +120,7 @@ function rig() {
 const ME = 0x14, PID = 9, DRIVER = 0xff000a10;
 function person(r, at, coins, dx) {
   r.forms[ME] = { cell: at.world, pos: [at.pos[0] + (dx || 0), at.pos[1], at.pos[2]],
+    pid: PID,
     inv: coins ? [{ baseId: GOLD, count: coins }] : [] };
   return r.forms[ME];
 }
