@@ -165,6 +165,7 @@ namespace Thornswood
             // has no other way to be told. VoiceBase, not the raw setting, so
             // the game always gets the https address the launcher uses (#1304).
             string vurl = cfg == null ? "" : cfg.VoiceBase();
+            string vsocket = cfg == null ? "" : cfg.VoiceSocket();
             if (want.Length == 0 && port.Length == 0 && vurl.Length == 0) return "";
 
             string ini = Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\Thornswood.ini");
@@ -175,6 +176,7 @@ namespace Thornswood
                 var lines = new List<string>(File.ReadAllLines(ini));
                 bool done = false;
                 bool vurlDone = false;
+                bool vsocketDone = false;
                 for (int i = 0; i < lines.Count; i++)
                 {
                     string t = lines[i].TrimStart();
@@ -195,6 +197,12 @@ namespace Thornswood
                         // it in the game too rather than leaving a stale one.
                         lines[i] = "VoiceUrl = " + vurl;
                         vurlDone = true;
+                    }
+                    else if (t.Substring(0, eq).Trim().Equals("VoiceSocketUrl", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Rewrite on every Play, including a switch back to Main.
+                        lines[i] = "VoiceSocketUrl = " + vsocket;
+                        vsocketDone = true;
                     }
                 }
                 // No line to rewrite, so one is added rather than the name being
@@ -223,6 +231,7 @@ namespace Thornswood
                 // machine there is no line to rewrite and it has to be added or the
                 // game would never learn about Caddy at all.
                 if (!vurlDone && vurl.Length > 0) { lines.Add("VoiceUrl = " + vurl); }
+                if (!vsocketDone && vsocket.Length > 0) { lines.Add("VoiceSocketUrl = " + vsocket); }
 
                 File.WriteAllLines(ini, lines.ToArray(), new UTF8Encoding(false));
                 return done ? want : "";

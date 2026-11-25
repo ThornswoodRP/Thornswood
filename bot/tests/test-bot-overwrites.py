@@ -85,7 +85,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'staffbump', 'open', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'staffbump', 'open', 'openread', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
@@ -382,6 +382,7 @@ def live_server():
                          ow=B.overwrites(bare, s.get('mode', 'open'), roles,
                                          s.get('hold'), space=s.get('space'),
                                          read_extra=s.get('read_extra'),
+                                         extra=s.get('extra_roles'),
                                          faction=s.get('faction'),
                                          tickets=s.get('key') in B.TICKET_KEYS))
             ch.mode = s.get('mode', 'open')
@@ -474,6 +475,7 @@ try:
                          ow=B.overwrites(g, mode, roles, s.get('hold'),
                                          space=s.get('space'),
                                          read_extra=s.get('read_extra'),
+                                         extra=s.get('extra_roles'),
                                          faction=s.get('faction')))
             yes('without Administrator the bot sees, posts and reads in a new #%s' % s['name'],
                 gets_in(resolve(g, me, ch)))

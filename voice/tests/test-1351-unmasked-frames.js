@@ -344,5 +344,5 @@ async function inWorld(port, pids) {
   try { ws.close(); a.sock.destroy(); } catch (e) { }
   await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });

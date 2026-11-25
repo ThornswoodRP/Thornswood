@@ -34,7 +34,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -50,7 +50,7 @@ function list(name) {
 const needsBlock = slice(gm, '// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 const branch = slice(gm, "    if (word === '/needs' || word === '/need') {\n", '\n    }\n');
 yes('the needs block and the /needs branch of handle() are in the gamemode', !!needsBlock && !!branch);
-if (!needsBlock || !branch) { done(); }
+if (!needsBlock || !branch) { done(); } else {
 
 // ======================================================== A. the word lists
 {
@@ -230,3 +230,4 @@ function typed(N, word, actorId) {
 function textOf(src) { return (String(src || '').match(/'(?:[^'\\\n]|\\.)*'/g) || []).join(' '); }
 
 done();
+}

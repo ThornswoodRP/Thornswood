@@ -282,7 +282,15 @@ if (mode === 'watch') {
   const res = s.port === 7777 ? 3000 : s.port + 1;
   const udp = dgram.createSocket('udp4');
   udp.on('listening', function () { log('UDP ' + s.port + ' bound'); });
-  udp.on('error', function (e) { why = 'UDP ' + s.port + ' taken: ' + e.code; process.exit(1); });
+  let tcp = null, slow = null;
+  // It ends by closing what it holds, so node ends by itself (#6036).
+  function end(code) {
+    process.exitCode = code;
+    clearInterval(watch); clearTimeout(life); clearTimeout(slow);
+    try { udp.close(); } catch (e) { /* a bind that failed has closed it already */ }
+    if (tcp) tcp.close();
+  }
+  udp.on('error', function (e) { why = 'UDP ' + s.port + ' taken: ' + e.code; end(1); });
   udp.bind(s.port, '127.0.0.1');
   function listen() {
     // Swap.ps1's probe connects and closes its socket at once, which Windows
@@ -290,25 +298,25 @@ if (mode === 'watch') {
     // the stand-in died of it the moment its slow port opened (20 Oct
     // nightly: ECONNRESET, read). A real server takes a reset as one client
     // gone, so this one does too, and says so.
-    const srv = net.createServer(function (c) {
+    const srv = tcp = net.createServer(function (c) {
       c.on('error', function (e) { log('a connection on ' + res + ' ended: ' + e.code); });
       c.end();
     });
     srv.on('listening', function () { log('resources port ' + res + ' open'); });
-    srv.on('error', function (e) { why = 'resources port ' + res + ' taken: ' + e.code; process.exit(1); });
+    srv.on('error', function (e) { why = 'resources port ' + res + ' taken: ' + e.code; end(1); });
     srv.listen(res, '127.0.0.1');
   }
   if (gm.indexOf('udp-only') >= 0) {
     log('listening on ' + s.port + ' only');
   } else if (gm.indexOf('slow-start-past-60') >= 0) {
-    setTimeout(listen, 61000);
+    slow = setTimeout(listen, 61000);
     log('listening on ' + s.port + ', resources after 61 s');
   } else {
     listen();
     log('listening on ' + s.port + ' and ' + res);
   }
-  setInterval(function () { if (!fs.existsSync(root)) { process.exit(0); } }, 1000);
-  setTimeout(function () { why = 'its 600 s were up'; process.exit(0); }, 600000);
+  const watch = setInterval(function () { if (!fs.existsSync(root)) { end(0); } }, 1000);
+  const life = setTimeout(function () { why = 'its 600 s were up'; end(0); }, 600000);
 }
 '@
 

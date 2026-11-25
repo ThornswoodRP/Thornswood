@@ -99,4 +99,4 @@ yes('refused scrap rows have empty half (not listed in recipe book)', HIDE.every
 }));
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

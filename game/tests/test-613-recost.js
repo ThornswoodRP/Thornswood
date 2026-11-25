@@ -37,7 +37,7 @@ const LAST = path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py');
 
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
-function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
+function done() { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0; }
 function python(args, input) {
   for (const exe of ['python', 'py', 'python3']) {
     const p = spawnSync(exe, args, { encoding: 'utf8', input: input, maxBuffer: 1 << 26,
@@ -247,7 +247,7 @@ const run = python(['-', LAST], RIG);
 let r = null;
 try { r = JSON.parse(run.stdout.trim().split('\n').pop()); } catch (e) { r = null; }
 yes('L0 the builder runs over two small plugins written here' + (r ? '' : ' (' + (run ? run.stderr.slice(-400) : 'no python') + ')'), !!r);
-if (!r) { done(); }
+if (!r) { done(); } else {
 yes('L1 the re-costed recipe is one override in a COBJ group of a light plugin', r.records === 1 &&
     r.groups[0] === 'GRUP' && r.groups[1] === 'COBJ' && r.light);
 yes('L2 it asks the table\'s counts, each input in the new plugin\'s numbering (' + JSON.stringify(r.cnto) + ')',
@@ -272,3 +272,4 @@ yes('W1 the builder reads game/data/recost.json, puts COBJ first among its group
     /re-costed by recost\.json, won by/.test(tool));
 
 done();
+}

@@ -84,4 +84,4 @@ yes('no header rule folds at the old 900' + (old.length ? ' (' + old.join(' | ')
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

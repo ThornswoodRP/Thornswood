@@ -67,7 +67,7 @@ function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-3218-'));
   made.push(dir);
   siteFiles.copy(dir);
-  fs.mkdirSync(path.join(dir, 'public'));
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   for (const f of fs.readdirSync(PUBLIC)) {
     if (fs.statSync(path.join(PUBLIC, f)).isFile()) fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));
   }
@@ -102,7 +102,7 @@ function stop(run) {
     if (!run || run.exited) { ok(); return; }
     run.child.once('exit', function () { ok(); });
     try { run.child.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 const hash = (b) => crypto.createHash('sha256').update(b).digest('hex').slice(0, 16);
@@ -235,8 +235,8 @@ function named(html) {
   }
 })().then(function () {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }, function (e) {
   console.log('FAIL  the harness threw: ' + (e && e.stack ? e.stack : e));
-  process.exit(1);
+  process.exitCode = 1;
 });

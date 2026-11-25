@@ -74,7 +74,8 @@ try {
   src = gamemodeSource.read(gmPath);
 } catch (e) {
   console.error('FAIL  no gamemode.js at ' + gmPath);
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 let next = src;
@@ -126,15 +127,17 @@ for (const t of TABLES) {
   console.log((CHECK ? 'DIFF  ' : 'wrote ') + t.name + ' from game\\data\\' + t.file);
 }
 
-if (process.exitCode) process.exit(process.exitCode);
+if (process.exitCode) return;
 
 if (CHECK) {
   if (changed) {
     console.error('FAIL  gamemode.js is out of date with game\\data for ' + changed + ' table(s); run Install-GamemodeConsts.js');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log('ok    all four consts match game\\data');
-  process.exit(0);
+  process.exitCode = 0;
+  return;
 }
 
 if (changed === 0) {

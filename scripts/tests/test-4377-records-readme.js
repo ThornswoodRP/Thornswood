@@ -90,4 +90,4 @@ yes('K2 and when none does, it says so', behind.length > 0 || /no provenance not
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

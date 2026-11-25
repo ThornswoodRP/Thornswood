@@ -3,8 +3,8 @@
 
   Makes the next revision of the Thornswood collection on Nexus Mods (slug
   7essxf), as a draft, from the revision published now with mods moved to a
-  new Nexus file (-Mod), added (-Add), given new installer answers (-Answers)
-  or taken out (-Remove), plugins given a new load rule (-Rule) or their light
+  new Nexus file (-Mod), added (-Add), given new installer answers (-Answers),
+  given fresh reference tags (-RefreshTag) or taken out (-Remove), plugins given a new load rule (-Rule) or their light
   flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft
   (-Publish) or discards one (-Discard) (#2914).
 
@@ -251,6 +251,11 @@
   A JSON file of plugins whose rule the revision replaces, as A PLUGIN RULE
   above says.
 
+.PARAMETER RefreshTag
+  Repairs an already-published entry whose old reference tag matched an older
+  archive in Vortex. Keeps every file, choice and plugin unchanged; not mixed
+  with other changes. The collection-record publisher verifies the draft.
+
 .PARAMETER Remove
   Mods to take out of the revision, by their numbers on the website, as
   TAKING A MOD OUT above says.
@@ -326,6 +331,7 @@ param(
   [string]$Answers,
   [string]$Rule,
   [string[]]$Remove = @(),
+  [string[]]$RefreshTag = @(),
   [string[]]$SetLight = @(),
   [string[]]$ClearLight = @(),
   [string]$Layout,
@@ -507,6 +513,11 @@ Write-Host '  THORNSWOOD  -  a revision of the collection on Nexus Mods' -Foregr
 if ($WhatIf) { Say '  -WhatIf: reads only, and says what it would write.' 'Yellow' }
 if ($Slug -notmatch '^[a-z0-9]+$') { Die ('-Slug ' + $Slug + ' is not a collection slug.') }
 if ($Game -notmatch '^[a-z0-9]+$') { Die ('-Game ' + $Game + ' is not a game domain.') }
+$refreshRequested = $PSBoundParameters.ContainsKey('RefreshTag')
+$RefreshTag = @($RefreshTag | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() })
+if ($refreshRequested -and (-not $RefreshTag.Count -or @($RefreshTag | Where-Object { $_ -notmatch '^[1-9][0-9]{0,8}$' }).Count -or @($RefreshTag | Select-Object -Unique).Count -ne $RefreshTag.Count)) {
+  Die '-RefreshTag needs a nonempty list of distinct positive Nexus mod numbers.'
+}
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 
@@ -521,7 +532,7 @@ Say ('  "' + (Get-NexusField $col 'name') + '", id ' + $colId + ', revision ' + 
 
 # --------------------------------------------------------------- publish ---
 if ($Publish) {
-  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
+  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Publish + ', domainName: "' + $Game + '") { id revisionNumber status downloadLink } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Publish) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -535,7 +546,7 @@ if ($Publish) {
   $pnode = Get-Command node -ErrorAction SilentlyContinue
   if (-not $pnode) { Die 'node is not on this machine, and collection-permissions.js checks the draft''s mods.' }
   $psz = Find-SevenZip
-  if (-not $psz) { Die '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and the draft is a 7z archive.' }
+  if (-not $psz) { Die ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and the draft is a 7z archive.') }
   $plink = [string](Get-NexusField $rev 'downloadLink')
   if ($plink -notmatch '^/v2/collections/\d+/revisions/\d+/download_link$') { Die ('Nexus gave revision ' + $Publish + ' the download link "' + $plink + '", not an API path, so its mods could not be checked.') }
   $plinks = @(Get-NexusField (Step { Invoke-NexusApi 'GET' $plink '' ('Asking for revision ' + $Publish + '''s download') }) 'download_links')
@@ -563,13 +574,14 @@ if ($Publish) {
   if ($nowLatest -ne $Publish) { Die ('Nexus said the publish succeeded, but the latest published revision still reads as ' + $nowLatest + '.') }
   Write-Host ''
   Say ('Revision ' + $Publish + ' is published: https://www.nexusmods.com/games/' + $Game + '/collections/' + $Slug) 'Green'
+  Say '  Next: update the collection records for this revision, then rebuild the Last plugin, NPC catalogue and load order tables. Follow docs/COLLECTION-REVISIONS.md.'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
 }
 
 # --------------------------------------------------------------- discard ---
 if ($Discard) {
-  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
+  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Discard + ', domainName: "' + $Game + '") { id revisionNumber status } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Discard) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -642,7 +654,7 @@ function Get-NexusFileExpression([string]$M, [string]$Fid) {
 }
 
 # ------------------------------------------------------- refused up front ---
-if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
+if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count -and -not $RefreshTag.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $FileId = @($FileId | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($Mod.Count -ne $FileId.Count -or $Mod.Count -ne $Archive.Count) { Die ('-Mod, -FileId and -Archive go together, one of each for every mod: ' + $Mod.Count + ', ' + $FileId.Count + ' and ' + $Archive.Count + ' were given.') }
@@ -654,6 +666,14 @@ $Remove = @($Remove | ForEach-Object { ([string]$_).Split(',') } | ForEach-Objec
 foreach ($m in $Remove) {
   if ($m -notmatch '^\d+$') { Die ('-Remove ' + $m + ' is not a mod number.') }
   if (@($Remove | Where-Object { $_ -eq $m }).Count -gt 1 -or $Mod -contains $m) { Die ('Mod ' + $m + ' is named more than once in -Mod and -Remove.') }
+}
+# A tag repair retains every published file and is never mixed with a move.
+
+if ($RefreshTag.Count) {
+  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-RefreshTag repairs identities alone; it takes no file, installer, plugin or rule changes.' }
+  foreach ($m in $RefreshTag) {
+    if ($m -notmatch '^[1-9][0-9]{0,8}$' -or @($RefreshTag | Where-Object { $_ -eq $m }).Count -ne 1) { Die '-RefreshTag needs distinct positive Nexus mod numbers.' }
+  }
 }
 $drops = @{}
 foreach ($d in @($DropPatch | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
@@ -724,7 +744,7 @@ if ($draft) {
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { Die 'node is not on this machine, and nexus-collection.js writes collection.json the way Vortex does.' }
 $sz = Find-SevenZip
-if (-not $sz) { Die '7-Zip is not on this machine (7z.exe in Program Files, or 7z, 7zz or 7za on PATH), and the collection is a 7z archive.' }
+if (-not $sz) { Die ('7-Zip is not on this machine (it looked for ' + (Get-SevenZipLooked) + '), and the collection is a 7z archive.') }
 
 $scratch = & (Join-Path $Here 'Get-ScratchDir.ps1') ('nexus-revision-' + $Slug)
 if (-not $From) {
@@ -776,6 +796,7 @@ if ($Mod.Count) { Head 'The new files' }
 $swaps = New-Object System.Collections.Generic.List[object]
 $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
 $dropped = @()
+foreach ($m in $RefreshTag) { $swaps.Add([ordered]@{ refreshTag = $true; modId = $m }) }
 for ($i = 0; $i -lt $Mod.Count; $i++) {
   $m = $Mod[$i]; $fid = $FileId[$i]
   $info = Step { Get-NexusField (Invoke-NexusApi 'GET' ('/v3/games/' + $Game + '/mods/' + $m) '' ('Reading mod ' + $m)) 'data' }
@@ -1032,6 +1053,13 @@ if ($adds.Count -or $rules.Count -or $Remove.Count) {
     if ([string]$rec.collection -eq $Slug -and [int]$rec.revision -eq $start -and $startStatus -eq 'published') {
       $unlisted = @(@($rec.plugins) | Where-Object { $_ -and $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
       if ($unlisted.Count) { Say ('  installed off the list, by the record: ' + ($unlisted -join ', ')) 'DarkGray' }
+      if ($adds.Count) {
+        $masterFlags = [ordered]@{}
+        foreach ($p in @($rec.plugins)) {
+          if ($p -and $p.name -and $p.master -is [bool]) { $masterFlags[[string]$p.name] = $p.master }
+        }
+        if ($masterFlags.Count) { $swaps.Add([ordered]@{ masterFlags = $masterFlags }) }
+      }
       if ($Remove.Count) {
         $masters = [ordered]@{}
         foreach ($p in @($rec.plugins | Where-Object { $_ -and $_.name })) { $masters[[string]$p.name] = [string[]]@(@($p.masters) | Where-Object { $_ } | ForEach-Object { [string]$_ }) }

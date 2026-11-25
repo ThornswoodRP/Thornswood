@@ -241,5 +241,5 @@ async function main(argv, env, get) {
   return r;
 }
 
-if (require.main === module) { main(process.argv.slice(2), process.env).then(() => process.exit(0), () => process.exit(0)); }
+if (require.main === module) { main(process.argv.slice(2), process.env).then(() => { process.exitCode = 0; }, () => { process.exitCode = 0; }); }
 module.exports = { find: find, main: main, treesInLog: treesInLog, gateShares: gateShares, RESULT: RESULT, GATE_LINUX: GATE_LINUX, WORKFLOW: WORKFLOW, JOBS: JOBS, STEP: STEP, CHECKS: CHECKS, MARK: MARK, GATE: GATE };

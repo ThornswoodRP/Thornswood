@@ -41,8 +41,8 @@ yes('the progression block, the skill perks block, mp.onDeath and the OnHit hand
 if (!(progression && perks && onDeath && onHit)) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
-}
+  process.exitCode = 1;
+} else {
 
 // ------------------------------------------------------------ the world --
 const clock = { t: 1700000000000 };
@@ -1056,4 +1056,5 @@ for (const field of ['life','runtime']) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
+}

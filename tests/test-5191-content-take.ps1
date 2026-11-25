@@ -201,9 +201,9 @@ try {
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $arts
     $out = Join-Path $tmp 'find-output.txt'
     $r = Run @('-Repo', $repo, '-Newest', '-Find', '-ArtifactsFile', $arts, '-Output', $out)
-    $said = if (Test-Path -LiteralPath $out) { [IO.File]::ReadAllText($out) } else { '' }
+    $said = if (Test-Path -LiteralPath $out) { @(Get-Content -LiteralPath $out) } else { @() }
     Check '3d -Newest -Find names the newest build main kept, for actions/download-artifact, and lays nothing' (
-        $r.Code -eq 0 -and $r.Text -match 'NEWEST artifact 7 of run 70' -and $said -match '(?m)^artifact=7$' -and $said -match '(?m)^run=70$' -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
+        $r.Code -eq 0 -and $r.Text -match 'NEWEST artifact 7 of run 70' -and $said -ccontains 'artifact=7' -and $said -ccontains 'run=70' -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
     $r = Run @('-Repo', $repo, '-Find', '-ArtifactsFile', $arts, '-Output', '')
     Check '3d -Find goes with -Newest alone' ($r.Code -eq 1 -and $r.Text -match '-Find goes with -Newest alone')
     $was = $env:GITHUB_ACTIONS
@@ -258,7 +258,11 @@ try {
     Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (
         $pre -match "(?s)- name: Take the build for the content checks\s+if: \$\{\{ steps\.find\.outputs\.found == 'yes' \}\}.*?Get-ContentBuild\.ps1 -Server dev -Take -Keep" -and
         $pre -match '(?s)- name: Hand the build to the content checks.*?name: content-taken\s.*?retention-days: 1')
-    Check '6 a pick picks the content checks from main''s map, as the gate''s pick does' ($pre -match '(?s)  checks-pick:.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
+    $pickAt = $pre.IndexOf("`n  checks-pick:")
+    $checksAt = $pre.IndexOf("`n  checks:")
+    $pick = $pre.Substring($pickAt, $checksAt - $pickAt)
+    Check '6 the content pick lays the artifact held to this run''s key before reading the built tables' (
+        $pick -match '(?s)uses: actions/download-artifact@[0-9a-f]{40}.*?name: content-taken.*?CONTENT_KEY: \$\{\{ needs\.content\.outputs\.key \}\}.*?Get-ContentBuild\.ps1 -Server dev -Newest -ArtifactDir .*?-BuildKey \$env:CONTENT_KEY.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
     foreach ($j in 'checks', 'checks-linux') {
         $at = $pre.IndexOf("`n  ${j}:")
         $body = if ($at -ge 0) { $pre.Substring($at + 1) } else { '' }

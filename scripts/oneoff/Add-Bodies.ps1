@@ -76,11 +76,8 @@ Head 'Making room'
 if (Test-GameRunning -Root $Root) { Die 'Skyrim is running. Quit the game first.' }
 $null = Stop-Launcher -Root $Root
 
-$7z = @(
-    "$env:ProgramFiles\7-Zip\7z.exe"
-    "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
-    "$env:LOCALAPPDATA\Programs\7-Zip\7z.exe"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+. (Join-Path $PSScriptRoot '..\release\SevenZip.ps1')
+$7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed.' }
 
 $work = Join-Path $env:TEMP 'Bodies-install'

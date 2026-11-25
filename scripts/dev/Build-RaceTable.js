@@ -45,7 +45,7 @@
 //   node scripts\dev\Build-RaceTable.js --plugins "C:\path\to\plugins.txt"
 const fs = require('fs');
 const path = require('path');
-const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const { pluginPath, loadedOrder, loadOrderName } = require('./OwnPlugins.js');
 const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
@@ -219,6 +219,7 @@ function walk(b, start, end) {
 }
 
 const order = loadedOrder(pluginsTxt(), DATA);
+if (!order) return;
 here.order = order;
 for (const file of order) {
   const full = pluginPath(DATA, file);
@@ -279,7 +280,7 @@ if (!Object.keys(rows).length) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-RaceTable.js',
-    source: 'the RACE records of the plugins in load order',
+    source: 'the RACE records of ' + loadOrderName(order),
     note: 'which recipes a race owns is in game\\data\\recipes.json; this only says what the races are',
     count: Object.keys(rows).length,
     items: rows

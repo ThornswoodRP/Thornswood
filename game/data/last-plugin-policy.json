@@ -65,6 +65,15 @@
    "perkRecipesCopied": true,
    "perkRecipesCopiedWhy": "Patrick, 31 Oct 2026, A on report page q-4826-ia-perk-recipes (issue 4826): each of its recipes that tests one of Skyrim's perks is copied into Thornswood-Last.esp with only those tests taken out, because nobody holds a vanilla perk and the crafting menu hid those rows from everybody. The copy is made on each machine from that machine's own copy of the plugin (last-plugin.recipe, issue 2791), so none of its bytes are handed on. Its counts and bench stay its own in the copy and are still set in each person's game (RECIPES_SET_IN_GAME, RECIPES_MOVED_IN_GAME)."}
  ],
+ "recipesHidden": {
+  "issue": 4509,
+  "why": "Patrick, 9 Nov 2026, option A on the instruments card (issue 4509): the flute, lute and drum people own are Skyrim's own, which cannot be equipped, not PlayFluteLuteDrum.esp's weapons, whose equip and playing are record scripts our client never runs. These three recipes turn Skyrim's instruments into those weapons, and PlayFluteLuteDrum.esp loads after Thornswood-Content.esp, so each is copied here with the condition that is never true, and no bench lists it. The Woodwright makes Skyrim's own three from Thornswood-Content.esp's recipes instead.",
+  "recipes": [
+   {"recipe": "1838:PlayFluteLuteDrum.esp", "edid": "RecipeWeaponFlute"},
+   {"recipe": "2de4:PlayFluteLuteDrum.esp", "edid": "RecipeWeaponLute"},
+   {"recipe": "2de5:PlayFluteLuteDrum.esp", "edid": "RecipeWeaponDrum"}
+  ]
+ },
  "holdOnly": {
   "issue": 3150,
   "why": "Patrick, 22 Oct 2026, page answer A on #3150: each hold has 2 to 3 hold-only plants, ores or animals, which grow only in their own hold (his words: 'they only spawn within that hold ... if you are in that hold you can just grab it but not while in a differnet hod'). Every placed one outside its hold is switched off (scripts/mods/Build-LastPlugin.py, step 10). Which ones is measured, not guessed: for each hold, the plants and ores whose placements already stand mostly in it, so the fewest are switched off and the world keeps the shape its authors gave it. A plant or ore with no hold among the nine as its largest share was left out. No animal: every animal kind in the catalogue stands in four or more holds (game/data/npc-population.json, 26 Oct 2026), so a hold-only animal would empty most of the wild of it. Hawk's Egg is not listed though all 6 nests stand in Eastmarch: it is Eastmarch's only already, and Eastmarch has three. Snowberries was the Pale's largest share and was left out: 450 of 1,924 in the Pale would have switched 1,474 off, where Malachite and Quicksilver switch off 88 together, and Dawnstar is a mining town.",

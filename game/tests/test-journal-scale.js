@@ -112,4 +112,4 @@ yes('at 1920 by 1080 it is drawn as it was, scale 1', at1080.scale === 1);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -106,4 +106,4 @@ yes('nobody is called a player in the card or the section', !/\bplayers?\b/i.tes
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

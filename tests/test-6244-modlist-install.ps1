@@ -280,7 +280,8 @@ try {
     $beside = @($recLines | Select-Object -Skip 1 | Where-Object { -not $_.StartsWith('Data\') })
     $paths = @($recLines | Select-Object -Skip 1 | ForEach-Object { $_.Split('|')[0].ToLowerInvariant() })
     Yes ("D5 records/collection-modlist.wabbajack makes a record of $($recLines.Count - 1) files, $($beside.Count) beside the game, the loader among them, each path once") ($recLines.Count -gt 1000 -and ($beside | Where-Object { $_.StartsWith('skse64_loader.exe|') }).Count -eq 1 -and @($paths | Select-Object -Unique).Count -eq $paths.Count -and ($recLines -match '^Data\\[^\\|]+\.esm\|').Count -gt 0)
-    Yes 'D6 and its first line names the modlist and its revision, 8' ($recLines[0] -ceq 'modlist=abc revision=8') $recLines[0]
+    $expectedRevision = (Get-Content -Raw -LiteralPath (Join-Path $Repo 'records/collection-plugins.json') | ConvertFrom-Json).revision
+    Yes "D6 and its first line names the modlist and its revision, $expectedRevision" ($recLines[0] -ceq "modlist=abc revision=$expectedRevision") $recLines[0]
 
     # The revision the launcher reads off an install in Mod Organizer 2, in
     # place of Vortex's, once the mods come from there.
@@ -300,7 +301,7 @@ try {
         $whole = & $modsRev; $viaChecks = & $checksRev
         [IO.File]::WriteAllLines((Join-Path $mods6 'thornswood-deployment.txt'), [string[]]@('modlist=abc'))
         $none = & $modsRev
-        Yes "D7 an install in Mod Organizer 2 is on the revision its record names ($whole), and Checks reads that in place of Vortex's ($viaChecks)" ($whole -eq 8 -and $viaChecks -eq 8)
+        Yes "D7 an install in Mod Organizer 2 is on the revision its record names ($whole), and Checks reads that in place of Vortex's ($viaChecks)" ($whole -eq $expectedRevision -and $viaChecks -eq $expectedRevision)
         Yes "D8 one part way, with no record, or a record naming no revision, is on none ($part, $none)" ($part -eq 0 -and $none -eq 0)
     } finally { $rootField.SetValue($null, $oldRoot) }
 

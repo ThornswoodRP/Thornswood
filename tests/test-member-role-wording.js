@@ -62,4 +62,4 @@ yes('the open-switch note no longer says everybody in the Discord is given Membe
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-if (fail) process.exit(1);
+if (fail) process.exitCode = 1;

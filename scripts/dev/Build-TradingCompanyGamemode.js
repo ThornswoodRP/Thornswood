@@ -54,17 +54,23 @@ function build(gamemodeText, dataText, moduleText) {
 function read(p) { return fs.readFileSync(p, 'utf8'); }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const now = gamemodeSource.read(GAMEMODE);
   const next = build(now, read(DATA), read(MODULE));
   if (process.argv.includes('--check')) {
     if (next !== now) {
       console.log('the company terms block is stale: run node scripts/dev/Build-TradingCompanyGamemode.js');
-      process.exit(1);
+      return 1;
     }
     console.log('the company terms block matches game/data/trading-company.json and game/trading-company.js');
-    process.exit(0);
+    return 0;
   }
-  if (next === now) { console.log('the company terms block is already up to date'); process.exit(0); }
+  if (next === now) { console.log('the company terms block is already up to date'); return 0; }
   gamemodeSource.write(GAMEMODE, next);
   console.log('wrote the company terms block into game/gamemode.js');
 }

@@ -948,17 +948,31 @@ function world(opts) {
   let proc = null;
   let reloads = 0;
   function boot() {
-    const timers = [];
+    // Keep only live timers. Long scenarios run days of game time and a
+    // completed HTTP deadline should cost nothing in each later clock step.
+    const timers = new Set();
+    function register(t) {
+      t.unref = function () { return t; };
+      t.ref = t.unref;
+      timers.add(t);
+      return t;
+    }
+    function clear(t) { timers.delete(t); }
     function line() { w.log.push([].slice.call(arguments).map(String).join(' ')); }
     const box = {
       mp: makeMp(), require: fakeRequire, process: process, Buffer: Buffer,
       console: { log: line, error: line, warn: line, info: line },
-      setInterval: function (fn, ms) { const t = { fn: fn, every: Math.max(1, Number(ms) || 1), at: clock + Math.max(1, Number(ms) || 1) }; t.unref = function () { return t; }; t.ref = t.unref; timers.push(t); return t; },
-      clearInterval: function (t) { if (t) { t.gone = true; } },
-      setTimeout: function (fn, ms) { const a = [].slice.call(arguments, 2); const t = { fn: function () { fn.apply(null, a); }, at: clock + (Number(ms) || 0) }; t.unref = function () { return t; }; t.ref = t.unref; timers.push(t); return t; },
-      clearTimeout: function (t) { if (t) { t.gone = true; } },
-      setImmediate: function (fn) { const t = { fn: fn, at: clock }; timers.push(t); return t; },
-      clearImmediate: function (t) { if (t) { t.gone = true; } },
+      setInterval: function (fn, ms) {
+        const every = Math.max(1, Number(ms) || 1);
+        return register({ fn, every, at: clock + every });
+      },
+      clearInterval: clear,
+      setTimeout: function (fn, ms, ...args) {
+        return register({ fn: () => fn.apply(null, args), at: clock + (Number(ms) || 0) });
+      },
+      clearTimeout: clear,
+      setImmediate: function (fn) { return register({ fn, at: clock }); },
+      clearImmediate: clear,
       queueMicrotask: queueMicrotask,
       Date: FakeDate, URL: URL, URLSearchParams: URLSearchParams, TextEncoder: TextEncoder, TextDecoder: TextDecoder
     };
@@ -1011,8 +1025,8 @@ function world(opts) {
     for (;;) {
       let next = null;
       const timers = proc.timers;
-      for (let i = 0; i < timers.length; i++) {
-        if (!timers[i].gone && (!next || timers[i].at < next.at)) { next = timers[i]; }
+      for (const timer of timers) {
+        if (!next || timer.at < next.at) { next = timer; }
       }
       // The launchers renew their passes every minute and the front plugin sends them on.
       if (passAt <= end && (!next || passAt <= next.at)) {
@@ -1040,7 +1054,7 @@ function world(opts) {
       }
       if (!next || next.at > end) { break; }
       clock = Math.max(clock, next.at);
-      if (next.every) { next.at += next.every; } else { next.gone = true; }
+      if (next.every) { next.at += next.every; } else { timers.delete(next); }
       try { next.fn(); } catch (e) { w.threw.push(e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e)); }
     }
     clock = end;
@@ -1049,7 +1063,7 @@ function world(opts) {
   w.loaded = function () { return proc && !proc.err; };
   w.loadError = function () { return proc && proc.err ? (proc.err.stack || String(proc.err)) : ''; };
   w.box = function () { return proc.box; };
-  w.timers = function () { return proc.timers.filter(function (t) { return !t.gone; }).map(function (t) { return { every: t.every || 0, at: t.at }; }); };
+  w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
   /* The gamemode deployed again while the server runs: same process, same mp. */
   w.reload = function () { proc.err = null; load(); return w.loaded(); };
@@ -1540,7 +1554,7 @@ function checks() {
       }
       console.log('');
       console.log(pass + ' passed, ' + fail + ' failed');
-      process.exit(fail ? 1 : 0);
+      process.exitCode = fail ? 1 : 0;
     }
   };
   return c;

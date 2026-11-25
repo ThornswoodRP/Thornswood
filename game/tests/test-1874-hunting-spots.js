@@ -47,7 +47,7 @@ for (const name of ["python", "python3"]) {
   if (!r.error && r.status === 0 && r.stdout.trim() === "3") { PY = name; break; }
 }
 yes("a Python 3 to run the writers (" + (PY || "none found") + ")", PY !== null);
-if (!PY) { console.log(""); console.log(pass + " passed, " + fail + " failed"); process.exit(1); }
+if (!PY) { console.log(""); console.log(pass + " passed, " + fail + " failed"); process.exitCode = 1; } else {
 
 // The first row that differs, so a failure says where.
 function firstDiff(a, b) {
@@ -88,7 +88,7 @@ function done() {
   temps.forEach(function (t) { try { fs.rmSync(t, { recursive: true, force: true }); } catch (e) { } });
   console.log("");
   console.log(pass + " passed, " + fail + " failed");
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const committed = readRepo(CSV);
@@ -207,3 +207,4 @@ yes("a body the hunt table leaves out (#1808) is not a Hunter row: the Spectral 
 }
 
 done();
+}

@@ -66,9 +66,14 @@ finally:
     C.CHANGES[key] = saved
 yes('and with its line back it is not', C.unrecorded([key]) == [])
 
-draft = C.DRAFTS[0]
-yes('a draft (%s) is never named, line or not' % draft,
-    draft not in C.CHANGES and C.unrecorded([draft]) == [])
+draft = 'DEVRULES'
+saved_drafts = C.DRAFTS
+try:
+    C.DRAFTS = saved_drafts + (draft,)
+    yes('an unapproved draft is never named, even when it has a change line',
+        C.unrecorded([draft]) == [])
+finally:
+    C.DRAFTS = saved_drafts
 
 yes('the fingerprint is twelve hex digits',
     len(fp) == 12 and all(c in '0123456789abcdef' for c in fp))
