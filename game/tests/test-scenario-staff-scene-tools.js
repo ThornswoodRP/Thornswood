@@ -1,4 +1,9 @@
 'use strict';
+/*
+  Scenario: systems/staff-tools.md
+  Whole-gamemode queued scene tools, role restrictions, native mode requests,
+  reload revocation and rendered name visibility through the real transport.
+*/
 // Real queued command transport, canonical roles and whole-gamemode reload.
 const assert=require('node:assert/strict');
 const standIn=require('../../tests/stand-in-server.js');

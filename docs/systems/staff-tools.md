@@ -52,6 +52,10 @@ commands available at their tier.
 
 ## Verification
 
+Run `node game/tests/test-scenario-staff-scene-tools.js` for the whole-gamemode
+queued route, and `node game/tests/test-6628-staff-tools.js` for strict native
+property-script, restraint and NPC-selection counterfactuals.
+
 The behavioral harness exercises unauthorized and mismatched actors, expired
 passes, constrained movement, state changes, revocation and fail-closed NPC
 selection. Native owner/observer scripts run against a recording platform in
