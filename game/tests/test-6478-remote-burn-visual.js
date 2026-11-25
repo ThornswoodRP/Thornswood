@@ -28,14 +28,19 @@ if (w.loaded()) {
   const value = () => w.prop(actor, prop);
   function observer(definition = def) {
     const calls = [], target = { loaded: true, is3DLoaded() { return this.loaded; } };
+    let active = [], peak = 0;
     const clock = { now: 400000 }, ctx = { state: {}, refr: target, value: undefined,
       get: key => key === 'isDead' ? !!w.row(actor).isDead : undefined,
       sp: { Actor: { from: ref => ref }, Game: { getFormEx: id => id, getPlayer() { throw Error('observer must not target itself'); } },
-        EffectShader: { from: () => ({ play(a, seconds) { calls.push(['play', a, seconds]); }, stop(a) { calls.push(['stop', a]); } }) },
+        EffectShader: { from: () => ({ play(a, seconds) {
+          active = active.filter(until => until > clock.now); active.push(clock.now + seconds * 1000);
+          peak = Math.max(peak, active.length); calls.push(['play', a, seconds]);
+        }, stop(a) { active = []; calls.push(['stop', a]); } }) },
         printConsole: line => calls.push(['error', line]) } };
     const fn = definition && definition.updateNeighbor ? new Function('ctx', 'Date', definition.updateNeighbor) : () => {};
     return { target, clock, calls, ctx, run(v = value()) { ctx.value = v; fn(ctx, { now: () => clock.now }); },
-      plays: () => calls.filter(row => row[0] === 'play').length, stops: () => calls.filter(row => row[0] === 'stop').length };
+      plays: () => calls.filter(row => row[0] === 'play').length, stops: () => calls.filter(row => row[0] === 'stop').length,
+      peak: () => peak };
   }
   ownerFire();
   yes('the actual owner tick still deals its existing fire damage and plays local flames', local.damage === 7 && local.plays === 1);
@@ -50,6 +55,8 @@ if (w.loaded()) {
   yes('an unloaded remote body does not start a shader', late.plays() === 0);
   late.target.loaded = true; late.run();
   yes('the same authoritative state appears once the remote body loads', late.plays() === 1);
+  late.target.loaded = false; late.run(); late.target.loaded = true; late.run();
+  yes('a body reload replaces its owned shader without overlapping an earlier instance', late.plays() === 2 && late.stops() === 1 && late.peak() === 1);
   w.run(2000);
   yes('the existing close-range spread still sends only its normal owner ignition', w.prop(other, 'thornswoodBurn') && w.prop(other, 'thornswoodBurn').ms === 5000);
   w.run(3100); ownerClock.now = w.now(); ownerTick(); w.run(100);
@@ -57,7 +64,16 @@ if (w.loaded()) {
   yes('the real owner stop report stops remote flames on both observers', value() && value().on === false && a.stops() === 1 && b.stops() === 1);
   yes('the local owner still stops its own shader', local.stops === 1);
 
-  ownerFire(); const active = value(), quiet = observer(); quiet.run(active); quiet.clock.now += 10000; quiet.run(active);
+  ownerFire(20000);
+  const renewal = observer(); renewal.run();
+  w.run(3100); ownerClock.now = w.now(); ownerTick(); w.run(100);
+  renewal.clock.now += 3100; renewal.run(); renewal.run();
+  yes('a fresh heartbeat extends the receipt lease without starting another active shader', renewal.plays() === 1 && renewal.peak() === 1);
+  w.run(3100); ownerClock.now = w.now(); ownerTick(); w.run(100);
+  renewal.clock.now += 3100; renewal.run(); renewal.run();
+  yes('a still-burning body replaces its finite shader once at the native lease boundary',
+    renewal.plays() === 2 && renewal.stops() === 1 && renewal.peak() === 1);
+  const active = value(), quiet = observer(); quiet.run(active); quiet.clock.now += 10000; quiet.run(active);
   yes('an observer without further reports expires its own finite visual', quiet.plays() === 1 && quiet.stops() === 1);
   quiet.run(active);
   yes('the same expired value cannot restart flames every frame', quiet.plays() === 1);
@@ -91,6 +107,16 @@ if (w.loaded()) {
   yes('hot-reloaded observer scripts reject saved fires from the previous registration', reloaded.plays() === 0);
   ownerFire(); reloaded.run();
   yes('a fresh fire report works immediately after hot reload', reloaded.plays() === 1);
-  yes('observer scripts never report an API or shader error', [a, b, late, quiet, expired, life, dead, returned, reloaded].every(o => !o.calls.some(row => row[0] === 'error')));
+  w.arrive(other); w.moveTo(actor, '3c:Skyrim.esm', [0, 0, 0]); w.moveTo(other, '3c:Skyrim.esm', [100, 0, 0]);
+  w.box().__thornswoodNeeds.setBurning(actor, false); w.run(2500);
+  const caughtBefore = (w.prop(other, 'thornswoodBurn') || {}).at || 0, setter = w.mp().set;
+  w.mp().set = function (id, key, next) {
+    if (key === prop && next.on === true) { throw Error('injected visual publication failure'); }
+    return setter(id, key, next);
+  };
+  try { ownerFire(); w.run(2500); } finally { w.mp().set = setter; }
+  yes('a visual publication failure does not disable the existing canonical close-range spread',
+    (w.prop(other, 'thornswoodBurn') || {}).at > caughtBefore);
+  yes('observer scripts never report an API or shader error', [a, b, late, renewal, quiet, expired, life, dead, returned, reloaded].every(o => !o.calls.some(row => row[0] === 'error')));
 }
 t.done(w);
