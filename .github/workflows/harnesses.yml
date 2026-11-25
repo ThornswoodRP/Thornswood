@@ -66,12 +66,7 @@ jobs:
       # laid over the checkout as the gate's shares lay it (build.yml, "Lay
       # the newest content build"), since nothing it writes is committed.
       - name: Lay the newest content build
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Newest
-          exit $LASTEXITCODE
+        uses: ./.github/actions/lay-content
 
       - name: Install the eslint the lint harness copies
         if: ${{ contains(inputs.harnesses, 'test-eslint-amp-path') }}

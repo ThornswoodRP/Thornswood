@@ -167,13 +167,13 @@ function github(repo, token) {
 async function main() {
   const e = process.env;
   for (const k of ['DEPLOYMENT', 'COMMIT', 'ENVIRONMENT', 'LOG_URL', 'REPO', 'GH_TOKEN']) {
-    if (!e[k]) { console.log('::error::' + k + ' is not set'); process.exit(1); }
+    if (!e[k]) { console.log('::error::' + k + ' is not set'); process.exitCode = 1; return; }
   }
   if (!/\/deploy-[0-9]+\.log$/.test(e.LOG_URL)) { console.log('The Deployment\'s log is not a deploy agent\'s, so no steps ran with it.'); return; }
   const url = e.LOG_URL.replace(/\.log$/, '.after.json');
   const res = await fetch(url);
   if (res.status === 404) { console.log('No steps after the deploy ran with Deployment ' + e.DEPLOYMENT + ' (' + url + ' is not there).'); return; }
-  if (!res.ok) { console.log('::error::' + url + ' answered ' + res.status); process.exit(1); }
+  if (!res.ok) { console.log('::error::' + url + ' answered ' + res.status); process.exitCode = 1; return; }
   const said = await act({
     after: await res.json(), steps: readSteps(path.join(__dirname, '..', '..')),
     deployment: e.DEPLOYMENT, commit: e.COMMIT, environment: e.ENVIRONMENT, logUrl: e.LOG_URL, gh: github(e.REPO, e.GH_TOKEN),
@@ -181,5 +181,5 @@ async function main() {
   for (const l of said) { console.log(l); }
 }
 
-if (require.main === module) { main().catch(err => { console.log('::error::' + err.message); process.exit(1); }); }
+if (require.main === module) { main().catch(err => { console.log('::error::' + err.message); process.exitCode = 1; }); }
 module.exports = { act: act, readSteps: readSteps, issueFor: issueFor, failureComment: failureComment, outputComment: outputComment, marker: marker, LABEL: LABEL };

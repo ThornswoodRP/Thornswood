@@ -162,7 +162,7 @@ if ($Packs) {
   # stopped the script on the first pack zip it found.
   $anyPacks = $false
   foreach ($d in $dists) {
-    $packZips = @(Get-ChildItem -LiteralPath $d.Path -Filter 'pack-*.zip' -File | Sort-Object LastWriteTime -Descending)
+    $packZips = @(Get-ChildItem -LiteralPath $d.Path -Filter 'pack-*.zip' -File | Sort-Object LastWriteTimeUtc -Descending)
     if ($packZips.Count -eq 0) { continue }
     $anyPacks = $true
     $keep = [Math]::Min(2, $packZips.Count)
@@ -202,7 +202,7 @@ if ($Backups) {
   # Backup-Server.ps1's copies: .zip.enc since #3582, the plain .zip before.
   $zips = @(Get-ChildItem -LiteralPath $BackupDir -Filter 'thornswood-backup-*' -File -EA SilentlyContinue |
             Where-Object { $_.Name -match '^thornswood-backup-\d{8}-\d{4}\.zip(\.enc)?$' } |
-            Sort-Object LastWriteTime -Descending)
+            Sort-Object LastWriteTimeUtc -Descending)
   if ($zips.Count -eq 0) { Say '  none' 'DarkGray' }
   else {
     $keep = [Math]::Min($KeepBackups, $zips.Count)

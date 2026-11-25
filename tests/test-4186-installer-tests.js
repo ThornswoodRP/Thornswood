@@ -163,4 +163,4 @@ yes('every row\'s workflow is the one tests/gate-excluded.txt and the workflows 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

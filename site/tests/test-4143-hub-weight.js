@@ -65,4 +65,4 @@ yes('C2 marked loads once, as a plain script, after the sign-in box and before h
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

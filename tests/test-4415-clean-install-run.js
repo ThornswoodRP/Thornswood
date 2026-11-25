@@ -71,4 +71,4 @@ const disc = doc.search(/^### Discord in the launcher$/m);
 yes('the run takes the collection before Connect Discord, as the launcher does', coll > 0 && disc > coll);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

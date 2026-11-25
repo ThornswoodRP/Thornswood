@@ -92,12 +92,12 @@ try {
     if ($OnWindows) {
         # ---- 1. the shares --------------------------------------------------------
         $a = Join-Path $work 'shares'
-        foreach ($n in 'a', 'b', 'c', 'd', 'e') { Put (Join-Path $a "tests\test-$n.js") "process.exit(0);`n" }
+        foreach ($n in 'a', 'b', 'c', 'd', 'e') { Put (Join-Path $a "tests\test-$n.js") "process.exitCode = 0;`n" }
         Put (Join-Path $a 'tests\test-f.ps1') "exit 0`n"
-        Put (Join-Path $a 'tests\not-a-harness.js') "process.exit(1);`n"
-        Put (Join-Path $a 'voice\tests\test-v.js') "process.exit(0);`n"
-        Put (Join-Path $a 'launcher\tests\test-l.js') "process.exit(0);`n"
-        Put (Join-Path $a 'launcher\tests\helper.js') "process.exit(1);`n"
+        Put (Join-Path $a 'tests\not-a-harness.js') "process.exitCode = 1;`n"
+        Put (Join-Path $a 'voice\tests\test-v.js') "process.exitCode = 0;`n"
+        Put (Join-Path $a 'launcher\tests\test-l.js') "process.exitCode = 0;`n"
+        Put (Join-Path $a 'launcher\tests\helper.js') "process.exitCode = 1;`n"
         $r1 = Run $a @('-Shard', '1', '-Of', '2')
         $r2 = Run $a @('-Shard', '2', '-Of', '2')
         $one = @(Ran $r1.Said); $two = @(Ran $r2.Said)
@@ -113,12 +113,12 @@ try {
 
         # ---- 2. what each kind of harness looks like ------------------------------
         $b = Join-Path $work 'kinds'
-        Put (Join-Path $b 'tests\test-1-pass.js') "console.log('PASS  one thing');`nprocess.exit(0);`n"
+        Put (Join-Path $b 'tests\test-1-pass.js') "console.log('PASS  one thing');`nprocess.exitCode = 0;`n"
         Put (Join-Path $b 'tests\test-2-fail.ps1') "Write-Host 'FAIL  one thing'`nexit 1`n"
         Put (Join-Path $b 'tests\test-3-hang.js') "// NIGHTLY CLOCK: 3 seconds. A stand-in that never ends.`nconsole.log('started');`nsetInterval(() => {}, 1000);`n"
         Put (Join-Path $b 'tests\test-4-leaves.js') ("const { spawn } = require('child_process');`n" +
             "const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });`n" +
-            "c.unref();`nconsole.log('left one running');`nprocess.exit(0);`n")
+            "c.unref();`nconsole.log('left one running');`nprocess.exitCode = 0;`n")
         $r = Run $b @()
         Yes "a share with a failure is red (exit $($r.Code))" ($r.Code -eq 1)
         Yes '  every harness is printed with its time and what it said' ($r.Said -match '(?m)^--- test-1-pass\.js  \([0-9.]+s[,)]' -and $r.Said -match 'PASS  one thing' -and $r.Said -match 'FAIL  one thing')
@@ -141,9 +141,9 @@ try {
 
         # ---- 3. the budget ----------------------------------------------------------
         $c = Join-Path $work 'budget'
-        Put (Join-Path $c 'tests\test-1-first.js') "// NIGHTLY CLOCK: 10 seconds`nsetTimeout(() => process.exit(0), 3000);`n"
-        Put (Join-Path $c 'tests\test-2-second.js') "// NIGHTLY CLOCK: 10 seconds`nprocess.exit(0);`n"
-        Put (Join-Path $c 'tests\test-3-third.js') "// NIGHTLY CLOCK: 10 seconds`nprocess.exit(0);`n"
+        Put (Join-Path $c 'tests\test-1-first.js') "// NIGHTLY CLOCK: 10 seconds`nsetTimeout(() => { process.exitCode = 0; }, 3000);`n"
+        Put (Join-Path $c 'tests\test-2-second.js') "// NIGHTLY CLOCK: 10 seconds`nprocess.exitCode = 0;`n"
+        Put (Join-Path $c 'tests\test-3-third.js') "// NIGHTLY CLOCK: 10 seconds`nprocess.exitCode = 0;`n"
         $r = Run $c @('-BudgetSeconds', '12')
         Yes "with 12 s to run them in, the first (clock 10) runs and passes" ((@(Ran $r.Said) -join ',') -eq 'test-1-first.js')
         Yes '  the next two, whose 10 s would not fit after it, are not started' ($r.Said -match '::error file=.*?test-2-second\.js::not run, out of time' -and $r.Said -match '::error file=.*?test-3-third\.js::not run, out of time')
@@ -207,12 +207,12 @@ try {
     $mk = "const fs=require('fs'),path=require('path');const dir=path.join(__dirname,'..','marks');fs.mkdirSync(dir,{recursive:true});"
     foreach ($n in 'a', 'b', 'c', 'd', 'e', 'f') {
         Put (Join-Path $d "tests\test-$n.js") ($mk + "const me=path.join(dir,'$n');fs.writeFileSync(me,'');" +
-            "setTimeout(()=>{console.log('SAW '+(fs.readdirSync(dir).length-1));fs.unlinkSync(me);process.exit(0);},1500);`n")
+            "setTimeout(()=>{console.log('SAW '+(fs.readdirSync(dir).length-1));fs.unlinkSync(me);process.exitCode = 0;},1500);`n")
     }
     Put (Join-Path $d 'tests\test-0-alone.js') ("// RUNS ALONE: a stand-in that fails when another runs beside it.`n" + $mk +
-        "const n=fs.readdirSync(dir).length;setTimeout(()=>{const m=fs.readdirSync(dir).length;console.log('ALONE SAW '+(n+m));process.exit(n+m?1:0);},700);`n")
+        "const n=fs.readdirSync(dir).length;setTimeout(()=>{const m=fs.readdirSync(dir).length;console.log('ALONE SAW '+(n+m));process.exitCode = n+m?1:0;},700);`n")
     Put (Join-Path $d 'tests\test-g-children.js') ("const {execFileSync}=require('child_process');" +
-        "for(let i=0;i<3;i++)execFileSync(process.execPath,['-e','let x=0;for(let j=0;j<3e7;j++)x+=j']);process.exit(0);`n")
+        "for(let i=0;i<3;i++)execFileSync(process.execPath,['-e','let x=0;for(let j=0;j<3e7;j++)x+=j']);process.exitCode = 0;`n")
     # The machine the throttle sees is a file here (-BusyFrom): idle first.
     $busy = Join-Path $work 'busy.txt'
     [IO.File]::WriteAllText($busy, '0')
@@ -252,8 +252,8 @@ try {
 
     # ---- 8. the start log (-StartLog, #3114) --------------------------------
     $s = Join-Path $work 'startlog'
-    Put (Join-Path $s 'tests\test-1-ok.js') "console.log('PASS  fine');`nprocess.exit(0);`n"
-    Put (Join-Path $s 'tests\test-2-skip.js') "console.log('  ok   one');`nconsole.log('SKIP  not here');`nconsole.log('SKIP  not here');`nconsole.log('  NOT RUN  that either');`nprocess.exit(0);`n"
+    Put (Join-Path $s 'tests\test-1-ok.js') "console.log('PASS  fine');`nprocess.exitCode = 0;`n"
+    Put (Join-Path $s 'tests\test-2-skip.js') "console.log('  ok   one');`nconsole.log('SKIP  not here');`nconsole.log('SKIP  not here');`nconsole.log('  NOT RUN  that either');`nprocess.exitCode = 0;`n"
     Put (Join-Path $s 'tests\test-3-red.ps1') "Write-Host 'FAIL  no'`nexit 3`n"
     $log = Join-Path $work 'starts.jsonl'
     $t0 = [DateTime]::UtcNow.AddSeconds(-1)

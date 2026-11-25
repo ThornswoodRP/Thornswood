@@ -45,7 +45,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -73,7 +73,7 @@ const charBlock = slice('// ==== thornswood character ====', '// ==== end thorns
 const socialBlock = slice('// ==== thornswood social', '// ==== end thornswood social ====');
 yes('the property, needs, character and social blocks and the /rest branch are in the gamemode',
     !!propBlock && !!needsBlock && !!restBranch && !!charBlock && !!socialBlock);
-if (!propBlock || !needsBlock || !restBranch || !charBlock || !socialBlock) { done(); }
+if (!propBlock || !needsBlock || !restBranch || !charBlock || !socialBlock) { done(); } else {
 
 // ------------------------------------------------------------ the wiring --
 
@@ -313,7 +313,7 @@ const first = box.__thornswoodBeds;
 yes('the property block publishes the beds',
     !!first && typeof first.rest === 'function' && typeof first.sleepHere === 'function' &&
     typeof first.mark === 'function' && typeof first.guestsOf === 'function' && !first.command);
-if (!first || !box.__thornswoodProperty) { done(); }
+if (!first || !box.__thornswoodProperty) { done(); } else {
 const NIGHT_MS = first.NIGHT_MS;
 yes('a night is 8 hours (Patrick, #1603)', NIGHT_MS === 8 * HOUR);
 yes('the beds watch on a timer of their own', ticks.some(function (t) { return t.ms === first.BED_EVERY_MS; }));
@@ -839,3 +839,4 @@ function up(p) { return rest(p, 'up'); }
 }
 
 done();
+}}

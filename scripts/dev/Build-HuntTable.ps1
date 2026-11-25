@@ -1732,7 +1732,7 @@ function Gives-Json($gives) {
 $docLines = New-Object 'System.Collections.Generic.List[string]'
 $docLines.Add('{')
 $docLines.Add('  "builtBy": ' + (JsonStr 'scripts\dev\Build-HuntTable.ps1') + ',')
-$docLines.Add('  "source": ' + (JsonStr ('the winning NPC_ records of ' + $order.Count + ' plugins in the recorded load order')) + ',')
+$docLines.Add('  "source": ' + (JsonStr ('the winning NPC_ records of ' + (Get-LoadOrderName $order))) + ',')
 $docLines.Add('  "language": ' + (JsonStr $LANGUAGE) + ',')
 $docLines.Add('  "animalsAre": ' + (JsonStr ('an NPC whose race, followed through the template while the Use Traits bit is set, carries the keyword ' +
     $ANIMAL_KEYWORD + '. No race in this build carries that and ' + $PERSON_KEYWORD + ' both. Reading RNAM straight off the record instead would call ' +

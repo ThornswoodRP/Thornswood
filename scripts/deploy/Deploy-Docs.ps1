@@ -540,7 +540,7 @@ var L = read(live), R = read(repo), moved = 0;
 var rev = (L._rev && typeof L._rev === 'object') ? L._rev : {};
 for (var i = 0; i < asks.length; i++) {
   var n = asks[i].split('=')[0], how = asks[i].split('=')[1];
-  if (!R[n] || typeof R[n] !== 'object') { console.log('BOARD NOT REPLACED: the repo has no board ' + n); process.exit(1); }
+  if (!R[n] || typeof R[n] !== 'object') { console.log('BOARD NOT REPLACED: the repo has no board ' + n); process.exitCode = 1; return; }
   if (how === 'seed' && L[n] && typeof L[n] === 'object' && L[n].seeded === R[n].seeded) {
     console.log('BOARD KEPT ' + n + ', already seeded ' + R[n].seeded + ', as typed on the site');
     continue;
@@ -1175,7 +1175,8 @@ try {
   $swapOut = @(Remote ($ownerVars + $vars + $siteHooks + $pick + $serviceSwapBlock) |
                ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
 } finally { $ErrorActionPreference = $eap }
-if (-not (Show-SwapResult $swapOut "$rootWin\.prev-<stamp>")) { exit 1 }
+$prevWhere = if ($PutBack) { "$rootWin\.undone-<stamp>" } else { "$rootWin\.prev-<stamp>" }
+if (-not (Show-SwapResult $swapOut $prevWhere)) { exit 1 }
 
 # The site's files are in place and it answers: the box records that it runs
 # this artifact, read back at /api/deploys (Artifact.ps1), and the record it

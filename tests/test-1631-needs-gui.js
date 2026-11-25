@@ -65,7 +65,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -93,7 +93,7 @@ const chatBlock = slice(gm, '// ==== thornswood chat commands ====', '// ==== en
 const charBlock = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
 yes('the needs, property, chat commands and character blocks are in the gamemode',
     !!needsBlock && !!propBlock && !!chatBlock && !!charBlock);
-if (!needsBlock || !propBlock || !chatBlock || !charBlock) { done(); }
+if (!needsBlock || !propBlock || !chatBlock || !charBlock) { done(); return; }
 
 // ==================================================== A. nothing is typed
 const GONE = ['/eat', '/drink', '/bard'];
@@ -341,7 +341,7 @@ function needsRig() {
   finally { process.chdir(was); }
   const B = box.__thornswoodBeds;
   yes('C0 the property block runs and publishes the beds', !!B && typeof B.tick === 'function');
-  if (!B) { done(); }
+  if (!B) { done(); return; }
   function tick() { process.chdir(dir); try { B.tick(); } finally { process.chdir(was); } }
   function resting(id) { return N.settle(id).resting; }
 

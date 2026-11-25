@@ -6,34 +6,32 @@ it first, before anything else:
 
     import _pyguard  # noqa: F401
 
-The bot runs on Python 3.12 (Install-Bot.ps1, bot/requirements.txt), and what
-it pins needs 3.11 or newer: Pillow 13 will not install on less (#1401).
-An older Python fails later and far from the cause (an AttributeError deep in a test),
-so it is refused here, at import, in plain words. On a Windows PC with more
-than one Python, plain python is whichever is first on PATH; py -3.12 picks
-the right one.
+The bot runs on Python 3.12 (Install-Bot.ps1). The hash-locked requirements
+support 3.11 and 3.12: Pillow needs at least 3.11, and from 3.13 discord.py
+needs audioop-lts, which this lock does not include (#4502).
 
 Standard library only, and nothing that will not parse on an old Python, so
-the message is what an old Python sees.
+an unsupported interpreter sees this message before any library import.
 """
 import sys
 
-PYTHON_MIN = (3, 11)
+SUPPORTED_PYTHON = ((3, 11), (3, 12))
 
 
-def python_too_old(version=None, exe=None):
-    """None when this Python can run the bot, else what to tell the person."""
+def unsupported_python(version=None, exe=None):
+    """None on a supported Python, otherwise a plain diagnostic."""
     v = tuple(version or sys.version_info)[:3]
-    if v[:2] >= PYTHON_MIN:
+    if v[:2] in SUPPORTED_PYTHON:
         return None
-    return ('The Thornswood bot needs Python %d.%d or newer (it runs on 3.12), '
+    supported = ' or '.join('%d.%d' % pair for pair in SUPPORTED_PYTHON)
+    return ('The Thornswood bot needs Python %s (it runs on 3.12), '
             'and this is Python %s at %s. On Windows, run it with py -3.12 '
-            'instead of python.' % (PYTHON_MIN + ('.'.join(str(x) for x in v),
-                                    exe or sys.executable)))
+            'instead of python.' % (supported, '.'.join(str(x) for x in v),
+                                    exe or sys.executable))
 
 
 def require():
-    said = python_too_old()
+    said = unsupported_python()
     if said:
         raise SystemExit(said)
 

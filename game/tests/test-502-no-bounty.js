@@ -257,4 +257,4 @@ yes('no gamemode, plugin or page code adds a bounty or raises an alarm', adds.le
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

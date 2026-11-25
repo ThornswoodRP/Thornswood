@@ -172,4 +172,4 @@ yes('G1 the ones the server holds off are in the gamemode\'s HELD_BY_SERVER bloc
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

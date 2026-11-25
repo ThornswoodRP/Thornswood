@@ -28,7 +28,8 @@ const a = src.indexOf(A);
 const b = src.indexOf(B);
 if (a < 0 || b < 0) {
   console.error('the needs block is not in gamemode.js');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 // The three tables the block reads, out of game\gamemode-tables where the

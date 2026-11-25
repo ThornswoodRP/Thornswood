@@ -56,20 +56,20 @@ function done() {
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { console.log('      could not remove ' + scratch + ': ' + e.message); }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8').split(String.fromCharCode(13)).join('');
 const a = gm.indexOf('// ==== thornswood trade ships ====');
 const z = gm.indexOf('// ==== end thornswood trade ships ====');
 yes('0 the trade ships block is in the gamemode', a >= 0 && z > a);
-if (!(a >= 0 && z > a)) { done(); }
+if (!(a >= 0 && z > a)) { done(); } else {
 const blockSrc = '(function () {\n' + require('../../tests/fixtures/ordinary-quest-items') + gm.slice(a, z) + '\n})();\n';
 /* The server's run, as gamemode.js makes it once and keeps on globalThis (#2623). */
 const r1 = gm.indexOf('\nfunction serverRunId(');
 const r2 = r1 < 0 ? -1 : gm.indexOf('\n}\n', r1);
 yes('0 serverRunId is in the gamemode', r1 >= 0 && r2 > r1);
-if (!(r1 >= 0 && r2 > r1)) { done(); }
+if (!(r1 >= 0 && r2 > r1)) { done(); } else {
 const runSrc = gm.slice(r1, r2 + 3);
 
 const dir = path.join(scratch, 'world');
@@ -254,3 +254,4 @@ try {
   yes('the carts run finished (' + ((e && e.stack) || e) + ')', false);
 }
 done();
+}}

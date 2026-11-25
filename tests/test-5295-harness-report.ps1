@@ -145,11 +145,11 @@ try {
         "console.log('PASS: with a colon');`n" +
         "console.log('a line that is no check, PASS in the middle');`n" +
         "console.log('FAIL  ' + " + ($odd | ConvertTo-Json) + " + String.fromCharCode(7));`n" +
-        "process.exit(1);`n")
+        "process.exitCode = 1;`n")
     Put (Join-Path $a 'tests\test-2-skips.ps1') ("Write-Host 'PASS  ran here'`nWrite-Host 'SKIP  needs Windows'`nWrite-Host 'NOT RUN  needs the box'`nexit 0`n")
     Put (Join-Path $a 'tests\test-3-throws.js') "console.log('PASS  before it threw');`nconsole.log('the last words');`nthrow new Error('it broke here');`n"
     Put (Join-Path $a 'tests\test-4-hang.js') "// NIGHTLY CLOCK: 3 seconds. A stand-in that never ends.`nconsole.log('PASS  started');`nsetInterval(() => {}, 1000);`n"
-    Put (Join-Path $a 'tests\test-5-late.js') "// NIGHTLY CLOCK: 600 seconds`nprocess.exit(0);`n"
+    Put (Join-Path $a 'tests\test-5-late.js') "// NIGHTLY CLOCK: 600 seconds`nprocess.exitCode = 0;`n"
     $one = Join-Path $work 'reports\share-1.xml'
     $r = Run $a @('-Report', $one, '-BudgetSeconds', '400')
     Yes "the share is red, as before (exit $($r.Code))" ($r.Code -eq 1)
@@ -194,7 +194,7 @@ try {
 
     # ---- 4 and 5. the merge -------------------------------------------------------
     $b = Join-Path $work 'green'
-    Put (Join-Path $b 'tests\test-6-green.js') "console.log('PASS  all well');`nprocess.exit(0);`n"
+    Put (Join-Path $b 'tests\test-6-green.js') "console.log('PASS  all well');`nprocess.exitCode = 0;`n"
     $two = Join-Path $work 'reports\share-2.xml'
     $null = Run $b @('-Report', $two)
     $merged = Join-Path $work 'merged.xml'

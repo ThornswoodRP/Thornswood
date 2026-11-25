@@ -86,4 +86,4 @@ yes('front.js holds no list of board spots of its own (BOARD_SEEDS is gone)', fr
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

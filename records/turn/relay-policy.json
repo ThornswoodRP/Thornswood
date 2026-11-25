@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "userQuota": 8,
+  "totalQuota": 32,
+  "bytesPerSecondPerAllocation": 65536,
+  "bytesPerSecondTotal": 2097152,
+  "roles": {
+    "dev": { "taskName": "Thornswood Dev TURN", "realm": "turn-dev.thornswood.net", "udpPort": 3478, "minPort": 42000, "maxPort": 42031 },
+    "main": { "taskName": "Thornswood Main TURN", "realm": "turn-main.thornswood.net", "udpPort": 3479, "minPort": 42032, "maxPort": 42063 }
+  }
+}

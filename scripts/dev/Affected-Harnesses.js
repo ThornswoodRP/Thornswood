@@ -550,6 +550,12 @@ function platforms(windowsStarts, linuxStarts, commit) {
 }
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const [cmd, a, b, c, d, e] = process.argv.slice(2);
   if (cmd === 'build' && a && b) {
     const map = build(a, REPO, c);
@@ -604,7 +610,7 @@ if (require.main === module) {
     for (const n of r.run) { console.log('  ' + n + ': ' + r.why[n]); }
   } else {
     console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt> | checks <map> - <commit> <gate.txt> <writes.txt> <out.txt> | stale <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt>');
-    process.exit(2);
+    return 2;
   }
 }
 module.exports = { contentChecks: contentChecks, staleChecks: staleChecks, platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };

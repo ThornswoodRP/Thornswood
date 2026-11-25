@@ -421,6 +421,12 @@ if (COMMANDS && STAFF) {
   got = run(w, STAFFER, '/kick Bjorn', false);
   yes('an unproven connection is refused, with a sentence saying so',
       /proved who you are/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
+  const unpGive = run(w, STAFFER, '/give iron ore 2', false);
+  yes('/give from an unproven connection is refused', /proved who you are/.test(to(unpGive, STAFFER)[0] || ''));
+  const unpSpawn = run(w, STAFFER, '/spawn troll', false);
+  yes('/spawn from an unproven connection is refused', /proved who you are/.test(to(unpSpawn, STAFFER)[0] || ''));
+  const unpTp = run(w, STAFFER, '/tp whiterun', false);
+  yes('/tp from an unproven connection is refused', /proved who you are/.test(to(unpTp, STAFFER)[0] || ''));
   delete w.box.__thornswoodPassSeen.passes[STAFFER];
   got = run(w, STAFFER, '/freeze Bjorn');
   yes('no join pass on hand is refused', /launcher's pass/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
@@ -436,6 +442,41 @@ if (COMMANDS && STAFF) {
   yes('no em dash in anything said or in the block', all.indexOf(String.fromCharCode(0x2014)) < 0);
   yes('the staff words are not offered to everybody in /help',
       ['/kick', '/freeze', '/silence', '/warn', '/bring'].every(function (x) { return w.box.PLAYER_WORDS.indexOf(x) < 0; }));
+}
+
+// #4636: exercise the real command transport and staff action together.
+// A separate world keeps these cases out of the moderation-order assertions.
+console.log('\nsilence duration forms:');
+for (const [length, minutes] of [['30m', 30], ['2h', 120], ['1d', 1440],
+                                 ['1w', 1440], ['2H', 120], ['45', 45]]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const before = Date.now();
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('/silence ' + length + ' uses ' + minutes + ' minutes and retains its reason',
+      !!muted && Math.abs(muted.until - (before + minutes * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')) &&
+      JSON.parse(s.records[0].text).minutes === minutes);
+}
+for (const length of ['0', '-2h', '2hours', '1.5h', 'forever', '9'.repeat(320)]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const postsBefore = s.silencedPosts.length;
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  yes('/silence rejects invalid length ' + length.slice(0, 16) + ' without any action',
+      !s.box.__thornswoodStaffState.silenced[BJORN] && s.records.length === 0 &&
+      s.silencedPosts.length === postsBefore && to(said, BJORN).length === 0 &&
+      to(said, STAFFER).some(line => /length|duration/i.test(line)));
+}
+{
+  const s = load(world());
+  pass10(s, STAFFER);
+  const said = run(s, STAFFER, '/silence Bjorn repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('a silence with only a reason retains the default 30 minutes',
+      !!muted && Math.abs(muted.until - (Date.now() + 30 * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')));
 }
 
 // ------------------------------------------------------------------ B --
@@ -536,7 +577,7 @@ function join(pid, name, tok) {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (m.t === 'welcome') {
         welcomed = true;
-        done({ heard: heard, hush: hush, who: who, say: (text) => ws.send(JSON.stringify({ t: 'chat', text: text })) });
+        clearTimeout(late); done({ heard: heard, hush: hush, who: who, say: (text) => ws.send(JSON.stringify({ t: 'chat', text: text })) });
       }
       if (m.t === 'chat') { heard.push(m); }
       if (m.t === 'hush') { hush.push(m); }
@@ -550,9 +591,9 @@ function join(pid, name, tok) {
       }
     };
     // Refused at the handshake (#1303, #1337): no socket, so nothing to say on.
-    ws.onerror = () => { if (!welcomed) { done({ refused: true }); } };
-    ws.onclose = () => { if (!welcomed) { done({ refused: true }); } };
-    setTimeout(() => bad(new Error('no welcome')), 4000);
+    ws.onerror = () => { if (!welcomed) { clearTimeout(late); done({ refused: true }); } };
+    ws.onclose = () => { if (!welcomed) { clearTimeout(late); done({ refused: true }); } };
+    const late = setTimeout(() => bad(new Error('no welcome')), 4000);
   });
 }
 async function commands() {
@@ -668,5 +709,4 @@ function python(args) {
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');
     process.exitCode = fail ? 1 : 0;
-    setTimeout(() => process.exit(process.exitCode), 1500).unref();
   });

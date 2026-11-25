@@ -345,7 +345,8 @@ if (AGE_PATHS[here] && !ageOk()) {
                ? '<ul>' + det.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') +
                  (n.files ? '<li>' + n.files + ' files changed</li>' : '') + '</ul>'
                : '') +
-             '</div>';
+             (window.ThornswoodNewsPictures ? window.ThornswoodNewsPictures.html(n.image)
+               : (n.image && typeof n.image.alt === 'string' ? '<p>' + esc(n.image.alt) + '</p>' : '')) + '</div>';
     });
     show(out);
   }).catch(function () { show('<h1>Every release</h1><p>Could not load it.</p>'); });

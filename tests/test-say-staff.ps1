@@ -286,7 +286,7 @@ const lines = fs.readFileSync(0, 'utf8').split(/\r?\n/).filter(l => l);
 fs.writeFileSync($(Js "$argsFile.in"), lines.map(l => l + os.EOL).join(''));
 const r = cp.spawnSync($(Js $shell), ['-NoProfile', '-NonInteractive', '-File', $(Js $box), '-From', from, '-Root', $(Js $root), '-BotData', $(Js $botData)],
   { input: lines.map(l => l + os.EOL).join(''), stdio: ['pipe', 'inherit', 'inherit'] });
-process.exit(r.status === null ? 1 : r.status);
+process.exitCode = r.status === null ? 1 : r.status;
 "@
     [IO.File]::WriteAllText($standIn, ($sshHead + $sshBody), $enc)
     Put-StandIn $bin 'ssh' $standIn
@@ -362,17 +362,18 @@ const all = process.argv.slice(2).map(String);
 fs.appendFileSync($(Js $ghCalls), all.join(' ') + '\n');
 const p = all.find(a => /^repos\//i.test(a)) || '';
 if (all.some(a => a.toLowerCase() === '--input')) { fs.writeFileSync($(Js $ghBody), fs.readFileSync(0, 'utf8')); }
-// writeSync, so nothing is still unwritten when it exits.
-const say = s => { fs.writeSync(1, s + '\n'); process.exit(0); };
-const no = s => { fs.writeSync(2, s + '\n'); process.exit(1); };
+// One answer per call: the first route that matches says it, and nothing
+// else runs after it.
+const say = s => { fs.writeSync(1, s + '\n'); };
+const no = s => { fs.writeSync(2, s + '\n'); process.exitCode = 1; };
 if (/^repos\/ThornswoodRP\/Thornswood\/issues`$/.test(p)) {
   const labels = fs.existsSync($(Js $ghNoLabel)) ? [] : [{ name: 'notice: staff' }];
   say(JSON.stringify({ number: 5300, html_url: 'https://github.com/ThornswoodRP/Thornswood/issues/5300', labels }));
 }
-if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300`$/.test(p)) { say(fs.readFileSync($(Js $ghIssue), 'utf8')); }
-if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/comments\?per_page=100`$/.test(p)) { say(fs.readFileSync($(Js $ghComments), 'utf8')); }
-if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/labels`$/.test(p)) { say('[]'); }
-no('gh: Not Found (HTTP 404)');
+else if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300`$/.test(p)) { say(fs.readFileSync($(Js $ghIssue), 'utf8')); }
+else if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/comments\?per_page=100`$/.test(p)) { say(fs.readFileSync($(Js $ghComments), 'utf8')); }
+else if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/labels`$/.test(p)) { say('[]'); }
+else { no('gh: Not Found (HTTP 404)'); }
 "@, $enc)
     Put-StandIn $bin2 'gh' $ghIn
     function Issue([string]$state, [string[]]$labels) {

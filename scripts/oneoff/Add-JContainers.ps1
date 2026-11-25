@@ -80,11 +80,8 @@ if ($jc[0].Name -notmatch '4\.3\.0') {
     Say '  WARNING: that does not look like 4.3.0. Only the 4.3.0 build loads on 1.6.1170.' 'Yellow'
 }
 
-$7z = @(
-    "$env:ProgramFiles\7-Zip\7z.exe"
-    "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
-    "$env:LOCALAPPDATA\Programs\7-Zip\7z.exe"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+. (Join-Path $PSScriptRoot '..\release\SevenZip.ps1')
+$7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed.' }
 
 $work = Join-Path $env:TEMP 'JContainers-install'

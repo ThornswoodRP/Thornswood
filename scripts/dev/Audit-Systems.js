@@ -444,4 +444,4 @@ if (notes.length) {
 console.log('');
 console.log('This answers presence, ownership and reachability. Check-Balance.ps1');
 console.log('answers whether the ladders line up across classes and professions.');
-process.exit(bad ? 1 : 0);
+process.exitCode = bad ? 1 : 0;

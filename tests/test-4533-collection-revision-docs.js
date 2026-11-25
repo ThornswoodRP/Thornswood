@@ -86,4 +86,4 @@ yes('U5 no page links the revision 3 page' + (linked.length ? ' (' + linked.join
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -56,7 +56,7 @@
 //   node scripts\dev\Build-FoodTable.js --plugins "C:\path\to\plugins.txt"
 const fs = require('fs');
 const path = require('path');
-const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const { pluginPath, loadedOrder, loadOrderName } = require('./OwnPlugins.js');
 const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
@@ -255,6 +255,7 @@ function walk(b, start, end) {
 }
 
 const order = loadedOrder(pluginsTxt(), DATA);
+if (!order) return;
 here.order = order;
 for (const file of order) {
   const full = pluginPath(DATA, file);
@@ -325,7 +326,7 @@ if (!Object.keys(items).length) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-FoodTable.js',
-    source: 'the ALCH records of the plugins in load order',
+    source: 'the ALCH records of ' + loadOrderName(order),
     readFrom: 'ENIT for the food and poison flags, FULL for the name',
     note: 'what a kind is WORTH is balance and lives in NEEDS in gamemode.js',
     count: Object.keys(items).length,

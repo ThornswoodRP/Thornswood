@@ -245,11 +245,11 @@ try {
     }
     Remove-Item -LiteralPath $local -Recurse -Force -ErrorAction SilentlyContinue
 }
-Say ('the tool exited ' + $code) $(if ($code -eq 0) { 'Green' } else { 'Yellow' })
+Write-Output ('the tool exited ' + $code)
 # Why, on a STOP line of its own, last, so whoever ran this can carry it on:
 # Build-ContentOnBox.ps1 puts it in the content build's status (#6351).
 if ($code -ne 0) {
     $why = Get-ThornswoodToolReason $lines
-    if ($why) { Say ('STOP. ' + $why) 'Yellow' }
+    if ($why) { Write-Output ('STOP. ' + $why) }
 }
 exit $code

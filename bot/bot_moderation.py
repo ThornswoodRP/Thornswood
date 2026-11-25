@@ -49,6 +49,9 @@ _MOD_DID = {
     'warn': 'warned %s',
     'give': 'gave %s',
     'spawn': 'spawned beside %s',
+    # The creature is named in why, not in the character fields.
+    'despawn': 'despawned a creature',
+    'hurt': 'used /hurt on %s',
     'tp': 'sent %s',
     # One character, or the whole account, and a character killed for good (#1010).
     'ban': 'banned the character %s',
@@ -71,6 +74,10 @@ _MOD_DID = {
     'worldpropose': 'proposed moving the world to %s',
     'worldconfirm': 'confirmed moving the world to %s',
     'worlddrop': 'dropped the proposal to move the world to %s',
+    # The subject is the company's terms, and why describes the changes.
+    'companypropose': 'proposed changes to %s',
+    'companydrop': 'dropped proposed changes to %s',
+    'companyconfirm': 'confirmed changes to %s',
     # Staff on the crafting card, the Office page of K (#3167): the why says
     # which rank from what to what, or what was given back and why.
     'craftrank': 'raised a rank of %s',
@@ -134,7 +141,9 @@ def moderation_text(where, row):
         why = clean(row.get('why'), 600) or 'a big move of gold.'
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
-    did = _MOD_DID[row['did']] % person(row.get('whoName'), row.get('who'))
+    did = _MOD_DID[row['did']]
+    if '%s' in did:
+        did = did % person(row.get('whoName'), row.get('who'))
     try:
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):

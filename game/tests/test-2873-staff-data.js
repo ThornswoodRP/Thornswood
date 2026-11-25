@@ -150,4 +150,4 @@ const gx = fs.readFileSync(path.join(ROOT, 'tests', 'gate-excluded.txt'), 'utf8'
 yes('G1 this harness is on the gate of build.yml and build-pr.yml (not in tests/gate-excluded.txt, #3009)', !/^game\/tests\/test-2873-staff-data\.js\s/m.test(gx));
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

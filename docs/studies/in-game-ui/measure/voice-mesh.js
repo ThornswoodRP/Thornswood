@@ -253,50 +253,59 @@ async function measure(talker, tpid) {
 
 async function room(n, tlsPort) {
   const mark = '--thornswood-talker=' + crypto.randomBytes(6).toString('hex');
-  const tb = await chromium.launch({ args: ARGS.concat([mark]) });
-  const lb = await chromium.launch({ args: ARGS });
-  const tpid = talkerRoot(mark);
-  const talker = await openPage(tb, 1000, tlsPort);
-  const others = [];
-  for (let i = 1; i < n; i++) others.push(await openPage(lb, 1000 + i, tlsPort));
-  const from = Date.now();
-  for (;;) {
-    for (const p of [talker, ...others]) await answerTokens(p);
-    const s = await sent(talker);
-    if (s.connected >= n - 1) break;
-    if (Date.now() - from > 60000 + n * 3000) {
-      console.log('  only ' + s.connected + ' of ' + (n - 1) + ' connections came up');
-      // Every page's side of every pair, for #3430: a pair that stays at
-      // ICE new on both sides, and who sent candidates to whom.
-      for (const p of [talker, ...others]) {
-        console.log('  page ' + p.__pid + ' ' + await p.evaluate(() => JSON.stringify({
-          peer: myPeer,
-          pairs: [...conns.entries()].map(([id, r]) => id + ' ' + r.pc.signalingState + '/' + r.pc.iceConnectionState +
-            (r.haveRemote ? '' : ' no remote') + (r.pendingIce.length ? ' ' + r.pendingIce.length + ' pending' : '')),
-          ice: window.__ice,
-        })));
+  // Both browsers close however the room ends, so a failed run ends too
+  // (#6036).
+  let tb = null, lb = null;
+  try {
+    tb = await chromium.launch({ args: ARGS.concat([mark]) });
+    lb = await chromium.launch({ args: ARGS });
+    const tpid = talkerRoot(mark);
+    const talker = await openPage(tb, 1000, tlsPort);
+    const others = [];
+    for (let i = 1; i < n; i++) others.push(await openPage(lb, 1000 + i, tlsPort));
+    const from = Date.now();
+    for (;;) {
+      for (const p of [talker, ...others]) await answerTokens(p);
+      const s = await sent(talker);
+      if (s.connected >= n - 1) break;
+      if (Date.now() - from > 60000 + n * 3000) {
+        console.log('  only ' + s.connected + ' of ' + (n - 1) + ' connections came up');
+        // Every page's side of every pair, for #3430: a pair that stays at
+        // ICE new on both sides, and who sent candidates to whom.
+        for (const p of [talker, ...others]) {
+          console.log('  page ' + p.__pid + ' ' + await p.evaluate(() => JSON.stringify({
+            peer: myPeer,
+            pairs: [...conns.entries()].map(([id, r]) => id + ' ' + r.pc.signalingState + '/' + r.pc.iceConnectionState +
+              (r.haveRemote ? '' : ' no remote') + (r.pendingIce.length ? ' ' + r.pendingIce.length + ' pending' : '')),
+            ice: window.__ice,
+          })));
+        }
+        break;
       }
-      break;
+      await sleep(500);
     }
-    await sleep(500);
+    await sleep(SETTLE_MS);
+    const idle = await measure(talker, tpid);
+    await talker.evaluate(() => window.__toPage({ t: 'ptt', on: true }));
+    await sleep(2000);
+    const talking = await measure(talker, tpid);
+    await talker.evaluate(() => window.__toPage({ t: 'ptt', on: false }));
+    return { n, idle, talking };
+  } finally {
+    if (tb) await tb.close();
+    if (lb) await lb.close();
   }
-  await sleep(SETTLE_MS);
-  const idle = await measure(talker, tpid);
-  await talker.evaluate(() => window.__toPage({ t: 'ptt', on: true }));
-  await sleep(2000);
-  const talking = await measure(talker, tpid);
-  await talker.evaluate(() => window.__toPage({ t: 'ptt', on: false }));
-  await tb.close(); await lb.close();
-  return { n, idle, talking };
 }
 
 const per = (kbit, n) => (n ? Math.round(kbit / n * 10) / 10 : 0);
 
 (async () => {
-  const { srv, port } = await startService();
-  const front = await startTls(port);
+  let srv = null, front = null;
   const rows = [];
   try {
+    const started = await startService();
+    srv = started.srv;
+    front = await startTls(started.port);
     for (const n of ROOMS) {
       console.log('room of ' + n + '...');
       const r = await room(n, front.port);
@@ -304,7 +313,8 @@ const per = (kbit, n) => (n ? Math.round(kbit / n * 10) / 10 : 0);
       rows.push(r);
     }
   } finally {
-    front.s.close(); srv.kill();
+    if (front) front.s.close();
+    if (srv) srv.kill();
   }
   console.log('\n| Room | Connections up | Idle upload kbit/s (RTP / all) | Talking upload kbit/s (RTP / all) | Per connection, idle / talking, kbit/s | Talking packets/s | Talker CPU % idle / talking |');
   console.log('|---|---|---|---|---|---|---|');
@@ -315,4 +325,4 @@ const per = (kbit, n) => (n ? Math.round(kbit / n * 10) / 10 : 0);
       ' | ' + r.talking.packetsPerSec + ' | ' + r.idle.cpuPct + ' / ' + r.talking.cpuPct + ' |');
   }
   fs.rmSync(dir, { recursive: true, force: true });
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => { console.error(e); process.exitCode = 1; });
