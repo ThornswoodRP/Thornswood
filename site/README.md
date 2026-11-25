@@ -13,13 +13,6 @@ the launchers ask it who may play (`/api/allowed`, and `/dev/api/allowed` for
 the dev server), and it answers from the Discord roles in its config.
 `public\` holds the pages and the art it serves as they are.
 
-Only `/hub` and `/api/hello` may draw the shell and identity/navigation from
-the last good Discord role answer when a refresh fails or is late (#4381).
-Private data routes, including GET and HEAD, use the normal current-standing
-check and its existing one-minute cache; they cannot revive expired staff
-rights from the ten-minute drawing fallback. The request deadlines and
-configured manual-admin/password permissions stay the same.
-
 These are what ask it for something other than a page, and each of them stops
 working while the site is down. `/api/play/join` is the launcher's question
 before every launch; when the site does not answer, a yes from the last 72
@@ -79,6 +72,12 @@ when a browser too old for that sends them on another site's form anyway, or
 a page on another name under thornswood.net does. A GET changes nothing
 another page can choose. `site\tests\test-1367-cross-site.js` sends every kind of
 write the hub makes from another site and from this one.
+
+Only `/hub` and `/api/hello` may use the last good Discord role answer to draw
+the page and its navigation when a refresh fails or is late (#4381). Private
+data routes, including GET and HEAD, check current standing and its existing
+one-minute cache instead of using the ten-minute page fallback. The request
+deadlines and configured manual-admin and password permissions stay the same.
 
 ## On your machine
 
