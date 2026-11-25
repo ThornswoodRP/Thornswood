@@ -51,7 +51,7 @@ try {
     # The rebuild consumes records after review, not the Vortex list or artifact directly.
     [IO.File]::WriteAllText($path, $text)
     [IO.File]::WriteAllText((Join-Path $records 'collection.json'), ($got | ConvertTo-Json -Depth 8))
-    [IO.File]::WriteAllText((Join-Path $records 'collection-plugins.json'), '{"collection":"7essxf","revision":12}')
+    [IO.File]::WriteAllText((Join-Path $records 'collection-plugins.json'), ('{"version":1,"collection":"7essxf","revision":12,"plugins":[{"name":"Old.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}'))
     $build = Get-ThornswoodContentOrder -Repo $root
     if ($build.Revision -ne 12 -or $build.Moved -or ($build.Names -join '|') -cne ($expected -join '|')) { throw 'The rebuild would use a different order' }
     Write-Host 'PASS the normal rebuild reader takes the same revision and order'
