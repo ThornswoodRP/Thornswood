@@ -373,7 +373,7 @@ attempt('Write a letter', function () {
   yes('B1 the board panel and the front plugin parse', parses);
   yes('B2 the panel has Write a letter: who it is for, held to 60, and the words, held to 300',
       page.indexOf("out += '<h3>Write a letter</h3>';") !== -1 &&
-      /id="' \+ ID \+ '-to" maxlength="60"/.test(page) && /id="' \+ ID \+ '-letter" maxlength="300"/.test(page) &&
+      /id="' \+ ID \+ '-to"[^>]*maxlength="60"/.test(page) && /id="' \+ ID \+ '-letter"[^>]*maxlength="300"/.test(page) &&
       /data-do="letter">Post the letter<\/button>/.test(page));
   const branch = slice(page, "    if (verb === 'letter') {", '\n    }\n');
   yes('B3 it sends /letter with the name in double quotes, quotes taken out of the name', !!branch &&
