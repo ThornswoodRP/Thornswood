@@ -125,20 +125,32 @@ const CHAT_DIRS = {
    come from the same server. */
 function chatSlice(profileId, from, to, channel) {
   const want = Number(profileId) || 0;
-  if (!want) return { ok: true, why: '', lines: [] };
+  if (!want || !Number.isFinite(from) || !Number.isFinite(to) || from > to) return { ok: true, why: '', lines: [] };
   const dev = channel === 'dev';
   const dir = CHAT_DIRS[dev ? 'dev' : 'main'];
-  const days = {};
-  for (const at of [from, to]) {
-    const d = new Date(at);
-    const p = (n) => (n < 10 ? '0' : '') + n;
-    days[d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())] = 1;
-  }
+  const first = new Date(from), last = new Date(to);
+  if (!Number.isFinite(first.getTime()) || !Number.isFinite(last.getTime())) return { ok: true, why: '', lines: [] };
+  const localDay = date => date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+  const firstDay = localDay(first), lastDay = localDay(last);
+  // Inspect retained filenames once, not every date in a possibly enormous
+  // session window. Local date keys include middle days and respect DST.
+  let days = [];
+  try {
+    days = fs.readdirSync(dir).filter(name => {
+      const match = /^(\d{4})-(\d{2})-(\d{2})\.jsonl$/.exec(name);
+      if (!match) return false;
+      const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+      const date = new Date(0); date.setUTCFullYear(year, month - 1, day);
+      const key = year * 10000 + month * 100 + day;
+      return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+        && key >= firstDay && key <= lastDay;
+    }).sort();
+  } catch (e) { days = []; }
   const out = [];
   let read = 0;
-  for (const day of Object.keys(days).sort()) {
+  for (const day of days) {
     let raw = '';
-    try { raw = fs.readFileSync(path.join(dir, day + '.jsonl'), 'utf8'); }
+    try { raw = fs.readFileSync(path.join(dir, day), 'utf8'); }
     catch (e) { continue; }
     read++;
     for (const l of raw.split('\n')) {
