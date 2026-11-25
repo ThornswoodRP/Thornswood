@@ -19,6 +19,13 @@ before every launch; when the site does not answer, a yes from the last 72
 hours still starts the game (`GraceHours` in `launcher\app\Door.cs`) and nothing
 else does.
 
+Admin API changes to a written page, an inbox row or an uploaded file record
+the verified actor and the page key, report ID or filename in the existing
+moderation log (#4939). Page and report contents are not copied into that
+log. Refused writes and unchanged retries add no success record; a committed
+file deletion is recorded even when its later metadata cleanup fails. Log
+retention and write-failure reporting keep their existing rules.
+
 | Route | Method | Asked by |
 | --- | --- | --- |
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
