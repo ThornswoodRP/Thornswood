@@ -1915,7 +1915,7 @@ async function handle(req, res) {
     const file = path.join(UP, name);
     const hasFile = file.startsWith(UP + path.sep) && fs.existsSync(file);
     const now = Date.now();
-    const meta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
+    const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
     const noteNotSaved = () => {
       retentionSay('gallery', { event: 'note-write-failed', file: name });
       answer.ok = false;
@@ -1924,17 +1924,18 @@ async function handle(req, res) {
                      (answer.fileDeleted ? 'its note is still listed.' : 'its file is still on the site. Try again.');
       return sendJson(res, 500, answer);
     };
-    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return noteNotSaved();
-    const oldNote = meta[name] || {};
+    if (!savedMeta || typeof savedMeta !== 'object' || Array.isArray(savedMeta)) return noteNotSaved();
+    const meta = new Map(Object.entries(savedMeta));
+    const oldNote = meta.get(name) || {};
     const wasRemoved = Number(oldNote.removed) > 0;
     let heldUntil = Number(oldNote.heldUntil) || 0;
     if (hasFile && itsReports.length && !heldUntil) {
       heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
-      meta[name] = Object.assign({}, oldNote, { removed: Number(oldNote.removed) || now,
+      meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now,
         heldUntil: heldUntil, heldReports: itsReports.slice(-20) });
       // The only copy of these reports stays in the open list until their
       // retention receipt is saved beside the file.
-      if (!putJson(UPMETA, meta)) return noteNotSaved();
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
       recordRemoval('hidden');
     }
     if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
@@ -1948,13 +1949,13 @@ async function handle(req, res) {
     if (hasFile) {
       const gone = deleteUpload(name);
       if (gone.ok) {
-        delete meta[name];
+        meta.delete(name);
         answer.fileDeleted = true;
         recordRemoval('file');
       } else {
-        meta[name] = Object.assign({}, oldNote, { removed: Number(oldNote.removed) || now });
+        meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now });
       }
-      if (!putJson(UPMETA, meta)) return noteNotSaved();
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
       if (!wasRemoved) recordRemoval('hidden');
       if (!gone.ok) {
         answer.ok = false;
