@@ -5874,18 +5874,30 @@ function killPieces(actorId) {
  * percentages, which only this handler can write. Anything else lets the death
  * go on to mp.onDeath below.
  *
- * Cheat Death answers first (#1385). Going down (#2681, docs/systems/injury.md)
- * is the second answer and is not built yet. Nothing here may ask
- * cheatDeath() about anything but this death: it spends its day when it says
- * yes.
+ * Cheat Death answers first (#1385). Going down (#4607, docs/systems/injury.md)
+ * is the second answer: a person is kept at the injury block's DOWN.keep and
+ * is down until somebody stands them up or the clock lets this death through.
+ * Nothing here may ask cheatDeath() about anything but this death: it spends
+ * its day when it says yes.
  */
-mp.onDying = guard('onDying', function (actorId) {
+mp.onDying = guard('onDying', function (actorId, killerId) {
   const perks = globalThis.__thornswoodPerks;
-  if (!perks || !perks.cheatDeath) { return undefined; }
-  const kept = perks.cheatDeath(actorId);
-  if (!(kept > 0)) { return undefined; }
-  mp.set(actorId, 'dyingHealth', kept);
-  return false;
+  if (perks && perks.cheatDeath) {
+    const kept = perks.cheatDeath(actorId);
+    if (kept > 0) {
+      mp.set(actorId, 'dyingHealth', kept);
+      return false;
+    }
+  }
+  const hurt = globalThis.__thornswoodHurt;
+  if (hurt && hurt.goDown) {
+    const down = hurt.goDown(actorId, killerId);
+    if (down > 0) {
+      mp.set(actorId, 'dyingHealth', down);
+      return false;
+    }
+  }
+  return undefined;
 });
 
 /**
@@ -25795,12 +25807,17 @@ module.exports = {
     Every one answers by drawing the panel again, with what happened in it.
   */
   function dropboxCmd(parts, actorId, profileId, toProfile) {
+    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
+    // Optional correlation metadata for Put in, never a transaction key or
+    // authority. Old callers omit it; no other action can acknowledge it.
+    var goldRequest = sub === 'gold' && parts && typeof parts[3] === 'string' &&
+      /^[a-zA-Z0-9-]{1,80}$/.test(parts[3]) ? parts[3] : '';
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to use its drop box.');
+      if (goldRequest) { showBox(actorId, { open: false, goldRequest: goldRequest }); }
       return true;
     }
-    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
     var said = '';
     var records = false;
     if (sub === 'gold') {
@@ -25815,7 +25832,9 @@ module.exports = {
     } else if (sub !== 'open') {
       said = 'The box does not know that.';
     }
-    showBox(actorId, boxView(actorId, profileId, hold, said, records));
+    var view = boxView(actorId, profileId, hold, said, records);
+    if (goldRequest) { view.goldRequest = goldRequest; }
+    showBox(actorId, view);
     return true;
   }
 
@@ -26558,8 +26577,13 @@ module.exports = {
       e.kind = v.kind;
       e.guestAt = v.guest ? v.guest.at : 0;
     }
+    var previous = bedHas(bedState.lying, actorId) ? bedState.lying[actorId] : null;
     bedState.lying[actorId] = e;
     var line = needs.resting(actorId, e.kind);
+    if (!e.seat && (!previous || previous.ref !== e.ref)) {
+      var college = g.__thornswoodCollege;
+      if (college && college.bedRested) { college.bedRested(actorId); }
+    }
     // Sitting down says nothing: people sit at every table in every inn, and
     // the Rest bar is what shows it counting.
     if (e.seat) { return ''; }
@@ -37042,6 +37066,10 @@ return module.exports;
       '(function(){',
       '  try {',
       '    var v = ctx.value;',
+      '    try {',
+      '      var front = globalThis.Thornswood;',
+      '      if (front && typeof front.localCritterClass === "function") front.localCritterClass(v && typeof v === "object" ? v["class"] : null);',
+      '    } catch (critterError) { ctx.sp.printConsole("Torchbug class delivery failed: " + critterError); }',
       '    if (!v || typeof v !== "object") { return; }',
       // No panel on the value means the write moved a counter and nothing
       // the panel draws, so the browser is not touched at all. See drawn().
@@ -41228,9 +41256,8 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   the character is not in it, because the server does not see those. The
   moment it ends is kept on the character, so a relog or a restart does not
   end it early. Waiting the 30 minutes clears it. The page's other clear, a
-  cooked meal and a bed, is not built here: the needs block has known a
-  cooked meal since #1382 (NEEDS.foodGroup.cooked), and nothing in this
-  block ends withered on one and a rest in a bed yet (#6239).
+  cooked meal followed by a bed rest, uses the needs block's accepted cooked
+  meal and the beds block's new validated rest session (#6239).
 */
 (function () {
   'use strict';
@@ -41687,17 +41714,43 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     return {
       drank: Array.isArray(rec.drank) ? rec.drank.filter(isFinite) : [],
       cast: Array.isArray(rec.cast) ? rec.cast.filter(isFinite) : [],
-      until: Number(rec.until) || 0
+      until: Number(rec.until) || 0,
+      mealAt: Number(rec.mealAt) || 0
     };
   }
 
   function witheredWrite(actorId, rec) {
-    try { mp.set(actorId, WITHERED_PROPERTY, rec); } catch (e) { clog('could not write withered for', hex(actorId) + ':', e); }
+    try { mp.set(actorId, WITHERED_PROPERTY, rec); return true; }
+    catch (e) { clog('could not write withered for', hex(actorId) + ':', e); return false; }
   }
 
   /** True while this person is withered. */
   function isWithered(actorId, at) {
     return witheredRead(actorId).until > (at || now());
+  }
+
+  // Only an accepted cooked meal during this withering can precede its cure.
+  function cookedMeal(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t) { return false; }
+    rec.mealAt = t;
+    return witheredWrite(actorId, rec);
+  }
+
+  // Called only for a new rest in validated bed furniture, including bedrolls.
+  function bedRested(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t || rec.mealAt <= 0 || rec.mealAt > t ||
+        rec.mealAt < rec.until - WITHERED.minutes * 60000) { return false; }
+    rec.until = 0;
+    rec.mealAt = 0;
+    if (!witheredWrite(actorId, rec)) { return false; }
+    delete witherTimers[actorId];
+    tell(actorId, 'Your meal and bed rest have cleared the withering. Your health and magicka are your own again.');
+    push(actorId);
+    return true;
   }
 
   /* The end of it, on its own clock, and the map written again when it comes. */
@@ -41730,6 +41783,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     var set = rec.drank.length >= WITHERED.potions || rec.cast.length >= WITHERED.casts;
     if (set) {
       rec.until = t + WITHERED.minutes * 60000;
+      rec.mealAt = 0;
       rec.drank = [];
       rec.cast = [];
     }
@@ -41827,7 +41881,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     reanimates: reanimates, hit: hit,
     isRestoration: isRestoration, cast: cast, effects: effects, strain: strain,
     WITHERED: WITHERED, WITHERED_PROPERTY: WITHERED_PROPERTY, drank: drank, isWithered: isWithered,
-    witheredAtLogin: witheredAtLogin,
+    witheredAtLogin: witheredAtLogin, cookedMeal: cookedMeal, bedRested: bedRested,
     takeScript: takeScript, laydownScript: laydownScript
   };
   clog('ready');
@@ -47813,13 +47867,13 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       '        st.thornswoodCuffWhere = 0;',
       '        step("take the cuffs off", function () { if (cuffs) { pc.unequipItem(cuffs, false, true); } });',
       '        step("end the bound idle", function () { sp.Debug.sendAnimationEvent(pc, "OffsetStop"); });',
-      '        step("stop naming fighting held", function () { if (sp.storage.thornswoodControlsHeld) { delete sp.storage.thornswoodControlsHeld.fighting; } });',
-      '        step("give fighting back", function () { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
+      '        step("stop naming fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; var left = String(held.fighting || "").split(",").filter(function (r) { return !!r && r !== "cuffed"; }); if (left.length) { held.fighting = left.join(","); } else { delete held.fighting; } sp.storage.thornswoodControlsHeld = held; });',
+      '        step("give fighting back", function () { var held = sp.storage.thornswoodControlsHeld || {}; if (!held.fighting) { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); } });',
       '        return;',
       '      }',
       '      st.thornswoodCuffBound = true;',
       '      st.thornswoodCuffWhere = where;',
-      '      step("name fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; held.fighting = "cuffed"; sp.storage.thornswoodControlsHeld = held; });',
+      '      step("name fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; var r = String(held.fighting || "").split(",").filter(function (x) { return !!x; }); if (r.indexOf("cuffed") < 0) { r.push("cuffed"); } held.fighting = r.join(","); sp.storage.thornswoodControlsHeld = held; });',
       '      step("turn fighting off", function () { sp.Game.disablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
       '      step("put the weapon away", function () { if (pc.isWeaponDrawn()) { pc.sheatheWeapon(); } });',
       '      step("lock the cuffs on", function () { if (cuffs && pc.getItemCount(cuffs) > 0) { pc.equipItem(cuffs, true, true); } });',
@@ -53353,6 +53407,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A cooked meal's help (#2682), only for a meal that went down: not
       // inside the 8 seconds, and not on a full stomach, where it sits badly.
       if (ate1.taken && !ate1.full) {
+        if (group === 'cooked' || group === 'soup' || group === 'feast') {
+          var college = g.__thornswoodCollege;
+          if (college && college.cookedMeal) { college.cookedMeal(actorId); }
+        }
         var help = mealHelpOf(baseId, group);
         // A fine dish's help lasts longer (#2906), and a feast's lasts half
         // as long as a meal's, fine or plain (#3152).
@@ -55050,12 +55108,45 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     and needs no launcher release.
   */
   var BURN_PROPERTY = 'thornswoodBurn';
+  var BURN_VISUAL_PROPERTY = 'thornswoodBurnVisual';
+  // Saved actor properties from an earlier process are not a current fire.
+  // The script and each report share this gamemode registration's token.
+  var burnEpoch = String(Date.now()) + ':' + String(Math.random());
+  var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
+  var burnIdentities = {}; // actorId -> profile, current runtime and life
+
+  function burnIdentity(actorId) {
+    try {
+      var state = mp.getNpcAIState(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!state || state.isConnected !== true || state.isDead || state.isDisabled ||
+          !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
+          typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
+      return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
+    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+  }
+
+  function publishBurnVisual(actorId, on) {
+    try {
+      mp.set(actorId, BURN_VISUAL_PROPERTY, { on: on, epoch: burnEpoch, seq: ++burnSequence });
+    } catch (e) { nlog('could not publish the fire visual for', actorId, e); }
+  }
+
+  function clearBurning(actorId) {
+    delete burning[actorId];
+    delete burnIdentities[actorId];
+    publishBurnVisual(actorId, false);
+  }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
-    if (on) { burning[actorId] = Date.now(); }
-    else { delete burning[actorId]; }
+    var identity = on ? burnIdentity(actorId) : '';
+    if (on && identity) {
+      burning[actorId] = Date.now();
+      burnIdentities[actorId] = identity;
+      publishBurnVisual(actorId, true);
+    } else { clearBurning(actorId); }
   }
 
   /** Tell one person's client to catch fire for a while. */
@@ -55075,8 +55166,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     for (var id in burning) {
       if (!Object.prototype.hasOwnProperty.call(burning, id)) { continue; }
       // A client that stops reporting has gone, crashed or stopped burning
-      // without saying so. Two of its own beats is enough to let go.
-      if (now - burning[id] > NEEDS.burn.every * 3) { delete burning[id]; continue; }
+      // without saying so. Three server beats without a report lets go.
+      if (now - burning[id] > NEEDS.burn.every * 3 || burnIdentity(Number(id)) !== burnIdentities[id]) {
+        clearBurning(Number(id)); continue;
+      }
       alight.push(Number(id));
     }
     if (!alight.length) { return; }
@@ -55146,6 +55239,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     ].join('\n');
   }
 
+  // This is only the observer's shader. The existing owner script/plugin
+  // continues to own ignition, damage and the report that drives spreading.
+  function burnVisualScript() {
+    return [
+      '(function(){',
+      '  var st = ctx.state;',
+      '  if (!st) { return; }',
+      '  try {',
+      '    var a = ctx.sp.Actor.from(ctx.refr);',
+      '    if (!a) { return; }',
+      '    var v = ctx.value, now = Date.now();',
+      '    var current = v && v.epoch === ' + JSON.stringify(burnEpoch) + ' && v.on === true && Number.isSafeInteger(v.seq);',
+      '    if (current && (st.thornswoodBurnVisualEpoch !== v.epoch || st.thornswoodBurnVisualSeq !== v.seq)) {',
+      '      if (st.thornswoodBurnVisualEpoch !== v.epoch) { st.thornswoodBurnVisualHidden = true; }',
+      '      st.thornswoodBurnVisualEpoch = v.epoch;',
+      '      st.thornswoodBurnVisualSeq = v.seq;',
+      '      st.thornswoodBurnVisualUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '    if (!current || ctx.get("isDead") || now >= (st.thornswoodBurnVisualUntil || 0)) {',
+      '      if (st.thornswoodBurnVisualShown) {',
+      '        var ended = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '        if (ended) { ended.stop(a); }',
+      '        st.thornswoodBurnVisualShown = false;',
+      '      }',
+      '      return;',
+      '    }',
+      '    if (!a.is3DLoaded()) { st.thornswoodBurnVisualHidden = true; return; }',
+      // Heartbeats extend receipt validity. They do not stack native Play calls.
+      // Replace only when the finite shader lease ends or the body reloads.
+      '    if (!st.thornswoodBurnVisualShown || st.thornswoodBurnVisualHidden || now >= (st.thornswoodBurnShaderUntil || 0)) {',
+      '      var shader = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '      if (!shader) { return; }',
+      '      if (st.thornswoodBurnVisualShown) { shader.stop(a); }',
+      '      shader.play(a, ' + (NEEDS.burn.every * 3 / 1000) + ');',
+      '      st.thornswoodBurnVisualShown = true;',
+      '      st.thornswoodBurnVisualHidden = false;',
+      '      st.thornswoodBurnShaderUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '  } catch (e) {',
+      '    if (!st.thornswoodBurnVisualError) {',
+      '      st.thornswoodBurnVisualError = true;',
+      '      ctx.sp.printConsole("[Thornswood] remote fire visual failed: " + String(e));',
+      '    }',
+      '  }',
+      '})();'
+    ].join('\n');
+  }
+
+  mp.makeProperty(BURN_VISUAL_PROPERTY, {
+    isVisibleByOwner: false,
+    isVisibleByNeighbors: true,
+    updateOwner: '',
+    updateNeighbor: burnVisualScript()
+  });
+
   try {
     mp.makeProperty(BURN_PROPERTY, {
       isVisibleByOwner: true,
@@ -55203,7 +55351,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
     place: place, tooTiredToCraft: tooTiredToCraft, craftRefusal: craftRefusal,
-    setBurning: setBurning, catchFire: catchFire,
+    setBurning: setBurning, catchFire: catchFire, clearBurning: clearBurning,
     fresh: fresh, clamp: clamp,
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
@@ -55948,13 +56096,19 @@ module.exports = {
   a physicker setting a bone. Yours from the inventory, somebody else's from
   the look prompt, both through one panel (game/ui/thornswood-treat.js).
 
-  GOING DOWN IS NOT HERE YET. The engine now asks mp.onDying before health
-  reaching zero kills, before anything is sent (#1626), so that is the moment
-  this file can say "down, not dead": refuse the death and keep them at a
-  health of its own. The rest of going down (the downed flag the clients are
-  sent, no fighting or casting while down, being stabilized, the wake) is
-  #2681. Until it is built a bleed that empties your health is a death with
-  no killer, the world's, and the temple keeps your wounds.
+  GOING DOWN (#4607, docs/systems/injury.md, "Down"). The engine asks
+  mp.onDying before health reaching zero kills, before anything is sent
+  (#1626, fork #101), and a refusal with dyingHealth keeps the person alive
+  at that share of their most: no death, no ragdoll, nothing undone. So a
+  person whose health would reach zero goes down here instead (goDown): kept
+  at DOWN.keep, held from fighting and casting on their own machine (the
+  thornswoodDown property's script), and able to talk. A bandage from
+  somebody else, a healing spell landing on them, or a healing potion
+  stands them up at a quarter of their health (standUp). Nobody does in
+  DOWN.minutes, and the tick lets the death through (wake): the ordinary
+  wake at the temple, with the wounds they had. Staff seeing who is down,
+  confirming the outcome and changing the minutes is #6409; a potion brewed
+  at a lab standing somebody up is #6407.
   ============================================================================
 */
 (function () {
@@ -56113,6 +56267,17 @@ module.exports = {
   var MEAL_GUARD = { cooked: { mult: 0.5, min: 20 }, feast: { mult: 0.25, min: 10 } };
 
   /*
+    DOWN (#4607). injury.md: "The clock is 3 real minutes", and "Health
+    returns to 25% of its max, not to full". keep is the share of their most
+    a person is held at while down: the engine takes any share above nothing
+    (DyingHealthBinding), and 1% is the least a health bar still shows.
+  */
+  var DOWN = { minutes: 3, keep: 0.01, stable: 0.25 };
+  // The down person's own machine reads this (downScript, below), and so does
+  // anybody near them, for the look prompt.
+  var DOWN_PROPERTY = 'thornswoodDown';
+
+  /*
     BENCHES THAT TAKE BOTH HANDS, by the keyword a bench carries (BENCH_BY_BASE).
     A broken arm and a missing hand refuse these. The page does not list them,
     and Patrick's answer on #1383 (4 October) is these: the forges, the armour
@@ -56138,7 +56303,8 @@ module.exports = {
   // ------------------------------------------------------------ the record --
 
   function fresh() {
-    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null };
+    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null,
+             down: null, wake: false };
   }
 
   /*
@@ -56194,6 +56360,11 @@ module.exports = {
     if (gd && num(gd.until, 0) > 0 && num(gd.mult, 1) > 0 && num(gd.mult, 1) < 1) {
       out.guard = { until: num(gd.until, 0), mult: num(gd.mult, 1) };
     }
+    var dn = (v.down && typeof v.down === 'object') ? v.down : null;
+    if (dn && num(dn.at, 0) > 0 && num(dn.until, 0) > 0) {
+      out.down = { at: num(dn.at, 0), until: num(dn.until, 0), by: Math.max(0, num(dn.by, 0)) };
+    }
+    out.wake = v.wake === true;
     return out;
   }
 
@@ -56361,6 +56532,7 @@ module.exports = {
      never shows". */
   function lines(rec, now) {
     var out = [];
+    if (rec.down) { out.push('Down'); }
     var bleeding = 0, slowed = true;
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
@@ -56580,6 +56752,8 @@ module.exports = {
       var who = online[i];
       try {
         var rec = read(who);
+        // Down past the clock, and nobody came (#4607).
+        if (rec.down && now >= rec.down.until) { wake(who); continue; }
         var was = rec.show.join('|');
         var r = step(who, rec, now);
         var shown = lines(rec, now).join('|');
@@ -56618,7 +56792,9 @@ module.exports = {
       // The wounds first: most people are not bleeding, and asking everybody
       // whether they are dead before that was a second engine read a person
       // every second for nothing (#5431).
-      var rate = bleedRate(read(who));
+      var held = read(who);
+      // Somebody down is held at DOWN.keep, not bled further (#4607).
+      var rate = held.down ? 0 : bleedRate(held);
       if (!rate) { continue; }
       var dead = false;
       try { dead = !!mp.get(who, 'isDead'); } catch (e) { continue; }
@@ -56768,6 +56944,8 @@ module.exports = {
     var s = spellRank(source);
     if (!s || s.self || !personal(targetId)) { return; }
     tell(targetId, healed(targetId, s.rank));
+    // Any healing spell from somebody else stands them back up (#4607).
+    tell(targetId, standUp(targetId, 'a healing spell'));
   }
 
   // ----------------------------------------------- the blow that opens one --
@@ -56963,11 +57141,18 @@ module.exports = {
   }
 
   /*
-    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A potion of cure
-    disease clears one ordinary disease. It is still the thirst sip, which the
-    needs block gives from the same event (eaten). Answers a line, or ''.
+    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A healing potion
+    stands somebody down back up (#4607). A potion of cure disease clears one
+    ordinary disease. Either is still the thirst sip, which the needs block
+    gives from the same event (eaten). Answers a line, or ''.
   */
   function swallowed(actorId, baseId) {
+    var up = healsHealth(baseId) ? standUp(actorId, 'a healing potion') : '';
+    var cured = cureSwallowed(actorId, baseId);
+    return [up, cured].filter(function (s) { return !!s; }).join(' ');
+  }
+
+  function cureSwallowed(actorId, baseId) {
     var cure = false;
     for (var i = 0; i < CURE_DISEASE.length; i++) {
       var id = 0;
@@ -57139,12 +57324,175 @@ module.exports = {
   */
   function died(actorId) {
     delete fires[actorId];
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
     var any = false;
     for (var i = 0; i < rec.wounds.length; i++) {
       if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
     }
+    // Down ends with the death (#4607): the wake is the temple's. Their machine
+    // is told by what it was last sent, because the wake's own death has
+    // already taken the down off the record (wake, below).
+    var wasDown = !!rec.down || rec.wake;
+    if (wasDown) { rec.down = null; rec.wake = false; any = true; }
     if (any) { write(actorId, rec); }
+    var shown = null;
+    try { shown = mp.get(actorId, DOWN_PROPERTY); } catch (e) { shown = null; }
+    if (wasDown || (shown && shown.down)) { showDown(actorId, false); }
+  }
+
+  // -------------------------------------------------------- going down --
+
+  function profileOf(id) {
+    try { return Math.max(0, Number(mp.get(id, 'profileId')) || 0); } catch (e) { return 0; }
+  }
+
+  /*
+    WHAT THE DOWN PERSON'S MACHINE IS SENT, and anybody near them: whether
+    they are down. at moves on every change, so the script acts once a change.
+  */
+  function showDown(actorId, down) {
+    try { mp.set(actorId, DOWN_PROPERTY, { down: !!down, at: Date.now() }); return true; }
+    catch (e) { hlog('could not send down to', actorId.toString(16) + ':', e); return false; }
+  }
+
+  /*
+    ASKED BY mp.onDying (event-handlers.ts), after Cheat Death: this person's
+    health is about to reach nothing. Answers the share of their most the
+    engine keeps them at, or 0 to let the death through.
+
+      somebody who is not a person   0: an animal, a bandit or a guard dies.
+      wake set                       0, once: DOWN.minutes ran out (wake,
+                                     below), and this is that death.
+      already down                   DOWN.keep, and the clock is not moved: a
+                                     blow on somebody down does not kill them.
+                                     A death needs a yes (death.md).
+      anybody else                   down now, for DOWN.minutes.
+
+    by is the profile of whoever's blow it was, 0 for the world's (a fall, a
+    fire, a bleed): death.md asks the question only when it was a person.
+    A record that cannot be written lets the death through, because a down
+    nothing remembers could never end.
+  */
+  function goDown(actorId, killerId) {
+    if (!personal(actorId)) { return 0; }
+    var rec = read(actorId);
+    if (rec.wake) {
+      rec.wake = false;
+      write(actorId, rec);
+      hlog(actorId.toString(16), 'was not stood up in', DOWN.minutes, 'minutes, and wakes at the temple');
+      return 0;
+    }
+    if (rec.down) { return DOWN.keep; }
+    var now = Date.now();
+    var by = (killerId && killerId !== actorId) ? profileOf(killerId) : 0;
+    rec.down = { at: now, until: now + DOWN.minutes * MIN, by: by };
+    if (!write(actorId, rec)) { return 0; }
+    showDown(actorId, true);
+    redraw(actorId);
+    hlog(actorId.toString(16), 'went down', by ? ('to profile ' + by) : 'to the world');
+    tell(actorId, 'You are down. You can talk, but not fight or cast. A bandage, a healing spell or a ' +
+                  'healing potion gets you back up. If nobody comes in ' + DOWN.minutes +
+                  ' minutes, you wake at the temple.');
+    return DOWN.keep;
+  }
+
+  /*
+    BACK UP: the property says so, and health is a quarter of their most, or
+    what they have if that is more. The record is already written without
+    the down.
+  */
+  function rise(actorId, how) {
+    showDown(actorId, false);
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'to stand them up');
+    } else {
+      try {
+        mp.set(actorId, 'percentages', { health: Math.max(num(p.health, 0), DOWN.stable),
+                                         magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      } catch (e) { hlog('could not stand', actorId.toString(16), 'up:', e); }
+    }
+    hlog(actorId.toString(16), 'is back up:', how);
+  }
+
+  /* Stood up by a healing spell or a potion. Answers the line to tell them, or ''. */
+  function standUp(actorId, how) {
+    var rec = read(actorId);
+    if (!rec.down) { return ''; }
+    rec.down = null;
+    if (!write(actorId, rec)) { return ''; }
+    redraw(actorId);
+    rise(actorId, how);
+    return 'You are back on your feet, still hurt.';
+  }
+
+  /*
+    THE CLOCK RAN OUT with nobody standing them up: the death goes through.
+    wake tells goDown to let the next one go, and health written to nothing
+    is that death, through the engine's own onDying and onDeath, so the wake
+    is the temple's with the wounds they had (died, above). A write the
+    engine refuses puts the down back, so the record never says less than
+    the truth.
+  */
+  function wake(actorId) {
+    var rec = read(actorId);
+    if (!rec.down) { return false; }
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'for the wake');
+      return false;
+    }
+    var down = rec.down;
+    rec.down = null;
+    rec.wake = true;
+    if (!write(actorId, rec)) { return false; }
+    try {
+      mp.set(actorId, 'percentages', { health: 0, magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      return true;
+    } catch (e) {
+      hlog('could not let the death of', actorId.toString(16), 'through:', e);
+      rec.down = down;
+      rec.wake = false;
+      write(actorId, rec);
+      return false;
+    }
+  }
+
+  /*
+    WHETHER A DRINK HEALS: a potion record (ALCH without the food flag, ENIT's
+    second word, bit 2) with a restore health effect, the AlchRestoreHealth
+    family named by editor id the way Build-IngredientTable.js names them.
+    Asked once per record. A potion brewed at a lab has no record: #6407.
+  */
+  var healsSeen = {};
+  function healsHealth(baseId) {
+    baseId = Number(baseId) || 0;
+    if (!baseId) { return false; }
+    if (has(healsSeen, baseId)) { return healsSeen[baseId]; }
+    var heals = false;
+    var res = recordOf(baseId);
+    if (res && res.record && String(res.record.type || '') === 'ALCH') {
+      var enit = fieldOf(res, 'ENIT');
+      var flags = (enit && enit.length >= 8) ? (enit[4] | (enit[5] << 8) | (enit[6] << 16)) + enit[7] * 0x1000000 : 0;
+      var fields = res.record.fields || [];
+      for (var i = 0; !(flags & 2) && !heals && i < fields.length; i++) {
+        if (!fields[i] || String(fields[i].type) !== 'EFID') { continue; }
+        var d = fields[i].data || [];
+        if (d.length < 4) { continue; }
+        var local = (d[0] | (d[1] << 8) | (d[2] << 16)) + d[3] * 0x1000000;
+        var global = local;
+        try {
+          if (typeof res.toGlobalRecordId === 'function') { global = Number(res.toGlobalRecordId(local)) || local; }
+        } catch (e) { global = local; }
+        if (editorIdOf(recordOf(global)).indexOf('AlchRestoreHealth') === 0) { heals = true; }
+      }
+    }
+    healsSeen[baseId] = heals;
+    return heals;
   }
 
   /*
@@ -57232,6 +57580,8 @@ module.exports = {
 
   /* Whether anybody could tend anything on this record. */
   function needsCare(rec) {
+    // Somebody down is the first thing anybody near could tend (#4607).
+    if (rec.down) { return true; }
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
       if (bandageHelps(w) || poulticeHelps(w) || (w.k === 'break' && !w.set)) { return true; }
@@ -57309,15 +57659,29 @@ module.exports = {
     }
     if (what === 'bandage') {
       var wb = firstWound(rec, bandageHelps, function (w) { return cutOrBite(w) && w.bleed; });
-      if (!wb) { return { why: 'There is no open wound a bandage would help.' }; }
+      // A bandage stands somebody down back up (#4607), wound or none. Somebody
+      // else's: injury.md, "if someone stabilizes you".
+      var downed = !!rec.down && !self;
+      if (!wb && !downed) {
+        return { why: (rec.down && self) ? 'You cannot get yourself back up. Somebody near you has to.'
+                                         : 'There is no open wound a bandage would help.' };
+      }
       if (carried(doerId, 'bandage') < 1) { return { why: 'You carry no bandage. ' + TREAT.bandage.maker }; }
       return { item: 'bandage', apply: function () {
+        if (!wb) {
+          rec.down = null;
+          return { line: 'You bandage ' + nameOf(targetId) + ' and help them back up.',
+                   them: by + ' bandages you and helps you back up.', up: true };
+        }
         var bled = cutOrBite(wb) && wb.bleed;
         wb.bandage = true;
         if (cutOrBite(wb)) { wb.bleed = false; }
         var after = bled ? ' The bleeding stops.' : '';
-        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after,
-                 them: by + ' bandages your ' + wordFor(wb) + '.' + after };
+        var up = downed ? ' You help them back up.' : '';
+        var upThem = downed ? ' You are back on your feet.' : '';
+        if (downed) { rec.down = null; }
+        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after + up,
+                 them: by + ' bandages your ' + wordFor(wb) + '.' + after + upThem, up: downed };
       } };
     }
     if (what === 'splint') {
@@ -57420,6 +57784,7 @@ module.exports = {
     var said = p.apply();
     write(targetId, rec);
     redraw(targetId);
+    if (said.up) { rise(targetId, 'a bandage from ' + doerId.toString(16)); }
     hlog(doerId.toString(16), 'tended', targetId.toString(16) + ':', what);
     return { ok: true, line: said.line, them: self ? '' : said.them };
   }
@@ -57636,6 +58001,83 @@ module.exports = {
   }
 
   /*
+    DOWN, ON THEIR OWN MACHINE (#4607). Once a change of the record: down
+    names fighting held for this reason, turns fighting off (in Skyrim that
+    is attacking and casting both), puts the weapon away and plays the
+    bleedout pose; up takes the reason off, gives fighting back only when no
+    other reason still holds it (the cuffs name theirs the same way), and
+    ends the pose. After that only the cell is read, so the pose a load
+    screen throws away is played once more. Talking and the menus stay
+    theirs. Only the server's record stands them up: the script never ends
+    the pose on its own.
+  */
+  function downScript() {
+    return [
+      '(function(){',
+      '  var sp = ctx.sp, st = ctx.state, v = ctx.value;',
+      '  if (!st) { return; }',
+      '  function step(what, f) {',
+      '    try { f(); } catch (e) {',
+      '      var seen = st.thornswoodDownReported || (st.thornswoodDownReported = {});',
+      '      if (seen[what]) { return; }',
+      '      seen[what] = true;',
+      '      sp.printConsole("[thornswood] down: could not " + what + ": " + e);',
+      '    }',
+      '  }',
+      '  function reasons() {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    return String(held.fighting || "").split(",").filter(function (r) { return !!r; });',
+      '  }',
+      '  function name(list) {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    if (list.length) { held.fighting = list.join(","); } else { delete held.fighting; }',
+      '    sp.storage.thornswoodControlsHeld = held;',
+      '  }',
+      '  var down = !!(v && v.down);',
+      '  var pc = sp.Game.getPlayer();',
+      '  if (!pc) { return; }',
+      '  var cell = pc.getParentCell();',
+      '  var where = cell ? cell.getFormID() : 0;',
+      '  var at = v ? v.at : 0;',
+      '  if (st.thornswoodDownAt !== at) {',
+      '    var was = !!st.thornswoodDown;',
+      '    st.thornswoodDownAt = at;',
+      '    st.thornswoodDown = down;',
+      '    st.thornswoodDownWhere = where;',
+      '    if (down) {',
+      '      step("name fighting held", function () { var r = reasons(); if (r.indexOf("down") < 0) { r.push("down"); } name(r); });',
+      '      step("turn fighting off", function () { sp.Game.disablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
+      '      step("put the weapon away", function () { if (pc.isWeaponDrawn()) { pc.sheatheWeapon(); } });',
+      '      step("go down", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '      return;',
+      '    }',
+      '    if (!was) { return; }',
+      '    var left = [];',
+      '    step("stop naming fighting held", function () { left = reasons().filter(function (r) { return r !== "down"; }); name(left); });',
+      '    step("give fighting back", function () { if (!left.length) { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); } });',
+      '    step("get up", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStop"); });',
+      '    return;',
+      '  }',
+      '  if (!down || !where || st.thornswoodDownWhere === where) { return; }',
+      '  st.thornswoodDownWhere = where;',
+      '  step("go down after a load", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '})();'
+    ].join('\n');
+  }
+
+  try {
+    mp.makeProperty(DOWN_PROPERTY, {
+      // The owner's machine holds them; a neighbour sees the record, for the look prompt.
+      isVisibleByOwner: true,
+      isVisibleByNeighbors: true,
+      updateOwner: downScript(),
+      updateNeighbor: ''
+    });
+  } catch (e) {
+    // Already made by a previous load. The script cannot change until a restart, which a deploy is.
+  }
+
+  /*
     THE TREATMENT PANEL'S VIEW, seen by its owner only, handed to the page the
     way the repair panel's is; game/ui/thornswood-treat.js draws it, and a
     view with open set opens it. at moves on every send, so the key pressed
@@ -57753,6 +58195,8 @@ module.exports = {
     forNeeds: forNeeds, burntWear: burntWear, wound: wound, burning: burning, settleQuietFires: settleQuietFires,
     healed: healed, cast: cast, hit: hit, swallowed: swallowed, rite: rite,
     exposed: exposed, craftRefusal: craftRefusal, died: died, scarOf: scarOf, staff: staff,
+    DOWN: DOWN, DOWN_PROPERTY: DOWN_PROPERTY, goDown: goDown, standUp: standUp, wake: wake,
+    healsHealth: healsHealth, downScript: downScript,
     BITERS: BITERS, TREAT: TREAT, TREAT_REACH: TREAT_REACH,
     weaponKind: weaponKind, woundFrom: woundFrom, bitingRaces: bitingRaces, blow: blow, landed: landed,
     needsCare: needsCare, careOf: careOf, careChanged: careChanged, plan: plan, treat: treat, viewFor: viewFor, panel: panel
@@ -60960,7 +61404,8 @@ module.exports = {
     bridge". Names have spaces, so the longest name of somebody in the world
     that the line starts with wins; then a first name that only one person in
     the world has; and failing both, the first word, kept as typed, because a
-    person who has already logged off can still be reported.
+    person who has already logged off can still be reported. A name shared
+    by several people here is refused before any delivery or cooldown (#4749).
 
     could is everybody in the world the name could mean (#4922), whichever
     one is picked or none: anybody a word of whose name starts with the first
@@ -60981,24 +61426,29 @@ module.exports = {
   function whoAbout(words, people) {
     var line = words.join(' ').toLowerCase();
     var could = couldBe(words, people);
-    var best = null, bestName = '';
+    var first = String(words[0] || '').toLowerCase();
+    var same = [];
+    var best = null, bestName = '', bestCount = 0;
     for (var i = 0; i < people.length; i++) {
       var n = String(people[i].name || '').toLowerCase().trim();
       if (!n) { continue; }
+      if (n.split(/\s+/, 1)[0] === first) { same.push(people[i]); }
       if ((line === n || line.indexOf(n + ' ') === 0) && n.length > bestName.length) {
         best = people[i];
         bestName = n;
+        bestCount = 1;
+      } else if (best && n === bestName) {
+        bestCount++;
       }
     }
     if (best) {
+      // A one-word full name can also be another person's first name.
+      if (bestCount > 1 || (bestName === first && same.length > 1)) { return { ambiguous: true }; }
       var used = bestName.split(/\s+/).length;
       if (could.indexOf(best) < 0) { could.push(best); }
       return { name: best.name, person: best, could: could, rest: words.slice(used).join(' ').trim() };
     }
-    var first = String(words[0] || '').toLowerCase();
-    var same = people.filter(function (p) {
-      return String(p.name || '').toLowerCase().trim().split(/\s+/)[0] === first;
-    });
+    if (same.length > 1 || could.length > 1) { return { ambiguous: true }; }
     if (first && same.length === 1) {
       return { name: same[0].name, person: same[0], could: could, rest: words.slice(1).join(' ').trim() };
     }
@@ -61080,6 +61530,11 @@ module.exports = {
         return;
       }
       about = whoAbout(words, people);
+      if (about.ambiguous) {
+        toProfile(profileId, 'That name matches more than one person. Use their full name. ' +
+          'If their full names are the same, use /helpme to explain which person you mean. Nothing was sent.');
+        return;
+      }
       said = about.rest;
       if (!said) {
         toProfile(profileId, 'Say what ' + about.name + ' did after the name, so staff know ' +
@@ -63016,6 +63471,101 @@ module.exports = {
   });
 })();
 // ==== end thornswood equipment testing repair ====
+// ==== thornswood staff progression ====
+// #6736: a test tool for one legal step on the character's current ladder.
+// Progression owns the rewards and character owns the saved record and view.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Use /rankup class [for <person>] or /rankup profession [school] [for <person>].';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rankup') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff) { return true; }
+    function refuse(why) { staff.tell(pid, why); return true; }
+    var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
+    if (!P || !C) { return refuse('The progression tools are not running.'); }
+    var args = parts.slice(1);
+    var kind = String(args.shift() || '').toLowerCase();
+    if (kind !== 'class' && kind !== 'profession') { return refuse(USAGE); }
+    var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
+    var targetWords = at < 0 ? [] : args.slice(at + 1);
+    var choice = at < 0 ? args : args.slice(0, at);
+    if ((at >= 0 && !targetWords.length) || choice.length > (kind === 'class' ? 0 : 1)) {
+      return refuse(USAGE);
+    }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    if (targetWords.length && !(targetWords.length === 1 && targetWords[0].toLowerCase() === 'me')) {
+      target = staff.takePerson(targetWords);
+      if (!target.actorId || !target.pid || target.rest.length) {
+        return refuse(target.why || 'Name exactly one character after for.');
+      }
+    }
+    var denied = staff.authorizeTool(cmd, pid, actorId, target.actorId === actorId ? 'playtester' : 'admin');
+    if (denied) { return refuse(denied); }
+    if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
+    var s = C.stateOf(target.actorId), key;
+    if (kind === 'class') {
+      key = s.cls;
+      if (!P.has(P.TABLE.classes, key)) { return refuse('Choose a class before advancing its rank.'); }
+    } else {
+      if (!P.has(P.TABLE.professions, s.prof)) { return refuse('Choose a profession before advancing its rank.'); }
+      if (s.prof === 'mage') {
+        key = String(choice[0] || '').toLowerCase();
+        if (P.TABLE.schools.indexOf(key) < 0 || s.schools.indexOf(key) < 0) {
+          return refuse('Name one of that mage\'s chosen schools after profession.');
+        }
+      } else {
+        if (choice.length) { return refuse('This profession advances its chosen half, without a school name.'); }
+        key = s.half;
+        if (P.halvesOf(s.prof).indexOf(key) < 0) { return refuse('Choose a half of the profession before advancing its rank.'); }
+      }
+    }
+    var from = P.rankOf(s, key);
+    // creditWork migrates a legacy class without standing to novice itself.
+    var legacyClass = !from && kind === 'class';
+    if (legacyClass) { from = 'novice'; }
+    var rung = P.TABLE.ranks.indexOf(from);
+    if (rung < 0) { return refuse('That progression rank cannot be read. Nothing was advanced.'); }
+    if (from === 'master') { return refuse('That rank is already Master.'); }
+    var need = legacyClass ? P.TUNING.workPerRank.advanced : P.workNeeded(s, key);
+    var done = P.workDone(s, key);
+    if (!Number.isFinite(need) || need <= 0 || !Number.isFinite(done) || done < 0) {
+      return refuse('That work count cannot be read. Nothing was advanced.');
+    }
+    // One threshold, once. Normal school rewards are calculated by the same
+    // function as earned work; no rank or reward is written by this module.
+    var r = P.creditWork(s, key, null, Math.max(1, need - done));
+    if (!r.ok || !r.raised || r.raised.key !== key || r.raised.to !== P.TABLE.ranks[rung + 1]) {
+      return refuse((r && r.why) || 'That rank cannot advance.');
+    }
+    try { C.writeState(target.actorId, r.state, true); }
+    catch (e) { return refuse('The new rank could not be saved.'); }
+    // writeState logs a refused engine write; do not report or audit success
+    // unless the single saved character property contains the new rank.
+    if (P.rankOf(C.stateOf(target.actorId), key) !== r.raised.to) {
+      return refuse('The new rank could not be saved.');
+    }
+    staff.tell(target.pid, C.raiseLines(target.actorId, r));
+    if (target.pid !== pid) {
+      staff.tell(pid, 'Advanced ' + target.name + '\'s ' + C.nameOf(key) + ' to ' + r.raised.to + '.');
+    }
+    staff.record('rankup', pid, staff.nameOf(actorId), target.pid, target.name,
+      kind + ' ' + key, 0, { key: key, from: r.raised.from, to: r.raised.to });
+    return true;
+  }
+
+  g.__thornswoodStaffProgression = { command: command };
+  var tools = g.__thornswoodCommandTools;
+  if (tools && tools.register) {
+    tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
+      syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
+      { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
+        text: 'Advance another character\'s current class or profession by one rank.' }] });
+  }
+})();
+// ==== end thornswood staff progression ====
 // ==== thornswood take back ====
 /*
   ============================================================================

@@ -81,6 +81,13 @@ Get-Content -LiteralPath (`$log + '.1'), `$log -Encoding UTF8 -Tail 3000 -EA Sil
 
 $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
 $out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" } 2>&1
+$sshCode = $LASTEXITCODE
+if ($sshCode -ne 0) {
+  Say 'could not reach the box' 'Red'
+  Write-Host ''
+  if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+  exit $sshCode
+}
 
 Head 'The VPS'
 foreach ($line in $out) {
@@ -94,3 +101,4 @@ foreach ($line in $out) {
 
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+exit 0

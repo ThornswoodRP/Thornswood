@@ -1,12 +1,22 @@
 # scripts/oneoff
 
-Scripts that did one job once, kept rather than deleted. Apart from
-`make-join-card.py`, which `bot/tests/test-join-card.py` runs (#4551), nothing in
-the repository calls any of them, and none of them is part of a release, a
-deploy or a test. They were parked here on 25 September from `tools\`, after the
-audit of that day found nothing still using them. The nine retired installers
-from `scripts\mods` joined them for #4740; tests\test-hand-install-retired.ps1
-and tests\test-bodies-retired.ps1 hold each one to its refusal.
+Scripts that did one job once, kept rather than deleted. None of them is part
+of a release or a deploy. The table names the tests that use scratch
+repositories and fixtures to run the history, asset, feed and FormID
+scripts, and the join card test that runs the art generator (#4551).
+
+Other harnesses check the retired scripts and their documentation.
+
+- `tests\test-hand-install-retired.ps1` and `tests\test-bodies-retired.ps1`
+  check the retired installers' refusals and table rows.
+- `tests\test-4740-mods-folder.ps1` checks the nine moved installers, and
+  `tests\test-4811-dead-record-scripts.ps1` checks the two retired record scripts.
+- `tests\test-4215-stops-next-step.js`, `tests\test-4688-one-load-order-rule.ps1`
+  and `tests\test-sunhelm-gone.js` read installer source. The service principals
+  test, `scripts\tests\test-2578-service-principals.ps1`, reads `Fix-Voice.ps1`.
+
+The first scripts moved here from `tools\` on 25 September. The nine retired
+installers moved from `scripts\mods` in #4740.
 
 They were written to sit in `tools\`, which is gone since 29 September, and
 some of them reach the scripts beside them from there, so a script taken out to

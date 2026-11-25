@@ -30,6 +30,17 @@ makings from day one. All three are novice.
 | Armor Kit | 1 Iron Ingot, 1 Leather | Forge | Smith, Platewright |
 | Sewing Kit | 1 Tundra Cotton, 1 Leather Strips | Tanning rack | Tailor, Haberdasher |
 
+The bench also burns fuel for each, besides the makings, the way every
+forge burns charcoal of the grade the metal asks for
+([Smith](professions/smith.md)). Iron asks for Poor Charcoal. The
+tanning rack burns nothing.
+
+| Kit | The bench burns |
+| --- | --- |
+| Weapon Kit | 1 Poor Charcoal |
+| Armor Kit | 1 Poor Charcoal |
+| Sewing Kit | Nothing |
+
 The Sewing Kit was first offered as linen wrap and leather strips.
 No class supplies linen wrap, so tundra cotton, a gatherer's, takes
 its place. The tanning rack, because the loom comes from a mod and

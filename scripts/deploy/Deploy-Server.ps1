@@ -1118,7 +1118,7 @@ if (Test-Path -LiteralPath $rp) {
       }
       continue
     }
-    $local = Join-Path $Data $n
+    $local = if ($Data -match '^[A-Za-z]:') { ($Data.TrimEnd('\', '/') + '\' + $n) } else { Join-Path $Data $n }
     # Ours (RepoPlugins.ps1) comes from the repo, never -Data (#2486).
     $isOurs = $false
     if (Test-ThornswoodRepoPlugin $n) {
