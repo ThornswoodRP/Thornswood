@@ -455,6 +455,7 @@ function world(opts) {
   /* Who holds each container or bench open (not saved: the engine keeps it in memory). */
   let occupant = new Map();
   let made = new Set();          // custom properties made with makeProperty, this process
+  let propertyDefinitions = new Map(); // the engine's registered owner/neighbor scripts
   let madeVisible = new Set();   // those of them the owner or the neighbours see
   let online = [];               // actor ids, by user id order
   let users = new Map();         // actor -> user id
@@ -621,6 +622,15 @@ function world(opts) {
         }
         case 'isOpen': case 'isOnline': case 'onlinePlayers': case 'type': case 'neighbors': case 'actorNeighbors':
           throw new Error('Property \'' + k + '\' is read-only');
+        case 'percentages': {
+          // PercentagesBinding::Set -> MpActor::NetSetPercentages: a write that
+          // takes health to nothing asks onDying first (fork #101), and one it
+          // lets through is SetPercentages' Kill, with nobody named.
+          const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {}, copy(v));
+          if (!(p.health > 0) && !row.isDead) { toNothing(id, p, 0); return; }
+          row.percentages = p;
+          return;
+        }
         default: row[k] = copy(v);
       }
     },
@@ -631,6 +641,7 @@ function world(opts) {
         throw new Error('makeProperty ' + name + ': options are not what the engine takes');
       }
       made.add(name);
+      propertyDefinitions.set(name, copy(options));
       if (options.isVisibleByOwner || options.isVisibleByNeighbors) { madeVisible.add(name); }
     },
     makeEventSource: function () { },
@@ -984,6 +995,7 @@ function world(opts) {
       ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
+    propertyDefinitions = new Map();
     madeVisible = new Set();
     savedReceipts = new Map();      // a new WorldState remembers no saved receipt
     runtimeIds = new Map();         // and every actor it loads is a new runtime object
@@ -1062,8 +1074,13 @@ function world(opts) {
   w.box = function () { return proc.box; };
   w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
+  w.propertyDefinition = function (name) { return copy(propertyDefinitions.get(name)); };
   /* The gamemode deployed again while the server runs: same process, same mp. */
-  w.reload = function () { proc.err = null; load(); return w.loaded(); };
+  w.reload = function () {
+    // gamemodeLoad.ts clears the native registrations before reloading.
+    made = new Set(); madeVisible = new Set(); propertyDefinitions = new Map();
+    proc.err = null; load(); return w.loaded();
+  };
   /* The server stopped and started: a new process, the change forms through JSON. */
   w.restart = function () {
     store = new Map(JSON.parse(JSON.stringify(Array.from(store.entries()))));
@@ -1375,14 +1392,10 @@ function world(opts) {
   */
   function maxHealthOf(row) { return Number(row.maxHealth) > 0 ? Number(row.maxHealth) : 100; }
   w.health = function (actorId) { const r = store.get(actorId >>> 0); return r && r.percentages ? r.percentages.health : undefined; };
-  w.hurtBy = function (actorId, points, killerId) {
-    actorId = actorId >>> 0;
+  /* Health written to nothing, by a blow or by the gamemode's own write (NetSetPercentages, then SetPercentages' Kill). */
+  function toNothing(actorId, p, killerId) {
     const row = store.get(actorId);
-    if (!row || row.isDead) { return; }
-    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
-    p.health = Math.max(0, p.health - points / maxHealthOf(row));
     row.percentages = p;
-    if (p.health > 0) { return; }
     if (fire('onDying', [actorId, killerId || 0]) === false) {
       row.percentages = Object.assign({}, p, { health: Number(row.dyingHealth) > 0 ? Number(row.dyingHealth) : 0.1 });
       return;
@@ -1392,6 +1405,16 @@ function world(opts) {
     fire('onDeath', [actorId, killerId || 0]);
     const lies = Number(row.spawnDelay);
     engineTimers.push({ at: clock + (lies >= 0 ? lies : 25) * 1000, fn: function () { w.respawn(actorId); } });
+  }
+  w.toNothing = toNothing;
+  w.hurtBy = function (actorId, points, killerId) {
+    actorId = actorId >>> 0;
+    const row = store.get(actorId);
+    if (!row || row.isDead) { return; }
+    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
+    p.health = Math.max(0, p.health - points / maxHealthOf(row));
+    if (p.health > 0) { row.percentages = p; return; }
+    toNothing(actorId, p, killerId);
   };
   /*
     A blow (ActionListener::OnWeaponHit): the server decides a block, sends

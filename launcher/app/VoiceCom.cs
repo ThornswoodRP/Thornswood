@@ -40,6 +40,7 @@ namespace Thornswood
         public const uint AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY = 0x08000000;
         public const uint AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM = 0x80000000;
         public const uint AUDCLNT_BUFFERFLAGS_SILENT = 0x2;
+        public const int AUDCLNT_S_BUFFER_EMPTY = 0x08890001;
         public const int AUDCLNT_E_DEVICE_INVALIDATED = unchecked((int)0x88890004);
         public const int AudioCategory_Communications = 3;
 

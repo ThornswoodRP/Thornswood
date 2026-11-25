@@ -285,6 +285,8 @@ try:
     sent = []
 
     class _R(object):
+        status = 200
+
         def __enter__(self):
             return self
 
@@ -292,7 +294,7 @@ try:
             return False
 
         def read(self):
-            return b'{}'
+            return b'{"ok": true}'
 
     keep = (urllib.request.urlopen, bot.KEY)
     urllib.request.urlopen = lambda req, timeout=None: (sent.append(json.loads(req.data)), _R())[1]

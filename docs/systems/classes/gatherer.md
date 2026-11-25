@@ -73,6 +73,15 @@ The beehive this server placed (`dbf8b3:Thornswood-Content.esp`) is
 the farmer's, the same as a world beehive on the harvest list. See
 [Farmer](farmer.md). A press from a gatherer does not take the comb.
 
+## Torchbugs
+
+Only a Gatherer can catch a torchbug. Other classes leave the insect intact
+and receive a refusal. While the character is still loading, wait before
+catching one. A class change or a new character clears the old permission.
+
+The local insect keeps its own collection script. The class gate does not
+send a catch claim or ask the server to create ingredients.
+
 ## What you are handed
 
 1 in Burden (+15 carry weight).

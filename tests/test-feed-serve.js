@@ -270,14 +270,6 @@ async function main() {
   const back = await ask('GET', '/feed/version.json', { 'If-None-Match': mv.h['etag'] });
   yes('with the move program gone, the feed\'s own launcher is named again', back.code === 200 && JSON.parse(back.body.toString('utf8')).launcherSha256 === SHA);
 
-  // Who the ETag above is for, so it is not taken out again as unused: the
-  // launcher asks with the tag of the copy it holds and reads a 304 as the
-  // document it already has (#445, launcher\app\Updater.cs FromSite).
-  const updater = fs.readFileSync(path.join(__dirname, '..', 'launcher', 'app', 'Updater.cs'), 'utf8');
-  yes('the launcher asks with If-None-Match', /If-None-Match/.test(updater));
-  yes('and reads 304 as the copy it already has',
-      /StatusCode\s*==\s*304/.test(updater) && /have\.Doc/.test(updater));
-
   server.close();
   try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { }
 

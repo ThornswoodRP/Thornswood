@@ -1,6 +1,8 @@
 <#
-  Rebuild-ContentTables.ps1
+.SYNOPSIS
+  Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed.
 
+.DESCRIPTION
   Rebuilds every table that is read out of the plugins of the load order, in
   the order they read each other, after a change to one of Thornswood's own
   plugins in game\content, and says what changed. Issue #2923.
@@ -168,7 +170,22 @@ if ($PluginsTxt) {
 }
 if (-not $List) {
     $populationPath = Join-Path $repo 'game\data\npc-population.json'
-    $catalogued = $(if (Test-Path -LiteralPath $populationPath -PathType Leaf) { @(([IO.File]::ReadAllText($populationPath) | ConvertFrom-Json).loadOrder | ForEach-Object { [string]$_.name }) } else { @() })
+    $catalogued = @(if (Test-Path -LiteralPath $populationPath -PathType Leaf) {
+        # Read the top-level array without creating PowerShell objects for every NPC.
+        # Parse the document so invalid catalogue JSON still stops the build.
+        $options = [Text.Json.JsonDocumentOptions]::new()
+        $options.MaxDepth = 1024
+        $options.AllowTrailingCommas = $true
+        $options.CommentHandling = [Text.Json.JsonCommentHandling]::Skip
+        $catalogue = [Text.Json.JsonDocument]::Parse([IO.File]::ReadAllText($populationPath), $options)
+        try {
+            foreach ($plugin in $catalogue.RootElement.GetProperty('loadOrder').EnumerateArray()) {
+                $plugin.GetProperty('name').GetString()
+            }
+        } finally {
+            $catalogue.Dispose()
+        }
+    })
     $parting = Get-Parting $catalogued $recorded
     if ($parting) { throw ("game\data\npc-population.json is not built in the load order the commit records: $parting. Build-LastPlugin.py cuts the actors it lists, so build it in that order first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.") }
 }
