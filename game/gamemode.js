@@ -5898,6 +5898,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -6120,6 +6122,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {
@@ -31319,6 +31323,8 @@ module.exports = {
       pos: [stop.pos[0], stop.pos[1], stop.pos[2]],
       rot: [0, 0, stop.rot]
     });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   function answer(line, from, went) {
@@ -46110,10 +46116,16 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
         });
+        var stuck = globalThis.__thornswoodStuck;
+        if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
       } catch (e) {
         toProfile(profileId, 'That did not work: ' + e);
         return;
@@ -46291,6 +46303,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -46368,18 +46382,19 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -46388,7 +46403,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -52393,9 +52408,26 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
+    var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    if (!projected.changed) { return projected.needs; }
+    write(actorId, projected.needs);
+    projectionEffects(actorId, projected);
+    return projected.needs;
+  }
+
+  /*
+    Stage the existing elapsed-time calculation without saving needs or sending
+    effects. The supplied environment owns all outside reads: the ordinary
+    path retains its existing character migration and bard-cache behavior.
+    Callers preparing a staff change must supply read-only context instead.
+    Helpers are asked at their original points, including warmth after crashes.
+    The input stays untouched; event flags are delivered only after a save.
+  */
+  function projectNeeds(before, now, arriving, environment) {
+    var n = Object.assign({}, before);
     var away = now - n.at;
     var hours = (now - n.at) / 3600000;
-    if (hours <= 0) { return n; }
+    if (hours <= 0) { return { needs: n, changed: false }; }
     // A session that has been away for a week does not starve to death twice
     // over; the meters bottom out at 0 anyway, and this keeps the arithmetic
     // sane for anything that reads the difference.
@@ -52424,7 +52456,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
     var restRate = NEEDS.drain.rest;
     if (n.worked && (now - n.worked) < NEEDS.workFor) {
-      restRate = restRate * workMultiplier(actorId);
+      restRate = restRate * environment.workMultiplier();
     }
     /*
       THE TIME AWAY GAINS NO REST (#1764). On an arrival n.resting is still
@@ -52436,7 +52468,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       may. The time away drains; the fill for the beds that give it is
       arrived(), below, and the beds' first sight of them gets them up.
     */
-    var gain = arriving ? 0 : restingGain(actorId, n);
+    var gain = arriving ? 0 : environment.restingGain(n);
     /*
       A DRUG HOLDS THE REST DRAIN AT ZERO while its window lasts (#1382), for
       the part of this stretch before drugUntil. Resting still gains.
@@ -52512,19 +52544,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = warmthTarget(actorId, n);
+      var target = environment.warmthTarget(n);
       // Winter out under the sky cools a quarter faster (#3144), so its half
       // life is the cooling one cut by that share. Warming is left alone.
       var half = (target > n.temp)
         ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / outdoorCooling(n);
+        : NEEDS.settleMinutes / environment.outdoorCooling(n);
       var k = 1 - Math.pow(0.5, (hours * 60) / half);
       if (k > 1) { k = 1; }
       if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
-    var slept = arriving ? arrived(actorId, n, away) : '';
+    var slept = arriving ? arrived(n, away) : '';
     var hungBefore = n.hangoverUntil > now;
     /*
       DRUNK WEARS OFF INTO A HANGOVER (#3153). n.drunk is still what the last
@@ -52546,7 +52578,22 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     n.drugged = n.drugUntil > now;
 
     n.at = now;
-    write(actorId, n);
+    return { needs: n, changed: true, hungBefore: hungBefore,
+             hung: hung, pulled: pulled, slept: slept };
+  }
+
+  function projectionEnvironment(actorId) {
+    return {
+      workMultiplier: function () { return workMultiplier(actorId); },
+      restingGain: function (n) { return restingGain(actorId, n); },
+      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      outdoorCooling: outdoorCooling
+    };
+  }
+
+  function projectionEffects(actorId, projected) {
+    var hungBefore = projected.hungBefore, hung = projected.hung;
+    var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
@@ -52571,7 +52618,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       notify(actorId, slept);
       say(actorId, slept);
     }
-    return n;
   }
 
   /*
@@ -54349,7 +54395,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     caller, and that call was never written; the first commit of this
     repository already has it without one.
   */
-  function arrived(actorId, n, away) {
+  function arrived(n, away) {
     if (!(away >= NEEDS.sleptFor)) { return ''; }
     var row = awayRow(n.resting);
     var rest = Number(row.rest) || 0, food = Number(row.food) || 0, drink = Number(row.drink) || 0;
@@ -55092,6 +55138,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // How a cook comes out, and the records it can come out as (#2906).
     cookedAs: cookedAs, fineOf: fineOf, isFine: isFine, burntMeal: burntMeal,
     settle: settle, view: view, effects: effects,
+    // Stage a needs snapshot; saving and delivery remain the caller's job.
+    project: projectNeeds,
     // The bars as a line of text, for /needs (#2267).
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
@@ -61121,8 +61169,10 @@ module.exports = {
 
   THE TRAIL. Every 3 seconds, for each character in the world who is alive
   and not still being made: a new point when they are 200 units or more from
-  the last one, or in another cell, 10 kept. A sample that dropped more than
-  300 units since the last one is a fall and never becomes a point, so
+  the last one, or in another cell, at most 10 kept for one minute. A death,
+  carriage ride or server teleport starts this trail over (#4838).
+  A sample that dropped more than 300 units since the last one is a fall
+  and never becomes a point, so
   somebody who fell through the world is not sent back into the air.
 
   WHICH POINT. The newest one at least 256 units from where they are now (any
@@ -61163,6 +61213,7 @@ module.exports = {
   var TICK_MS = 1000;
   var TRAIL_MS = 3000;            // between trail samples
   var TRAIL_KEEP = 10;
+  var TRAIL_MAX_MS = 60000;       // only the last minute's steps are recent
   var TRAIL_STEP = 200;           // units from the last point before a new one
   var SAME_PLACE = 256;           // units: closer than this is the same place
   var FALL = 300;                 // units dropped between samples: a fall
@@ -61293,6 +61344,16 @@ module.exports = {
     return state.chars[k];
   }
 
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
+
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
     var seen = g.__thornswoodPassSeen;
@@ -61316,7 +61377,8 @@ module.exports = {
   /* One character, every few seconds: the trail. */
   function trailOne(actorId, now) {
     var c = charOf(actorId);
-    if (isDead(actorId) || inCreation(actorId)) { c.last = null; return; }
+    if (isDead(actorId) || inCreation(actorId)) { resetTrail(actorId); return; }
+    expireTrail(c, now);
     var here = placeOf(actorId);
     if (!here) { return; }
     var falling = !!(c.last && c.last.desc === here.desc && c.last.pos[2] - here.pos[2] > FALL);
@@ -61367,6 +61429,7 @@ module.exports = {
   /* The spot a few steps back, or null. */
   function backSpot(actorId, here) {
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     var before = state.used[hex(actorId)];
     // Still where the last /stuck put them: that spot is the stuck place.
     if (before && before.to && samePlace(before.to, here)) { return null; }
@@ -61384,6 +61447,7 @@ module.exports = {
     var f = frameOf(here.desc);
     if (f) { return { frame: f, x: here.pos[0], y: here.pos[1] }; }
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     for (var i = c.trail.length - 1; i >= 0; i--) {
       var tf = frameOf(c.trail[i].desc);
       if (tf) { return { frame: tf, x: c.trail[i].pos[0], y: c.trail[i].pos[1] }; }
@@ -61631,6 +61695,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    resetTrail: resetTrail,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -61839,7 +61904,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
@@ -62017,6 +62082,8 @@ module.exports = {
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   // ------------------------------------------------------------ silence --
@@ -62139,6 +62206,10 @@ module.exports = {
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -62609,6 +62680,10 @@ module.exports = {
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way

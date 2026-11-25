@@ -109,7 +109,8 @@ Yes 'Build check result needs the pick, the tree checks, the launcher build and 
 $script = ''
 $m = [regex]::Match($prResult, '(?ms)^        run: \|\n(.*)\z')
 if ($m.Success) { $script = (($m.Groups[1].Value -split "`n") | ForEach-Object { $_ -replace '^          ', '' }) -join "`n" }
-$bash = Get-Command bash -ErrorAction SilentlyContinue
+$bash = Get-Command 'C:\Program Files\Git\bin\bash.exe' -ErrorAction SilentlyContinue
+if (-not $bash) { $bash = Get-Command bash -ErrorAction SilentlyContinue }
 if (-not $script) { Yes 'Build check result has a script to run' $false }
 elseif (-not $bash) { Write-Host 'SKIP  Build check result''s script: no bash here, which GitHub''s ubuntu-latest runs it with' }
 else {
@@ -141,7 +142,7 @@ else {
             @('a Linux share was cancelled', 'success', 'success', 'success', 'success', 'true', '[1]', 'cancelled', '[1]', 1))
         foreach ($c in $cases) {
             $env:PICK = $c[1]; $env:CHECKS = $c[2]; $env:BUILD = $c[3]; $env:GATE = $c[4]; $env:REACHES_LAUNCHER = $c[5]; $env:SHARES = $c[6]; $env:GATE_LINUX = $c[7]; $env:LINUX_SHARES = $c[8]
-            $null = & bash $file 2>&1
+            $null = & $bash $file 2>&1
             $rc = $LASTEXITCODE
             Yes ("Build check result: {0}: {1}" -f $c[0], $(if ($c[9] -eq 0) { 'passes' } else { 'fails' })) ($rc -eq $c[9])
         }

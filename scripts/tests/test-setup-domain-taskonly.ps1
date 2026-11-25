@@ -16,7 +16,7 @@
   Nothing leaves this machine. -SetupDomain runs another copy, so the same
   test runs on the one from before this change:
 
-      git show origin/main:scripts/deploy/Setup-Domain.ps1 > $env:TEMP\domain-before.ps1
+      git show a4cc1fd3:scripts/deploy/Setup-Domain.ps1 > $env:TEMP\domain-before.ps1
       pwsh -NoProfile -File .\scripts\tests\test-setup-domain-taskonly.ps1 -SetupDomain $env:TEMP\domain-before.ps1
 
   A copy outside scripts\deploy needs its neighbours, so the copy is put in a
