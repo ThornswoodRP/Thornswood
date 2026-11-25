@@ -154,6 +154,7 @@ function makeBlock() {
     },
     __thornswoodCharacter: { stateOf: function () { return {}; }, writeState: function () { } }
   };
+  box.__thornswoodMerchantTrade = { withQuestInventoryMutation: box.mp.admitPackDebit };
   box.globalThis = box;
   inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
   return box.__thornswoodProperty;

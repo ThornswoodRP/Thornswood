@@ -405,12 +405,13 @@ for (const at of Object.keys(WRITERS)) {
     furniture's cutOne takes one item, and the drop box's lays a stack out
     and refuses gold.
   */
-  const calls=code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
-  const PF = 'mp.compareAndSetInventory(actorId, { entries: before }, receipt, { entries: out.entries }, sequence, who.profileId);';
-  yes('the profile-bound CAS writers are the merchant\'s and packFirst in the property and furniture blocks',
-    calls.length===3 && calls.every(function (c) { return c==='mp.compareAndSetInventory('; }) &&
-    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
-    code.split(PF).length - 1 === 2);
+  const calls = code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
+  const markedCalls = code.match(/\b\w+\.compareAndSetInventoryAndProperty\(/g) || [];
+  const packDebit = /mp\.compareAndSetInventoryAndProperty\(actorId, \{ entries: before \}, receipt, \{ entries: out\.entries \},\s*sequence, who\.profileId, \{ name: markerField, expected: previousMarker, replacement: marker,/g;
+  yes('merchant CAS remains profile-bound and both pack debit writers save a private operation marker',
+    calls.length === 1 && /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
+    markedCalls.length === 3 && (code.match(packDebit) || []).length === 2 &&
+    /mp\.compareAndSetInventoryAndProperty\(actor,before,receipt,next,sequence,human\.profileId,/.test(code));
   const goldCut = lift('  function goldCut(amount, refusal) {', '\n  }\n') || '';
   const cutOne = lift('  function cutOne(entries, itemDesc) {', '\n  }\n') || '';
   yes('packFirst\'s cuts only take: goldCut lowers one stack of gold, cutOne one furniture item, and the drop box\'s stack refuses gold',

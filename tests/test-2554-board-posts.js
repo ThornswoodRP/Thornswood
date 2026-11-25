@@ -129,6 +129,7 @@ const box = {
     return { jarl: [], court: [], steward: [], guard: pid === GUARD.pid ? ['whiterun'] : [] };
   }
 };
+box.__thornswoodMerchantTrade = { withQuestInventoryMutation: box.mp.admitPackDebit };
 box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;

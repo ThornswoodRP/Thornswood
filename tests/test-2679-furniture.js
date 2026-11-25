@@ -132,6 +132,7 @@ function world() {
     log: function () { W.logs.push(Array.prototype.join.call(arguments, ' ')); },
     readRegister: function () { return W.book ? JSON.parse(JSON.stringify(W.book)) : null; },
     writeRegister: function (bk) { W.book = JSON.parse(JSON.stringify(bk)); },
+    writePackRegister: function (bk) { W.book = JSON.parse(JSON.stringify(bk)); return true; },
     cellOf: function (id) { const o = W.actors[id] || W.refs[id]; return o ? o.cell : ''; },
     posOf: function (id) { const o = W.actors[id] || W.refs[id]; return o ? o.pos.slice() : null; },
     angleOf: function (id) { const o = W.actors[id] || W.refs[id]; return o ? [0, 0, o.angle] : null; },
@@ -167,7 +168,22 @@ function world() {
     anchorIn: function (bd) { return W.doors[bd] && W.refs[W.doors[bd]] ? W.doors[bd] : 0; },
     line: function (id, v) { W.lines[id] = v; },
     show: function (id, v) { W.shows[id] = v; },
-    packFirst: function (book, keep, landers) { return packFirst(W.mp, book, keep, landers, function () { }); },
+    packFirst: function (book, keep, landers, commit) {
+      return packFirst(W.mp, book, keep, landers, function () {}, 'thornswoodFurnitureDebit', commit,
+                       require('crypto').randomUUID, W.mp.admitPackDebit);
+    },
+    placementReady: function () { return true; },
+    placementMarker: function (id) { return W.refs[id].marker; },
+    placementEnabled: function (id) { return W.refs[id].isDisabled === false; },
+    stagePlacement: function (base, marker) {
+      const prior = Object.keys(W.refs).find(function (id) { return W.refs[id].marker === marker; });
+      if (prior) { return Number(prior); }
+      const id = W.api.place(base);
+      W.refs[id].marker = marker;
+      W.refs[id].isDisabled = true;
+      return id;
+    },
+    enablePlacement: function (id) { W.refs[id].isDisabled = false; },
     // A pack here is a count by item; its entries carry the item as baseId.
     cutOne: function (entries, desc) {
       for (let i = 0; i < entries.length; i++) {
@@ -266,12 +282,12 @@ const B1 = 'b1:Skyrim.esm';
   W.refuse = '';
   // The item is saved out of the pack before the piece stands (#4901), so a
   // stand that fails never hands it back: the piece is kept in the register
-  // and stood at the next start, as one with nothing to stand next to is.
+  // and stands on retry once it can be placed.
   W.throwPlace = true;
   const failed = F.command(0x14, ['place', 'chest']);
   const waiting = Object.keys(F.pieces()).filter(function (k) { return F.pieces()[k].key === 'chest' && !F.pieces()[k].ref; });
-  yes('a piece that will not stand is kept to stand at the next start, and nothing comes back to the pack (' + failed + ')',
-      /next starts/.test(failed) && !W.actors[0x14].pack[CHEST] && waiting.length === 1 && !!W.book.pieces[waiting[0]] &&
+  yes('a piece that will not stand is kept, and nothing comes back to the pack (' + failed + ')',
+      /kept in the register/.test(failed) && !W.actors[0x14].pack[CHEST] && waiting.length === 1 && !!W.book.pieces[waiting[0]] &&
       Object.keys(F.pieces()).length === 4);
   yes('and it is on nobody\'s line until it stands', W.lines[0x16].p.indexOf('0') < 0 && W.lines[0x16].p.length === 3);
   W.throwPlace = false;

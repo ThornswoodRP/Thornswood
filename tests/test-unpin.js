@@ -74,7 +74,7 @@ const PIECES = {
   storeRead: 'function storeRead(file, what) {',
   storeWrite: 'function storeWrite(file, text, read) {',
   loadPart: 'function loadPart(key, fallback) {',
-  save: 'function save() {',
+  save: 'function save(durable) {',
   takeGold: 'function takeGold(actorId, amount) {',
   // A job's reward comes back to its poster on a take down (#2554).
   payOut: 'function payOut(actorId, amount) {',

@@ -292,13 +292,19 @@
     return out;
   }
 
-  function save() {
+  function save(durable) {
     try {
-      var dir = require('path').dirname(registerPath());
-      storeWrite(registerPath(),
-        JSON.stringify({ claims: claims, arrears: arrears,
-                        funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1), registerRead);
+      var text = JSON.stringify({ claims: claims, arrears: arrears,
+        funds: funds, notices: notices, boards: boards, steps: steps,
+        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+      if (durable === true) {
+        if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
+        var file = registerPath();
+        require('fs').mkdirSync(require('path').dirname(file), { recursive: true });
+        mp.writeFileWhole(file, text);
+      } else {
+        storeWrite(registerPath(), text, registerRead);
+      }
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -5715,121 +5721,145 @@
     return false;
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
   // -- pack first (#4901), begin --
   /*
-    A THING TAKEN OUT OF A PACK INTO A REGISTER, IN THAT ORDER (#4901). The
-    same text is in the property and furniture blocks, and
-    tests/test-4901-pack-first.js holds the copies to it, since each block
-    is lifted and run alone.
-
-    A plain inventory write is saved with the character later, and a
-    register file is written at once. So a server that stopped between the
-    two came back with the gold or the piece in the pack as it was saved and
-    in the register too, and it could be taken out a second time. The
-    merchant settlement orders it with the engine's receipts, and so does
-    this:
-      1. the take is written down first, in the register, as a debit that
-         holds nothing yet: nothing is in a box, on a board or on a floor;
-      2. the pack is written with compareAndSetInventory, which stamps the
-         write with a receipt, the character's next sequence;
-      3. only once getSavedInventoryReceipt says the pack is saved at or
-         past that sequence does the debit land: what it was for goes into
-         the register and the debit comes off it, in the same write.
-    A restart before 3 reads the pack as it was saved. Saved without the
-    take, the pack still holds the thing and its receipt is older than the
-    debit, so the debit lets go: the thing is in the pack and only there.
-    Saved with it, the debit lands, once, because landing and letting go
-    each take the debit off in the one write that does them. Nothing is
-    handed back and nothing is undone. A take waits, as a merchant trade or
-    a quest does, until the pack's last receipt is saved, so the receipts
-    of one character never pass each other.
-
-    packFirst(mp, book, keep, landers, tell): book() is the register's list
-    of debits, keep() writes the register and answers whether it did,
-    landers[kind](row, landed) puts a landed debit into the register or says
-    why one let go and answers the line for its person, and tell(profile,
-    line, error) says a line to a person or an error to the log.
-    begin(actorId, cut, kind, data): cut(entries) answers { entries, taken }
-    or a refusal. Answers { why } when nothing was taken, otherwise { line }
-    once it landed or let go already, or { line: '' } while it waits.
-    settle() lands or lets go of every debit whose pack says which.
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
   */
-  function packFirst(mp, book, keep, landers, tell) {
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
     function sequenceOf(receipt, who) {
       var doc = JSON.parse(receipt);
       if (doc === null) { return 0; }
       if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
           !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
-        throw new Error('the pack receipt ' + receipt + ' is not this character\'s');
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
       }
       return doc.sequence;
     }
     function ready() {
-      return !!mp && ['compareAndSetInventory', 'getInventoryReceipt', 'getSavedInventoryReceipt',
-        'getNpcAIState', 'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
     }
     function person(actorId) {
       var ai = mp.getNpcAIState(actorId);
       var desc = mp.getDescFromId(actorId);
-      if (!ai || ai.isHuman !== true || !(Number(ai.profileId) > 0) || typeof desc !== 'string' || !desc) { return null; }
-      return { desc: desc, profileId: Number(ai.profileId) };
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
     }
     function wellFormed(row) {
-      return !!row && typeof row.kind === 'string' && typeof landers[row.kind] === 'function' &&
-        !!row.human && typeof row.human.desc === 'string' && Number(row.human.profileId) > 0 &&
-        Number.isSafeInteger(row.sequence) && row.sequence > 0 && Array.isArray(row.taken);
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
     }
-    /* One debit landed or let go once its pack's receipts say which: the line for its person, or '' while it waits. */
     function settleOne(row) {
       if (!wellFormed(row)) { return ''; }
       var id = mp.getIdFromDesc(row.human.desc) >>> 0;
       if (!id) { return ''; }
       var who = person(id);
-      if (!who || who.desc !== row.human.desc || who.profileId !== row.human.profileId) { return ''; }
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
       var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
       var live = sequenceOf(mp.getInventoryReceipt(id), who);
-      var landed;
-      if (saved >= row.sequence) { landed = true; }
-      else if (live < row.sequence) { landed = false; }
-      else { return ''; }
-      var rows = book();
-      var at = rows.indexOf(row);
-      if (at < 0) { return ''; }
-      rows.splice(at, 1);
-      var line = landers[row.kind](row, landed);
-      keep();
-      return line;
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
     }
     function begin(actorId, cut, kind, data) {
       if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
-      var who, receipt, before;
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
       try {
         who = person(actorId);
-        if (!who) { return { why: 'Only a person in the world can do that. Nothing was taken.' }; }
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
         receipt = mp.getInventoryReceipt(actorId);
         if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
           return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
         }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
         var inv = mp.get(actorId, 'inventory');
         before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
       } catch (e) {
         tell(0, '', e);
         return { why: 'Your pack could not be read. Nothing was taken.' };
       }
-      var sequence = sequenceOf(receipt, who) + 1;
       var out = cut(JSON.parse(JSON.stringify(before)));
       if (typeof out === 'string') { return { why: out }; }
-      var row = { kind: kind, data: data, human: who, sequence: sequence, taken: out.taken, at: Date.now() };
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
       var rows = book();
       rows.push(row);
       if (!keep()) {
         rows.splice(rows.indexOf(row), 1);
         return { why: 'The server could not write that down. Nothing was taken.' };
       }
+      if (!stillActive()) { return { line: '' }; }
       try {
-        mp.compareAndSetInventory(actorId, { entries: before }, receipt, { entries: out.entries }, sequence, who.profileId);
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
       } catch (e2) {
-        // The receipts read next say whether the pack was written; the debit waits or lets go by them.
         tell(0, '', e2);
       }
       try { return { line: settleOne(row) }; }
@@ -5839,6 +5869,7 @@
       }
     }
     function settle() {
+      if (!ready()) { return; }
       var rows = book().slice();
       for (var i = 0; i < rows.length; i++) {
         var line = '';
@@ -5884,13 +5915,40 @@
     refreshPanel(to);
   }
 
-  var packs = packFirst(mp, function () { return debits; }, save, {
+  function commitPackDebit(land, row, paid) {
+    var original = { claims: claims, arrears: arrears, funds: funds, notices: notices,
+                     dropbox: dropbox, debits: debits };
+    var draft = JSON.parse(JSON.stringify(original));
+    claims = draft.claims;
+    arrears = draft.arrears;
+    funds = draft.funds;
+    notices = draft.notices;
+    dropbox = draft.dropbox;
+    debits = debits.filter(function (debit) { return debit !== row; });
+    var committed = false;
+    try {
+      var line = land(JSON.parse(JSON.stringify(row)), paid);
+      committed = save(true);
+      return committed ? line : '';
+    } finally {
+      if (!committed) {
+        claims = original.claims;
+        arrears = original.arrears;
+        funds = original.funds;
+        notices = original.notices;
+        dropbox = original.dropbox;
+        debits = original.debits;
+      }
+    }
+  }
+
+  var packs = packFirst(mp, function () { return debits; }, function () { return save(true); }, {
     'box-gold': landBoxGold,
     'box-left': landBoxLeft,
     'post': landPost,
     'letter': landLetter,
     'haul': landHaul
-  }, tellPerson);
+  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, require('crypto').randomUUID, admitPackDebit);
 
   if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
   g.__thornswoodPackTimer = setInterval(

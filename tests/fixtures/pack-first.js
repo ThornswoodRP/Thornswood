@@ -23,6 +23,13 @@
 function receipts(mp) {
   const live = new Map();
   const ids = new Map();
+  const markers = new Map();
+  const get = mp.get.bind(mp);
+  mp.get = function (id, key) {
+    return key === 'thornswoodPropertyDebit' || key === 'thornswoodFurnitureDebit'
+      ? markers.get(id + ':' + key) ?? null : get(id, key);
+  };
+  if (typeof mp.makeProperty !== 'function') { mp.makeProperty = function () {}; }
   const descOf = typeof mp.getDescFromId === 'function' ? mp.getDescFromId.bind(mp) : null;
   mp.getDescFromId = function (id) {
     const d = descOf ? descOf(id) : (Number(id) >>> 0).toString(16);
@@ -39,6 +46,22 @@ function receipts(mp) {
       return pid > 0 ? { isHuman: true, profileId: pid } : null;
     };
   }
+  const owner = mp.getNpcAIState.bind(mp);
+  mp.getNpcAIState = function (id) {
+    const ai = owner(id);
+    return ai ? { lifeGeneration: 0, ...ai } : null;
+  };
+  mp.getActorRuntimeIdentity = function () { return '123'; };
+  mp.admitPackDebit = function (actor, change) {
+    const ai = mp.getNpcAIState(actor);
+    if (!ai) { return null; }
+    return change({ desc: mp.getDescFromId(actor), profileId: ai.profileId }, function () { return true; });
+  };
+  mp.writeFileWhole = function (path, contents) {
+    const fs = require('fs');
+    fs.writeFileSync(path + '.tmp', contents);
+    fs.renameSync(path + '.tmp', path);
+  };
   mp.getInventoryReceipt = function (id) { return live.get(Number(id) >>> 0) || 'null'; };
   mp.getSavedInventoryReceipt = mp.getInventoryReceipt;
   mp.compareAndSetInventory = function (id, expected, receipt, next, sequence, profile) {
@@ -50,6 +73,14 @@ function receipts(mp) {
     mp.set(id, 'inventory', { entries: JSON.parse(JSON.stringify(next.entries)) });
     live.set(Number(id) >>> 0, JSON.stringify({ actor: mp.getDescFromId(id), profile: profile, sequence: sequence }));
     return true;
+  };
+  mp.compareAndSetInventoryAndProperty = function (id, expected, receipt, next, sequence, profile, property) {
+    if (mp.get(id, property.name) !== property.expected ||
+        mp.getActorRuntimeIdentity(id) !== property.expectedRuntimeIdentity ||
+        mp.getNpcAIState(id).lifeGeneration !== property.expectedLifeGeneration) { return false; }
+    const changed = mp.compareAndSetInventory(id, expected, receipt, next, sequence, profile);
+    if (changed) { markers.set(id + ':' + property.name, property.replacement); }
+    return changed;
   };
   return mp;
 }
@@ -72,8 +103,32 @@ function pieces(prop) {
     'var debits = [];',
     'var packs = packFirst(mp, function () { return debits; }, function () { save(); return true; }, {',
     "  'box-gold': landBoxGold, 'box-left': landBoxLeft, post: landPost, letter: landLetter, haul: landHaul",
-    '}, function () { });'
+    "}, function () { }, 'thornswoodPropertyDebit', function (land, row, paid) {",
+    '  debits.splice(debits.indexOf(row), 1);',
+    '  const line = land(row, paid); save(); return line;',
+    '}, globalThis.crypto.randomUUID.bind(globalThis.crypto), mp.admitPackDebit);'
   ].join('\n');
 }
 
-module.exports = { receipts: receipts, pieces: pieces, LANDINGS: LANDINGS };
+function attachScenarioReservation(world) {
+  // Board scenarios use no NPC load order. Exercise the real reservation
+  // against an empty merchant ledger and the scenario's native stand-in.
+  const box = world.box();
+  const { createSettlement } = require('../../game/merchant-settlement');
+  const { createNativeMerchantTransfer } = require('../../game/merchant-trading');
+  const settlement = createSettlement({
+    world: 'board scenario',
+    purses: {
+      pendingRecords: function () { return []; },
+      read: function () { return null; },
+      compareAndCommit: function () { throw new Error('the scenario has no merchant ledgers'); }
+    },
+    transfer: createNativeMerchantTransfer(box.mp)
+  });
+  box.__thornswoodMerchantTrade = {
+    withQuestInventoryMutation: settlement.withInventoryMutation,
+    shutdown: settlement.shutdown
+  };
+}
+
+module.exports = { receipts: receipts, pieces: pieces, LANDINGS: LANDINGS, attachScenarioReservation: attachScenarioReservation };
