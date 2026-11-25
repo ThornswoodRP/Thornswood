@@ -449,6 +449,7 @@ function world(opts) {
   /* Who holds each container or bench open (not saved: the engine keeps it in memory). */
   let occupant = new Map();
   let made = new Set();          // custom properties made with makeProperty, this process
+  let propertyDefinitions = new Map(); // the engine's registered owner/neighbor scripts
   let madeVisible = new Set();   // those of them the owner or the neighbours see
   let online = [];               // actor ids, by user id order
   let users = new Map();         // actor -> user id
@@ -625,6 +626,7 @@ function world(opts) {
         throw new Error('makeProperty ' + name + ': options are not what the engine takes');
       }
       made.add(name);
+      propertyDefinitions.set(name, copy(options));
       if (options.isVisibleByOwner || options.isVisibleByNeighbors) { madeVisible.add(name); }
     },
     makeEventSource: function () { },
@@ -978,6 +980,7 @@ function world(opts) {
       ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
+    propertyDefinitions = new Map();
     madeVisible = new Set();
     savedReceipts = new Map();      // a new WorldState remembers no saved receipt
     runtimeIds = new Map();         // and every actor it loads is a new runtime object
@@ -1056,8 +1059,13 @@ function world(opts) {
   w.box = function () { return proc.box; };
   w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
+  w.propertyDefinition = function (name) { return copy(propertyDefinitions.get(name)); };
   /* The gamemode deployed again while the server runs: same process, same mp. */
-  w.reload = function () { proc.err = null; load(); return w.loaded(); };
+  w.reload = function () {
+    // gamemodeLoad.ts clears the native registrations before reloading.
+    made = new Set(); madeVisible = new Set(); propertyDefinitions = new Map();
+    proc.err = null; load(); return w.loaded();
+  };
   /* The server stopped and started: a new process, the change forms through JSON. */
   w.restart = function () {
     store = new Map(JSON.parse(JSON.stringify(Array.from(store.entries()))));

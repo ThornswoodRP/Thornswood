@@ -78,6 +78,8 @@ function rig() {
   }
   const Fake = {
     makeProperty: function () { },
+    getActorRuntimeIdentity: function (id) { return String(id); },
+    getNpcAIState: function (id) { return { profileId: id, lifeGeneration: 0, isConnected: !!store[id], isDead: false, isDisabled: false }; },
     // The real one turns a form id back into its descriptor. The rig knows
     // both halves already, because it is what hands out the ids.
     getDescFromId: function (id) {
@@ -98,6 +100,7 @@ function rig() {
       return store[id] ? store[id].v : undefined;
     },
     set: function (id, key, v) {
+      if (key === 'thornswoodBurnVisual') { return; }
       if (key === 'thornswoodBurn') {
         if (!props[id]) { props[id] = []; }
         props[id].push(v);
