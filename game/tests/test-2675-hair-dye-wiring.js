@@ -87,7 +87,7 @@ const needsFns = ['  function nearFire(n) {', '  function unboiledHeld(n) {', ' 
   '  function fireSettle(actorId, n) {', '  function boilSay(actorId, n) {', '  function spendBottle(n) {',
   '  function spendWater(actorId, count) {'].map((h) => lift(h, '\n  }\n'))
   .concat([(() => { const one = '  function fireNear(actorId) { return nearFire(read(actorId)); }\n'; return gm.indexOf(one) >= 0 ? one : null; })()]);
-const topFns = ['function mintedBy(owner, test) {', 'function mintedEntry(entry) {', 'function addItem(actorId, itemDesc, count) {',
+const topFns = ['function unfitToMake(actorId, workbenchId) {', 'function mintedBy(owner, test) {', 'function mintedEntry(entry) {', 'function addItem(actorId, itemDesc, count) {',
   'function takeItem(', 'function takeItemById(', 'function bodyShapeGuard(appearance) {'].map((h) => lift(h, '\n}\n'));
 const atomic = lift('function addItemsAtomic(', '\n}\n');
 const bodyConsts = lift('const BODY_APPEARANCE_FIELDS', "'name'];") + '\nconst BODY_WEIGHT_MIN = 0;\nconst BODY_WEIGHT_MAX = 100;\nconst BODY_WEIGHT_DEFAULT = 50;\n';
@@ -320,7 +320,7 @@ const BOWL = idFor(DATA.item);
       (gm.match(/n\.water\[[a-zA-Z]+\]--/g) || []).length === 1 && /function spendBottle[\s\S]{0,400}n\.water\[src\]--/.test(gm));
   yes('W9 the needs block hands spendWater, fireNear and waterItem out', /spendWater: spendWater, fireNear: fireNear,/.test(gm) &&
       /waterItem: function \(\) \{ return NEEDS\.waterItems\.full; \}/.test(gm));
-  yes('W10 onActivate asks the dye before the water', /dyeW\.pressed\(casterRefrId, kwW\)[\s\S]{0,300}needsW\.activatedWater\(casterRefrId/.test(gm));
+  yes('W10 onActivate asks the dye with the cooking reference before the water', /dyeW\.pressed\(casterRefrId, kwW, refrId\)[\s\S]{0,300}needsW\.activatedWater\(casterRefrId/.test(gm));
 }
 
 // ------------------------------------------------------- A: the one write

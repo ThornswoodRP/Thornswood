@@ -478,22 +478,24 @@ module.exports = {
   }
 
   // ------------------------------------------------------------ the steep --
-  var steeps = {};   // actorId -> { dye, from, fire }
+  var steeps = {};   // actorId -> { dye, from, fire, workbench }
 
   /*
     E on something. Starts a steep at the list's cooking spot when one dye's
     inputs are carried and none is steeping. Answers a line, or '' when this
-    press is none of the dye's business. Never refuses anything.
+    press is none of the dye's business. Refusals apply only to the dye.
   */
-  function pressed(actorId, benchKeyword) {
+  function pressed(actorId, benchKeyword, workbenchId) {
     if (!LIST || !benchKeyword || benchKeyword !== LIST.steepAt) { return ''; }
     if (Object.prototype.hasOwnProperty.call(steeps, actorId)) { return ''; }
     var dye = HAIR_DYE.dyeFor(HAIR_DYE.carriedFor(packOf(actorId), LIST, inputIds(), dyeItemId()), LIST);
     if (!dye) { return ''; }
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var N = g.__thornswoodNeeds;
     var fire = !!(N && N.fireNear && N.fireNear(actorId));
-    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire };
+    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire, workbench: workbenchId };
     var secs = LIST.steepSeconds;
     return 'You set ' + dye.name + ' to steep. Stay by the fire for ' +
            (secs % 60 === 0 ? (secs / 60) + (secs === 60 ? ' minute.' : ' minutes.') : secs + ' seconds.');
@@ -515,11 +517,13 @@ module.exports = {
     }
     if (Date.now() - st.from < LIST.steepSeconds * 1000) { return ''; }
     delete steeps[actorId];
-    return finishSteep(actorId, dye);
+    return finishSteep(actorId, dye, st.workbench);
   }
 
-  function finishSteep(actorId, dye) {
+  function finishSteep(actorId, dye, workbenchId) {
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var pack = packOf(actorId);
     var next = HAIR_DYE.afterSteep(pack, dye, LIST, inputIds(), dyeItemId());
     if (!next) { return 'You no longer carry everything ' + dye.name + ' takes, so nothing steeped.'; }
