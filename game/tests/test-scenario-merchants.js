@@ -240,4 +240,62 @@ yes('I4 the boots and bracers left her pack and 17 gold came in (' + JSON.string
 yes('I5 the pay is new gold, the trader\'s purse the same, and the panel says the turn-in went through (#5419) (' + view().note + ')',
   view().purse === parcelPurse && view().note === 'The work is turned in. Paid 17 gold.' && parcel().state === 'cooldown');
 
+// J. The actual native actor snapshot must be usable now, not when the panel opened.
+const currentTrade = w.box().__thornswoodMerchantTrade;
+const nativeAI = w.mp().getNpcAIState;
+function traderState(kind) {
+  w.row(SMITH).isDead = kind === 'dead';
+  w.row(SMITH).isDisabled = kind === 'disabled';
+  w.mp().getNpcAIState = function (id) {
+    if (id !== SMITH) return nativeAI(id);
+    if (kind === 'throws') throw new Error('actor state unavailable');
+    const ai = nativeAI(id);
+    if (kind === 'missing-dead') delete ai.isDead;
+    if (kind === 'missing-disabled') delete ai.isDisabled;
+    return ai;
+  };
+}
+function unchangedTradeState() {
+  return JSON.stringify({ inventory: w.prop(BRENNA, 'inventory'),
+    ledger: w.readPrivate('merchant-ledger.json'), character: w.prop(BRENNA, 'thornswoodCharacter') });
+}
+for (const kind of ['dead', 'disabled', 'missing-dead', 'missing-disabled', 'throws']) {
+  traderState('alive');
+  say('/merchant close');
+  const beforeOpen = unchangedTradeState();
+  traderState(kind);
+  w.activate(SMITH, BRENNA); w.run(500);
+  yes('J activation refuses an unavailable trader (' + kind + ') without opening or moving goods',
+    view().open === false && /trader.*unavailable/.test(last(BRENNA)) && unchangedTradeState() === beforeOpen);
+  for (const action of ['buy 1 Iron Ingot', 'sell 1 Iron Ingot', 'supply Iron Ingot', 'quest take ' + PARCEL]) {
+    traderState('alive');
+    w.activate(SMITH, BRENNA); w.run(500);
+    yes('J the live trader opens before the state changes (' + kind + ', ' + action + ')', view().open === true);
+    const beforeAction = unchangedTradeState();
+    traderState(kind);
+    // Call the installed controller immediately, before its periodic cleanup can mask a stale-panel command.
+    let refused;
+    try { refused = currentTrade.command({ actorId: BRENNA, profileId: 1000, parts: ('/merchant ' + action).split(' ') }); }
+    catch (error) { refused = { text: 'THREW: ' + error.message }; }
+    if (refused.view) currentTrade.push(BRENNA, refused.view);
+    yes('J the stale panel refuses before a transfer or quest write (' + kind + ', ' + action + ')',
+      /trader.*unavailable/.test(refused.text) && refused.view && refused.view.open === false &&
+      currentTrade.questAdmission(BRENNA, SMITH) === null && unchangedTradeState() === beforeAction);
+    say('/merchant ' + action);
+    yes('J a queued replay cannot use the closed session (' + kind + ', ' + action + ')', unchangedTradeState() === beforeAction);
+  }
+  traderState('alive');
+  w.activate(SMITH, BRENNA); w.run(500);
+  traderState(kind);
+  let closures = [];
+  try { closures = currentTrade.recover(); } catch (error) { /* asserted below as a refusal failure */ }
+  closures.forEach(row => currentTrade.push(row.actorId, row.view));
+  yes('J periodic cleanup closes an unavailable trader (' + kind + ')',
+    currentTrade.questAdmission(BRENNA, SMITH) === null && closures.some(row => row.actorId === BRENNA && row.view.open === false));
+}
+traderState('alive');
+w.mp().getNpcAIState = nativeAI;
+w.activate(SMITH, BRENNA); w.run(500);
+yes('J the same trader can be used again after valid live state returns', view().open === true);
+
 t.done(w);

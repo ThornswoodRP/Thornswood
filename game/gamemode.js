@@ -70058,6 +70058,9 @@ function createMerchantTrading(deps) {
     if (merchant.isHuman || merchant.profileId > 0) {
       return { ok: false, reason: 'That is not a guild trader.' };
     }
+    if (merchant.isDead !== false || merchant.isDisabled !== false) {
+      return { ok: false, reason: 'This guild trader is unavailable.' };
+    }
     if (String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
@@ -70661,6 +70664,8 @@ function installMerchantTrading(env) {
           desc: mp.getDescFromId(id),
           lifeGeneration: ai && ai.lifeGeneration,
           runtimeIdentity: mp.getActorRuntimeIdentity(id),
+          isDead: ai && ai.isDead,
+          isDisabled: ai && ai.isDisabled,
           profileId: ai && ai.profileId || 0,
           isHuman: !!(ai && ai.isHuman)
         };
