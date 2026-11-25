@@ -11320,8 +11320,20 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     try { desc = mp.getDescFromId(recipeId); } catch (e) { desc = null; }
   } else {
     desc = recipeSetInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    if (!desc && typeof recipeMovedInGame === 'function') {
+      desc = recipeMovedInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    }
   }
   const row = (desc && typeof desc === 'string') ? craftRow(desc) : null;
+  // The same read-only learning gate is asked again at completion. Its
+  // credit and allowed note belong only to that later successful craft.
+  const refusal = row && typeof row === 'object' ? craftAnswer(actorId, row).refusal : '';
+  if (refusal) {
+    notify(actorId, refusal);
+    say(actorId, refusal);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '):', refusal);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 

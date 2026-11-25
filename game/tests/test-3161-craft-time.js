@@ -73,6 +73,8 @@ const box = {
   BENCH_BY_BASE: BENCH_BY_BASE,
   unfit: '', notes: [], says: [], logs: [], set: [],
   craftRow: function (desc) { return Object.prototype.hasOwnProperty.call(RECIPES, desc) ? RECIPES[desc] : null; },
+  // Permission outcomes run through the real gate in test-4911-craft-preflight.
+  craftAnswer: function () { return {refusal:null}; },
   recipeSetInGame: function (out, bench, inputs) { return (inputs && inputs.setInGame) ? SET_IN_GAME : null; },
   unfitToMake: function () { return box.unfit; },
   notify: function (id, text) { box.notes.push(text); },
