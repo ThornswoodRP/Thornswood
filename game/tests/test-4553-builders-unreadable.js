@@ -26,8 +26,9 @@ if (!run) {
   console.log('FAIL  python is on this machine');
   console.log('');
   console.log('0 passed, 1 failed');
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  process.stdout.write(run.stdout);
+  if (run.stderr) { process.stdout.write(run.stderr); }
+  process.exitCode = run.status === 0 ? 0 : 1;
 }
-process.stdout.write(run.stdout);
-if (run.stderr) { process.stdout.write(run.stderr); }
-process.exit(run.status === 0 ? 0 : 1);

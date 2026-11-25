@@ -58,13 +58,13 @@ the embassy, if the Ambassador sets it on a room, is still gold into
 Haafingar's box, because there is one treasury per hold and the
 embassy is in that hold. See [Gold](gold.md).
 
-Carriage to Solitude is Solitude's carriage, 20 gold, not an embassy
-fare. See [Carriages and ferries](carriages.md).
+A ride to Solitude is a carriage like any other, not an embassy fare.
+Its fare, and which hold's box the fare goes into, are on [Carriages and ferries](carriages.md).
 
 ## Who may play it
 
 Imperial citizens, merchants, embassy staff, the Ambassador's people.
-A Legion soldier under arms is one of the 6, inside the walls. Walk
+The 6 who bear arms are the embassy's guard, inside the walls. Walk
 out the gate carrying and you have broken the Accord.
 
 You are watched, and you are one bad night from being told to leave.

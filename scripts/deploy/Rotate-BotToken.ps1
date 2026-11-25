@@ -103,7 +103,7 @@ function Show($lines) {
   foreach ($l in @($lines)) {
     $s = "$l"
     $c = 'Gray'
-    if ($s -match '^(NOT WRITTEN|CANNOT READ|BOT HAS NOT|SITE DID NOT|PUTTING)' -or $s -match 'NOT SET|NOT A BOT TOKEN|BYTE ORDER MARK|CANNOT READ THE SERVER|NO ROLES') { $c = 'Red' }
+    if ((Test-ThornswoodRestartLine $s) -or $s -match '^(NOT WRITTEN|CANNOT READ|PUTTING)' -or $s -match 'NOT SET|NOT A BOT TOKEN|BYTE ORDER MARK|NO ROLES') { $c = 'Red' }
     elseif ($s -match '(written and read back|already holds|is present|reconnected|site restarted|roles visible|can read)') { $c = 'Green' }
     Say "  $s" $c
   }
@@ -183,6 +183,14 @@ if ("$out" -match 'NOT WRITTEN') {
 if ("$out" -notmatch 'written and read back|already holds') {
   Die 'The VPS did not say the token was written. Run it again with -Check to see what it holds.'
 }
+# Both programs read the token only when they start, so it is in use only
+# once each restart said it worked (#4211).
+$failed = @(Get-ThornswoodRestartFailed $out @('bot', 'site'))
+if ($failed.Count) {
+  Write-Host ''
+  foreach ($f in $failed) { Say "  $f" 'Red' }
+  Die 'The token is in both files, but not everything that reads it restarted onto it. Put right what the lines above say, then run this again: it finds the token already there and restarts both.'
+}
 
 Head 'Consumers updated'
 Say "  $envFile  DISCORD_TOKEN, read by the bot (the service $BotService)" 'Green'
@@ -199,5 +207,4 @@ Write-Host ''
 Say '  Then check from the outside, the way the site sees Discord:' 'DarkGray'
 Say '    .\scripts\vps\Check-Site.ps1' 'Green'
 Say '    .\scripts\vps\Show-BotLog.ps1' 'Green'
-if ("$out" -match 'BOT HAS NOT|SITE DID NOT|CANNOT READ THE SERVER') { Done 1 }
 Done 0

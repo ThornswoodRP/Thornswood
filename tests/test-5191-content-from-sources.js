@@ -71,7 +71,7 @@ for g in tree:
 # Every committed record of the types the tool writes is one it writes or one
 # it copies from a master (house parts, woodworking moves, cooking quality).
 copied = set(f for f, _ in m.HOUSE_PARTS) | set(f for f, _, _ in m.WOODWORKER_MASTER_RECIPES)
-copied |= set(f for f, _, _, _, _ in m.quality_wanted(list(m.PLUGIN_MASTERS), m.PLUGIN))
+copied |= set(m.quality_fids(list(m.PLUGIN_MASTERS), m.PLUGIN))
 kinds = set(r.tag for r in made)
 made_ids = set(r.fid for r in made)
 stray = ['%s 0x%07X %s' % (r.tag.decode(), r.fid, r.editor_id()) for r in have
@@ -163,4 +163,4 @@ print(' '.join('0x%07X' % f for f in off) or 'none')
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -715,7 +715,7 @@ async function adminRoleOnly() {
     console.log('\nthe Linked accounts page and the menu:');
     const page = read(PAGE);
     const escM = /var esc = function \(s\) \{[\s\S]*?\n\};/.exec(page);
-    const names = ['banUntil', 'byLine', 'charName', 'charLine', 'linkedNotes', 'lengthPick', 'linkedControls', 'looseBans', 'deadList'];
+    const names = ['banUntil', 'byLine', 'charName', 'charLine', 'pcLine', 'linkedNotes', 'lengthPick', 'linkedControls', 'looseBans', 'deadList'];
     const fns = names.map((n) => braceGrab(page, 'function ' + n + '('));
     yes('the page has the character lines, the controls and the dead list', !!escM && fns.every(Boolean));
     if (escM && fns.every(Boolean)) {
@@ -995,6 +995,5 @@ async function adminRoleOnly() {
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');
     process.exitCode = fail ? 1 : 0;
-    setTimeout(() => process.exit(process.exitCode), 1000).unref();
   }
 })();

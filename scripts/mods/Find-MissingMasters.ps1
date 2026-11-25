@@ -17,6 +17,13 @@
   holds to the launcher's) and the plugins Skyrim.ccc beside Data names. A
   master in Data that is neither is reported against each enabled plugin
   that needs it, as switched off.
+
+  Exit 0 when every plugin plugins.txt enables has its masters in Data. Exit 1
+  when an enabled plugin has a missing master, or when Data is missing or
+  empty (#4760). A plugins.txt that is missing or cannot be read stops it
+  with exit 1 before any verdict, naming the path (#4809). A plugin with a
+  missing master that plugins.txt leaves disabled is listed but does not fail
+  the run, because nothing loads it.
 #>
 #Requires -Version 7
 param(
@@ -43,7 +50,7 @@ $ErrorActionPreference = 'Stop'
 #>
 if (-not (Test-Path -LiteralPath $Data)) {
     Write-Host ''
-    Write-Host "STOP. There is no Data folder at $Data" -ForegroundColor Red
+    Write-Output "STOP. There is no Data folder at $Data"
     Write-Host '  Nothing was read, so nothing can be said about any master.' -ForegroundColor Red
     Write-Host '  Pass -Data with the game folder you mean.' -ForegroundColor Yellow
     if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
@@ -57,10 +64,30 @@ Get-ChildItem -LiteralPath $Data -File |
 
 $enabled = @{}
 $pl = $Plugins
-if (Test-Path $pl) {
-    Get-Content $pl | Where-Object { $_ -match '^\*' } |
-        ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
+<#
+  NO LIST, NO VERDICT (#4809). Without plugins.txt nothing says which plugins
+  are switched on, so every one would count as switched off and the verdict
+  below would be made up: "nothing will crash" over a plugin that loads.
+  Until 16 Nov a plugins.txt that was not there was read as an empty list and
+  that verdict was printed. A list that is not there, or cannot be read, stops
+  this here, naming where it looked.
+#>
+if (-not (Test-Path -LiteralPath $pl -PathType Leaf)) {
+    Write-Host ''
+    Write-Output "STOP. There is no plugins.txt at $pl, so which plugins are switched on is not known, and nothing can be said about what crashes."
+    Write-Host '  Pass -Plugins with the plugins.txt of the profile you play.' -ForegroundColor Yellow
+    if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+    exit 1
 }
+try { $plLines = [IO.File]::ReadAllLines($pl) }
+catch {
+    Write-Host ''
+    Write-Output "STOP. The plugins.txt at $pl could not be read ($($_.Exception.Message)), so which plugins are switched on is not known, and nothing can be said about what crashes."
+    if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+    exit 1
+}
+$plLines | Where-Object { $_ -match '^\*' } |
+    ForEach-Object { $enabled[$_.TrimStart('*').Trim().ToLower()] = $true }
 
 # What the game loads: what plugins.txt switches on, the five base masters,
 # and what Skyrim.ccc in the game folder names.
@@ -114,25 +141,33 @@ Write-Host ''
 if ($present.Count -eq 0) {
     # Belt and braces with the Test-Path above: a folder that exists and holds
     # no plugins is the same nothing, and it must not read as a pass either.
-    Write-Host "STOP. $Data has no plugins in it, so nothing was compared." -ForegroundColor Red
+    Write-Output "STOP. $Data has no plugins in it, so nothing was compared."
     if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
     exit 1
 }
+$crashes = 0
 if (-not $problems) {
     # THE COUNT IS THE POINT. The old line said everything was fine whether it
     # had read ninety nine plugins or none, which is how it spent weeks
     # reporting a pass from an empty folder.
-    Write-Host ("no missing masters: $($present.Count) plugin(s) in $Data, " +
-                "$($enabled.Count) of them enabled, every dependency present.") -ForegroundColor Green
+    Write-Output ("no missing masters: $($present.Count) plugin(s) in $Data, " +
+                  "$($enabled.Count) of them enabled, every dependency present.")
 } else {
     $live = @($problems | Where-Object State -eq 'ENABLED')
+    $crashes = $live.Count
     $problems | Sort-Object State, Plugin | Format-Table -AutoSize
     if ($live) {
-        Write-Host ("{0} ENABLED plugin(s) have a missing master. That crashes at load." -f $live.Count) -ForegroundColor Red
+        Write-Output ("{0} ENABLED plugin(s) have a missing master. That crashes at load." -f $live.Count)
         if (@($live | Where-Object Why -eq 'switched off').Count) {
             Write-Host '  A master marked switched off is in Data, but plugins.txt does not switch it on: switch it on in Vortex, or switch off the plugin that needs it.' -ForegroundColor Yellow
         }
     } else {
-        Write-Host "all affected plugins are already disabled. nothing will crash." -ForegroundColor Yellow
+        Write-Output "all affected plugins are already disabled. nothing will crash."
     }
 }
+
+# What it found is the exit code (#4760). Until then a crash at load was
+# printed in red and the run still exited 0, so a script or harness that ran
+# this read a pass.
+if ($crashes) { exit 1 }
+exit 0

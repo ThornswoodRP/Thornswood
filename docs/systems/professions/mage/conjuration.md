@@ -5,36 +5,7 @@ in Capacity. The mage profession also places 1 in Capacity, so taking
 this school starts you at 2: +20 magicka. See
 [Skill tree](../../skill-tree.md).
 
-<!-- detail:begin -->
-
-## The book
-
-Generated from the spell book and the gamemode's `SPELL_IDS` table by `scripts/dev/Write-SystemLists.js`. Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.
-
-| Spell | Rank | Id |
-| --- | --- | --- |
-| Conjure Familiar | novice | `640b6:Skyrim.esm` |
-| Raise Zombie | novice | `7e8e1:Skyrim.esm` |
-| Bound Sword | novice | `211eb:Skyrim.esm` |
-| Conjure Flame Atronach | advanced | `204c3:Skyrim.esm` |
-| Reanimate Corpse | advanced | `65bd7:Skyrim.esm` |
-| Bound Battleaxe | advanced | `211ec:Skyrim.esm` |
-| Soul Trap | advanced | `4dba4:Skyrim.esm` |
-| Conjure Frost Atronach | advanced | `204c4:Skyrim.esm` |
-| Banish Daedra | advanced | `6d22c:Skyrim.esm` |
-| Revenant | advanced | `96d94:Skyrim.esm` |
-| Bound Bow | advanced | `211ed:Skyrim.esm` |
-| Conjure Storm Atronach | expert | `204c5:Skyrim.esm` |
-| Dread Zombie | expert | `96d95:Skyrim.esm` |
-| Conjure Dremora Lord | expert | `10ddec:Skyrim.esm` |
-| Expel Daedra | expert | `6f952:Skyrim.esm` |
-| Command Daedra | expert | `6f953:Skyrim.esm` |
-| Dead Thrall | master | `7e8df:Skyrim.esm` |
-| Flame Thrall | master | `7e5d5:Skyrim.esm` |
-| Frost Thrall | master | `7e5d6:Skyrim.esm` |
-| Storm Thrall | master | `7e5d7:Skyrim.esm` |
-
-<!-- detail:end -->
+The book, each spell with its rank and id: [the Conjuration book](../../lists/mage-conjuration.md).
 
 ## What this school is not
 
@@ -53,7 +24,7 @@ a dremora. Dremora is not a people you can pick. See
 
 ## Where this is
 
-These 20 names are the server's book.
+The book above shows every name and whether the server has an id for it.
 
 The server refuses Dead Thrall on a person's body, and every other
 spell that raises the dead: Raise Zombie, Reanimate Corpse, Revenant,

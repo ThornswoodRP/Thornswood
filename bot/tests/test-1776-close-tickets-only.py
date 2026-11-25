@@ -115,9 +115,14 @@ class Answer(object):
     """interaction.response, counted."""
     def __init__(self):
         self.said = []
+        self.options = []
 
     async def send_message(self, text=None, ephemeral=False, **k):
         self.said.append((text, ephemeral))
+        self.options.append(k)
+
+    async def send(self, text=None, ephemeral=False, **k):
+        return await self.send_message(text=text, ephemeral=ephemeral, **k)
 
     def is_done(self):
         return bool(self.said)
@@ -139,7 +144,7 @@ BOOK = []
 class Book(object):
     """The staff channel a closed ticket is written down in."""
     async def send(self, *a, **k):
-        BOOK.append(a)
+        BOOK.append((a[0], k))
 
 
 async def staff_book(guild, make=True):
@@ -241,6 +246,37 @@ for label, way in WAYS:
             len(BOOK) == 1 and 'Closed: **Apply to be an alpha playtester, Dee**'
             in BOOK[0][0] and thread.jump_url in BOOK[0][0])
 
+# The real command sends both messages through stand-ins. Use ordinary
+# punctuation that should stay visible, not become part of the formatting.
+closer = Person(['Moderator'])
+closer.display_name = 'Aela_One'
+thread = Thread('Ferry *notes*', Channel(bot.TICKETS[0]))
+
+
+async def close_with_reason(ask):
+    await bot.tree.get_command('close').callback(ask, why='Checked `weather` settings.')
+
+
+def literal_send(options):
+    mentions = options.get('allowed_mentions')
+    return (options.get('suppress_embeds') is True
+            and isinstance(mentions, discord.AllowedMentions)
+            and not any((mentions.everyone, mentions.users, mentions.roles, mentions.replied_user)))
+
+
+ask = run(close_with_reason, thread, closer)
+reason = r'Checked \`weather\` settings.'
+yes('the thread reply shows the closer and reason as literal text',
+    len(ask.response.said) == 1
+    and ask.response.said[0][0].startswith(r'Closed by Aela\_One. ' + reason))
+yes('the staff note shows the escaped title, closer and reason with its link',
+    len(BOOK) == 1 and BOOK[0][0] == (
+        r'Closed: **Ferry \*notes\***. By Aela\_One. ' + reason + '\n' + thread.jump_url))
+yes('the thread reply disables mentions and previews',
+    len(ask.response.options) == 1 and literal_send(ask.response.options[0]))
+yes('the staff note disables mentions and previews',
+    len(BOOK) == 1 and literal_send(BOOK[0][1]))
+
 # Content Creator is pulled into creator applications and is not staff: in a
 # real ticket they get the staff line, which shows the ticket check let the
 # ticket through to the staff gate.
@@ -249,6 +285,34 @@ ask = run(by_command, thread, Person(['Content Creator'], uid=502))
 yes('a Content Creator in a real ticket meets the staff gate, not the ticket one',
     len(ask.response.said) == 1 and 'Staff close these' in ask.response.said[0][0]
     and not thread.edited and not BOOK)
+
+
+# --------------------------------------------- archiving fails (#4237) --
+class FailingThread(Thread):
+    async def edit(self, **k):
+        raise discord.HTTPException(discord.Object(500), 'Cannot archive thread')
+
+
+del BOOK[:]
+fail_thread = FailingThread('Failing archive ticket', Channel(bot.TICKETS[0]))
+fail_closer = Person(['Moderator'])
+fail_closer.display_name = 'Mod_Bob'
+fail_ask = run(by_command, fail_thread, fail_closer)
+
+# 1. Told to whoever ran /close
+yes('a failed archive is told to whoever ran /close (ephemeral)',
+    len(fail_ask.response.said) >= 2
+    and any('could not archive' in s[0].lower() and s[1] is True for s in fail_ask.response.said))
+
+# 2. Corrected in the ticket
+yes('a failed archive is corrected in the ticket thread',
+    len(fail_thread.sent) >= 1
+    and any('still open' in s[0].lower() or 'archive failed' in s[0].lower() for s in fail_thread.sent))
+
+# 3. Corrected in the staff log
+yes('a failed archive is corrected in the staff log',
+    len(BOOK) >= 2
+    and any('still open' in b[0].lower() or 'archive failed' in b[0].lower() for b in BOOK))
 
 
 # ------------------------------------------------------------- the words --

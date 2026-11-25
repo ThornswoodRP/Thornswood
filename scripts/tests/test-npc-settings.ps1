@@ -225,7 +225,6 @@ for (const [k, id] of [['cow', 0x10ebaf], ['indoors', 0xea7], ['belethor', 0x1a6
   try { srv.get(id, 'pos'); out[k] = true; } catch (e) { out[k] = false; }
 }
 console.log('PROBE ' + JSON.stringify(out));
-process.exit(0);
 '@
 $probeFile = Join-Path $tmp 'probe.js'
 [IO.File]::WriteAllText($probeFile, $probe, $utf8)

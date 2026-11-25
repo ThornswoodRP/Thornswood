@@ -106,6 +106,8 @@ $ssh = @('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes')
 $rootWin = $Root.Replace('/','\')
 $botWin  = $BotRoot.Replace('/','\')
 $writer  = Join-Path $Here '..\vps\Write-BotToken.ps1'
+# Here too, for the restart lines it holds what the box says to (#4211).
+. $writer
 
 function Remote($script) {
   # Send-Script.ps1 (issue #1070): a long script goes by scp and its run takes
@@ -427,11 +429,21 @@ Restart-ThornswoodSite -Root '$rootWin' -Task '$Task'
 if (`$tokenChanged) { Restart-ThornswoodBot -Root '$botWin' -Service '$BotService' }
 "@))
 $payload = $null
-$wrote | ForEach-Object { Write-Host "  $_" }
+$wrote | ForEach-Object { if (Test-ThornswoodRestartLine "$_") { Write-Host "  $_" -ForegroundColor Red } else { Write-Host "  $_" } }
 if (@($wrote | Where-Object { "$_" -like 'NOT WRITTEN:*' -or "$_" -like 'NOTHING ARRIVED*' }).Count) {
   Write-Host ''
   Write-Host '  Nothing was written on the VPS, and nothing was restarted. The line above says why.' -ForegroundColor Red
   exit 1
+}
+# The site reads config.json only when it starts, and the bot its token only
+# when it starts, so neither change is in use until its restart says it
+# worked (#4211). The bot is restarted when the writer wrote it a new token.
+$restarted = @('site')
+if (@($wrote | Where-Object { "$_" -match 'DISCORD_TOKEN\s+written and read back' }).Count) { $restarted += 'bot' }
+$failed = @(Get-ThornswoodRestartFailed $wrote $restarted)
+if ($failed.Count) {
+  Write-Host ''
+  foreach ($f in $failed) { Write-Host "  $f" -ForegroundColor Red }
 }
 
 Write-Host ''
@@ -440,3 +452,8 @@ Write-Host '    https://thornswood.net/auth/discord/callback' -ForegroundColor G
 Write-Host ''
 Write-Host '  The bot has to be IN the server for roles to be readable.' -ForegroundColor DarkGray
 Write-Host '  Setup-Discord.ps1 puts it there.' -ForegroundColor DarkGray
+if ($failed.Count) {
+  Write-Host ''
+  Write-Host '  It is written on the VPS, but not in use: the FAILED lines above say which restart did not happen.' -ForegroundColor Red
+  exit 1
+}

@@ -6,7 +6,7 @@
 # harnesses (tests/test-staff-commands.js, tests/test-help-report.js) run in
 # a cloud thread the way they run on One and in the nightly (#3055); and,
 # as the hook, the session's git identity, so its commits are Patrick's and
-# not Claude's (#5231, below).
+# not Claude's (#5231, below), and the newest content build (#5191, below).
 #
 # WHY IT IS RUN THIS WAY
 #
@@ -128,6 +128,23 @@ if [ "$register" = 0 ]; then
     echo "This clone runs the pre-push checks (#5291)."
   else
     echo "Setup-CloudSession.sh: git could not set core.hooksPath in $repo, so pushes from this session skip the pre-push checks (#5291)." >&2
+  fi
+fi
+
+# The content build (#5191). The content plugin and the tables read out of
+# the load order are built on the box and are not committed, so a fresh clone
+# has none, and every harness that reads one says so. The newest build main's
+# merge release kept goes over the clone, as a developer's clone takes it
+# (docs/guide/set-up-a-machine.md). It needs gh, which a cloud session has;
+# when it cannot, the session starts without it and says why.
+if [ "$register" = 0 ]; then
+  if ! command -v pwsh >/dev/null; then
+    echo "Setup-CloudSession.sh: no pwsh here, so the content build was not laid and the harnesses that read a table will say it is missing (#5191)." >&2
+  elif out="$(cd "$repo" && pwsh -NoProfile -File scripts/release/Get-ContentBuild.ps1 -Newest 2>&1)"; then
+    echo "The newest content build is laid over this clone ($(printf '%s\n' "$out" | grep -oE '^(SAME|OTHER) KEY' | head -n 1))."
+  else
+    printf '%s\n' "$out" | tail -n 5 >&2
+    echo "Setup-CloudSession.sh: Get-ContentBuild.ps1 -Newest could not lay the content build (above), so the harnesses that read a table will say it is missing (#5191)." >&2
   fi
 fi
 

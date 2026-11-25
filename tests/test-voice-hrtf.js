@@ -312,5 +312,5 @@ function partSeven() {
 }).then(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('\n' + pass + ' passed, ' + fail + ' failed' + (skip ? ', ' + skip + ' skipped' : ''));
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 });

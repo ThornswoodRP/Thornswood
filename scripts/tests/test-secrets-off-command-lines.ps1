@@ -330,9 +330,15 @@ $r = OnVpsWith ("`$u = `$ThornswoodSecret") $url
 finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 
 # ---- 2. every script in the repository ------------------------------------
-$skip = '(?i)[\\/](tests|engine|node_modules|\.git|local|out)[\\/]'
-$files = @(Get-ChildItem -LiteralPath $repo -Recurse -File -Filter *.ps1 -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName.Substring($repo.Length) -notmatch $skip })
+# The scripts and pages read are the ones git tracks (#6119), named by git
+# rather than found by walking the working tree: a walk went into temp\,
+# where other harnesses make and remove scratch, and SilentlyContinue hid
+# errors.
+$skip = '(?i)/(tests|engine)/'
+$trackedPs1 = @(& git -C $repo ls-files -- '*.ps1')
+if ($LASTEXITCODE -ne 0) { throw "git ls-files in $repo said $LASTEXITCODE, so the scripts to read are not known" }
+$files = @($trackedPs1 | Where-Object { ('/' + ($_ -replace '\\', '/')) -notmatch $skip } |
+    ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) })
 Yes ("scripts found to scan: " + $files.Count) ($files.Count -gt 100)
 $all = @()
 foreach ($f in $files) { foreach ($h in (Scan $f.FullName $f.Name)) { if ($h) { $all += $h } } }
@@ -341,10 +347,10 @@ Yes ('no script puts a secret on an ssh, scp or remote command line (' + $all.Co
 
 # The same for anything else that could shell out to ssh: a line naming ssh
 # or scp and a secret together.
-# By extension rather than -Include, which Windows PowerShell 5.1 ignores
-# beside -LiteralPath.
-$other = @(Get-ChildItem -LiteralPath $repo -Recurse -File -ErrorAction SilentlyContinue |
-    Where-Object { @('.py', '.js', '.cmd', '.bat', '.sh') -contains $_.Extension.ToLowerInvariant() -and $_.FullName.Substring($repo.Length) -notmatch $skip })
+$trackedOther = @(& git -C $repo ls-files -- '*.py' '*.js' '*.cmd' '*.bat' '*.sh')
+if ($LASTEXITCODE -ne 0) { throw "git ls-files in $repo said $LASTEXITCODE, so the files to read are not known" }
+$other = @($trackedOther | Where-Object { ('/' + ($_ -replace '\\', '/')) -notmatch $skip } |
+    ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) })
 $bad = @()
 foreach ($f in $other) {
     $i = 0
@@ -472,7 +478,11 @@ Yes 'Remote.ps1 -Secret is a SecureString' ($remoteText -match '\[System\.Securi
 # what one machine keeps and builds, not pages: since 5 October One's dev
 # release folder, a whole game with its mods' read me files, is in local.
 $docHits = @()
-foreach ($d in @(Get-ChildItem -LiteralPath $repo -Recurse -File -Filter *.md -ErrorAction SilentlyContinue | Where-Object { $_.FullName.Substring($repo.Length) -notmatch '(?i)[\\/](docs[\\/]archive|engine|node_modules|\.git|local|out)[\\/]' })) {
+$trackedMd = @(& git -C $repo ls-files -- '*.md')
+if ($LASTEXITCODE -ne 0) { throw "git ls-files in $repo said $LASTEXITCODE, so the markdown files to read are not known" }
+$docs = @($trackedMd | Where-Object { ('/' + ($_ -replace '\\', '/')) -notmatch '(?i)/(docs/archive|engine)/' } |
+    ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) })
+foreach ($d in $docs) {
     $i = 0
     foreach ($l in [IO.File]::ReadAllLines($d.FullName)) {
         $i++

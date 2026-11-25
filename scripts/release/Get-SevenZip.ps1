@@ -17,7 +17,9 @@
 
   WHERE. $XDG_DATA_HOME/thornswood/7zip-25.01/7zz, or
   ~/.local/share/thornswood/7zip-25.01/7zz when XDG_DATA_HOME is not set.
-  Install-NexusRevision.ps1 looks there first.
+  SevenZip.ps1's Get-SevenZipOwnBuild holds the version, the address, the
+  sha256 and this place, and its Find-SevenZip, which every script that
+  needs 7-Zip calls, looks there before PATH (#4424).
 
   WHAT IS FETCHED. https://www.7-zip.org/a/7z2501-linux-x64.tar.xz, 1,571,044
   bytes. The sha256 below was read on 21 Oct 2026 from that file and from the
@@ -34,20 +36,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Url = 'https://www.7-zip.org/a/7z2501-linux-x64.tar.xz'
-$Sha256 = '4ca3b7c6f2f67866b92622818b58233dc70367be2f36b498eb0bdeaaa44b53f4'
-$Version = '25.01'
+. (Join-Path $PSScriptRoot 'SevenZip.ps1')
+$own = Get-SevenZipOwnBuild
+$Url = $own.Url
+$Sha256 = $own.Sha256
+$Version = $own.Version
 
 if ($PSVersionTable.PSVersion.Major -lt 6 -or $IsWindows) { throw 'This is for Linux. On Windows, 7-Zip is installed from 7-zip.org as usual, and the scripts find it in Program Files.' }
-if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) { throw ('The pinned build is for x64 Linux, and this machine is ' + [Runtime.InteropServices.RuntimeInformation]::OSArchitecture + '.') }
-
-$data = if ($env:XDG_DATA_HOME) { $env:XDG_DATA_HOME } elseif ($HOME) { Join-Path (Join-Path $HOME '.local') 'share' } else { '' }
-if (-not $data) { throw 'There is no XDG_DATA_HOME or HOME here to put 7-Zip in.' }
-$dir = Join-Path (Join-Path $data 'thornswood') ('7zip-' + $Version)
-$exe = Join-Path $dir '7zz'
+if (-not $own.Dir) { throw 'There is no XDG_DATA_HOME or HOME here to put 7-Zip in.' }
+$dir = $own.Dir
+$exe = $own.Path
 
 if (Test-Path -LiteralPath $exe -PathType Leaf) { Write-Output $exe; exit 0 }
 if ($Check) { Write-Host ('7-Zip ' + $Version + ' is not at ' + $exe + '. pwsh scripts/release/Get-SevenZip.ps1 puts it there.'); exit 1 }
+# Only fetching needs the machine to be x64: -Check above answers on any.
+if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) { throw ('The pinned build is for x64 Linux, and this machine is ' + [Runtime.InteropServices.RuntimeInformation]::OSArchitecture + '.') }
 
 $work = Join-Path $dir 'fetch'
 if (Test-Path -LiteralPath $work) { [IO.Directory]::Delete($work, $true) }

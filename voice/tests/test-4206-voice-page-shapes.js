@@ -129,12 +129,12 @@ function join(profileId, name, raw) {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       got.push(m);
       if (m.t === 'welcome') {
-        done({ got: got, welcome: m, closed: () => closed, send: (o) => ws.send(typeof o === 'string' ? o : JSON.stringify(o)) });
+        clearTimeout(late); done({ got: got, welcome: m, closed: () => closed, send: (o) => ws.send(typeof o === 'string' ? o : JSON.stringify(o)) });
       }
     };
     ws.onclose = () => { closed = true; };
     ws.onerror = () => bad(new Error('could not join'));
-    setTimeout(() => bad(new Error('no welcome')), 4000);
+    const late = setTimeout(() => bad(new Error('no welcome')), 4000);
   });
 }
 
@@ -211,7 +211,7 @@ async function plainComesBack(me, words) {
     const feed = (/\n  feed\(chunk\) \{[\s\S]*?\n  \}\n/.exec(src) || [''])[0];
     const hand = (/try \{\s*this\.onmessage\(msg\);?\s*\} catch \((\w+)\) \{([\s\S]*?)\n\s*\}/.exec(feed)) || null;
     yes('Sock.feed hands each message to onmessage inside a try', !!hand, feed.slice(-600));
-    yes('whose catch closes this socket', !!hand && /this\.close\(\)/.test(hand[2]), hand && hand[2]);
+    yes('whose catch closes this socket as a handler failure', !!hand && /this\.close\('handler'\)/.test(hand[2]), hand && hand[2]);
     yes('and says in the log what it was', !!hand && /console\.(log|error)\(/.test(hand[2]) && new RegExp('\\b' + hand[1] + '\\b').test(hand[2]),
         hand && hand[2]);
   } catch (e) {
@@ -222,5 +222,5 @@ async function plainComesBack(me, words) {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.log('      the temp folder was not removed: ' + e.message); }
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

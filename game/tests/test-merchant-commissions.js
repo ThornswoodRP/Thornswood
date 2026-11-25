@@ -55,6 +55,8 @@ function world(startingPurse=250) {
   isTrader:merchant=>merchants.some(row=>row.merchantId===merchant),now:()=>time,
   resolve:name=>{const found=itemByName.get(name);return found?{baseId:found.baseId,name:found.name}:null;},
   prices:{catalog:()=>[...itemNames.values()].map(name=>({name,buy:unit,sell:unit+1})),quote:()=>({buy:unit,sell:unit+1})},
+  // The staff's reward prices (#6180): `unit` stands for the reward each good pays.
+  rewards:{price:desc=>unit===null?null:{item:desc,name:itemNames.get(id(desc)),gold:unit,start:unit}},
   commissionEligible:(actor,gate)=>{if(deps.onRankRead)deps.onRankRead();return rules.allows(gate,standing);}};
  let api=bundle.createMerchantTrading(deps);
  const command=(...parts)=>api.command({actorId:10,profileId:7,parts:['/merchant',...parts]});
@@ -80,7 +82,7 @@ for(const row of rows) {
  w.box.inv[10][row.itemId]=row.count;w.unit(9);w.rank({v:1,cls:'other',ranks:{}});
  const originalToken=w.token(row);w.reload();w.open(row);w.command('quest','return',row.id,originalToken);w.settle();
  const state=w.purses.read(row.merchantId);
- assert.equal(state.purse,250-held.gold);assert.equal(w.box.inv[10][15],40+held.gold);
+ assert.equal(state.purse,250,'the pay is new gold, not the trader\'s (#6180)');assert.equal(w.box.inv[10][15],40+held.gold);
  assert.equal(w.box.inv[10][row.itemId]||0,0);assert.equal(state.stock[0].count,row.count);
  assert.equal(Object.keys(state.commissions.held).length,0);assert.equal(state.pending,null);
  assert.match(w.command('quest','return',row.id,originalToken).text,/Choose the work/);
@@ -104,8 +106,9 @@ for(const row of rows) {
  const row=rows[0],w=world();w.take(row);const held=w.purses.read(row.merchantId).commissions;
  w.box.inv[10][row.itemId]=1000;w.open(row);
  const quote=w.open(row).offers.find(item=>item.name===itemNames.get(row.itemId));
- assert.equal(quote.maxSell,Math.floor((250-policy.reserved(held))/2));
- assert.match(w.command('sell','125',itemNames.get(row.itemId)).text,/unreserved/);
+ // Work taken holds none of the purse back (#6180): the whole purse still buys.
+ assert.ok(policy.reserved(held)>0);assert.equal(quote.maxSell,Math.floor(250/2));
+ assert.match(w.command('sell','126',itemNames.get(row.itemId)).text,/cannot pay that much/);
  assert.equal(w.purses.read(row.merchantId).purse,250);
 }
 {
@@ -117,7 +120,7 @@ for(const row of rows) {
 }
 function seedPromise(w,row) {
  const state=w.purses.read(row.merchantId),made=policy.reserve(state.commissions,w.box.transfer.identity(10),row.id,
-  {hash:row.sourceHash,item:{baseId:row.itemId,name:itemNames.get(row.itemId)},count:row.count,unit:2},w.now(),state.purse);
+  {hash:row.sourceHash,item:{baseId:row.itemId,name:itemNames.get(row.itemId)},count:row.count,unit:2},w.now());
  assert.equal(made.ok,true);w.purses.commit(row.merchantId,{...state,commissions:made.next});
 }
 {
@@ -160,7 +163,7 @@ for(const row of ranked) {
  row.goods.forEach(good=>{w.box.inv[10][good.itemId]=good.count;});
  w.unit(9);w.rank({v:1,prof:'other',ranks:{}});w.reload();w.open(row);
  w.command('quest','return',row.id,token);w.settle();
- const paid=w.purses.read(row.merchantId);assert.equal(paid.purse,250-q.gold);assert.equal(w.box.inv[10][15],40+q.gold);
+ const paid=w.purses.read(row.merchantId);assert.equal(paid.purse,250);assert.equal(w.box.inv[10][15],40+q.gold);
  assert.equal(paid.stock.length,row.goods.length);assert.deepEqual(copy(paid.commissions.cool[policy.key(w.box.transfer.identity(10),row.id)]),[w.now(),row.hours]);
  row.goods.forEach(good=>assert.equal(w.box.inv[10][good.itemId]||0,0));
  w.command('quest','return',row.id,token);assert.equal(w.box.inv[10][15],40+q.gold);
@@ -190,7 +193,7 @@ for(const row of [rows[0],ranked[0]]) {
 console.log('PASS231 ranked compiled parcel jobs: actual gates, complete delivery, original multi-item quote, exact cadence and stale-panel refusal');
 {
  const row=ranked[ranked.length-1],w=world(1),quote=w.quote(row);
- assert.ok(quote.gold>1);assert.equal(quote.canTake,false);w.take(row);
- assert.equal(w.purses.read(row.merchantId).purse,1);assert.equal(w.purses.read(row.merchantId).commissions,undefined,
-  'a valid source parcel cannot create the missing gold or reserve beyond a poor purse');
+ assert.ok(quote.gold>1);assert.equal(quote.canTake,true,'a poor trader still gives out work: the pay is new gold (#6180)');
+ assert.match(w.take(row).text,/take the work/);
+ assert.equal(w.purses.read(row.merchantId).purse,1,'taking work holds none of the purse back');
 }

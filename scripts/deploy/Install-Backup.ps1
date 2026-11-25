@@ -78,6 +78,9 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 . (Join-Path $Here 'ServiceAccount.ps1')
+# What the backup reads a world in MongoDB out with (#6237), sent beside it
+# as world.ps1.
+. (Join-Path $Here 'World.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 
@@ -139,10 +142,20 @@ if (Test-Path '$Root\backup.log') { ''; '--- backup.log, last 12 ---'; Get-Conte
 if ($Remove) {
   Head 'Removing the task'
   Say '  The backups themselves and the passphrase are left alone.' 'DarkGray'
-  Remote @"
-Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false -EA SilentlyContinue
-if (Get-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue) { 'STILL THERE' } else { 'task removed' }
-"@ | ForEach-Object { Say "  $_" }
+  $removed = @(Remote @"
+`$ErrorActionPreference = 'Stop'
+function Find-BackupTask {
+  Get-ScheduledTask | Where-Object { `$_.TaskName -eq '$TaskName' -and `$_.TaskPath -eq '\' }
+}
+if (-not (Find-BackupTask)) { 'task already absent'; exit 0 }
+Unregister-ScheduledTask -TaskName '$TaskName' -TaskPath '\' -Confirm:`$false
+if (Find-BackupTask) { 'STILL THERE'; exit 1 }
+'task removed'
+exit 0
+"@)
+  $removeExit = $LASTEXITCODE
+  $removed | ForEach-Object { Say "  $_" }
+  if ($removeExit -ne 0) { Die 'Could not confirm removal of the backup task.' }
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 0
@@ -188,6 +201,14 @@ Say "  $Root is SYSTEM's and Administrators' only" 'Green'
 Invoke-ThornswoodNative { & scp @ssh $script "${target}:$($Root.Replace('\','/'))/vps-nightly-backup.ps1" }
 if ($LASTEXITCODE -ne 0) { Die 'scp failed.' }
 Say "  $runner" 'Green'
+# world.ps1 beside it: World.ps1's functions with world.js in them, the copy
+# this checkout was tested with, which the backup dot-sources.
+$worldTmp = Join-Path ([IO.Path]::GetTempPath()) ('world-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+[IO.File]::WriteAllText($worldTmp, $ThornswoodWorld, (New-Object Text.UTF8Encoding $true))
+try { Invoke-ThornswoodNative { & scp @ssh $worldTmp "${target}:$($Root.Replace('\','/'))/world.ps1" } }
+finally { Remove-Item -LiteralPath $worldTmp -Force -ErrorAction SilentlyContinue }
+if ($LASTEXITCODE -ne 0) { Die 'scp of world.ps1 failed.' }
+Say ("  " + (Join-Path $Root 'world.ps1')) 'Green'
 
 Head 'The passphrase'
 # A new box, and this machine already has the passphrase every backup so far
@@ -252,9 +273,9 @@ $(Get-ThornswoodServiceAccountScript)
 # The fail-safe, before the task is touched: nothing broad, and not LOCAL
 # SERVICE as a whole, may read the backups or the passphrase.
 `$bad = @(Test-ThornswoodServiceCannotReach @('$Root', '$keyFile'))
-if (`$bad.Count) { foreach (`$b in `$bad) { 'FAIL-SAFE ' + `$b } }
+if (`$bad.Count) { foreach (`$b in `$bad) { 'FAIL-SAFE ' + `$b }; exit 1 }
 else {
-  Register-ScheduledTask -TaskName '$TaskName' -Action `$a -Trigger `$t -Principal (New-ThornswoodServicePrincipal -AsSystem:`$asSystem) -Settings `$s -Force | Out-Null
+  Register-ScheduledTask -TaskName '$TaskName' -Action `$a -Trigger `$t -Principal (New-ThornswoodServicePrincipal -AsSystem:`$asSystem) -Settings `$s -Force -ErrorAction Stop | Out-Null
   if (`$asSystem) { 'on SYSTEM, Highest, as -AsSystem asked' }
   else {
     try {
@@ -298,24 +319,51 @@ else {
       Set-ThornswoodTaskOwner -TaskName '$TaskName' -Sid `$sid -Action `$a -Roots '$Root'
       'on LOCAL SERVICE, Limited, as ' + `$sid
     } catch {
-      Register-ScheduledTask -TaskName '$TaskName' -Action `$a -Trigger `$t -Principal (New-ThornswoodServicePrincipal -AsSystem) -Settings `$s -Force | Out-Null
+      Register-ScheduledTask -TaskName '$TaskName' -Action `$a -Trigger `$t -Principal (New-ThornswoodServicePrincipal -AsSystem) -Settings `$s -Force -ErrorAction Stop | Out-Null
       'BACK ON SYSTEM: ' + `$_.Exception.Message
     }
   }
 }
-`$x = Get-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue
-if (`$x) { 'registered, ' + `$x.State + ', next ' + (Get-ScheduledTaskInfo -TaskName '$TaskName').NextRunTime } else { 'REGISTER FAILED' }
+`$x = Get-ScheduledTask -ErrorAction Stop | Where-Object { `$_.TaskName -eq '$TaskName' -and `$_.TaskPath -eq '\' }
+if (-not `$x) { 'REGISTER FAILED'; exit 1 }
+'registered, ' + `$x.State + ', next ' + (Get-ScheduledTaskInfo -TaskName '$TaskName' -TaskPath '\' -ErrorAction Stop).NextRunTime
+exit 0
 "@)
+$registerExit = $LASTEXITCODE
 $registered | ForEach-Object { Say "  $_" }
 if ("$registered" -match 'FAIL-SAFE') { Die "$Root can be read by more than it should, so the task was left as it was. Fix that and run this again." }
+if ($registerExit -ne 0) { Die 'Could not confirm registration of the backup task.' }
 
 if ($RunNow) {
   Head 'Taking one now'
-  Remote @"
-Start-ScheduledTask -TaskName '$TaskName'
-Start-Sleep -Seconds 45
-Get-Content '$Root\backup.log' -Tail 20 -EA SilentlyContinue
-"@ | ForEach-Object { Say "  $_" }
+  $run = @(Remote @"
+`$ErrorActionPreference = 'Stop'
+`$task = @{ TaskName = '$TaskName'; TaskPath = '\' }
+`$before = (Get-ScheduledTaskInfo @task).LastRunTime
+if ((Get-ScheduledTask @task).State -in 'Queued', 'Running') {
+  'Backup already queued or running. Nothing was started.'
+  exit 1
+}
+Start-ScheduledTask @task
+# The gate gives installation and RunNow 20 minutes together. Observe the
+# new run for up to 15 minutes, not the previous run's last result.
+`$until = (Get-Date).AddMinutes(15)
+while ((Get-Date) -lt `$until) {
+  `$state = (Get-ScheduledTask @task).State
+  `$info = Get-ScheduledTaskInfo @task
+  if (`$state -notin 'Queued', 'Running' -and `$info.LastRunTime -gt `$before) {
+    'Backup ended ' + `$info.LastRunTime + ', result ' + `$info.LastTaskResult
+    if (Test-Path -LiteralPath '$Root\backup.log') { Get-Content -LiteralPath '$Root\backup.log' -Tail 20 }
+    exit [int](`$info.LastTaskResult -ne 0)
+  }
+  Start-Sleep -Seconds 2
+}
+'No new backup completion confirmed within 15 minutes. The task was not stopped.'
+exit 1
+"@)
+  $runExit = $LASTEXITCODE
+  $run | ForEach-Object { Say "  $_" }
+  if ($runExit -ne 0) { Die 'The requested backup did not report success.' }
 }
 
 Head 'What is left to do'

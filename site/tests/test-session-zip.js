@@ -184,4 +184,4 @@ yes('the zip goes out as application/zip', src.indexOf("{ type: 'application/zip
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

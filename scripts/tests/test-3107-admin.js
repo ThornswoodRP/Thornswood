@@ -1273,5 +1273,5 @@ function start(stateDir, ghPort, more) {
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

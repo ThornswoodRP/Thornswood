@@ -6,7 +6,7 @@ Revision 6 carries three changes in one run, so everybody updates once:
 - Atlas Map Markers SE taken out with -Remove 24104, because its page does
   not allow it in a collection (#3649);
 - cheddars_mashups.esl loading after RaceCompatibility.esm (#4070), from
-  [COLLECTION-REVISION-6-RULE.json](COLLECTION-REVISION-6-RULE.json).
+  [collection-revision-6-rule.json](../records/collection-revision-6-rule.json).
 
 ## Why the rule changes
 
@@ -39,7 +39,7 @@ answer q-3649-content-14, A), each step through Nexus-Run.ps1 from main
 2. `New-NexusRevision -Discard 6` threw draft 824557 away.
 3. `New-NexusRevision -Mod 192001 -FileId 829844 -DropPatch
    192001:Thornswood-Content.esp -Remove 24104 -Rule
-   docs/COLLECTION-REVISION-6-RULE.json` made draft 825936.
+   records/collection-revision-6-rule.json` made draft 825936.
 4. `Install-NexusRevision -Revision 6` installs the draft and stops on any
    rule that goes round with the game's own order, as draft 823950's would.
 5. records/collection-permissions.json names file 829844, through

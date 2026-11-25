@@ -28,13 +28,18 @@
    module loaded below sets the site's roots with calls an older Node does
    not have, and died there with a TypeError that named no version. */
 const tooOld = require('./lib/node-version').nodeVerdict(process.versions.node, require('tls'));
-if (tooOld) { console.error(tooOld); process.exit(1); }
+if (tooOld) { console.error(tooOld); process.exitCode = 1; return; }
 
 /* node server.js --strip-metadata <folder> (#3648): takes what each picture
    and recording in the folder says about where and when it was made out of
    it, as stripMedia does to every upload, says what it did, and stops. The
-   site is not started. scripts/vps/Strip-Uploads.ps1 runs it on the box. */
-if (process.argv[2] === '--strip-metadata') process.exit(require('./lib/media').stripFolder(process.argv[3]));
+   site is not started. scripts/vps/Strip-Uploads.ps1 runs it on the box.
+   Both stop by returning, not by node's exit function, which can hang on
+   Node 24 (#6036). */
+if (process.argv[2] === '--strip-metadata') {
+  process.exitCode = require('./lib/media').stripFolder(process.argv[3]);
+  return;
+}
 
 /* THE SITE IS IN site/lib, ONE FILE PER AREA (#5357). This file was all of
    it, 10,000 lines. Each module there says at its top what it holds; they
@@ -62,6 +67,9 @@ require('./lib/http');
 const { discordGet, roleNames } = require('./lib/discord');
 require('./lib/roster');
 require('./lib/signins');
+require('./lib/ledger');
+require('./lib/takeback');
+require('./lib/pcs');
 require('./lib/sessions');
 const { retentionSweep } = require('./lib/retention');
 const { rereadTrouble } = require('./lib/trouble');
@@ -72,6 +80,17 @@ require('./lib/characters');
 require('./lib/your-settings');
 const { failed, handle } = require('./lib/serve');
 const { applyDeletionRequests } = require('./lib/deletion');
+
+/* A PORT IT CANNOT HAVE (#6036). A listen that fails, most often
+   EADDRINUSE, is said on one line and the site stops with exit 1 by
+   returning, as everything here does: it is a start that did not happen,
+   not the unknown state the last net in site/lib/serve.js ends with abort.
+   Once listening, an error goes on to that net as before. */
+function listenFailed(e) {
+  console.error('[thornswood-docs] could not listen on ' + BIND + ':' + PORT + ': ' +
+                ((e && (e.code || e.message)) || e));
+  process.exitCode = 1;
+}
 
 applyDeletionRequests();
 
@@ -88,7 +107,8 @@ http.createServer((req, res) => {
   if (done && typeof done.catch === 'function') {
     done.catch((e) => failed(req, res, e));
   }
-}).listen(PORT, BIND, function () {
+}).once('error', listenFailed).listen(PORT, BIND, function () {
+  this.off('error', listenFailed);
   /* THE PORT IT GOT (#6136). Given THORNSWOOD_DOCS_PORT=0 the system hands
      the site a free port as it listens, and the line below says which. A
      copy handed a port somebody else chose and let go can find it taken

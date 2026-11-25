@@ -49,4 +49,4 @@ if(process.argv[5]==='orchard') {
  assert.equal(createOrchardPlots(storage(),refs).read(refs[0]).crop,'');
  console.log('PASS actual native whole-file writer initializes and reloads authoritative private orchard plots');
 }
-process.exit(0);
+process.exitCode = 0;

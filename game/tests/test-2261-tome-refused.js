@@ -49,4 +49,4 @@ function rig(answer) {
   yes('an ordinary book is left alone', r.handler(0x14, 0x1) !== false && r.sets.length === 0);
 }
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

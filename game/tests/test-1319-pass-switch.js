@@ -33,7 +33,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const KEY = 'test-1319-key-not-a-real-one';
@@ -49,7 +49,7 @@ function mint(o) {
 const a = src.indexOf('// ==== thornswood join pass ====');
 const b = src.indexOf('// ==== end thornswood join pass ====');
 yes('the join pass block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 
 const PRIV = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-1319-'));
 fs.writeFileSync(path.join(PRIV, 'door.json'), JSON.stringify({ site: 'https://thornswood.net/dev', key: 'k', passKey: KEY }));
@@ -196,3 +196,4 @@ heldCase('false', false, true, false);
 
 try { fs.rmSync(PRIV, { recursive: true, force: true }); } catch (e) { }
 done();
+}

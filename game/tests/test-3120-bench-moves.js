@@ -39,7 +39,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function take(start, end) {
   const i = src.indexOf(start);
@@ -136,7 +136,7 @@ yes('L3 the gamemode\'s RECIPES_MOVED_IN_GAME is the manifest\'s moves in each g
 // ---------------------------------------------------------------- the server --
 const NAMER = take('function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {');
 yes('S0 recipeMovedInGame is in the gamemode', !!NAMER);
-if (!NAMER) { done(); }
+if (!NAMER) { done(); } else {
 function idOf(desc) {
   const at = desc.indexOf(':');
   const files = { 'Skyrim.esm': 0x00, 'Update.esm': 0x01, 'Hothtrooper44_ArmorCompilation.esp': 0x5a };
@@ -198,3 +198,4 @@ yes('O2 and refuses a moved recipe crafted by its record at the bench its mod pu
     /return false;$/.test(refusal));
 
 done();
+}

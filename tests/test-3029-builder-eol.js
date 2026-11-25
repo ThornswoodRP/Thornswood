@@ -12,13 +12,20 @@
   instead (#1622, #1713, #1787, #1828); .gitattributes now gives every
   checkout LF, and the builders write LF.
 
+  Since #5191 nothing the chain builds is committed: what a step writes is
+  read from the content build laid over this checkout
+  (scripts/release/Get-ContentBuild.ps1), beside the few writes that are
+  sources as well and stay tracked (content-tables.json "committed"). The
+  merge release lays the merge's own build, so there B2 holds the box's
+  build to LF (#6333: a build that carried two CSVs CRLF).
+
   A  every text file a step of scripts/mods/content-tables.json writes is
      text eol=lf in .gitattributes, and a plugin it writes is not text.
-  B  every tracked file under those writes is stored LF, with no CR at all
-     (a lone CR made git take game/gamemode.js for binary, so autocrlf
-     passed it by and nothing said so).
-  C  and is checked out LF here, whatever core.autocrlf says: on a Windows
-     runner this is the proof .gitattributes does what it says.
+  B  every file under those writes holds no CR at all (a lone CR made git
+     take game/gamemode.js for binary, so autocrlf passed it by and nothing
+     said so), and each tracked one is stored LF.
+  C  and a tracked one is checked out LF here, whatever core.autocrlf says:
+     on a Windows runner this is the proof .gitattributes does what it says.
   D  every line of .gitattributes covers something a step writes, so the
      list cannot drift past the chain. The two other lines are
      records/client-licences/** -text: the vcpkg licence texts, held byte for
@@ -69,16 +76,34 @@ let tracked = null;
 try { tracked = git(['ls-files', '-z']).split('\0').filter(Boolean); }
 catch (e) { console.log('NOTE  git did not answer, so nothing here can be measured: ' + e.message); }
 
+// Every file under a write on disk: the file itself, or each file in a folder.
+function onDisk(w) {
+  const at = path.join(ROOT, w);
+  if (!fs.existsSync(at)) { return []; }
+  if (!fs.statSync(at).isDirectory()) { return [w]; }
+  const found = [];
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { walk(path.join(dir, e.name), rel + '/' + e.name); } else { found.push(rel + '/' + e.name); }
+    }
+  })(at, w);
+  return found;
+}
+
 if (tracked) {
-  // Every tracked file a write names: the file itself, or each file in a folder.
+  // Every file a write names, tracked (a source a step writes) or laid by a
+  // build: the file itself, or each file in a folder.
   const files = [];
   const named = [];
   for (const w of writes) {
-    const under = tracked.filter(function (f) { return f === w || f.indexOf(w + '/') === 0; });
+    const under = Array.from(new Set(tracked.filter(function (f) { return f === w || f.indexOf(w + '/') === 0; }).concat(onDisk(w)))).sort();
     if (!under.length) { named.push(w); }
     for (const f of under) { files.push(f); }
   }
-  yes('every write content-tables.json names is in the repository' + some(named), named.length === 0);
+  const laid = fs.existsSync(path.join(ROOT, 'temp', 'content-laid.json'));
+  yes('every write content-tables.json names is in the repository or the content build laid here' + some(named) +
+      (named.length && !laid ? ': no build is laid here, and pwsh scripts/release/Get-ContentBuild.ps1 -Newest lays one' : ''), named.length === 0);
+  const isTracked = new Set(tracked);
   const text = files.filter(function (f) { return !PLUGIN.test(f); });
   const plugins = files.filter(function (f) { return PLUGIN.test(f); });
 
@@ -95,19 +120,22 @@ if (tracked) {
   yes('A2 and nothing about the ' + plugins.length + ' plugins they write, which are bytes' + some(plugText), plugText.length === 0);
 
   // ---- B and C ----------------------------------------------------------------
+  const textTracked = text.filter(function (f) { return isTracked.has(f); });
   const eol = {};
-  for (const line of git(['ls-files', '--eol', '--'].concat(text)).split('\n')) {
-    const m = /^i\/(\S+)\s+w\/(\S+)\s+attr\/.*?\t(.*)$/.exec(line);
-    if (m) { eol[m[3]] = { i: m[1], w: m[2] }; }
+  if (textTracked.length) {
+    for (const line of git(['ls-files', '--eol', '--'].concat(textTracked)).split('\n')) {
+      const m = /^i\/(\S+)\s+w\/(\S+)\s+attr\/.*?\t(.*)$/.exec(line);
+      if (m) { eol[m[3]] = { i: m[1], w: m[2] }; }
+    }
   }
-  const storedBad = text.filter(function (f) { return !eol[f] || (eol[f].i !== 'lf' && eol[f].i !== 'none'); });
-  yes('B1 each is stored LF' + some(storedBad.map(function (f) { return f + ' i/' + (eol[f] || {}).i; })), storedBad.length === 0);
+  const storedBad = textTracked.filter(function (f) { return !eol[f] || (eol[f].i !== 'lf' && eol[f].i !== 'none'); });
+  yes('B1 each of the ' + textTracked.length + ' tracked ones is stored LF' + some(storedBad.map(function (f) { return f + ' i/' + (eol[f] || {}).i; })), storedBad.length === 0);
   const withCr = text.filter(function (f) { return fs.readFileSync(path.join(ROOT, f)).indexOf(13) >= 0; });
-  yes('B2 and holds no CR at all' + some(withCr), withCr.length === 0);
-  const outBad = text.filter(function (f) { return !eol[f] || (eol[f].w !== 'lf' && eol[f].w !== 'none'); });
+  yes('B2 and all ' + text.length + ', tracked or laid, hold no CR at all' + some(withCr), withCr.length === 0);
+  const outBad = textTracked.filter(function (f) { return !eol[f] || (eol[f].w !== 'lf' && eol[f].w !== 'none'); });
   let autocrlf = '';
   try { autocrlf = git(['config', 'core.autocrlf']).trim(); } catch (e) { autocrlf = 'unset'; }
-  yes('C  each is checked out LF here, with core.autocrlf ' + autocrlf + some(outBad.map(function (f) { return f + ' w/' + (eol[f] || {}).w; })), outBad.length === 0);
+  yes('C  each tracked one is checked out LF here, with core.autocrlf ' + autocrlf + some(outBad.map(function (f) { return f + ' w/' + (eol[f] || {}).w; })), outBad.length === 0);
 
   // ---- D ----------------------------------------------------------------------
   const attrFile = path.join(ROOT, '.gitattributes');
@@ -123,12 +151,17 @@ if (tracked) {
   // #6195: the gamemode and its source are no step's output now, but
   // Build-Gamemode.js --check and the two bundle builders compare them byte
   // for byte with what they write LF, so a CRLF checkout would fail them.
-  const NOT_BUILT = ['.githooks/** text eol=lf', 'game/gamemode.js text eol=lf', 'game/gamemode/** text eol=lf'];
+  // #5191: records/load-order.json is Set-LoadOrder.ps1's, no content
+  // table step's, and its -Check compares the checkout with the LF it writes.
+  const NOT_BUILT = ['.githooks/** text eol=lf', 'game/gamemode.js text eol=lf', 'game/gamemode/** text eol=lf',
+    'records/load-order.json text eol=lf'];
   const stray = [];
   for (const l of lines) {
     if (BYTES.indexOf(l) >= 0 || NOT_BUILT.indexOf(l) >= 0) { continue; }
     const pattern = l.split(/\s+/)[0];
-    const hits = git(['ls-files', '--', ':(glob)' + pattern]).split('\n').filter(Boolean);
+    // Tracked, or laid by a build (ignored, #5191).
+    const hits = git(['ls-files', '--', ':(glob)' + pattern]).split('\n')
+      .concat(git(['ls-files', '--others', '--ignored', '--exclude-standard', '--', ':(glob)' + pattern]).split('\n')).filter(Boolean);
     if (!hits.some(function (f) { return text.indexOf(f) >= 0; })) { stray.push(l); }
   }
   yes('D  each of the ' + lines.length + ' lines of .gitattributes covers a file a step writes' + some(stray), lines.length > 0 && stray.length === 0);
@@ -191,4 +224,4 @@ yes('G  each of the ' + checkouts + ' checkouts on a self-hosted runner (of ' + 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

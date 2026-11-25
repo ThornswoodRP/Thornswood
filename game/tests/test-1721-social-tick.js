@@ -32,7 +32,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function fnOf(head) {
   const a = gm.indexOf(head);
@@ -55,7 +55,7 @@ const HANDLE = (function () {
 yes('the social block, hasStoredAppearance and publishedForOthers are where this reads them', !!(SOCIAL && HAS && PUB));
 yes('and the chargen block hands both of them out',
   !!HANDLE && /\n  hasStoredAppearance: hasStoredAppearance,/.test(HANDLE) && /\n  publishedForOthers: publishedForOthers,/.test(HANDLE));
-if (!(SOCIAL && HAS && PUB)) { done(); }
+if (!(SOCIAL && HAS && PUB)) { done(); } else {
 
 // ------------------------------------------------------------ the store --
 const PEOPLE = 20;
@@ -106,7 +106,7 @@ new Function('globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterva
   function () { return 1; }, function () { }, function (n, f) { return f; }, function () { }, function () { });
 const S = g.__thornswoodSocial;
 yes('the social block loads and hands out its tick', !!(S && S.tick));
-if (!(S && S.tick)) { done(); }
+if (!(S && S.tick)) { done(); } else {
 
 function onePass() {
   for (const k in reads) { delete reads[k]; }
@@ -172,3 +172,4 @@ yes('E1 the publish test and the name share one read a pass: online() asks hasSt
   (SOCIAL.match(/mp\.get\([a-zA-Z]+, 'appearance'\)/g) || []).length === 1);
 
 done();
+}}

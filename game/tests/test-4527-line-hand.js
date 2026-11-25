@@ -29,13 +29,13 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const a = src.indexOf('// ==== thornswood seats ====');
 const b = src.indexOf('// ==== end thornswood seats ====');
 yes('the seats block is in gamemode.js between its markers', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 const block = src.slice(a, b);
 
 const ACTOR = 0xff000000;
@@ -176,3 +176,4 @@ function staffSeat() {
 }
 
 done();
+}

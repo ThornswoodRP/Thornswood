@@ -70,6 +70,7 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 . (Join-Path $Here 'NpcReset.ps1')
+. (Join-Path $Here '..\deploy\World.ps1')
 . (Join-Path $Here '..\vps\ServerHold.ps1')
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
@@ -103,6 +104,7 @@ $readyWait = [IO.File]::ReadAllText((Join-Path $Here '..\deploy\ServerReadyWait.
 $boxScript = @"
 `$ErrorActionPreference = 'Continue'
 $ThornswoodNpcReset
+$ThornswoodWorld
 `$Root = $(Q $root)
 `$Task = $(Q $task)
 `$Want = $(Q $Server)

@@ -1,0 +1,79 @@
+[
+  {
+    "line": "![The new character panel](https://thornswood.net/news-creation-panel-20261117.png)",
+    "image": {
+      "url": "https://thornswood.net/news-creation-panel-20261117.png",
+      "alt": "The new character panel"
+    }
+  },
+  {
+    "line": "![A caption with <tags> and \"quotes\"](https://thornswood.net/news-panel.webp)",
+    "image": {
+      "url": "https://thornswood.net/news-panel.webp",
+      "alt": "A caption with <tags> and \"quotes\""
+    }
+  },
+  {
+    "line": "![Panel](http://thornswood.net/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://example.com/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net.evil.example/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net:443/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net/news-panel.png?x=1)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net/news-../secret.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net/news-%2e%2e.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](javascript:alert(1))",
+    "image": null
+  },
+  {
+    "line": "![](https://thornswood.net/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "Normal release text",
+    "image": null
+  },
+  {
+    "line": "![🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂](https://thornswood.net/news-panel.png)",
+    "image": {
+      "url": "https://thornswood.net/news-panel.png",
+      "alt": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂"
+    }
+  },
+  {
+    "line": "![🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂](https://thornswood.net/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![Panel](https://thornswood.net/news-pa\rnel.png)",
+    "image": null
+  },
+  {
+    "line": "![ 🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂](https://thornswood.net/news-panel.png)",
+    "image": null
+  },
+  {
+    "line": "![﻿](https://thornswood.net/news-panel.png)",
+    "image": null
+  }
+]

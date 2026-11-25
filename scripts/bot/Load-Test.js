@@ -38,8 +38,14 @@
 //         [--steps 10,20,40,60,80,100] [--settle 20] [--hold 60] [--workers 3]
 //         [--shape crowd] [--summary <markdown file>]
 //         [--play fight,host,trade,quest] [--busy 0.6] [--watch <online.json url>,...]
+//         [--moves change|beat] [--stand 0.5]
 //
-// --play is what the bots do besides walking (load-bots.js). --busy is the
+// --play is what the bots do besides walking (load-bots.js). --moves is how
+// a bot sends its moves: change, the game's own since #6247 (only when they
+// change, then once settled), or beat, the game before it (every 130 ms).
+// --stand is the share of the time each bot stands still, 0.5 unless
+// given: a mix chosen for the measure, not one counted in the game, so
+// every summary says which it was. --busy is the
 // share of the machine's CPU a step stops at (0.9 on a runner of its own; the
 // box shares it with the game servers). --watch names the online.json of each
 // server people play on: anybody on one, or one that does not answer, stops
@@ -54,7 +60,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { ServerRun, gitBlob } = require('./Bot-Pass.js');
-const { passKeyOf } = require('./load-bots.js');
+const { passKeyOf, MOVES } = require('./load-bots.js');
 
 const HEADER = 28;           // IPv4 (20) and UDP (8) header bytes on each datagram
 const BUSY = 0.9;            // the share of the runner's CPU past which a step is the runner's
@@ -165,8 +171,11 @@ function windowOf(a, b, bots, people) {
   const machine = (b.cpu.busy - a.cpu.busy) / Math.max(1, b.cpu.total - a.cpu.total);
   const botCpuMs = bots.reduce((x, r) => x + r.cpuMs, 0);
   const moves = [].concat(...bots.map((r) => r.movesReadPerBot || []));
-  // Each walking bot sends a move every 130 ms, and the server passes each
-  // one to every bot near it: in a crowd that is everybody else.
+  const sent = [].concat(...bots.map((r) => r.movesSentPerBot || []));
+  const settled = bots.reduce((x, r) => x + (r.settledSent || 0), 0);
+  const repeats = bots.reduce((x, r) => x + (r.repeatsRead || 0), 0);
+  // The server passes each move a bot sends to every bot near it: in a
+  // crowd that is everybody else.
   return {
     people,
     seconds: Math.round(sec * 10) / 10,
@@ -188,7 +197,12 @@ function windowOf(a, b, bots, people) {
     machineBusy: machine,
     botCores: botCpuMs / ms,
     movesReadPerBotPerS: moves.length ? moves.reduce((x, y) => x + y, 0) / moves.length / sec : 0,
-    fewestMovesReadPerS: moves.length ? Math.min(...moves) / sec : 0
+    fewestMovesReadPerS: moves.length ? Math.min(...moves) / sec : 0,
+    movesSentPerBotPerS: sent.length ? sent.reduce((x, y) => x + y, 0) / sent.length / sec : 0,
+    settledSentPerS: settled / sec,
+    // Copies: a message other than a move read again within load-bots.js's
+    // REPEAT_MS of the first, for each bot (#6252).
+    repeatsReadPerBotPerS: people ? repeats / people / sec : 0
   };
 }
 
@@ -215,17 +229,19 @@ function markdown(doc) {
   out.push('### Load test, ' + doc.shape + ' (' + doc.started + ')');
   out.push('');
   out.push('Engine ' + doc.engine + ', gamemode git blob ' + doc.blob.slice(0, 12) + ', ' + doc.cores + ' cores on ' + (doc.cpuModel || 'the machine') + '. ' +
-    'Each bot logs in over the game port and walks, a move every 130 ms. Bytes are on the wire, IPv4 and UDP headers included.');
+    'Each bot logs in over the game port, walks, and stands still ' + fixed((doc.stand || 0) * 100, 0) + '% of the time; it looks at its place every 130 ms and ' +
+    (doc.moves === 'beat' ? 'sends a move on every look, as the game did before #6247' : 'sends a move only when it changed, then once settled, as the game does since #6247') +
+    '. Bytes are on the wire, IPv4 and UDP headers included.');
   out.push('');
   out.push('Memory is the server process\'s private bytes; its working set, which Windows trims, is in result.json.');
   out.push('');
-  out.push('| People | Server cores | Server memory MB | Down KB/s | Up KB/s | Per person: cores | MB | down KB/s | up KB/s | Moves read per bot /s | Runner busy |');
-  out.push('|---|---|---|---|---|---|---|---|---|---|---|');
+  out.push('| People | Server cores | Server memory MB | Down KB/s | Up KB/s | Per person: cores | MB | down KB/s | up KB/s | Moves sent per bot /s | Moves read per bot /s | Copies read per bot /s | Runner busy |');
+  out.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const st of doc.steps) {
     const w = st.window; const p = st.perPerson || {};
-    if (!w) { out.push('| ' + st.people + ' | not measured: ' + st.stopped + ' |||||||||| '); continue; }
+    if (!w) { out.push('| ' + st.people + ' | not measured: ' + st.stopped + ' |||||||||||| '); continue; }
     out.push('| ' + [w.people, fixed(w.serverCores, 3), fixed(w.serverPrivateMB === null || w.serverPrivateMB === undefined ? w.serverRssMB : w.serverPrivateMB, 0), fixed(w.downWirePerS / 1024, 1), fixed(w.upWirePerS / 1024, 1),
-      fixed(p.cores, 4), fixed(p.memoryMB, 2), fixed(p.downKBps, 2), fixed(p.upKBps, 2), fixed(w.movesReadPerBotPerS, 1),
+      fixed(p.cores, 4), fixed(p.memoryMB, 2), fixed(p.downKBps, 2), fixed(p.upKBps, 2), fixed(w.movesSentPerBotPerS, 1), fixed(w.movesReadPerBotPerS, 1), fixed(w.repeatsReadPerBotPerS, 2),
       fixed(w.machineBusy * 100, 0) + '%'].join(' | ') + ' |');
   }
   out.push('');
@@ -246,6 +262,17 @@ function markdown(doc) {
     for (const st of doc.steps) { if (st.window) { out.push('- ' + st.people + ' people: ' + JSON.stringify(st.play || {})); } }
     out.push('');
   }
+  if (doc.world) {
+    const saves = doc.world.saves || [];
+    out.push('The world was kept in ' + (doc.world.world || 'a store the log did not name') + '. Its saves, as the engine says them once a minute' + (saves.length ? ':' : ': no line, so no minute had a save.'));
+    out.push('');
+    if (saves.length) {
+      out.push('| Time | Seconds | Batches | Forms | ms writing | Slowest batch ms | Most batches waiting |');
+      out.push('|---|---|---|---|---|---|---|');
+      for (const s of saves) { out.push('| ' + [s.at, s.seconds, s.batches, s.forms, fixed(s.writingMs, 1), fixed(s.slowestMs, 1), s.waiting].join(' | ') + ' |'); }
+      out.push('');
+    }
+  }
   for (const st of doc.steps) { if (st.stopped) { out.push('Stopped at ' + st.people + ': ' + st.stopped); } }
   if (doc.problem) { out.push('Problem: ' + doc.problem); }
   return out.join('\n') + '\n';
@@ -255,7 +282,7 @@ function args(argv) {
   const o = {};
   for (let i = 0; i < argv.length; i++) {
     const m = /^--([a-z]+)$/.exec(argv[i]);
-    if (!m || i + 1 >= argv.length) { throw new Error('what is "' + argv[i] + '"? Use --root, --out, --steps, --settle, --hold, --workers, --shape, --summary, --play, --busy and --watch.'); }
+    if (!m || i + 1 >= argv.length) { throw new Error('what is "' + argv[i] + '"? Use --root, --out, --steps, --settle, --hold, --workers, --shape, --summary, --play, --busy, --watch, --moves and --stand.'); }
     o[m[1]] = argv[++i];
   }
   return o;
@@ -322,6 +349,28 @@ function gameLines(file) {
   return text.split(/\r?\n/).filter((l) => /npc|merchant|quest|load order|loadorder/i.test(l)).slice(0, 60).map((l) => l.slice(0, 300));
 }
 
+// How the world kept up (#6237): where the engine keeps it ("Using file
+// with name" or "Using mongodb with name") and the saver's line a minute,
+// "Saves in the last 60 s: 12 batch(es), 340 form(s), 85.3 ms writing,
+// slowest batch 21.4 ms, most batches waiting 2" (the fork's
+// AsyncSaveStorage.h), each with the time the log gives it.
+const SAVES = /Saves in the last (\d+) s: (\d+) batch\(es\), (\d+) form\(s\), ([\d.]+) ms writing, slowest batch ([\d.]+) ms, most batches waiting (\d+)/;
+function saveLines(file) {
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return { world: '', saves: [], problem: 'the server log could not be read: ' + e.message }; }
+  let world = '';
+  const saves = [];
+  for (const l of text.split(/\r?\n/)) {
+    const w = /Using (file|mongodb) with name '([^']*)'/.exec(l);
+    if (w && !world) { world = w[1] + ' ' + w[2]; }
+    const m = SAVES.exec(l);
+    if (!m) { continue; }
+    const at = /^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/.exec(l);
+    saves.push({ at: at ? at[1] : '', seconds: +m[1], batches: +m[2], forms: +m[3], writingMs: +m[4], slowestMs: +m[5], waiting: +m[6] });
+  }
+  return { world, saves };
+}
+
 async function run(o) {
   const root = path.resolve(o.root);
   const log = o.log || ((s) => console.log(s));
@@ -333,6 +382,10 @@ async function run(o) {
   const play = String(o.play || '').split(',').filter(Boolean);
   for (const p of play) { if (!PLAYS.includes(p)) { return { schema: 1, problem: '--play takes ' + PLAYS.join(', ') + ', not ' + p, steps: [] }; } }
   const watch = String(o.watch || '').split(',').filter(Boolean);
+  const moves = o.moves || 'change';
+  if (!MOVES.includes(moves)) { return { schema: 1, problem: '--moves takes ' + MOVES.join(' or ') + ', not ' + moves, steps: [] }; }
+  const stand = o.stand === undefined ? 0.5 : Number(o.stand);
+  if (!(stand >= 0 && stand <= 1)) { return { schema: 1, problem: '--stand is a share from 0 to 1, not ' + o.stand, steps: [] }; }
   const settings = readJson(path.join(root, 'server-settings.json'));
   const port = Number(settings.port);
   const password = settings.password === undefined ? '' : String(settings.password);
@@ -341,7 +394,7 @@ async function run(o) {
   try { engine = String(readJson(path.join(root, 'server-build.json')).source.commit || ''); } catch (e) { engine = 'not named (no server-build.json beside it)'; }
   const doc = { schema: 1, shape: o.shape || 'crowd', started: new Date().toISOString(), engine, blob, cores: os.cpus().length,
     cpuModel: (os.cpus()[0] || {}).model || '', totalMemMB: Math.round(os.totalmem() / 1048576), settleS: settleMs / 1000, holdS: holdMs / 1000,
-    baseline: null, steps: [], problem: '', tail: [], play, busyLimit, watched: watch, gameLines: [] };
+    baseline: null, steps: [], problem: '', tail: [], play, busyLimit, watched: watch, gameLines: [], moves, stand };
   if (!(port > 0)) { doc.problem = 'server-settings.json names no port'; return doc; }
   try { passKeyOf(root); } catch (e) { doc.problem = 'the bots cannot hold join passes here: ' + e.message; return doc; }
   if (Number(settings.maxPlayers) < Math.max(...steps)) { doc.problem = 'maxPlayers is ' + settings.maxPlayers + ', fewer than the ' + Math.max(...steps) + ' bots asked for'; return doc; }
@@ -374,7 +427,7 @@ async function run(o) {
     proxy = child(path.join(__dirname, 'load-proxy.js'), ['--target', '127.0.0.1:' + port], log);
     const proxyPort = await proxy.ask(null, 'listening', 10000);
     for (let i = 0; i < workerCount; i++) {
-      workers.push(child(path.join(__dirname, 'load-bots.js'), ['--root', root, '--port', String(proxyPort), '--password', password, '--voice', String(voicePort)].concat(play.length ? ['--play', play.join(',')] : []), log));
+      workers.push(child(path.join(__dirname, 'load-bots.js'), ['--root', root, '--port', String(proxyPort), '--password', password, '--voice', String(voicePort)].concat(play.length ? ['--play', play.join(',')] : []).concat(['--moves', moves, '--stand', String(stand)]), log));
     }
 
     const reading = async () => {
@@ -441,7 +494,7 @@ async function run(o) {
       for (const r of m.bots) { for (const k of Object.keys(r.counts)) { step.counts[k] = (step.counts[k] || 0) + r.counts[k]; } }
       const w = m.window;
       log('  server ' + fixed(w.serverCores, 3) + ' cores, ' + fixed(w.serverPrivateMB, 0) + ' MB private, ' + fixed(w.serverRssMB, 0) + ' MB working set, down ' + fixed(w.downWirePerS / 1024, 1) +
-        ' KB/s, up ' + fixed(w.upWirePerS / 1024, 1) + ' KB/s, each bot read ' + fixed(w.movesReadPerBotPerS, 1) +
+        ' KB/s, up ' + fixed(w.upWirePerS / 1024, 1) + ' KB/s, each bot sent ' + fixed(w.movesSentPerBotPerS, 1) + ' and read ' + fixed(w.movesReadPerBotPerS, 1) +
         ' moves a second, runner ' + fixed(w.machineBusy * 100, 0) + '% busy');
       if (failed.length) { step.failed = failed; step.stopped = failed.length + ' bots were dropped during the window; the first: ' + failed[0].why; break; }
       step.play = playCounts(m.bots);
@@ -461,6 +514,7 @@ async function run(o) {
     if (site) { site.server.close(); }
     doc.tail = server.tail.slice(-30);
     doc.gameLines = gameLines(path.join(root, 'load-test-server.log'));
+    doc.world = saveLines(path.join(root, 'load-test-server.log'));
     doc.ended = new Date().toISOString();
   }
 }
@@ -468,7 +522,7 @@ async function run(o) {
 async function main() {
   const o = args(process.argv.slice(2));
   if (!o.root || !o.out) {
-    console.log('node Load-Test.js --root <server folder> --out <result.json> [--steps 10,20,40,60,80,100] [--settle 20] [--hold 60] [--workers 3] [--shape crowd] [--summary <file>]');
+    console.log('node Load-Test.js --root <server folder> --out <result.json> [--steps 10,20,40,60,80,100] [--settle 20] [--hold 60] [--workers 3] [--shape crowd] [--summary <file>] [--play ...] [--moves change|beat] [--stand 0.5]');
     return 2;
   }
   const doc = await run(o);
@@ -483,7 +537,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().then((code) => process.exit(code), (e) => { console.log('LOAD TEST FAILED: ' + (e && e.stack || e)); process.exit(1); });
+  main().then((code) => { process.exitCode = code; }, (e) => { console.log('LOAD TEST FAILED: ' + (e && e.stack || e)); process.exitCode = 1; });
 }
 
-module.exports = { windowOf, perPerson, markdown, samples, run, startVoice, siteThatSaysYes, someoneOn, playCounts, gameLines, PLAYS };
+module.exports = { windowOf, perPerson, markdown, samples, run, startVoice, siteThatSaysYes, someoneOn, playCounts, gameLines, saveLines, PLAYS };

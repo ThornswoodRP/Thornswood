@@ -57,7 +57,7 @@ function slice(src, start, end) {
 
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); process.exit(1); }
+if (!propBlock) { done(); return; }
 
 const clock = { t: Date.UTC(2026, 9, 15, 19, 0, 0) };
 class FakeDate extends Date { static now() { return clock.t; } }
@@ -132,7 +132,7 @@ box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
 yes('the property block runs', !!W && typeof W.command === 'function' && typeof W.haulTick === 'function');
-if (!W) { done(); process.exit(1); }
+if (!W) { done(); return; }
 
 /* A line as the server gets it: dispatch splits it on spaces (gamemode.js). */
 function say(p, line) {

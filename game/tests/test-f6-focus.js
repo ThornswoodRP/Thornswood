@@ -57,7 +57,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 /** The text from one marker up to, but not including, the next. */
@@ -78,7 +78,7 @@ const hideLine = /^      const hide = ([^;]+);/m.exec(src);
 yes('the focus arbiter is in the plugin', arbiter !== null);
 yes('the top of the key handler is in the plugin', keys !== null);
 yes('the browser visibility line is in the plugin', hideLine !== null);
-if (!arbiter || !keys || !hideLine) { done(); }
+if (!arbiter || !keys || !hideLine) { done(); } else {
 
 const ESC = 1;
 const ENTER = 28;
@@ -364,3 +364,4 @@ WORLDS.forEach(function (world) {
 }
 
 done();
+}

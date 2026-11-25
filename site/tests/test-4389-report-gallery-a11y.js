@@ -40,6 +40,10 @@ const vm = require('vm');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const siteFiles = require('../../tests/site-files');
+// The page's own timers (a request's give-up timer, a line's fade) are
+// unref'd, as a page's timers never hold a process open: node ends when
+// the harness is done, not when a page timer it never waits on fires (#6036).
+const pageTimeout = (fn, ms, ...args) => setTimeout(fn, ms, ...args).unref();
 
 const ROOT = path.join(__dirname, '..', '..');
 const HOME_JS = fs.readFileSync(path.join(ROOT, 'site', 'public', 'home.js'), 'utf8');
@@ -126,7 +130,7 @@ async function runPage(pathname, answers) {
     window: win, document: doc, fetch: fetchStub, console: { log() { }, error() { } },
     location: { pathname: pathname, hash: '', protocol: 'https:', reload() { } },
     localStorage: { getItem() { return null; }, setItem() { }, removeItem() { } },
-    navigator: anything('navigator'), setTimeout, clearTimeout, setInterval() { return 0; }, clearInterval() { },
+    navigator: anything('navigator'), setTimeout: pageTimeout, clearTimeout, setInterval() { return 0; }, clearInterval() { },
     requestAnimationFrame() { }, AbortController, URL
   };
   vm.createContext(ctx);
@@ -330,10 +334,10 @@ function get(port, where) {
     const sp = parentOf(sh, '1. Your character knows what your character knows');
     yes('E8 and its rule 1 sits under "In the World" there too', !!sp && sp.text === 'In the World');
   } finally {
-    if (srv) await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });
+    if (srv) await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.log('FAIL  the harness itself threw: ' + (e && e.stack || e)); process.exit(1); });
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.log('FAIL  the harness itself threw: ' + (e && e.stack || e)); process.exitCode = 1; });

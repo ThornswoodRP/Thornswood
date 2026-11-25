@@ -183,27 +183,6 @@ You cannot treat a wild reagent as a crop. That is the gatherer.
 
 The emote of sweeping is not farm work.
 
-<!-- detail:begin -->
-
-## Every record
-
-Generated from the work tables by `scripts/dev/Write-SystemLists.js`. The same rows are in [farmer](../lists/farmer.md).
-
-| Name | Rank | Records | You receive | Grow minutes |
-| --- | --- | --- | --- | --- |
-| Cabbage | novice | 1 | Cabbage | 75 |
-| Carrot | novice | 2 | Carrot | 75 |
-| Gourd | novice | 1 | Gourd | 75 |
-| Leek | novice | 2 | Leek | 75 |
-| Potato | novice | 1 | Potato | 75 |
-| Ash Yam | advanced | 1 | Ash Yam | 75 |
-| Tomato | advanced | 1 | Tomato | 75 |
-| Wheat | advanced | 1 | Wheat | 135 |
-| Green Apple | expert | 2 | Green Apple | 75 |
-| Red Apple | expert | 2 | Red Apple | 75 |
-
-<!-- detail:end -->
-
 ## Where this is
 
 Empty plots, the claim circle, the 14 days, the waits, the yields,

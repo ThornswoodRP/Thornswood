@@ -2,8 +2,8 @@
 
 Poisons and medicine. Skyrim has no alchemy recipe records. A potion
 is whatever the ingredients share, worked out in the alchemy menu.
-The server cannot hold you to a row that does not exist. It holds you
-to the bench.
+The server checks that brew at the bench. Fixed recipes for remedies
+are separate from Skyrim's mixing menu.
 
 - [Blightbrewer](alchemist/blightbrewer.md) makes poisons.
 - [Physicker](alchemist/physicker.md) makes medicine.
@@ -14,9 +14,8 @@ master alchemist has taught them this as one of their two outside
 trades. That teaching is novice and stops there.
 
 Both halves may use the lab. The split is what you are for, not a
-second door on the furniture. The day bench recipes exist, the poison
-rows go to Blightbrewer and the medicine rows go to Physicker. Until
-then the menu is the work.
+second door on the furniture. Fixed medicines are [Physicker work](../lists/alchemist-physicker.md).
+Brewing from shared effects is separate from those recipes.
 
 A batch is two or more ingredients that share an effect on the short
 list. The effects that are allowed, and the rank each one asks for,
@@ -74,8 +73,8 @@ craft is still one piece of work.
 ## The ladder
 
 100, then 250, then 600, the count resetting. A successful batch is
-one piece. There is no recipe list to climb by, so the work has to be
-the batch the server sees. See the bottom of each half.
+one piece. The work from brewing is the batch the server sees. See
+the bottom of each half.
 
 ## Where this is
 
@@ -86,5 +85,5 @@ effects the engine names for each brew (see [Mixtures](../mixtures.md)).
 What your character has eaten and brewed is the alchemy block in
 `game/gamemode.js`: it hears an ingredient eaten from the engine's own
 eat, refuses a brew with one you never ate, and teaches your game what
-you know at every arrival. There is no item list, because there are
-no recipe rows.
+you know at every arrival. The fixed medicine recipes are listed
+separately from these brews.

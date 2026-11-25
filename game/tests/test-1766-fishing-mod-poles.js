@@ -67,12 +67,16 @@ MOD.forEach(function (id) {
 // ---- the Woodwright's pages list only poles that fish -----------------------
 const fishing = {};
 OURS.forEach(function (id) { fishing[recipes.recipes[id].name] = true; });
+// The list holds the rows; the hand-written page names none of the mod's
+// (#5191: the list writer no longer copies its rows into the page).
 ["docs/systems/professions/woodworker/woodwright.md", "docs/systems/lists/woodworker-woodwright.md"].forEach(function (rel) {
   const page = read(rel);
-  const poles = (page.match(/\| ([^|]*Fishing Pole[^|]*) \|/g) || []).map(function (m) { return m.slice(2, -2).trim(); });
-  yes(rel + " lists our three poles and no other (" + poles.join(", ") + ")",
-    poles.length === 3 && poles.every(function (p) { return fishing[p]; }));
-  yes("  and not the fishing mod's", !/Fishing Pole - /.test(page) && page.indexOf("FishingInSkyrim.esp`") < 0);
+  if (/\/lists\//.test(rel)) {
+    const poles = (page.match(/\| ([^|]*Fishing Pole[^|]*) \|/g) || []).map(function (m) { return m.slice(2, -2).trim(); });
+    yes(rel + " lists our three poles and no other (" + poles.join(", ") + ")",
+      poles.length === 3 && poles.every(function (p) { return fishing[p]; }));
+  }
+  yes((/\/lists\//.test(rel) ? "  and" : rel) + " names none of the fishing mod's poles", !/Fishing Pole - /.test(page) && page.indexOf("FishingInSkyrim.esp`") < 0);
 });
 yes("the fisher page says the mod's pole recipes are cut", /its three pole recipes are cut/.test(read("docs/systems/classes/fisher.md").replace(/\s+/g, " ")));
 
@@ -117,4 +121,4 @@ try {
 
 console.log("");
 console.log(pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -54,7 +54,7 @@ function done() {
   dirs.forEach(function (d) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { } });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 function slice(start, end) {
@@ -65,7 +65,7 @@ function slice(start, end) {
 }
 const propBlock = slice('// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('P0 the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 function recordOf(name) {
   const m = new RegExp("var " + name + " = '([0-9a-f]+:Thornswood-Content\\.esp)';").exec(propBlock);
   return m ? m[1] : null;
@@ -80,7 +80,7 @@ const townM = HOLD ? new RegExp(HOLD + ": '([A-Za-z ]+)'").exec(propBlock) : nul
 const TOWN = townM ? townM[1] : null;
 yes('P0 the records, the test house\'s hold and its town are read out of the block (' + HOLD + ', ' + TOWN + ')',
     !!DEED_DESC && !!KEY_DESC && !!MASTER_DESC && !!HOLD && !!TOWN);
-if (!DEED_DESC || !KEY_DESC || !MASTER_DESC || !HOLD || !TOWN) { done(); }
+if (!DEED_DESC || !KEY_DESC || !MASTER_DESC || !HOLD || !TOWN) { done(); } else {
 
 // ================================================================ the server
 const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -225,7 +225,7 @@ let box = boot();
 let W = box.__thornswoodProperty;
 yes('P1 the property block boots and publishes the word', !!W && typeof W.picked === 'function' &&
     typeof W.wordTick === 'function' && typeof W.wordBook === 'function');
-if (!W || typeof W.picked !== 'function') { done(); }
+if (!W || typeof W.picked !== 'function') { done(); } else {
 yes('P2 the word is ticked on a timer of everySeconds', timers.some(function (t) { return t.ms === 30000; }));
 
 function open(p, door) { inDir(function () { W.touched(p.a, door); }); }
@@ -587,3 +587,4 @@ if (ha >= 0 && hb > ha && hc > hb) {
 yes('C9 the plugin sends it on the channel /tspicks uses', /tellServer\('\/tspicked ' \+ id\.toString\(16\)\);/.test(front));
 
 done();
+}}}

@@ -81,6 +81,16 @@ try {
     Yes 'Dependabot passes with no line' ((Problems "Bumps discord.py from 2.4 to 2.5." 'dependabot[bot]').Count -eq 0)
     Yes 'anyone else with no line is refused' ((Problems "Bumps discord.py from 2.4 to 2.5." 'someone').Count -gt 0)
 
+    # The copy the dotnet parts build from holds what a build in the checkout
+    # reads (#5740): every source at any depth, and any global.json,
+    # nuget.config or Directory.Build file above the projects. Checked on
+    # every machine, with or without the SDK.
+    $probe = Join-Path $temp 'inputs'
+    Copy-NotesProjects $Repo $probe
+    $want = Get-NotesInputs $Repo; $got = Get-NotesInputs $probe
+    Yes ('the copy holds every file a build of the two projects reads, and nothing of obj or bin (' + @($want -split "`n").Count + ' files)') ($want -and $want -ceq $got)
+    if ($want -cne $got) { Write-Host ('      the checkout: ' + ($want -replace "`n", ', ')); Write-Host ('      the copy: ' + ($got -replace "`n", ', ')) }
+
     # ---- the check's command -----------------------------------------------------
     $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $dotnet) { Write-Host 'SKIP  the check''s command: the .NET SDK is not on this machine (the Release note rules workflow runs its tests)' }

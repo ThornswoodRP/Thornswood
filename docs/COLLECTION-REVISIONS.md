@@ -1,6 +1,6 @@
 # Collection revisions
 
-The collection is on revision 8 of 7essxf on Nexus Mods, as
+The collection is on revision 11 of 7essxf on Nexus Mods, as
 `records/collection-plugins.json` records it, every plugin with its size and
 sha256. `tests/test-4533-collection-revision-docs.js` holds this page and
 every other page to that record, so a page that names an older revision as the
@@ -16,8 +16,15 @@ says how. From Nexus to a release it goes like this:
 2. The records follow in a pull request of their own:
    `collection-plugins.json` (written by
    `scripts/mods/New-CollectionPluginRecord.ps1` from the revision's plugins),
-   `collection-dropped.json`, `collection-permissions.json`, and the record's
-   `revision`.
+   `collection-dropped.json`, `collection-permissions.json`,
+   `collection-modlist.wabbajack` (the revision as the Wabbajack modlist the
+   launcher installs from, #6244), the record's
+   `revision`, and `load-order.json`, the order the servers run and every
+   build reads. The `collection-record` artifact carries the new server
+   `load-order.json`, computed from the verified layout and the prior server
+   order. It is distinct from the unpacked `loadorder.txt`, which is the
+   collection layout's order. `Set-LoadOrder.ps1 -Check` verifies the order
+   once the other records have moved to the same revision.
 3. The box builds again what is read from the plugins: the NPC catalogue
    (`game/data/npc-population.json`) and the Last plugin's recipe and record
    (`game/data/last-plugin.recipe`, `game/data/last-plugin.json`), through
@@ -29,8 +36,39 @@ says how. From Nexus to a release it goes like this:
    revision. Main follows from the feed only when Patrick says so for that
    build.
 
-For revision 8, steps 1 and 2 are done. Step 3, for Improved Eyes Skyrim.esp,
-is #4176.
+For revision 11, steps 1 and 2 are done. Its collection plugins and their
+load order are unchanged from revision 10. The merge builds the content again
+on the box before its release.
+
+## Revision 11
+
+Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44198347972).
+
+PapyrusUtil AE SE 4.6 keeps the same file as revision 10, with a new Vortex
+reference tag so updating the collection replaces an installed 3.9 archive.
+Revision 10 retained the old tag, which let Vortex accept that older archive
+before comparing file identity. No archive contents, plugins or indices
+changed. Native loading and the warning still need the matching dev check.
+
+## Revision 10
+
+Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44181409514).
+
+PapyrusUtil AE SE 4.6 replaces the incompatible 3.9 file from revision 9.
+The author targets this file at Skyrim 1.6.1170, the runtime Thornswood pins.
+It supplies the configuration reader the CBBE 3BA physics manager calls.
+No collection plugin or plugin index changed. Native loading and the warning
+still have to be checked on the matching dev release before main follows.
+
+## Revision 9
+
+Published 17 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/44159851290).
+
+PapyrusUtil SE 3.9 was added as the physics manager's configuration reader.
+That file targets Skyrim 1.5.97, while Thornswood runs 1.6.1170; it needs
+the AE 4.6 file instead. No plugin or plugin index changed. The revision
+also carries the recorded load-after rules for CBBE.esp,
+RaceMenuMorphsCBBE.esp and Improved Eyes Skyrim.esp.
 
 ## Revision 8
 

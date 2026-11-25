@@ -84,7 +84,7 @@ if ($Out) {
   # take it, not the process folder, which Set-Location leaves where it was.
   $Out = Resolve-RealPath $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
   if ($Out.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Out.StartsWith($repo + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Host ('STOP. -Out is inside the repository (' + $Out + '); these are Bethesda''s and the mods'' authors'' files and are not to be committed (#2827, #3113).')
+    Write-Output ('STOP. -Out is inside the repository (' + $Out + '); these are Bethesda''s and the mods'' authors'' files and are not to be committed (#2827, #3113).')
     exit 1
   }
 }

@@ -39,8 +39,8 @@ sits in the launcher.
     Byte for byte LICENSE.TXT in the Microsoft.NETCore.App.Runtime.NativeAOT.win-x64
     10.0.14 package (MIT, the .NET Foundation). Covers the .NET runtime and
     libraries compiled into Thornswood.exe, and
-    System.Security.Cryptography.ProtectedData 10.0.14, whose package carries
-    the same text.
+    System.Security.Cryptography.ProtectedData 11.0.0, whose package names
+    the same licence.
 
   dotnet-THIRD-PARTY-NOTICES.txt
     Byte for byte THIRD-PARTY-NOTICES.TXT in the same package: the code of
@@ -48,8 +48,8 @@ sits in the launcher.
 
   Avalonia-LICENSE.txt
     Byte for byte licence.md in https://github.com/AvaloniaUI/Avalonia at
-    commit 2d79ba55, the commit the Avalonia 12.1.4 packages name (MIT).
-    Covers Avalonia and the rest of its 12.1.4 packages the launcher restores
+    commit cf8e5646, the commit the Avalonia 12.1.6 packages name (MIT).
+    Covers Avalonia and the rest of its 12.1.6 packages the launcher restores
     (Desktop, Win32, Skia, HarfBuzz, the Fluent theme and the others),
     compiled into the launcher.
 
@@ -97,7 +97,7 @@ sits in the launcher.
 
   NLayer-LICENSE.txt
     Byte for byte LICENSE in https://github.com/naudio/NLayer at commit
-    046c7ce4, the commit NLayer 3.0.0's nuspec names (MIT), quoted in
+    cdd16ea2, the commit NLayer 3.0.1's nuspec names (MIT), quoted in
     THIRD-PARTY.md under "NLayer licence". The MP3 decoder for the menu
     theme, compiled into the launcher.
 

@@ -43,7 +43,7 @@ function yes(what, cond, why) {
 if (process.platform !== 'win32') {
   console.log('SKIP  a read only file stops the write only on Windows, where the site runs');
   console.log('\n0 passed, 0 failed');
-  process.exit(0);
+  return;
 }
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2354-'));
@@ -140,11 +140,11 @@ function ask(where) {
   await new Promise((ok) => {
     srv.on('exit', ok);
     try { srv.kill(); } catch (e) { ok(); }
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
   try { fs.chmodSync(SIGNINS, 0o644); } catch (e) { }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

@@ -118,6 +118,14 @@ git config core.hooksPath .githooks
 
 It prints nothing. From then on `git push` first checks that every script parses and that the writing rules hold in what you are pushing, in about twenty seconds (#5291). When one fails, the push stops and names the file and line; fix it, commit, and push again. A cloud session turns this on by itself.
 
+Then lay the content build over the clone. The content plugin and the tables read out of the load order are built on the box and are not committed (#5191); each merge release keeps the newest as an artifact once its content checks pass, and the harnesses read it:
+
+```powershell
+pwsh scripts/release/Get-ContentBuild.ps1 -Newest
+```
+
+It ends with `SAME KEY` when the build is of your clone's content inputs, or `OTHER KEY` when your clone changes one (a source, a builder or a script a builder loads). Run it again after every pull of main. With `OTHER KEY` a harness that holds a table to a source you changed holds it to the old table, and says nothing of your change until the box builds it; the gate leaves those out of a pull request's checks in the same way, and the merge release runs them over the new build.
+
 From here on, the commands assume PowerShell is inside your clone.
 
 ### Open the folder in Visual Studio Code
@@ -147,7 +155,7 @@ Needs: Windows 10 or 11, Skyrim Special Edition on Steam (any Steam library,
 any drive; the scripts find it through Steam) with the Thornswood collection
 deployed through Vortex, the Thornswood launcher installed on any drive and
 signed in, git, the GitHub CLI (`gh`) signed in to an account that is a
-collaborator on the source repo, PowerShell 7, node, Python 3.11 or newer (the
+collaborator on the source repo, PowerShell 7, node, Python 3.11 or 3.12 (the
 bot runs on 3.12) with `discord.py` and `Pillow` for the bot scripts, and an
 SSH key the VPS knows. There is no releases clone any more: the feed and its
 baseline are on the VPS (#907). The clone is [Clone the repository](#clone-the-repository);
@@ -158,16 +166,12 @@ cd C:\Thornswood-Repo
 gh auth status
 ```
 
-The bot's libraries go into the Python that `py` starts by default, because
-that is the one the bot harnesses run on: `bot\tests\test-*.py`, and
-`tests\test-staff-commands.js`, which imports bot.py. On the shipping machine
-the default was 3.12 with no discord.py, so every bot harness stopped on its
-first import with nothing to do with the change being tested (#1008). From
-`Thornswood-Repo`:
+The bot harnesses use Python 3.12 when available, so install and check the
+libraries with that version explicitly. From `Thornswood-Repo`:
 
 ```
-py -m pip install -r bot\requirements.txt
-py -c "import discord, PIL; print('discord.py ' + discord.__version__)"
+py -3.12 -m pip install --require-hashes --only-binary :all: -r bot\requirements.txt
+py -3.12 -c "import discord, PIL; print('discord.py ' + discord.__version__)"
 ```
 
 The second line prints the discord.py version `bot\requirements.txt` pins when
@@ -254,6 +258,17 @@ The first lists a 10.x SDK. The second publishes `Thornswood.exe` and the
 native libraries beside it into a scratch folder and ends with Done. With no
 10.x SDK it stops and says so; with no C++ build tools `dotnet publish` stops
 with "Platform linker not found".
+
+On this machine, `scripts\dev\Install-Everything.cmd` (double click it) puts
+a build from the clone into the install in one run: the content plugin, the
+recorded SkyMP client, the gamemode and the preflight check when the machine
+has a server build, and the launcher. By default it then publishes the result
+to the dev channel (`Ship.ps1 -Channel dev`), so it needs everything above:
+the VPS access, signing and the dev release folder. It never publishes to
+main. `Install-Everything.cmd -NoShip` only installs, and publishes nothing.
+The `.cmd` runs `scripts\dev\Install-Thornswood.ps1`, which takes the same
+`-NoShip`, and `-Only` or `-Skip` with the step names its header lists. A PC
+that does not ship needs neither: its first run is the launcher's.
 
 The pack baseline lives on the VPS beside the feed, and every Ship receives it
 first, so there is nothing to pull. If the VPS has none for a channel, Ship

@@ -35,7 +35,7 @@ const a = src.indexOf(START);
 const b = a < 0 ? -1 : src.indexOf(END, a);
 const block = (a >= 0 && b >= 0) ? src.slice(a, b + END.length) : null;
 yes('home.js still has its status line', block !== null);
-if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (!block) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
 
 // A node that keeps its text and its children, enough to read back what a
 // person sees and where the link goes.
@@ -111,4 +111,4 @@ yes('no em dash in what it says', said.indexOf(String.fromCharCode(0x2014)) < 0)
 yes('never the word the house rules forbid', !new RegExp('pla' + 'yer', 'i').test(said));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

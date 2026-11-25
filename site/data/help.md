@@ -50,7 +50,7 @@ Skyrim the way it was.
    marked adult, so first turn on adult content in your Nexus Mods settings,
    or Nexus shows the collection as hidden. On a free account Vortex opens
    each file's page on Nexus and you press **Slow download** there, once for
-   each file: 120 files, from 111 mods.
+   each file: 121 files, from 112 mods.
 4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
    above Settings. Your browser opens, you say yes, and it closes itself. You
    never do this again.
@@ -59,6 +59,12 @@ Skyrim the way it was.
    your account has not been accepted into the alpha yet, and applying is the
    fix.
 <!-- /alpha -->
+5. Press **Play**. The first time, the launcher builds Thornswood's animation
+   and body files on your computer, with the collection's Pandora and
+   BodySlide, before the game starts. Its status line reads **Building
+   Thornswood's animation and body files** while it works, and it takes a few
+   minutes. Leave it be: it has not stuck. It builds them again after the
+   collection changes, and an ordinary Play goes straight to the game.
 
 ## When the mods need updating
 
@@ -141,7 +147,7 @@ You arrive dressed in a plain tunic and boots in a quiet stone hall.
 The race menu opens there to make your face, with your clothes kept on as you
 change race. When you are done, the panel behind **K** opens by itself. That panel is
 where the rest is chosen: your profession and the half of it you will make your
-own, your class, and your Home, the town you start in. Those are the choices
+own, your class, and your Starting Location, the town you start in. Those are the choices
 on the [Professions](/classes) page.
 
 Only the town has to be chosen before you leave the hall. Your class and
@@ -259,6 +265,16 @@ using it to get out of a fight or to travel can mean a warning or a ban.
    enough to start with.
 3. If you have a screenshot or a crash log, drag it into your ticket in the
    Discord, or say in the report that you have one. Where the logs are is below.
+
+If the first Play's build stops, a box about Thornswood's animation and body
+files comes up and the game does not start. That happens when the files
+cannot be built, or when a body comes out uncovered. The box says why, and the
+launcher log on the Diagnostics page has each step it took. Put right what the
+box names, for example a mod to deploy in Vortex, or Skyrim to close first.
+Then open **Diagnostics**, press **Scan** and then **Fix**, which builds the
+files again, and press Play. If it stops again, press **Build the report** on
+Diagnostics and drag the zip into a ticket in the Discord, or
+[report it](/report).
 
 A launcher last opened before 26 September says it cannot read the update
 source, or never offers an update. Updates are asked for at thornswood.net now

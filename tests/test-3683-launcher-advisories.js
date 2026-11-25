@@ -194,8 +194,8 @@ function saved(name) {
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })().catch(function (e) {
   console.log('FAIL  the test itself threw: ' + (e && e.stack || e));
-  process.exit(1);
+  process.exitCode = 1;
 });

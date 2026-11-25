@@ -34,6 +34,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Microsoft.Win32;
 
 namespace Thornswood
 {
@@ -596,6 +597,34 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// This PC, as a one-way hash of the machine id Windows gives it at
+        /// install (MachineGuid), or "" when it cannot be read (Patrick's
+        /// answer A on q-hwid-collect, 16 Nov 2026). Sent with each join pass
+        /// so staff can see which accounts play from the same PC; the id
+        /// itself never leaves the machine, and the site hashes this again
+        /// with its own secret before it keeps it for 30 days (the privacy
+        /// page, "This PC").
+        /// </summary>
+        public static string PcId()
+        {
+            if (!OperatingSystem.IsWindows()) return "";
+            string guid = "";
+            try
+            {
+                using (RegistryKey k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
+                                                  .OpenSubKey(@"SOFTWARE\Microsoft\Cryptography"))
+                {
+                    guid = k == null ? "" : Convert.ToString(k.GetValue("MachineGuid"), CultureInfo.InvariantCulture) ?? "";
+                }
+            }
+            catch (Exception ex) { Swallow.Note("Discord.PcId, the join pass is asked for without it", ex); return ""; }
+            guid = guid.Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(guid, "^[0-9a-f-]{32,40}$")) return "";
+            byte[] h = SHA256.HashData(Encoding.UTF8.GetBytes("thornswood-pc:" + guid));
+            return Convert.ToHexString(h).ToLowerInvariant();
+        }
+
+        /// <summary>
         /// A join pass for one character, or "" with why saying why not (#937).
         ///
         /// The game server ends a session that has not shown it one, so this
@@ -623,7 +652,8 @@ namespace Thornswood
             string body = "{\"ticket\":\"" + Escape(Ticket) + "\"" +
                           ",\"profileId\":" + profileId.ToString(CultureInfo.InvariantCulture) +
                           ",\"channel\":\"" + Escape(string.IsNullOrEmpty(Channel) ? "main" : Channel) + "\"" +
-                          ",\"version\":\"" + Escape(Updater.Version) + "\"}";
+                          ",\"version\":\"" + Escape(Updater.Version) + "\"" +
+                          ",\"pc\":\"" + PcId() + "\"}";
             string reply;
             int code = PostJson(Site + "/api/play/pass", body, out reply);
             if (code == 0)

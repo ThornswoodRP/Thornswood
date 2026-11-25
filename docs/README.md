@@ -25,7 +25,9 @@ and the long form of each, are in the Developer Guide's pages under
 | [AFFECTED-HARNESSES.md](AFFECTED-HARNESSES.md) | Running only the gate harnesses a pull request can affect (#3114): the Linux study, the read map, the rules, and the trace of the gate on the VPS. |
 | [WORKFLOWS.md](WORKFLOWS.md) | Every GitHub workflow here: what starts it, what it does and what it writes (#4184). |
 | [DEPLOY-AGENT.md](DEPLOY-AGENT.md) | The box deploy agent (#5180): deploying a signed Release by its tag through the gate and rolling back, how a merge reaches the dev server by itself, what it holds, how it updates itself and how it is installed. |
+| [WINDOWS-TURN.md](WINDOWS-TURN.md) | Pinned native relay packaging, security boundaries, cutover prerequisites and rollback. |
 | [SIGNED-RELEASES.md](SIGNED-RELEASES.md) | The signed release design (#2163): what gets signed and how, custody, rotation, revocation, the rollout that keeps every checksum, and the test-only pilot. |
+| [NEWS-PICTURES.md](NEWS-PICTURES.md) | Captioned screenshots in Discord, website and launcher News: the note format, image names, publication order and display. |
 | [CLEAN-INSTALL-RUN.md](CLEAN-INSTALL-RUN.md) | The checklist for a stranger's first install, and what each step should show. |
 | [COLLECTION-CHANGES.md](COLLECTION-CHANGES.md) | How a mod is added, taken out or moved: a pull request to records/collection.json, its check, and the merge that drafts and publishes the revision (#5189). |
 | [COLLECTION-REVISIONS.md](COLLECTION-REVISIONS.md) | Which revision the collection is on, what each published revision changed, and how a new one goes from Nexus to a release (#4533). |
@@ -38,7 +40,6 @@ and the long form of each, are in the Developer Guide's pages under
 | [LIGHT-ORDER-DRIFT.md](LIGHT-ORDER-DRIFT.md) | Every light plugin form id the live and the dev world stored, which plugin each was for, which have drifted with the light order, and the one-time move (#1715). |
 | [NPC-POPULATION.md](NPC-POPULATION.md) | NPC population catalogue from the winning records in the load order. |
 | [NPC-SERVER-ACTIVITY.md](NPC-SERVER-ACTIVITY.md) | Shared NPC activity on dev and main: who owns placed identities, movement, combat and return. |
-| [npc-server-runtime.md](npc-server-runtime.md) | Dev NPC loading and first unattended activity. |
 | [NPC-WORLD-PLAN.md](NPC-WORLD-PLAN.md) | NPC world work: town cut, habitat rules, rates and merchant quests. |
 
 The pages about running the box (what runs where, restoring it, moving it,
