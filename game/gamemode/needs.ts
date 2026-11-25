@@ -1568,10 +1568,9 @@
     2026: vanilla food's extra magic effects go, except temperature ones, so
     alchemy matters more. FOOD_GROUPS.strip says which groups lose them and
     which records keep them. The engine scales a record's effects as a whole
-    (EatItemEvent, eatItemScale), so a record whose temperature effect rides
-    with another effect is kept whole until the engine can drop one effect
-    and keep another. Hunger and thirst are this block's own numbers, not
-    record effects, and are not touched.
+    (EatItemEvent, eatItemScale). Thornswood-Last.esp removes the recovery
+    effects from the three foods that keep frost resistance (#4612).
+    Hunger and thirst come from this block's own numbers.
   */
   var stripIndex = null;
 
