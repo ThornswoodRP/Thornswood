@@ -145,7 +145,10 @@ async function ask(o) {
                              dev: false, devBuild: false, admin: false, roles: ['Playtester'] },
                            (o.standing && o.standing[String(d)]) || {});
     },
-    discordGet: async function () { return { ok: false, status: 404, body: null, why: 'not found' }; },
+    discordGet: async function (resource) {
+      if (resource.indexOf('/bans/') < 0) throw new Error('unexpected Discord resource');
+      return { ok: false, status: 404, code: 10026, body: null, why: 'not found' };
+    },
     cfg: { passKey: o.key === undefined ? KEY : o.key, access: { dev: ['Owner', 'Dev'], devBuild: ['Owner', 'Dev'] },
            discord: { botToken: 'x', guildId: 'g' } },
     andList: function (a) { return (a || []).join(' and '); },

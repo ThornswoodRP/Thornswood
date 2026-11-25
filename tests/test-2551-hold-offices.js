@@ -123,7 +123,7 @@ function siteWith(opts) {
       env.memberAsked.push(id);
       const m = env.members && env.members[id];
       if (opts.memberFails) { return { ok: false, status: 0, why: 'Discord did not answer' }; }
-      return m ? { ok: true, status: 200, body: { roles: m.roles.map(idOf) } } : { ok: false, status: 404, why: 'not found' };
+      return m ? { ok: true, status: 200, body: { roles: m.roles.map(idOf) } } : { ok: false, status: 404, code: 10007, why: 'not found' };
     },
     discordWrite: async function (method, p, reason) {
       env.writes.push([method, p, reason]);

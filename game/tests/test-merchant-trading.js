@@ -42,7 +42,7 @@ function worldOf(native) {
   return {
     actors, inv, records,
     // A character is a runtime form (formDesc its local hex alone, #2870); a merchant is placed.
-    actor(id) { return actors[id] ? {desc:id.toString(16)+(actors[id].profileId>0?'':':Skyrim.esm'),lifeGeneration:0,runtimeIdentity:'100',...actors[id]} : null; },
+    actor(id) { return actors[id] ? {desc:id.toString(16)+(actors[id].profileId>0?'':':Skyrim.esm'),lifeGeneration:0,runtimeIdentity:'100',isDead:false,isDisabled:false,...actors[id]} : null; },
     carry(id, baseId) { return (inv[id] && inv[id][baseId]) || 0; },
     save() { for (const [id,receipt] of live) saved.set(id,receipt); },
     transfer: {
@@ -739,6 +739,12 @@ assert.equal(stuck.world.inv[10][100], 7);
 let second = stuck.api.command({ actorId: 10, profileId: 7, parts: ['/merchant', 'sell', '1', 'Iron', 'Ingot'] });
 assert.match(second.text, /waiting/);
 assert.equal(stuck.purses.prepare(1).purse, 250);
+stuck.world.actors[1].isDead = true;
+const accepted = stuck.purses.prepare(1).pending;
+assert.ok(stuck.api.recover().some(row => row.actorId === 10 && row.view.open === false),
+  'a trader who dies while a save is pending closes the panel');
+assert.deepEqual(stuck.purses.prepare(1).pending, accepted,
+  'closing the panel retains the accepted debit until its save confirms');
 stuck.world.save();
 stuckNative.fail='';
 stuck.api.recover([1]);
@@ -747,6 +753,8 @@ assert.equal(stuck.purses.prepare(1).stock[0].count, 1);
 assert.equal(stuck.purses.prepare(1).pending, null);
 stuck.api.recover([1]);
 assert.equal(stuck.purses.prepare(1).purse, 247);
+assert.equal(stuck.world.inv[10][15], 43, 'payment for the accepted sale arrives once after the trader dies');
+assert.equal(stuck.purses.prepare(1).stock[0].count, 1);
 
 let fresh = service({ on: true }, 250);
 open(fresh.api);

@@ -436,6 +436,30 @@ try:
     yes('M14 no em dash and never the forbidden word',
         all(chr(0x2014) not in t and ('pla' + 'yer') not in t.lower() for t in (ev, rn, nr)))
 
+    # The testing command writes the selected profession in why, while the
+    # subject remains the character whose profession actually changed.
+    put(LIVE, [])
+    put(DEV, [])
+    profession_records = [
+        json.dumps(dict(json.loads(row('setprofession', who='Aela', why='Enchanter')), who=1001)),
+        row('setprofession', who='Bjorn', why='Mage', n=1),
+    ]
+    ticks = drive([lambda: put(DEV, profession_records)])
+    yes('profession changes reach the watcher with the correct self or other target and profession',
+        confirmed_tick(ticks, [
+            '**Staff on the dev server:** Aela (profile 1001) changed the profession of '
+            'Aela (profile 1001): Enchanter',
+            '**Staff on the dev server:** Aela (profile 1001) changed the profession of '
+            'Bjorn (profile 2002): Mage',
+        ]))
+    profession_escaped = bot.moderation_text('live', json.loads(row('setprofession', who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+    yes('profession change escapes both names and its reason',
+        profession_escaped is not None and '@everyone' not in profession_escaped
+        and '<@111111111111111111>' not in profession_escaped
+        and '<@&111111111111111111>' not in profession_escaped
+        and '\\[x](http://e.invalid)' in profession_escaped and len(profession_escaped) <= 1900)
+
     # M15: staff on the world's card, the Office page of K (#513, Patrick,
     # 17 Oct): each press comes through the staff block's record with the
     # stage as the who, and reads as who did what to the world.

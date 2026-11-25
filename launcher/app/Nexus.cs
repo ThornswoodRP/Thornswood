@@ -75,7 +75,8 @@ namespace Thornswood
 
         /// <summary>The address Nexus sends the browser back to, registered with the client id.</summary>
         internal const int Port = 53150;
-        internal static string Back { get { return "http://127.0.0.1:" + Port + "/nexus"; } }
+        internal static string Back { get { return CallbackAddress(Port); } }
+        static string CallbackAddress(int port) { return "http://127.0.0.1:" + port + "/nexus"; }
         const string Scope = "openid profile";
 
         /// <summary>Profile\nexus.txt's folder. Paths.ProfileDir unless a harness says otherwise.</summary>
@@ -124,21 +125,29 @@ namespace Thornswood
         /// </summary>
         public static Account SignIn(Action<string> open, TimeSpan wait)
         {
+            return SignInOnLoopbackPort(open, wait, Port);
+        }
+
+        // The harness shares its stand-in's ephemeral port. Normal sign-in
+        // always listens on the port registered with Nexus.
+        internal static Account SignInOnLoopbackPort(Action<string> open, TimeSpan wait, int port)
+        {
             if (string.IsNullOrEmpty(ClientId))
                 throw new ModlistStop("This launcher is not registered with Nexus yet, so it cannot sign in to Nexus. Download each file with Manual Download instead.");
             string verifier = Url64(RandomNumberGenerator.GetBytes(32));
             string challenge = Url64(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
             string state = Url64(RandomNumberGenerator.GetBytes(24));
 
+            string callback = CallbackAddress(port);
             var listener = new HttpListener();
-            listener.Prefixes.Add(Back + "/");
+            listener.Prefixes.Add(callback + "/");
             try { listener.Start(); }
-            catch (Exception ex) { throw new ModlistStop("The Nexus sign in could not listen on port " + Port + " for Nexus's answer: " + Failure.Why("Nexus.SignIn, listen", ex) + "."); }
+            catch (Exception ex) { throw new ModlistStop("The Nexus sign in could not listen on port " + port + " for Nexus's answer: " + Failure.Why("Nexus.SignIn, listen", ex) + "."); }
             try
             {
                 string page = Users + "/oauth/authorize?response_type=code" +
                               "&client_id=" + Uri.EscapeDataString(ClientId) +
-                              "&redirect_uri=" + Uri.EscapeDataString(Back) +
+                              "&redirect_uri=" + Uri.EscapeDataString(callback) +
                               "&scope=" + Uri.EscapeDataString(Scope) +
                               "&state=" + state +
                               "&code_challenge=" + challenge +
@@ -146,7 +155,7 @@ namespace Thornswood
                 try { open(page); }
                 catch (Exception ex) { throw new ModlistStop("Your browser could not be opened for the Nexus sign in: " + Failure.Why("Nexus.SignIn, open the browser", ex) + "."); }
                 string code = WaitForCode(listener, state, wait);
-                Kept k = Trade(new[] { "grant_type", "authorization_code", "client_id", ClientId, "code", code, "redirect_uri", Back, "code_verifier", verifier }, null, "Nexus did not sign you in: ");
+                Kept k = Trade(new[] { "grant_type", "authorization_code", "client_id", ClientId, "code", code, "redirect_uri", callback, "code_verifier", verifier }, null, "Nexus did not sign you in: ");
                 Learn(k);
                 Write(k);
                 return new Account { Name = k.Name, Premium = k.Premium };

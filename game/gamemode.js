@@ -13640,6 +13640,7 @@ log('gamemode loaded:',
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -13727,6 +13728,24 @@ log('gamemode loaded:',
                  (doc.lookupFailedWhy ? ': ' + doc.lookupFailedWhy : ''));
           }
 
+          // A failed or late request can still refresh unrelated role fields,
+          // but it cannot replace the last readable ban list or advance its clock.
+          var previousBansRequestedAt = (Array.isArray(had.bans) &&
+            had.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }))
+            ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var previousBansWritten = new Date(String(had.at || '')).getTime() || 0;
+          // A role-only rewrite must not turn an invalid ban stamp into
+          // valid proof or make it look like a door file from before stamps.
+          if (!(previousBansRequested > 0 && previousBansRequested <= previousBansWritten &&
+                previousBansWritten <= Date.now())) {
+            previousBansRequested = 0;
+            if (previousBansRequestedAt) { previousBansRequestedAt = 'invalid'; }
+          }
+          var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
+            doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
+            requestedAt > previousBansRequested && requestedAt <= Date.now();
+
           // Whole, never in place (#2740): Set-Door reads it on the box while
           // the server runs, and an in-place write read half way is no list.
           try {
@@ -13755,7 +13774,10 @@ log('gamemode loaded:',
               // Staff bans with why and until (#412), from the site's own
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
-              bans: Array.isArray(doc.bans) ? doc.bans : [],
+              bans: takeBans ? doc.bans : (Array.isArray(had.bans) ? had.bans : []),
+              // The request's start, never its response time, is the proof
+              // used when handing local game bans back to the site.
+              bansRequestedAt: takeBans ? new Date(requestedAt).toISOString() : previousBansRequestedAt,
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],
@@ -17167,16 +17189,12 @@ log('gamemode loaded:',
   // #6737: explicit testing exception to the ordinary one-class pick.
   // Preserve spent tree points, then place the current choices again through
   // the same capped allocation used at creation. No kit or rank reward.
-  function setClassForTesting(state, cls) {
-    if (!own(CLASSES, cls)) { return no('no such class'); }
-    var s = clone(state);
-    if (s.cls === cls) { return no('that is already the current class'); }
-    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+  function removePlaced(s) {
     for (var skill in s.placed) {
       if (!own(s.placed, skill)) { continue; }
       if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
           !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
-        return no('the placed skill points cannot be read');
+        return 'the placed skill points cannot be read';
       }
     }
     for (var oldSkill in s.placed) {
@@ -17185,6 +17203,15 @@ log('gamemode loaded:',
       if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
     }
     s.placed = {};
+    return null;
+  }
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
     if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
     s.cls = null;
     var picked = pickClass(s, cls);
@@ -17194,6 +17221,101 @@ log('gamemode loaded:',
     if (s.half) { place(s, 'halves', s.half); }
     for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
     return yes(s);
+  }
+
+  function captureKnowledge(state) {
+    var s = clone(state), h = s.spellHistory || {};
+    var balances = clone(h.points || {});
+    balances.spells = clone(balances.spells || {});
+    balances.staff = clone(balances.staff || {});
+    function union(a, b) {
+      var out = (a || []).slice();
+      (b || []).forEach(function (x) { if (out.indexOf(x) < 0) { out.push(x); } });
+      return out;
+    }
+    if (s.prof) { balances.spells[s.prof] = s.spells ? s.spells.points : 0; }
+    if (s.prof === 'enchanter') { balances.staff.enchanter = staffPoints(s); }
+    s.spellHistory = { spells: union(h.spells, s.spells && s.spells.known),
+      staffSpells: union(h.staffSpells, s.staffSpells), points: balances,
+      otherSpells: union(h.otherSpells, []) };
+    s.spellHistory.otherSpells.forEach(function (desc) {
+      var known = spellByDesc(desc);
+      if (known && s.spellHistory.spells.indexOf(known.name) < 0) { s.spellHistory.spells.push(known.name); }
+    });
+    return s;
+  }
+
+  // History is permanent; only the book eligible under today's choices is
+  // active. More than two outsider candidates requires an explicit choice.
+  function activeKnowledge(state, staffRank) {
+    var s = captureKnowledge(state), h = s.spellHistory;
+    h.otherSpells.forEach(function (desc) {
+      if (staffRank(desc) && h.staffSpells.indexOf(desc) < 0) { h.staffSpells.push(desc); }
+    });
+    var outside = (s.taught || []).concat(s.untaught || []);
+    var schools = s.prof === 'mage' ? s.schools : outside.filter(function (x) { return SCHOOLS.indexOf(x) >= 0; });
+    var spells = h.spells.filter(function (name) {
+      var spell = spellAt(name);
+      var rank = spell && (s.prof === 'mage' ? rankOf(s, spell.school) : 'novice');
+      return spell && schools.indexOf(spell.school) >= 0 && rankIndex(rank) >= rankIndex(spell.rank);
+    });
+    var staff = h.staffSpells.filter(function (desc) {
+      var rank = staffRank(desc);
+      var have = s.prof === 'enchanter' ? rankOf(s, STAFF_HALF) :
+        (outside.indexOf(STAFF_HALF) >= 0 ? 'novice' : null);
+      return rank && have && rankIndex(have) >= rankIndex(rank);
+    });
+    function selected(list, key, capped) {
+      if (!capped) { return { ok: true, list: list }; }
+      var choices = s.spellSelections || {};
+      if (!own(choices, key)) {
+        return list.length <= LIMITS.outsiderSpells ? { ok: true, list: list } :
+          { ok: false, why: 'choose up to ' + LIMITS.outsiderSpells + ' ' + key + ' explicitly', choices: list };
+      }
+      var chosen = choices[key];
+      if (!Array.isArray(chosen) || chosen.length > LIMITS.outsiderSpells || chosen.some(function (x, i) {
+        return list.indexOf(x) < 0 || chosen.indexOf(x) !== i;
+      })) { return { ok: false, why: 'the selected ' + key + ' are not eligible', choices: list }; }
+      return { ok: true, list: chosen.slice() };
+    }
+    var a = selected(spells, 'spells', s.prof !== 'mage');
+    if (!a.ok) { return a; }
+    var b = selected(staff, 'staffSpells', s.prof !== 'enchanter');
+    if (!b.ok) { return b; }
+    s.spells = s.spells || { points: 0, known: [] };
+    s.spells.known = a.list;
+    s.staffSpells = b.list;
+    return yes(s);
+  }
+
+  function setProfessionForTesting(state, prof, halfOrSchools) {
+    var checked = pickProfession(fresh(), prof, halfOrSchools);
+    if (!checked.ok) { return checked; }
+    var s = captureKnowledge(state);
+    if ((s.taught || []).length || Object.keys(s.masters || {}).length || (s.apprentices || []).length) {
+      return no('end the current teaching relationships on K before changing profession');
+    }
+    if (s.prof === prof && s.half === checked.state.half &&
+        JSON.stringify((s.schools || []).slice().sort()) === JSON.stringify(checked.state.schools.slice().sort())) {
+      return no('that is already the current profession and choice');
+    }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
+    halvesOf(s.prof).forEach(function (key) { delete s.ranks[key]; delete s.work[key]; });
+    s.prof = null; s.half = null; s.schools = []; s.spells = null;
+    delete s.staffPoints; delete s.staffSpells; delete s.weave;
+    if (s.cls) { place(s, 'classes', s.cls); }
+    var picked = pickProfession(s, prof, halfOrSchools);
+    if (!picked.ok) { return picked; }
+    // Each profession gets its canonical starting spell points once. Returning
+    // to it restores its last balance, including zero after spending them.
+    var balances = picked.state.spellHistory.points;
+    if (own(balances.spells, prof)) {
+      picked.state.spells = picked.state.spells || { points: 0, known: [] };
+      picked.state.spells.points = balances.spells[prof];
+    }
+    if (prof === 'enchanter' && own(balances.staff, prof)) { picked.state.staffPoints = balances.staff[prof]; }
+    return picked;
   }
 
   /**
@@ -18191,7 +18313,8 @@ log('gamemode loaded:',
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
     pickClass: pickClass, setClassForTesting: setClassForTesting,
-    pickProfession: pickProfession, teach: teach,
+    pickProfession: pickProfession, setProfessionForTesting: setProfessionForTesting,
+    captureKnowledge: captureKnowledge, activeKnowledge: activeKnowledge, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,
@@ -28383,7 +28506,19 @@ module.exports = {
     };
   }
 
-  function post(parts, actorId, profileId, toProfile, isJob) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
+    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+        (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
+      toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
+      return true;
+    }
+    // Same authoritative location, size, fee, reward and pack-first landing.
+    // Only the legacy command boundary unescapes or normalizes text.
+    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
+                kind === 'job', {title:title,body:body,hold:expectedHold});
+  }
+
+  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
     /*
       AT THE BOARD, because that is what makes it a board rather than a
       command. It is the same rule as claiming at a door: the place is the
@@ -28393,6 +28528,10 @@ module.exports = {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -28413,9 +28552,9 @@ module.exports = {
       }
       from = 2;
     }
-    var words = postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
+    var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
     var what = isJob ? 'the job' : 'the notice';
-    if (!words.title) {
+    if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
     }
@@ -28424,7 +28563,7 @@ module.exports = {
                 words.title.length + '. Nothing was taken.');
       return true;
     }
-    if (!words.body) {
+    if (!words.body.trim()) {
       toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
                                  : 'Say what the notice says. Nothing was taken.');
       return true;
@@ -30828,7 +30967,7 @@ module.exports = {
     notices: function () { return notices; }, takedown: takedown,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
-    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel,
+    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,
@@ -31851,6 +31990,30 @@ module.exports = {
     return { line: line, from: from, went: !!went };
   }
 
+  // A displayed route grants no permission to move a now-frozen or dead rider.
+  function riderCheck(actorId, profileId, expected) {
+    var unavailable = { line: 'Your character is unavailable. Open the ride panel again.' };
+    var ai, runtime;
+    try {
+      ai = mp.getNpcAIState(actorId);
+      runtime = mp.getActorRuntimeIdentity(actorId);
+    } catch (e) { return unavailable; }
+    if (!Number.isSafeInteger(profileId) || profileId <= 0 || !ai || ai.isHuman !== true ||
+        ai.profileId !== profileId || !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+        typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) ||
+        runtime.length === 20 && runtime > '18446744073709551615') { return unavailable; }
+    var identity = JSON.stringify([actorId, profileId, ai.lifeGeneration, runtime]);
+    if (expected && identity !== expected) { return unavailable; }
+    if (ai.isDead === true) { return { line: 'You are dead, so you cannot ride. Nothing was taken.' }; }
+    if (ai.isDead !== false) { return unavailable; }
+    var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
+    if (!frozen || typeof frozen !== 'object' || Array.isArray(frozen)) { return unavailable; }
+    if (frozen[profileId]) {
+      return { line: 'Staff have you frozen in place, so you cannot ride. Nothing was taken.' };
+    }
+    return { line: '', identity: identity };
+  }
+
   /** A ride, and the move when it goes: the line to say back, the stop it was asked at, and whether it went. */
   function ride(actorId, profileId, wanted) {
     var from = stopHere(actorId);
@@ -31867,10 +32030,14 @@ module.exports = {
       plog('a ride was asked for and the hold ledger is not loaded');
       return answer('The hold\'s ledger is not running on this server, so nobody rides. Say so in the dev channel.', from);
     }
+    var rider = riderCheck(actorId, profileId);
+    if (rider.line) { return answer(rider.line, from); }
     // A pack that is short keeps all of it and stays where it is.
     if (!canPay(actorId, price)) {
       return answer('The ride to ' + to.name + ' is ' + price + ' gold and you do not have it. Nothing was taken.', from);
     }
+    var current = riderCheck(actorId, profileId, rider.identity);
+    if (current.line) { return answer(current.line, from); }
     /*
       THE MOVE, THEN THE FARE, so a move the server could not make costs
       nothing and no coin ever has to go back into a pack. The pack was read a
@@ -37534,6 +37701,7 @@ return module.exports;
     empty map after a restart costs one redraw each, which is right anyway.
   */
   var lastDrawn = {};
+  var writeResults = {};
 
   /*
     The client side script. It runs inside skymp5-client EVERY FRAME for as
@@ -37634,7 +37802,28 @@ return module.exports;
     return lastAsked;
   }
 
-  function writeState(actorId, s, redraw) {
+  function writeState(actorId, s, redraw, nativeTome) {
+    var expected = null;
+    writeResults[actorId] = false;
+    if (s.spellHistory) {
+      expected = readState(actorId);
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The atomic spell writer is not running.'); }
+      var active = knowledge.prepare(s);
+      if (!active.ok) { throw new Error('Could not prepare active knowledge: ' + active.why); }
+      if (nativeTome) {
+        var eligible = function (a, b) { return (a || []).every(function (x, i) { return b.indexOf(x) >= 0 && a.indexOf(x) === i; }); };
+        if (!eligible(s.spells && s.spells.known, active.state.spells.known) || !eligible(s.staffSpells, active.state.staffSpells)) {
+          throw new Error('The tome would grant knowledge that is not currently eligible.');
+        }
+        // Native ReadBookEvent will add only the tome's own spell. Historical
+        // extras made eligible by this study remain latent until an atomic
+        // refresh can publish them in the book and engine together.
+        active.state.spells.known = ((s.spells && s.spells.known) || []).slice();
+        active.state.staffSpells = (s.staffSpells || []).slice();
+      }
+      s = active.state;
+    }
     s.v = 1;
     // forPanel is what the client sees; the rules state is what is stored.
     // Both travel in the one property so the panel never sees a half state.
@@ -37705,13 +37894,16 @@ return module.exports;
     }
     var written = false;
     try {
-      mp.set(actorId, CHAR_PROPERTY, s);
-      written = true;
+      if (s.spellHistory && !nativeTome) {
+        written = g.__thornswoodCharacterKnowledge.commit(actorId, expected, s);
+        if (!written) { throw new Error('The character or active spells changed before the write.'); }
+      } else { mp.set(actorId, CHAR_PROPERTY, s); written = true; }
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
-      if (sending) { lastDrawn[actorId] = sig; }
+      if (written && sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
+      if (s.spellHistory || nativeTome) { throw e; }
     }
     /*
       What the menus list goes with the record, so only once it is written
@@ -37721,12 +37913,15 @@ return module.exports;
       with no end: an actor whose form is gone (a name taken off the embassy
       roll after its character went) stopped the server.
     */
+    writeResults[actorId] = written;
     if (written) {
       // Twin Souls is a second enchantment slot in the menu (#1389). It lives
       // beside the craft gate, outside this block, the way spellOn does.
-      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      try { if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); } }
+      catch (eSlots) { clog('character saved but enchantment slots could not be published for', actorId.toString(16), eSlots); }
       // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+      try { if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); } }
+      catch (eRecipes) { clog('character saved but recipe visibility could not be published for', actorId.toString(16), eRecipes); }
     }
     return s;
   }
@@ -37961,6 +38156,7 @@ return module.exports;
       try { FS.worked(actorId); } catch (eSteps) { clog('first steps threw at a piece of work:', eSteps); }
     }
     writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) { return null; }
     return raiseLines(actorId, r);
   }
 
@@ -38005,6 +38201,11 @@ return module.exports;
     had no form id for it all end up in the same place.
   */
   function grantKnown(actorId) {
+    var current = stateOf(actorId);
+    if (current.spellHistory) {
+      var active = writeState(actorId, current);
+      return writeResults[actorId] ? active.spells.known.length + active.staffSpells.length : 0;
+    }
     // Only the book is granted (#1387): what it does not list comes off
     // first, out of the book and off the character, in the college block.
     var college = g.__thornswoodCollege;
@@ -38858,6 +39059,10 @@ return module.exports;
     }
     r.state.note = null;
     var st = writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) {
+      toProfile(profileId, 'The character change could not be saved. Nothing was learned or spent.');
+      return true;
+    }
     clog(word, parts.slice(1).join(' '), 'for', actorId.toString(16), 'accepted');
 
     /*
@@ -39067,6 +39272,23 @@ return module.exports;
 
   g.__thornswoodCharacter = {
     PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
+    // ReadBookEvent owns AddSpell and consuming the tome after this returns.
+    // Saving eligible book/history here must not pre-add that engine spell.
+    writeTomeState: function (actorId, s) {
+      var next = P.clone(s);
+      // Canonical tome rules already enforce the outsider cap. A newly learned
+      // eligible spell takes its place beside the currently selected spells.
+      if (next.spellHistory && next.spellSelections) {
+        if (next.prof !== 'mage' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'spells')) {
+          next.spellSelections.spells = ((next.spells && next.spells.known) || []).slice();
+        }
+        if (next.prof !== 'enchanter' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'staffSpells')) {
+          next.spellSelections.staffSpells = (next.staffSpells || []).slice();
+        }
+      }
+      return writeState(actorId, next, false, true);
+    },
+    writeSucceeded: function (actorId) { return writeResults[actorId] === true; },
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,
@@ -41599,6 +41821,20 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     }
 
     var staffDesc = (S && S.isStaffSpell && spell.desc && S.isStaffSpell(spell.desc)) ? spell.desc : null;
+    if (s.spellHistory) {
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The retained knowledge writer is not running.'); }
+      var eligible = knowledge.prepare(s);
+      if (!eligible.ok) { throw new Error('Retained knowledge cannot be prepared: ' + eligible.why); }
+      var restoreBook = !P.knowsSpell(s, spell.name) && P.knowsSpell(eligible.state, spell.name);
+      var restoreStaff = staffDesc && !P.knowsStaff(s, staffDesc) && P.knowsStaff(eligible.state, staffDesc);
+      if (restoreBook || restoreStaff) {
+        // This is knowledge already earned, newly eligible after study. One
+        // normal atomic refresh restores it before the already-known path,
+        // so its tome and point cannot be spent for the same knowledge again.
+        s = C.writeState(actorId, eligible.state);
+      }
+    }
     var fresh = !!staffDesc && !!P.knowsStaff && !P.knowsStaff(s, staffDesc);
     var outsider = fresh && !!P.staffTaught && P.staffTaught(s);
     var enchNote = (fresh && P.isEnchanter && P.isEnchanter(s))
@@ -41612,7 +41848,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
       if (outsider) {
         var again = S.learn(P, s, staffDesc);
         if (again.ok) {
-          C.writeState(actorId, again.state);
+          C.writeTomeState(actorId, again.state);
           var gone = spendTome(actorId, bookBaseId);
           return { refused: false, line: 'You know ' + spell.name + ' already, and the tome unlocks it for staves: ' +
                    'you can bind it into a staff at a staff enchanter now.' + (gone ? ' The tome is spent.' : '') };
@@ -41637,7 +41873,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
             It is not written into their spell book, so it takes none of the
             places a Master mage's teaching gives.
           */
-          C.writeState(actorId, st.state);
+          C.writeTomeState(actorId, st.state);
           tlog(Number(actorId).toString(16), 'unlocked', spell.name, spell.desc, 'for staves from a tome');
           return { refused: false, line: 'The tome unlocks ' + spell.name + ' for staves: you can bind it into a staff ' +
                    'at a staff enchanter now. It took one of your ' + P.TABLE.limits.outsiderSpells +
@@ -41663,7 +41899,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
         staffLine = ' It is not unlocked for staves: you need ' + joinNeeds(st2.missing || [{ why: st2.why }]) + '.';
       }
     }
-    C.writeState(actorId, next);
+    C.writeTomeState(actorId, next);
     var raised = C.raiseLines ? C.raiseLines(actorId, r) : null;
     tlog(Number(actorId).toString(16), 'learned', spell.name, spell.desc, 'from a tome');
     return { refused: false, line: 'The tome teaches you ' + spell.name + ', ' + word(spell.rank) + ' ' +
@@ -43229,7 +43465,12 @@ mp.onUpdateEquipmentAttempt = guard('onUpdateEquipmentAttempt', function (actorI
 */
 mp.onReadBook = guard('onReadBook', function (actorId, bookBaseId) {
   const tomes = globalThis.__thornswoodTomes;
-  const r = tomes ? tomes.read(actorId, bookBaseId) : null;
+  let r;
+  try { r = tomes ? tomes.read(actorId, bookBaseId) : null; }
+  catch (e) {
+    log('spell tomes: reading or saving failed for ' + Number(actorId).toString(16) + ': ' + String(e));
+    r = { refused: true, line: 'The spell could not be learned safely. You keep the tome and your spell points.' };
+  }
   if (r && r.line) {
     notify(actorId, r.line);
     say(actorId, r.line);
@@ -44586,6 +44827,61 @@ function thornswoodBooks(env) {
 })();
 
 
+// Atomic active spell membership for characters with preserved spell history.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function prepare(state) {
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    if (!SS) { return { ok: false, why: 'the spell catalogue is not running' }; }
+    return P.activeKnowledge(state, SS.rankOf);
+  }
+  function commit(actorId, expected, replacement) {
+    if (typeof mp.compareAndSetActorPropertyAndSpells !== 'function') {
+      throw new Error('This engine cannot commit character progression and active spells together.');
+    }
+    if (typeof mp.getActorLearnedSpells !== 'function') { throw new Error('This engine cannot read the full learned spell snapshot.'); }
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    var runtime = mp.getActorRuntimeIdentity(actorId);
+    var identity = mp.getNpcAIState(actorId);
+    var current = mp.getActorLearnedSpells(actorId);
+    if (!Array.isArray(current) || current.length > 4096 || current.some(function (id, i) {
+      return !Number.isInteger(id) || id <= 0 || id >= 0xff000000 || current.indexOf(id) !== i;
+    })) { throw new Error('The full learned spell snapshot cannot be read safely.'); }
+    current = current.slice();
+    var managed = Object.keys(P.SPELL_IDS).map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(Object.keys(SS.STAFF_SPELLS)).map(function (desc) { return mp.getIdFromDesc(desc); });
+    var college = g.__thornswoodCollege;
+    if (!college || !college.spellKind) { throw new Error('The spell type catalogue is not running.'); }
+    var history = replacement.spellHistory.otherSpells;
+    var next = current.filter(function (id) {
+      if (managed.indexOf(id) >= 0) { return false; }
+      var kind = college.spellKind(id);
+      if (!kind || [0, 1, 2, 3, 4, 5, 10, 11].indexOf(kind.type) < 0) {
+        throw new Error('An unrelated spell type cannot be read safely.');
+      }
+      var desc = mp.getDescFromId(id);
+      if (kind.type !== 0 || (typeof INSTRUMENT_SPELL !== 'undefined' && String(INSTRUMENT_SPELL).toLowerCase() === String(desc).toLowerCase())) {
+        return true;
+      }
+      if (history.indexOf(desc) < 0) { history.push(desc); }
+      return false;
+    });
+    var wanted = replacement.spells.known.map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(replacement.staffSpells);
+    wanted.forEach(function (desc) {
+      var id = mp.getIdFromDesc(desc);
+      if (!Number.isInteger(id) || id <= 0) { throw new Error('An eligible spell has no form in this load order.'); }
+      if (next.indexOf(id) < 0) { next.push(id); }
+    });
+    return mp.compareAndSetActorPropertyAndSpells(actorId, identity.profileId, {
+      name: g.__thornswoodCharacter.PROPERTY, expected: expected, replacement: replacement,
+      expectedRuntimeIdentity: runtime, expectedLifeGeneration: identity.lifeGeneration,
+      expectedSpells: current, replacementSpells: next
+    });
+  }
+  g.__thornswoodCharacterKnowledge = { prepare: prepare, commit: commit };
+})();
 // ==== thornswood chat commands ====
 /*
   EVERY WORD THIS SERVER ANSWERS, WRITTEN DOWN ONCE.
@@ -44609,7 +44905,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -45076,7 +45372,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   /** Every line from the voice service, on its way to handle(). */
   function dispatch(cmd) {
     var profileId = Number(cmd && cmd.profileId) || 0;
-    var parts = String((cmd && cmd.text) || '').trim().split(/\s+/);
+    var parts = commandParts(cmd && cmd.text);
     var word = parts[0].toLowerCase();
     // The launcher's join pass, from the front plugin (#937). Needs no
     // character and answers nothing; see the join pass block.
@@ -45660,6 +45956,21 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
+  // These payloads are JSON strings, never words to reconstruct with spaces.
+  function commandParts(text) {
+    var raw = String(text || '').trim();
+    var head = /^\S+/.exec(raw);
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1')) return [head[0]];
+    return raw.split(/\s+/);
+  }
+
+  function savedTextPayload(text, word, maximum, fields) {
+    if (typeof text !== 'string' || text.length > maximum || text.indexOf(word + ' ') !== 0) return null;
+    var value;
+    try { value = JSON.parse(text.slice(word.length + 1)); } catch (e) { return null; }
+    if (!Array.isArray(value) || value.length !== fields) return null;
+    return value;
+  }
   function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
@@ -45796,7 +46107,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     var profileId = Number(cmd.profileId) || 0;
     if (!profileId) { return; }
 
-    var parts = String(cmd.text || '').trim().split(/\s+/);
+    var parts = commandParts(cmd.text);
     var word = parts[0].toLowerCase();
     var arg = (parts[1] || '').toLowerCase();
 
@@ -45867,6 +46178,51 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
+      if (!needCharacter()) return;
+      var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
+      var journals = g.__thornswoodSocial;
+      if (!journalPayload || !journalPayload.every(function (x) { return typeof x === 'string'; }) ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[0]) ||
+          !(journalPayload[1] === '' || /^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[1])) ||
+          journalPayload[2].length > 60 || journalPayload[3].length > 4000) {
+        toProfile(profileId, 'That page could not be saved: the request is invalid or too long. Your draft is still in J.');
+        return;
+      }
+      if (!journals || !journals.writePageExact) {
+        toProfile(profileId, 'Saving pages is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
+      if (journalWhy) toProfile(profileId, journalWhy);
+      journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-post-v1') {
+      if (!needCharacter()) return;
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
+      var propertyPosts = g.__thornswoodProperty;
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+          !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
+          (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
+          typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
+        toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
+        return;
+      }
+      if (!propertyPosts || !propertyPosts.postExact) {
+        toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
+      return;
     }
 
     // A lockpick that broke in somebody's game.
@@ -52179,7 +52535,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
       if (pidHere !== Number(pid)) { continue; }
       if (typeof notify === 'function') {
-        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not log a line to', hex(online[i]) + ':', e3); }
+      }
+      if (typeof say === 'function') {
+        try { say(online[i], line); } catch (e4) { plog('furniture: could not say a line to', hex(online[i]) + ':', e4); }
       }
       return;
     }
@@ -53586,7 +53945,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var fireEnd = Number(environment.burningUntil) || 0;
       var cursor = n.at;
       function temperatureTo(until, onFire) {
-        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        var target = environment.warmthTarget(n, onFire);
+        var coolingShare = target > n.temp ? 1 : environment.outdoorCooling(n);
+        approachTemperature(n, target, until - cursor, coolingShare);
         cursor = until;
       }
       // The environment supplies the interval. No runtime state is read by
@@ -59373,8 +59734,7 @@ module.exports = {
 
   function write(actorId, s) {
     s.at = Date.now();
-    if (tickMemo) { tickMemo['s' + actorId] = s; }
-    try { mp.set(actorId, SOCIAL_PROPERTY, s); return true; }
+    try { mp.set(actorId, SOCIAL_PROPERTY, s); if (tickMemo) { tickMemo['s' + actorId] = s; } return true; }
     catch (e) { return false; }
   }
 
@@ -59419,7 +59779,11 @@ module.exports = {
   function online() {
     return memo('online', function () {
       var all = [];
-      try { all = mp.get(0, 'onlinePlayers') || []; } catch (e) { return []; }
+      try { all = mp.get(0, 'onlinePlayers'); } catch (e) { return []; }
+      // Raw membership also proves disconnects for private save outcomes.
+      // Keep it only for this pass, before hiding faces still being created.
+      if (tickMemo && Array.isArray(all)) tickMemo.onlineRaw = all;
+      all = all || [];
       var chargen = g.__thornswoodChargen;
       if (!chargen || !chargen.hasStoredAppearance) { return all; }
       var out = [];
@@ -60159,8 +60523,34 @@ module.exports = {
     return null;
   }
 
-  function writePage(actorId, journalId, pageId, title, text) {
-    var s = stateOf(actorId);
+  // Kept through a gamemode reload, never persisted. One result per online
+  // actor, fenced to the owner/runtime so recycled form ids expose no prose.
+  var journalSaves = g.__thornswoodJournalSaveState || (g.__thornswoodJournalSaveState = {});
+  function journalSaveState(actorId, create) {
+    var profile, runtime;
+    try { profile = profileOf(actorId); runtime = mp.getActorRuntimeIdentity(actorId); } catch (e) { return null; }
+    if (!Number.isSafeInteger(profile) || !(profile > 0) || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+    var state = journalSaves[actorId];
+    if (state && (state.profile !== profile || state.runtime !== runtime)) { delete journalSaves[actorId]; state = null; }
+    if (!state && create) state = journalSaves[actorId] = {profile:profile,runtime:runtime,uncertain:false,result:null};
+    return state;
+  }
+  function writePageExact(actorId, journalId, pageId, title, text) {
+    if (typeof title !== 'string' || typeof text !== 'string' || title.length > 60 || text.length > SOCIAL.pageChars) {
+      return 'That page is too long or invalid. Nothing was saved.';
+    }
+    return writePage(actorId, journalId, pageId, title, text, true);
+  }
+
+  function writePage(actorId, journalId, pageId, title, text, exact) {
+    var resultState = exact ? journalSaveState(actorId, true) : null;
+    if (exact && !resultState) return 'The page save cannot be confirmed right now. Keep your unsaved draft.';
+    // Prepare on a clone: a refused property write must not mutate the cached
+    // page and publish it as an authoritative successful save.
+    var current = exact ? readNow(actorId) : stateOf(actorId);
+    if (!current) return 'That journal cannot be read right now. Your draft has not been saved.';
+    var s = JSON.parse(JSON.stringify(current));
+    var previous = JSON.stringify(s);
     var j = findJournal(s, journalId);
     if (!j) { return 'No such journal.'; }
     /*
@@ -60183,10 +60573,34 @@ module.exports = {
       page = { id: 'p' + Date.now().toString(36) + j.pages.length, shared: {} };
       j.pages.push(page);
     }
-    page.title = String(title || 'Page').slice(0, 60);
+    page.title = exact ? title : String(title || 'Page').slice(0, 60);
     page.text = body;
     page.at = Date.now();
-    write(actorId, s);
+    var ok = write(actorId, s);
+    var status = ok ? 'saved' : 'refused';
+    var digest = '';
+    if (ok && resultState) {
+      try { digest = require('crypto').createHash('sha256').update(JSON.stringify(s)).digest('hex'); }
+      catch (eDigest) { status = 'uncertain'; }
+      // An identical-value setter queues nothing. Only our prior successful
+      // queue of this exact full snapshot can qualify that no-op as accepted.
+      if (JSON.stringify(s) === previous && (!digest || resultState.confirmedDigest !== digest)) status = 'uncertain';
+    }
+    if (!ok) {
+      if (tickMemo) delete tickMemo['s' + actorId];
+      // The native setter may apply before RequestSave/publication throws.
+      // Readback only classifies live state, never proves queued persistence.
+      try { if (JSON.stringify(mp.get(actorId, SOCIAL_PROPERTY)) !== previous) status = 'uncertain'; }
+      catch (eReadback) { status = 'uncertain'; }
+    }
+    if (resultState) {
+      if (status === 'uncertain') resultState.uncertain = true;
+      else if (status === 'saved') { resultState.uncertain = false; resultState.confirmedDigest = digest; }
+      resultState.result = {journalId:journalId,pageId:page.id,title:page.title,text:body,status:status};
+    }
+    if (!ok || status === 'uncertain') return status === 'uncertain'
+      ? 'The page save could not be confirmed. Keep the unsaved draft and check it before trying again.'
+      : 'That page could not be saved. Your draft has not been saved.';
     return '';
   }
 
@@ -60200,6 +60614,14 @@ module.exports = {
       }
     }
     return false;
+  }
+
+  function pushJournalSave(actorId) {
+    // A failed input read must not call stateOf's first-use initializer.
+    var current = readNow(actorId);
+    if (!current) return;
+    if (tickMemo) tickMemo['s' + actorId] = current;
+    push(actorId);
   }
 
   /*
@@ -60390,6 +60812,7 @@ module.exports = {
     var offerNow = standingOffer(mine);
     return {
       me: mine,
+      journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
       near: near,
@@ -60495,6 +60918,12 @@ module.exports = {
     try { partyTick(); } catch (e) { slog('party tick:', e); }
     try { pushTextMutes(); } catch (e) { slog('text mute:', e); }
     var all = online();
+    // The public list can fail or omit a face still loading. Only a successful
+    // raw online read retires outcomes; an unknown read is not a disconnect.
+    var saveOnline = tickMemo && tickMemo.onlineRaw;
+    if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
+      if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
+    }
     for (var i = 0; i < all.length; i++) {
       try { push(all[i]); } catch (e) { }
     }
@@ -60559,7 +60988,7 @@ module.exports = {
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
-    newJournal: newJournal, writePage: writePage, dropJournal: dropJournal,
+    newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
     partyTick: partyTick, PARTY_PROPERTY: PARTY_PROPERTY
@@ -60985,7 +61414,7 @@ module.exports = {
     // Invalidate first: if minting fails, the changed pile can never retain
     // an old valid approval or version. An unversioned offer cannot agree.
     t.offerVersion = '';
-    t.okA = false; t.okB = false; t.at = Date.now();
+    t.okA = false; t.okB = false;
     t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
     t.offerVersion = freshOfferVersion();
   }
@@ -61282,13 +61711,13 @@ module.exports = {
         var room = hit.c - side[k].c;
         if (room <= 0) { return 'That is all of them already.'; }
         side[k].c += Math.min(n, room);
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
     if (side.length >= TRADE.mostLines) { return 'That is as much as one side can offer.'; }
     side.push({ id: hit.id, x: hit.x, n: hit.n, c: n });
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -61304,7 +61733,7 @@ module.exports = {
              String(side[i].id) === want || side[i].id.toString(16) === want)) {
         if (n > 0 && side[i].c > n) { side[i].c -= n; }
         else { side.splice(i, 1); }
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
@@ -61320,7 +61749,7 @@ module.exports = {
     var have = holding(actorId, GOLD);
     if (want > have) { return 'You only have ' + have + '.'; }
     if (t.a === actorId) { t.goldA = want; } else { t.goldB = want; }
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -61351,7 +61780,7 @@ module.exports = {
     if (!t) { return 'You are not trading.'; }
     if (t.sale === actorId) {
       t.sale = 0;
-      unconfirm(t); push(t);
+      t.at = Date.now(); unconfirm(t); push(t);
       try { say(other(t, actorId), nameOf(actorId) + ' is not buying for the company now. It is an ordinary trade.'); }
       catch (e) { }
       return '';
@@ -61361,7 +61790,7 @@ module.exports = {
       return 'Only somebody the Free Skyrim Trading Company has taken on buys for it. It is an application, in Discord.';
     }
     t.sale = actorId;
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     try {
       say(other(t, actorId), nameOf(actorId) + ' is buying for the Free Skyrim Trading Company. ' +
           'What you put up leaves Skyrim and does not come back.');
@@ -61398,6 +61827,9 @@ module.exports = {
   function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    // The normal cleanup tick may still be waiting. An approval cannot revive
+    // a conversation whose full idle window has already elapsed.
+    if (Date.now() - t.at > TRADE.idleFor) { return 'The trade timed out.'; }
     if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
         offerVersion !== t.offerVersion) {
       refresh(actorId);
@@ -61414,6 +61846,9 @@ module.exports = {
     }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
+    // Only a newly accepted approval renews idle time. A refused final swap
+    // may invalidate approvals, but it is not activity that keeps a trade open.
+    if (!(t.okA && t.okB)) { t.at = Date.now(); }
     push(t);
     var them = other(t, actorId);
     if (!(t.okA && t.okB)) {
@@ -63620,6 +64055,7 @@ module.exports = {
   // Bans made here, until the door's next list carries them; and who is
   // already on their way out, so the sweep tells them once.
   if (!state.banned) { state.banned = {}; }
+  var bansLoadedAt = Date.now();  // old hot-reload overlays have no acknowledgement time
   if (!state.ending) { state.ending = {}; }
   // Characters killed for good here (#1010), until the door's list carries them.
   if (!state.pk) { state.pk = {}; }
@@ -63628,6 +64064,37 @@ module.exports = {
   // Bans lifted here, so the door's list, which can carry a lifted ban for up
   // to its five minute refresh, does not end their session again meanwhile.
   if (!state.lifted) { state.lifted = {}; }
+  migrateScopes(state.banned);
+  migrateScopes(state.lifted);
+
+  // Existing hot reloads can carry a single receipt or lift per character.
+  function migrateScopes(records) {
+    Object.keys(records).forEach(function (pid) {
+      var record = records[pid];
+      if (!record.scope && record.at === undefined && record.until === undefined) { return; }
+      var scopes = {};
+      scopes[record.scope || 'account'] = record;
+      records[pid] = scopes;
+    });
+  }
+  function recordScope(records, pid, scope, record) {
+    if (!records[pid]) { records[pid] = {}; }
+    records[pid][scope] = record;
+  }
+  function forgetScope(records, pid, scope) {
+    var scopes = records[pid];
+    if (!scopes) { return; }
+    delete scopes[scope];
+    if (!scopes.account && !scopes.character) { delete records[pid]; }
+  }
+  function pruneScopes(records, expired) {
+    Object.keys(records).forEach(function (pid) {
+      var scopes = records[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        if (expired(scopes[scope])) { forgetScope(records, pid, scope); }
+      });
+    });
+  }
 
   function settings() {
     try { return mp.getServerSettings() || {}; } catch (e) { return {}; }
@@ -64037,25 +64504,45 @@ module.exports = {
   }
 
   /* Every active ban the door's last list carried, and the ones made here since. */
-  var bansRead = { at: 0, list: [], pk: [] };
+  // Once the site has taken over, a transient missing file during hot reload
+  // cannot erase its last confirmed bans either.
+  var confirmedBans = state.confirmedBans || (state.confirmedBans = { list: [], requestedAt: 0 });
+  var bansRead = { at: 0, list: confirmedBans.list, pk: [], banAt: confirmedBans.requestedAt };
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0;
+    var list = null, pk = [], written = 0, bansRequested = 0, hasBanStamp = false;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
-      if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
+      if (doc && Array.isArray(doc.bans) && doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); })) {
+        list = doc.bans;
+      }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
-    } catch (e) { list = []; pk = []; }
-    bansRead.list = list;
+      if (list) {
+        hasBanStamp = !!doc.bansRequestedAt;
+        bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
+      }
+    } catch (e) { list = null; pk = []; }
     bansRead.pk = pk;
     bansRead.written = written;
-    // A lift the door's list has caught up with needs remembering no longer.
-    for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
+    // The site's confirmed newer request now owns these bans, including a
+    // lift made on the site. A late older request or unreadable list does not.
+    if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
+      bansRead.list = confirmedBans.list = list;
+      bansRead.banAt = confirmedBans.requestedAt = bansRequested;
+      pruneScopes(state.banned, function (ban) {
+        return bansRequested > (Number(ban.at) || bansLoadedAt);
+      });
+    } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
+      // Read old door files until the first confirmed snapshot arrives. A
+      // broken file cannot erase the last known list or its ban-specific time.
+      bansRead.list = list;
+      bansRead.banAt = written;
     }
+    // A lift the door's ban list has caught up with needs remembering no longer.
+    pruneScopes(state.lifted, function (lift) { return bansRead.banAt > lift.at; });
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
     for (var p in state.pk) {
@@ -64078,6 +64565,18 @@ module.exports = {
     }
     return out;
   }
+  // Account bans govern the whole account. Within one kind, keep the
+  // longest active ban; a permanent ban outlasts every timed one.
+  function preferredBan(have, next) {
+    if (!have) { return next; }
+    var account = (have.scope || 'account') === 'account';
+    var nextAccount = (next.scope || 'account') === 'account';
+    if (account !== nextAccount) { return nextAccount ? next : have; }
+    var until = Number(have.until) || 0;
+    var nextUntil = Number(next.until) || 0;
+    if (until && (!nextUntil || nextUntil > until)) { return next; }
+    return have;
+  }
   function bansNow(now) {
     readDoor(now);
     var out = {};
@@ -64090,19 +64589,19 @@ module.exports = {
       for (var j = 0; j < ps.length; j++) {
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
-        var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
-        // A ban on the whole account says more than one on the character.
-        if (out[p] && out[p].scope === 'account') { continue; }
-        out[p] = { why: String(b.why || ''), until: until, scope: scope };
+        var lifts = state.lifted[p];
+        var lift = lifts && lifts[scope];
+        if (lift && lift.at >= bansRead.banAt) { continue; }
+        out[p] = preferredBan(out[p], { why: String(b.why || ''), until: until, scope: scope });
       }
     }
-    for (var k in state.banned) {
-      if (!Object.prototype.hasOwnProperty.call(state.banned, k)) { continue; }
-      var s = state.banned[k];
-      if (s.until && s.until <= now) { delete state.banned[k]; continue; }
-      out[Number(k)] = s;
-    }
+    pruneScopes(state.banned, function (ban) { return ban.until && ban.until <= now; });
+    Object.keys(state.banned).forEach(function (pid) {
+      var scopes = state.banned[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        out[pid] = preferredBan(out[pid], scopes[scope]);
+      });
+    });
     return out;
   }
 
@@ -64190,15 +64689,15 @@ module.exports = {
         if (!ok) { tell(pid, 'The site did not take the ban, so nothing changed: ' + v + '.'); return; }
         var until = Number(v.until) || 0;
         var covers = whole && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
-        var ban = { why: why, until: until, scope: whole ? 'account' : 'character' };
         var now = Date.now();
+        var ban = { why: why, until: until, scope: whole ? 'account' : 'character', at: now };
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }
-          state.banned[p] = ban;
-          delete state.lifted[p];
+          recordScope(state.banned, p, ban.scope, ban);
+          forgetScope(state.lifted, p, ban.scope);
           var a = (p === them.pid && them.actorId) || actorFor(p);
-          if (a) { endBanned(p, a, ban, now); }
+          if (a) { endBanned(p, a, bansNow(now)[p], now); }
         }
         tell(pid, whole
           ? ('Banned ' + them.name + '\'s whole account, every character on it and any new one, ' + untilText(until) + '.')
@@ -64217,11 +64716,11 @@ module.exports = {
           var covers = wholeU && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
           for (var i = 0; i < covers.length; i++) {
             var p = Number(covers[i]);
-            var had = state.banned[p];
-            if (had && (had.scope || 'account') === (wholeU ? 'account' : 'character')) { delete state.banned[p]; }
+            var scope = wholeU ? 'account' : 'character';
+            forgetScope(state.banned, p, scope);
             delete state.ending[p];
             // The door's list can still carry it for a few minutes.
-            if (v.was) { state.lifted[p] = { at: now, scope: wholeU ? 'account' : 'character' }; }
+            if (v.was) { recordScope(state.lifted, p, scope, { at: now }); }
           }
           if (wholeU) {
             tell(pid, v.was ? ('The ban on ' + them.name + '\'s account is lifted.') : (them.name + '\'s account was not banned.'));
@@ -64667,21 +65166,24 @@ module.exports = {
 
   function command(cmd, word, parts, pid, actorId) {
     var settingClass = word === '/setclass';
-    if (word !== '/rankup' && !settingClass) { return false; }
-    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : USAGE;
+    var settingProfession = word === '/setprofession';
+    if (word !== '/rankup' && !settingClass && !settingProfession) { return false; }
+    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : settingProfession ?
+      'Use /setprofession <profession> <half or school,school> [spells <names>] [staffspells <names>] [for <person>].' : USAGE;
     var staff = g.__thornswoodStaff;
     if (!staff) { return true; }
     function refuse(why) { staff.tell(pid, why); return true; }
     var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
     if (!P || !C) { return refuse('The progression tools are not running.'); }
     var args = parts.slice(1);
-    var kind = settingClass ? 'class' : String(args.shift() || '').toLowerCase();
+    var kind = settingClass ? 'class' : settingProfession ? 'profession' : String(args.shift() || '').toLowerCase();
     if (kind !== 'class' && kind !== 'profession') { return refuse(usage); }
     var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
     var targetWords = at < 0 ? [] : args.slice(at + 1);
     var choice = at < 0 ? args : args.slice(0, at);
-    if ((at >= 0 && !targetWords.length) || choice.length > (settingClass || kind === 'profession' ? 1 : 0) ||
-        (settingClass && choice.length !== 1)) {
+    if ((at >= 0 && !targetWords.length) ||
+        (!settingProfession && choice.length > (settingClass || kind === 'profession' ? 1 : 0)) ||
+        (settingClass && choice.length !== 1) || (settingProfession && choice.length < 2)) {
       return refuse(usage);
     }
     var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
@@ -64695,6 +65197,45 @@ module.exports = {
     if (denied) { return refuse(denied); }
     if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
     var s = C.stateOf(target.actorId), key;
+    if (settingProfession) {
+      var prof = String(choice[0]).toLowerCase();
+      var half = prof === 'mage' ? String(choice[1]).toLowerCase().split(',') : C.mapHalf(choice[1]);
+      var replacement = P.setProfessionForTesting(s, prof, half);
+      if (!replacement.ok) { return refuse(replacement.why); }
+      var selections = replacement.state.spellSelections || {};
+      var seen = {};
+      for (var n = 2; n < choice.length;) {
+        var label = String(choice[n++]).toLowerCase();
+        if ((label !== 'spells' && label !== 'staffspells') || seen[label]) { return refuse(usage); }
+        seen[label] = true;
+        var start = n;
+        while (n < choice.length && ['spells', 'staffspells'].indexOf(String(choice[n]).toLowerCase()) < 0) { n++; }
+        var text = choice.slice(start, n).join(' ');
+        if (!text) { return refuse(usage); }
+        var names = text.toLowerCase() === 'none' ? [] : text.split(',').map(function (x) { return x.trim(); });
+        var picked = [];
+        for (var j = 0; j < names.length; j++) {
+          var spell = label === 'spells' ? P.spellAt(names[j]) : g.__thornswoodStaffSpells.find(names[j]);
+          if (!spell) { return refuse('No known spell is named ' + names[j] + '.'); }
+          picked.push(label === 'spells' ? spell.name : spell.desc);
+        }
+        selections[label === 'spells' ? 'spells' : 'staffSpells'] = picked;
+      }
+      replacement.state.spellSelections = selections;
+      var prepared = g.__thornswoodCharacterKnowledge.prepare(replacement.state);
+      if (!prepared.ok) {
+        return refuse(prepared.why + (prepared.choices ? ': ' + prepared.choices.join(', ') + '.' : '.'));
+      }
+      try { C.writeState(target.actorId, prepared.state, true); }
+      catch (e) { return refuse('The profession change could not be saved.'); }
+      if (!C.writeSucceeded(target.actorId)) { return refuse('The profession change could not be saved.'); }
+      var name = P.TABLE.professions[prof].name;
+      staff.tell(target.pid, 'Your profession is now ' + name + ' at Novice. Your learned knowledge is kept; only eligible spells are active.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s profession to ' + name + '.'); }
+      staff.record('setprofession', pid, staff.nameOf(actorId), target.pid, target.name, name, 0,
+        { from: s.prof || null, to: prof, half: prepared.state.half, schools: prepared.state.schools });
+      return true;
+    }
     if (settingClass) {
       var cls = String(choice[0]).toLowerCase();
       var changed = P.setClassForTesting(s, cls);
@@ -64767,7 +65308,11 @@ module.exports = {
         text: 'Advance another character\'s current class or profession by one rank.' },
       { word: '/setclass', role: 'playtester', syntax: '/setclass <class>', text: 'Change your gathering class at Novice.' },
       { word: '/setclass', role: 'admin', syntax: '/setclass <class> for <person>',
-        text: 'Change another character\'s gathering class at Novice.' }] });
+        text: 'Change another character\'s gathering class at Novice.' },
+      { word: '/setprofession', role: 'playtester', syntax: '/setprofession <profession> <half or school,school>',
+        text: 'Change your profession at Novice, keeping knowledge with only eligible spells active.' },
+      { word: '/setprofession', role: 'admin', syntax: '/setprofession <profession> <half or school,school> for <person>',
+        text: 'Change another character\'s profession at Novice, keeping their knowledge.' }] });
   }
 })();
 // ==== end thornswood staff progression ====
@@ -70207,7 +70752,7 @@ function createMerchantTrading(deps) {
   function inReach(humanId, merchantId) {
     var human = world.actor(humanId);
     var merchant = world.actor(merchantId);
-    if (!human || !merchant || !human.pos || !merchant.pos) {
+    if (!human || !merchant) {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     if (human.isHuman !== true || !(human.profileId > 0)) {
@@ -70216,7 +70761,10 @@ function createMerchantTrading(deps) {
     if (merchant.isHuman || merchant.profileId > 0) {
       return { ok: false, reason: 'That is not a guild trader.' };
     }
-    if (String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
+    if (merchant.isDead !== false || merchant.isDisabled !== false) {
+      return { ok: false, reason: 'This guild trader is unavailable.' };
+    }
+    if (!human.pos || !merchant.pos || String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     var d = Math.hypot(
@@ -70802,8 +71350,15 @@ function installMerchantTrading(env) {
     transfer: createNativeMerchantTransfer(mp),
     world: {
       actor: function (id) {
-        var ai = null;
-        try { ai = mp.getNpcAIState(id); } catch (e) { ai = null; }
+        var ai = null, desc = null, runtimeIdentity = null;
+        try {
+          ai = mp.getNpcAIState(id);
+          // Only the player's session is pinned to a runtime identity.
+          if (ai && ai.isHuman) {
+            desc = mp.getDescFromId(id);
+            runtimeIdentity = mp.getActorRuntimeIdentity(id);
+          }
+        } catch (e) { ai = null; }
         var pos = ai && Array.isArray(ai.pos) ? ai.pos.slice(0, 3) : null;
         var cell = ai ? (ai.cellOrWorld || ai.cell || null) : null;
         try {
@@ -70819,9 +71374,11 @@ function installMerchantTrading(env) {
         return {
           pos: pos,
           cell: cell,
-          desc: mp.getDescFromId(id),
+          desc: desc,
           lifeGeneration: ai && ai.lifeGeneration,
-          runtimeIdentity: mp.getActorRuntimeIdentity(id),
+          runtimeIdentity: runtimeIdentity,
+          isDead: ai && ai.isDead,
+          isDisabled: ai && ai.isDisabled,
           profileId: ai && ai.profileId || 0,
           isHuman: !!(ai && ai.isHuman)
         };

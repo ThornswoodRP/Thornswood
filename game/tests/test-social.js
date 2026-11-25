@@ -687,7 +687,7 @@ if (social && trade) {
     w.g.__thornswoodJoinPass={requiring(){return true;}};
     const da=src.indexOf('  if (!globalThis.__thornswoodLastActor)'), db=src.indexOf('  /** key -> where /tp sends staff',da);
     const words=/^const WORDS = (\[[\s\S]*?\]);$/m.exec(src);
-    const api=new Function('globalThis','g','mp','WORDS','handle','toProfile','log','Date',src.slice(da,db)+'; return {dispatch,actorOf};')(
+    const api=new Function('globalThis','g','mp','WORDS','handle','toProfile','log','Date',lift('  function commandParts(', '  function savedTextPayload(')+src.slice(da,db)+'; return {dispatch,actorOf};')(
       w.g,w.g,w.mp,new Function('return '+words[1])(),
       cmd=>command(w,api.actorOf(Number(cmd.profileId)),cmd.text),
       (pid,line)=>w.said.push({to:w.soc.actorForProfile(pid),line}),()=>{}, {now(){return w.clock.now;}});

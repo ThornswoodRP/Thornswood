@@ -872,6 +872,7 @@
     empty map after a restart costs one redraw each, which is right anyway.
   */
   var lastDrawn = {};
+  var writeResults = {};
 
   /*
     The client side script. It runs inside skymp5-client EVERY FRAME for as
@@ -972,7 +973,28 @@
     return lastAsked;
   }
 
-  function writeState(actorId, s, redraw) {
+  function writeState(actorId, s, redraw, nativeTome) {
+    var expected = null;
+    writeResults[actorId] = false;
+    if (s.spellHistory) {
+      expected = readState(actorId);
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The atomic spell writer is not running.'); }
+      var active = knowledge.prepare(s);
+      if (!active.ok) { throw new Error('Could not prepare active knowledge: ' + active.why); }
+      if (nativeTome) {
+        var eligible = function (a, b) { return (a || []).every(function (x, i) { return b.indexOf(x) >= 0 && a.indexOf(x) === i; }); };
+        if (!eligible(s.spells && s.spells.known, active.state.spells.known) || !eligible(s.staffSpells, active.state.staffSpells)) {
+          throw new Error('The tome would grant knowledge that is not currently eligible.');
+        }
+        // Native ReadBookEvent will add only the tome's own spell. Historical
+        // extras made eligible by this study remain latent until an atomic
+        // refresh can publish them in the book and engine together.
+        active.state.spells.known = ((s.spells && s.spells.known) || []).slice();
+        active.state.staffSpells = (s.staffSpells || []).slice();
+      }
+      s = active.state;
+    }
     s.v = 1;
     // forPanel is what the client sees; the rules state is what is stored.
     // Both travel in the one property so the panel never sees a half state.
@@ -1043,13 +1065,16 @@
     }
     var written = false;
     try {
-      mp.set(actorId, CHAR_PROPERTY, s);
-      written = true;
+      if (s.spellHistory && !nativeTome) {
+        written = g.__thornswoodCharacterKnowledge.commit(actorId, expected, s);
+        if (!written) { throw new Error('The character or active spells changed before the write.'); }
+      } else { mp.set(actorId, CHAR_PROPERTY, s); written = true; }
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
-      if (sending) { lastDrawn[actorId] = sig; }
+      if (written && sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
+      if (s.spellHistory || nativeTome) { throw e; }
     }
     /*
       What the menus list goes with the record, so only once it is written
@@ -1059,12 +1084,15 @@
       with no end: an actor whose form is gone (a name taken off the embassy
       roll after its character went) stopped the server.
     */
+    writeResults[actorId] = written;
     if (written) {
       // Twin Souls is a second enchantment slot in the menu (#1389). It lives
       // beside the craft gate, outside this block, the way spellOn does.
-      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      try { if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); } }
+      catch (eSlots) { clog('character saved but enchantment slots could not be published for', actorId.toString(16), eSlots); }
       // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+      try { if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); } }
+      catch (eRecipes) { clog('character saved but recipe visibility could not be published for', actorId.toString(16), eRecipes); }
     }
     return s;
   }
@@ -1299,6 +1327,7 @@
       try { FS.worked(actorId); } catch (eSteps) { clog('first steps threw at a piece of work:', eSteps); }
     }
     writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) { return null; }
     return raiseLines(actorId, r);
   }
 
@@ -1343,6 +1372,11 @@
     had no form id for it all end up in the same place.
   */
   function grantKnown(actorId) {
+    var current = stateOf(actorId);
+    if (current.spellHistory) {
+      var active = writeState(actorId, current);
+      return writeResults[actorId] ? active.spells.known.length + active.staffSpells.length : 0;
+    }
     // Only the book is granted (#1387): what it does not list comes off
     // first, out of the book and off the character, in the college block.
     var college = g.__thornswoodCollege;
@@ -2196,6 +2230,10 @@
     }
     r.state.note = null;
     var st = writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) {
+      toProfile(profileId, 'The character change could not be saved. Nothing was learned or spent.');
+      return true;
+    }
     clog(word, parts.slice(1).join(' '), 'for', actorId.toString(16), 'accepted');
 
     /*
@@ -2405,6 +2443,23 @@
 
   g.__thornswoodCharacter = {
     PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
+    // ReadBookEvent owns AddSpell and consuming the tome after this returns.
+    // Saving eligible book/history here must not pre-add that engine spell.
+    writeTomeState: function (actorId, s) {
+      var next = P.clone(s);
+      // Canonical tome rules already enforce the outsider cap. A newly learned
+      // eligible spell takes its place beside the currently selected spells.
+      if (next.spellHistory && next.spellSelections) {
+        if (next.prof !== 'mage' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'spells')) {
+          next.spellSelections.spells = ((next.spells && next.spells.known) || []).slice();
+        }
+        if (next.prof !== 'enchanter' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'staffSpells')) {
+          next.spellSelections.staffSpells = (next.staffSpells || []).slice();
+        }
+      }
+      return writeState(actorId, next, false, true);
+    },
+    writeSucceeded: function (actorId) { return writeResults[actorId] === true; },
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,
