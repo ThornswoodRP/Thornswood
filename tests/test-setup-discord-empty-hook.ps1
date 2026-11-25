@@ -15,6 +15,8 @@
     a missing file: the old "no webhook was made" lines, nothing sent
     a file that is not a webhook address: Discord-Hook.ps1 refuses it,
       the tail says it is not on the VPS, nothing reaches the stub
+    a leftover file under -Check: says the file is there, leaves it untouched (#4226)
+    a leftover file under -Only: exits without saving, leaves it untouched (#4226)
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -44,15 +46,15 @@ try {
     $called = Join-Path $work 'remote-called.txt'
     $stub = "param([Parameter(ValueFromRemainingArguments=`$true)]`$rest)`r`n[IO.File]::AppendAllText('" + $called.Replace("'", "''") + "', 'called`r`n')`r`nexit 1`r`n"
     [IO.File]::WriteAllText((Join-Path $vps 'Remote.ps1'), $stub)
-    $tail = "`$ErrorActionPreference = 'Stop'`r`n`$Here = `$PSScriptRoot`r`n`$code = 0`r`n" + $src.Substring($at)
+    $tail = "param([switch]`$Check, [string[]]`$Only = @())`r`n`$ErrorActionPreference = 'Stop'`r`n`$Here = `$PSScriptRoot`r`n`$code = 0`r`n" + $src.Substring($at)
     $tailPath = Join-Path $dep 'Setup-Discord-tail.ps1'
     [IO.File]::WriteAllText($tailPath, $tail, (New-Object Text.UTF8Encoding($true)))
     $hookFile = Join-Path $bot 'news-webhook.txt'
 
-    function RunTail {
+    function RunTail([string[]]$TailArgs = @()) {
         Remove-Item -LiteralPath $called -Force -ErrorAction SilentlyContinue
         $ErrorActionPreference = 'Continue'
-        $said = @(& $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tailPath 2>&1 | ForEach-Object { "$_" })
+        $said = @(& $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tailPath @TailArgs 2>&1 | ForEach-Object { "$_" })
         $rc = $LASTEXITCODE
         return @{ Said = ($said -join "`n"); Code = $rc; Sent = (Test-Path -LiteralPath $called) }
     }
@@ -77,6 +79,26 @@ try {
     Yes 'not an address: Discord-Hook.ps1 refuses it' ($r.Said -match 'not a Discord webhook address')
     Yes 'not an address: the tail says it is not on the VPS' ($r.Said -match 'not on the VPS')
     Yes 'not an address: nothing reached the VPS stub' (-not $r.Sent)
+
+    # Leftover webhook file from an earlier run (#4226)
+    $validHook = 'https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz'
+    [IO.File]::WriteAllText($hookFile, $validHook)
+
+    $r = RunTail -TailArgs @('-Check')
+    Yes '-Check with leftover file: exit 0' ($r.Code -eq 0)
+    Yes '-Check with leftover file: says the file is there' ($r.Said -match 'news-webhook\.txt is there')
+    Yes '-Check with leftover file: nothing reached the VPS stub' (-not $r.Sent)
+    Yes '-Check with leftover file: leaves file untouched' ((Test-Path -LiteralPath $hookFile) -and [IO.File]::ReadAllText($hookFile) -eq $validHook)
+
+    $r = RunTail -TailArgs @('-Only', 'Gamemasters')
+    Yes '-Only with leftover file: exit 0' ($r.Code -eq 0)
+    Yes '-Only with leftover file: nothing reached the VPS stub' (-not $r.Sent)
+    Yes '-Only with leftover file: leaves file untouched' ((Test-Path -LiteralPath $hookFile) -and [IO.File]::ReadAllText($hookFile) -eq $validHook)
+
+    Remove-Item -LiteralPath $hookFile -Force
+    $r = RunTail -TailArgs @('-Check')
+    Yes '-Check without file: exit 0' ($r.Code -eq 0)
+    Yes '-Check without file: nothing reached the VPS stub' (-not $r.Sent)
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

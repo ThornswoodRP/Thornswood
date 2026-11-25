@@ -16,8 +16,6 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent $Here
 
-. (Join-Path $Here 'Windows.ps1')
-
 $script:pass = 0
 $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -63,7 +61,7 @@ Yes 'Deploy-Server.ps1 does not call unconditional Join-Path on $Data' (
     $deployServerSrc -notmatch '(?m)^\s*\$local\s*=\s*Join-Path\s+\$Data\s+\$n\s*$')
 
 # 3. Path code execution check (simulating drive C missing or running on Linux)
-$drive = if ($OnWindows) { 'Z:' } else { 'C:' }
+$drive = if (([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT)) { 'Z:' } else { 'C:' }
 $testSrv = "$drive\Thornswood-Server"
 $testVoice = "$drive\Thornswood-Voice"
 $testDocs = "$drive\Thornswood-Docs"
