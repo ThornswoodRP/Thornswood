@@ -165,6 +165,17 @@ def moderation_text(where, row):
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
     did = _MOD_DID[row['did']]
+    gallery_phase = row.get('phase')
+    if row['did'] == 'galleryapprove' and gallery_phase == 'updated':
+        did = 'updated gallery picture %s'
+    elif row['did'] == 'galleryremove' and isinstance(gallery_phase, str):
+        did = {
+            'approved': 'removed gallery picture %s from the public gallery',
+            'pending': 'removed gallery picture %s from the approval queue',
+            'reports': 'cleared reports while removing gallery picture %s',
+            'file': 'deleted the stored file for gallery picture %s',
+            'hidden': 'marked the stored file for gallery picture %s as removed',
+        }.get(gallery_phase, did)
     if '%s' in did:
         # Generated picture names exceed the character-name bound. Keep the
         # filename distinct, escaped as typed, without treating it as a person.

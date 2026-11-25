@@ -39,5 +39,19 @@ for did, words in [('galleryapprove', 'accepted gallery picture'),
     bounded = bot.moderation_text('site', {'did': did, 'byName': 'a' * 5000, 'whoName': 'b' * 5000})
     yes(did + ' stays within the existing message limit', bounded is not None and len(bounded) <= 1900)
 
+for question, phase, words in [
+    ('galleryapprove', 'updated', 'updated gallery picture ' + picture),
+    ('galleryremove', 'approved', 'removed gallery picture ' + picture + ' from the public gallery'),
+    ('galleryremove', 'pending', 'removed gallery picture ' + picture + ' from the approval queue'),
+    ('galleryremove', 'reports', 'cleared reports while removing gallery picture ' + picture),
+    ('galleryremove', 'file', 'deleted the stored file for gallery picture ' + picture),
+    ('galleryremove', 'hidden', 'marked the stored file for gallery picture ' + picture + ' as removed'),
+]:
+    private_id = '111111111111111111'
+    text = bot.moderation_text('site', {'did': question, 'phase': phase,
+        'byName': 'Current Aela', 'byId': private_id, 'whoName': picture})
+    yes(phase + ' reports the step that committed without printing the account ID',
+        'Current Aela ' + words in text and private_id not in text)
+
 print('%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

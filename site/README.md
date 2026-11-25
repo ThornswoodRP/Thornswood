@@ -253,12 +253,17 @@ rather than send something in. A ticket for an account that is not staff is
 one `403 {why:'banned'}`, and a Discord that could not be asked `503`. Neither
 cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
 
-Gallery accept, removal and report dismissal also write the verified staff
-name and picture name to `data\for-bot\moderation.log` (#4938). The record
-follows a committed change, including one whose later cleanup fails; a
-refused first save or unchanged retry has no new action. Report text stays
-in its existing store. The bot escapes the names in its staff sentence, and
-the log keeps its existing retention and write-failure reporting.
+Gallery accept, removal and report dismissal write the verified staff name,
+account ID and picture name to `data\for-bot\moderation.log` (#4938). Each
+record names the first step the request committed, so a cleanup retry does
+not read like another public removal. A refused first save or an unchanged
+retry leaves no new action. Report text stays in its existing store. The bot
+escapes the names in its staff sentence. The log keeps its existing retention
+and write-failure reporting.
+
+A report's retention record is saved before its open entry is cleared.
+Retrying a removal during an active hold keeps the picture and the original
+deadline. The retention sweep can remove the file once the hold ends.
 
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
 (`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds

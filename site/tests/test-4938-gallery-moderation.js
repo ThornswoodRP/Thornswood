@@ -67,6 +67,7 @@ async function act(method, route, body, id = first, launcher = false) {
 function recorded(before, did, name, actor) {
   const added = audit().slice(before);
   return added.length === 1 && added[0].did === did && added[0].whoName === name && added[0].byName === actor
+    && added[0].byId === (actor === 'Current Aela' ? first : second)
     && added[0].server === 'site' && Number.isFinite(Date.parse(added[0].at));
 }
 (async () => {
@@ -83,11 +84,16 @@ function recorded(before, did, name, actor) {
     let stderr = ''; child.stderr.on('data', data => { stderr += data; }); port = (await siteFiles.listening(child)).port;
     const image = '20261125-' + 'a'.repeat(40) + '.png';
     seed(image); let before = audit().length;
-    let result = await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor', byName: 'Forged actor' });
+    let result = await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor', byName: 'Forged actor', byId: second });
     yes('approval really commits public entry and removes pending', result.status === 200 && read('data/gallery.json')[0].name === image && read('data/gallery-pending.json').length === 0);
     yes('approval audit uses current authenticated staff name and exact picture', recorded(before, 'galleryapprove', image, 'Current Aela'));
+    yes('the audit binds the display name to the verified account ID', audit().at(-1).byId === first);
     before = audit().length; await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor' });
     yes('unchanged approval retry has no duplicate action', audit().length === before);
+    result = await act('POST', '/api/gallery/approve', { name: image, by: 'Corrected credit' });
+    yes('changing credit on an existing approved picture is recorded as an update',
+      result.status === 200 && recorded(before, 'galleryapprove', image, 'Current Aela') && audit().at(-1).phase === 'updated');
+    before = audit().length;
     result = await act('DELETE', '/api/gallery/approved', { name: image, byName: 'Forged actor' }, second, true);
     yes('launcher removal actually removes public entry', result.status === 200 && read('data/gallery.json').length === 0);
     yes('launcher removal names current verified ticket actor, not old ticket/body name', recorded(before, 'galleryremove', image, 'Current Brynjolf'));
@@ -116,6 +122,12 @@ function recorded(before, did, name, actor) {
     fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-pending.json');
     result = await act('DELETE', '/api/gallery/approved', { name: image });
     yes('committed removal is audited before later pending save refusal', result.status === 500 && read('data/gallery.json').length === 0 && recorded(before, 'galleryremove', image, 'Current Aela'));
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
+    const beforeCleanup = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: image }, second, true);
+    yes('a removal retry preserves which moderator changed the visible gallery and which finished a later step',
+      result.status === 200 && audit().at(beforeCleanup - 1).phase === 'approved' &&
+      audit().at(beforeCleanup).phase === 'pending' && audit().at(beforeCleanup).byId === second);
     seed(image, [{ id: 'save-refused', name: image }]); before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-reports.json');
     result = await act('POST', '/api/gallery/report/dismiss', { id: 'save-refused' });
     yes('failed dismissal preserves report without success audit', result.status === 500 && audit().length === before && read('data/gallery-reports.json').length === 1);
@@ -137,6 +149,43 @@ function recorded(before, did, name, actor) {
       && fs.existsSync(path.join(dir, 'uploads', image)) && held.heldUntil > Date.now() && held.heldReports[0].why === 'Private held evidence'
       && read('data/gallery.json').length === 0 && read('data/gallery-pending.json').length === 0 && read('data/gallery-reports.json').length === 0
       && recorded(before, 'galleryremove', image, 'Current Aela') && !JSON.stringify(audit().slice(before)).includes('Private held evidence'));
+    before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: image }, second, true);
+    yes('repeating removal during a report hold preserves the file and writes no second action',
+      result.status === 200 && fs.existsSync(path.join(dir, 'uploads', image)) &&
+      read('uploads/uploads.json')[image]?.heldUntil === held.heldUntil && audit().length === before);
+    const retryImage = '20261125-' + 'b'.repeat(40) + '.png';
+    seed(retryImage, [{ id: 'save-held-note', name: retryImage, why: 'Report stays intact' }]);
+    write('data/gallery.json', [{ name: retryImage }]);
+    fs.writeFileSync(path.join(dir, 'uploads', retryImage), 'owned retry image');
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), 'uploads.json');
+    before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: retryImage });
+    yes('refused evidence metadata write preserves the file and source report',
+      result.status === 500 && result.body.fileKept === true &&
+      fs.existsSync(path.join(dir, 'uploads', retryImage)) && read('data/gallery-reports.json').length === 1 &&
+      recorded(before, 'galleryremove', retryImage, 'Current Aela') && audit().at(-1).phase === 'approved');
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-reports.json');
+    before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: retryImage }, second, true);
+    const retryHeld = read('uploads/uploads.json')[retryImage];
+    yes('failed clearing of an open report keeps both durable retained evidence and the original report',
+      result.status === 500 && fs.existsSync(path.join(dir, 'uploads', retryImage)) &&
+      retryHeld.heldReports[0].why === 'Report stays intact' && read('data/gallery-reports.json').length === 1);
+    yes('the retry audit identifies the moderator who placed the hold',
+      recorded(before, 'galleryremove', retryImage, 'Current Brynjolf') && audit().at(-1).phase === 'hidden');
+    fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
+    before = audit().length;
+    result = await act('DELETE', '/api/gallery/approved', { name: retryImage }, second, true);
+    yes('the next retry clears the open queue after the hold without resetting its deadline',
+      result.status === 200 && result.body.heldUntil === retryHeld.heldUntil &&
+      read('data/gallery-reports.json').length === 0 && fs.existsSync(path.join(dir, 'uploads', retryImage)) &&
+      recorded(before, 'galleryremove', retryImage, 'Current Brynjolf') && audit().at(-1).phase === 'reports');
+    before = audit().length;
+    fs.writeFileSync(path.join(dir, 'uploads/uploads.json'), '{');
+    result = await act('DELETE', '/api/gallery/approved', { name: retryImage });
+    yes('unreadable evidence state cannot authorize deleting the stored upload',
+      result.status === 500 && fs.existsSync(path.join(dir, 'uploads', retryImage)) && audit().length === before);
     yes('owned site remains running and blocks every unrecognized provider route', child.exitCode === null && !stderr.includes('fixture blocks external request'));
   } catch (e) { fail++; console.error(e.stack || e); }
   finally {
