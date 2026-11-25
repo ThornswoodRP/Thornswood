@@ -82,6 +82,10 @@ function Test-CollectionPluginName($Name) { return ($Name -is [string]) -and ($N
 
 # The record read from its file. Throws a sentence naming the file.
 function Read-CollectionRecord([string]$Path) {
+    if ([IO.Path]::GetFileName($Path) -ieq 'collection-plugins.json') {
+        . (Join-Path $PSScriptRoot 'RecordShape.ps1')
+        return (Read-ThornswoodRecord -Path $Path -Kind collection-plugins)
+    }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "There is no collection record at $Path." }
     try { return (([IO.File]::ReadAllText($Path) -replace ('^' + [char]0xFEFF), '') | ConvertFrom-Json) }
     catch { throw ("$Path does not read as JSON: " + ($_.Exception.Message -replace '\s+', ' ')) }
@@ -652,6 +656,30 @@ function New-CollectionRecordFromLayout([string]$Dir) {
         plugins    = $plugins.ToArray()
         dropped    = @()
     }
+}
+
+# Prepare the canonical rebuild order from the verified layout, not the
+# Vortex export list. Only the old server order holds server-only positions.
+function Get-PublishedCollectionOrderText([string]$Repo, $Want, $Layout, [int]$Revision) {
+    if ($Revision -ne [int]$Want.revision + 1 -or [int]$Layout.revision -ne $Revision -or
+        $Layout.collection -cne $Want.collection -or $Layout.game -cne $Want.game -or -not @($Layout.plugins | Where-Object { $_ }).Count) {
+        throw "The verified layout does not identify the next collection revision $Revision with plugins."
+    }
+    $path = Join-Path $Repo 'records/load-order.json'
+    try { $old = [IO.File]::ReadAllText($path) | ConvertFrom-Json }
+    catch { throw "Cannot read records/load-order.json: $($_.Exception.Message)" }
+    if ($old.collection -cne $Want.collection -or [string]$old.revision -cne [string]$Want.revision) {
+        throw "records/load-order.json must match collection $($Want.collection) revision $($Want.revision) before preparing the rebuild order."
+    }
+    $names = @($old.loadOrder)
+    if ($names.Count -lt 6 -or ($names[0..4] -join '|') -ine ($script:CollectionBaseMasters -join '|') -or
+        $names[-1] -ine 'Thornswood-Last.esp' -or @($names | Where-Object { -not (Test-CollectionPluginName $_) }).Count -or
+        @($names | Sort-Object -Unique).Count -ne $names.Count) {
+        throw 'records/load-order.json does not contain a valid server order from the five base masters through Thornswood-Last.esp.'
+    }
+    $drop = @($Want.dropped | Where-Object { $_ } | ForEach-Object { [string]$_.name })
+    $next = Get-ThornswoodServerOrder $Layout $names $drop
+    return Format-ThornswoodLoadOrderRecord -Slug $Layout.collection -Revision $Revision -Order $next
 }
 
 # Where two records part, one line each, leaving out what only people read

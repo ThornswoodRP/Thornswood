@@ -258,7 +258,11 @@ try {
     Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (
         $pre -match "(?s)- name: Take the build for the content checks\s+if: \$\{\{ steps\.find\.outputs\.found == 'yes' \}\}.*?Get-ContentBuild\.ps1 -Server dev -Take -Keep" -and
         $pre -match '(?s)- name: Hand the build to the content checks.*?name: content-taken\s.*?retention-days: 1')
-    Check '6 a pick picks the content checks from main''s map, as the gate''s pick does' ($pre -match '(?s)  checks-pick:.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
+    $pickAt = $pre.IndexOf("`n  checks-pick:")
+    $checksAt = $pre.IndexOf("`n  checks:")
+    $pick = $pre.Substring($pickAt, $checksAt - $pickAt)
+    Check '6 the content pick lays the artifact held to this run''s key before reading the built tables' (
+        $pick -match '(?s)uses: actions/download-artifact@[0-9a-f]{40}.*?name: content-taken.*?CONTENT_KEY: \$\{\{ needs\.content\.outputs\.key \}\}.*?Get-ContentBuild\.ps1 -Server dev -Newest -ArtifactDir .*?-BuildKey \$env:CONTENT_KEY.*?Run-Gate\.ps1 -Pick 5 -LinuxShares 4 -Content')
     foreach ($j in 'checks', 'checks-linux') {
         $at = $pre.IndexOf("`n  ${j}:")
         $body = if ($at -ge 0) { $pre.Substring($at + 1) } else { '' }

@@ -54,8 +54,8 @@ namespace Thornswood
         /// /voice-dev on the dev build.
         /// </summary>
         /// <remarks>
-        /// Everything voice does goes through Caddy on 443: one door with a
-        /// certificate on it, and wss:// rather than ws://, so nobody's voice
+        /// HTTPS requests go through Caddy on 443; canonical signaling
+        /// uses its dedicated trusted socket. Both use TLS, so nobody's voice
         /// signalling, join token or Discord ticket crosses the internet in
         /// the clear.
         ///
@@ -87,10 +87,23 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The same address as a WebSocket url, which is always wss (#1304).
+        /// The signaling socket, always wss. Each canonical channel has its
+        /// own trusted ingress; HTTPS authentication keeps using VoiceBase.
         /// </summary>
         public string VoiceSocket()
         {
+            bool canonicalHost = string.Equals(ServerAddress, "play.thornswood.net", StringComparison.OrdinalIgnoreCase);
+            if (IsDev && canonicalHost
+                && ServerPort == "7787" && VoicePort == "7789"
+                && VoiceBase() == Voice + "-dev")
+            {
+                return "wss://dev-signal.thornswood.net:44789/voice-dev/";
+            }
+            bool main = string.IsNullOrEmpty(Channel) || string.Equals(Channel, "main", StringComparison.OrdinalIgnoreCase);
+            if (main && canonicalHost && ServerPort == "7777" && VoicePort == "7778" && VoiceBase() == Voice)
+            {
+                return "wss://main-signal.thornswood.net:44789/voice/";
+            }
             return "wss://" + VoiceBase().Substring(8) + "/";
         }
 
@@ -106,6 +119,10 @@ namespace Thornswood
           than whoever built the release.
         */
         [JsonInclude] public string MicrophoneName = "";
+
+        [JsonInclude] public string AudioOutputId = "";
+        [JsonInclude] public string AudioOutputName = "";
+        [JsonInclude] public bool AudioOutputConfigured;
 
         [JsonInclude, JsonPropertyName("VoiceAuto")] public bool? VoiceAutoSetting = true;
 

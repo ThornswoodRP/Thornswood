@@ -313,6 +313,16 @@
   */
   function url() {
     var b = String(CFG.base || '').replace(/\/+$/, '');
+    // Each dedicated trusted ingress belongs only to its canonical channel.
+    // Ignore stale cross-channel keys, custom routes and legacy launchers.
+    var direct = 'wss://dev-signal.thornswood.net:44789/voice-dev/';
+    var mainDirect = 'wss://main-signal.thornswood.net:44789/voice/';
+    var canonicalHost = String(CFG.host || '').toLowerCase() === 'play.thornswood.net';
+    var port = Number(CFG.port);
+    if (canonicalHost && port === 7789 &&
+        b === 'https://thornswood.net/voice-dev' && CFG.socket === direct) return direct;
+    if (canonicalHost && port === 7778 &&
+        b === 'https://thornswood.net/voice' && CFG.socket === mainDirect) return mainDirect;
     if (b.indexOf('https://') === 0) { return 'wss://' + b.slice(8) + '/'; }
     return '';
   }
@@ -592,7 +602,7 @@
       reflex. The server parses it again and does not trust this: this is here
       so a typo is answered in the same breath instead of a round trip later.
     */
-    return count === 1 ? String(sides) : (count + 'x' + sides);
+    return count === 1 ? String(sides) : (sides + 'x' + count);
   }
 
   /* A queued line is its text, or { text, press } for one a key sent (#2251). */

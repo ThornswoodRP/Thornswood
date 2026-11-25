@@ -273,8 +273,8 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Plays the mix on Windows' default output until told to stop, the
-        /// device the page's AudioContext played on. Returns as CaptureOnce.
+        /// Plays the mix on the chosen Windows audio output until told to stop.
+        /// Returns as CaptureOnce.
         /// </summary>
         unsafe int PlaybackOnce()
         {
@@ -287,7 +287,7 @@ namespace Thornswood
             var wake = new AutoResetEvent(false);
             try
             {
-                hr = en.GetDefaultAudioEndpoint(VoiceCom.eRender, VoiceCom.eConsole, out dev);
+                hr = AudioOutput.OpenForVoice(en, cfg.AudioOutputId, out dev);
                 if (hr != 0 || dev == null) { OnEvent("log", "could not play voice: Windows has no speakers (0x" + hr.ToString("X8") + ")"); return 0; }
                 string name = VoiceCom.NameOf(dev);
                 client = Activate(dev, out hr);

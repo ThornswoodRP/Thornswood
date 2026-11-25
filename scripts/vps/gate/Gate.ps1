@@ -34,7 +34,9 @@
       @CHANGE <what runs>  the read lane hands the line to the other pipe;
                            this is never printed
   Exit codes: the verb's own, 64 refused, 65 the broker is not there, did
-  not take the line, or went away before it said @END.
+  not take the line, or went away before it said @END, and 66 main cannot be
+  read (GitHub did not answer for main on a ping, or main could not be read
+  before a run).
 
   PowerShell 7 (pwsh), as sshd's forced command starts it since #5356. It
   loads no module and writes through [Console] only, so nothing reaches stderr as CLIXML

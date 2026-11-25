@@ -1109,13 +1109,17 @@ async def close_here(interaction, why=None):
             ephemeral=True)
         return
 
-    line = 'Closed by %s.' % interaction.user.mention
-    if why:
-        line += ' ' + why.strip()
+    # Bound the fields before escaping so the retention text and link fit.
+    closer = as_typed(interaction.user.display_name, 80)
+    reason = as_typed(why, 700)
+    ending = ' ' + reason if reason else ''
+    mentions = discord.AllowedMentions.none()
+    line = 'Closed by %s.%s' % (closer, ending)
     line += ('\nEverybody who was in here can still read it, and staff can open '
              'it again. It is deleted %d days after it was last closed.'
              % TICKET_KEEP_DAYS)
-    await interaction.response.send_message(line[:1900])
+    await interaction.response.send_message(
+        line, allowed_mentions=mentions, suppress_embeds=True)
 
     # Archiving drops a thread out of the sidebar and out of the channel's
     # active list, and a private one is then behind two clicks nobody finds. A
@@ -1125,24 +1129,47 @@ async def close_here(interaction, why=None):
     try:
         book = await log_channel(interaction.guild)
         if book is not None:
-            note = 'Closed: **%s**. By %s.' % (
-                ch.name, interaction.user.display_name)
-            if why:
-                note += ' ' + why.strip()
-            note += '\n' + ch.jump_url
-            await book.send(note[:1900])
+            note = 'Closed: **%s**. By %s.%s\n%s' % (
+                as_typed(ch.name, 100), closer, ending, ch.jump_url)
+            await book.send(note, allowed_mentions=mentions, suppress_embeds=True)
     except Exception:
         log('could not write the ticket down:\n' + traceback.format_exc())
 
     # Sent first, then archived. The other way round the message never lands,
     # because an archived thread will not take one.
+    archived = False
     try:
         await ch.edit(archived=True, locked=True)
+        archived = True
     except Exception:
         try:
             await ch.edit(archived=True)
+            archived = True
         except Exception:
             log('could not archive the ticket thread:\n' + traceback.format_exc())
+
+    if not archived:
+        fail_msg = 'Discord could not archive the ticket thread, so it remains open.'
+        try:
+            if hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send'):
+                await interaction.followup.send(fail_msg, ephemeral=True)
+            elif hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send_message'):
+                await interaction.followup.send_message(fail_msg, ephemeral=True)
+        except Exception:
+            log('could not tell user about archive failure:\n' + traceback.format_exc())
+
+        try:
+            await ch.send('Archive failed: Discord could not archive this thread, so the ticket remains open.')
+        except Exception:
+            log('could not post archive failure in ticket:\n' + traceback.format_exc())
+
+        try:
+            if book is not None:
+                note_fail = 'Archive failed: **%s** is still open, Discord could not archive it.\n%s' % (
+                    as_typed(ch.name, 100), ch.jump_url)
+                await book.send(note_fail, allowed_mentions=mentions, suppress_embeds=True)
+        except Exception:
+            log('could not post archive failure in staff log:\n' + traceback.format_exc())
 
 
 class TicketTools(discord.ui.View):

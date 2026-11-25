@@ -90,8 +90,8 @@ git pull
 ```
 
 Nothing moves the version first: Ship works the launcher's number out from
-git, the time its sources last changed on main (The version comes from the
-build, above, #5179).
+git, the time its sources last changed on main ([The version comes from the
+build](#the-version-comes-from-the-build), #5179).
 
 Ship writes nothing to this repository. It refuses a main release with
 anything uncommitted, with a file under `scripts` or another folder a release

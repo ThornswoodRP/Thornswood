@@ -246,8 +246,30 @@ Yes 'Get-ThornswoodToolReason takes the last line a tool printed when it printed
 $said = @('STOP. not this one, the run''s', '-------- t --------', 'STOP. the first', 'STOP. the second. Nothing was written.', 'a line after', '-------- end --------', 'EXIT 1')
 Yes 'and its last STOP line, without the STOP, when it printed one, and nothing from outside its own lines' ((Get-ThornswoodToolReason $said) -ceq 'the second. Nothing was written.')
 Yes 'and nothing when it printed nothing' ((Get-ThornswoodToolReason @('-------- t --------', '', '-------- end --------', 'EXIT 2')) -ceq '')
-Yes 'Run-OnBox.ps1 says that reason on a STOP line, last, when the tool ended other than 0' (
-    $runSrc -match "(?s)if \(\`$code -ne 0\) \{\s*\`$why = Get-ThornswoodToolReason \`$lines\s*if \(\`$why\) \{ Say \('STOP\. ' \+ \`$why\) 'Yellow' \}\s*\}\s*exit \`$code\s*$")
+# Run only the reporting tail with the stand-in tool's exit and lines. No
+# connection or artifact is needed to check the caller's output contract.
+$ast = [Management.Automation.Language.Parser]::ParseInput($runSrc, [ref]$null, [ref]$null)
+$statements = $ast.EndBlock.Statements
+$cleanup = $statements | Where-Object { $_ -is [Management.Automation.Language.TryStatementAst] -and $_.Finally } | Select-Object -Last 1
+if (-not $cleanup) { throw 'Run-OnBox.ps1 has no top-level cleanup before its verdict' }
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('ts-2899-verdict-' + [guid]::NewGuid().ToString('n'))
+$null = New-Item -ItemType Directory -Path $fixture
+try {
+    $tail = Join-Path $fixture 'verdict.ps1'
+    $log = Join-Path $fixture 'verdict.txt'
+    [IO.File]::WriteAllText($tail, ('param([int]$code, [string[]]$lines)' + "`n" + $runSrc.Substring($cleanup.Extent.EndOffset)))
+    & $tail -code 3 -lines $said > $log
+    $actualCode = $LASTEXITCODE
+    $actual = [IO.File]::ReadAllLines($log)
+    Yes 'Run-OnBox keeps the nonzero tool exit and its last STOP reason on redirected output' (
+        $actualCode -eq 3 -and $actual -ccontains 'the tool exited 3' -and
+        $actual.Count -ge 2 -and $actual[-1] -ceq 'STOP. the second. Nothing was written.')
+    & $tail -code 0 -lines $said > $log
+    $actualCode = $LASTEXITCODE
+    $actual = [IO.File]::ReadAllLines($log)
+    Yes 'Run-OnBox keeps exit 0 and prints no STOP on success' (
+        $actualCode -eq 0 -and $actual.Count -eq 1 -and $actual[0] -ceq 'the tool exited 0')
+} finally { Remove-Item -LiteralPath $fixture -Recurse -Force }
 $runText = Get-Content -LiteralPath $runOnBox -Raw
 # The keeper is started and told the run is over in OnBox.ps1, for every
 # script that lands files on the box (#3035), and Run-OnBox.ps1 goes through it.

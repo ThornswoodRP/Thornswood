@@ -95,8 +95,9 @@ namespace Thornswood
         readonly object dtlsGate = new object();
         volatile SrtpSessionContext srtp;
         volatile bool closed;
+        volatile bool dtlsInputClosed;
         int dtlsStarted;
-        DtlsTransport dtls;
+        volatile DtlsTransport dtls;
         string remoteFingerprint = "";
         string remoteSetup = "";
         ushort seq;
@@ -304,7 +305,7 @@ namespace Thornswood
             public int Receive(byte[] buf, int off, int len, int waitMillis) { return Receive(buf.AsSpan(off, len), waitMillis); }
             public int Receive(Span<byte> buffer, int waitMillis)
             {
-                if (p.closed) throw new IOException("the connection is closed");
+                if (p.dtlsInputClosed) throw new IOException("the connection is closed");
                 byte[] d;
                 if (!p.dtlsIn.TryTake(out d, waitMillis)) return -1;
                 int n = Math.Min(d.Length, buffer.Length);
@@ -459,8 +460,17 @@ namespace Thornswood
         {
             if (closed) return;
             closed = true;
-            lock (dtlsGate) dtlsIn.CompleteAdding();
+            // Retire media first, but let DTLS send close_notify before its
+            // input is interrupted. An earlier IOException sends fatal80;
+            // an immediate empty read makes BouncyCastle poll to its deadline.
+            // With no established transport, this still interrupts the initial
+            // handshake immediately, as before.
             try { if (dtls != null) dtls.Close(); } catch (Exception ex) { Swallow.Note("VoicePeer.Dispose, dtls", ex); }
+            lock (dtlsGate)
+            {
+                dtlsInputClosed = true;
+                dtlsIn.CompleteAdding();
+            }
             ice.Dispose();
             lock (recvLock) decoder.Dispose();
         }
