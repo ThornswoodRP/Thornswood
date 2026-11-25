@@ -875,20 +875,36 @@ function run(o) {
   }
   function writeChildLine(parts, complete) {
     const now = Date.now();
-    if (due(now)) roll(now);
     const line = [Buffer.from('[' + stampOf(new Date(now)) + '] '), ...parts];
     if (!complete) line.push(Buffer.from('\n'));
-    raw(Buffer.concat(line));
+    const buf = Buffer.concat(line);
+    if (due(now) || (now >= state.rollAfter && state.bytes > 0 && state.bytes + buf.length > MAX_BYTES)) roll(now);
+    raw(buf);
   }
 
   // Use one bounded buffer per pipe, so an stderr line cannot be appended to
   // a stdout fragment before that line finishes. --stamp remains accepted.
   function childPipe(stream) {
     let parts = [], bytes = 0;
-    function flush(complete) {
+    function flush(complete, ended = false) {
+      let carry = null;
+      if (bytes && !complete && !ended) {
+        // A size boundary must not put a newline inside a UTF-8 character.
+        // Retain only its unfinished bytes for the next stamped fragment.
+        const line = Buffer.concat(parts, bytes);
+        let start = bytes - 1;
+        while (start > Math.max(0, bytes - 4) && (line[start] & 0xc0) === 0x80) start--;
+        const lead = line[start];
+        const width = lead >= 0xf0 && lead <= 0xf4 ? 4 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xc2 && lead <= 0xdf ? 2 : 1;
+        if (start + width > bytes) {
+          carry = line.subarray(start);
+          parts = [line.subarray(0, start)];
+          bytes = start;
+        }
+      }
       if (bytes) writeChildLine(parts, complete);
-      parts = [];
-      bytes = 0;
+      parts = carry ? [carry] : [];
+      bytes = carry ? carry.length : 0;
     }
     function receive(buf) {
       for (let at = 0; at < buf.length;) {
@@ -903,8 +919,8 @@ function run(o) {
       }
     }
     stream.on('data', receive);
-    stream.on('end', () => flush(false));
-    return () => flush(false);
+    stream.on('end', () => flush(false, true));
+    return () => flush(false, true);
   }
 
   // The start: the files Roll-Log.ps1 or an earlier run left cut to the

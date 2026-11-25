@@ -1,7 +1,7 @@
 'use strict';
 // Actual writer child streams -> actual session reader and retention, on a private clock.
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), Module = require('module');
-const root = path.resolve(__dirname, '..'), writer = path.join(root, 'scripts/vps/Server-Log.js');
+const root = path.resolve(__dirname, '..'), writer = process.env.WRITER_SOURCE || path.join(root, 'scripts/vps/Server-Log.js');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4948-'));
 let pass = 0, fail = 0;
 function yes(name, ok) { console.log((ok ? 'PASS ' : 'FAIL ') + name); ok ? pass++ : fail++; }
@@ -109,5 +109,18 @@ try {
   yes('over-limit output rolls and keeps all bytes in two independently stamped fragments',
     ranLarge.status === 0 && largeFiles.length === 1 && fs.statSync(largeFiles[0]).size <= W.MAX_BYTES &&
     fragments.length === 2 && fragments.reduce((total, fragment) => total + fragment.length, 0) === W.MAX_BYTES + 19);
+  for (const [width, character] of [[2, '\u00a2'], [3, '\u96ea'], [4, '\u{1f600}']]) {
+    const unicodeLog = path.join(dir, 'unicode-' + width + '.log'), unicode = 'U' + character.repeat(Math.ceil((W.MAX_BYTES + 300000) / width));
+    fs.writeFileSync(program, 'process.stdout.write(' + JSON.stringify(unicode) + ' + "\\n");');
+    const ranUnicode = cp.spawnSync(process.execPath, ['--require', preload, writer, '--log', unicodeLog, program], {
+      cwd: dir, encoding: 'utf8', timeout: 15000, env: { ...process.env, TZ: 'UTC', CLOCK_FILE: clock }
+    });
+    const unicodeFiles = W.rolledFiles(unicodeLog).concat(unicodeLog);
+    const unicodeText = unicodeFiles.flatMap(f => fs.readFileSync(f, 'utf8').split('\n'))
+      .map(line => (/^\[2026-11-01T08:25:00\.000Z\] (.*)$/.exec(line) || [])[1])
+      .filter(value => value !== undefined && !value.startsWith('[server-log]')).join('');
+    yes('an over-limit ' + width + '-byte Unicode record stays readable within the file-size bound', ranUnicode.status === 0 && unicodeText === unicode
+      && unicodeFiles.length === 2 && unicodeFiles.every(file => fs.statSync(file).size <= W.MAX_BYTES));
+  }
 } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 console.log(pass + ' passed, ' + fail + ' failed'); process.exitCode = fail ? 1 : 0;
