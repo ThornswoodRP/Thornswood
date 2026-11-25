@@ -81,6 +81,7 @@ const fees = slice(prop, '  var NOTICE_FEE = ', 'var LETTER_REACH = 700;');
 const holds = slice(prop, '  var LEDGER_HOLDS = [', '];');
 // The company's cut of a haul is its terms now (#512, #2695), read by the company terms block.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 const reads = slice(prop, '  var boardReads = ', ';');
 const seeding = (function () {
   const a = prop.indexOf('  var BOARD_REACH = 400;');
@@ -137,6 +138,8 @@ function world() {
       }
     }
   };
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  PACK_FIRST.receipts(w.mp);
   return w;
 }
 
@@ -171,6 +174,8 @@ function boot(w) {
      'evict', 'boxCmd', 'rentCmd', 'sleepHere'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, notices: function () { return notices; }, command: command, ' +
             'lettersCarried: lettersCarried, funds: function () { return funds; } };');
   const make = new Function('reg', 'mp', 'plog', 'loadPart', 'PASSAGES', 'g', 'isSteward', body.join('\n'));
