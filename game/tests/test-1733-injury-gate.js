@@ -54,7 +54,8 @@ function number(name) {
 const NEEDS_SRC = slice('// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 const HURT_SRC = slice('// ==== thornswood injury and disease ====', '// ==== end thornswood injury and disease ====');
 const GATE_SRC = slice('function unfitToMake(actorId, workbenchId) {', '\n}\n');
-const CRAFT_SRC = slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
+const CRAFT_SRC = slice('function recipeMetadataRefusal(desc) {', '\n}\n') +
+  slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
 // The order taken at a bench before its time runs (#3161) asks it too, so a
 // person too tired to work is told before they wait.
 const WORK_SRC = slice("mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');

@@ -9776,16 +9776,11 @@ function cookedOutput(actorId, row) {
   }
 }
 
-function onCraftRoll(actorId, roll) {
+function onCraftRoll(actorId, roll, s) {
   const gate = globalThis.__thornswoodRolls;
   if (gate && typeof gate.has === 'function') {
     try { return !!gate.has(actorId, roll); } catch (e) { return false; }
   }
-  const C = globalThis.__thornswoodCharacter;
-  if (!C || !C.stateOf) { return false; }
-  let s = null;
-  try { s = C.stateOf(actorId); } catch (e) { return false; }
-  if (!s) { return false; }
   const list = s.rolls;
   if (Array.isArray(list)) { return list.indexOf(roll) !== -1; }
   if (list && typeof list === 'object') { return !!list[roll]; }
@@ -9793,6 +9788,7 @@ function onCraftRoll(actorId, roll) {
 }
 
 function craftAnswer(actorId, row) {
+  const preview = arguments[2] === true;
   const out = { refusal: null, note: null, credit: null };
 
   /*
@@ -9848,7 +9844,7 @@ function craftAnswer(actorId, row) {
   }
   let s = null;
   try {
-    s = C.stateOf(actorId);
+    s = preview && C.previewState ? C.previewState(actorId) : C.stateOf(actorId);
   } catch (e) {
     log('the craft gate threw reading the character, so it is open:', e);
     return out;
@@ -9889,7 +9885,7 @@ function craftAnswer(actorId, row) {
   if (row && row.roll) {
     const roll = String(row.roll);
     let on = false;
-    try { on = onCraftRoll(actorId, roll); } catch (e) { on = false; }
+    try { on = onCraftRoll(actorId, roll, s); } catch (e) { on = false; }
     if (!on) {
       const made = String(row.name || 'that');
       out.refusal = roll === 'embassy'
@@ -11241,6 +11237,24 @@ function unfitToMake(actorId, workbenchId) {
   return (needs && needs.craftRefusal) ? needs.craftRefusal(actorId) : '';
 }
 
+// A named recipe from an old menu still has its mod's counts or bench.
+// Shared by start and completion; resolved recipe-less events already use
+// this game's counts and bench, so they do not ask this named-record check.
+function recipeMetadataRefusal(desc) {
+  if (typeof RECIPES_SET_IN_GAME === 'object' && Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) {
+    const asks = RECIPES_SET_IN_GAME[desc];
+    return 'The ' + asks.name.trim() + ' takes different materials here than that bench listed. ' +
+           'Leave the bench and use it again to see what it takes.';
+  }
+  if (typeof RECIPES_MOVED_IN_GAME === 'object' && RECIPES_MOVED_IN_GAME &&
+      Object.prototype.hasOwnProperty.call(RECIPES_MOVED_IN_GAME, desc)) {
+    const moved = RECIPES_MOVED_IN_GAME[desc];
+    return 'The ' + String(moved.name || 'that').trim() + ' is not made at this bench here. ' +
+           'Leave the bench and use the one it is made at.';
+  }
+  return '';
+}
+
 /*
   HOW LONG A CRAFT TAKES AT THE BENCH (#3161).
 
@@ -11320,8 +11334,21 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     try { desc = mp.getDescFromId(recipeId); } catch (e) { desc = null; }
   } else {
     desc = recipeSetInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    if (!desc && typeof recipeMovedInGame === 'function') {
+      desc = recipeMovedInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    }
   }
   const row = (desc && typeof desc === 'string') ? craftRow(desc) : null;
+  // The same read-only learning gate is asked again at completion. Its
+  // credit and allowed note belong only to that later successful craft.
+  const stale = recipeId ? recipeMetadataRefusal(desc) : '';
+  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row, true).refusal : '');
+  if (refusal) {
+    notify(actorId, refusal);
+    say(actorId, refusal);
+    log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 
@@ -11447,27 +11474,11 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       log('no descriptor for recipe', recipeId, 'so the craft is allowed');
       return;
     }
-    // The mod's own counts for a recipe set in each game: this game has not
-    // set the new ones yet (#613), and they are what the craft costs.
-    if (typeof RECIPES_SET_IN_GAME === 'object' && Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) {
-      const asks = RECIPES_SET_IN_GAME[desc];
-      const no = 'The ' + asks.name.trim() + ' takes different materials here than that bench listed. ' +
-                 'Leave the bench and use it again to see what it takes.';
+    const no = recipeMetadataRefusal(desc);
+    if (no) {
       notify(actorId, no);
       say(actorId, no);
-      log(actorId.toString(16), 'was refused', desc, '(' + asks.name + ') at the mod\'s own counts');
-      return false;
-    }
-    // The bench its mod put it at, for a recipe moved in each game: this
-    // game has not moved it yet (#3120), and that bench is not its trade's.
-    if (typeof RECIPES_MOVED_IN_GAME === 'object' && RECIPES_MOVED_IN_GAME &&
-        Object.prototype.hasOwnProperty.call(RECIPES_MOVED_IN_GAME, desc)) {
-      const moved = RECIPES_MOVED_IN_GAME[desc];
-      const no = 'The ' + String(moved.name || 'that').trim() + ' is not made at this bench here. ' +
-                 'Leave the bench and use the one it is made at.';
-      notify(actorId, no);
-      say(actorId, no);
-      log(actorId.toString(16), 'was refused', desc, '(' + moved.name + ') at', moved.from, 'and it is made at', moved.to);
+      log(actorId.toString(16), 'was refused', desc, 'with its old recipe settings:', no);
       return false;
     }
   }
@@ -37575,7 +37586,7 @@ return module.exports;
     rules, so an old value the rules refuse is simply not carried, and the
     log says which.
   */
-  function migrate(actorId) {
+  function migrate(actorId, preview) {
     var s = P.fresh();
     var old = null;
     try { old = mp.get(actorId, 'thornswoodChargen'); } catch (e) { old = null; }
@@ -37603,17 +37614,23 @@ return module.exports;
           leftover privilege (bard instruments, etc.) reads it, and leave
           the progression state empty so they re-pick like somebody new.
         */
-        clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
-        try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        if (!preview) {
+          clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
+          try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        }
       } else if (trade) {
         clog('migrate', actorId.toString(16), 'old trade', trade, 'has no home in the rulebook; left on the old property, nothing chosen here');
       }
     }
-    return writeState(actorId, s);
+    return preview ? s : writeState(actorId, s);
   }
 
   function stateOf(actorId) {
     return readState(actorId) || migrate(actorId);
+  }
+
+  function previewState(actorId) {
+    return readState(actorId) || migrate(actorId, true);
   }
 
   // ------------------------------------------------- gates, work, spells --
@@ -38898,7 +38915,7 @@ return module.exports;
   }
 
   g.__thornswoodCharacter = {
-    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, writeState: writeState,
+    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,
