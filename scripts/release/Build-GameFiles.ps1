@@ -33,11 +33,11 @@
   symbols), and Go.ps1 copies none, but the rule is held here as well.
 
   THE ZIP IS THE SAME FOR THE SAME FILES. Entries sorted by path (ordinal),
-  forward slashes, one fixed time (2000-01-01), Optimal compression, and one
-  name, so the workflow can tell an unchanged game part from the zip's sha256
-  (MergeRelease.ps1) and a rebuild of the same files gives the same bytes.
-  The list names the commit and the release it was built over, so it differs
-  on every merge and is not what is compared.
+  forward slashes, one fixed time (2000-01-01), ExternalAttributes = 0, Optimal
+  compression, and one name, so the workflow can tell an unchanged game part
+  from the zip's sha256 (MergeRelease.ps1) and a rebuild of the same files
+  gives the same bytes. The list names the commit and the release it was built
+  over, so it differs on every merge and is not what is compared.
 
   game-files.json:
       { schema: 1, commit, channel: "dev", from: <the record id staged>,
@@ -177,6 +177,7 @@ try {
             $sha = (Get-FileHash -LiteralPath $e.Full -Algorithm SHA256).Hash.ToLowerInvariant()
             $z = $zip.CreateEntry($e.Path, [IO.Compression.CompressionLevel]::Optimal)
             $z.LastWriteTime = $fixed
+            $z.ExternalAttributes = 0
             $w = $z.Open()
             try { $r = [IO.File]::OpenRead($e.Full); try { $r.CopyTo($w) } finally { $r.Dispose() } } finally { $w.Dispose() }
             $list.Add([ordered]@{ path = $e.Path; size = [int64]$e.Size; sha256 = $sha })

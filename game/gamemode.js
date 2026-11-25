@@ -46110,6 +46110,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
@@ -46291,6 +46295,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -46368,18 +46374,19 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -46388,7 +46395,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -61941,7 +61948,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
@@ -62241,6 +62248,10 @@ module.exports = {
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -62711,6 +62722,10 @@ module.exports = {
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way

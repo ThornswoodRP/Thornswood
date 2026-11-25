@@ -10,7 +10,7 @@ import re
 from bot_base import DATA_DIR
 from bot_core import log
 from bot_joins import _joins_read, _joins_write
-from bot_tickets import OPEN_TICKETS
+from bot_tickets import _open_tickets, _open_tickets_write
 
 
 # A deletion request, taken out of the bot's own records as it starts (#2758).
@@ -52,12 +52,7 @@ def apply_deletion_requests():
         return said('the request is not a list of deletion requests, so nothing was removed and it is left as it is')
     try:
         joins = _joins_read()
-        tickets = {}
-        if os.path.exists(OPEN_TICKETS):
-            with open(OPEN_TICKETS, encoding='utf-8-sig') as f:
-                tickets = json.load(f)
-            if not isinstance(tickets, dict):
-                raise ValueError(OPEN_TICKETS + ' is not a JSON object')
+        tickets = _open_tickets()
     except (OSError, ValueError) as e:
         return said('the records could not be read (%s), so nothing was removed and the request waits for the next start' % type(e).__name__)
     numbers = marks = 0
@@ -82,10 +77,7 @@ def apply_deletion_requests():
         if numbers or marks:
             _joins_write(joins)
         if gone:
-            tmp = OPEN_TICKETS + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(tickets, f)
-            os.replace(tmp, OPEN_TICKETS)
+            _open_tickets_write(tickets)
     except OSError as e:
         return said('a record could not be written (%s), so the request waits for the next start' % type(e).__name__)
     what = '%d person(s): join numbers %d, open tickets %d' % (len(ids), numbers, len(gone))
