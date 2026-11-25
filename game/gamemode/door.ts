@@ -880,6 +880,14 @@
                  (doc.lookupFailedWhy ? ': ' + doc.lookupFailedWhy : ''));
           }
 
+          // A failed or late request can still refresh unrelated role fields,
+          // but it cannot replace the last readable ban list or advance its clock.
+          var previousBansRequestedAt = Array.isArray(had.bans) ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
+            doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
+            requestedAt > previousBansRequested && requestedAt <= Date.now();
+
           // Whole, never in place (#2740): Set-Door reads it on the box while
           // the server runs, and an in-place write read half way is no list.
           try {
@@ -908,11 +916,10 @@
               // Staff bans with why and until (#412), from the site's own
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
-              bans: Array.isArray(doc.bans) ? doc.bans : [],
-              // A late response to an old request cannot retire a newer local
-              // game ban. Only a readable upstream ban list proves freshness.
-              bansRequestedAt: (Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken)
-                ? new Date(requestedAt).toISOString() : '',
+              bans: takeBans ? doc.bans : (Array.isArray(had.bans) ? had.bans : []),
+              // The request's start, never its response time, is the proof
+              // used when handing local game bans back to the site.
+              bansRequestedAt: takeBans ? new Date(requestedAt).toISOString() : previousBansRequestedAt,
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],

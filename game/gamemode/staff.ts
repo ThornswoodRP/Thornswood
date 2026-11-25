@@ -536,35 +536,47 @@
   }
 
   /* Every active ban the door's last list carried, and the ones made here since. */
-  var bansRead = { at: 0, list: [], pk: [] };
+  // Once the site has taken over, a transient missing file during hot reload
+  // cannot erase its last confirmed bans either.
+  var confirmedBans = state.confirmedBans || (state.confirmedBans = { list: [], requestedAt: 0 });
+  var bansRead = { at: 0, list: confirmedBans.list, pk: [], banAt: confirmedBans.requestedAt };
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0, bansRequested = 0;
+    var list = null, pk = [], written = 0, bansRequested = 0, hasBanStamp = false;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
-      if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
+      if (doc && Array.isArray(doc.bans) && doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); })) {
+        list = doc.bans;
+      }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
-      if (doc && Array.isArray(doc.bans)) {
+      if (list) {
+        hasBanStamp = !!doc.bansRequestedAt;
         bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
       }
-    } catch (e) { list = []; pk = []; }
-    bansRead.list = list;
+    } catch (e) { list = null; pk = []; }
     bansRead.pk = pk;
     bansRead.written = written;
     // The site's confirmed newer request now owns these bans, including a
     // lift made on the site. A late older request or unreadable list does not.
-    if (bansRequested > 0 && bansRequested <= written) {
+    if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
+      bansRead.list = confirmedBans.list = list;
+      bansRead.banAt = confirmedBans.requestedAt = bansRequested;
       for (var b in state.banned) {
         if (Object.prototype.hasOwnProperty.call(state.banned, b) &&
             bansRequested > (Number(state.banned[b].at) || bansLoadedAt)) { delete state.banned[b]; }
       }
+    } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
+      // Read old door files until the first confirmed snapshot arrives. A
+      // broken file cannot erase the last known list or its ban-specific time.
+      bansRead.list = list;
+      bansRead.banAt = written;
     }
-    // A lift the door's list has caught up with needs remembering no longer.
+    // A lift the door's ban list has caught up with needs remembering no longer.
     for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
+      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && bansRead.banAt > state.lifted[k].at) { delete state.lifted[k]; }
     }
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
@@ -601,7 +613,7 @@
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
         var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
+        if (lift && lift.scope === scope && lift.at >= bansRead.banAt) { continue; }
         // A ban on the whole account says more than one on the character.
         if (out[p] && out[p].scope === 'account') { continue; }
         out[p] = { why: String(b.why || ''), until: until, scope: scope };

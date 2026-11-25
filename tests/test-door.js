@@ -184,7 +184,8 @@ if (block !== null) {
     r.advance(10000);
     r.refresh();
     r.advance(30000);
-    r.answer(200, { profiles: [101], bans: [] });
+    const activeBan = { profiles: [202], scope: 'character', until: 0, why: 'test ban' };
+    r.answer(200, { profiles: [101], bans: [activeBan] });
     const next = JSON.parse(r.files[ALLOWED]);
     yes('4484 each refresh carries its own request start',
         Date.parse(next.bansRequestedAt) === 1070000 && Date.parse(next.at) === 1100000);
@@ -193,9 +194,31 @@ if (block !== null) {
       r.advance(10000);
       r.answer(200, Object.assign({ profiles: [] },
           Object.keys(broken).length ? { bans: [] } : {}, broken));
-      yes('4484 broken or missing upstream bans cannot claim a fresh ban snapshot',
-          !JSON.parse(r.files[ALLOWED]).bansRequestedAt);
+      const retained = JSON.parse(r.files[ALLOWED]);
+      yes('4484 broken or missing upstream bans retain the previous list and its original freshness',
+          retained.bansRequestedAt === next.bansRequestedAt && JSON.stringify(retained.bans) === JSON.stringify(next.bans));
     }
+    r.refresh();
+    r.advance(1);
+    r.answer(200, { profiles: [101], bans: [null] });
+    yes('4484 malformed ban entries cannot replace a readable ban snapshot',
+        JSON.parse(r.files[ALLOWED]).bansRequestedAt === next.bansRequestedAt);
+    r.refresh();
+    r.advance(1);
+    r.refresh();
+    const olderRequest = r.pending.shift();
+    r.answer(200, { profiles: [101], bans: [activeBan] });
+    const newest = JSON.parse(r.files[ALLOWED]);
+    r.pending.unshift(olderRequest);
+    r.advance(1);
+    r.answer(200, { profiles: [101], bans: [] });
+    const afterOlder = JSON.parse(r.files[ALLOWED]);
+    yes('4484 a late old response cannot replace newer confirmed bans',
+        afterOlder.bansRequestedAt === newest.bansRequestedAt && afterOlder.bans.length === 1);
+
+    const cold = rig(true, [101]);
+    cold.answer(200, { profiles: [], bans: [], bansBroken: true });
+    yes('4484 a broken initial ban read proves no freshness', !JSON.parse(cold.files[ALLOWED]).bansRequestedAt);
   }
 
   // S1: somebody on the list is let in and stays.

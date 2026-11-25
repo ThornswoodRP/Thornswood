@@ -739,6 +739,26 @@ async function adminRoleOnly() {
       const still = snapshot(reinstated);
       yes('4484 a current site ' + scope + ' ban still enforces after local retirement',
           covers.every((pid) => still[pid] && still[pid].scope === scope));
+      const confirmedRequest = Date.parse(reinstated.bansRequestedAt);
+      const damaged = [
+        Object.assign({}, after, { bansRequestedAt: stamp(confirmedRequest - 1), at: stamp(clock + 1) }),
+        Object.assign({}, after, { bansRequestedAt: 'unreadable', at: stamp(clock + 2) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(clock + 60000), at: stamp(clock + 60001) }),
+        Object.assign({}, after, { bans: [null], bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }),
+        '{'
+      ];
+      for (const doc of damaged) {
+        const retained = snapshot(doc);
+        yes('4484 lost or regressing saved authority keeps the last good ' + scope + ' ban',
+            covers.every((pid) => retained[pid] && retained[pid].scope === scope));
+      }
+      w = loadStaff({ clock: StaffClock, staffState: w.api.state });
+      const duringReload = snapshot('{');
+      yes('4484 hot reload retains the last confirmed ' + scope + ' bans if the door file is broken',
+          covers.every((pid) => duringReload[pid] && duringReload[pid].scope === scope));
+      const freshLift = snapshot(Object.assign({}, after, { bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }));
+      yes('4484 the next good snapshot can still lift the last known ' + scope + ' ban',
+          covers.every((pid) => !freshLift[pid]));
     }
 
     // Hot reload keeps older local overlays that predate the timestamp field.
