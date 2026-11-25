@@ -1,3 +1,4 @@
+const observedOfferVersion = require('../../tests/fixtures/trade-version');
 // test-1718-trade-pieces.js
 //
 // #1718. The trade panel lists each piece, not each record: two pieces of one
@@ -111,9 +112,9 @@ function tradeWorld(company) {
   };
   const said = [];
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('../../tests/fixtures/ordinary-quest-items') + TRADE)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function () { } }, function () { return 1; }, function () { },
     function (n, f) { return f; }, function (id, line) { said.push([id, line]); }, function () { });
   const tr = g.__thornswoodTrade;
   return {
@@ -175,8 +176,8 @@ attempt('one of two differently named keys of the same record is offered', funct
   yes('the panel is sent no piece itself, only its number',
       w.view(A).pack.concat(w.view(A).mine, w.view(B).theirs).every(function (l) { return l.x === undefined; }));
   w.trade.gold(B, 50);
-  w.trade.confirm(A);
-  yes('both agree and it swaps', w.trade.confirm(B) === '' && !w.trade.tradeOf(A));
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
+  yes('both agree and it swaps', w.trade.confirm(B, observedOfferVersion(w.trade, B)) === '' && !w.trade.tradeOf(A));
   yes('the Honeyside key crossed', !!entry(w.pack(B), HONEYSIDE));
   yes('and the Breezehome key did not', !w.pack(B).some(function (e) { return e.name === 'Key to Breezehome'; }));
   yes('the giver still holds the Breezehome key, and only it',
@@ -205,7 +206,7 @@ attempt('a sword at 85% and a plain one, an enchanted dagger and a plain one', f
   w.trade.add(A, '#' + charmed.p, 1);
   yes('the other side sees which sword and which dagger they are getting',
       names(w.view(B).theirs) === 'Iron Sword | Steel Dagger (enchanted)');
-  w.trade.confirm(A); w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A)); w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('the plain sword crossed and the one at 85% stayed',
       !!entry(w.pack(B), { baseId: SWORD, count: 1 }) &&
       !!entry(w.pack(A), { baseId: SWORD, count: 1, name: 'Iron Sword (85%)' }));
@@ -251,7 +252,7 @@ attempt('the same piece in two entries', function () {
   const at40 = w.line(A, 'pack', 'Iron Sword (40%)')[0];
   w.trade.add(A, '#' + at40.p, 1);
   yes('the other piece of the record is a line of its own on the table', w.view(A).mine.length === 2);
-  w.trade.confirm(A); w.trade.confirm(B);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A)); w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('all three at 85% and the one at 40% crossed, none of them worn',
       !!entry(w.pack(B), { baseId: SWORD, count: 3, name: 'Iron Sword (85%)' }) &&
       !!entry(w.pack(B), { baseId: SWORD, count: 1, name: 'Iron Sword (40%)' }) && w.pack(A).length === 0);
@@ -300,10 +301,10 @@ attempt('the piece put up is gone, another of its record is not', function () {
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.line(A, 'pack', 'Key to Honeyside')[0].p, 1);
   w.trade.gold(B, 20);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   // Dropped between the offer and the agreement. The Breezehome key is still a key.
   w.store[A].inventory.entries = [BREEZEHOME];
-  const answer = w.trade.confirm(B);
+  const answer = w.trade.confirm(B, observedOfferVersion(w.trade, B));
   yes('the trade is refused and names the house', /does not have the Key to Honeyside any more/.test(answer));
   yes('and nothing was written: the other key is not handed over in its place',
       w.writes.length === 0 && !!entry(w.pack(A), BREEZEHOME) && w.pack(B).length === 1);
@@ -316,10 +317,10 @@ attempt('a piece whose extra changed after it was put up', function () {
   w.trade.begin(A, B);
   w.trade.add(A, '#' + w.view(A).pack[0].p, 1);
   w.trade.gold(B, 20);
-  w.trade.confirm(A);
+  w.trade.confirm(A, observedOfferVersion(w.trade, A));
   w.store[A].inventory.entries = [{ baseId: SWORD, count: 1, name: 'Iron Sword (60%)' }];
   yes('is not the piece agreed to: refused, nothing moves',
-      /does not have the Iron Sword \(85%\) any more/.test(w.trade.confirm(B)) && w.writes.length === 0);
+      /does not have the Iron Sword \(85%\) any more/.test(w.trade.confirm(B, observedOfferVersion(w.trade, B))) && w.writes.length === 0);
 });
 
 // ----------------------------- 6. a company sale takes the piece put up --
@@ -332,8 +333,8 @@ attempt('a company sale of one of two swords', function () {
   w.trade.add(S, '#' + w.line(S, 'pack', 'Iron Sword')[0].p, 1);
   yes('the worker sees which sword is for sale', names(w.view(W).theirs) === 'Iron Sword');
   w.trade.gold(W, 40);
-  w.trade.confirm(W);
-  yes('the sale goes through', w.trade.confirm(S) === '' && !w.trade.tradeOf(W));
+  w.trade.confirm(W, observedOfferVersion(w.trade, W));
+  yes('the sale goes through', w.trade.confirm(S, observedOfferVersion(w.trade, S)) === '' && !w.trade.tradeOf(W));
   yes('the plain sword left Skyrim and the one at 85% stayed with the seller',
       !!entry(w.pack(S), { baseId: SWORD, count: 1, name: 'Iron Sword (85%)' }) &&
       !w.pack(S).concat(w.pack(W)).some(function (e) { return e.baseId === SWORD && !e.name; }));

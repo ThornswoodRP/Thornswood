@@ -446,7 +446,7 @@ const T = rules(trade.css);
   yes('the trade window loads and says it is ready', !!trade.win.thornswoodTrade &&
       trade.told.indexOf('thornswood-front trade:ready') >= 0);
   const offer = {
-    open: true, them: 'Ingrid',
+    open: true, offerVersion: 'a'.repeat(48), them: 'Ingrid',
     pack: [{ n: 'Iron Sword', c: 3 }, { n: 'Leek', c: 1 }],
     mine: [{ n: 'Iron Dagger', c: 1 }], myGold: 40, iAgreed: false,
     theirs: [{ n: 'Salt Pile', c: 5 }], theirGold: 25, theyAgreed: false
@@ -502,7 +502,7 @@ const T = rules(trade.css);
   const ok = tr.querySelector('#ts-trade-ok');
   yes('Agree is the gold primary until you agree', ok.className === 'go' && ok.textContent === 'Agree');
   ok.onclick.call(ok);
-  yes('Agree sends /trade ok', lastSent() === '/trade ok');
+  yes('Agree sends its observed offer version', lastSent() === '/trade agree ' + offer.offerVersion);
   const cancel = tr.querySelector('#ts-trade-cancel');
   cancel.onclick.call(cancel);
   yes('Walk away sends /trade cancel', lastSent() === '/trade cancel');
@@ -543,7 +543,7 @@ const T = rules(trade.css);
   const pr = pieces.root;
   function sent() { return pieces.sent[pieces.sent.length - 1]; }
   pieces.win.thornswoodTrade.setData({
-    open: true, them: 'Ingrid',
+    open: true, offerVersion: 'a'.repeat(48), them: 'Ingrid',
     pack: [{ p: 1, n: 'Key to Breezehome', c: 1, k: 'Keys' }, { p: 2, n: 'Key to Honeyside', c: 1, k: 'Keys' },
            { p: 3, n: 'Steel Dagger (enchanted)', c: 2, k: 'Weapons' }, { p: 4, n: 'Steel Dagger (enchanted)', c: 3, k: 'Weapons' }],
     mine: [{ p: 2, n: 'Key to Honeyside', c: 1 }], myGold: 0, iAgreed: false,

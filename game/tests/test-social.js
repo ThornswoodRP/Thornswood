@@ -1,3 +1,4 @@
+const observedOfferVersion = require('../../tests/fixtures/trade-version');
 // test-social.js
 //
 // Friends, parties, mutes, journals and trading.
@@ -84,11 +85,11 @@ function world() {
 
   function run(block) {
     return new Function(
-      'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
+      'require', 'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
       'JSON', 'isFinite', 'parseInt',
       require('../../tests/fixtures/ordinary-quest-items') + block)(
-      g, mp, { now: function () { return clock.now; } },
+      require, g, mp, { now: function () { return clock.now; } },
       { log: function () { } },
       function (f) { timers.push(f); return timers.length; },
       function () { },
@@ -539,7 +540,7 @@ if (social && trade) {
       THE ONE RULE THAT MAKES A TRADE SAFE. What you agreed to is what you
       get: changing either pile takes both agreements back.
     */
-    w.trade.confirm(A);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
     yes('one side agreeing does not swap anything', w.count(B, 0x900) === 0);
     /*
       A REAL change, not a no-op. The first version of this added a fourth
@@ -551,8 +552,8 @@ if (social && trade) {
     yes('and changing the pile takes the agreement back', t.okA === false);
     w.trade.add(A, 'Iron Sword', 3);
 
-    w.trade.confirm(A);
-    w.trade.confirm(B);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('both agreeing swaps it', w.count(B, 0x900) === 3 && w.count(A, 0x901) === 5);
     yes('and the gold with it', w.count(B, GOLD) === 40 && w.count(A, GOLD) === 60);
     yes('and the trade is over', !w.trade.tradeOf(A) && !w.trade.tradeOf(B));
@@ -566,9 +567,9 @@ if (social && trade) {
     w2.trade.begin(X, Y);
     w2.trade.add(X, 'Iron Sword', 1);
     w2.trade.add(Y, 'Leek', 1);
-    w2.trade.confirm(X);
+    w2.trade.confirm(X, observedOfferVersion(w2.trade, X));
     w2.store[X].inventory = [];            // they dropped it
-    const refused = w2.trade.confirm(Y);
+    const refused = w2.trade.confirm(Y, observedOfferVersion(w2.trade, Y));
     yes('a thing that is gone by the time both agree refuses the whole trade',
         /does not have/.test(refused) && w2.count(Y, 0x901) === 1);
     yes('and nothing moved', w2.count(X, 0x901) === 0);

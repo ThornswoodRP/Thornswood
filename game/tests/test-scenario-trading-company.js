@@ -180,8 +180,8 @@ say(RALOF, '/trade add ' + line(RALOF, 'Gem Ruby') + ' 1');
 say(TORSTEN, '/trade gold 50');
 const rg = gold(RALOF), tg = gold(TORSTEN);
 heardAt = w.heard(RALOF).length;
-say(TORSTEN, '/trade ok');
-say(RALOF, '/trade ok');
+say(TORSTEN, '/trade agree ' + win(TORSTEN).offerVersion);
+say(RALOF, '/trade agree ' + win(RALOF).offerVersion);
 yes('E3 the ruby leaves the world, Ralof receives 40 and Torsten keeps his 5 (' + w.heardSince(RALOF, heardAt).join(' | ') + ')',
     w.count(RALOF, w.idOf(RUBY)) === 0 && w.count(TORSTEN, w.idOf(RUBY)) === 0 && gold(RALOF) === rg + 40 && gold(TORSTEN) === tg - 45 &&
     w.heardSince(RALOF, heardAt).some(function (l) { return /^Sold to the Free Skyrim Trading Company for 50 gold\..* You receive 40: 5 went to Torsten for handling it, and 5 left the world\./.test(l); }));
