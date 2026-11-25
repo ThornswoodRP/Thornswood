@@ -32,14 +32,24 @@ for (const server of ['main','dev']) {
     yes('inspection leaves every character unchanged: '+text,snapshot() === before && !w.did.slice(marks).some(d => d[2] === 'set'));
     return lines;
   }
-  let lines = ask(TESTER,'/inspect'), output = lines.join('\n');
+  // Exercise an older engine explicitly. The shared stand-in may support
+  // this native flag now; its default false is a valid value, not absence.
+  const initialGet = w.mp().get;
+  w.mp().get = function(actor,property) {
+    if (property === 'isGodMode') { throw new Error('isGodMode binding unavailable'); }
+    return initialGet(actor,property);
+  };
+  let lines;
+  try { lines = ask(TESTER,'/inspect'); }
+  finally { w.mp().get = initialGet; }
+  let output = lines.join('\n');
   yes('a playtester receives their gameplay identity and actual location',/Tester/.test(output) && /ff006721/i.test(output) && /3c:Skyrim.esm/.test(output) && /1244.5/.test(output));
   yes('vitals show actual percentages, including a real zero',/Health: 75%/.test(output) && /Magicka: 50%/.test(output) && /Stamina: 0%/.test(output));
   yes('needs are the last recorded values, without an elapsed drain',/last recorded/i.test(output) && /Food: 81/.test(output) && /Drink: 72/.test(output) && /Rest: 63/.test(output) && /Temperature: 44/.test(output));
   yes('class, profession, chosen half and ranks are reported',/Miner/.test(output) && /Smith/.test(output) && /Platewright/.test(output) && /expert/.test(output) && /advanced/.test(output));
   yes('private account and unrelated state never reach the output',!/PRIVATE_|discord|account|token/i.test(output));
   yes('the output arrives as complete bounded lines',lines.length >= 5 && lines.every(line => line.length <= 300));
-  yes('unimplemented god mode is explicitly unavailable',/God mode: unavailable/.test(output));
+  yes('an engine without the god-mode binding reports unavailable',/God mode: unavailable/.test(output));
   output = ask(TESTER,'/inspect for Tester').join('\n');
   yes('an explicit unambiguous self target keeps the playtester permission',/Tester/.test(output) && /Health: 75%/.test(output));
   output = ask(HELPER,'/inspect').join('\n');
