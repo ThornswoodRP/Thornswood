@@ -196,10 +196,11 @@
     A name somebody can read.
 
     Skyrim.esm and the DLCs are localized. A FULL field there is not a name:
-    it is a four byte index into the strings file. String() of those bytes is
-    a row of numbers, which is what the trade list was showing. A FULL is
-    used only when it is real text. Otherwise the editor id is spaced out
-    (SteelSword becomes Steel Sword). A string index is never shown.
+    it is a four byte index into the strings file. Some indexes even look
+    printable (Hammer's is [46,74,0,0], or '.J'). Use the shared
+    decoded content names first, matched by the whole record descriptor.
+    FULL is text only when the winning plugin is proven unlocalized.
+    Unknown provenance and missing decoded names use the editor id.
   */
   function fieldText(data) {
     if (typeof data === 'string') {
@@ -240,6 +241,11 @@
     if (Object.prototype.hasOwnProperty.call(nameCache, baseId)) { return nameCache[baseId]; }
     var label = '';
     var edid = '';
+    var names = g.__thornswoodProperty;
+    if (names && typeof names.baseItemName === 'function') {
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
+    }
     try {
       var res = mp.lookupEspmRecordById(baseId);
       var rec = res && res.record;
@@ -249,7 +255,7 @@
         for (var i = 0; i < fields.length; i++) {
           if (!fields[i]) { continue; }
           var t = String(fields[i].type || '');
-          if (t === 'FULL' && !label) { label = fieldText(fields[i].data); }
+          if (t === 'FULL' && !label && res.isLocalized === false) { label = fieldText(fields[i].data); }
           else if (t === 'EDID' && !edid) { edid = fieldText(fields[i].data); }
         }
       }

@@ -8402,7 +8402,7 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
       */
       var dyeW = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodHairDye;
       var dLine = '';
-      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW) : ''; } catch (eDye) {
+      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW, refrId) : ''; } catch (eDye) {
         log('the hair dye at', refrId.toString(16), 'threw:', eDye);
       }
       if (dLine) { notify(casterRefrId, dLine); say(casterRefrId, dLine); answeredHere = true; }
@@ -12438,7 +12438,7 @@ log('gamemode loaded:',
   if (globalThis.__thornswoodRoster) {
     try { clearInterval(globalThis.__thornswoodRoster); } catch (e) { }
   }
-  globalThis.__thornswoodRoster = setInterval(function () {
+  function refresh() {
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
 
@@ -12489,7 +12489,9 @@ log('gamemode loaded:',
 
     // Still dirty when the write was refused: the file is behind the book.
     if (dirty) { dirty = !write(); }
-  }, EVERY_MS);
+  }
+  globalThis.__thornswoodRefreshRoster = refresh;
+  globalThis.__thornswoodRoster = setInterval(refresh, EVERY_MS);
 
   console.log('[thornswood] character roster published at ' + FILE);
 })();
@@ -18569,15 +18571,21 @@ log('gamemode loaded:',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
       '    if (st.thornswoodSkyId === id) { return; }',
-      '    st.thornswoodSkyId = id;',
+      // An id is applied only when its native operation completes. A form
+      // unavailable during loading must not suppress later owner updates.
       '    if (!id) {',
-      '      try { if (ctx.sp.Weather.releaseOverride) { ctx.sp.Weather.releaseOverride(); } } catch (e0) { }',
+      '      if (!ctx.sp.Weather.releaseOverride) { return; }',
+      '      ctx.sp.Weather.releaseOverride();',
+      '      st.thornswoodSkyId = id;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
       '    if (!form) { return; }',
       '    var weather = ctx.sp.Weather.from(form);',
-      '    if (weather && weather.forceActive) { weather.forceActive(true); }',
+      '    if (weather && weather.forceActive) {',
+      '      weather.forceActive(true);',
+      '      st.thornswoodSkyId = id;',
+      '    }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -22428,13 +22436,19 @@ module.exports = {
     return out;
   }
 
-  function save() {
+  function save(durable) {
     try {
-      var dir = require('path').dirname(registerPath());
-      storeWrite(registerPath(),
-        JSON.stringify({ claims: claims, arrears: arrears,
-                        funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1), registerRead);
+      var text = JSON.stringify({ claims: claims, arrears: arrears,
+        funds: funds, notices: notices, boards: boards, steps: steps,
+        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+      if (durable === true) {
+        if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
+        var file = registerPath();
+        require('fs').mkdirSync(require('path').dirname(file), { recursive: true });
+        mp.writeFileWhole(file, text);
+      } else {
+        storeWrite(registerPath(), text, registerRead);
+      }
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -22446,6 +22460,8 @@ module.exports = {
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
+  // Read with the rest, before anything can save, so no write leaves them out (#4901).
+  var debits = loadDebits();
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -25432,9 +25448,9 @@ module.exports = {
     the two generated name tables /give reads, when this file has them.
   */
   var boxNames = null;
-  function itemName(entry) {
-    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
-    var base = Number(entry && entry.baseId) || 0;
+  /** Decoded base name by its whole descriptor, or '' when unknown. Read only. */
+  function baseItemName(baseId) {
+    var base = Number(baseId) || 0;
     if (base === GOLD_ID) { return 'Gold'; }
     if (!boxNames) {
       boxNames = {};
@@ -25453,6 +25469,16 @@ module.exports = {
     var desc = '';
     try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     if (desc && Object.prototype.hasOwnProperty.call(boxNames, desc)) { return boxNames[desc]; }
+    return '';
+  }
+
+  function itemName(entry) {
+    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
+    var base = Number(entry && entry.baseId) || 0;
+    var name = baseItemName(base);
+    if (name) { return name; }
+    var desc = '';
+    try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     return desc ? 'something (' + desc + ')' : 'something';
   }
 
@@ -25557,7 +25583,20 @@ module.exports = {
   function boxPutGold(hold, actorId, profileId, amount) {
     var n = Math.floor(Number(amount));
     if (!(n > 0) || String(n) !== String(amount).trim()) { return 'Say how much gold, as a whole number.'; }
-    if (!takeGold(actorId, n)) { return 'You do not have ' + n + ' gold in one purse.'; }
+    // Into the register only once the pack's take is saved (#4901): landBoxGold.
+    var r = packs.begin(actorId, goldCut(n, 'You do not have ' + n + ' gold in one purse.'), 'box-gold',
+                        { hold: hold, n: n, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || ('The ' + n + ' gold goes in the box once your pack is saved, in a moment.');
+  }
+
+  /* Gold in, once its take out of the pack is saved (#4901). Answers the line for whoever put it in. */
+  function landBoxGold(row, landed) {
+    var hold = row.data.hold, n = row.data.n, who = row.data.who;
+    var profileId = row.human.profileId;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + n + ' gold out of it, so it is still in your pack and not in the box.';
+    }
     var owed = rentOwedBy(profileId);
     var left = n;
     var rent = [];
@@ -25578,7 +25617,6 @@ module.exports = {
                                : { building: owed[i].building, amount: take });
     }
     var d = dropboxOf(hold);
-    var who = characterName(actorId);
     var item = { n: d.next++, by: profileId, name: who, kind: 'gold', baseId: GOLD_ID, count: n,
                  what: 'Gold', at: Date.now() };
     if (rent.length) { item.rent = rent; }
@@ -25586,7 +25624,6 @@ module.exports = {
     var paid = n - left;
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: 'Gold', count: n, note: paid ? paid + ' of it rent' : '' });
-    save();
     plog(who, '(profile ' + profileId + ') put', n, 'gold in', hold + '\'s drop box', paid ? '(' + paid + ' of it rent)' : '');
     return 'You put ' + n + ' gold in the box.' + (paid ? ' ' + paid + ' of it pays your rent.' : '');
   }
@@ -25609,20 +25646,40 @@ module.exports = {
     if (e.worn || e.wornLeft) { return 'Take it off first.'; }
     var n = Math.floor(Number(count));
     if (!(n > 0) || n > (Number(e.count) || 0)) { return 'You do not have that many.'; }
-    var kept = JSON.parse(JSON.stringify(e));
-    delete kept.count; delete kept.worn; delete kept.wornLeft;
-    e.count = (Number(e.count) || 0) - n;
-    if (e.count <= 0) { entries.splice(at, 1); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return 'Your pack could not be written.'; }
-    var d = dropboxOf(hold);
-    var who = characterName(actorId);
+    // Into the register only once the pack's take is saved (#4901): landBoxLeft.
+    var r = packs.begin(actorId, function (list) {
+      var it = list[at];
+      if (!it || Number(it.baseId) === GOLD_ID || it.worn || it.wornLeft || n > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was put in the box.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = n;
+      it.count = (Number(it.count) || 0) - n;
+      if (it.count <= 0) { list.splice(at, 1); }
+      return { entries: list, taken: [kept] };
+    }, 'box-left', { hold: hold, to: to, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || 'It goes in the box for ' + to + ' once your pack is saved, in a moment.';
+  }
+
+  /* Something left for somebody, once its take out of the pack is saved (#4901). */
+  function landBoxLeft(row, landed) {
+    var hold = row.data.hold, to = row.data.to, who = row.data.who;
+    var profileId = row.human.profileId;
+    var kept = JSON.parse(JSON.stringify(row.taken[0] || {}));
+    var n = Number(kept.count) || 0;
+    delete kept.count;
     var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with ' + what + ' out of it, so it is still in your pack and not in the box.';
+    }
+    var d = dropboxOf(hold);
     var item = { n: d.next++, by: profileId, name: who, kind: 'left', baseId: Number(kept.baseId),
                  count: n, what: what, entry: kept, forName: to, at: Date.now() };
     d.items.push(item);
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: what, count: n, forName: to });
-    save();
     plog(who, '(profile ' + profileId + ') left', n, what, 'for', to, 'in', hold + '\'s drop box');
     return 'You left ' + (n > 1 ? n + ' ' : '') + what + ' in the box for ' + to + '.';
   }
@@ -26952,7 +27009,7 @@ module.exports = {
     the gate: Solitude, Whiterun, Windhelm, Riften and Markarth are walled
     cities, each its own worldspace inside the walls, and their numbers were
     read inside them. Measured 15 Oct:
-      - the game's own NPCs placed near each point (docs/NPC-SPAWNS.csv)
+      - the game's own NPCs placed near each point (game/data/NPC-SPAWNS.csv)
         stand in WhiterunWorld 1a26f, RiftenWorld 16bb4, WindhelmWorld 1691d
         and MarkarthWorld 16d71;
       - Solitude has no NPC within 3,000, so the cell its point falls in was
@@ -27830,6 +27887,239 @@ module.exports = {
     return false;
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* A whole count of gold out of one stack, the way takeGold takes it: { entries, taken } or the refusal. */
+  function goldCut(amount, refusal) {
+    return function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        if (e && e.baseId === GOLD_ID && (Number(e.count) || 0) >= amount) {
+          e.count -= amount;
+          if (e.count <= 0) { entries.splice(i, 1); }
+          return { entries: entries, taken: [{ baseId: GOLD_ID, count: amount }] };
+        }
+      }
+      return refusal;
+    };
+  }
+
+  /* The debits the register holds: takes armed and not yet landed or let go (#4901). */
+  function loadDebits() {
+    var raw = registerRead.doc;
+    var list = (raw && Array.isArray(raw.debits)) ? raw.debits : [];
+    if (list.length) { plog('read', list.length, 'take(s) out of a pack waiting on its save'); }
+    return list;
+  }
+
+  /* A line to a person in the world, from a debit that landed or let go without them asking. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('a take out of a pack:', err); return; }
+    var to = onlineActorOf(Number(pid));
+    if (!to || !line) { return; }
+    try { notify(to, line); } catch (e) { plog('could not show', Number(to).toString(16), 'a line:', e); }
+    try { say(to, line); } catch (e2) { plog('could not say a line to', Number(to).toString(16) + ':', e2); }
+    refreshPanel(to);
+  }
+
+  function commitPackDebit(land, row, paid) {
+    var original = { claims: claims, arrears: arrears, funds: funds, notices: notices,
+                     dropbox: dropbox, debits: debits };
+    var draft = JSON.parse(JSON.stringify(original));
+    claims = draft.claims;
+    arrears = draft.arrears;
+    funds = draft.funds;
+    notices = draft.notices;
+    dropbox = draft.dropbox;
+    debits = debits.filter(function (debit) { return debit !== row; });
+    var committed = false;
+    try {
+      var line = land(JSON.parse(JSON.stringify(row)), paid);
+      committed = save(true);
+      return committed ? line : '';
+    } finally {
+      if (!committed) {
+        claims = original.claims;
+        arrears = original.arrears;
+        funds = original.funds;
+        notices = original.notices;
+        dropbox = original.dropbox;
+        debits = original.debits;
+      }
+    }
+  }
+
+  var packs = packFirst(mp, function () { return debits; }, function () { return save(true); }, {
+    'box-gold': landBoxGold,
+    'box-left': landBoxLeft,
+    'post': landPost,
+    'letter': landLetter,
+    'haul': landHaul
+  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, require('crypto').randomUUID, admitPackDebit);
+
+  if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
+  g.__thornswoodPackTimer = setInterval(
+    guard('packTick', packs.settle), 1000);
+
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
 
@@ -27984,11 +28274,12 @@ module.exports = {
     }
     var fee = isJob ? JOB_FEE : NOTICE_FEE;
     var cost = fee + reward;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, isJob
-        ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
-          ' reward, and you do not have it. Nothing was taken.'
-        : 'That costs ' + fee + ' gold and you do not have it.');
+    var short = isJob
+      ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
+        ' reward, and you do not have it. Nothing was taken.'
+      : 'That costs ' + fee + ' gold and you do not have it.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -27996,24 +28287,38 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-
-    if (!notices[hold]) { notices[hold] = []; }
     var made = { by: profileId, name: who, title: words.title, text: words.body, at: Date.now(),
                  job: !!isJob, taken: 0 };
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    // On the board only once the pack's take is saved (#4901): landPost.
+    var r = packs.begin(actorId, goldCut(cost, short),
+      'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
+    toProfile(profileId, r.why || r.line ||
+      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A notice or a job onto its board, once its fee is saved out of the pack (#4901). */
+  function landPost(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
+    var isJob = !!made.job;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
+             (isJob ? 'job' : 'notice') + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', words.title);
-    toProfile(profileId, isJob
+    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
         'Then it goes to whoever took it.'
-      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.');
-    refreshPanel(actorId);
-    return true;
+      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.';
   }
 
   /*
@@ -28563,26 +28868,37 @@ module.exports = {
       return true;
     }
     var cost = LETTER_FEE + LETTER_PAY;
-    if (!takeGold(actorId, cost)) {
-      toProfile(profileId, 'A letter costs ' + cost + ' gold and you do not have it.');
-      return true;
-    }
     var who = 'somebody';
     try {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
-    notices[hold].push({ by: profileId, name: who, text: words, at: Date.now(),
-                         job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 });
-    funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, 'posted a letter for', to, 'in', hold, 'for', cost, 'gold');
-    toProfile(profileId, 'Your letter for ' + to + ' is on the board in ' + hold + '. That cost ' + cost +
-              ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
-              ' held for whoever carries it.');
-    refreshPanel(actorId);
+    var made = { by: profileId, name: who, text: words, at: Date.now(),
+                 job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
+    // On the board only once the pack's take is saved (#4901): landLetter.
+    var r = packs.begin(actorId, goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.'),
+                        'letter', { hold: hold, made: made, cost: cost });
+    toProfile(profileId, r.why || r.line ||
+      ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /* A letter onto its board, once its cost is saved out of the pack (#4901). The words stay out of the log. */
+  function landLetter(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the letter for ' +
+             made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a letter for', made.to, 'in', hold, 'for', cost, 'gold');
+    return 'Your letter for ' + made.to + ' is on the board in ' + hold + '. That cost ' + cost +
+           ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
+           ' held for whoever carries it.';
   }
 
   /*
@@ -28850,9 +29166,10 @@ module.exports = {
     }
     var fee = co.haulFee();
     var cost = fee + pay;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
-                ' pay, and you do not have it. Nothing was taken.');
+    var short = 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
+                ' pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -28860,23 +29177,40 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
     // The haul carries the cut it was posted under, so a change of terms never re-prices it.
-    notices[hold].push(co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
-                                      job: true, haul: true, dest: dest, pay: pay, taken: 0 }));
-    // deposit saves the notice with the coin, so the two cannot part.
-    if (!deposit(hold, cost, 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held')) {
-      notices[hold].pop();
-      payOut(actorId, cost);
-      toProfile(profileId, 'That did not work. Nothing was taken.');
-      return true;
-    }
-    plog(who, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
-    toProfile(profileId, 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
-              notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
-              pay + ' pay, held until it is confirmed at ' + dest + '.');
-    refreshPanel(actorId);
+    var made = co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
+                              job: true, haul: true, dest: dest, pay: pay, taken: 0 });
+    // On the board only once the pack's take is saved (#4901): landHaul.
+    var r = packs.begin(actorId, goldCut(cost, short), 'haul',
+                        { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
+    toProfile(profileId, r.why || r.line ||
+      ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /*
+    A haul onto its board, once its cost is saved out of the pack (#4901).
+    The coin is counted on the hold's ledger in the same write as the notice
+    (the debit's landing), so the two cannot part, and nothing is ever handed
+    back: the pack's take is saved before any of it is counted.
+  */
+  function landHaul(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    var fee = row.data.fee, pay = row.data.pay, dest = row.data.dest;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the haul to ' +
+             dest + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(cost, 'gold onto', hold + '\'s ledger:', 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held');
+    plog(made.name, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
+    return 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
+           notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
+           pay + ' pay, held until it is confirmed at ' + dest + '.';
   }
 
   function confirmHaul(parts, actorId, profileId, toProfile) {
@@ -30322,7 +30656,7 @@ module.exports = {
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
-    deposit: deposit, takeGold: takeGold, LEDGER_HOLDS: LEDGER_HOLDS,
+    deposit: deposit, takeGold: takeGold, settlePacks: packs.settle, LEDGER_HOLDS: LEDGER_HOLDS,
     withdraw: withdraw, mayWithdraw: mayWithdraw, heldOn: heldOn,
     haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany,
     holdStanding: holdStanding,
@@ -30340,7 +30674,7 @@ module.exports = {
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
-    itemName: itemName
+    itemName: itemName, baseItemName: baseItemName
   };
   plog('ready,', Object.keys(BUILDING_BY_DOOR).length, 'doors across',
        Object.keys(BUILDING_NAME).length, 'buildings,',
@@ -50808,6 +51142,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     (doc.pieces || []).forEach(function (r) { if (r && r.key) { rows[r.key] = r; } });
     var book = api.readRegister() || {};
     var pieces = (book && typeof book.pieces === 'object' && book.pieces) ? book.pieces : {};
+    // Pieces taken out of a pack and not yet set down, waiting on the pack's save (#4901).
+    var debits = (book && Array.isArray(book.debits)) ? book.debits : [];
     // In memory only: a piece in somebody's hands, by actor, { ref, until }.
     var carrying = {};
 
@@ -50821,8 +51157,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     function carryMs() { return num(limits.carryMs, 60000); }
     function turnStep() { return num(limits.turnStep, 45); }
 
+    /* Answers whether the register was written. */
     function save() {
-      api.writeRegister({ pieces: pieces });
+      return api.writeRegister({ pieces: pieces, debits: debits }) !== false;
     }
 
     function piecesIn(building) {
@@ -50831,6 +51168,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         if (own(pieces, k) && pieces[k] && pieces[k].building === building) { out.push(pieces[k]); }
       }
       return out;
+    }
+
+    /* Pieces for that building still waiting on a pack's save, which the cap counts too. */
+    function waitingIn(building) {
+      return debits.filter(function (d) { return d && d.data && d.data.building === building; }).length;
     }
 
     /* The building the person stands in, when it is one the property block knows. */
@@ -50887,7 +51229,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var c = may ? carryOf(actorId) : null;
       return {
         b: building, n: building ? api.nameOf(building) : '', may: may,
-        p: may ? piecesIn(building).map(function (x) { return hex(x.ref); }) : [],
+        p: may ? piecesIn(building).filter(function (x) { return !!x.ref; }).map(function (x) { return hex(x.ref); }) : [],
         c: c ? hex(c.ref) : '', left: c ? Math.max(0, c.until - api.now()) : 0
       };
     }
@@ -50926,9 +51268,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       if (why) { return why; }
       var row = own(rows, key) ? rows[key] : null;
       if (!row || !typeOn(row.type)) { return 'That is not furniture that can be set down.'; }
+      if (!api.placementReady()) { return 'Furniture placement is unavailable just now.'; }
       if (!(api.count(actorId, row.itemDesc) > 0)) { return 'You carry no ' + row.name + '.'; }
       var cap = capOf(building);
-      if (piecesIn(building).length >= cap) {
+      if (piecesIn(building).length + waitingIn(building) >= cap) {
         return api.nameOf(building) + ' already has ' + cap + ' pieces set down, which is all it takes.';
       }
       var bad = api.baseRefusal(row);
@@ -50936,25 +51279,96 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var pos = inFront(actorId);
       if (!pos) { return 'Could not tell where you stand. Try again.'; }
       var angle = wrap(num(api.angleOf(actorId)[2], 0) + 180);
-      if (!api.take(actorId, row.itemDesc)) { return 'Could not take the ' + row.name + ' out of your pack.'; }
-      var id = 0;
-      try {
-        id = api.place(row.base);
-        stand(id, row.base, actorId, pos, angle);
-      } catch (e) {
-        api.log('furniture: could not set down', row.key, 'in', building + ':', e);
-        if (id) { try { api.remove(id); } catch (e2) { } }
-        api.give(actorId, row.itemDesc);
-        return 'The ' + row.name + ' could not be set down. It is back in your pack.';
-      }
-      pieces[hex(id)] = { ref: id, key: row.key, base: row.base, building: building,
-                          pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), angle: angle };
-      save();
-      api.log('furniture:', api.who(actorId), 'set down a', row.name, hex(id), 'in', api.nameOf(building),
-              '(' + building + ') at', pieces[hex(id)].pos.join(','), 'turned', angle);
-      lookAll(building);
-      return '';
+      // Set down only once the pack's take is saved (#4901): landPiece.
+      var r = packs.begin(actorId, function (entries) { return api.cutOne(entries, row.itemDesc) || ('You carry no ' + row.name + '.'); },
+                          'piece', { key: row.key, building: building, angle: angle,
+                                     pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), by: api.who(actorId) });
+      if (r.why) { return r.why; }
+      return r.line && r.line !== PIECE_DOWN ? r.line : '';
     }
+
+    var PIECE_DOWN = 'It is set down.';
+
+    /*
+      A piece set down, once its item is saved out of the pack (#4901). Its
+      place was fixed when it was asked for. One that cannot be stood just
+      now stays in the register, the way standAll keeps one with nothing to
+      stand next to, and is stood at the next start: the item is out of the
+      pack for good, so the piece is never dropped.
+    */
+    function landPiece(d, landed) {
+      var w = d.data;
+      var row = own(rows, w.key) ? rows[w.key] : null;
+      var name = row ? row.name : w.key;
+      if (!landed) {
+        return { line: 'Your pack was not saved with the ' + name + ' out of it, so it was not set down.' };
+      }
+      return { name: name, piece: { ref: 0, marker: d.marker, key: w.key, base: row ? row.base : w.base,
+                                     building: w.building, pos: w.pos, angle: w.angle } };
+    }
+
+    // A paid piece is durable before it gets a reference. Bind the disabled
+    // reference before moving and enabling it in the building.
+    var pendingPaid = {};
+    function standPaidPiece(k, preferred) {
+      var piece = pieces[k];
+      pendingPaid[piece.marker] = k;
+      if (!piece.base) { return false; }
+      var anchor = preferred && api.cellOf(preferred) === piece.building ? preferred : api.anchorIn(piece.building);
+      if (!anchor) { return false; }
+      try {
+        var id = piece.ref;
+        if (!(id && api.refStands(id, piece.base) && api.placementMarker(id) === piece.marker)) {
+          id = api.stagePlacement(piece.base, piece.marker);
+        }
+        if (id !== piece.ref) {
+          if (own(pieces, hex(id)) && pieces[hex(id)].marker !== piece.marker) {
+            throw new Error('the placed reference already belongs to another registered piece');
+          }
+          var next = Object.assign({}, pieces);
+          delete next[k];
+          next[hex(id)] = Object.assign({}, piece, { ref: id });
+          if (!api.writePackRegister({ pieces: next, debits: debits })) { return false; }
+          pieces = next;
+          piece = next[hex(id)];
+          pendingPaid[piece.marker] = hex(id);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          stand(id, piece.base, anchor, piece.pos, piece.angle);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          throw new Error('the disabled furniture did not reach its registered position');
+        }
+        api.enablePlacement(id);
+        delete pendingPaid[piece.marker];
+      } catch (e) {
+        api.log('furniture: could not stand paid piece', piece.key + ':', e);
+        return false;
+      }
+      lookAll(piece.building);
+      return true;
+    }
+
+    function commitPackDebit(land, row, paid, actor) {
+      var result = land(row, paid);
+      var next = Object.assign({}, pieces);
+      var waiting = debits.filter(function (debit) { return debit !== row; });
+      var k = 'w' + row.marker;
+      if (paid) { next[k] = result.piece; }
+      if (!api.writePackRegister({ pieces: next, debits: waiting })) { return ''; }
+      pieces = next;
+      debits = waiting;
+      if (!paid) { return result.line; }
+      if (standPaidPiece(k, actor)) {
+        api.log('furniture:', row.data.by, 'set down a', result.name, 'in', api.nameOf(row.data.building));
+        return PIECE_DOWN;
+      }
+      return 'The ' + result.name + ' is kept in the register and will stand once it can be placed.';
+    }
+
+    var packs = api.packFirst(function () { return debits; }, function () {
+      return api.writePackRegister({ pieces: pieces, debits: debits });
+    }, { piece: landPiece }, commitPackDebit);
 
     /* The piece under their crosshair, when they may touch it: { piece } or { why }. */
     function reachable(actorId, refHex) {
@@ -51061,6 +51475,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         if (!own(pieces, k)) { continue; }
         var p = pieces[k];
         if (!p || !p.base || !p.building || !p.pos) { continue; }
+        if (p.marker) {
+          if (p.ref && api.refAt(p.ref, p.base, p.building, p.pos, p.angle) &&
+              api.placementMarker(p.ref) === p.marker && api.placementEnabled(p.ref)) {
+            kept++;
+          } else {
+            var localRef = p.ref && api.cellOf(p.ref) === p.building ? p.ref : 0;
+            if (!localRef && !api.anchorIn(p.building)) {
+              api.log('furniture: nothing to stand', p.key, k, 'next to in', p.building);
+            }
+            if (standPaidPiece(k, localRef)) { stood++; }
+          }
+          continue;
+        }
         if (api.refAt(p.ref, p.base, p.building, p.pos, p.angle)) { kept++; continue; }
         var id = api.refStands(p.ref, p.base) ? p.ref : 0;
         var anchor = (id && api.cellOf(id) === p.building) ? id : api.anchorIn(p.building);
@@ -51112,6 +51539,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return {
       command: command, look: look, lineFor: lineFor, view: view, place: place, move: move,
       down: down, turn: turn, pick: pick, standAll: standAll, refusal: refusal, capOf: capOf,
+      settle: function () {
+        packs.settle();
+        for (var marker in pendingPaid) {
+          var key = pendingPaid[marker];
+          if (own(pieces, key)) { standPaidPiece(key, 0); }
+          else { delete pendingPaid[marker]; }
+        }
+      },
       pieces: function () { return pieces; }, carrying: function () { return carrying; }
     };
   }
@@ -51315,15 +51750,240 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (e) { return false; }
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* One furniture item out of a list of pack entries, for packFirst: { entries, taken }, or null when none is there. */
+  function cutOne(entries, itemDesc) {
+    var baseId = idOf(itemDesc) >>> 0;
+    if (!baseId) { return null; }
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || (e.baseId >>> 0) !== baseId || !(Number(e.count) > 0)) { continue; }
+      e.count = Number(e.count) - 1;
+      if (e.count <= 0) { entries.splice(i, 1); }
+      return { entries: entries, taken: [{ baseId: baseId, count: 1 }] };
+    }
+    return null;
+  }
+
+  /* A line to a person in the world, from a piece that landed or let go after they asked. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('furniture: a take out of a pack:', err); return; }
+    if (!line) { return; }
+    var online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    for (var i = 0; i < online.length; i++) {
+      var pidHere = 0;
+      try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
+      if (pidHere !== Number(pid)) { continue; }
+      if (typeof notify === 'function') {
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+      }
+      return;
+    }
+  }
+
+  var placementField = 'thornswoodFurniturePlacement';
+  var placementRegistered = false;
+  try {
+    mp.makeProperty(placementField, {
+      isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+    });
+    placementRegistered = true;
+  } catch (err) { plog('could not register furniture placement markers:', err); }
+
   g.__thornswoodFurniture = create({
     catalog: doc,
     now: function () { return Date.now(); },
     log: plog,
     readRegister: function () { return furnitureRead.doc; },
     writeRegister: function (book) {
-      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); }
-      catch (e) { plog('furniture: could not write', registerPath() + ':', e); }
+      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); return true; }
+      catch (e) { plog('furniture: could not write', registerPath() + ':', e); return false; }
     },
+    writePackRegister: function (book) {
+      try {
+        if (furnitureRead.bad) { throw new Error('the furniture register could not be read at startup'); }
+        var file = registerPath();
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        mp.writeFileWhole(file, JSON.stringify(book, null, 1));
+        return true;
+      } catch (e) { plog('furniture: could not commit a placement:', e); return false; }
+    },
+    packFirst: function (book, keep, landers, commit) {
+      return packFirst(mp, book, keep, landers, tellPerson, 'thornswoodFurnitureDebit', commit, require('crypto').randomUUID, admitPackDebit);
+    },
+    placementReady: function () {
+      return placementRegistered && typeof mp.writeFileWhole === 'function' &&
+        typeof mp.placeDisabledFurniture === 'function';
+    },
+    placementMarker: function (id) { return mp.get(id, placementField); },
+    placementEnabled: function (id) { return mp.get(id, 'isDisabled') === false; },
+    stagePlacement: function (baseDesc, marker) {
+      return mp.placeDisabledFurniture(idOf(baseDesc) >>> 0, marker);
+    },
+    enablePlacement: function (id) { mp.set(id, 'isDisabled', false); },
+    cutOne: cutOne,
+    actorOf: function (desc) { try { return mp.getIdFromDesc(desc) >>> 0; } catch (e) { return 0; } },
     cellOf: cellOf,
     posOf: function (id) { try { return mp.get(id, 'pos') || null; } catch (e) { return null; } },
     angleOf: function (id) { try { return mp.get(id, 'angle') || null; } catch (e) { return null; } },
@@ -51429,6 +52089,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   });
 
   try { g.__thornswoodFurniture.standAll(); } catch (e) { plog('furniture: standing the pieces failed:', e); }
+
+  // A piece is set down once its item is saved out of the pack (#4901): see packFirst.
+  if (g.__thornswoodFurniturePackTimer) {
+    try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
+  }
+  g.__thornswoodFurniturePackTimer = setInterval(
+    guard('furniturePackTick', g.__thornswoodFurniture.settle), 1000);
 })();
 // ==== end thornswood furniture ====
 
@@ -52303,6 +52970,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function read(actorId) {
     var v = null;
     try { v = mp.get(actorId, NEEDS_PROPERTY); } catch (e) { v = null; }
+    return normalizedNeeds(v);
+  }
+
+  function normalizedNeeds(v) {
     if (!v || typeof v !== 'object') { return null; }
     return {
       food: clamp(v.food), drink: clamp(v.drink), rest: clamp(v.rest),
@@ -52386,6 +53057,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /*
+    An explicit testing change brings every meter to the same clock, overrides
+    one value, and commits once. Existing malformed meters are refused rather
+    than silently replaced by read()'s compatibility defaults. Only a genuinely
+    absent record is initialized, because the caller explicitly asked to set it.
+  */
+  function setForTesting(actorId, key, value) {
+    if (['food', 'drink', 'rest', 'temp'].indexOf(key) === -1 ||
+        typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      return { ok: false, why: 'Choose a needs value from 0 to 100.' };
+    }
+    if (inCreation(actorId)) { return { ok: false, why: 'Finish creating your character before changing needs.' }; }
+    var raw;
+    try { raw = mp.get(actorId, NEEDS_PROPERTY); }
+    catch (e) { return { ok: false, why: 'The server could not read those needs. Nothing changed.' }; }
+    var now = Date.now();
+    if (raw === undefined || raw === null) { raw = fresh(); raw.at = now; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        ['food', 'drink', 'rest', 'temp'].some(function (meter) {
+          return typeof raw[meter] !== 'number' || !Number.isFinite(raw[meter]) || raw[meter] < 0 || raw[meter] > 100;
+        }) || typeof raw.at !== 'number' || !Number.isFinite(raw.at) || raw.at <= 0 || raw.at > now) {
+      return { ok: false, why: 'The saved needs are invalid or unavailable. Nothing changed.' };
+    }
+    var normalized = normalizedNeeds(raw), arriving = !here[actorId] && onlineNow(actorId);
+    var projected;
+    try {
+      var api = g.__thornswoodNeeds;
+      projected = api && api.ignoresNeeds && api.ignoresNeeds(actorId)
+        ? { needs: normalized, changed: false }
+        : projectNeeds(normalized, now, arriving, projectionEnvironment(actorId, true));
+    }
+    catch (e) { return { ok: false, why: 'The server could not read the needs context. Nothing changed.' }; }
+    // Preserve metadata this operation did not change, including fields added
+    // by another module. Apply exactly the canonical elapsed-time changes.
+    var next = Object.assign({}, raw);
+    Object.keys(projected.needs).forEach(function (field) {
+      if (JSON.stringify(projected.needs[field]) !== JSON.stringify(normalized[field])) {
+        next[field] = projected.needs[field];
+      }
+    });
+    next[key] = value;
+    next.at = now;
+    if (!write(actorId, next)) { return { ok: false, why: 'The server could not save those needs. Nothing changed.' }; }
+    if (arriving) { here[actorId] = true; }
+    /* Character refresh asks settle/view again. During this synchronous
+       delivery it must see the committed snapshot, not charge a few more
+       milliseconds and produce a second authoritative needs write. */
+    testingSnapshot[actorId] = next;
+    try {
+      projectionEffects(actorId, projected, true);
+      pushEffects(actorId, true);
+    } finally { delete testingSnapshot[actorId]; }
+    return { ok: true, from: raw[key], to: value };
+  }
+
+  /*
     Whether somebody is still making their character. The chargen block's own
     answer, through the global the way the character block reaches it, and no
     answer counts as not in creation, so a missing block never freezes anybody.
@@ -52434,7 +53160,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     land on the same number. The tick below only exists to make the change
     visible and to notice a band crossing; the arithmetic does not need it.
   */
+  var testingSnapshot = {};
   function settle(actorId, now) {
+    if (testingSnapshot[actorId]) { return Object.assign({}, testingSnapshot[actorId]); }
     now = now || Date.now();
     var n = read(actorId);
     var arriving = !here[actorId] && onlineNow(actorId);
@@ -52602,15 +53330,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = environment.warmthTarget(n);
-      // Winter out under the sky cools a quarter faster (#3144), so its half
-      // life is the cooling one cut by that share. Warming is left alone.
-      var half = (target > n.temp)
-        ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / environment.outdoorCooling(n);
-      var k = 1 - Math.pow(0.5, (hours * 60) / half);
-      if (k > 1) { k = 1; }
-      if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+      var end = n.at + hours * 3600000;
+      var fireFrom = Number(environment.burningFrom) || 0;
+      var fireEnd = Number(environment.burningUntil) || 0;
+      var cursor = n.at;
+      function temperatureTo(until, onFire) {
+        approachTemperature(n, environment.warmthTarget(n, onFire), until - cursor, environment.outdoorCooling(n));
+        cursor = until;
+      }
+      // The environment supplies the interval. No runtime state is read by
+      // projection, and a refused pre-fire save cannot heat earlier time.
+      if (fireFrom > cursor) { temperatureTo(Math.min(end, fireFrom), false); }
+      if (cursor < end && fireFrom <= cursor && fireEnd > cursor) { temperatureTo(Math.min(end, fireEnd), true); }
+      if (cursor < end) { temperatureTo(end, false); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
@@ -52640,27 +53372,30 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
              hung: hung, pulled: pulled, slept: slept };
   }
 
-  function projectionEnvironment(actorId) {
+  function projectionEnvironment(actorId, savedOnly) {
+    var fireEnd = burningUntil(actorId, savedOnly);
     return {
-      workMultiplier: function () { return workMultiplier(actorId); },
-      restingGain: function (n) { return restingGain(actorId, n); },
-      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
+      restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
+      warmthTarget: function (n, onFire) { return warmthTarget(actorId, n, savedOnly, onFire ? NEEDS.fire.at : 0); },
+      burningFrom: fireEnd ? burnStarts[actorId] : 0,
+      burningUntil: fireEnd,
       outdoorCooling: outdoorCooling
     };
   }
 
-  function projectionEffects(actorId, projected) {
+  function projectionEffects(actorId, projected, savedOnly) {
     var hungBefore = projected.hungBefore, hung = projected.hung;
     var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       hangoverCare(actorId);
       if (hung) { notify(actorId, NEEDS.ale.hungLine); say(actorId, NEEDS.ale.hungLine); }
     }
     if (pulled) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, NEEDS.drug.withdrawal.line);
       say(actorId, NEEDS.drug.withdrawal.line);
     }
@@ -52672,7 +53407,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       */
       var beds = g.__thornswoodBeds;
       if (beds && beds.off) { beds.off(actorId); }
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, slept);
       say(actorId, slept);
     }
@@ -52739,11 +53474,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n) {
+  function approachTemperature(n, target, ms, coolingShare) {
+    // The same documented half-gap curve, including winter cooling.
+    var half = target > n.temp ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
+      : NEEDS.settleMinutes / coolingShare;
+    var k = Math.min(1, 1 - Math.pow(0.5, ms / (half * 60000)));
+    if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+  }
+
+  function warmthTarget(actorId, n, savedOnly, bodyFireWorth) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly, bodyFireWorth) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52807,14 +53550,27 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId) {
+  function nearbyFireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
     var reach = NEEDS.fire.reach || 1;
     if (d >= reach) { return 0; }
-    var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
+    var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
+  }
+
+  function burningUntil(actorId, savedOnly, identity) {
+    if (!burning || !Object.prototype.hasOwnProperty.call(burning, actorId)) { return 0; }
+    // A new profile, runtime or life can read needs before the burn tick.
+    // Only the actor that reported the fire can bank its elapsed warmth.
+    if ((identity || burnIdentity(actorId, savedOnly)) !== burnIdentities[actorId]) { return 0; }
+    return burning[actorId] + NEEDS.burn.every * 3;
+  }
+
+  function fireWarmth(n, actorId, savedOnly, bodyFireWorth) {
+    var body = bodyFireWorth === undefined ? (burningUntil(actorId) > Date.now() ? NEEDS.fire.at : 0) : bodyFireWorth;
+    return Math.max(nearbyFireWarmth(n, actorId, savedOnly), body);
   }
 
   /*
@@ -52834,15 +53590,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     The perk is the progression block's own answer, held at master in the
     half somebody picked. Nothing loaded answers no, which is an ordinary fire.
   */
-  function perkHeld(actorId, key) {
+  function projectionCharacter(actorId, savedOnly) {
+    var c = g.__thornswoodCharacter;
+    if (!savedOnly) { return c && c.stateOf ? c.stateOf(actorId) : null; }
+    var state = mp.get(actorId, (c && c.PROPERTY) || 'thornswoodCharacter');
+    return state && typeof state === 'object' && state.v === 1 ? state : null;
+  }
+
+  function perkHeld(actorId, key, savedOnly) {
     var P = g.__thornswoodProgression;
     var C = g.__thornswoodCharacter;
     if (!P || !P.perks || !C || !C.stateOf) { return false; }
-    try { return P.perks(C.stateOf(actorId)).indexOf(key) !== -1; } catch (e) { return false; }
+    try { return P.perks(projectionCharacter(actorId, savedOnly)).indexOf(key) !== -1; }
+    catch (e) { if (savedOnly) { throw e; } return false; }
   }
 
-  function carverFire(actorId) {
-    if (perkHeld(actorId, 'mastercarver')) { return true; }
+  function carverFire(actorId, savedOnly) {
+    if (perkHeld(actorId, 'mastercarver', savedOnly)) { return true; }
     var reach = NEEDS.fire.reach || 1;
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return false; }
@@ -52865,7 +53629,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       } catch (e) { continue; }
       var theirs = read(them);
       if (!theirs || !(theirs.fire >= 0) || theirs.fire >= reach) { continue; }
-      if (perkHeld(them, 'mastercarver')) { return true; }
+      if (perkHeld(them, 'mastercarver', savedOnly)) { return true; }
     }
     return false;
   }
@@ -53630,13 +54394,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** How much faster working drains rest, by the best rank this person holds. */
-  function workMultiplier(actorId) {
+  function workMultiplier(actorId, savedOnly) {
     var best = 'novice';
     try {
       var P = g.__thornswoodProgression;
       var C = g.__thornswoodCharacter;
       if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
+        var s = projectionCharacter(actorId, savedOnly);
         var ranks = (s && s.ranks) || {};
         var order = ['novice', 'advanced', 'expert', 'master'];
         for (var k in ranks) {
@@ -53644,16 +54408,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           if (order.indexOf(ranks[k]) > order.indexOf(best)) { best = ranks[k]; }
         }
       }
-    } catch (e) { }
+    } catch (e) { if (savedOnly) { throw e; } }
     return NEEDS.workRest[best] || NEEDS.workRest.novice;
   }
 
   /** What this person is recovering per hour, by where they are resting. */
-  function restingGain(actorId, n) {
+  function restingGain(actorId, n, savedOnly) {
     if (!n.resting) { return 0; }
     var base = NEEDS.recover[n.resting] || 0;
     if (!base) { return 0; }
-    if (bardNear(actorId)) { base += NEEDS.bard; }
+    if (bardNear(actorId, savedOnly)) { base += NEEDS.bard; }
     return base;
   }
 
@@ -53724,14 +54488,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
-  function bardNear(actorId) {
+  function bardNear(actorId, savedOnly) {
     var myCell = null;
     try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
     if (!myCell) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
-      if (now - BARDS[id] > BARD_FOR) { delete BARDS[id]; continue; }
+      if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
       var theirs = null;
@@ -53843,7 +54607,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       tempTarget: Math.round(warmthTarget(actorId, n)),
       roof: !!n.roof, night: !!n.night,
       fireAway: (typeof n.fire === 'number' && n.fire >= 0) ? Math.round(n.fire) : -1,
-      fireWorth: Math.round(fireWarmth(n, actorId)),
+      fireWorth: Math.round(nearbyFireWarmth(n, actorId)),
+      burning: burningUntil(actorId) > Date.now(),
       exposure: Math.round(weathered(actorId, n)),
       // How much slower a storm makes you right now, 0 when not in one (#3176).
       storm: stormy(n) ? NEEDS.weather.storm : 0,
@@ -54572,11 +55337,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     not change anything, and a band change is at most a handful of times an
     evening per person.
   */
-  function pushEffects(actorId) {
+  function pushEffects(actorId, savedOnly) {
     try {
       var c = g.__thornswoodCharacter;
       if (!c || !c.stateOf || !c.writeState) { return; }
-      var s = c.stateOf(actorId);
+      var s = projectionCharacter(actorId, savedOnly);
       if (!s) { return; }
       // redraw, because the rules state has not changed and the panel
       // signature would hold the write back. What changed is underneath it.
@@ -55059,8 +55824,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
+  var burnStarts = {};     // actual start, independent of whether needs saved
 
-  function burnIdentity(actorId) {
+  function burnIdentity(actorId, savedOnly) {
     try {
       var state = mp.getNpcAIState(actorId);
       var runtime = mp.getActorRuntimeIdentity(actorId);
@@ -55068,7 +55834,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
           typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
       return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
-    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+    } catch (e) {
+      if (savedOnly) { throw e; }
+      nlog('could not read the burning actor identity:', e);
+      return '';
+    }
   }
 
   function publishBurnVisual(actorId, on) {
@@ -55078,18 +55848,37 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   function clearBurning(actorId) {
-    delete burning[actorId];
-    delete burnIdentities[actorId];
-    publishBurnVisual(actorId, false);
+    var hadFire = Object.prototype.hasOwnProperty.call(burning, actorId);
+    var online = onlineNow(actorId);
+    // Bank heat only for the original actor. An offline character keeps the
+    // saved reading, and their next settle is an arrival.
+    var bankHeat = hadFire && online && burningUntil(actorId) > 0;
+    try {
+      if (bankHeat) { settle(actorId); }
+    } finally {
+      // Closing the fire is independent of saving this temperature sample.
+      if (hadFire && !online) { delete here[actorId]; }
+      delete burning[actorId];
+      delete burnIdentities[actorId];
+      delete burnStarts[actorId];
+      publishBurnVisual(actorId, false);
+    }
+    if (bankHeat) { pushEffects(actorId); }
   }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
     var identity = on ? burnIdentity(actorId) : '';
     if (on && identity) {
+      var wasBurning = burningUntil(actorId, false, identity) > Date.now();
+      // A new fire cannot warm the time before the report. A heartbeat also
+      // banks the old interval before extending its deadline.
+      settle(actorId);
+      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
+      if (!wasBurning) { pushEffects(actorId); }
     } else { clearBurning(actorId); }
   }
 
@@ -55300,7 +56089,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
     // The meters as last settled, without settling them again (#1383).
-    read: read,
+    read: read, setForTesting: setForTesting,
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
@@ -55795,22 +56584,24 @@ module.exports = {
   }
 
   // ------------------------------------------------------------ the steep --
-  var steeps = {};   // actorId -> { dye, from, fire }
+  var steeps = {};   // actorId -> { dye, from, fire, workbench }
 
   /*
     E on something. Starts a steep at the list's cooking spot when one dye's
     inputs are carried and none is steeping. Answers a line, or '' when this
-    press is none of the dye's business. Never refuses anything.
+    press is none of the dye's business. Refusals apply only to the dye.
   */
-  function pressed(actorId, benchKeyword) {
+  function pressed(actorId, benchKeyword, workbenchId) {
     if (!LIST || !benchKeyword || benchKeyword !== LIST.steepAt) { return ''; }
     if (Object.prototype.hasOwnProperty.call(steeps, actorId)) { return ''; }
     var dye = HAIR_DYE.dyeFor(HAIR_DYE.carriedFor(packOf(actorId), LIST, inputIds(), dyeItemId()), LIST);
     if (!dye) { return ''; }
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var N = g.__thornswoodNeeds;
     var fire = !!(N && N.fireNear && N.fireNear(actorId));
-    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire };
+    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire, workbench: workbenchId };
     var secs = LIST.steepSeconds;
     return 'You set ' + dye.name + ' to steep. Stay by the fire for ' +
            (secs % 60 === 0 ? (secs / 60) + (secs === 60 ? ' minute.' : ' minutes.') : secs + ' seconds.');
@@ -55832,11 +56623,13 @@ module.exports = {
     }
     if (Date.now() - st.from < LIST.steepSeconds * 1000) { return ''; }
     delete steeps[actorId];
-    return finishSteep(actorId, dye);
+    return finishSteep(actorId, dye, st.workbench);
   }
 
-  function finishSteep(actorId, dye) {
+  function finishSteep(actorId, dye, workbenchId) {
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var pack = packOf(actorId);
     var next = HAIR_DYE.afterSteep(pack, dye, LIST, inputIds(), dyeItemId());
     if (!next) { return 'You no longer carry everything ' + dye.name + ' takes, so nothing steeped.'; }
@@ -59991,10 +60784,11 @@ module.exports = {
     A name somebody can read.
 
     Skyrim.esm and the DLCs are localized. A FULL field there is not a name:
-    it is a four byte index into the strings file. String() of those bytes is
-    a row of numbers, which is what the trade list was showing. A FULL is
-    used only when it is real text. Otherwise the editor id is spaced out
-    (SteelSword becomes Steel Sword). A string index is never shown.
+    it is a four byte index into the strings file. Some indexes even look
+    printable (Hammer's is [46,74,0,0], or '.J'). Use the shared
+    decoded content names first, matched by the whole record descriptor.
+    FULL is text only when the winning plugin is proven unlocalized.
+    Unknown provenance and missing decoded names use the editor id.
   */
   function fieldText(data) {
     if (typeof data === 'string') {
@@ -60035,6 +60829,11 @@ module.exports = {
     if (Object.prototype.hasOwnProperty.call(nameCache, baseId)) { return nameCache[baseId]; }
     var label = '';
     var edid = '';
+    var names = g.__thornswoodProperty;
+    if (names && typeof names.baseItemName === 'function') {
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
+    }
     try {
       var res = mp.lookupEspmRecordById(baseId);
       var rec = res && res.record;
@@ -60044,7 +60843,7 @@ module.exports = {
         for (var i = 0; i < fields.length; i++) {
           if (!fields[i]) { continue; }
           var t = String(fields[i].type || '');
-          if (t === 'FULL' && !label) { label = fieldText(fields[i].data); }
+          if (t === 'FULL' && !label && res.isLocalized === false) { label = fieldText(fields[i].data); }
           else if (t === 'EDID' && !edid) { edid = fieldText(fields[i].data); }
         }
       }
@@ -61852,6 +62651,12 @@ module.exports = {
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
 
   // A server move begins a new journey. Keep the cooldown and the last
   // successful escape's trap information, which are independent of steps.
@@ -62204,7 +63009,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
-    resetTrail: resetTrail,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -62309,6 +63114,96 @@ module.exports = {
     ]
   });
 })();
+// ==== thornswood admin rename ====
+// #6739: change the saved appearance name through the engine's normal
+// appearance binding, which persists it and reliably updates its listeners.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var MAX_NAME = 60;
+  // Refuse invisible controls, markup and malformed Unicode; never remove
+  // them and quietly save a different name. Ordinary spaces are normalized.
+  var UNSAFE = /[\p{C}\p{Zl}\p{Zp}<>]/u;
+  var NAME = /^[\p{L}\p{M}\p{N} .'\u2019-]+$/u;
+
+  function validateName(text) {
+    if (typeof text !== 'string' || UNSAFE.test(text)) {
+      return { why: 'A name cannot contain controls, invisible marks or markup.' };
+    }
+    var name = text.normalize('NFC').trim().replace(/ +/g, ' ');
+    if (!name || !/[\p{L}\p{N}]/u.test(name)) { return { why: 'A name needs at least one letter or number.' }; }
+    if (Array.from(name).length > MAX_NAME) { return { why: 'A name is at most 60 characters.' }; }
+    if (!NAME.test(name)) { return { why: 'Use letters, numbers, spaces, apostrophes, hyphens or periods in a name.' }; }
+    return { name: name, why: '' };
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rename') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.authorizeTool !== 'function') {
+      if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, 'Renaming is unavailable right now.'); }
+      return true;
+    }
+    // Self and other-character renames have exactly the same admin boundary.
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+    if (refused) { staff.tell(pid, refused); return true; }
+    if (UNSAFE.test(String(cmd.text || ''))) {
+      staff.tell(pid, 'A name cannot contain controls, invisible marks or markup.');
+      return true;
+    }
+    var words = parts.slice(1);
+    var target;
+    if (String(words[0] || '').toLowerCase() === 'self') {
+      target = { actorId: actorId, pid: pid, rest: words.slice(1) };
+    } else {
+      target = staff.takePerson(words);
+      if (!target.actorId) { staff.tell(pid, target.why || 'Name somebody who is in the world.'); return true; }
+    }
+    if (!target.rest.length) {
+      staff.tell(pid, 'Use /rename self <new name> or /rename <person> <new name>.');
+      return true;
+    }
+    var named = validateName(target.rest.join(' '));
+    if (named.why) { staff.tell(pid, named.why); return true; }
+    var saved;
+    try { saved = mp.get(target.actorId, 'appearance'); }
+    catch (eRead) { staff.tell(pid, 'The server could not read that character\'s saved appearance, so the name was not changed.'); return true; }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      staff.tell(pid, 'That character has no saved appearance to rename yet.');
+      return true;
+    }
+    var oldName = String(saved.name || '');
+    if (oldName === named.name) { staff.tell(pid, 'That character is already called ' + named.name + '.'); return true; }
+    // Take the requestor's name before a self rename changes it.
+    var byName = staff.nameOf(actorId);
+    var next = Object.assign({}, saved, { name: named.name });
+    try { mp.set(target.actorId, 'appearance', next); }
+    catch (eWrite) { staff.tell(pid, 'The server could not rename that character. Nothing was confirmed; try again later.'); return true; }
+    staff.record('rename', pid, byName, target.pid, oldName,
+      'Renamed to ' + named.name + '.', 0,
+      { character: target.actorId.toString(16), oldName: oldName, newName: named.name });
+    // Publish from the same saved appearance used by the normal roster and
+    // nearby views, including when somebody disconnects before their timer.
+    if (g.__thornswoodRefreshRoster) { g.__thornswoodRefreshRoster(); }
+    var social = g.__thornswoodSocial;
+    if (social && social.nearTick) { social.nearTick(); }
+    staff.tell(pid, 'Renamed ' + (target.actorId === actorId ? 'your character' : oldName) +
+      ' to ' + named.name + '. This is logged for staff.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin renamed your character to ' + named.name + '. This is logged for staff.'); }
+    return true;
+  }
+
+  g.__thornswoodRename = { command: command, validateName: validateName };
+  if (g.__thornswoodCommandTools) {
+    g.__thornswoodCommandTools.register('rename', {
+      command: command,
+      help: [{ word: '/rename', role: 'admin',
+        syntax: '/rename self <newname> | /rename <person> <newname>',
+        text: 'Renames the same saved character. Names use 1 to 60 characters: letters, numbers, spaces, apostrophes, hyphens or periods.' }]
+    });
+  }
+})();
+// ==== end thornswood admin rename ====
 // ==== thornswood staff ====
 /*
   WHAT A MODERATOR CAN DO IN THE WORLD. Issue #412, "A moderator has no powers
@@ -63399,6 +64294,101 @@ module.exports = {
 })();
 // ==== end thornswood staff ====
 
+// ==== thornswood staff progression ====
+// #6736: a test tool for one legal step on the character's current ladder.
+// Progression owns the rewards and character owns the saved record and view.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Use /rankup class [for <person>] or /rankup profession [school] [for <person>].';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rankup') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff) { return true; }
+    function refuse(why) { staff.tell(pid, why); return true; }
+    var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
+    if (!P || !C) { return refuse('The progression tools are not running.'); }
+    var args = parts.slice(1);
+    var kind = String(args.shift() || '').toLowerCase();
+    if (kind !== 'class' && kind !== 'profession') { return refuse(USAGE); }
+    var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
+    var targetWords = at < 0 ? [] : args.slice(at + 1);
+    var choice = at < 0 ? args : args.slice(0, at);
+    if ((at >= 0 && !targetWords.length) || choice.length > (kind === 'class' ? 0 : 1)) {
+      return refuse(USAGE);
+    }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    if (targetWords.length && !(targetWords.length === 1 && targetWords[0].toLowerCase() === 'me')) {
+      target = staff.takePerson(targetWords);
+      if (!target.actorId || !target.pid || target.rest.length) {
+        return refuse(target.why || 'Name exactly one character after for.');
+      }
+    }
+    var denied = staff.authorizeTool(cmd, pid, actorId, target.actorId === actorId ? 'playtester' : 'admin');
+    if (denied) { return refuse(denied); }
+    if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
+    var s = C.stateOf(target.actorId), key;
+    if (kind === 'class') {
+      key = s.cls;
+      if (!P.has(P.TABLE.classes, key)) { return refuse('Choose a class before advancing its rank.'); }
+    } else {
+      if (!P.has(P.TABLE.professions, s.prof)) { return refuse('Choose a profession before advancing its rank.'); }
+      if (s.prof === 'mage') {
+        key = String(choice[0] || '').toLowerCase();
+        if (P.TABLE.schools.indexOf(key) < 0 || s.schools.indexOf(key) < 0) {
+          return refuse('Name one of that mage\'s chosen schools after profession.');
+        }
+      } else {
+        if (choice.length) { return refuse('This profession advances its chosen half, without a school name.'); }
+        key = s.half;
+        if (P.halvesOf(s.prof).indexOf(key) < 0) { return refuse('Choose a half of the profession before advancing its rank.'); }
+      }
+    }
+    var from = P.rankOf(s, key);
+    // creditWork migrates a legacy class without standing to novice itself.
+    var legacyClass = !from && kind === 'class';
+    if (legacyClass) { from = 'novice'; }
+    var rung = P.TABLE.ranks.indexOf(from);
+    if (rung < 0) { return refuse('That progression rank cannot be read. Nothing was advanced.'); }
+    if (from === 'master') { return refuse('That rank is already Master.'); }
+    var need = legacyClass ? P.TUNING.workPerRank.advanced : P.workNeeded(s, key);
+    var done = P.workDone(s, key);
+    if (!Number.isFinite(need) || need <= 0 || !Number.isFinite(done) || done < 0) {
+      return refuse('That work count cannot be read. Nothing was advanced.');
+    }
+    // One threshold, once. Normal school rewards are calculated by the same
+    // function as earned work; no rank or reward is written by this module.
+    var r = P.creditWork(s, key, null, Math.max(1, need - done));
+    if (!r.ok || !r.raised || r.raised.key !== key || r.raised.to !== P.TABLE.ranks[rung + 1]) {
+      return refuse((r && r.why) || 'That rank cannot advance.');
+    }
+    try { C.writeState(target.actorId, r.state, true); }
+    catch (e) { return refuse('The new rank could not be saved.'); }
+    // writeState logs a refused engine write; do not report or audit success
+    // unless the single saved character property contains the new rank.
+    if (P.rankOf(C.stateOf(target.actorId), key) !== r.raised.to) {
+      return refuse('The new rank could not be saved.');
+    }
+    staff.tell(target.pid, C.raiseLines(target.actorId, r));
+    if (target.pid !== pid) {
+      staff.tell(pid, 'Advanced ' + target.name + '\'s ' + C.nameOf(key) + ' to ' + r.raised.to + '.');
+    }
+    staff.record('rankup', pid, staff.nameOf(actorId), target.pid, target.name,
+      kind + ' ' + key, 0, { key: key, from: r.raised.from, to: r.raised.to });
+    return true;
+  }
+
+  g.__thornswoodStaffProgression = { command: command };
+  var tools = g.__thornswoodCommandTools;
+  if (tools && tools.register) {
+    tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
+      syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
+      { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
+        text: 'Advance another character\'s current class or profession by one rank.' }] });
+  }
+})();
+// ==== end thornswood staff progression ====
 // ==== thornswood take back ====
 /*
   ============================================================================
@@ -63568,6 +64558,68 @@ module.exports = {
   tblog('ready: asks from the hub are taken every', EVERY_MS / 1000, 's');
 })();
 // ==== end thornswood take back ====
+// Restore vitals for a self-only playtest or an admin's named target (#6733).
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Usage: /heal, or /heal for <person> for an admin.';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/heal') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    var args = parts.slice(1);
+    if (args.length) {
+      if (args.length < 2 || args[0].toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      target = staff.takePerson(args.slice(1));
+      if (!target.actorId || target.rest.length) { staff.tell(pid, target.why || USAGE); return true; }
+      if (target.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+    }
+    var dead, current;
+    try { dead = mp.get(target.actorId, 'isDead'); current = mp.get(target.actorId, 'percentages'); }
+    catch (e) { staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true; }
+    if (dead === true) { staff.tell(pid, 'That character is dead. Healing cannot undo death; use the normal wake or the appropriate admin process.'); return true; }
+    if (dead !== false || !current || ['health', 'magicka', 'stamina'].some(function (key) {
+      return typeof current[key] !== 'number' || !Number.isFinite(current[key]);
+    })) {
+      staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true;
+    }
+    if (current.health === 1 && current.magicka === 1 && current.stamina === 1) {
+      staff.tell(pid, target.name + ' already has full health, magicka and stamina.'); return true;
+    }
+    try {
+      mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
+      var confirmed = mp.get(target.actorId, 'percentages');
+      if (mp.get(target.actorId, 'isDead') !== false || !confirmed ||
+          confirmed.health !== 1 || confirmed.magicka !== 1 || confirmed.stamina !== 1) {
+        throw new Error('The native vitals write was not applied.');
+      }
+    }
+    catch (e) {
+      log('heal: could not confirm vitals for ' + target.actorId.toString(16) + ': ' + e);
+      staff.tell(pid, 'Healing could not be confirmed. The server recorded why; try again only after the problem is checked.');
+      return true;
+    }
+    var byName = staff.nameOf(actorId);
+    staff.record('heal', pid, byName, target.pid, target.name, 'restored health, magicka and stamina', 0);
+    staff.tell(pid, 'Restored health, magicka and stamina for ' + target.name + '.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin restored your health, magicka and stamina.'); }
+    return true;
+  }
+  g.__thornswoodHeal = { command: command };
+  g.__thornswoodCommandTools.register('heal', {
+    command: command,
+    help: [
+      { word: '/heal', role: 'playtester', syntax: '/heal', text: 'Restore your health, magicka and stamina for testing.' },
+      { word: '/heal', role: 'admin', syntax: '/heal for <person>', text: 'Restore another character\'s vitals without undoing death or permanent decisions.' }
+    ]
+  });
+})();
 // ==== thornswood staff crafting ====
 /*
   STAFF CRAFTING TOOLS, ON THE OFFICE PAGE OF K (#3167). Patrick, 22 Oct
@@ -63899,6 +64951,56 @@ module.exports = {
 })();
 // ==== end thornswood staff crafting ====
 
+// ==== thornswood needs testing tools ====
+(function () {
+  'use strict';
+  var g = globalThis;
+  var METERS = { hunger: 'food', thirst: 'drink', rest: 'rest', temperature: 'temp' };
+  var USAGE = 'Usage: /setneeds <hunger|thirst|rest|temperature> <0..100> [for <person>].';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/setneeds') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var meter = String(parts[1] || '').toLowerCase(), number = String(parts[2] || '');
+    if (!Object.prototype.hasOwnProperty.call(METERS, meter) || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(number) ||
+        !Number.isFinite(Number(number)) || Number(number) < 0 || Number(number) > 100 ||
+        (parts.length !== 3 && (parts.length < 5 || String(parts[3]).toLowerCase() !== 'for'))) {
+      staff.tell(pid, USAGE); return true;
+    }
+    var target = actor, targetPid = pid;
+    if (parts.length > 3) {
+      var person = staff.takePerson(parts.slice(4));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var needs = g.__thornswoodNeeds;
+    if (!needs || !needs.setForTesting) { staff.tell(pid, 'Needs testing is unavailable. Try again later.'); return true; }
+    var me = staff.nameOf(actor), name = staff.nameOf(target);
+    var result = needs.setForTesting(target, METERS[meter], Number(number));
+    if (!result.ok) { staff.tell(pid, result.why); return true; }
+    staff.record('setneeds', pid, me, targetPid, name, '', 0,
+      { meter: meter, from: result.from, to: result.to });
+    var label = meter.charAt(0).toUpperCase() + meter.slice(1);
+    staff.tell(pid, label + ' set to ' + result.to + '/100 for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'Staff set your ' + meter + ' to ' + result.to + '/100 for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffNeeds = { command: command };
+  g.__thornswoodCommandTools.register('setneeds', {
+    command: command,
+    help: [{ word: '/setneeds', role: 'playtester', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100>',
+      text: 'Set one of your needs for testing. Food, drink and rest are full at 100; temperature is comfortable at 50.' },
+      { word: '/setneeds', role: 'admin', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100> for <person>',
+        text: 'Set one need on another character for testing.' }]
+  });
+})();
+// ==== end thornswood needs testing tools ====
 // SHARED RESOURCE STOCK BEGIN
 function createSharedResourceStock(api, now) {
   const property='thornswoodResourceStock';
@@ -63979,6 +65081,114 @@ function createSharedResourceStock(api, now) {
 try { globalThis.__thornswoodResourceStock=createSharedResourceStock(mp,()=>Date.now()); }
 catch(error) { log('Shared resource stock could not start: '+error); }
 
+// ==== thornswood gameplay inspection ====
+// #6732: inspect the recorded gameplay state without settling or writing it.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function read(actor, property) {
+    try { return mp.get(actor, property); } catch (e) { return undefined; }
+  }
+  function text(value, most) {
+    if (typeof value !== 'string') { return 'unavailable'; }
+    var out = value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ').trim();
+    return out ? (out.length > most ? out.slice(0, most - 3) + '...' : out) : 'unavailable';
+  }
+  function number(value, scale, suffix) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(value * scale)) { return 'unavailable'; }
+    return String(Number((value * scale).toFixed(1))) + suffix;
+  }
+  function field(value, key, scale, suffix) {
+    return number(object(value) ? value[key] : undefined, scale, suffix);
+  }
+  function named(value, table) {
+    if (value === null || value === '') { return 'not chosen'; }
+    return typeof value === 'string' && table && Object.prototype.hasOwnProperty.call(table, value)
+      ? table[value].name : 'unavailable';
+  }
+  function rankLabels(table) {
+    var out = {};
+    Object.keys(table.classes).forEach(function (key) { out[key] = table.classes[key].name; });
+    Object.keys(table.professions).forEach(function (key) {
+      var halves = table.professions[key].halves;
+      Object.keys(halves || {}).forEach(function (half) { out[half] = halves[half]; });
+    });
+    table.schools.forEach(function (key) { out[key] = key.charAt(0).toUpperCase() + key.slice(1); });
+    return out;
+  }
+  function report(staff, pid, actor) {
+    var appearance = read(actor, 'appearance');
+    staff.tell(pid, 'Character: ' + text(object(appearance) ? appearance.name : undefined, 90) +
+      ' (form ' + actor.toString(16) + ').');
+    var pos = read(actor, 'pos');
+    staff.tell(pid, 'Location: ' + text(read(actor, 'worldOrCellDesc'), 120) + '; position ' +
+      [0,1,2].map(function (i) { return number(Array.isArray(pos) ? pos[i] : undefined, 1, ''); }).join(', ') + '.');
+    var vitals = read(actor, 'percentages');
+    staff.tell(pid, 'Health: ' + field(vitals, 'health', 100, '%') + '; Magicka: ' +
+      field(vitals, 'magicka', 100, '%') + '; Stamina: ' + field(vitals, 'stamina', 100, '%') + '.');
+    // Needs.read supplies defaults and stateOf can migrate. Read the saved
+    // properties themselves so missing or invalid values remain unavailable.
+    var needs = read(actor, 'thornswoodNeeds');
+    staff.tell(pid, 'Needs (last recorded): Food: ' + field(needs, 'food', 1, '/100') +
+      '; Drink: ' + field(needs, 'drink', 1, '/100') + '; Rest: ' + field(needs, 'rest', 1, '/100') +
+      '; Temperature: ' + field(needs, 'temp', 1, '/100') + '.');
+    var saved = read(actor, 'thornswoodCharacter');
+    var state = object(saved) && saved.v === 1 ? saved : null;
+    var progression = g.__thornswoodProgression;
+    var table = progression && progression.TABLE;
+    var labels = table ? rankLabels(table) : {};
+    staff.tell(pid, 'Class: ' + (state ? named(state.cls, table && table.classes) : 'unavailable') +
+      '; Profession: ' + (state ? named(state.prof, table && table.professions) : 'unavailable') +
+      '; Half: ' + (state && typeof state.half === 'string' && Object.prototype.hasOwnProperty.call(labels, state.half)
+        ? labels[state.half] : state && state.half === null ? 'not chosen' : 'unavailable') + '.');
+    var ranks = state && object(state.ranks) ? state.ranks : null;
+    var entries = ranks && table ? Object.keys(labels).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(ranks, key);
+    }).map(function (key) {
+      return labels[key] + ': ' + (table.ranks.indexOf(ranks[key]) !== -1 ? ranks[key] : 'unavailable');
+    }) : null;
+    var line = 'Ranks: ';
+    (entries || []).forEach(function (entry) {
+      if (line.length + entry.length > 250) { staff.tell(pid, line); line = 'Ranks: '; }
+      line += (line === 'Ranks: ' ? '' : '; ') + entry;
+    });
+    staff.tell(pid, line + (entries ? (entries.length ? '.' : 'none recorded.') : 'unavailable.'));
+    var godMode = read(actor, 'isGodMode');
+    staff.tell(pid, 'God mode: ' + (typeof godMode === 'boolean' ? (godMode ? 'on' : 'off') : 'unavailable') + '.');
+  }
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/inspect') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor;
+    if (parts.length !== 1) {
+      if (String(parts[1]).toLowerCase() !== 'for' || parts.length < 3) {
+        staff.tell(pid, 'Usage: /inspect or /inspect for <person>.'); return true;
+      }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, 'Usage: /inspect for <person>.'); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId;
+    }
+    report(staff, pid, target);
+    return true;
+  }
+  g.__thornswoodInspect = { command: command };
+  g.__thornswoodCommandTools.register('inspect', {
+    command: command,
+    help: [{ word: '/inspect', role: 'playtester', syntax: '/inspect',
+      text: 'Read your own recorded gameplay state without changing it.' },
+      { word: '/inspect', role: 'admin', syntax: '/inspect for <person>',
+        text: 'Read another character\'s recorded gameplay state without changing it.' }]
+  });
+})();
+// ==== end thornswood gameplay inspection ====
 // NPC MERCHANT PURSES BEGIN
 function createPrivateMerchantLedger(fs,path,settings,references,durableWriter) {
   return createPrivateEconomyLedger(fs,path,settings,'merchant',references,durableWriter);
@@ -64419,6 +65629,55 @@ function createNpcMerchantPurses(api,data,storage) {
 }
 // NPC MERCHANT PURSES END
 
+// Self-only person teleport for Playtesters on Dev and Main (#6757).
+(function () {
+  'use strict';
+  var g=globalThis,USAGE='Usage: /tpto <person>.';
+  function place(actor) {
+    var desc=mp.get(actor,'worldOrCellDesc'),pos=mp.get(actor,'pos'),rot=mp.get(actor,'angle');
+    function vector(value){return Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);}
+    if(typeof desc!=='string'||!desc||!vector(pos)||!vector(rot)){throw new Error('Authoritative location is unavailable.');}
+    return {desc:desc,pos:pos.slice(),rot:rot.slice()};
+  }
+  function command(cmd,word,parts,pid,actor) {
+    if(word!=='/tpto'){return false;}
+    var staff=g.__thornswoodStaff,refused=staff.authorizeTool(cmd,pid,actor,'playtester');
+    if(refused){staff.tell(pid,refused);return true;}
+    if(parts.length<2){staff.tell(pid,USAGE);return true;}
+    var person=staff.takePerson(parts.slice(1));
+    if(!person.actorId||person.rest.length){staff.tell(pid,person.why||USAGE);return true;}
+    if(person.actorId===actor||person.pid===pid){staff.tell(pid,'That is you.');return true;}
+    try {
+      if(mp.get(actor,'isDead')!==false||mp.get(person.actorId,'isDead')!==false){
+        staff.tell(pid,'Both characters must be alive to teleport.');return true;
+      }
+      var from=place(actor),to=place(person.actorId);
+      if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
+      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
+      if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
+        throw new Error('Movement safeguards are unavailable.');
+      }
+      if(cuffs.cuffedBy(actor)){staff.tell(pid,'You are cuffed, so you cannot teleport yourself.');return true;}
+      if(property.lockedJailHere(actor,pid)){staff.tell(pid,'A guard has a cell locked here, so you cannot teleport out of this jail.');return true;}
+      mp.set(actor,'locationalData',{cellOrWorldDesc:to.desc,pos:to.pos,rot:to.rot});
+      var confirmed=place(actor);
+      if(confirmed.desc!==to.desc||confirmed.pos.some(function(n,i){return n!==to.pos[i];})){
+        throw new Error('The native teleport was not applied.');
+      }
+      stuck.teleported(pid,actor);
+      staff.record('tpto',pid,staff.nameOf(actor),person.pid,person.name,'Self-only playtest teleport.',0,{from:from,to:to});
+      staff.tell(pid,'Sent to '+person.name+'.');
+    } catch(e) {
+      log('tpto: could not confirm teleport for '+actor.toString(16)+': '+e);
+      staff.tell(pid,'The teleport could not be confirmed. Staff can check the server log.');
+    }
+    return true;
+  }
+  g.__thornswoodPersonTeleport={command:command};
+  g.__thornswoodCommandTools.register('person-teleport',{command:command,
+    help:[{word:'/tpto',role:'playtester',syntax:'/tpto <person>',text:'Teleport yourself to an online person; restraints still apply.'}]});
+})();
 // NPC POPULATION POLICY BEGIN
 /*
   THALMOR PATROLS (#1390). docs/systems/thalmor.md: "A patrol is 2 to 4. They

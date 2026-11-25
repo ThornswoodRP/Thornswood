@@ -47,6 +47,7 @@
       node game\tests\test-scenario-trading-company.js
 */
 const standIn = require('../../tests/stand-in-server.js');
+const { attachScenarioReservation } = require('../../tests/fixtures/pack-first');
 const t = standIn.checks();
 const yes = t.yes;
 
@@ -83,12 +84,13 @@ ALL.forEach(function (a) { w.row(a).thornswoodNeeds = { food: 90, drink: 90, res
 
 yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
+attachScenarioReservation(w);
 ALL.forEach(w.arrive);
 w.run(30000);
 
 const P = () => w.box().__thornswoodProperty;
 function last(a) { const h = w.heard(a); return h.length ? h[h.length - 1] : ''; }
-function say(a, line) { w.say(a, line); w.run(300); return last(a); }
+function say(a, line) { w.say(a, line); w.run(1300); return last(a); }
 function gold(a) { return w.count(a, GOLD); }
 function fund(hold) { return Number(P().funds()[hold]) || 0; }
 function wall(hold) { const r = w.readPrivate('property.json'); return (r && r.notices && r.notices[hold]) || []; }
@@ -190,6 +192,7 @@ yes('E4 and no ledger moved', JSON.stringify(P().funds()) === funds0);
 // ------------------------------------------------------------- F. restart --
 const kept = JSON.stringify([w.readPrivate('property.json').notices.falkreath, P().funds()]);
 const r = w.restart();
+if (r) { attachScenarioReservation(w); }
 yes('F1 the server restarts', r.loaded);
 ALL.forEach(w.arrive);
 w.run(30000);

@@ -150,6 +150,7 @@ function slots(order) {
     start     the clock at the start, ms since 1970 (default 26 Oct 2026, noon)
     settings  more server-settings.json
     files     { 'private/property.json': object or text } written before boot
+    pluginFlags  declared TES4 flags by file name; undeclared provenance is unknown
     gm        the gamemode file (default game/gamemode.js, or GM in the environment)
 */
 function world(opts) {
@@ -236,7 +237,7 @@ function world(opts) {
   /*
     A record as mp.lookupEspmRecordById hands it over (ScampServer.cpp):
     { record: { id, editorId, type, flags, fields: [{ type, data }] },
-    fileIndex, toGlobalRecordId }, or {} for an id no plugin has. record.id is
+    fileIndex, isLocalized, toGlobalRecordId }, or {} for an id no plugin has. record.id is
     the id as written in its own file: the top byte is the file's place in
     its own masters, and toGlobalRecordId maps such a local id to the load
     order. The plugins themselves are not here, so every file's masters are
@@ -293,6 +294,11 @@ function world(opts) {
     return {
       record: { id: localIn(at, id), editorId: r.editorId || '', type: r.type, flags: r.flags || 0, fields: fields },
       fileIndex: at,
+      // ScampServer::LookupEspmRecordById reads the winning file's TES4
+      // localization bit (0x80), never the individual record's flags.
+      // Undeclared fixture provenance stays unknown, as on an older engine.
+      isLocalized: opts.pluginFlags && Object.prototype.hasOwnProperty.call(opts.pluginFlags, SLOTS[at].file)
+        ? !!(opts.pluginFlags[SLOTS[at].file] & 0x80) : undefined,
       toGlobalRecordId: function (local) {
         local = local >>> 0;
         const b = local >>> 24;

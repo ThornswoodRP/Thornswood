@@ -245,7 +245,7 @@
     kinds.sort();
     if (cat && kinds.indexOf(cat) < 0) { cat = ''; }
     var ph = '<h3>Your pack</h3>' +
-             '<input id="' + ID + '-find" placeholder="Find by name" value="' + esc(filter) + '">';
+             '<input id="' + ID + '-find" aria-label="Find by name" placeholder="Find by name" value="' + esc(filter) + '">';
     ph += '<div class="chips"><button data-cat=""' + (cat ? '' : ' class="on"') + '>All</button>';
     for (var c = 0; c < kinds.length; c++) {
       ph += '<button data-cat="' + esc(kinds[c]) + '"' + (cat === kinds[c] ? ' class="on"' : '') + '>' +
@@ -276,7 +276,7 @@
           var addKey = 'add:' + ref(it);
           ph += '<div class="line"><div class="top"><span class="nm">' + esc(it.n) + '</span>' +
                 '<span class="c">' + it.c + '</span></div><div class="acts">' +
-                '<input class="qty" data-side="add" data-for="' + itRef + '" placeholder="How many" value="' + esc(typed[addKey] || '') + '">' +
+                '<input class="qty" data-side="add" data-for="' + itRef + '" aria-label="Count to offer" placeholder="How many" value="' + esc(typed[addKey] || '') + '">' +
                 '<button data-qty="' + itRef + '">Add</button>' +
                 '<button data-add="' + itRef + '" data-n="1">Add 1</button>' +
                 (it.c >= 5 ? '<button data-add="' + itRef + '" data-n="5">Add 5</button>' : '') +
@@ -298,13 +298,13 @@
       var remKey = 'rem:' + ref(mineRow);
       mh += '<div class="line"><div class="top"><span class="nm">' + esc(mineRow.n) + '</span>' +
             '<span class="c">' + mineRow.c + '</span></div><div class="acts">' +
-            '<input class="qty" data-side="rem" data-for="' + mineRef + '" placeholder="How many" value="' + esc(typed[remKey] || '') + '">' +
+            '<input class="qty" data-side="rem" data-for="' + mineRef + '" aria-label="Count to take back" placeholder="How many" value="' + esc(typed[remKey] || '') + '">' +
             '<button data-take="' + mineRef + '">Take</button>' +
             (mineRow.c > 1 ? '<button data-rem="' + mineRef + '" data-n="1">Take 1</button>' : '') +
             '<button data-rem="' + mineRef + '">Take back</button></div></div>';
     }
     mh += '<div class="gold"><span>Gold</span>' +
-          '<input id="' + ID + '-gold" value="' + (data.myGold || 0) + '">' +
+          '<input id="' + ID + '-gold" aria-label="Gold to offer" value="' + (data.myGold || 0) + '">' +
           '<button data-do="gold">Set</button>' +
           '<button data-do="goldall">All</button>' +
           '<button data-do="goldclear">None</button></div>';

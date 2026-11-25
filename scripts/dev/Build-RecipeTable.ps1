@@ -1632,7 +1632,7 @@ $OPEN_ROW_WHY = [ordered]@{
     'RecipeIngotDwarvenScrapPlateMetalLarge' = 'a smelter makes ingots, which are stock rather than a finished good. Both halves of the Smith need them, and a Miner who could not smelt his own ore would have nothing to sell. Smith work at novice, so both smith halves can do it. Not open to anybody.'
 }
 
-# THE CUT FILE (#1391). docs\systems\cut-items.json names every recipe that
+# THE CUT FILE (#1391). game\data\cut-items.json names every recipe that
 # leaves the open craft book, one row per reference so a row can be put back
 # for an event, and says which of three things each one is:
 #   cut       not found and not made. An owned row keeps its owner and rank in
@@ -1652,7 +1652,7 @@ $OPEN_ROW_WHY = [ordered]@{
 # anything was cut. On a table that is already cut it starts from this file
 # and writes it back as it is (issue #1714), because its rules would read the
 # cut table wrongly.
-$CUT_FILE = Join-Path $PSScriptRoot '..\..\docs\systems\cut-items.json'
+$CUT_FILE = Join-Path $PSScriptRoot '..\..\game\data\cut-items.json'
 $CUT_ROLLS = [ordered]@{ 'embassy' = 'embassy'; 'thalmor' = 'remnant' }
 # What the gamemode says, after "Nobody makes that here. ", for a cut row.
 $CUT_SENTENCE = 'Cut from the open book. Not found and not made. The reference stays in the cut file.'
@@ -1944,7 +1944,7 @@ $BENCH_UNOWNED_PREFIX = 'BYOHBuildingInteriorPart'
 # ONE SMELT ROW PER INGOT AND ONE ROW FOR LEATHER (#1391, #1400). Smelting an
 # ingot is smith work and tanning a hide is the Platewright's
 # (docs/systems/cut-items.md, "Smelting and tanning are not anybody's work").
-# The duplicates are cut in docs/systems/cut-items.json, which CUT_FILE reads,
+# The duplicates are cut in game/data/cut-items.json, which CUT_FILE reads,
 # and these are the rows that stay. They are named here because the smelter
 # is open furniture in BENCH_OWNER and the tanning rack is no profession's
 # bench, so no derived rule gives either to a half. All of them are novice

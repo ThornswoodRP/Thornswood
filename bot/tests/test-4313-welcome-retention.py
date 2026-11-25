@@ -20,6 +20,7 @@ os.environ['DISCORD_TOKEN'] = 'not-a-real-token'
 import discord
 import bot_deletion
 import bot_joins
+import bot_tickets
 
 
 class WelcomeRetention(unittest.TestCase):
@@ -84,7 +85,7 @@ class WelcomeRetention(unittest.TestCase):
                 patch.object(bot_joins, 'asyncio', SimpleNamespace(
                     sleep=stop, get_running_loop=asyncio.get_running_loop)), \
                 patch.object(bot_deletion, 'DELETION_REQUESTS', str(request)), \
-                patch.object(bot_deletion, 'OPEN_TICKETS', str(root / 'tickets.json')):
+                patch.object(bot_tickets, 'OPEN_TICKETS', str(root / 'tickets.json')):
             for member in (first, first, second, third):
                 asyncio.run(bot_joins.on_member_join(member))
             self.assertEqual(set(posts), {99, 21, 22, 23, 24})

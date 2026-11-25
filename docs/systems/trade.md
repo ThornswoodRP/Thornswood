@@ -22,10 +22,12 @@ up, in case it was closed.
 
 ## The panel
 
-The window shows the names of what you are holding. A localized name
-that the game stores as a string index is never shown as a number.
-When there is no readable name, the editor id is spaced out, so
-SteelSword reads as Steel Sword.
+The window shows the names of what you are holding, using the decoded
+content name for each exact item record. This includes Hammer, whose
+localized string index can otherwise look like the letters .J. A piece's
+own name still takes precedence. An unknown localized name or unknown
+plugin localization uses the spaced editor id; proven unlocalized text
+keeps its written name. SteelSword falls back to Steel Sword.
 
 What you are holding is grouped. The groups are Gold, Weapons, Armor
 and clothes, Ammunition, Potions and food, Ingredients, Books and
