@@ -25,6 +25,14 @@ before every launch; when the site does not answer, a yes from the last 72
 hours still starts the game (`GraceHours` in `launcher\app\Door.cs`) and nothing
 else does.
 
+Admin API changes to a written page, an inbox row or an uploaded file record
+the verified actor's name and account ID alongside the page key, report ID
+or filename in the moderation log (#4939). Page and report contents stay in
+their original stores. The log records a committed file deletion even if a
+later metadata save fails. A successful retry that only removes the file's
+listing has its own action. A refused write or unchanged retry adds no
+success record.
+
 | Route | Method | Asked by |
 | --- | --- | --- |
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
@@ -78,6 +86,12 @@ when a browser too old for that sends them on another site's form anyway, or
 a page on another name under thornswood.net does. A GET changes nothing
 another page can choose. `site\tests\test-1367-cross-site.js` sends every kind of
 write the hub makes from another site and from this one.
+
+Only `/hub` and `/api/hello` may use the last good Discord role answer to draw
+the page and its navigation when a refresh fails or is late (#4381). Private
+data routes, including GET and HEAD, check current standing and its existing
+one-minute cache instead of using the ten-minute page fallback. The request
+deadlines and configured manual-admin and password permissions stay the same.
 
 ## On your machine
 
@@ -134,6 +148,13 @@ Releases (#5547).
 | `THORNSWOOD_TRUSTED_PROXIES` | empty | Comma separated addresses of proxies on another box whose `X-Forwarded-For` the site believes, for the report limit and the sign in log. Loopback, which is Caddy, is always believed, and only the last forwarded hop is taken (`lib\limits.js`). |
 | `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
 | `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
+
+Session chat reads every local calendar day in its window, including middle
+days when a session spans several dates (#4947). One folder listing selects
+valid day files inside the local date window, including daylight-saving
+changes, without scanning an arbitrary date range. The same slice supplies
+an initial kept-chat copy; existing profile, time, server, output and retention
+limits still apply.
 
 To see the door answer, from a second window:
 
@@ -258,6 +279,18 @@ rather than send something in. A ticket for an account that is not staff is
 `403 {why:'role'}`, one that has left the Discord `403 {why:'guild'}`, a banned
 one `403 {why:'banned'}`, and a Discord that could not be asked `503`. Neither
 cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
+
+Gallery accept, removal and report dismissal write the verified staff name,
+account ID and picture name to `data\for-bot\moderation.log` (#4938). Each
+record names the first step the request committed, so a cleanup retry does
+not read like another public removal. A refused first save or an unchanged
+retry leaves no new action. Report text stays in its existing store. The bot
+escapes the names in its staff sentence. The log keeps its existing retention
+and write-failure reporting.
+
+A report's retention record is saved before its open entry is cleared.
+Retrying a removal during an active hold keeps the picture and the original
+deadline. The retention sweep can remove the file once the hold ends.
 
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
 (`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds

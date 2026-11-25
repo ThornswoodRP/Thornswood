@@ -469,10 +469,11 @@ function questChecks() {
   yes('then steps back and walks on', said[said.length - 1] === '/merchant close' && b.atPanel === null && b.questPhase === 'idle' && b.nextQuest === now + 30000);
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You take the work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You leave the work without payment.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You give back what remains of the draw and leave the work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'This trader does not handle that work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Trading with Dagur in Winterhold. Purse 100.' }));
   yes('quest answers are counted as quest answers, and a trade answer as a trade answer',
-    b.played.questTaken === 1 && b.played.questLeft === 1 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
+    b.played.questTaken === 1 && b.played.questLeft === 2 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
     !b.played.tradeOtherAnswer && b.played.tradeOpened === 1);
   b.nextQuest = now; b.questPhase = 'idle'; b.atPanel = null; b.others.clear(); b.advance(now + 1);
   yes('with no NPC within reach it says so and asks nothing', b.played.questNoTraderNear === 1 && b.played.questPanelAsks === 2);

@@ -6,7 +6,7 @@ Everything in the world has a recipe except named uniques and quest items (Patri
 
 What the world hands out and who makes it both come from [Where every item comes from](lists/item-sources.md) (`game/data/item-sources.json`). A maker is a recipe in the open book (not cut and not tempering), a class that gathers the item, or the scarce work or rare seam a class works. A bottle the alchemy lab brews is a new form, not a record, so the lab is the maker of no record. The build fails when the world hands out something with no maker that `scripts/dev/Check-Makers.waiting.json` does not name with the issue that will give it one.
 
-288 items handed out. 172 have a maker. 116 have none yet.
+288 items handed out. 173 have a maker. 115 have none yet.
 
 ## Contents
 
@@ -37,7 +37,6 @@ What the world hands out and who makes it both come from [Where every item comes
 | Hunting Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
 | Long Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
 | Lockpick | Dungeon and body loot | 0 | #4646 | Smith work with no recipe yet |
-| Linen Wrap | Asked for by a recipe | 46 | #4647 | Tailor work with no recipe yet |
 | Eidar Cheese Wheel | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
 | Honey | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
 | Mammoth Cheese Bowl | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
@@ -158,7 +157,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Enchanter/Bladebinder | 13 | also enchants in the arcane enchanter's menu |
 | Enchanter/Wardweaver | 0 | enchants armour and clothing in the arcane enchanter's menu, which has no recipe rows |
 | Tailor/Liverywright | 85 |  |
-| Tailor/Haberdasher | 171 |  |
+| Tailor/Haberdasher | 172 |  |
 | Woodworker/Charburner | 5 |  |
 | Woodworker/Woodwright | 49 |  |
 | Farmer | 14 |  |
@@ -238,6 +237,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Jug of Milk | Asked for by a recipe | Farmer, novice | `3534:HearthFires.esm` |
 | Juniper Berries | Asked for by a recipe | Gatherer, novice | `5076e:Skyrim.esm` |
 | Leather | Asked for by a recipe | Smith/Platewright, novice | `db5d2:Skyrim.esm` |
+| Linen Wrap | Asked for by a recipe | Tailor/Haberdasher, novice | `34cd6:Skyrim.esm` |
 | Lute | Asked for by a recipe | Woodworker/Woodwright, novice | `dabab:Skyrim.esm` |
 | Malachite Ore | Asked for by a recipe | Miner, expert | `5ace1:Skyrim.esm` |
 | Mammoth Snout | Asked for by a recipe | Hunter, master; Hunter, master, only while the mammoth work is open | `669a4:Skyrim.esm` |

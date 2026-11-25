@@ -6815,8 +6815,8 @@
         /letter "Lydia Stormblade" Meet me at the Drunken Huntsman at dusk.
 
     NOBODY TYPES THESE (#1595). Patrick, 4 Oct: nothing people do is a chat
-    command. The board panel's Write a letter sends the second form, the name
-    always in double quotes, and nothing a person reads names /letter.
+    command. The current board panel sends /letter-post-v1 with separate encoded
+    strings. These older forms remain compatible; no public help names them.
 
     #1374, as docs/systems/noticeboards.md has it. A letter is a job with a
     named person at the other end, written standing at the board. The words
@@ -6828,7 +6828,28 @@
     panels, Your jobs and the taking line say who it is for and from whom, and
     the log does not record them either.
   */
-  function postLetter(parts, actorId, profileId, toProfile) {
+  // Two encoded strings keep quotes and spaces out of the legacy word parser.
+  // This verb is intentionally unknown to a server that still strips names.
+  function postLetterV1(parts, actorId, profileId, toProfile) {
+    var to, words;
+    if (!Array.isArray(parts) || parts.length !== 3 || typeof parts[1] !== 'string' ||
+        typeof parts[2] !== 'string' || parts[1].length > 540 || parts[2].length > 2700) {
+      toProfile(profileId, 'That letter request is invalid. Nothing was posted or taken.'); return true;
+    }
+    try { to = decodeURIComponent(parts[1]); words = decodeURIComponent(parts[2]); }
+    catch (eLetter) {
+      toProfile(profileId, 'That letter request has invalid text. Nothing was posted or taken.'); return true;
+    }
+    // Same unsafe characters as character names; quotes and valid spaces stay.
+    // Do not run a rename normalizer or change the existing name-match policy.
+    if (!to.trim() || to.length > 60 || /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) ||
+        !words.trim() || words.length > LETTER_CHARS) {
+      toProfile(profileId, 'That letter request is invalid or too long. Nothing was posted or taken.'); return true;
+    }
+    return postLetter(parts, actorId, profileId, toProfile, {to:to,words:words});
+  }
+
+  function postLetter(parts, actorId, profileId, toProfile, written) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
@@ -6836,7 +6857,8 @@
     }
     var rest = (parts && parts.length > 1) ? parts.slice(1).join(' ').trim() : '';
     var to = '', words = '';
-    if (rest.charAt(0) === '"') {
+    if (written) { to = written.to; words = written.words; }
+    else if (rest.charAt(0) === '"') {
       var shut = rest.indexOf('"', 1);
       if (shut > 1) { to = rest.slice(1, shut).trim(); words = rest.slice(shut + 1).trim(); }
     } else {
@@ -7948,6 +7970,7 @@
     if (word === '/take') { return take(parts, actorId, profileId, toProfile); }
     if (word === '/dropjob') { return dropJob(parts, actorId, profileId, toProfile); }
     if (word === '/unpin') { return unpin(parts, actorId, profileId, toProfile); }
+    if (word === '/letter-post-v1') { return postLetterV1(parts, actorId, profileId, toProfile); }
     if (word === '/letter') { return postLetter(parts, actorId, profileId, toProfile); }
     if (word === '/deliver') { return deliver(parts, actorId, profileId, toProfile); }
     if (word === '/haul') { return haulCmd(parts, actorId, profileId, toProfile); }

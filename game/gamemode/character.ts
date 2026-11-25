@@ -1959,7 +1959,7 @@
         word === '/rent' || word === '/sleephere' || word === '/notice' || word === '/job' ||
         word === '/board' || word === '/take' ||
         word === '/haul' || word === '/world' ||
-        word === '/letter' || word === '/deliver' ||
+        word === '/letter-post-v1' || word === '/letter' || word === '/deliver' ||
         word === '/dropjob' || word === '/unpin') {
       if (!actorId) {
         toProfile(profileId, 'The server cannot find your character right now. Give it a moment and try again.');

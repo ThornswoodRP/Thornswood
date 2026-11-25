@@ -166,7 +166,7 @@ yes('J5 an ingredient whose record is gone stays on the page, with effects null,
 
 // ------------------------------------------------------------- W: wiring
 {
-  const ws = lift('  function writeState(actorId, s, redraw) {', '\n  }\n') || '';
+  const ws = lift('  function writeState(', '\n  }\n') || '';
   const world = ws.slice(ws.indexOf('if (view && !view.creating) {'), ws.indexOf('var sig = drawn(view);'));
   yes('W1 writeState puts the alchemy block\'s page on the panel as alchemy, in the world only',
       /var AJ = g\.__thornswoodAlchemy;/.test(world) && /AJ\.page\(actorId\)/.test(world) &&
