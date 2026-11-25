@@ -89,6 +89,8 @@ unknown age. A new clock records verified intake from then on. Staff must
 reconcile older entries from evidence, rather than guessing an age or making
 them fresh. A damaged or future clock refuses the aging operation without
 changing goods, the purse or the clock.
+Evidence-based staff reconciliation is tracked in
+[the follow-up](https://github.com/ThornswoodRP/Thornswood/issues/6837).
 
 A day comes off when its place's day turns. A steak put in a chest an
 hour before that chest's day turns loses that day. A day is always a
