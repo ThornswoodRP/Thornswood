@@ -1,6 +1,8 @@
 <#
-  Build-ContentOnBox.ps1
+.SYNOPSIS
+  The deploy gate's Build-Content verb (#5191, stage 3): the content plugin and every table read out of the load order, built on the box from main as the gate reads it, and kept there by what they were built from, so a build whose inputs did not change is taken from the last one and not built again.
 
+.DESCRIPTION
   The deploy gate's Build-Content verb (#5191, stage 3): the content plugin
   and every table read out of the load order, built on the box from main as
   the gate reads it, and kept there by what they were built from, so a build

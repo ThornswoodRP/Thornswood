@@ -1,6 +1,8 @@
 <#
-  Compare-NexusLayout.ps1
+.SYNOPSIS
+  Says whether a collection revision's layout record (what Install-NexusRevision.ps1 writes) is the same as another layout record, or the same as what Vortex deployed into a game folder, file by file and plugin by plugin (#2969).
 
+.DESCRIPTION
   Says whether a collection revision's layout record (what
   Install-NexusRevision.ps1 writes) is the same as another layout record, or
   the same as what Vortex deployed into a game folder, file by file and
