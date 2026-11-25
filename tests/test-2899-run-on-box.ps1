@@ -109,6 +109,11 @@ Yes 'Run-OnBox.ps1 takes what goes up and what comes back from ContentPaths.ps1'
 $content = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Rebuild-ContentTables.ps1'
 $paths = $content.Paths
 $watch = $content.Watch
+Yes 'the content-order reader carries its record validator to the box' (
+    $paths -contains 'scripts/release/RecordShape.ps1')
+$defaultContent = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+Yes 'the initial plugin run also carries the content-order reader dependencies' (
+    $defaultContent.Paths -contains 'scripts/release/RecordShape.ps1')
 $chain = Get-Content -LiteralPath (Join-Path $Repo 'scripts\mods\content-tables.json') -Raw | ConvertFrom-Json
 $need = @($chain.steps | ForEach-Object { @($_.reads) + @($_.readsBack) + @($_.uses) + @($_.writes) } | Where-Object { $_ } | Sort-Object -Unique)
 $left = @($need | Where-Object { $n = [string]$_; -not @($paths | Where-Object { $n -eq $_ -or $n.StartsWith($_ + '/') }).Count })
