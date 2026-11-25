@@ -211,7 +211,7 @@
         else field.setAttribute('aria-invalid', error.invalid);
       }
       var currentNote = root.querySelector('#' + error.token);
-      if (error.added && (!currentNote || currentNote === error.note)) {
+      if (error.added && (!currentNote || (currentNote === error.note && error.note.textContent === error.reason))) {
         var now = field.getAttribute('aria-describedby');
         var remaining = now === error.installed ? error.described :
           String(now || '').split(/\s+/).filter(function (id) { return id && id !== error.token; }).join(' ');

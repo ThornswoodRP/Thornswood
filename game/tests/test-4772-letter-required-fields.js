@@ -48,7 +48,7 @@ for(const mode of ['redraw','close','compose']){
 }
 {
  const p=rig(),f=p.field('letter');f.value='';p.press(p.button());const note=p.field('letter-reason');test('newer-message control installs the original reason first',()=>assert(note&&note.textContent));
- if(note)note.textContent='A newer status';f.value='Ready';p.fire(f,'input');test('cleanup preserves newer text in the same note',()=>{assert(note);assert.equal(note.textContent,'A newer status');});
+ if(note)note.textContent='A newer status';f.value='Ready';p.fire(f,'input');test('cleanup preserves newer text in the same note',()=>{assert(note);assert.equal(note.textContent,'A newer status');assert.equal(f.getAttribute('aria-describedby'),note.id);assert.equal(f.validity.customError,false);});
 }
 for(const id of ['to','letter']){
  const p=rig();p.field(id).value='bad\ud800text';const values=p.values();p.press(p.button());
