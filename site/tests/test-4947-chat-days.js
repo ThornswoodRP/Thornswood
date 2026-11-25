@@ -8,18 +8,25 @@ let child, serial = 0, pass = 0, fail = 0;
 function yes(name, ok) { console.log((ok ? 'PASS ' : 'FAIL ') + name); ok ? pass++ : fail++; }
 function preload() {
   const fs = require('node:fs'), path = require('node:path');
-  const read = fs.readFileSync.bind(fs); let reads = [];
+  const read = fs.readFileSync.bind(fs), list = fs.readdirSync.bind(fs), setDate = Date.prototype.setDate;
+  let reads = [], lists = 0, steps = 0;
+  const isChat = file => ['chat', 'chat-dev'].some(name => String(file) === path.join(__dirname, name));
+  fs.readdirSync = (file, ...args) => { if (isChat(file)) lists++; return list(file, ...args); };
+  Date.prototype.setDate = function (...args) {
+    if (++steps > 1000) throw Error('fixture stopped an unbounded date-range scan');
+    return setDate.apply(this, args);
+  };
   fs.readFileSync = (file, ...args) => {
     if (String(file).startsWith(path.join(__dirname, 'chat') + path.sep) || String(file).startsWith(path.join(__dirname, 'chat-dev') + path.sep)) reads.push(path.basename(String(file)));
     return read(file, ...args);
   };
   process.on('message', message => {
-    reads = [];
+    reads = []; lists = 0; steps = 0;
     try {
       const logs = require('./lib/serverlogs'), retained = require('./lib/retention');
       const result = message.kind === 'copy' ? retained.copyKeptChat(message.row, message.now)
         : logs.chatSlice(message.profile, message.from === 'NaN' ? NaN : message.from, message.to, message.channel);
-      process.send({ id: message.id, result, reads });
+      process.send({ id: message.id, result, reads, lists, steps });
     } catch (error) { process.send({ id: message.id, error: error.stack }); }
   });
 }
@@ -105,6 +112,15 @@ function putLine(at, text, channel = 'main', profile = 7) {
     answer = await call({ profile: 11, from: start, to: end, channel: 'main' });
     yes('the existing output bound still stops inside a middle day before reading later dates', answer.result.lines.length === 4001
       && answer.result.lines.every(line => line.text.startsWith('bounded ')) && answer.reads.length === 2);
+    const malformedDays = ['2026-11-02.jsonl.bak', '2026-11-00.jsonl', '2026-11-99.jsonl', '2026-02-30.jsonl', '2026-13-01.jsonl'];
+    for (const name of malformedDays) fs.writeFileSync(path.join(dir, 'chat', name), JSON.stringify({ at: middle, profileId: 7, text: 'not a canonical day file' }) + '\n');
+    try {
+      answer = await call({ profile: 7, from: -8e15, to: 8e15, channel: 'main' });
+      yes('a huge finite window does one directory listing without scanning calendar dates', answer.lists === 1 && answer.steps === 0
+        && answer.result.lines.some(line => line.text === 'middle') && answer.reads.length <= fs.readdirSync(path.join(dir, 'chat')).length);
+      yes('only canonical valid calendar filenames are read, even inside a wide range', !answer.reads.some(name => malformedDays.includes(name))
+        && !answer.result.lines.some(line => line.text === 'not a canonical day file'));
+    } catch (error) { yes('a huge finite window does one directory listing without scanning calendar dates: ' + error.message, false); }
     yes('owned site remains healthy', child.exitCode === null && !/uncaught exception|unhandled rejection/.test(stderr));
   } catch (error) { fail++; console.error(error.stack || error); }
   finally {

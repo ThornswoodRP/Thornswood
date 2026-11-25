@@ -136,9 +136,11 @@ Releases (#5547).
 | `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
 
 Session chat reads every local calendar day in its window, including middle
-days when a session spans several dates (#4947). Calendar dates advance
-across daylight-saving changes. The same slice supplies an initial kept-chat
-copy; existing profile, time, server, output and retention limits still apply.
+days when a session spans several dates (#4947). One folder listing selects
+valid day files inside the local date window, including daylight-saving
+changes, without scanning an arbitrary date range. The same slice supplies
+an initial kept-chat copy; existing profile, time, server, output and retention
+limits still apply.
 
 To see the door answer, from a second window:
 
