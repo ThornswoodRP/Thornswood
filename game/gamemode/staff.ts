@@ -402,6 +402,10 @@
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -872,6 +876,10 @@
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way

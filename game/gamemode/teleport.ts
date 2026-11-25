@@ -1823,6 +1823,10 @@
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
