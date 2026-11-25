@@ -22,6 +22,11 @@ post at the board or trade with an NPC. Notice and job fees stay 20 and
 30 gold for everybody. Two people still agree their own price when they
 [trade](trade.md).
 
+A dead or disabled guild trader cannot open trading or accept a purchase,
+sale, supply or quest action. An open panel closes when the trader becomes
+unavailable. The server checks their current state for each action; an
+unreadable state refuses the action without moving goods or gold.
+
 ## What the traders charge
 
 A guild trader buys and sells at the hold's price. The numbers come

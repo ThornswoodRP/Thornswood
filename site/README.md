@@ -13,6 +13,12 @@ the launchers ask it who may play (`/api/allowed`, and `/dev/api/allowed` for
 the dev server), and it answers from the Discord roles in its config.
 `public\` holds the pages and the art it serves as they are.
 
+Discord errors are read by their JSON code. Unknown Member (10007) can prove
+that an account is absent, and Unknown Ban (10026) can prove it is not banned.
+Other 404s remain failed lookups. A complete member list can also prove
+absence; a page of 1000 members cannot. These checks keep linked character
+ownership intact when Discord cannot be read.
+
 These are what ask it for something other than a page, and each of them stops
 working while the site is down. `/api/play/join` is the launcher's question
 before every launch; when the site does not answer, a yes from the last 72

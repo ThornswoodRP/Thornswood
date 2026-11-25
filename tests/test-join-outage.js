@@ -6,8 +6,8 @@
   The launcher's door, /api/play/join, when Discord does not answer the site.
 
   standing() leaves inGuild false on every failed lookup and sets lookupFailed
-  to say why, because a 404 is the only failure that means "not in the
-  server". /api/play/join tested inGuild and nothing else, so a rate limit
+  to say why unless Discord confirms the member is absent. /api/play/join
+  tested inGuild and nothing else, so a rate limit
   came back as 403 why 'guild': "That Discord account is not in the
   Thornswood Discord", with an invite. The launcher writes a 'guild' down as a
   remembered no, so the same answer also erased the 72 hour grace Door.cs
@@ -76,7 +76,7 @@ async function discordGet(p) {
   if (p.indexOf('/members?limit=') >= 0) return { ok: true, status: 200, body: guild };
   const id = p.slice(p.lastIndexOf('/') + 1);
   const hit = guild.filter((m) => m.user.id === id)[0];
-  return hit ? { ok: true, status: 200, body: hit } : { ok: false, status: 404, body: null, why: 'not found' };
+  return hit ? { ok: true, status: 200, body: hit } : { ok: false, status: 404, code: 10007, body: null, why: 'not found' };
 }
 const jsonFile = (f, def) => (f in files ? JSON.parse(JSON.stringify(files[f])) : def);
 // The real putJson answers whether the write landed; the check in refuses one that did not (#2180).
@@ -178,6 +178,11 @@ const yes = (w, c) => {
   r = await ask('111');
   yes('Discord falling over is a 503 too', r.code === 503);
 
+  reset();
+  answer = { ok: false, status: 404, code: 10004, body: null, why: 'Discord answered 404 (code 10004)' };
+  r = await ask('111');
+  yes('an Unknown Guild response is unavailable', r.code === 503 && r.obj.why === 'could not ask Discord' && !r.obj.invite);
+
   // ---- the answers that ARE a no stay a no -------------------------------------
   reset();
   guild = [member(222, ['r1'])];
@@ -186,9 +191,9 @@ const yes = (w, c) => {
   yes('with the invite, so they can join', r.obj.invite === 'https://discord.gg/thornswood');
 
   reset();
-  answer = { ok: false, status: 404, body: null, why: 'not found' };
+  answer = { ok: false, status: 404, code: 10007, body: null, why: 'not found' };
   r = await ask('111');
-  yes('a 404 from the single lookup is still guild', r.code === 403 && r.obj.why === 'guild');
+  yes('Unknown Member from the single lookup is still guild', r.code === 403 && r.obj.why === 'guild');
 
   reset();
   guild = [member(111, [])];

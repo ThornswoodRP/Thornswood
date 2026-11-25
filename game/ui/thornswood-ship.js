@@ -364,7 +364,10 @@
       ((data.port && data.port.name) || 'The dock');
     root.querySelector('#' + ID + '-body').innerHTML = data.mode === 'staff' ? drawStaff() :
       data.mode === 'stop' ? drawStop() : data.mode === 'raid' ? drawRaid() : drawDock();
-    if (!was) { tell('opened'); }
+    if (!was) {
+      if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
+      tell('opened');
+    }
   }
 
   function open() { draw(); }

@@ -241,10 +241,14 @@ try {
     $N.GetField('Seal', $flags).SetValue($null, $plain)
     $N.GetField('Unseal', $flags).SetValue($null, $unplain)
     $srv.ClientId = 'thornswood-test'
-    $back = [string]$N.GetProperty('Back', $flags).GetValue($null)
-    $srv.Back = $back
+    $registered = [string]$N.GetProperty('Back', $flags).GetValue($null)
+    Yes 'N0 the launcher uses the registered loopback address in production' ($registered -ceq 'http://127.0.0.1:53150/nexus') $registered
+    # A separate callback prefix can share the stand-in's already-bound port.
+    # Keep the real loopback callback without competing for the production port.
+    $callback = $base + '/nexus'
+    $srv.Back = $callback
     $kept = Join-Path $profile 'nexus.txt'
-    $signIn = $N.GetMethod('SignIn', $flags)
+    $signIn = $N.GetMethod('SignInOnLoopbackPort', $flags)
     $who = $N.GetProperty('Who', $flags)
 
     # The browser: what it was sent to, and how it answers.
@@ -265,14 +269,14 @@ try {
             'refused' { [TsNexusBrowser]::Go($to + '?error=access_denied&error_description=' + [Uri]::EscapeDataString('The person said no') + '&state=' + [Uri]::EscapeDataString($q['state'])) }
         }
     }
-    function Sign-In { return $signIn.Invoke($null, [object[]]@($open, [TimeSpan]::FromSeconds(20))) }
+    function Sign-In { return $signIn.Invoke($null, [object[]]@($open, [TimeSpan]::FromSeconds(20), $srv.Port)) }
 
     # ------------------------------------------------------------------ N ----
     $acct = Sign-In
     $q = Query $script:sentTo[0]
     Yes 'N1 the browser goes to Nexus''s sign in page with the client id, the address back, a state and an S256 challenge' (
         $script:sentTo[0].StartsWith($base + '/oauth/authorize?') -and $q['response_type'] -eq 'code' -and $q['client_id'] -eq 'thornswood-test' -and
-        $q['redirect_uri'] -eq 'http://127.0.0.1:53150/nexus' -and $q['code_challenge_method'] -eq 'S256' -and $q['state'].Length -ge 32 -and $q['code_challenge'].Length -eq 43) $script:sentTo[0]
+        $q['redirect_uri'] -ceq $callback -and $q['code_challenge_method'] -eq 'S256' -and $q['state'].Length -ge 32 -and $q['code_challenge'].Length -eq 43) $script:sentTo[0]
     $token = @($srv.Asked() | Where-Object { $_.StartsWith('POST /oauth/token') })
     Yes 'N2 the code is traded with the verifier the challenge was made from' ($token.Count -eq 1 -and $token[0].Contains('grant_type=authorization_code') -and $srv.Issued -eq 1) ($srv.Asked() -join ' | ')
     Yes 'N3 who signed in, and that the account is Premium' ($acct.Name -eq 'Ada' -and $acct.Premium)

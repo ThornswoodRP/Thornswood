@@ -83,6 +83,7 @@
     build();
     if (!data || data.open === false) { close(); return; }
     root.className = 'on';
+    var was = shown;
     shown = true;
     root.querySelector('#' + ID + '-title').textContent =
       (data.trader || 'Trader') + (data.place ? ' at ' + data.place : '');
@@ -199,6 +200,7 @@
         if (take) take.disabled = take.getAttribute('data-ready') !== 'yes' || !el.value;
       };
     }
+    if (!was && window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
   function tradeLine(row, verb, index, maximum) {

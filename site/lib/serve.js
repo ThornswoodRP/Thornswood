@@ -2052,7 +2052,8 @@ async function handle(req, res) {
       Could not ask Discord is not the same answer as not in the Discord.
 
       standing() leaves inGuild false on every failed lookup and sets
-      lookupFailed to say why, because only a 404 means "not in the server".
+      lookupFailed to say why: only Unknown Member (10007), or proven absence
+      from a complete member list, means "not in the server".
       This door tested inGuild alone, so a rate limit or a Discord outage came
       back as 403 why 'guild', and the launcher writes a 'guild' down as a
       remembered no, which erased the 72 hour grace it keeps for exactly the

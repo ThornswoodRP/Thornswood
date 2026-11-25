@@ -111,11 +111,11 @@ const discord = http.createServer((req, res) => {
   // The bulk list is refused, as with the members intent off, so every
   // account is its own lookup and MODE decides it.
   if (/\/members\?limit=/.test(u)) return out(403, { message: 'Missing Access' });
-  if (/\/bans\//.test(u)) return out(404, { message: 'Unknown Ban' });
+  if (/\/bans\//.test(u)) return out(404, { code: 10026, message: 'Unknown Ban' });
   const id = u.slice(u.lastIndexOf('/') + 1);
   const m = MEMBERS[id];
   const answer = () => {
-    if (!m) return out(404, { message: 'Unknown Member' });
+    if (!m) return out(404, { code: 10007, message: 'Unknown Member' });
     return out(200, { user: { id, username: 'u' + id, global_name: 'Visitor ' + id }, nick: null,
                       roles: m === 'play' ? ['r1'] : [] });
   };

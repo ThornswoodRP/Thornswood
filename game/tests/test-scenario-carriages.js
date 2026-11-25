@@ -47,7 +47,7 @@ const standIn = require('../../tests/stand-in-server.js');
 const t = standIn.checks();
 const yes = t.yes;
 
-const w = standIn.world({ name: 'carriages' });
+const w = standIn.world({ name: 'carriages', settings: { thornswoodAdmins: [1001] } });
 const GOLD = 0xf;
 const TAMRIEL = '3c:Skyrim.esm';
 
@@ -163,6 +163,76 @@ v = press(CORVIN, MASLYN);
 yes('F2 Raven Rock\'s own ferry goes to Tel Mithryn for 10 (' + fareOf(v, 'Tel Mithryn') + ')', fareOf(v, 'Tel Mithryn') === 10);
 ride(CORVIN, 'Tel Mithryn');
 yes('F2 and he rides it (' + last(CORVIN) + ')', gold(CORVIN) === 10 && atStop(CORVIN, stop('solstheim:telmithryn')) && fares('ravenrock') === 10);
+
+// H. A previously opened Ride button cannot bypass current movement restrictions.
+function journeyState() {
+  const row = w.row(BRENNA);
+  return JSON.stringify([row.worldOrCellDesc, row.pos, row.inventory, P().dropbox()]);
+}
+function rideMoves(since) {
+  return w.did.slice(since).filter(row => row[1] === BRENNA && row[2] === 'set' && row[3] === 'locationalData');
+}
+w.moveTo(BRENNA, WHITERUN.world, by(WHITERUN, 60));
+press(BRENNA, BJORLAM);
+w.say(ALDIS, '/freeze Brenna checking a fare');
+yes('H an authorized freeze applies after the panel opened', !!w.box().__thornswoodStaffState.frozen[1000]);
+let riderBefore = journeyState(), movedAt = w.did.length;
+ride(BRENNA, 'Solitude');
+yes('H the queued stale Ride refuses a frozen rider before movement or any fare',
+  /frozen/.test(last(BRENNA)) && journeyState() === riderBefore && rideMoves(movedAt).length === 0);
+w.say(CORVIN, '/unfreeze Brenna');
+yes('H an ordinary person cannot release the movement restriction', !!w.box().__thornswoodStaffState.frozen[1000]);
+w.say(ALDIS, '/unfreeze Brenna');
+const resumedGold = gold(BRENNA), resumedFare = fares('whiterun');
+ride(BRENNA, 'Solitude');
+yes('H a ride works after authorized release, at the unchanged fare',
+  atStop(BRENNA, SOLITUDE) && gold(BRENNA) === resumedGold - 20 && fares('whiterun') === resumedFare + 20);
+w.moveTo(BRENNA, WHITERUN.world, by(WHITERUN, 60));
+press(BRENNA, BJORLAM);
+w.row(BRENNA).isDead = true;
+riderBefore = journeyState(); movedAt = w.did.length;
+ride(BRENNA, 'Solitude');
+yes('H the queued stale Ride refuses a dead rider before movement or any fare',
+  /dead/.test(last(BRENNA)) && journeyState() === riderBefore && rideMoves(movedAt).length === 0);
+w.row(BRENNA).isDead = false;
+const mp = w.mp(), nativeAI = mp.getNpcAIState, nativeRuntime = mp.getActorRuntimeIdentity, nativeGet = mp.get;
+const frozenMap = w.box().__thornswoodStaffState.frozen;
+for (const kind of ['missing-death', 'throws-death', 'wrong-profile', 'runtime-drift', 'life-drift',
+  'frozen-during-pay', 'dead-during-pay', 'profile-drift', 'missing-life', 'missing-runtime', 'missing-freeze-state']) {
+  w.moveTo(BRENNA, WHITERUN.world, by(WHITERUN, 60));
+  press(BRENNA, BJORLAM);
+  let paidRead = false;
+  mp.get = function (id, key) {
+    if (id === BRENNA && key === 'inventory') paidRead = true;
+    return nativeGet(id, key);
+  };
+  mp.getNpcAIState = function (id) {
+    if (id !== BRENNA) return nativeAI(id);
+    if (kind === 'throws-death') throw new Error('current death state unreadable');
+    const ai = nativeAI(id);
+    if (kind === 'missing-death') delete ai.isDead;
+    if (kind === 'wrong-profile') ai.profileId = 1002;
+    if (kind === 'profile-drift' && paidRead) ai.profileId = 1002;
+    if (kind === 'missing-life') delete ai.lifeGeneration;
+    if (kind === 'life-drift' && paidRead) ai.lifeGeneration++;
+    if (kind === 'dead-during-pay' && paidRead) ai.isDead = true;
+    if (kind === 'frozen-during-pay' && paidRead) w.box().__thornswoodStaffState.frozen[1000] = { by: 1001 };
+    return ai;
+  };
+  mp.getActorRuntimeIdentity = function (id) {
+    if (id === BRENNA && kind === 'missing-runtime') return undefined;
+    return id === BRENNA && kind === 'runtime-drift' && paidRead ? '999999999' : nativeRuntime(id);
+  };
+  if (kind === 'missing-freeze-state') w.box().__thornswoodStaffState.frozen = null;
+  riderBefore = journeyState(); movedAt = w.did.length;
+  // Capture directly from the installed handler without waiting for unrelated timers.
+  const refused = C.ride(BRENNA, 1000, 'Solitude');
+  yes('H current rider authority refuses before move/takeGold/boxFare (' + kind + ')',
+    !refused.went && /unavailable|frozen|dead/.test(refused.line) && journeyState() === riderBefore && rideMoves(movedAt).length === 0);
+  mp.get = nativeGet; mp.getNpcAIState = nativeAI; mp.getActorRuntimeIdentity = nativeRuntime;
+  w.box().__thornswoodStaffState.frozen = frozenMap;
+  delete w.box().__thornswoodStaffState.frozen[1000];
+}
 
 // ---------------------------------------------------------- G. restart --
 const kept = JSON.stringify(['whiterun', 'solitude', 'windhelm', 'ravenrock'].map(fares));
