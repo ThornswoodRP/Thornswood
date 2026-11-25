@@ -14,24 +14,7 @@ from unittest.mock import patch
 
 
 
-class Room:
-    id = 42
-    name = 'staff'
-
-    def __init__(self):
-        self.posts = {1: 'untracked notice'}
-        self.next = 2
-
-    async def send(self, text, **options):
-        mid = self.next
-        self.next += 1
-        self.posts[mid] = text
-        return SimpleNamespace(id=mid, channel=self)
-
-    def get_partial_message(self, mid):
-        async def delete():
-            del self.posts[mid]
-        return SimpleNamespace(delete=delete)
+from staff_copy_fixture import Room
 
 
 class Copies(unittest.TestCase):
@@ -48,6 +31,7 @@ class Copies(unittest.TestCase):
         self.reports = bot_reports
         self.moderation = bot_moderation
         self.room = Room()
+        self.room.add('untracked notice')
 
     def run_watch(self, mod, watch, *steps):
         pending = iter(steps)
@@ -64,7 +48,7 @@ class Copies(unittest.TestCase):
         async def ready():
             return None
 
-        client = SimpleNamespace(wait_until_ready=ready, is_closed=lambda: stopped,
+        client = SimpleNamespace(user=SimpleNamespace(id=50), wait_until_ready=ready, is_closed=lambda: stopped,
                                  get_channel=lambda cid: self.room if cid == self.room.id else None)
         shim = SimpleNamespace(get_running_loop=asyncio.get_running_loop, sleep=sleep)
         with patch.object(mod, 'client', client), patch.object(mod, 'asyncio', shim), \
