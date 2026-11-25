@@ -87,6 +87,23 @@ for(const route of ['/moldhere','/mold']) {
     f.E.mp.get=(id,key)=>{if(id===h.ALICE.actor&&key==='inventory')throw Error('unreadable recipient');return get(id,key);};
     f.run();assert.equal(JSON.stringify(f.E.packs),JSON.stringify(f.before));assert.equal(f.E.native.calls.length,0);
   });
+  for (const blocked of ['reserved recipient','unsaved recipient','old lease service','mismatched recipient']) {
+    check(route+' '+blocked+' refuses before any blank debit',()=>{
+      const f=setup(route), native=f.E.native;
+      if (blocked==='reserved recipient') native.reserved.add(h.ALICE.actor);
+      if (blocked==='unsaved recipient') native.receipt[h.ALICE.actor]=JSON.stringify({actor:h.ALICE.actor.toString(16),profile:h.ALICE.pid,sequence:1});
+      if (blocked==='old lease service') delete native.merchants.withPairedInventoryMutation;
+      if (blocked==='mismatched recipient') {
+        const paired=native.merchants.withPairedInventoryMutation;
+        native.merchants.withPairedInventoryMutation=(actor,holder,change)=>
+          paired(actor,holder,(human,alive,recipient)=>change(human,alive,{...recipient,desc:'42'}));
+      }
+      const told=f.run();
+      assert.equal(JSON.stringify(f.E.packs),JSON.stringify(f.before));
+      assert.equal(native.calls.length,0);
+      assert.match(f.reply(told),/blank was not spent/);
+    });
+  }
   check(route+' missing CAS refuses before any blank debit',()=>{
     const f=setup(route);delete f.E.mp.compareAndSetInventory;
     f.run();assert.equal(JSON.stringify(f.E.packs),JSON.stringify(f.before));

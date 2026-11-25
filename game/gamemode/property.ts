@@ -1956,9 +1956,11 @@
     var merchants = globalThis.__thornswoodMerchantTrade;
     var untouched = 'The mold could not be handed over. Your blank was not spent.';
     var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
     var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
       'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
-    if (!merchants || typeof merchants.withQuestInventoryMutation !== 'function' ||
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
         !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
       return {ok:false,why:untouched};
     }
@@ -2008,28 +2010,29 @@
     }
     try {
       var entered = false;
-      var result = merchants.withQuestInventoryMutation(actorId, function (human, alive) {
+      function handover(human, alive, recipient) {
         entered = true;
         var source, target, debit, named;
         try {
           source = read(actorId);
-          target = actorId === owner.actorId ? source : read(owner.actorId);
+          target = self ? source : read(owner.actorId);
           if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
               target.profile !== owner.profileId ||
-              actorId !== owner.actorId && !Number.isSafeInteger(source.sequence + 1) ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
               mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
               mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
             return {ok:false,why:untouched};
           }
           debit = blankMoldAfter(source.inventory);
           if (!debit) { return {ok:false,why:untouched}; }
-          named = JSON.parse(JSON.stringify(actorId === owner.actorId ? debit : target.inventory));
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
           named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
           if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
             return {ok:false,why:untouched};
           }
         } catch (e) { return {ok:false,why:untouched}; }
-        if (actorId === owner.actorId) {
+        if (self) {
           var converted = replace(source, named, alive);
           return converted.state === 'committed' ? {ok:true} :
             {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
@@ -2048,7 +2051,9 @@
           {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
           {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
             uncertain:restored.state === 'unknown'};
-      });
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
       return entered ? result : {ok:false,why:untouched};
     } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
   }

@@ -24100,9 +24100,11 @@ module.exports = {
     var merchants = globalThis.__thornswoodMerchantTrade;
     var untouched = 'The mold could not be handed over. Your blank was not spent.';
     var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
     var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
       'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
-    if (!merchants || typeof merchants.withQuestInventoryMutation !== 'function' ||
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
         !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
       return {ok:false,why:untouched};
     }
@@ -24152,28 +24154,29 @@ module.exports = {
     }
     try {
       var entered = false;
-      var result = merchants.withQuestInventoryMutation(actorId, function (human, alive) {
+      function handover(human, alive, recipient) {
         entered = true;
         var source, target, debit, named;
         try {
           source = read(actorId);
-          target = actorId === owner.actorId ? source : read(owner.actorId);
+          target = self ? source : read(owner.actorId);
           if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
               target.profile !== owner.profileId ||
-              actorId !== owner.actorId && !Number.isSafeInteger(source.sequence + 1) ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
               mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
               mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
             return {ok:false,why:untouched};
           }
           debit = blankMoldAfter(source.inventory);
           if (!debit) { return {ok:false,why:untouched}; }
-          named = JSON.parse(JSON.stringify(actorId === owner.actorId ? debit : target.inventory));
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
           named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
           if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
             return {ok:false,why:untouched};
           }
         } catch (e) { return {ok:false,why:untouched}; }
-        if (actorId === owner.actorId) {
+        if (self) {
           var converted = replace(source, named, alive);
           return converted.state === 'committed' ? {ok:true} :
             {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
@@ -24192,7 +24195,9 @@ module.exports = {
           {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
           {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
             uncertain:restored.state === 'unknown'};
-      });
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
       return entered ? result : {ok:false,why:untouched};
     } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
   }
@@ -67837,12 +67842,13 @@ function createSettlement(deps) {
       return all;
     } catch(error) {active=false;throw error;}
   }
-  function admitted(human, reference, reserveCapacity) {
+  function admitted(human, reference, reserveCapacity, recipientKey) {
     var pending = records(), key = humanKey(human);
     if (!key || reserveCapacity!==false && pending.length >= MAX_PENDING) return false;
     return pending.every(function (record) {
       var other = record.state.pending.human;
-      return humanKey(other) && humanKey(other) !== key && record.reference !== reference;
+      var otherKey = humanKey(other);
+      return otherKey && otherKey !== key && otherKey !== recipientKey && record.reference !== reference;
     });
   }
   function save(id, state, next, intentId, caller) {
@@ -68076,20 +68082,38 @@ function createSettlement(deps) {
       return changed;
     } finally { busy = false; }
   }
-  function withInventoryMutation(actorId,change) {
+  function inventoryMutationLease(actorId,change,recipientId) {
     if(!available() || busy)return {ok:false,why:'unavailable'};
     busy=true;
     var leased=true;
     try {
       var human=transfer.identity(actorId);
-      if(!human || !admitted(human,'',false))return {ok:false,why:'waiting'};
+      var recipient, recipientKey;
+      if (recipientId !== undefined) {
+        recipient = transfer.identity(recipientId);
+        recipientKey = humanKey(recipient);
+        if (!recipientKey || recipientKey === humanKey(human)) return {ok:false,why:'waiting'};
+      }
+      if(!human || !admitted(human,'',false,recipientKey))return {ok:false,why:'waiting'};
       if(transfer.saved(actorId)!==transfer.receipt(actorId))return {ok:false,why:'waiting'};
+      if(recipient && transfer.saved(recipientId)!==transfer.receipt(recipientId))return {ok:false,why:'waiting'};
       if(!active)return {ok:false,why:'unavailable'};
-      var result=change(human,function(){return active && leased;});
+      var alive = function(){return active && leased;};
+      var result = recipient ? change(human,alive,recipient) : change(human,alive);
       // Unknown receipts revoke all writers until a reload reads durable state.
       if(result && result.uncertain)active=false;
       return result;
     } finally {leased=false;busy=false;}
+  }
+  function withInventoryMutation(actorId,change) {
+    return inventoryMutationLease(actorId,change);
+  }
+  // A saved receipt alone does not prove that the next sequence is free.
+  // Hold both identities against the same pending-record check and lease.
+  function withPairedInventoryMutation(actorId,recipientId,change) {
+    if (!Number.isInteger(recipientId) || recipientId <= 0 || recipientId > 0xffffffff || recipientId === actorId)
+      return {ok:false,why:'unavailable'};
+    return inventoryMutationLease(actorId,change,recipientId);
   }
   function canInventoryMutation(actorId) {
     if(!available() || busy)return false;
@@ -68133,7 +68157,8 @@ function createSettlement(deps) {
     return how;
   }
   return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
-    withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
+    withInventoryMutation:withInventoryMutation,withPairedInventoryMutation:withPairedInventoryMutation,
+    canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 
 module.exports = {createSettlement:createSettlement,stockRows:stockRows,inventory:inventory,takeEntries:takeEntries,
@@ -70379,6 +70404,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;

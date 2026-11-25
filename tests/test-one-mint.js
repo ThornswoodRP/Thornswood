@@ -798,9 +798,12 @@ function goldDescriptors(text) {
   const sceneGold = goldDescriptors(sceneQuest || '');
   yes('scene finish gold is the named GOLD_DESC row, and those lines stay in the scan',
       !!sceneQuest && sceneGold.gold.length === 0 &&
+      (sceneQuest.match(/\bitem:\s*GOLD_DESC\b/g) || []).length === 3 &&
       (sceneQuest.match(/\{item: GOLD_DESC, count: row\.gold\}/g) || []).length === 2 &&
+      (sceneQuest.match(/\{item:GOLD_DESC,count:open\.terms\.gold\}/g) || []).length === 1 &&
+      /!paid\.ok \|\| paid\.gold!==open\.terms\.gold/.test(sceneQuest) &&
       !/addItem\(actor, GOLD_DESC/.test(sceneQuest) &&
-      /if \(!keep\(actor, b, changes\)\)/.test(sceneQuest) &&
+      /if \(!keep\(actor, b, changes,eligible\)\)/.test(sceneQuest) &&
       /var GOLD_DESC = deps\.goldDesc;/.test(sceneQuest));
   yes('the testers\' two tables were found and set aside', !!outside);
   const inside = goldDescriptors(src);

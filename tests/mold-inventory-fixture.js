@@ -5,6 +5,8 @@ module.exports = function nativeBoundary(E) {
   const copy = x => JSON.parse(JSON.stringify(x));
   const receipt = {}, saved = {}, runtime = {}, calls = [];
   let busy = false, uncertain = false, hook;
+  const reserved = new Set();
+  const identity = id => E.pid[id] ? {desc:desc(id),profileId:E.pid[id]} : null;
   const desc = id => id.toString(16);
   const previousDesc = E.mp.getDescFromId;
   E.mp.getDescFromId = id => E.pid[id] ? desc(id) : previousDesc(id);
@@ -35,16 +37,24 @@ module.exports = function nativeBoundary(E) {
     if (fault === 'throw-after') throw Error('native committed before publication failure');
     return true;
   };
-  const merchants = {withQuestInventoryMutation(actor, change) {
-    if (busy || uncertain || E.mp.getSavedInventoryReceipt(actor) !== E.mp.getInventoryReceipt(actor)) return {ok:false,why:'waiting'};
+  function mutate(actor, change, holder) {
+    if (busy || uncertain || reserved.has(actor) ||
+        E.mp.getSavedInventoryReceipt(actor) !== E.mp.getInventoryReceipt(actor)) return {ok:false,why:'waiting'};
     busy = true;
     try {
-      const result = change({desc:desc(actor),profileId:E.pid[actor]},() => true);
+      const recipient = holder === undefined ? undefined : identity(holder);
+      if (holder !== undefined && (!recipient || reserved.has(holder) ||
+          E.mp.getSavedInventoryReceipt(holder) !== E.mp.getInventoryReceipt(holder))) return {ok:false,why:'waiting'};
+      const result = change(identity(actor),() => busy,recipient);
       if (result && result.uncertain) uncertain = true;
       return result;
     } finally {busy=false;}
-  }};
-  return {calls,merchants,runtime,receipt,saved,
+  }
+  const merchants = {
+    withQuestInventoryMutation: mutate,
+    withPairedInventoryMutation(actor, holder, change) { return mutate(actor,change,holder); }
+  };
+  return {calls,merchants,runtime,receipt,saved,reserved,
     hook(fn) {hook=fn;},
     ack() {Object.assign(saved,receipt);},
     uncertain:() => uncertain};
