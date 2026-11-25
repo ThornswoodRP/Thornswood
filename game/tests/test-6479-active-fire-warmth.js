@@ -123,5 +123,19 @@ if (w.loaded()) {
     close(raw(refused).temp, approach(20, 58, 60000)));
   yes('a failed needs bank does not disable the canonical fire report or its active warmth target',
     w.prop(refused, 'thornswoodBurnVisual').on === true && panel(refused).tempTarget === 92);
+  const beforeProjection = Object.assign(N.fresh(), { at: now - 10000, temp: 20, place: 'indoors', roof: true, fire: -1 });
+  const untouched = JSON.stringify(beforeProjection), getter = box.mp.get;
+  const environment = { workMultiplier: () => 1, restingGain: () => 0, outdoorCooling: () => 1,
+    warmthTarget: (n, onFire) => onFire ? 92 : 58, burningFrom: now - 8000, burningUntil: now - 2000 };
+  let staged;
+  box.mp.get = box.mp.set = () => { throw Error('pure projection must not touch runtime state'); };
+  try { staged = N.project(beforeProjection, now, false, environment); }
+  finally { box.mp.get = getter; box.mp.set = setter; }
+  const pure = approach(approach(approach(20, 58, 2000), 92, 6000), 58, 2000);
+  yes('pure projection stages all three thermal segments from explicit environment without runtime reads or writes',
+    close(staged.needs.temp, pure) && JSON.stringify(beforeProjection) === untouched);
+  N.clearBurning(refused);
+  yes('the same captured projection environment is independent of later live fire changes',
+    JSON.stringify(N.project(beforeProjection, now, false, environment)) === JSON.stringify(staged));
 }
 t.done(w);
