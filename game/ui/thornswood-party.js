@@ -685,7 +685,7 @@
       destructiveArm.snapshot === snapshot && Date.now() < destructiveArm.until;
     resetDestructive();
     if (again) {
-      if (!net(target.line)) root.querySelector('#' + ID + '-sub').textContent = 'Not sent. Review and press again.';
+      if (!net(target.line)) root.querySelector('#' + ID + '-sub').textContent = 'Delivery not confirmed. Check the current list before trying again.';
       return;
     }
     var armed = { button: button, text: button.textContent, snapshot: snapshot, until: Date.now() + 5000 };

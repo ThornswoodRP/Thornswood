@@ -55,4 +55,11 @@ for(const change of [p=>p.state.partyIntent.version='c'.repeat(48),p=>p.state.pa
  yes('local refusal changes no authoritative friend data or success label',calls===1&&p.state.friends.length===1&&!/removed|no longer/.test(b.textContent));
  b.click();yes('local refusal needs a new confirmation rather than automatic retry',calls===1);
 }
+for(const throws of [false,true]){
+ const p=rig(),b=p.button('drop'),queued=[];
+ p.win.thornswoodNet.say=line=>{queued.push(line);if(throws)throw Error('after queue fixture');return false;};
+ b.click();b.click();const message=p.doc.getElementById('ts-party-sub').textContent;
+ yes('queued delivery is never falsely described as unsent, throws='+throws,/Delivery not confirmed/.test(message)&&/Check the current list/.test(message)&&!message.includes('Not sent'));
+ yes('unknown delivery preserves state and never resends automatically, throws='+throws,queued.length===1&&p.state.friends.length===1);
+}
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;
