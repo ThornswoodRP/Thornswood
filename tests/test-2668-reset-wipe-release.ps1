@@ -104,7 +104,7 @@ $Moves = @(); $WipeDone = @()
 foreach ($a in $assign) { Set-Variable -Name ("$($a.Left)".TrimStart('$')) -Value @(& ([scriptblock]::Create($a.Right.Extent.Text))) }
 # Not 'merchants', the ledger a wipe keeps, nor 'saves' (server-log.js's),
 # since mod-settings.json stays too.
-$expect = @($parts | Where-Object { $_ -ne 'merchants' -and $_ -ne 'saves' })
+$expect = @($parts | Where-Object { $_ -ne 'merchants' -and $_ -ne 'saves' -and $_ -ne 'restraints' })
 Yes ('S5 the wipe marks done every part but the merchants'' and the saves (' + ($WipeDone -join ', ') + ')') (
     $WipeDone.Count -eq $expect.Count -and @($expect | Where-Object { $WipeDone -notcontains $_ }).Count -eq 0)
 $registers = @{ farms = @('farm-claims.json'); property = @('property.json', 'law.json', 'beds.json'); embassy = @('embassy.json')
@@ -375,7 +375,10 @@ try {
     Put (Join-Path $w2 'world\changeForms\13164_JKs Whiterun.esp.json') '{}'
     Registers $w2
     $x = RunBox (FillMove $w2)
-    Yes 'W7 with nobody to name and no list set aside, no list is written' (($x.out -contains 'RELEASE|none') -and -not (Test-Path -LiteralPath (Join-Path $w2 'private\deleted-characters.json')))
+    $emptyWipe = ListOf (Join-Path $w2 'private\deleted-characters.json')
+    Yes 'W7 with no character IDs, the explicit freeze-only wipe request still reaches the game' ($emptyWipe -and
+        @($emptyWipe.profiles).Count -eq 0 -and @($emptyWipe.actors).Count -eq 0 -and $emptyWipe.clearFreezes -eq $true -and
+        @($emptyWipe.freezeWipeIds).Count -eq 1 -and $emptyWipe.freezeWipeIds[0] -cmatch '^[0-9a-f]{32}$' -and $null -eq $emptyWipe.done.restraints)
 
     $w3 = Server 'wipe-badlist' '{}'
     Registers $w3
@@ -446,9 +449,9 @@ try {
         Yes ('G2b a reset''s list with no profile has every part but the saves waiting on it, the saves being done already (' + (@($G.resetFresh.waiting) -join ', ') + ')') (
             $G.resetFresh -and (@($G.resetFresh.waiting) -join ',') -eq (@($others | Where-Object { $_ -ne 'saves' }) -join ','))
         Yes ('G3 the release block reads the wipe''s list, carrying a deleted profile, and only the saves and the merchants'' part wait on it (' + (@($G.wipe.waiting) -join ', ') + ')') (
-            $G.wipe -and -not $G.wipe.unread -and (@($G.wipe.waiting) -join ',') -eq 'saves,merchants')
+            $G.wipe -and -not $G.wipe.unread -and (@($G.wipe.waiting) -join ',') -eq 'saves,restraints,merchants')
         Yes ('G4 a wipe''s list with no profile has only the merchants'' part waiting on it (' + (@($G.wipeNoProfile.waiting) -join ', ') + ')') (
-            $G.wipeNoProfile -and -not $G.wipeNoProfile.unread -and (@($G.wipeNoProfile.waiting) -join ',') -eq 'merchants')
+            $G.wipeNoProfile -and -not $G.wipeNoProfile.unread -and (@($G.wipeNoProfile.waiting) -join ',') -eq 'restraints,merchants')
     }
 }
 catch {

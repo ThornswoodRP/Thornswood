@@ -532,6 +532,11 @@
   function onLogin(e) {
     var now = Date.now();
     var asked = Number(e && e.profileId) || 0;
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked)) {
+      console.log('[thornswood] login of profile ' + asked + ' refused: staff restraint authority is unavailable or movement awaits staff resolution');
+      return 0;
+    }
     if (!e || !e.proof) {
       console.log('[thornswood] login of profile ' + asked + ' on user ' + (e && e.userId) +
                   ' challenged; handed over as asked (watching, #1320)');
