@@ -1,6 +1,8 @@
 <#
-  Run-OnBox.ps1
+.SYNOPSIS
+  Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders.
 
+.DESCRIPTION
   Runs one of the repository's content tools on the VPS box, against the game
   plugins a game server there already holds, and brings back what the tool
   wrote into the repository's game\, records\ and docs\systems\ folders.

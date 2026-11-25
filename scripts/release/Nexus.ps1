@@ -1,6 +1,8 @@
 <#
-  Nexus.ps1
+.SYNOPSIS
+  The one place the release scripts talk to Nexus Mods from, with Patrick's personal API key (#2914).
 
+.DESCRIPTION
   The one place the release scripts talk to Nexus Mods from, with Patrick's
   personal API key (#2914).
 

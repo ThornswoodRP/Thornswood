@@ -119,6 +119,23 @@ try {
     $r = Invoke-Chain $a
     Yes ("a writer that changes nothing: the chain runs once and ends 0 (ran {0})" -f $r.Ran) ($r.Code -eq 0 -and $r.Ran -eq 'reader,between,writer' -and $r.Out -notmatch 'runs again')
 
+
+    # Only the order at the root is authoritative. A nested copy cannot
+    # make an out-of-order or damaged catalogue pass the build preflight.
+    $invalid = New-Sandbox 'same' "kept`n"
+    $roots += $invalid
+    $ordered = $population.Substring(1, $population.Length - 2)
+    $wrong = $ordered.Replace('A.esp', 'B.esp')
+    Put $invalid 'game/data/npc-population.json' ('{"other":' + $population + ',' + $wrong + '}')
+    $r = Invoke-Chain $invalid
+    # PowerShell can colour and wrap exception text differently on each host.
+    Yes 'preflight rejects a wrong top-level order even with a matching nested order' (
+        $r.Code -ne 0 -and $r.Ran -eq '' -and $r.Out -match 'B\.esp' -and $r.Out -match 'A\.esp')
+
+    Put $invalid 'game/data/npc-population.json' ('{' + $ordered + ',"npcs":[')
+    $r = Invoke-Chain $invalid
+    Yes 'preflight rejects truncated JSON after a correct order' ($r.Code -ne 0 -and $r.Ran -eq '')
+
     $b = New-Sandbox 'settle' "old`n"
     $roots += $b
     $r = Invoke-Chain $b

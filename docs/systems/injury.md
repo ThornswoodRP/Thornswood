@@ -150,13 +150,23 @@ An agreed loss is written onto the character by staff with /hurt,
 because the yes is given out of character. Staff can also give a cut,
 a bite or a break with it for a scene.
 
+Going down is the server's. Health that would reach nothing leaves a
+person down instead (#4607): the engine asks before the death, and the
+server keeps them at a sliver of health with nothing of a death sent.
+While down, fighting and casting are off on their own machine and they
+lie in the bleedout pose; talking is theirs. Somebody else's bandage,
+from Tend their wounds, a healing spell landing on them, or a healing
+potion they drink stands them up at 25%, or what they have if that is
+more. A blow on somebody down does not kill them, and nobody bleeds
+while down. After 3 minutes the death goes through, and the wake is
+the temple's with the wounds they had. A potion brewed at a lab does
+not stand anybody up yet (#6407).
+
 Not in yet:
 
-- Going down. The engine now asks the server before health reaching
-  zero kills, before anything is sent (#1626), which is the moment going
-  down needs; the rest of it is #2681. Until that is built a bleed that
-  empties your health is a death with no killer, and the wake stops the
-  bleed.
+- Staff seeing who is down, confirming the outcome, and changing the
+  downed minutes from the staff panel (#6409). Until then the clock is
+  3 minutes for everybody, and silence is the temple.
 
 A broken arm makes a block cost twice the stamina and a broken leg
 refuses sprint, for as long as the break lasts, splinted or not.

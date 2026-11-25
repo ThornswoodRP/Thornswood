@@ -70,7 +70,7 @@
   is under its own temp folder, which it removes.
 #>
 [CmdletBinding()]
-param()
+param([switch]$ConsoleEncodingOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -105,6 +105,78 @@ function Q([string]$s) { return '"' + (($s -replace '(\\*)"', '$1$1\"') -replace
 $node = Get-Command node -ErrorAction SilentlyContinue
 Yes 'node is on PATH, for the stand-in Nexus' ($null -ne $node)
 if ($null -eq $node) { Done }
+# A harness that stops part way still takes its stand-in and its folder with it.
+trap { $script:fail++; Write-Host ('FAIL  the harness itself stopped: ' + $_.Exception.Message) -ForegroundColor Red; Done }
+
+$js = Join-Path $rel 'nexus-collection.js'
+# & decodes a program's output in [Console]::OutputEncoding, which is code page
+# 437 on an English Windows console, so a mod name with a letter outside ASCII
+# came back as other letters and its check failed there (#4169). This reads
+# node's output as UTF-8 itself, whatever the console is set to, and leaves the
+# console alone. The exit code is in $LASTEXITCODE, as after &.
+function NodeSaid {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $node.Source
+    $psi.Arguments = (@($args | ForEach-Object { Q ([string]$_) }) -join ' ')
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
+    $psi.StandardErrorEncoding = New-Object Text.UTF8Encoding($false)
+    $p = [Diagnostics.Process]::Start($psi)
+    $e = $p.StandardError.ReadToEndAsync()
+    $o = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    if ($e.Result) { Write-Host $e.Result.TrimEnd() }
+    $global:LASTEXITCODE = $p.ExitCode
+    $o = $o.TrimEnd("`r", "`n")
+    if (-not $o) { return @() }
+    return @($o -split "`r?`n")
+}
+# A name with a letter outside ASCII, so the round trip through node is held to keep it.
+$E = [string][char]0x00C9
+$fixture = [ordered]@{
+    info = [ordered]@{ author = 'EvilPatrick06'; authorUrl = ''; name = 'Thornswood'; description = ''; installInstructions = 'Install it.'; domainName = 'skyrimspecialedition'; gameVersions = @('1.6.1170.0') }
+    mods = @(
+        [ordered]@{ name = 'Thornswood Content'; version = '1.2'; optional = $false; domainName = 'skyrimspecialedition'
+            source = [ordered]@{ type = 'nexus'; modId = 192001; fileId = 811029; md5 = 'ee881bf2a869d0810113a82ca1405445'; fileSize = 660022; logicalFilename = 'Thornswood Content'; updatePolicy = 'exact'; tag = 'QXsOYonzPMT' }
+            patches = [ordered]@{ 'Thornswood-Content.esp' = '023593E0' }; author = 'EvilPatrick06'; details = [ordered]@{ category = 'Miscellaneous'; type = '' }; phase = 0 },
+        [ordered]@{ name = 'Thornswood Client Runtime'; version = '1.0.0'; optional = $false; domainName = 'skyrimspecialedition'
+            source = [ordered]@{ type = 'nexus'; modId = 192762; fileId = 809366; md5 = 'c515679068f6563750b1ca1f9260031f'; fileSize = 148896610; logicalFilename = 'Thornswood Client Runtime'; updatePolicy = 'exact'; tag = 'Km2wtoJLmxn' }
+            author = 'EvilPatrick06'; details = [ordered]@{ category = 'Utilities'; type = '' }; phase = 0 },
+        [ordered]@{ name = ('A Fishing Mod, ' + $E + 'dition'); version = '1.0.0'; optional = $false; domainName = 'skyrimspecialedition'
+            source = [ordered]@{ type = 'nexus'; modId = 47618; fileId = 191234; md5 = 'fa1fe7613d21ab5826d4a3a3b258f14a'; fileSize = 1000; logicalFilename = 'Fishing In Skyrim'; updatePolicy = 'exact'; tag = 'abcDEF12345' }
+            author = 'Someone'; details = [ordered]@{ category = 'Gameplay'; type = '' }; phase = 0 },
+        [ordered]@{ name = 'A Hashed Mod'; version = '2.0'; optional = $true; domainName = 'skyrimspecialedition'
+            source = [ordered]@{ type = 'nexus'; modId = 1111; fileId = 2222; md5 = '00000000000000000000000000000001'; fileSize = 10; logicalFilename = 'Hashed'; updatePolicy = 'exact'; tag = 'zzz' }
+            hashes = @([ordered]@{ path = 'a.esp'; md5 = '00000000000000000000000000000002' }); author = 'Someone'; details = [ordered]@{ category = 'Gameplay'; type = '' }; phase = 1 }
+    )
+    modRules = @([ordered]@{ type = 'before'; reference = [ordered]@{ fileExpression = 'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil'; fileMD5 = 'ee881bf2a869d0810113a82ca1405445'; logicalFileName = 'Thornswood Content'; versionMatch = '1.2.0' }
+                           source = [ordered]@{ fileMD5 = 'fa1fe7613d21ab5826d4a3a3b258f14a'; logicalFileName = 'Fishing In Skyrim'; versionMatch = '1.0.0' } })
+    tools = @(); plugins = @(); pluginRules = [ordered]@{ plugins = @(); groups = @() }; collectionConfig = [ordered]@{ recommendNewProfile = $true; referenceTagScheme = 'v1' }
+}
+$cj = Join-Path $T 'fixture\collection.json'
+# Written by node, so the fixture is in the layout Vortex writes and the round trip is the real one.
+Put (Join-Path $T 'fixture-in.json') ($fixture | ConvertTo-Json -Depth 8)
+New-Item -ItemType Directory -Force -Path (Join-Path $T 'fixture\patches\Thornswood Content'), (Join-Path $T 'fixture\bundled') | Out-Null
+& $node.Source -e "const fs=require('fs');fs.writeFileSync(process.argv[2], JSON.stringify(JSON.parse(fs.readFileSync(process.argv[1],'utf8')), undefined, 2))" (Join-Path $T 'fixture-in.json') $cj
+Put (Join-Path $T 'fixture\patches\Thornswood Content\Thornswood-Content.esp.diff') 'BSDIFF40'
+
+$ptJson = Join-Path $T 'patch.json'
+$patchCollection = Join-Path $T 'patch-collection.json'
+$patchPayload = Join-Path $T 'patch-payload.json'
+
+function Test-CollectionPatchOutput {
+    Put $ptJson '[{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"},{"patch":true,"fileId":"811029","path":"Second.esp","crc":"DEADBEEF"}]'
+    $said = NodeSaid $js $cj $ptJson $patchCollection $patchPayload
+    Yes 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('A Fishing Mod, ' + $E + "dition`tpatch`t`tFishingInSkyrim.esp CRC-32 0A1B2C3D|Thornswood Content`tpatch`t`tSecond.esp CRC-32 DEADBEEF"))
+}
+
+# The code-page regression uses the same fixture and output assertion as the
+# full harness, without running the Nexus stand-in or making a revision.
+if ($ConsoleEncodingOnly) {
+    Test-CollectionPatchOutput
+    Done
+}
+
 $pwsh = (Get-Process -Id $PID).Path
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 $sz = ''
@@ -121,8 +193,6 @@ $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandar
 $psi.EnvironmentVariables['NEXUS_STANDIN_KEY'] = $KEY
 $psi.EnvironmentVariables['NEXUS_STANDIN_SAVE'] = (Join-Path $T 'save')
 $script:standin = [Diagnostics.Process]::Start($psi)
-# A harness that stops part way still takes its stand-in and its folder with it.
-trap { $script:fail++; Write-Host ('FAIL  the harness itself stopped: ' + $_.Exception.Message) -ForegroundColor Red; Done }
 $errRead = $script:standin.StandardError.ReadToEndAsync()
 $first = $script:standin.StandardOutput.ReadLineAsync()
 $heard = if ($first.Wait(15000)) { [string]$first.Result } else { '' }
@@ -336,59 +406,7 @@ Control @{ storeOdd = $false }
 YesR 'when Nexus keeps something other than what was sent the run stops with the command that puts it back' ($r.Code -eq 1 -and $r.Out -match 'Nexus kept something other than what was sent' -and $r.Out -match 'Set-NexusDescription\.ps1 -Mod 192762 -From ".+-before\.txt"' -and $r.Out -match 'On Nexus from this run: mod 192762 description edited') $r
 
 # ---- 5: a collection revision -----------------------------------------------------
-$js = Join-Path $rel 'nexus-collection.js'
 # What nexus-collection.js says, as the lines it wrote. Node writes UTF-8, and
-# & decodes a program's output in [Console]::OutputEncoding, which is code page
-# 437 on an English Windows console, so a mod name with a letter outside ASCII
-# came back as other letters and its check failed there (#4169). This reads
-# node's output as UTF-8 itself, whatever the console is set to, and leaves the
-# console alone. The exit code is in $LASTEXITCODE, as after &.
-function NodeSaid {
-    $psi = New-Object Diagnostics.ProcessStartInfo
-    $psi.FileName = $node.Source
-    $psi.Arguments = (@($args | ForEach-Object { Q ([string]$_) }) -join ' ')
-    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-    $psi.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
-    $psi.StandardErrorEncoding = New-Object Text.UTF8Encoding($false)
-    $p = [Diagnostics.Process]::Start($psi)
-    $e = $p.StandardError.ReadToEndAsync()
-    $o = $p.StandardOutput.ReadToEnd()
-    $p.WaitForExit()
-    if ($e.Result) { Write-Host $e.Result.TrimEnd() }
-    $global:LASTEXITCODE = $p.ExitCode
-    $o = $o.TrimEnd("`r", "`n")
-    if (-not $o) { return @() }
-    return @($o -split "`r?`n")
-}
-# A name with a letter outside ASCII, so the round trip through node is held to keep it.
-$E = [string][char]0x00C9
-$fixture = [ordered]@{
-    info = [ordered]@{ author = 'EvilPatrick06'; authorUrl = ''; name = 'Thornswood'; description = ''; installInstructions = 'Install it.'; domainName = 'skyrimspecialedition'; gameVersions = @('1.6.1170.0') }
-    mods = @(
-        [ordered]@{ name = 'Thornswood Content'; version = '1.2'; optional = $false; domainName = 'skyrimspecialedition'
-            source = [ordered]@{ type = 'nexus'; modId = 192001; fileId = 811029; md5 = 'ee881bf2a869d0810113a82ca1405445'; fileSize = 660022; logicalFilename = 'Thornswood Content'; updatePolicy = 'exact'; tag = 'QXsOYonzPMT' }
-            patches = [ordered]@{ 'Thornswood-Content.esp' = '023593E0' }; author = 'EvilPatrick06'; details = [ordered]@{ category = 'Miscellaneous'; type = '' }; phase = 0 },
-        [ordered]@{ name = 'Thornswood Client Runtime'; version = '1.0.0'; optional = $false; domainName = 'skyrimspecialedition'
-            source = [ordered]@{ type = 'nexus'; modId = 192762; fileId = 809366; md5 = 'c515679068f6563750b1ca1f9260031f'; fileSize = 148896610; logicalFilename = 'Thornswood Client Runtime'; updatePolicy = 'exact'; tag = 'Km2wtoJLmxn' }
-            author = 'EvilPatrick06'; details = [ordered]@{ category = 'Utilities'; type = '' }; phase = 0 },
-        [ordered]@{ name = ('A Fishing Mod, ' + $E + 'dition'); version = '1.0.0'; optional = $false; domainName = 'skyrimspecialedition'
-            source = [ordered]@{ type = 'nexus'; modId = 47618; fileId = 191234; md5 = 'fa1fe7613d21ab5826d4a3a3b258f14a'; fileSize = 1000; logicalFilename = 'Fishing In Skyrim'; updatePolicy = 'exact'; tag = 'abcDEF12345' }
-            author = 'Someone'; details = [ordered]@{ category = 'Gameplay'; type = '' }; phase = 0 },
-        [ordered]@{ name = 'A Hashed Mod'; version = '2.0'; optional = $true; domainName = 'skyrimspecialedition'
-            source = [ordered]@{ type = 'nexus'; modId = 1111; fileId = 2222; md5 = '00000000000000000000000000000001'; fileSize = 10; logicalFilename = 'Hashed'; updatePolicy = 'exact'; tag = 'zzz' }
-            hashes = @([ordered]@{ path = 'a.esp'; md5 = '00000000000000000000000000000002' }); author = 'Someone'; details = [ordered]@{ category = 'Gameplay'; type = '' }; phase = 1 }
-    )
-    modRules = @([ordered]@{ type = 'before'; reference = [ordered]@{ fileExpression = 'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil'; fileMD5 = 'ee881bf2a869d0810113a82ca1405445'; logicalFileName = 'Thornswood Content'; versionMatch = '1.2.0' }
-                           source = [ordered]@{ fileMD5 = 'fa1fe7613d21ab5826d4a3a3b258f14a'; logicalFileName = 'Fishing In Skyrim'; versionMatch = '1.0.0' } })
-    tools = @(); plugins = @(); pluginRules = [ordered]@{ plugins = @(); groups = @() }; collectionConfig = [ordered]@{ recommendNewProfile = $true; referenceTagScheme = 'v1' }
-}
-$cj = Join-Path $T 'fixture\collection.json'
-# Written by node, so the fixture is in the layout Vortex writes and the round trip is the real one.
-Put (Join-Path $T 'fixture-in.json') ($fixture | ConvertTo-Json -Depth 8)
-New-Item -ItemType Directory -Force -Path (Join-Path $T 'fixture\patches\Thornswood Content'), (Join-Path $T 'fixture\bundled') | Out-Null
-& $node.Source -e "const fs=require('fs');fs.writeFileSync(process.argv[2], JSON.stringify(JSON.parse(fs.readFileSync(process.argv[1],'utf8')), undefined, 2))" (Join-Path $T 'fixture-in.json') $cj
-Put (Join-Path $T 'fixture\patches\Thornswood Content\Thornswood-Content.esp.diff') 'BSDIFF40'
-
 # The mapping against the payload Vortex's toV3CollectionPayload makes of it.
 $sw = Join-Path $T 'swap-runtime.json'
 Put $sw ('[{"modId":"192762","fileId":"812346","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Thornswood Client Runtime"}]')
@@ -528,11 +546,8 @@ foreach ($case in @(
 # Issue #2979: a binary patch on the entry that installs a plugin, recorded
 # the way Vortex records one: the file's path in the mod and the CRC-32 of the
 # archive's copy, after the entry's source.
-$ptJson = Join-Path $T 'patch.json'
-Put $ptJson '[{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"},{"patch":true,"fileId":"811029","path":"Second.esp","crc":"DEADBEEF"}]'
-$o1 = Join-Path $T 'patch-collection.json'; $o2 = Join-Path $T 'patch-payload.json'
-$said = NodeSaid $js $cj $ptJson $o1 $o2
-Yes 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('A Fishing Mod, ' + $E + "dition`tpatch`t`tFishingInSkyrim.esp CRC-32 0A1B2C3D|Thornswood Content`tpatch`t`tSecond.esp CRC-32 DEADBEEF"))
+Test-CollectionPatchOutput
+$o1 = $patchCollection; $o2 = $patchPayload
 & $node.Source -e "(()=>{const fs=require('fs');const m=require(process.argv[4]);const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const f=b.mods[2],c=b.mods[0];if(Object.keys(f).join()!=='name,version,optional,domainName,source,patches,author,details,phase'){process.exitCode=2;return};if(Object.keys(f.patches).join()!=='FishingInSkyrim.esp'||f.patches['FishingInSkyrim.esp']!=='0A1B2C3D'){process.exitCode=3;return};if(Object.keys(c.patches).join()!=='Thornswood-Content.esp,Second.esp'||c.patches['Second.esp']!=='DEADBEEF'){process.exitCode=4;return};const pay=fs.readFileSync(process.argv[3],'utf8');delete f.patches;delete c.patches['Second.esp'];process.exitCode=JSON.stringify(a)===JSON.stringify(b)&&pay===JSON.stringify(m.payloadOf(a))?0:1})()" $cj $o1 $o2 $js
 Yes 'patches goes after the source as Vortex writes it, the payload does not change, and nothing else does' ($LASTEXITCODE -eq 0)
 foreach ($case in @(

@@ -426,7 +426,27 @@ try {
     $rc2 = $LASTEXITCODE
     $z1 = Join-Path $tmp 'g1/game.zip'; $z2 = Join-Path $tmp 'g2/game.zip'
     Yes 'Build-GameFiles.ps1 writes game.zip and game-files.json' ($rc1 -eq 0 -and $rc2 -eq 0 -and (Test-Path -LiteralPath $z1) -and (Test-Path -LiteralPath (Join-Path $tmp 'g1/game-files.json')))
-    Yes '  the same bytes when built twice, whatever the files'' times' ((Test-Path -LiteralPath $z2) -and (Sha $z1) -eq (Sha $z2) -and (Sha (Join-Path $tmp 'g1/game-files.json')) -eq (Sha (Join-Path $tmp 'g2/game-files.json')))
+    $sameGame = (Test-Path -LiteralPath $z2) -and (Sha $z1) -eq (Sha $z2) -and (Sha (Join-Path $tmp 'g1/game-files.json')) -eq (Sha (Join-Path $tmp 'g2/game-files.json'))
+    if (-not $sameGame) {
+        $j1 = Join-Path $tmp 'g1/game-files.json'; $j2 = Join-Path $tmp 'g2/game-files.json'
+        if ((Sha $j1) -ne (Sha $j2)) {
+            Write-Host "    game-files.json differs: g1 sha $(Sha $j1) vs g2 sha $(Sha $j2)"
+        }
+        if ((Test-Path -LiteralPath $z2) -and (Sha $z1) -ne (Sha $z2)) {
+            $b1 = [IO.File]::ReadAllBytes($z1); $b2 = [IO.File]::ReadAllBytes($z2)
+            $firstDiff = -1
+            $minLen = [Math]::Min($b1.Length, $b2.Length)
+            for ($idx = 0; $idx -lt $minLen; $idx++) {
+                if ($b1[$idx] -ne $b2[$idx]) { $firstDiff = $idx; break }
+            }
+            if ($firstDiff -ge 0) {
+                Write-Host ("    game.zip differs at byte {0} (0x{0:x}): 0x{1:x2} in g1 vs 0x{2:x2} in g2 (len {3} vs {4})" -f $firstDiff, $b1[$firstDiff], $b2[$firstDiff], $b1.Length, $b2.Length)
+            } else {
+                Write-Host ("    game.zip differs in length: {0} vs {1}" -f $b1.Length, $b2.Length)
+            }
+        }
+    }
+    Yes '  the same bytes when built twice, whatever the files'' times' $sameGame
     $list = [IO.File]::ReadAllText((Join-Path $tmp 'g1/game-files.json')) | ConvertFrom-Json
     $paths = @($list.files | ForEach-Object { $_.path })
     Yes '  the list is sorted by path, in forward slashes, with each file''s sha256' (($paths -join ',') -eq 'Data/Platform/Plugins/x.dll,Data/a.esp,Data/b.esp,skse64_loader.exe' -and

@@ -47,6 +47,9 @@
          on a plain `dotnet build` too, not only when Build-Launcher.ps1
          publishes. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Unused members fail the build (#4632): the rules are in
+         Unused.globalconfig, and the IDE ones only run in a build with this. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -111,4 +114,8 @@
     <XmlPoke XmlInputPath="$(ApplicationManifest)" Query="/asm:assembly/asm:assemblyIdentity/@version" Value="$(ThornswoodVersionFour)"
              Namespaces="&lt;Namespace Prefix='asm' Uri='urn:schemas-microsoft-com:asm.v1' /&gt;" />
   </Target>
+
+  <ItemGroup>
+    <GlobalAnalyzerConfigFiles Include="Unused.globalconfig" />
+  </ItemGroup>
 </Project>

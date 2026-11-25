@@ -1031,9 +1031,26 @@
     }
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
+    var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    if (!projected.changed) { return projected.needs; }
+    write(actorId, projected.needs);
+    projectionEffects(actorId, projected);
+    return projected.needs;
+  }
+
+  /*
+    Stage the existing elapsed-time calculation without saving needs or sending
+    effects. The supplied environment owns all outside reads: the ordinary
+    path retains its existing character migration and bard-cache behavior.
+    Callers preparing a staff change must supply read-only context instead.
+    Helpers are asked at their original points, including warmth after crashes.
+    The input stays untouched; event flags are delivered only after a save.
+  */
+  function projectNeeds(before, now, arriving, environment) {
+    var n = Object.assign({}, before);
     var away = now - n.at;
     var hours = (now - n.at) / 3600000;
-    if (hours <= 0) { return n; }
+    if (hours <= 0) { return { needs: n, changed: false }; }
     // A session that has been away for a week does not starve to death twice
     // over; the meters bottom out at 0 anyway, and this keeps the arithmetic
     // sane for anything that reads the difference.
@@ -1062,7 +1079,7 @@
 
     var restRate = NEEDS.drain.rest;
     if (n.worked && (now - n.worked) < NEEDS.workFor) {
-      restRate = restRate * workMultiplier(actorId);
+      restRate = restRate * environment.workMultiplier();
     }
     /*
       THE TIME AWAY GAINS NO REST (#1764). On an arrival n.resting is still
@@ -1074,7 +1091,7 @@
       may. The time away drains; the fill for the beds that give it is
       arrived(), below, and the beds' first sight of them gets them up.
     */
-    var gain = arriving ? 0 : restingGain(actorId, n);
+    var gain = arriving ? 0 : environment.restingGain(n);
     /*
       A DRUG HOLDS THE REST DRAIN AT ZERO while its window lasts (#1382), for
       the part of this stretch before drugUntil. Resting still gains.
@@ -1150,19 +1167,19 @@
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = warmthTarget(actorId, n);
+      var target = environment.warmthTarget(n);
       // Winter out under the sky cools a quarter faster (#3144), so its half
       // life is the cooling one cut by that share. Warming is left alone.
       var half = (target > n.temp)
         ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / outdoorCooling(n);
+        : NEEDS.settleMinutes / environment.outdoorCooling(n);
       var k = 1 - Math.pow(0.5, (hours * 60) / half);
       if (k > 1) { k = 1; }
       if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
-    var slept = arriving ? arrived(actorId, n, away) : '';
+    var slept = arriving ? arrived(n, away) : '';
     var hungBefore = n.hangoverUntil > now;
     /*
       DRUNK WEARS OFF INTO A HANGOVER (#3153). n.drunk is still what the last
@@ -1184,7 +1201,22 @@
     n.drugged = n.drugUntil > now;
 
     n.at = now;
-    write(actorId, n);
+    return { needs: n, changed: true, hungBefore: hungBefore,
+             hung: hung, pulled: pulled, slept: slept };
+  }
+
+  function projectionEnvironment(actorId) {
+    return {
+      workMultiplier: function () { return workMultiplier(actorId); },
+      restingGain: function (n) { return restingGain(actorId, n); },
+      warmthTarget: function (n) { return warmthTarget(actorId, n); },
+      outdoorCooling: outdoorCooling
+    };
+  }
+
+  function projectionEffects(actorId, projected) {
+    var hungBefore = projected.hungBefore, hung = projected.hung;
+    var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
@@ -1209,7 +1241,6 @@
       notify(actorId, slept);
       say(actorId, slept);
     }
-    return n;
   }
 
   /*
@@ -1568,10 +1599,9 @@
     2026: vanilla food's extra magic effects go, except temperature ones, so
     alchemy matters more. FOOD_GROUPS.strip says which groups lose them and
     which records keep them. The engine scales a record's effects as a whole
-    (EatItemEvent, eatItemScale), so a record whose temperature effect rides
-    with another effect is kept whole until the engine can drop one effect
-    and keep another. Hunger and thirst are this block's own numbers, not
-    record effects, and are not touched.
+    (EatItemEvent, eatItemScale). Thornswood-Last.esp removes the recovery
+    effects from the three foods that keep frost resistance (#4612).
+    Hunger and thirst come from this block's own numbers.
   */
   var stripIndex = null;
 
@@ -1886,6 +1916,10 @@
       // A cooked meal's help (#2682), only for a meal that went down: not
       // inside the 8 seconds, and not on a full stomach, where it sits badly.
       if (ate1.taken && !ate1.full) {
+        if (group === 'cooked' || group === 'soup' || group === 'feast') {
+          var college = g.__thornswoodCollege;
+          if (college && college.cookedMeal) { college.cookedMeal(actorId); }
+        }
         var help = mealHelpOf(baseId, group);
         // A fine dish's help lasts longer (#2906), and a feast's lasts half
         // as long as a meal's, fine or plain (#3152).
@@ -2987,7 +3021,7 @@
     caller, and that call was never written; the first commit of this
     repository already has it without one.
   */
-  function arrived(actorId, n, away) {
+  function arrived(n, away) {
     if (!(away >= NEEDS.sleptFor)) { return ''; }
     var row = awayRow(n.resting);
     var rest = Number(row.rest) || 0, food = Number(row.food) || 0, drink = Number(row.drink) || 0;
@@ -3583,12 +3617,45 @@
     and needs no launcher release.
   */
   var BURN_PROPERTY = 'thornswoodBurn';
+  var BURN_VISUAL_PROPERTY = 'thornswoodBurnVisual';
+  // Saved actor properties from an earlier process are not a current fire.
+  // The script and each report share this gamemode registration's token.
+  var burnEpoch = String(Date.now()) + ':' + String(Math.random());
+  var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
+  var burnIdentities = {}; // actorId -> profile, current runtime and life
+
+  function burnIdentity(actorId) {
+    try {
+      var state = mp.getNpcAIState(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!state || state.isConnected !== true || state.isDead || state.isDisabled ||
+          !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
+          typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
+      return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
+    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+  }
+
+  function publishBurnVisual(actorId, on) {
+    try {
+      mp.set(actorId, BURN_VISUAL_PROPERTY, { on: on, epoch: burnEpoch, seq: ++burnSequence });
+    } catch (e) { nlog('could not publish the fire visual for', actorId, e); }
+  }
+
+  function clearBurning(actorId) {
+    delete burning[actorId];
+    delete burnIdentities[actorId];
+    publishBurnVisual(actorId, false);
+  }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
-    if (on) { burning[actorId] = Date.now(); }
-    else { delete burning[actorId]; }
+    var identity = on ? burnIdentity(actorId) : '';
+    if (on && identity) {
+      burning[actorId] = Date.now();
+      burnIdentities[actorId] = identity;
+      publishBurnVisual(actorId, true);
+    } else { clearBurning(actorId); }
   }
 
   /** Tell one person's client to catch fire for a while. */
@@ -3608,8 +3675,10 @@
     for (var id in burning) {
       if (!Object.prototype.hasOwnProperty.call(burning, id)) { continue; }
       // A client that stops reporting has gone, crashed or stopped burning
-      // without saying so. Two of its own beats is enough to let go.
-      if (now - burning[id] > NEEDS.burn.every * 3) { delete burning[id]; continue; }
+      // without saying so. Three server beats without a report lets go.
+      if (now - burning[id] > NEEDS.burn.every * 3 || burnIdentity(Number(id)) !== burnIdentities[id]) {
+        clearBurning(Number(id)); continue;
+      }
       alight.push(Number(id));
     }
     if (!alight.length) { return; }
@@ -3679,6 +3748,61 @@
     ].join('\n');
   }
 
+  // This is only the observer's shader. The existing owner script/plugin
+  // continues to own ignition, damage and the report that drives spreading.
+  function burnVisualScript() {
+    return [
+      '(function(){',
+      '  var st = ctx.state;',
+      '  if (!st) { return; }',
+      '  try {',
+      '    var a = ctx.sp.Actor.from(ctx.refr);',
+      '    if (!a) { return; }',
+      '    var v = ctx.value, now = Date.now();',
+      '    var current = v && v.epoch === ' + JSON.stringify(burnEpoch) + ' && v.on === true && Number.isSafeInteger(v.seq);',
+      '    if (current && (st.thornswoodBurnVisualEpoch !== v.epoch || st.thornswoodBurnVisualSeq !== v.seq)) {',
+      '      if (st.thornswoodBurnVisualEpoch !== v.epoch) { st.thornswoodBurnVisualHidden = true; }',
+      '      st.thornswoodBurnVisualEpoch = v.epoch;',
+      '      st.thornswoodBurnVisualSeq = v.seq;',
+      '      st.thornswoodBurnVisualUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '    if (!current || ctx.get("isDead") || now >= (st.thornswoodBurnVisualUntil || 0)) {',
+      '      if (st.thornswoodBurnVisualShown) {',
+      '        var ended = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '        if (ended) { ended.stop(a); }',
+      '        st.thornswoodBurnVisualShown = false;',
+      '      }',
+      '      return;',
+      '    }',
+      '    if (!a.is3DLoaded()) { st.thornswoodBurnVisualHidden = true; return; }',
+      // Heartbeats extend receipt validity. They do not stack native Play calls.
+      // Replace only when the finite shader lease ends or the body reloads.
+      '    if (!st.thornswoodBurnVisualShown || st.thornswoodBurnVisualHidden || now >= (st.thornswoodBurnShaderUntil || 0)) {',
+      '      var shader = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '      if (!shader) { return; }',
+      '      if (st.thornswoodBurnVisualShown) { shader.stop(a); }',
+      '      shader.play(a, ' + (NEEDS.burn.every * 3 / 1000) + ');',
+      '      st.thornswoodBurnVisualShown = true;',
+      '      st.thornswoodBurnVisualHidden = false;',
+      '      st.thornswoodBurnShaderUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '  } catch (e) {',
+      '    if (!st.thornswoodBurnVisualError) {',
+      '      st.thornswoodBurnVisualError = true;',
+      '      ctx.sp.printConsole("[Thornswood] remote fire visual failed: " + String(e));',
+      '    }',
+      '  }',
+      '})();'
+    ].join('\n');
+  }
+
+  mp.makeProperty(BURN_VISUAL_PROPERTY, {
+    isVisibleByOwner: false,
+    isVisibleByNeighbors: true,
+    updateOwner: '',
+    updateNeighbor: burnVisualScript()
+  });
+
   try {
     mp.makeProperty(BURN_PROPERTY, {
       isVisibleByOwner: true,
@@ -3730,11 +3854,13 @@
     // How a cook comes out, and the records it can come out as (#2906).
     cookedAs: cookedAs, fineOf: fineOf, isFine: isFine, burntMeal: burntMeal,
     settle: settle, view: view, effects: effects,
+    // Stage a needs snapshot; saving and delivery remain the caller's job.
+    project: projectNeeds,
     // The bars as a line of text, for /needs (#2267).
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
     place: place, tooTiredToCraft: tooTiredToCraft, craftRefusal: craftRefusal,
-    setBurning: setBurning, catchFire: catchFire,
+    setBurning: setBurning, catchFire: catchFire, clearBurning: clearBurning,
     fresh: fresh, clamp: clamp,
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,

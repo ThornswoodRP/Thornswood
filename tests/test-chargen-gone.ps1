@@ -294,7 +294,7 @@ $lifted = [ordered]@{
     'OwnGame.UiHashedName'     = Get-CsLine $og '(?m)^\s*static readonly Regex UiHashedName = [^\r\n]*;'
     'OwnGame.uiHashedOursField' = Get-CsLine $og '(?m)^\s*static HashSet<string> uiHashedOurs;'
     'OwnGame.uiHashedWalkRoot' = Get-CsLine $og '(?m)^\s*static string uiHashedWalkRoot = [^\r\n]*;'
-    'OwnGame.uiGoneRecordText' = Get-CsLine $og '(?m)^\s*static string uiGoneRecordText;'
+    'OwnGame.uiGoneRecordText' = Get-CsLine $og '(?m)^\s*static string uiGoneRecordText = null;'
     'OwnGame.uiGoneLeaves'     = Get-CsLine $og '(?m)^\s*static HashSet<string> uiGoneLeaves;'
     'OwnGame.uiGoneHashes'     = Get-CsLine $og '(?m)^\s*static HashSet<string> uiGoneHashes;'
     'OwnGame.ReadUiGoneRecord' = Get-CsMember $og 'static string ReadUiGoneRecord()'
