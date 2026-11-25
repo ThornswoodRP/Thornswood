@@ -538,6 +538,7 @@ function pluginReport(text) {
    and nothing else. */
 function commandLogText(me, text, press) {
   if (/^\/board-unpin-v1(?:\s|$)/i.test(text)) return '/board-unpin-v1 [private board action]';
+  if (/^\/party-action-v1(?:\s|$)/i.test(text)) return '/party-action-v1 [private party action]';
   if (/^\/journal-write-v1(?:\s|$)/i.test(text)) return '/journal-write-v1 [private page]';
   if (/^\/letter-post-v1(?:\s|$)/i.test(text)) return '/letter-post-v1 [sealed letter]';
   if (press === true && pluginReport(text)) return '';
@@ -3133,6 +3134,12 @@ server.on('upgrade', (req, socket, head) => {
           (/^\/board-unpin-v1(?:\s|$)/i.test(rawCommand) && rawCommand.length > COMMAND_CHARS)) {
         ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
           text:'That board request is invalid or too long. It was not sent; review the current board.'});
+        return;
+      }
+      if (/^\s+\/party-action-v1(?:\s|$)/i.test(rawCommand) ||
+          (/^\/party-action-v1(?:\s|$)/i.test(rawCommand) && rawCommand.length > COMMAND_CHARS)) {
+        ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
+          text:'That party request is invalid or too long. It was not sent; review the party again.'});
         return;
       }
       const exactJournal = /^\/journal-write-v1(?: |$)/.test(rawCommand);

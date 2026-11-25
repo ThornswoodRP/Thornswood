@@ -359,6 +359,7 @@ if (social && trade && commands) {
   }
   const sent = [];
   const window = {
+    listeners: {}, addEventListener: function (type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     thornswoodNet: { say: function (line) { sent.push(line); return true; } },
     skyrimPlatform: { sendMessage: function () { } }
   };

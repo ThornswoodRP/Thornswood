@@ -748,6 +748,17 @@
   var inParty = {};      // pid -> partyId
   var nextParty = 1;
 
+  // Public only to party owners. These bind an intent, never grant authority.
+  // Retire the UI capability on entropy failure; ordinary party play continues.
+  function rotatePartyIntent(p, creating) {
+    p.intentVersion = '';
+    try {
+      var crypto = require('crypto');
+      if (creating) p.intentId = crypto.randomBytes(24).toString('hex');
+      p.intentVersion = crypto.randomBytes(24).toString('hex');
+    } catch (e) { slog('party confirmation is unavailable'); }
+  }
+
   function partyOf(pid) {
     var id = inParty[pid];
     if (!id) { return null; }
@@ -761,12 +772,14 @@
     if (!p) {
       var id = 'p' + (nextParty++);
       p = { leader: leaderPid, members: [leaderPid], at: Date.now() };
+      rotatePartyIntent(p, true);
       parties[id] = p;
       inParty[leaderPid] = id;
     }
     if (p.members.length >= SOCIAL.mostParty) { return 'That party is full.'; }
     if (p.members.indexOf(pid) !== -1) { return 'They are already with you.'; }
     leaveParty(pid);
+    rotatePartyIntent(p, false);
     p.members.push(pid);
     inParty[pid] = inParty[leaderPid];
     return '';
@@ -777,6 +790,7 @@
     if (!p) { return false; }
     var id = inParty[pid];
     var at = p.members.indexOf(pid);
+    rotatePartyIntent(p, false);
     if (at !== -1) { p.members.splice(at, 1); }
     delete inParty[pid];
     if (p.leader === pid) { p.leader = p.members[0] || 0; }
@@ -836,6 +850,7 @@
     if (p.leader !== leaderPid) { return 'Only the leader can do that.'; }
     if (p.members.indexOf(whoPid) === -1) { return 'They are not in your party.'; }
     if (p.leader === whoPid) { return 'They already lead this party.'; }
+    rotatePartyIntent(p, false);
     p.leader = whoPid;
     pushMembers(p.members.slice());
     return '';
@@ -851,6 +866,23 @@
     delete parties[id];
     pushMembers(left);
     return '';
+  }
+
+  function partyIntent(p) {
+    return p && /^[a-f0-9]{48}$/.test(p.intentId || '') && /^[a-f0-9]{48}$/.test(p.intentVersion || '')
+      ? { id: p.intentId, version: p.intentVersion } : null;
+  }
+
+  function confirmPartyAction(pid, action, id, version, whoPid) {
+    var p = partyOf(pid);
+    var current = partyIntent(p);
+    if (!current || current.id !== id || current.version !== version) {
+      return 'The party changed. Review the current party and press again.';
+    }
+    // The canonical operations still enforce leader and exact membership.
+    if (action === 'disband') return disbandParty(pid);
+    if (action === 'kick') return kickParty(pid, whoPid);
+    return 'That party action is not available.';
   }
 
   /*
@@ -1222,6 +1254,7 @@
       journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
+      partyIntent: partyIntent(p),
       near: near,
       hidden: hidden,
       together: partyNear(actorId),
@@ -1394,6 +1427,7 @@
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
+    confirmPartyAction: confirmPartyAction,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
     newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,

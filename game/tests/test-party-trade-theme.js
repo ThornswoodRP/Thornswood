@@ -70,7 +70,12 @@ function unesc(s) {
 function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', style: {},
-    id: '', className: '', textContent: '', value: '', onclick: null, oninput: null,
+    id: '', className: '', textContent: '', value: '', onclick: null, oninput: null, listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
+    contains(target) { return target === this || this.kids.concat(this.children).some(c => c.contains(target)); },
+    setAttribute(k, v) { this.attrs[k] = String(v); },
+    removeAttribute(k) { delete this.attrs[k]; },
+    hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     focus() { },
@@ -347,14 +352,14 @@ const P = rules(party.css);
   yes('the party window loads and says it is ready', !!party.win.thornswoodParty &&
       party.told.indexOf('thornswood-front party:ready') >= 0);
   party.win.thornswoodParty.setData({
-    me: 'p1',
+    me: 1000,
     offer: { kind: 'party', name: 'Ingrid' },
     party: [{ name: 'Aldric', me: true, on: true, leader: true }, { name: 'Sera', on: true }, { name: 'Bjorn', on: false }],
     together: 1, bonus: 10,
     friends: [
       { name: 'Sera', on: true, party: true },
       { name: 'Bjorn', on: true },
-      { name: 'Hilde', on: false, muted: true }
+      { p: 1003, name: 'Hilde', on: false, muted: true }
     ]
   });
   party.win.thornswoodParty.open();
@@ -389,7 +394,10 @@ const P = rules(party.css);
   yes('Leave sends /party leave', press('leave') === '/party leave');
   yes('Ask to party names the friend', press('ask', 'Bjorn') === '/party Bjorn');
   yes('Mute names the friend', press('mute', 'Sera') === '/mute Sera');
-  yes('Remove names the friend', press('drop', 'Hilde') === '/friend remove Hilde');
+  const beforeRemove = party.sent.length;
+  press('drop', '1003');
+  yes('Remove waits for a second press naming the exact friend', party.sent.length === beforeRemove);
+  yes('Remove uses the exact friend profile after confirmation', press('drop', '1003') === '/friend remove 1003');
   yes('a friend who is already in the party has no Ask button', !body.querySelectorAll('button[data-do]').some(function (x) {
     return x.getAttribute('data-do') === 'ask' && x.getAttribute('data-who') === 'Sera';
   }));

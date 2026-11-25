@@ -205,7 +205,7 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // are the J panel's lines, never typed (#1630). /hidename too,
                // which the P panel's Name buttons send and which was missing
                // here, so it ran before the character was in the world (#1628).
-               '/friend', '/party', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
+               '/friend', '/party', '/party-action-v1', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
                // Contracts between people (#4561): K's Contracts section
                // sends them. Never typed, so not in PLAYER_WORDS.
                '/contract',

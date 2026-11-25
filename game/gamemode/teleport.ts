@@ -1037,6 +1037,22 @@
       return false;
     }
 
+    if (word === '/party-action-v1') {
+      if (!needCharacter()) return;
+      var partyApi = g.__thornswoodSocial;
+      var partyLine = typeof cmd.text === 'string' ? cmd.text : '';
+      var partyMatch = /^\/party-action-v1 (disband|kick) ([a-f0-9]{48}) ([a-f0-9]{48})(?: ([1-9][0-9]{0,15}))?$/.exec(partyLine);
+      var partyTarget = partyMatch && partyMatch[4] ? Number(partyMatch[4]) : 0;
+      var partyValid = partyMatch && partyMatch[0] === partyLine && (partyMatch[1] === 'kick'
+        ? Number.isSafeInteger(partyTarget) && partyTarget > 0 : !partyMatch[4]);
+      var partyAnswer = !partyValid ? 'That party request is invalid. Review the party and press again.'
+        : !partyApi ? 'Party actions are not available right now.'
+        : partyApi.confirmPartyAction(partyApi.profileOf(actorId), partyMatch[1], partyMatch[2], partyMatch[3], partyTarget);
+      toProfile(profileId, partyAnswer || (partyMatch[1] === 'kick' ? 'They left the party.' : 'The party is ended.'));
+      if (partyApi) partyApi.push(actorId, true);
+      return;
+    }
+
     if (word === '/journal-write-v1') {
       // Exact JSON strings, including leading/trailing whitespace and literal
       // backslashes. Nothing here passes through the legacy title/body codec.
