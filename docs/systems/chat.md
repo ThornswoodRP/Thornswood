@@ -96,10 +96,10 @@ It is not this text.
 
 ## Where this is
 
-`/ooc` is local, 4000 units, same cell, in the server. `/roll` is
+`/ooc` is local, 4000 units, same cell, in the voice service. `/roll` is
 rolled in the server and goes to the same people. `/me`, `/do`,
-`/w`, and `/s` are local too, whether or not the plain-line switch is
-on. They are not sent on to the game server.
+`/w`, `/s`, and `/ooc` are local, whether or not the plain-line switch is
+on. They are kept by the voice service and not sent on to the game server.
 
 Plain speech in the box is local on both servers: the same cell,
 4000 units, the same reach as the line above the head.

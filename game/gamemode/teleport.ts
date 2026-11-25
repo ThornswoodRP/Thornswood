@@ -2008,6 +2008,8 @@
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {

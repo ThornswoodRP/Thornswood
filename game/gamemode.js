@@ -46293,6 +46293,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -61783,7 +61785,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
