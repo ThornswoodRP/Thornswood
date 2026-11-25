@@ -13,8 +13,10 @@
 
     -Out      one JUnit file with every share's suites, in the order given;
     -Summary  Markdown for the run's summary page: how many checks ran, how
-              many failed and were skipped, and each failed test under a
-              heading of its own, with its FAIL lines, the end of what it
+              many failed and were skipped, how many harnesses failed,
+              passed, passed with parts skipped and ran nothing but skips,
+              each harness that skipped listed apart with its SKIP lines
+              (#4197), and each failed test under a heading of its own, with its FAIL lines, the end of what it
               printed when it had no FAIL line, and the command that runs it
               alone (#4178), so a red run says what failed and how to see it
               fail without anybody opening a log. $env:GITHUB_STEP_SUMMARY
@@ -97,19 +99,33 @@ $all = 0; $bad = 0; $skip = 0
 # that is the runner's own (a harness that ended with no FAIL line) carries
 # the end of what the harness printed as its failure's text.
 $byHarness = [ordered]@{}
+# A harness that did not fail but skipped (#4197): one that printed nothing
+# but SKIP or NOT RUN lines checked nothing here, and one that passed with
+# some skipped a part. Each ends 0, so without these lists the summary
+# counted it with the passed ones.
+$onlySkipped = [ordered]@{}
+$partSkipped = [ordered]@{}
+$passedWhole = 0
 foreach ($s in $suites) {
+    $h = $s.GetAttribute('name')
+    $ran = 0; $failedHere = 0
+    $skippedHere = New-Object System.Collections.Generic.List[string]
     foreach ($c in $s.SelectNodes('testcase')) {
         $all++
         $f = $c.SelectSingleNode('failure')
         if ($f) {
-            $bad++
-            $h = $s.GetAttribute('name')
+            $bad++; $failedHere++
             $x = [pscustomobject]@{ Harness = $h; What = $c.GetAttribute('name'); Tail = ([string]$f.InnerText).Trim() }
             if (-not $byHarness.Contains($h)) { $byHarness[$h] = New-Object System.Collections.Generic.List[object] }
             $byHarness[$h].Add($x)
         }
-        elseif ($c.SelectSingleNode('skipped')) { $skip++ }
+        elseif ($c.SelectSingleNode('skipped')) { $skip++; $skippedHere.Add($c.GetAttribute('name')) }
+        else { $ran++ }
     }
+    if ($failedHere) { continue }
+    if ($skippedHere.Count -and -not $ran) { $onlySkipped[$h] = $skippedHere }
+    elseif ($skippedHere.Count) { $partSkipped[$h] = $skippedHere }
+    else { $passedWhole++ }
 }
 
 if ($Out) {
@@ -196,6 +212,27 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine('## ' + $Title)
 [void]$md.AppendLine('')
 [void]$md.AppendLine(('{0} checks in {1} harnesses: {2} failed, {3} skipped.' -f $all, $suites.Count, $bad, $skip))
+[void]$md.AppendLine('')
+[void]$md.AppendLine(('{0} harnesses: {1} failed, {2} passed, {3} passed with parts skipped, {4} ran nothing but skips.' -f $suites.Count, $byHarness.Count, $passedWhole, $partSkipped.Count, $onlySkipped.Count))
+# Skipped is not passed (#4197): each harness that skipped, by name, with
+# the lines it skipped, so a part nobody runs is seen every night.
+function Skipped-List($heading, $which) {
+    if (-not $which.Count) { return '' }
+    $b = New-Object System.Text.StringBuilder
+    [void]$b.AppendLine('')
+    [void]$b.AppendLine('### ' + $heading)
+    [void]$b.AppendLine('')
+    foreach ($h in $which.Keys) {
+        [void]$b.AppendLine('`' + $h + '`')
+        [void]$b.AppendLine('')
+        [void]$b.Append((Block @($which[$h] | Select-Object -First 10 | ForEach-Object { 'SKIP  ' + (Clip $_) })))
+        if ($which[$h].Count -gt 10) { [void]$b.AppendLine(('{0} more skipped line(s) are in the merged report.' -f ($which[$h].Count - 10))) }
+        [void]$b.AppendLine('')
+    }
+    return $b.ToString()
+}
+[void]$md.Append((Skipped-List 'Ran nothing but skips' $onlySkipped))
+[void]$md.Append((Skipped-List 'Passed, with parts skipped' $partSkipped))
 foreach ($p in $problems) { [void]$md.AppendLine(''); [void]$md.AppendLine('**' + (Cell $p) + '.**') }
 if ($list) {
     [void]$md.AppendLine('')

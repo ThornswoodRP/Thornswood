@@ -61,7 +61,9 @@ yes('a channel name such as #lore or #test-findings is not a number',
     C.not_public('The full history is in #lore, and bugs go in #test-findings.') == [])
 
 # Planted, in memory only: the file is never written.
-draft = C.DRAFTS[0]
+draft = 'DEVRULES'
+saved_drafts = C.DRAFTS
+C.DRAFTS = saved_drafts + (draft,)
 saved_doc, saved_lines = C.DOCS[draft], C.CHANGES.get(draft)
 try:
     C.DOCS[draft] = saved_doc + '\nAsk Patrick.'
@@ -70,6 +72,7 @@ try:
     yes('but a draft\'s change lines are',
         [w for _k, where, w, _ in C.unpublic([draft])] == ['an issue or pull request number'])
 finally:
+    C.DRAFTS = saved_drafts
     C.DOCS[draft] = saved_doc
     if saved_lines is None:
         C.CHANGES.pop(draft, None)

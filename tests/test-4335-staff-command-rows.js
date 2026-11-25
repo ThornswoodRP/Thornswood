@@ -74,4 +74,4 @@ const evictRow = guideRows.find((r) => /`\/evict/.test(r[0])) || [];
 yes('the guide\'s /evict row says staff may use it at any building', /any building/.test(evictRow.join(' ')));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

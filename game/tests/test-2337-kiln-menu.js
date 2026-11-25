@@ -45,7 +45,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function take(start, end) {
   const i = src.indexOf(start);
@@ -72,7 +72,7 @@ const handlerEnd = handlerAt < 0 ? -1 : src.indexOf('\n});\n', handlerAt);
 const handler = (handlerAt >= 0 && handlerEnd >= 0)
   ? src.slice(handlerAt + "mp.onActivate = guard('onActivate', ".length, handlerEnd + 2) : null;
 yes('onActivate is in the gamemode', !!handler);
-if (!handler || !STATIONS) { done(); }
+if (!handler || !STATIONS) { done(); } else {
 
 // The old kiln, when the file under test still has it, so GM=<old file> runs
 // the press as it was and this harness says what it did.
@@ -235,7 +235,7 @@ const GATE_PARTS = [
 ];
 const gateOk = RULES && CHARACTER && GATE_PARTS.every(function (p) { return p !== null; });
 yes('the rules, the character store and the craft gate are in the gamemode', !!gateOk);
-if (!gateOk) { done(); }
+if (!gateOk) { done(); } else {
 
 const store = {};
 const mp2 = {
@@ -286,3 +286,4 @@ yes('but not Coke, which is master work, so the grade still follows the rank',
 yes('a novice woodwright may make the Splint at the kiln', may(WRIGHT, '154c5:Thornswood-Content.esp'));
 
 done();
+}}

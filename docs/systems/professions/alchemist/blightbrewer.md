@@ -22,8 +22,7 @@ A poison that would kill a person is [Death](../../death.md).
 You cannot use a cookpot, a forge, or an enchanter's table on the
 strength of this half.
 
-You cannot name a poison the server does not have a row for and have
-it counted as a recipe. There are zero alchemy recipes in the table.
+A poison mixed from shared effects is a brew, not a fixed recipe in the book.
 
 Master Chemist, at master, is two bottles from one batch.
 

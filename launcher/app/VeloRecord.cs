@@ -204,7 +204,7 @@ namespace Thornswood
             string said;
             Manifest m;
             try { m = Get(a.Version, out said); }
-            catch (Exception ex) { return "could not be held to its release record: " + ex.Message; }
+            catch (Exception ex) { return "could not be held to its release record: " + Failure.Why("VeloRecord", ex); }
             PartFile f = m.File(PartOf("dev"), a.FileName) ?? m.File(PartOf("main"), a.FileName);
             if (f == null)
                 return "is not among the Velopack files the signed release record of " + m.Tag + " lists.";
@@ -230,6 +230,30 @@ namespace Thornswood
             if (!string.Equals(list.Commit, m.Commit, StringComparison.OrdinalIgnoreCase))
                 throw new Exception("game-files.json of " + m.Tag + " was built from " + list.Commit + ", and the release from " + m.Commit + ".");
             return list;
+        }
+
+        /// <summary>
+        /// The collection's Wabbajack modlist the Release <paramref name="m"/>
+        /// records (its part "modlist", #6244), written to
+        /// <paramref name="file"/> once it is held to the sha256 and size the
+        /// signed record gives it. Throws with the reason, writing nothing.
+        /// </summary>
+        public static void Modlist(Manifest m, string file)
+        {
+            const string name = "collection-modlist.wabbajack";
+            PartFile f = m.File("modlist", name);
+            if (f == null) throw new Exception("The release record of " + m.Tag + " lists no " + name + ", so this Release has no modlist to install the mods from.");
+            byte[] raw = Fetch(m.Tag, name);
+            if (raw.LongLength != f.Size || !string.Equals(Sha256(raw), f.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new Exception(name + " of " + m.Tag + " is not the one its signed release record lists.");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file)));
+            string part = file + ".part";
+            try
+            {
+                File.WriteAllBytes(part, raw);
+                File.Move(part, file, true);
+            }
+            finally { if (File.Exists(part)) File.Delete(part); }
         }
 
         /// <summary>

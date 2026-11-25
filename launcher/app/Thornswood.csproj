@@ -50,9 +50,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
     <!-- Avalonia brings Avalonia.BuildServices, whose only part is a build
          step that starts a process to send Avalonia statistics about each
          build. Nothing of it is used: the launcher sends nothing nobody asked
@@ -62,10 +62,10 @@
          names. -->
     <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
     <!-- The menu theme's MP3 decoder (MenuMusic.cs), MIT, THIRD-PARTY.md. -->
-    <PackageReference Include="NLayer" Version="3.0.0" />
+    <PackageReference Include="NLayer" Version="3.0.1" />
     <!-- DPAPI for the keys the launcher keeps on this PC (Secrets.cs); on
          .NET Framework ProtectedData was part of the framework. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
     <!-- Voice without a browser (#4823, Voice*.cs). Opus in C# (Concentus,
          BSD-3-Clause), and DTLS-SRTP (SharpSRTP, MIT) on BouncyCastle (MIT).
          All three rooted whole in a Native AOT publish give no trim or AOT

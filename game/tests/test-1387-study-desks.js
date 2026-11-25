@@ -76,4 +76,4 @@ yes('mp.onActivate asks the college block about every press, says its line and e
   /if \(deskLine !== null\) \{\s*notify\(casterRefrId, deskLine\);\s*say\(casterRefrId, deskLine\);\s*return false;/.test(gm));
 
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

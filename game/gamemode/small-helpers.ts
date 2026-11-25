@@ -228,14 +228,17 @@ let voicePortCached = 0;
 function voicePort() {
   if (voicePortCached) { return voicePortCached; }
   let n = 0;
+  let fallback = 7778;
   try {
-    n = Number(JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8')).thornswoodVoicePort) || 0;
+    const cfg = JSON.parse(require('fs').readFileSync('server-settings.json', 'utf8'));
+    if (cfg.thornswoodServer === 'dev') { fallback = 7789; }
+    n = Number(cfg.thornswoodVoicePort) || 0;
   } catch (e) {
     n = 0;
   }
-  // Anything absent or nonsensical falls back to the live port, which is what
-  // every deployment did before this existed.
-  voicePortCached = (n > 0 && n < 65536) ? n : 7778;
+  // Keep Dev traffic on Dev even when its configured port is invalid. Without
+  // an explicit Dev identity, retain the existing live-port default.
+  voicePortCached = (Number.isInteger(n) && n > 0 && n < 65536) ? n : fallback;
   if (voicePortCached !== 7778) {
     log('voice service port is ' + voicePortCached + ', from server-settings.json');
   }
@@ -437,29 +440,30 @@ function idOf(descriptor) {
 }
 
 /**
- * Try to put a line on somebody's screen. Debug.Notification is implemented on
- * the server, but it finds its target actor through the Papyrus stack, which is
- * empty when the call starts here rather than in a game event. So this may well
- * do nothing, and nothing is allowed to depend on it: the log line below is the
- * one that is guaranteed.
+ * The log's copy of a line said to somebody. say() below is what puts it on
+ * their screen, and every caller sends both.
+ *
+ * This used to call Debug.Notification too. The server's native finds its
+ * actor through the Papyrus stack, which is empty when the call starts here,
+ * so it never reached a screen and the engine logged "Native
+ * Debug.Notification errored with Invalid stackId was passed to
+ * GetDefaultActor (0)" for every line (eight on the live server on 15 Nov
+ * 2026). Worse, seven callers sent the line through this alone and never
+ * through say(), so nobody saw them: the crafting time at a bench, the
+ * profession said at login, and the answers at mammoth carcasses, quest
+ * retrieval spots, quest fishing waters, geodes and crimson nirnroot.
  */
 function notify(actorId, text) {
   log('say', actorId.toString(16), text);
-  try {
-    mp.callPapyrusFunction('global', 'Debug', 'Notification', null, [text]);
-  } catch (e) {
-    // no stack actor, or the class is not registered. expected; ignore.
-  }
 }
 
 /**
  * A line in somebody's chat.
  *
- * notify() above goes through Debug.Notification, which resolves its target
- * through the Papyrus stack and therefore does nothing when the call starts
- * here. This is the one that works: the voice service is holding everybody's
- * chat socket already, so the line is posted to it over loopback and it puts
- * it on the right screen.
+ * notify() above only writes the log's copy. This is the one that reaches
+ * the person: the voice service is holding everybody's chat socket already,
+ * so the line is posted to it over loopback and it puts it on the right
+ * screen.
  */
 function say(actorId, text) {
   var pid = 0;

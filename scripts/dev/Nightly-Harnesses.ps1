@@ -128,7 +128,8 @@
   Which share to run, from 1.
 
 .PARAMETER Of
-  How many shares there are. nightly.yml passes the length of its matrix.
+  How many shares there are. nightly.yml types the number into its -Of and
+  job name to match its shard list (#4298).
 
 .PARAMETER BudgetSeconds
   How long this may take in all. A harness starts only when the time used so
@@ -169,8 +170,8 @@
   test points it at a copy.
 
 .PARAMETER OutDir
-  Where each harness's output is kept while it runs. harness-out under the
-  runner's temp folder, or under TEMP off a runner.
+  Where each harness's output is kept while it runs. harness-out-<share>
+  under the runner's temp folder, or under TEMP off a runner.
 
 .PARAMETER Report
   A JUnit file to write when the run ends: a test case for each check every
@@ -492,6 +493,17 @@ $FAIL_LINE_CHARS = 300
 # is the only part of a failed run a Bot can read, so up to this many of
 # those lines go with each FAIL line shown.
 $FAIL_REASON_LINES = 8
+# A child process that dies prints how, and then the harness prints a FAIL
+# line about what it did not get (#5752): exit 139 on Linux share 2 of
+# 4 for #5781, where the FAIL lines alone said only that a child was gone.
+# So up to DEATH_LINES of the lines the runtime or the OS write as a
+# process dies go in after the FAIL lines: .NET's "Unhandled exception.",
+# "Process terminated." (a fail fast), "Fatal error." and "Stack
+# overflow.", and a shell's "Segmentation fault" and "Aborted", with
+# "(core dumped)" or without. Only what the harness printed: a child's
+# output that the harness kept to itself is not here to carry.
+$DEATH_LINES = 5
+$DEATH_SAYS = '^(Unhandled exception\.|Process terminated\.|Fatal error\.|Stack overflow\.|Aborted\b)|Segmentation fault|\(core dumped\)'
 function Get-FailSaid([string]$printed) {
     $raw = @($printed -split "`r?`n")
     $lines = @($raw | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -517,13 +529,30 @@ function Get-FailSaid([string]$printed) {
     }
     $more = $fails.Count - $FAIL_LINES
     $show = New-Object System.Collections.Generic.List[string]
+    $shown = New-Object System.Collections.Generic.List[string]
     foreach ($f in @($fails | Select-Object -First $FAIL_LINES)) {
-        $show.Add((& $cut $f.Line))
-        foreach ($w in @($f.Why | Select-Object -First $FAIL_REASON_LINES)) { $show.Add('    ' + (& $cut $w)) }
+        $show.Add((& $cut $f.Line)); $shown.Add($f.Line)
+        foreach ($w in @($f.Why | Select-Object -First $FAIL_REASON_LINES)) { $show.Add('    ' + (& $cut $w)); $shown.Add($w) }
         $over = $f.Why.Count - $FAIL_REASON_LINES
         if ($over -gt 0) { $show.Add(('    and {0} more line(s) under it, in the job log' -f $over)) }
     }
     if ($more -gt 0) { $show.Add(('and {0} more FAIL line(s), in the job log' -f $more)) }
+    # A header that ends at its full stop (.NET 10 prints "Process
+    # terminated." and the fail fast's message on the next line, measured on
+    # #5785's Linux share) takes that next line with it, unless it is a line
+    # of the stack or a harness's own.
+    $deaths = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $d = $lines[$i]
+        if ($d -cnotmatch $DEATH_SAYS -or $shown -ccontains $d) { continue }
+        if ($d -cmatch '^(Unhandled exception|Process terminated|Fatal error)\.$' -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -cnotmatch '^(at |FAIL\b|PASS\b|SKIP\b|NOT RUN\b)') { $d += ' ' + $lines[$i + 1] }
+        if (-not $deaths.Contains($d)) { $deaths.Add($d) }
+    }
+    if ($deaths.Count) {
+        $show.Add('and what it printed of a process dying')
+        foreach ($d in @($deaths | Select-Object -First $DEATH_LINES)) { $show.Add((& $cut $d)) }
+        if ($deaths.Count -gt $DEATH_LINES) { $show.Add(('and {0} more such line(s), in the job log' -f ($deaths.Count - $DEATH_LINES))) }
+    }
     $text = ': ' + $head + "`n" + ($show -join "`n")
     return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
 }

@@ -45,7 +45,7 @@
 // the load order being unusual.
 const fs = require('fs');
 const path = require('path');
-const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const { pluginPath, loadedOrder, loadOrderName } = require('./OwnPlugins.js');
 const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
@@ -306,6 +306,7 @@ function records(b, start, end, pass, mast, self, wantType) {
 }
 
 const order = loadedOrder(PLUGINS_TXT, DATA);
+if (!order) return;
 let parsed = 0;
 
 /*
@@ -386,8 +387,7 @@ if (process.exitCode === 1) {
   install();
   fs.writeFileSync(OUT, JSON.stringify({
     builtBy: 'scripts\\dev\\Build-WarmthTable.js',
-    builtAt: new Date().toISOString(),
-    source: 'the ARMO records of ' + parsed + ' plugins in load order, and the ' +
+    source: 'the ARMO records of ' + loadOrderName(order) + ', and the ' +
             'KYWD records their keywords point at',
     readFrom: 'BOD2 for what it covers, KWDA for the material, DATA for the weight',
     note: 'what a material is WORTH is balance and lives in NEEDS.wear in gamemode.js',

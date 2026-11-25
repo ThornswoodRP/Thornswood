@@ -252,8 +252,6 @@ function done() {
   setTimeout(() => {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
   }, 300).unref();
-  // Whatever is still closing underneath, the counts are already out.
-  setTimeout(() => process.exit(process.exitCode), 3000).unref();
 }
 
 (async () => {

@@ -35,6 +35,8 @@ sealed class FakeGitHub : HttpMessageHandler
     /// answered, with that environment: a test holds one environment's pass
     /// here to stand for an apply that takes a long time.</summary>
     public Func<string, Task>? BeforeDeployments { get; set; }
+    /// <summary>The repository's files at a commit, by "path@commit" (#6209).</summary>
+    public readonly Dictionary<string, byte[]> Contents = new();
     /// <summary>What a compare of two commits names; null answers 404.</summary>
     public List<string>? Changed { get; set; } = new();
     public readonly List<string> Compared = new();
@@ -191,6 +193,14 @@ sealed class FakeGitHub : HttpMessageHandler
                 var aid = long.Parse(p["/repos/O/R/releases/assets/".Length..]);
                 Downloaded.Add(Names[aid]);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Files[aid]) };
+            }
+            const string cn = "/repos/O/R/contents/";
+            if (r.Method == HttpMethod.Get && p.StartsWith(cn))
+            {
+                if (r.Headers.Accept.ToString() != "application/vnd.github.raw") return new HttpResponseMessage(HttpStatusCode.UnsupportedMediaType);
+                return Contents.TryGetValue(Uri.UnescapeDataString(p[cn.Length..]) + "@" + q["ref"], out var cb)
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(cb) }
+                    : Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
             }
             const string cp = "/repos/O/R/compare/";
             if (p.StartsWith(cp))
@@ -1672,7 +1682,8 @@ public sealed partial class AgentTests : IDisposable
 
     [Theory]
     [InlineData("records/collection-plugins.json")]
-    [InlineData("game/data/last-plugin.json")]
+    [InlineData("records/load-order.json")]
+    [InlineData("records/collection.json")]
     [InlineData(null)]
     public async Task ARecordChangeMovesTheOrderAndAMoveThatFailsFailsTheDeploymentAndIsTriedByTheNext(string? changed)
     {
@@ -2032,6 +2043,12 @@ public sealed partial class AgentTests : IDisposable
     /// archive, a world and a private folder that must never be copied.</summary>
     (Agent a, FakeGitHub gh, FakeServer s, BotPass bp) MakeWithPass(Func<BotPass, string?> work)
     {
+        var (a, gh, s, bp, _) = MakeWithPassAndConfig(work);
+        return (a, gh, s, bp);
+    }
+
+    (Agent a, FakeGitHub gh, FakeServer s, BotPass bp, Config cfg) MakeWithPassAndConfig(Func<BotPass, string?> work)
+    {
         var (a, gh, s, server, cfg) = Make();
         var env = cfg.Environments["dev"];
         env.BotPassRoot = Temp();
@@ -2063,7 +2080,7 @@ public sealed partial class AgentTests : IDisposable
         var bp = made = new BotPass(env, tasks) { Tick = TimeSpan.FromMilliseconds(20), InUse = () => (new() { 7900 }, new() { 7904 }) };
         a.Tasks = tasks;
         a.MakeBotPass = _ => bp;
-        return (a, gh, s, bp);
+        return (a, gh, s, bp, cfg);
     }
 
     static string? WriteResult(BotPass bp, bool ok, string failAt = "")

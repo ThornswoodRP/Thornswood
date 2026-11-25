@@ -79,4 +79,4 @@ yes("both Where this is sections say the wait is kept through a restart",
 
 console.log("");
 console.log(pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

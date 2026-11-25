@@ -49,6 +49,9 @@
     local:   { ref: 4,   max: 30, gain: 1.0, label: 'Local',   colour: '#ffffff' },
     yell:    { ref: 9,   max: 85, gain: 1.3, label: 'Yell',    colour: '#edad38' }
   };
+  // When the launcher plays the audio, the speaking mark follows the
+  // launcher's quiet distances. test-2474-heads checks these against its mixer.
+  var NATIVE_MARK_MAX = { whisper: 1.7, local: 6, yell: 30 };
   /*
     colour is what the microphone at the bottom of the screen turns while you
     speak at that distance (#2474, Patrick, 12 Oct: "the one on your screen
@@ -1115,7 +1118,8 @@
         var dz = (Number(row.pos[2]) - Number(me.pos[2])) / UNITS_PER_METRE;
         var metres = Math.sqrt(dx * dx + dy * dy + dz * dz);
         var mode = MODES[row.mode] ? row.mode : 'local';
-        if (metres > MODES[mode].max) continue;
+        var max = inRelay() ? NATIVE_MARK_MAX[mode] : MODES[mode].max;
+        if (!isFinite(metres) || metres >= max) continue;
         list.push({ a: Number(row.actor), m: mode });
       }
     }
@@ -1231,6 +1235,7 @@
     */
     if (n) { n.noVoice(); }
     joined = false;
+    publishMarks();
     draw();
   }
 

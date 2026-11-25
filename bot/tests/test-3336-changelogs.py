@@ -110,8 +110,14 @@ class Channel(object):
         self.threads, self.archived = [], []
 
     async def history(self, limit=None):
-        for m in list(self.msgs)[::-1]:
+        messages = list(self.msgs)[::-1]
+        for m in messages if limit is None else messages[:limit]:
             yield m
+
+    async def pins(self, limit=None):
+        for m in self.msgs:
+            if m.pinned:
+                yield m
 
     async def archived_threads(self, limit=None):
         for t in self.archived:
@@ -237,6 +243,14 @@ yes('  in an archived thread, opened before the delete',
 ch.log[:] = []
 run(B.keep_changelog(ch, key))
 yes('a thread already in order is asked nothing', ch.log == [])
+
+# ---- 7. check_docs refuses what a public line never says (#3656)
+guide = Channel('server-progression-and-economy')
+thread = run(B.keep_changelog(guide, 'ECONOMY'))
+run(B.post(guide, B.doc_with_footer('ECONOMY', thread), {}))
+guide.msgs.extend(Msg(guide, 77, 'Discussion %d' % i) for i in range(60))
+yes('a busy discussion guide still links its Changelog through its pinned parts',
+    run(B.changelog_drift(guide, 'ECONOMY', BOT)) == [])
 
 # ---- 7. check_docs refuses what a public line never says (#3656)
 saved = B.C.CHANGES[key]

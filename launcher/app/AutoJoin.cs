@@ -72,7 +72,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                if (say != null) say("Could not make the client settings file: " + ex.Message);
+                if (say != null) say("Could not make the client settings file: " + Failure.Say("AutoJoin, the client settings file", ex));
                 return false;
             }
         }
@@ -178,7 +178,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "Could not set the server address: " + ex.Message;
+                return "Could not set the server address: " + Failure.Say("AutoJoin, the server address", ex);
             }
         }
 

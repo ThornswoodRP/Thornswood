@@ -31,6 +31,8 @@ else does.
 | `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |
 | `/api/roster` | POST | the game server, with the bot's key, when its book of characters changes (`game\gamemode.js`) |
 | `/api/economy`, `/dev/api/economy` | POST | each game server, with the bot's key, every five minutes: what each hold gathered, crafted and traded, by the day, for the hub's Hold economy page (#3164, the hold economy block in `game\gamemode.js`) |
+| `/api/ledger`, `/dev/api/ledger` | POST | each game server, with the bot's key, every 15 seconds while there are rows: each trade and each move of gold between people, by account and character, for the hub's Gold and trades page (#6270, the ledger block in `game\gamemode.js`) |
+| `/api/takeback`, `/dev/api/takeback` | POST | each game server, with the bot's key in a header, every 30 seconds: what it did with the take-back asks an admin made on the hub's Gold and trades page, and the asks still waiting for it (#6271, the take back block in `game\gamemode.js`) |
 | `/api/office`, `/dev/api/office` | POST | each game server, with the bot's key in a header, when a Jarl names or removes their hold's Court, Steward or Guard on the Office page of K; the site checks the Jarl's role again and sets the Discord role with the bot's token, and the game reads it back through `/api/allowed` (#2551, `game\gamemode.js`) |
 | `/api/play/owns` | POST | the voice service, on every `/token`: before it hands out a voice token for a character, whether the launcher's sign in holds that character (`voice\voice-server.js`) |
 | `/api/ticket` | POST | the Discord bot, for a support ticket (`bot\bot_core.py`) |
@@ -45,11 +47,12 @@ put in that folder answers 404 and is not on the Downloads page (#3798).
 The installer is not in that folder since #4824. It is Velopack's setup
 program, which `merge-release.yml` makes and signs, and `/file/` answers
 302 to its GitHub Release copy (`newestSetup` in `lib/feed.js`):
-`/file/Thornswood-Setup.exe` to the one on the newest Release `main-<tag>`,
-which the approval step publishes once a build is approved (#5181), and
-`/file/Thornswood-Dev-Setup.exe` to the one on the newest build Release
-(`build-YYYYMMDD.N`). Until there is one, the name answers 404 and the
-Downloads page says the installer is not published yet. The old installer's
+`/file/Thornswood-Setup.exe` to the newest main setup Release (matching
+`main-build-YYYYMMDD.N` or `main-build-1.3.n`, issue #5581), which the approval
+step publishes once a build is approved (#5181), and
+`/file/Thornswood-Dev-Setup.exe` to the newest dev build Release
+(`build-YYYYMMDD.N` or `build-1.3.n`). Until there is one, the name answers 404
+and the Downloads page says the installer is not published yet. The old installer's
 exe and payload zip, which `Publish-Installer` left in the folder, are never
 served or listed, whatever `files.json` still says. `/api/payload`, which the
 old setup program asked for its zip, is gone with it.
@@ -117,6 +120,15 @@ token, which Releases hold the setup programs and the move program.
 where nothing answers, so what its copy serves never depends on the live
 Releases (#5547).
 
+### Settings for where it listens and what it reads
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `THORNSWOOD_DOCS_EXPOSE` | unset | `1` opens the site on every address as plain HTTP, with a warning at every start. Unset, or anything else, keeps it on 127.0.0.1, and `THORNSWOOD_DOCS_LOCAL=1` keeps it there even when this is `1` (`lib\base.js`). |
+| `THORNSWOOD_TRUSTED_PROXIES` | empty | Comma separated addresses of proxies on another box whose `X-Forwarded-For` the site believes, for the report limit and the sign in log. Loopback, which is Caddy, is always believed, and only the last forwarded hop is taken (`lib\limits.js`). |
+| `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
+| `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
+
 To see the door answer, from a second window:
 
 ```
@@ -142,8 +154,9 @@ copy of the live `C:\Thornswood-Caddy\Caddyfile`), and `Setup-Domain.ps1` is
 what set `THORNSWOOD_DOCS_LOCAL=1` there. Its `config.json` on the VPS holds
 the member password, the Discord client secret and bot token, the bot's key
 and the cookie secret, and is never in the repo. `.\scripts\deploy\Deploy-Docs.ps1`
-sends `server.js`, `lib\` and everything in `public\` and restarts the task, and
-`-Site` also sends the public pages. A plain deploy never overwrites a
+sends only the changed `server.js`, `lib\` and `public\` files and stops the
+site only when one of them changed, and `-Site` also sends the public pages. A
+plain deploy never overwrites a
 document somebody has typed into on the site; `-Boards`, `-Docs` and
 `-SeedDocs` do, after a `.bak` of each. `-Board active` replaces that one board
 inside the live `board.json` and leaves every other board as typed. The
@@ -174,8 +187,9 @@ The pages, the downloads, the hub and every route in the table above are one
 node process. A route that throws is answered 500 and the rest carry on, and a
 throw in a timer is logged and carried on from, so a broken page does not take
 the door with it. What one process cannot keep apart: anything that holds its
-event loop holds the door for as long, and every `Deploy-Docs.ps1` restarts the
-door along with the pages. `tests\test-site-local.js` measures the first two
+event loop holds the door for as long, and a `Deploy-Docs.ps1` that changes the
+app restarts the door along with the pages (when nothing in the app changed,
+the site is left running). `tests\test-site-local.js` measures the first two
 against a copy: with a page made to throw, `/api/play/who` still answers its
 401, and with a page made to hold the loop for a second and a half, the same
 question waits until it lets go.
@@ -219,7 +233,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | Route | Method | Who | Body | Answers |
 | --- | --- | --- | --- | --- |
 | `/api/gallery/who` | GET | anybody | none | `200 {signed,canSubmit,staff,admin,name}` for the public gallery page |
-| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp or gif; `413` over 25 MB |
+| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp, gif, mp4 or webm; `413` over 100 MB |
 | `/api/gallery/copy` | POST | whoever sent a waiting picture, once for each width, or staff at any time (#3218) | one smaller copy is the body, a WebP or a JPEG named by its Content-Type; `name` (the picture), `w` (800 or 1600) and, for the launcher, `ticket` in the query | `200 {ok,name,w}`, kept as `uploads/small/<name>.w<w>.webp` or `.jpg` and listed in the queue entry's `copies`; a staff copy of a picture already on the gallery goes into its `srcset` at once; `403` for anybody else, `409` for a width the sender already sent, `400` for another width or a picture no wider than it, `415` for another kind, `422` for a copy that is not exactly that width and the picture's shape |
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
@@ -242,10 +256,10 @@ cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
 (`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds
 `{ name, by, note, at, from: 'web'|'launcher', discordId? }` to the queue. The
-cap is 25 MB rather than the 200 MB `/api/upload` takes for logs, and only
-images are taken: `/shot` serves with a plain `Content-Length` and no range,
-which a browser needs before it will play an mp4, so video waits until `/shot`
-honours a range. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
+cap is 100 MB rather than the 200 MB `/api/upload` takes for logs, and video as
+well as images is taken (mp4 and webm alongside png, jpg, jpeg, webp and gif):
+`/shot` answers byte ranges through `rangeReply`, so browsers can stream and
+play video. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
 Moderator, Loremaster), not Owner/Dev-only `w.admin`. The public `/gallery`
 page has the member submit form; the hub Gallery page, `/uploads`, shows the
 queue and the live list. That page is `LEVEL.uploads: 'staff'` (#742), so the

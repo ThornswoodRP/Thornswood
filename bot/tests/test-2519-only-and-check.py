@@ -565,9 +565,19 @@ try:
             and '#factions and its changelog' in out)
 
         g = live_server()
-        out = written(g, only='playtester-rules', posts=True)
-        yes('a named channel whose words are a draft is never written',
-            wrote == [] and 'its words are a draft waiting on approval' in out)
+        saved_drafts = B.C.DRAFTS
+        try:
+            B.C.DRAFTS = saved_drafts + ('TESTERRULES',)
+            out = written(g, only='playtester-rules', posts=True)
+            yes('a named channel whose words are a draft is never written',
+                wrote == [] and 'its words are a draft waiting on approval' in out)
+        finally:
+            B.C.DRAFTS = saved_drafts
+
+        g = live_server()
+        written(g, only='playtester-rules', posts=True)
+        yes('the approved playtesting rules are written',
+            [w[0] for w in wrote] == ['playtester-rules'])
 
         g = live_server()
         out = written(g, posts=True)

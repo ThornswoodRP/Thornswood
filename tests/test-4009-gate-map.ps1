@@ -203,7 +203,7 @@ Yes '  keeps a pull request''s as gate-map-trial' ($w -match "(?ms)- name: Keep 
 Yes '  traces on windows-2022, where node''s stats are opens the trace sees' ($w -match '(?m)^    runs-on: windows-2022$')
 Yes '  checks the trace on the runner before it starts one' ($w.IndexOf('-Mode selftest') -gt 0 -and $w.IndexOf('-Mode selftest') -lt $w.IndexOf('-Mode start'))
 Yes '  and needs no secret, and keeps no credentials on disk' ($w -notmatch 'secrets\.' -and $w.Contains('persist-credentials: false'))
-$checkoutOf = { param($text) if ($text -match '(?m)^      - uses: actions/checkout@\S+ # v\d+(?:\.\d+)*\n        with:\n((?:          .+\n)+)') { @($Matches[1].Trim() -split '\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne 'persist-credentials: false' } | Sort-Object) -join ';' } else { '' } }
+$checkoutOf = { param($text) if ($text -match '(?m)^      - (?:name: .+\n        )?uses: actions/checkout@\S+ # v\d+(?:\.\d+)*\n        with:\n((?:          .+\n)+)') { @($Matches[1].Trim() -split '\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne 'persist-credentials: false' } | Sort-Object) -join ';' } else { '' } }
 $gateCo = & $checkoutOf $gateJob
 Yes '  checks out what the gate''s shares check out, so the trace runs the gate on the same history (#5179)' ($gateCo -ne '' -and $gateCo.Contains('fetch-depth: 0') -and $gateCo -eq (& $checkoutOf $w))
 

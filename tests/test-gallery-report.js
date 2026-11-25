@@ -266,4 +266,4 @@ yes('Thornswood is spelt Thornswood', !/ThornsWood/.test(words + GALLERY + XAML 
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -90,6 +90,26 @@
   change runs only the harnesses the map says read what it changed; none is
   skipped by its path alone, since many harnesses read docs.
 
+.PARAMETER Content
+  With -Pick, picks the content checks instead (#5191, stage 4): every
+  gate harness a new content build can affect, from main's nightly map
+  (Affected-Harnesses.js checks), and the whole gate with no map. The merge
+  release runs them over the build of the merge before anything carries it
+  (merge-release.yml, "Content checks").
+
+  THE CONTENT BUILD ON A CHECKOUT (#5191, stage 4). Nothing the content
+  build writes is committed: the pick and each share lay the newest build
+  main kept over the checkout first (scripts\release\Get-ContentBuild.ps1
+  -Newest), all the same one (the pick hands its build on). When this
+  checkout's content inputs are not that build's (CONTENT_SAME=no, from
+  -Newest), the pick leaves out the content checks that read an input
+  changed since the build's commit (CONTENT_COMMIT) beside the build
+  (Affected-Harnesses.js stale): until the box builds those inputs they hold
+  new sources to old tables and say nothing of the change. It names each,
+  and the run is not the whole gate. The merge release runs every content
+  check over the merge's own build before anything carries it, so none is
+  lost, only moved to where its build is.
+
 .PARAMETER Throttle
   The most harnesses at once, as Nightly-Harnesses.ps1 takes it.
 
@@ -118,6 +138,7 @@ param(
     [int]$Of = 1,
     [int]$Pick = 0,
     [int]$LinuxShares = 0,
+    [switch]$Content,
     [int]$Throttle = 6,
     [int]$BudgetSeconds = 1800,
     [string]$StartLog = '',
@@ -173,6 +194,14 @@ Say ('{0} build(s) at once on this machine, so {1} of its {2} cores are this one
 # '' when there is none, with $script:MapWhy saying why.
 $script:MapWhy = ''
 function Find-Map {
+    # Once a run: the pick may want it twice (what a change reaches, and the
+    # content checks), and both must read the one map.
+    if ($script:MapTried) { return $script:MapFound }
+    $script:MapTried = $true
+    $script:MapFound = Find-MapOnce
+    return $script:MapFound
+}
+function Find-MapOnce {
     if (-not $env:RUNNER_TEMP) { $script:MapWhy = 'this is no GitHub run, so there is no map to fetch'; return '' }
     $maps = Join-Path $env:RUNNER_TEMP 'gate-map-fetched'
     # The token goes in the environment for this call only, never on a
@@ -189,6 +218,13 @@ function Find-Map {
 # $script:Seconds. $null when it does not
 # read, with $script:MapWhy saying why.
 function Read-Map([string]$maps) {
+    # Once a run, as Find-Map.
+    if ($script:MapReadFrom -eq $maps) { return $script:MapRead }
+    $script:MapReadFrom = $maps
+    $script:MapRead = Read-MapOnce $maps
+    return $script:MapRead
+}
+function Read-MapOnce([string]$maps) {
     $latest = Join-Path $maps 'latest.json'
     try {
         $m = [IO.File]::ReadAllText($latest) | ConvertFrom-Json
@@ -239,6 +275,49 @@ function Select-Affected {
         Say ('The whole gate runs: the traced map could not be used (' + $_.Exception.Message + ').')
         return $null
     }
+}
+
+# The content checks (-Content), or with -Stale those of them this
+# checkout's changed content inputs leave saying nothing (the parameter
+# -Content says why), through Affected-Harnesses.js on main's nightly map,
+# or with no map on the harnesses' own text. Each named with why in the
+# log. Stops the pick on any failure: a content check left in by mistake
+# fails on old tables, and one left out by mistake is not run here.
+function Get-ContentList([switch]$Stale) {
+    . (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
+    $c = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+    # What a build holds: the plugin, the catalogue built in the order before
+    # the chain (Build-ContentOnBox.ps1), and every file the chain writes.
+    $writes = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($c.Writes)
+    $tmp = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
+    $gateFile = Join-Path $tmp 'content-gate.txt'
+    $writesFile = Join-Path $tmp 'content-writes.txt'
+    $inputsFile = Join-Path $tmp 'content-inputs.txt'
+    $out = Join-Path $tmp 'content-picked.txt'
+    [IO.File]::WriteAllLines($gateFile, [string[]]$gate)
+    [IO.File]::WriteAllLines($writesFile, [string[]]@($writes | Select-Object -Unique))
+    [IO.File]::WriteAllLines($inputsFile, [string[]]@($c.Paths))
+    $mapFile = '-'; $commit = '-'
+    $maps = Find-Map
+    $map = $(if ($maps) { Read-Map $maps } else { $null })
+    if ($map) { $mapFile = $map.Traces; $commit = $map.Commit } else { Say ('No map for the content checks: ' + $script:MapWhy + '. Each harness''s own text decides.') }
+    if ($Stale) {
+        $built = [string]$env:CONTENT_COMMIT
+        if ($built -notmatch '^[0-9a-f]{40}$') { throw 'CONTENT_SAME is no and CONTENT_COMMIT names no commit, so there is no telling which inputs the build was made of' }
+        # The build's commit, to measure the inputs from: a checkout of one
+        # commit has no other. A public repository fetches it without a token.
+        $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $f = @(& git -C $Repo fetch --quiet --no-tags --depth=1 origin $built 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $was }
+        if ($LASTEXITCODE -ne 0) { throw ('the build''s commit ' + $built + ' could not be fetched: ' + ($f -join ' ')) }
+        & node $Affected stale $mapFile $built $commit $gateFile $writesFile $inputsFile $out 2>&1 | ForEach-Object { Say ([string]$_) }
+    } else {
+        & node $Affected checks $mapFile '-' $commit $gateFile $writesFile $out 2>&1 | ForEach-Object { Say ([string]$_) }
+    }
+    if ($LASTEXITCODE -ne 0) { throw ('Affected-Harnesses.js ' + $(if ($Stale) { 'stale' } else { 'checks' }) + ' failed (exit ' + $LASTEXITCODE + '), the lines above say why') }
+    $names = @([IO.File]::ReadAllLines($out) | Where-Object { $_.Trim() })
+    $strange = @($names | Where-Object { $gate -notcontains $_ })
+    if ($strange.Count) { throw ('Affected-Harnesses.js named what is not on the gate: ' + ($strange -join ', ')) }
+    return , [string[]]$names
 }
 
 # The list split into $count shares: harness i to share (i mod count) + 1,
@@ -300,6 +379,31 @@ if ($Pick -gt 0) {
         # main (#5296), so its run is main's build, early.
         $maps = Find-Map
         if ($maps) { $null = Read-Map $maps }
+    }
+    try {
+        if ($Content -or [string]$env:CONTENT_SAME -eq 'yes') {
+            # Check the laid tables even if selection below picks no harness.
+            # OTHER KEY is deliberately held for the merge's own content run.
+            . (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
+            . (Join-Path $Repo 'scripts\dev\OwnPlugins.ps1')
+            Assert-ThornswoodLaidTableOrders $Repo
+        }
+        if ($Content) {
+            $list = Get-ContentList
+            $whole = $list.Count -ge $gate.Count
+            Say ('The content checks: ' + $list.Count + ' of the gate''s ' + $gate.Count + ' harnesses, each to run over the content build this run took.')
+        } elseif ([string]$env:CONTENT_SAME -eq 'no') {
+            $stale = Get-ContentList -Stale
+            $before = $list.Count
+            $list = @($list | Where-Object { $stale -notcontains $_ })
+            if ($list.Count -lt $before) {
+                $whole = $false
+                Say ('{0} content checks do not run here: the newest content build is not of this checkout''s inputs, and each reads one it changed (named above). The merge release runs every content check over the merge''s own build before anything carries it.' -f ($before - $list.Count))
+            }
+        }
+    } catch {
+        Write-Host ('::error::' + $_.Exception.Message)
+        exit 1
     }
     # WHERE EACH RUNS (#5293). A harness the map says Linux runs as fully as
     # Windows goes to a Linux share, when there are any (-LinuxShares), and

@@ -218,12 +218,18 @@ function github(token) {
 module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, OUTSIDE_LABEL, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
 
 if (require.main === module) {
+  const code = cli();
+  if (code !== undefined) process.exitCode = code;
+}
+// Run as a program. A function, so a stop is a return and not node's exit
+// function, which can hang on Node 24 (#6036).
+function cli() {
   const repo = process.env.REPO, token = process.env.GH_TOKEN;
-  if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); process.exit(2); }
+  if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); return 2; }
   let scripts;
   try { scripts = verbScripts(require('path').join(__dirname, '..', '..')); }
-  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); process.exit(1); }
+  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); return 1; }
   sweep(repo, github(token), (l) => console.log(l), { dryRun: process.argv.includes('--dry-run'), scripts })
-    .then((code) => process.exit(code))
-    .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exit(1); });
+    .then((code) => { process.exitCode = code; })
+    .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exitCode = 1; });
 }

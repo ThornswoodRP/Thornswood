@@ -576,7 +576,7 @@ if (Test-Path $liveVoice) {
         ('set THORNSWOOD_VOICE_PORT={0}' -f $devVoicePort),
         'set THORNSWOOD_VOICE_AUTH=on',
         'set THORNSWOOD_VOICE_BIND=127.0.0.1',
-        'set THORNSWOOD_SITE=https://thornswood.net',
+        'set THORNSWOOD_SITE=http://127.0.0.1:3001',
         ('cd /d "{0}"' -f $devVoice),
         ('start "" /b /wait /high "{0}" "{1}\server-log.js" --log "{1}\voice.log" --days 90 --stamp voice-server.js' -f $node, $devVoice)
     )

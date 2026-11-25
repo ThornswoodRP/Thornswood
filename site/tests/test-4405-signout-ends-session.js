@@ -116,7 +116,7 @@ function stop(s) {
     if (!s || s.srv.exitCode !== null) return ok();
     s.srv.on('exit', ok);
     s.srv.kill();
-    setTimeout(ok, 3000);
+    setTimeout(ok, 3000).unref();
   });
 }
 
@@ -167,5 +167,5 @@ function stop(s) {
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

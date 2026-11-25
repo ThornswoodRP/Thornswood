@@ -416,6 +416,12 @@
     const m = ini.match(/^\s*VoiceUrl\s*=\s*(\S+)/m);
     return m ? String(m[1]).replace(/\/+$/, '') : '';
   })();
+  // Separate from the HTTPS issuer. Old launchers without this key retain
+  // the base-derived socket; both early chat and the full overlay need it.
+  const VOICE_SOCKET_URL = (function () {
+    const m = ini.match(/^\s*VoiceSocketUrl\s*=\s*(\S+)/m);
+    return m ? String(m[1]) : '';
+  })();
   /*
     The four social keys, and P and J are Patrick's own choices:
     "P for the Party menu... J for Journal".
@@ -716,9 +722,13 @@
     chat (tokenWant, below; lineTick at the menu).
   */
   let tokenWant = 0;           // the profile an ask is out for, 0 for none
+  let tokenBeforeAsk = '';    // a file left by an earlier try is not this answer
   function askToken(id) {
     id = Number(id) || 0;
     if (id <= 0) { return; }
+    // Keep this baseline across retries of the same pending ask: a fetch
+    // may have completed just before the next retry writes its request.
+    if (tokenWant !== id) { tokenBeforeAsk = joinToken(); }
     tokenWant = id;
     let wrote = false;
     for (const d of ['Data/Platform/', '../Profile/']) {
@@ -1513,7 +1523,7 @@
 
     // Idempotent, so a page the silence watch reloaded gets all of it back.
     T.js('try{if(!window.thornswoodNet){window.THORNSWOOD=' + JSON.stringify({
-      host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL,
+      host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL, socket: VOICE_SOCKET_URL,
       chatFade: CHAT_FADE, needsBars: NEEDS_BARS
     }) + ';}}catch(e){}');
     inject('thornswood-chat.js');
@@ -2903,12 +2913,22 @@
     clearBedsIn(e.cell);
   }));
 
-  guard('bed owners at start', () => {
+  /*
+    ON THE FIRST FRAME, NOT AS THE PLUGIN LOADS. Skyrim Platform answers a
+    game call made while a plugin file is still being run with "can't be
+    called in this context": game calls belong to the game's own thread,
+    which runs the update handlers. So this walk used to throw on every PC
+    at every start ("bed owners at start threw: Error:
+    'ObjectReference.getParentCell' can't be called in this context", two
+    PCs on 15 Nov 2026) and the beds already in the person's cell kept
+    their owners. sp.once runs it once, on the first update.
+  */
+  sp.once('update', guard('bed owners at start', () => {
     const pc = sp.Game.getPlayer();
     if (!pc) { return; }
     const cleared = clearBedsIn(pc.getParentCell());
     if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
-  })();
+  }));
 
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared
@@ -9042,7 +9062,7 @@
       lastToken = joinToken();
       T.js('window.THORNSWOOD=' + JSON.stringify({
         host: HOST, port: VOICE_PORT, profileId: PROFILE, name: sentName,
-        token: '', base: VOICE_URL,
+        token: '', base: VOICE_URL, socket: VOICE_SOCKET_URL,
         chatFade: CHAT_FADE, needsBars: NEEDS_BARS
       }) + ';');
       OVERLAYS.forEach(inject);
@@ -9188,6 +9208,9 @@
       // Sitting at the character choice is not a stuck keyboard, it is the one
       // thing to do there. Only while it is up: see menuGone.
       if (who === 'select' && choiceUp()) { continue; }
+      // Creation owns input until the server confirms it is complete.
+      // Reading its choices is not a stuck keyboard (#6431).
+      if (who === 'skills' && skillsCreating) { continue; }
       if (!claims[who] || !claimedAt[who]) { continue; }
       if (now - claimedAt[who] > 120000) {
         log('the ' + who + ' claim has held the keyboard for two minutes, closing it and taking it back');
@@ -9290,7 +9313,7 @@
     if (tokenWant && now - tokenAt > 1000) {
       tokenAt = now;
       const tok = joinToken();
-      if (tok && tok !== lastToken && tokenProfile(tok) === tokenWant) {
+      if (tok && tok !== lastToken && tok !== tokenBeforeAsk && tokenProfile(tok) === tokenWant) {
         lastToken = tok;
         tokenWant = 0;
         T.js('try{window.thornswoodNet&&window.thornswoodNet.setToken(' +

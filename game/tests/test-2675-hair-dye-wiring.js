@@ -55,7 +55,7 @@ function yes(what, cond, why) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function lift(from, to, src) {
   src = src || gm;
@@ -96,6 +96,7 @@ const boilSecs = /boilSeconds: (\d+)/.exec(gm), fireReach = /fire: \{ at: \d+, m
 yes('S0 the hair dye block and the needs and item helpers are found',
     !!blockSrc && needsFns.every(Boolean) && topFns.every(Boolean) && !!atomic && !!order && !!unboiled && !!boilSecs && !!fireReach);
 if (fail) done();
+else {
 
 const IDS = {};
 let nextId = 0x5000;
@@ -506,3 +507,4 @@ const BOWL = idFor(DATA.item);
   yes('X1 build.yml runs this harness (it is not in tests/gate-excluded.txt, #3009)', !/^game\/tests\/test-2675-hair-dye-wiring\.js\s/m.test(read('tests/gate-excluded.txt')));
 }
 done();
+}

@@ -71,9 +71,11 @@ nothing is typed. See
 
 The roles are made for the nine holds of Skyrim and for Raven Rock
 (Patrick, 16 October): "Jarl of Raven Rock", "Raven Rock Court", "Steward
-of Raven Rock" and "Guard of Raven Rock". Raven Rock has no Citizen role
-or hold channel. Its board, its drop box and its jail answer to them like
-any hold's.
+of Raven Rock" and "Guard of Raven Rock". Raven Rock is a hold like the nine
+in Discord too (#3317): it has a "Citizen of Raven Rock" role and a category
+of its own, with its announcements, town, court and guard channels
+([Discord](discord.md#raven-rock)). Its board, its drop box and its jail
+answer to them like any hold's.
 
 The [Merchant's Guild](merchants-guild.md) is the merchant NPCs.
 It has no joinable roll or factor appointment for people.

@@ -18,6 +18,9 @@
     Copy-NotesProjects <repo> <to>   the sources, lock files and the fixture
                                      the tests read, laid out as in the repo
                                      under <to>; never obj or bin
+    Get-NotesInputs <root>           what a build of the two projects reads
+                                     there, one path a line, so a copy can be
+                                     held to the checkout
     Get-NotesTreeState <repo>        every file under the two project folders
                                      with its length and write time, one
                                      line each, to compare before and after
@@ -25,20 +28,60 @@
                                      states, or 'no change'
 #>
 $NotesProjects = @('tools/ReleaseNotes', 'tools/ReleaseNotes.Tests')
+# What dotnet reads from the folders above a project, which a build in the
+# checkout would take and a copy has to carry: the SDK pin, where restore
+# looks, and shared build settings. None is in the repository on 10 Nov
+# 2026; any added later is copied with the projects, from where it sits.
+$NotesAbove = @('global.json', 'nuget.config', 'NuGet.Config', 'Directory.Build.props', 'Directory.Build.targets', 'Directory.Packages.props')
 
 function Copy-NotesProjects([string]$Repo, [string]$To) {
     foreach ($p in $NotesProjects) {
         $from = Join-Path $Repo $p
         $into = Join-Path $To $p
         $null = New-Item -ItemType Directory -Path $into -Force
-        foreach ($f in @(Get-ChildItem -LiteralPath $from -File | Where-Object { $_.Extension -in '.cs', '.csproj' -or $_.Name -eq 'packages.lock.json' })) {
-            Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $into $f.Name)
+        # Every source in the project, at any depth, but never its own obj or bin.
+        foreach ($f in @(Get-ChildItem -LiteralPath $from -File -Recurse | Where-Object {
+                ($_.Extension -in '.cs', '.csproj' -or $_.Name -eq 'packages.lock.json') -and
+                $_.FullName.Substring($from.Length) -notmatch '^[\\/](obj|bin)[\\/]' })) {
+            $rel = $f.FullName.Substring($from.Length + 1)
+            $at = Join-Path $into $rel
+            $null = New-Item -ItemType Directory -Path (Split-Path -Parent $at) -Force
+            Copy-Item -LiteralPath $f.FullName -Destination $at
+        }
+    }
+    foreach ($dir in '', 'tools') {
+        foreach ($n in $NotesAbove) {
+            $f = Join-Path (Join-Path $Repo $dir) $n
+            if (Test-Path -LiteralPath $f -PathType Leaf) { Copy-Item -LiteralPath $f -Destination (Join-Path (Join-Path $To $dir) $n) }
         }
     }
     # ReleaseNotes.Tests.csproj takes the fixture from ..\..\tests\fixtures.
     $fx = Join-Path $To 'tests/fixtures'
     $null = New-Item -ItemType Directory -Path $fx -Force
     Copy-Item -LiteralPath (Join-Path $Repo 'tests/fixtures/note-rules-cases.json') -Destination $fx
+}
+
+# What a build of the two projects reads, as paths from <root>: every source
+# and lock file at any depth outside obj and bin, and each file dotnet reads
+# from the folders above that is there. A copy holds what the checkout does
+# when the two lists are the same.
+function Get-NotesInputs([string]$Root) {
+    $base = $Root.TrimEnd('\', '/')
+    $list = foreach ($p in $NotesProjects) {
+        $dir = Join-Path $Root $p
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -Recurse -Force)) {
+            $rel = $f.FullName.Substring($base.Length + 1).Replace('\', '/')
+            if ($rel.Substring($p.Length) -match '^/(obj|bin)/') { continue }
+            if ($f.Extension -in '.cs', '.csproj' -or $f.Name -eq 'packages.lock.json') { $rel }
+        }
+    }
+    $list += foreach ($dir in '', 'tools') {
+        foreach ($n in $NotesAbove) {
+            if (Test-Path -LiteralPath (Join-Path (Join-Path $Root $dir) $n) -PathType Leaf) { (($dir + '/' + $n).TrimStart('/')) }
+        }
+    }
+    return (@($list | Sort-Object -Unique) -join "`n")
 }
 
 function Get-NotesTreeState([string]$Repo) {

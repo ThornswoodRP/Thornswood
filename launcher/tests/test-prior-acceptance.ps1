@@ -70,7 +70,8 @@ function Strings([string]$src, [string]$head) {
 $windowPages = Strings $agree 'public static readonly string[] Pages ='
 $windowWords = Strings $agree 'public static readonly string[] Words ='
 $windowLinks = Strings $installWin 'string[] linkWords ='
-Yes 'the install window still has three pages, three boxes and three links' ($windowPages.Count -eq 3 -and $windowWords.Count -eq 3 -and $windowLinks.Count -eq 3)
+$windowLinkNames = Strings $agree 'public static readonly string[] LinkNames ='
+Yes 'the install window still has three pages, three boxes and three links' ($windowPages.Count -eq 3 -and $windowWords.Count -eq 3 -and $windowLinks.Count -eq 3 -and $windowLinkNames.Count -eq 3)
 Yes 'and makes its boxes and links from those, in page order' (
     $installWin.Contains('agree[i] = Box(InstallAgreements.Words[i],') -and $installWin.Contains('Content = linkWords[i]'))
 
@@ -92,6 +93,7 @@ for ($i = 0; $i -lt $pages.Count; $i++) {
     $p = $pages[$i]
     Yes "$p box is the install window's words" ($windowWords[$i] -eq $words[$i])
     Yes "$p link is the install window's words" ($windowLinks[$i] -eq $links[$i])
+    Yes "$p link is named for a screen reader as the install window names it" ($windowLinkNames[$i] -eq @($T::LinkNames)[$i])
 }
 Yes 'the file is accepted.json' ($T::FileName -eq 'accepted.json')
 Yes 'the pages are on https://thornswood.net' ($T::Site -eq 'https://thornswood.net')

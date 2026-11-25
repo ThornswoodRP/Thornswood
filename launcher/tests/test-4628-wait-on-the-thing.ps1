@@ -85,7 +85,9 @@ function Body([string]$src, [string]$start) {
 }
 function Run-Built([string]$src, [string]$label) {
     $built = $null
-    try { $built = Build-LauncherCode -Source $src -Exe }
+    # The real Failure beside each driver: CloseGame keeps why Windows refused
+    # through it (#4633), and each driver stands in Swallow, which it needs.
+    try { $built = Build-LauncherCode -Source $src -File (Join-Path $AppDir 'Failure.cs') -Exe }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
     Yes "$label builds the way the project builds" ($null -ne $built)
     if (-not $built) { return @() }
@@ -281,7 +283,7 @@ Yes '4. Checks.cs has StuckReport' ($report.Length -gt 0)
 $m = [regex]::Match($checks, 'static readonly TimeSpan EndedToGo = TimeSpan\.FromSeconds\((\d+)\);')
 Yes ('4d. CloseGame waits at least 22 s for an ended game to go (' + $m.Groups[1].Value + ' s)') ($m.Success -and [int]$m.Groups[1].Value -ge 22)
 Yes '4d. CloseGame records the end Windows took and the refusal it gave' (
-    $close.Contains('ended[id] = DateTime.Now') -and $close.Contains('refused[id] = ex.Message'))
+    $close.Contains('ended[id] = DateTime.Now') -and $close.Contains('refused[id] = Failure.Why('))
 
 $reportDriver = @'
 using System;

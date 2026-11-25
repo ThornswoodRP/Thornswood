@@ -4,6 +4,8 @@ What a release, the build, the box and GitHub are checked against, kept apart
 from the scripts that write and read it (issue #440, phase 8). Every file and
 folder here is named below, under the heading it belongs to.
 
+- `turn/`: the reviewed native Windows TURN supplier pin and exact archive/runtime hashes; `scripts/turn/New-CoturnPackage.ps1` stages it without activation. No script writes this pin: it changes in a reviewed pull request.
+
 ## Builds, the game and the content tools
 
 - `client-build.json`: the six SkyMP client files built from the fork, by
@@ -71,10 +73,10 @@ folder here is named below, under the heading it belongs to.
   `"owner"` is RECIPE_OWNER and `"rank"` is RECIPE_RANK in
   `scripts\dev\Build-RecipeTable.ps1`, which reads them from here. No script
   writes this one: it is changed by hand, in the pull request that adds the
-  recipe it names. It is data so that a recipe change is this file and
-  `game\content\Thornswood-Content.esp` and nothing else, the two files the
-  box's Rebuild-ContentTables takes from a pull request to rebuild its tables
-  with main's own builders (Patrick, 30 Oct 2026, B on the report page, #3470).
+  recipe it names. It is data so that a recipe's owner and rank are a change
+  to a file and not to a builder (Patrick, 30 Oct 2026, B on the report
+  page, #3470). The box builds the content plugin and the tables from the
+  sources at the merge, and neither is committed (#5191).
 - `game-strings.json`: the loose string tables of the localized masters the
   content tools read whose names are in no Skyrim archive, by size and
   sha256 (#2899): RaceCompatibility.esm's three, measured 20 Oct 2026.
@@ -195,6 +197,19 @@ folder here is named below, under the heading it belongs to.
 
 ## The collection
 
+- `mo2.json`: the Mod Organizer 2 the Thornswood modlist installs (#6244):
+  its version, its release asset on GitHub and that asset's size and sha256.
+  `scripts\release\Install-NexusRevision.ps1 -Modlist` downloads it, refuses
+  any other bytes, and names each of its files in the modlist.
+- `collection-modlist.wabbajack`: the published revision as a Wabbajack
+  modlist (#6244), which every merge release carries in its signed record
+  as the part `modlist` and the launcher installs from. Written by
+  `Install-NexusRevision.ps1 -Record -Modlist` (Publish-CollectionRecord.ps1
+  puts it in the records that follow a publish), and it moves with
+  `collection-plugins.json`: `tests\test-6244-collection-modlist.ps1` holds
+  it to that revision and to `mo2.json`. It holds names, hashes and sizes,
+  our own MO2 files, and the collection's own patches as deltas; no other
+  author's file.
 - `collection.json`: the collection as it should be (issue #5189): each
   Nexus file it installs with the plugins that file puts in Data, every
   plugin in the collection's order with its load-after rule and what its
@@ -214,6 +229,16 @@ folder here is named below, under the heading it belongs to.
   revision's plugins, in the pull request that moves the records to a new
   revision. The content table builders and `game\data\last-plugin.json` are
   held to it, and `docs\COLLECTION-REVISIONS.md` names its revision.
+- `collection-page.json`: the text of the collection's page on Nexus Mods,
+  its summary, description and install steps (issue #4537). Each mod it
+  names is written `[[the words|its Nexus mod id]]`, and `notSaid` is what
+  the build has made untrue, each with why. `New-NexusRevision.ps1` sends it
+  with every revision in place of the text the revision before carried;
+  `scripts\release\collection-page.js` holds it to `collection.json` (every
+  mod it names installed, nothing `notSaid` lists, real headings, the same
+  `revision`), and `tests\test-4537-collection-page.js` runs that in the
+  gate. Changed by hand, and read again in the pull request that moves
+  `collection.json` to a new revision.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with
@@ -237,6 +262,11 @@ folder here is named below, under the heading it belongs to.
   the same rule, and the record's own shape check fails a reading it does
   not give; `allowed` and `not stated` both pass a revision, so the rule
   says what a reading means and lets nothing new through.
+  An entry that is not a Nexus mod (a bundle packed into the collection's own
+  archive, or a direct, browse or manual one) goes in `others`, by its source
+  type and its name, with `ours` or a reading held to the same rule (#4278);
+  check refuses one the list does not have, has not read, or reads as not
+  allowed.
   `node scripts\release\collection-permissions.js update <collection.json>
   --revision <n>` takes the list of mods from a new revision and keeps every
   reading, so a new mod comes in unread. `New-NexusRevision.ps1` makes and
@@ -252,6 +282,19 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `collection-revision-6-rule.json`: the plugin rule passed to
+  `New-NexusRevision -Rule` for collection revision 6, putting cheddars_mashups.esl
+  after RaceCompatibility.esm (#3649, #4070, #6299).
+- `load-order.json`: the load order the servers run and every content
+  build reads, at the revision `collection-plugins.json` names, the five
+  masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
+  revision adds goes on the end of its kind and none moves to another index
+  (`docs\LIGHT-ORDER-DRIFT.md`). Until 16 Nov 2026 the order was
+  `game\data\npc-population.json`'s, a table the box's build writes, so a
+  build read it back from the build before. `scripts\mods\Set-LoadOrder.ps1`
+  writes it in the pull request that moves the records to a new revision,
+  and `tests\test-5191-load-order.ps1` fails while it is another
+  revision's.
 
 ## The box, GitHub and Cloudflare
 
@@ -291,9 +334,11 @@ named. Names only: no secret or token is in any of them.
   #2165).
 - `github-apps.json`: what each GitHub App that works on Thornswood's
   repositories may do, permission by permission and event by event, each
-  with its reason. Every night `scripts\dev\Check-AppPermissions.js` reads
-  each App from GitHub and names any difference. Only Patrick changes an
-  App's permissions; the change is a pull request to this file first.
+  with its reason. Every night `scripts\dev\Check-AppPermissions.js` checks
+  the full catalog and reads every public registration from GitHub.
+  Patrick can run it with `-Private` and his local GitHub sign-in to
+  check private registrations. He changes App permissions after a pull
+  request updates this file.
 - `github-repo-settings.json`: the rulesets, vulnerability reporting,
   immutable releases, secret scanning, auto-merge and merge methods of this
   repository, the engine fork and the ops repository (#3683, #3691). After a
@@ -326,6 +371,14 @@ named. Names only: no secret or token is in any of them.
   `scripts\deploy\Install-Tunnel.ps1` reads it and makes Cloudflare and the
   box match it; nothing writes it. A new cloudflared is its version, URL and
   SHA-256 changed together, from the release page.
+- `mongodb.json`: the MongoDB the game servers keep their worlds in (#6237):
+  mongod, the database tools and mongosh, each by version, URL and SHA-256
+  from MongoDB's own download records, the address and port mongod listens
+  on (loopback only), its cache, and the user each game server, the backup
+  and the admin signs in as. `scripts\deploy\Install-Mongo.ps1` reads it and
+  makes the box match it; nothing writes it. A new version is its URL and
+  SHA-256 changed together, and the server stays on the 8.0 series the
+  engine's driver is held to.
 
 ## Provenance notes
 

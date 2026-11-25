@@ -64,7 +64,8 @@ try {
     .toString('utf8').split('\0').filter(Boolean);
 } catch (e) {
   console.log('FAIL  git ls-files did not answer: ' + e.message);
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 yes('git lists the tracked files, ' + tracked.length + ' of them', tracked.length > 1000);
 
@@ -138,4 +139,4 @@ FIRST.forEach(function (f) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

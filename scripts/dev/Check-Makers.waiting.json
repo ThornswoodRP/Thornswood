@@ -530,18 +530,6 @@
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
-      "desc": "daba9:Skyrim.esm",
-      "name": "Drum",
-      "issue": "#4644",
-      "why": "Woodwright work with no recipe yet"
-    },
-    {
-      "desc": "daba7:Skyrim.esm",
-      "name": "Flute",
-      "issue": "#4644",
-      "why": "Woodwright work with no recipe yet"
-    },
-    {
       "desc": "13985:Skyrim.esm",
       "name": "hunting bow",
       "issue": "#4644",
@@ -550,12 +538,6 @@
     {
       "desc": "3b562:Skyrim.esm",
       "name": "long bow",
-      "issue": "#4644",
-      "why": "Woodwright work with no recipe yet"
-    },
-    {
-      "desc": "dabab:Skyrim.esm",
-      "name": "Lute",
       "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },

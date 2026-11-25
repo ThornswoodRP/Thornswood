@@ -43,7 +43,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -53,7 +53,7 @@ function slice(src, start, end) {
 }
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); return; }
 
 const DAY = 86400000;
 const T0 = Date.UTC(2026, 9, 20, 18, 0, 0);
@@ -161,7 +161,7 @@ function makeBlock() {
 let W = makeBlock();
 yes('the property block runs, with the rent and the arrears in it', !!W && typeof W.arrears === 'function' &&
     typeof W.officeView === 'function');
-if (!W) { done(); }
+if (!W) { done(); return; }
 yes('rows of the register\'s arrears that are not debts are dropped as it is read, and said',
     JSON.stringify(W.arrears()) === '{}' && logged.some(function (l) { return /dropped 2 row\(s\) of rent still owed/.test(l); }));
 

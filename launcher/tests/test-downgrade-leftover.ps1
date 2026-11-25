@@ -158,7 +158,10 @@ $null = New-Item -ItemType Directory -Force -Path $work
 $held = $null
 try {
     $asm = $null
-    try { $asm = Add-LauncherType -Source $probe }
+    # ClearLeftover says a caught exception through Failure (#4633), here in
+    # the probe's namespace, beside the probe's stand-in Swallow.
+    $failure = [IO.File]::ReadAllText((Join-Path $AppPath 'Failure.cs')).Replace('namespace Thornswood', 'namespace Probe')
+    try { $asm = Add-LauncherType -Source $probe, $failure }
     catch { $out = $_.Exception.Message }
     Yes 'the lifted methods compile with the .NET SDK the launcher builds with' ($null -ne $asm)
     if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }

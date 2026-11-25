@@ -60,6 +60,14 @@ namespace Thornswood
         public static string LastLauncherCheck = "";
 
         /// <summary>
+        /// The Release this install's channel is on, whose signed record
+        /// gave ServerCollectionRevision: the one this launcher is going to,
+        /// or the one it is. Its modlist is the one the mods install from
+        /// (ModlistSetup.FromRelease, #6244). Null until a check has read it.
+        /// </summary>
+        public static SemanticVersion ChannelOn;
+
+        /// <summary>
         /// Asks this install's channel for a launcher newer than the one
         /// running. Null when there is none, or when Velopack did not install
         /// this launcher (LastLauncherCheck says which). Throws when the
@@ -99,6 +107,7 @@ namespace Thornswood
             {
                 string recordSaid;
                 ServerCollectionRevision = VeloRecord.Get(on, out recordSaid).CollectionRevision;
+                ChannelOn = on;
             }
             if (info == null)
             {
@@ -166,7 +175,7 @@ namespace Thornswood
             {
                 try { File.Delete(pkg); } catch (Exception dex) { Swallow.Note("Updater.FetchLauncher, delete the refused package", dex); }
                 throw new Exception(
-                    "The launcher " + u.Version + " was refused: " + ex.Message + " " +
+                    "The launcher " + u.Version + " was refused: " + Failure.Why("VeloUpdate, " + u.Version, ex) + ". " +
                     "Nothing has been replaced and the one you are running is untouched. " +
                     "Tell Patrick before running anything.");
             }
@@ -224,7 +233,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                return "No newer launcher could be put in: " + ex.Message;
+                return "No newer launcher could be put in: " + Failure.Say("VeloUpdate, putting in a newer launcher", ex);
             }
         }
 

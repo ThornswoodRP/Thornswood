@@ -349,6 +349,7 @@ const WRITERS = {
   'trade ships/packTake': [1, 'the dock\'s load (#2700) and a cart stop\'s (#3158, the same function through __thornswoodCargoHands): a stack off the pack onto a trade ship\'s or cart\'s manifest, coin refused before the pack is read; it only takes away (test-2700-trade-ship-dock.js, test-3158-trade-carts.js)'],
   'trade ships/packGive': [1, 'the dock\'s hand out (#2700) and a cart\'s collect, take back and raid (#3158, the same function through __thornswoodCargoHands): only a piece the manifest begin() hands back, or the piece a refused load just took, each first debited off a pack, so never coin (trade-cargo refuses base 0xF aboard) and never more than was loaded (test-2700-trade-ship-dock.js, test-3158-trade-carts.js)'],
   'market stalls/writePack': [1, 'the market stalls (#3160): packTake lays a stack out of the keeper\'s pack and refuses coin; packPay takes a price out of the buyer\'s pack; packGive puts in only what the stall book hands back, a piece laid out (the book refuses coin on a stall), or the very pieces packPay just took, to the keeper or back to the buyer when the sale cannot finish. No count grows (test-3160-market-stalls.js)'],
+  'take back/doAsk': [1, 'an admin\'s take back (#6271): writes back the pack it has just read with the asked record\'s counts lowered, never below 0, and the emptied stacks left out; no base is added and no count grows (test-6271-take-back.js)'],
   'property/boxTake': [1, 'hands back a thing out of the drop box record, which holds only what boxLeave took off a pack; gold comes out through payOut, never more than the row holds, and the row goes down by the same (#2298, test-2298-dropbox.js)']
 };
 
@@ -1084,4 +1085,4 @@ yes('the gamemode never asks Papyrus to AddItem', !/(['"])AddItem\1/.test(code))
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

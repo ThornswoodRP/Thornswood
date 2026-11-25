@@ -37,7 +37,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -47,7 +47,7 @@ function slice(src, start, end) {
 }
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('the property block is in the gamemode', !!propBlock);
-if (!propBlock) { done(); }
+if (!propBlock) { done(); } else {
 
 const clock = { t: Date.UTC(2026, 9, 12, 7, 0, 0) };
 class FakeDate extends Date { static now() { return clock.t; } }
@@ -142,7 +142,7 @@ box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
 yes('the property block runs, with the guards', !!W && typeof W.boardPanel === 'function' && W.isGuard(101, 'whiterun'));
-if (!W) { done(); }
+if (!W) { done(); } else {
 yes('the block hands out the haulTick its timer runs', typeof W.haulTick === 'function' && typeof tick === 'function');
 
 const boards = W.boards();
@@ -280,3 +280,4 @@ yes('W3 and Riften\'s guard takes it down there', r.mine === 'You take Alice\'s 
     !!list('riften')[0].down);
 
 done();
+}}

@@ -36,6 +36,14 @@
     5. The picker refuses a folder with no Vortex record, and can be cleared.
     6. The nothing-deployed sentence says how to find Vortex's folder.
     7. No Steam copy at all: refused in one sentence, nothing built.
+    8. Once the modlist installs the mods into Mod Organizer 2 in Root\Mods
+       (#6244): the mods come from there and never from Vortex, not even an
+       old deployment Vortex left in the Steam copy; an install with no
+       record yet is not finished and nothing is made; with the record the
+       folder holds the Steam copy's game and exactly the files the record
+       lists, linked from the mods folder, the script extender's loader
+       beside the game, a missing or climbing line left out and said; and
+       the next install's record is noticed and brought in.
 
   HOW. It builds the shipped launcher\app\Steam.cs, OwnGame.cs and Verify.cs,
   with Paths.cs, Config.cs, Secrets.cs and LoadOrder.cs, using the .NET SDK
@@ -48,7 +56,7 @@
   Members added by this change are reached by name, so the driver also builds
   against the code before it, where the bleed test fails. The driver runs on
   Windows only, since OwnGame lays the game folder out by Windows paths and
-  links with kernel32; elsewhere 1 to 7 say SKIP. The checks of the launcher's
+  links with kernel32; elsewhere 1 to 8 say SKIP. The checks of the launcher's
   side, read from the source, run everywhere.
 
   Nothing outside its own folder in %TEMP% and its build under out\harness
@@ -96,6 +104,10 @@ $real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secre
 # cut from a live release.
 $swallow = Join-Path $AppPath 'Swallow.cs'
 if (Test-Path -LiteralPath $swallow) { $real += $swallow }
+# Every catch that says what went wrong says it through Failure.cs since
+# #4633, which needs only Swallow. Taken only where it exists, as above.
+$failure = Join-Path $AppPath 'Failure.cs'
+if (Test-Path -LiteralPath $failure) { $real += $failure }
 # OwnGame and Verify report how far they have got to the Play button since
 # #1145; Progress.cs needs only Swallow. Taken only where it exists, as above.
 $progress = Join-Path $AppPath 'Progress.cs'
@@ -107,6 +119,7 @@ if (Test-Path -LiteralPath $ownShare) { $real += $ownShare }
 # And which kind of file each is, by the pinned build's list, since #1232.
 # Taken only where it exists, as above, with a list of the pretend game's own
 # files embedded the way Build-Launcher embeds records\skyrim-files.json.
+$real += (Join-Path $AppPath 'PathFence.cs')
 $ownKinds = Join-Path $AppPath 'OwnGameKinds.cs'
 if (Test-Path -LiteralPath $ownKinds) { $real += $ownKinds }
 foreach ($f in $real) {
@@ -478,6 +491,8 @@ namespace Thornswood
                     Picker();
                     NothingDeployed();
                     NoSteamCopy();
+                    if (Has(typeof(OwnGame), "ModsStaged")) ModOrganizer();
+                    else Yes("OwnGame takes its mods from Mod Organizer 2 once the modlist installs there (OwnGame.ModsStaged)", false);
                 }
             }
             catch (Exception ex)
@@ -963,6 +978,124 @@ namespace Thornswood
         }
 
         // ---- 7: no Steam copy at all -------------------------------------------
+        // ---- 8: the mods from Mod Organizer 2 (#6244) -------------------------
+        //
+        // The modlist installs the mods into Root\Mods, and the install's record
+        // (thornswood-deployment.txt) says what goes into the game folder: the
+        // folder is made of the Steam copy's game and exactly those files, from
+        // the mods folder, and never of Vortex's, not even an old deployment
+        // Vortex left in the Steam copy.
+        static void ModRecord(string mods, string[] lines, DateTime when)
+        {
+            string f = Path.Combine(mods, "thornswood-deployment.txt");
+            var all = new List<string> { "modlist=0123" };
+            all.AddRange(lines);
+            File.WriteAllLines(f, all.ToArray(), new UTF8Encoding(false));
+            File.SetLastWriteTimeUtc(f, when);
+        }
+
+        static void ModOrganizer()
+        {
+            Scene s = NewScene("mo2", true);
+            string steam = SteamCopy(s, s.Steam, "STEAM");
+            Staging(s);
+            // An old Vortex deployment in the Steam copy: its file is not the game's.
+            Put(Path.Combine(steam, "Data\\TsOne.esp"), "VORTEX-OLD-TSONE");
+            Record(Path.Combine(steam, "Data\\vortex.deployment.json"), s.Staging, Path.Combine(steam, "Data"),
+                   new string[][] { new string[] { "TsOne.esp", "ModA" } }, DateTime.UtcNow.AddMinutes(-5));
+            Paths.Game = Paths.SteamCopy = steam;
+
+            string mods = Path.Combine(s.Ts, "Mods");
+            Put(Path.Combine(mods, "mods\\ModA\\TsOne.esp"), "MO2-TSONE");
+            Put(Path.Combine(mods, "mods\\ModA\\TsTwo.esm"), "MO2-TSTWO");
+            Put(Path.Combine(mods, "mods\\ModA\\textures\\ts\\wood.dds"), "MO2-DDS");
+            Put(Path.Combine(mods, "mods\\ModB\\TsOne.esp"), "MO2-LOWER-TSONE");
+            Put(Path.Combine(mods, "mods\\SKSE\\Root\\skse64_loader.exe"), "MO2-LOADER");
+            Put(Path.Combine(mods, "mods\\SKSE\\Scripts\\input.pex"), "MO2-INPUT");
+            Put(Path.Combine(mods, "mods\\Mine\\Mine.esp"), "MO2-MINE");
+
+            Yes("MO2: once the modlist installs into Root\\Mods the mods come from there, not from Vortex", string.Equals(DeploysInto(s.Cfg), mods, StringComparison.OrdinalIgnoreCase));
+            Yes("MO2: and the game itself still from the Steam copy", string.Equals(OwnGame.Source(s.Cfg), steam, StringComparison.OrdinalIgnoreCase));
+            string why = OwnGame.WhyNot(s.Cfg, mods);
+            Yes("MO2: with no record yet the install is not finished, and nothing is made from it", why != null && why.IndexOf("not all installed yet", StringComparison.Ordinal) >= 0 && Clean(why));
+            Yes("MO2: Scan has no Vortex folder to point at", DeploysElsewhere(s.Cfg) == "");
+
+            DateTime first = DateTime.UtcNow.AddMinutes(-1);
+            ModRecord(mods, new string[] {
+                "Data\\Scripts\\input.pex|SKSE|Scripts\\input.pex|0000000000000001|9",
+                "Data\\TsOne.esp|ModA|TsOne.esp|0000000000000002|9",
+                "Data\\TsTwo.esm|ModA|TsTwo.esm|0000000000000003|9",
+                "Data\\gone.esp|ModA|gone.esp|0000000000000004|1",
+                "Data\\textures\\ts\\wood.dds|ModA|textures\\ts\\wood.dds|0000000000000005|7",
+                "..\\escape.txt|ModA|TsOne.esp|0000000000000006|9",
+                "skse64_loader.exe|SKSE|Root\\skse64_loader.exe|0000000000000007|10",
+            }, first);
+            why = OwnGame.WhyNot(s.Cfg, mods);
+            Yes("MO2: with the record the folder can be made" + (why == null ? "" : " (" + why + ")"), why == null);
+            Dictionary<string, string> staged = Snap(mods), steamBefore = Snap(steam);
+            string made = null;
+            try { made = OwnGame.Make(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Make said: " + ex.Message); }
+            Yes("MO2: the own folder is built", made != null && Directory.Exists(OwnGame.Folder));
+
+            string game = OwnGame.Folder;
+            var expect = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            expect["SkyrimSE.exe"] = "STEAM-EXE";
+            expect["bink2w64.dll"] = "STEAM-BINK";
+            expect["Data\\Skyrim.esm"] = "STEAM-MASTER";
+            expect["Data\\Skyrim - Textures0.bsa"] = "STEAM-BSA";
+            expect["Data\\Scripts\\vanilla.pex"] = "STEAM-PEX";
+            expect["Data\\TsOne.esp"] = "MO2-TSONE";
+            expect["Data\\TsTwo.esm"] = "MO2-TSTWO";
+            expect["Data\\textures\\ts\\wood.dds"] = "MO2-DDS";
+            expect["Data\\Scripts\\input.pex"] = "MO2-INPUT";
+            expect["skse64_loader.exe"] = "MO2-LOADER";
+            List<string> rels = Rels(game);
+            var extra = new List<string>();
+            foreach (string r in rels) if (!expect.ContainsKey(r)) extra.Add(r);
+            var wrong = new List<string>();
+            foreach (KeyValuePair<string, string> kv in expect)
+                if (Text(Path.Combine(game, kv.Key)) != kv.Value) wrong.Add(kv.Key + " is " + (Text(Path.Combine(game, kv.Key)) ?? "missing"));
+            Yes("MO2: it holds the Steam copy's game and exactly the files the record lists, from the mods folder, the loader beside the game" +
+                (extra.Count > 0 ? " (also has " + string.Join(", ", extra.ToArray()) + ")" : "") + (wrong.Count > 0 ? " (" + string.Join("; ", wrong.ToArray()) + ")" : ""),
+                extra.Count == 0 && wrong.Count == 0);
+            Yes("MO2: the mods' big files are hard links to Mod Organizer 2's copies",
+                File.Exists(Path.Combine(game, "Data\\TsOne.esp")) && Id(Path.Combine(game, "Data\\TsOne.esp")) == Id(Path.Combine(mods, "mods\\ModA\\TsOne.esp")) &&
+                Id(Path.Combine(game, "Data\\textures\\ts\\wood.dds")) == Id(Path.Combine(mods, "mods\\ModA\\textures\\ts\\wood.dds")));
+            string files = File.ReadAllText(Path.Combine(OwnGame.Dir, "files.txt"));
+            Yes("MO2: files.txt marks the mods' files as the collection's (V), which Publish-Update reads",
+                System.Text.RegularExpressions.Regex.IsMatch(files, @"\|V\|\d+\|\d+\|Data\\TsOne\.esp") &&
+                System.Text.RegularExpressions.Regex.IsMatch(files, @"\|V\|\d+\|\d+\|skse64_loader\.exe"));
+            string left = File.ReadAllText(Path.Combine(OwnGame.Dir, "left-out.txt"));
+            Yes("MO2: a file the record lists and the mods folder lacks, and a line that climbs out, are left out and said",
+                left.IndexOf("gone.esp  (Mod Organizer 2's record lists it", StringComparison.Ordinal) >= 0 && left.IndexOf("escape.txt", StringComparison.Ordinal) >= 0 &&
+                !File.Exists(Path.Combine(s.Ts, "escape.txt")));
+            string made2 = File.ReadAllText(Path.Combine(OwnGame.Dir, "made.txt"));
+            Yes("MO2: made.txt names Root\\Mods as the source, which Pandora's build reads", made2.IndexOf("source=" + mods, StringComparison.OrdinalIgnoreCase) >= 0);
+            Yes("MO2: nothing in the mods folder or the Steam copy was changed", SameSnap(staged, Snap(mods)) && SameSnap(steamBefore, Snap(steam)));
+            string log = File.Exists(Paths.LogFile) ? File.ReadAllText(Paths.LogFile) : "";
+            Yes("MO2: the log says the mods come from Mod Organizer 2", log.IndexOf("Thornswood takes its mods from Mod Organizer 2 in " + mods, StringComparison.OrdinalIgnoreCase) >= 0);
+
+            // An install of the next revision: one file new, one gone.
+            Paths.Collection = false;
+            Paths.Game = OwnGame.Folder;
+            Yes("MO2: nothing to bring up to date until the mods are installed again", OwnGame.Active && !OwnGame.NeedsRefresh(s.Cfg));
+            Put(Path.Combine(mods, "mods\\ModA\\textures\\ts\\new.dds"), "MO2-NEW");
+            ModRecord(mods, new string[] {
+                "Data\\Scripts\\input.pex|SKSE|Scripts\\input.pex|0000000000000001|9",
+                "Data\\TsOne.esp|ModA|TsOne.esp|0000000000000002|9",
+                "Data\\TsTwo.esm|ModA|TsTwo.esm|0000000000000003|9",
+                "Data\\textures\\ts\\new.dds|ModA|textures\\ts\\new.dds|0000000000000008|7",
+                "skse64_loader.exe|SKSE|Root\\skse64_loader.exe|0000000000000007|10",
+            }, first.AddMinutes(3));
+            Yes("MO2: a new install is noticed", OwnGame.NeedsRefresh(s.Cfg));
+            string refreshed = null;
+            try { refreshed = OwnGame.Refresh(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Refresh said: " + ex.Message); }
+            Yes("MO2: the refresh brings in the new file and takes out the one the record no longer has" + (refreshed == null ? "" : " (" + refreshed + ")"),
+                refreshed != null && refreshed.IndexOf("Mod Organizer 2", StringComparison.Ordinal) >= 0 &&
+                Text(Path.Combine(game, "Data\\textures\\ts\\new.dds")) == "MO2-NEW" && !File.Exists(Path.Combine(game, "Data\\textures\\ts\\wood.dds")) &&
+                Text(Path.Combine(game, "Data\\TsOne.esp")) == "MO2-TSONE");
+        }
+
         static void NoSteamCopy()
         {
             Scene s = NewScene("nosteam", true);
@@ -1009,7 +1142,7 @@ try {
     if (-not $exe) { Done }
 
     if (-not $OnWindows) {
-        Write-Host 'SKIP  1 to 7, the driver on a pretend Steam, other server and Vortex: OwnGame lays the game folder out by Windows paths and makes its links with kernel32, so it runs on Windows only'
+        Write-Host 'SKIP  1 to 8, the driver on a pretend Steam, other server and Vortex: OwnGame lays the game folder out by Windows paths and makes its links with kernel32, so it runs on Windows only'
     } else {
         $scene = Join-Path $work 'machine'
         $null = New-Item -ItemType Directory -Force -Path $scene

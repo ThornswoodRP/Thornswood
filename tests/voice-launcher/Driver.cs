@@ -157,6 +157,7 @@ namespace Thornswood
                 case "refuse": Sock(c).Refuse(); break;
                 case "say": Sock(c).Say(c.GetProperty("msg").GetRawText()); break;
                 case "close": Sock(c).CloseFromService(); break;
+                case "send-outcome": Sock(c).SendOutcome = Str(c, "answer"); break;
                 case "hear":
                 {
                     var levels = new List<KeyValuePair<string, double>>();
@@ -342,6 +343,7 @@ namespace Thornswood
     /// </summary>
     sealed class FakeSocket : WebSocket
     {
+        public string SendOutcome = "";
         readonly int n;
         readonly object gate = new object();
         public readonly TaskCompletionSource<WebSocket> Dialling = new TaskCompletionSource<WebSocket>();
@@ -442,6 +444,10 @@ namespace Thornswood
 
         public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
         {
+            if (SendOutcome == "sync-fail") throw new WebSocketException(WebSocketError.ConnectionClosedPrematurely);
+            if (SendOutcome == "fault") return Task.FromException(new WebSocketException(WebSocketError.ConnectionClosedPrematurely));
+            if (SendOutcome == "cancel") return Task.FromCanceled(new CancellationToken(true));
+            if (SendOutcome == "pending") return new TaskCompletionSource<bool>().Task;
             if (State != WebSocketState.Open) throw new WebSocketException("not open");
             string text = Encoding.UTF8.GetString(buffer.Array, buffer.Offset, buffer.Count);
             Driver.Emit(w => { w.WriteString("ev", "sent"); w.WriteNumber("n", n); w.WritePropertyName("msg"); w.WriteRawValue(text); });

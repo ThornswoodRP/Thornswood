@@ -50,13 +50,16 @@ character's own most, what the race and the skill tree give, less what
 hunger, thirst and the rest take off. A fortify from gear or a potion
 running on you is not in that most, because the server cannot see it.
 Waiting the 30 minutes clears it. Eating a cooked meal and resting in a
-bed does not clear it yet: the server does not know a cooked meal from
-any other until the meals on [Food](food.md) are in it.
+bed does not clear it yet. The server knows a cooked meal from any other
+now (see [Food](food.md)), but nothing in it ends withered on one and a
+rest in a bed. That is #6239.
 
-The diminishing potions are written in the server, waiting on an engine
-build. The server counts the potions in your minute and tells the engine
-how much of the next one to apply before it lands: the second at half, the
-third at a quarter, the fourth and after at nothing but the sip. A brewed
-potion counts. A restart starts a new minute. Until the engine build that
-reads it is on the server (skymp #62), potions still stack as the game
-allows, plus thirst.
+The diminishing potions are in the server. The server counts the potions
+in your minute and tells the engine how much of the next one to apply
+before it lands: the second at half, the third at a quarter, the fourth
+and after at nothing but the sip. A brewed potion counts. A restart
+starts a new minute. The engine reads it through the change in skymp #62,
+which is in the engine pin (`records/client-build.json`, fork commit
+`ee67f972`) and in the engines both servers run: on 15 Nov 2026 the site's
+credits page said the main server runs `ec8e20f9` and the test server
+`50736fe6`, and both carry it.

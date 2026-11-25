@@ -223,4 +223,4 @@ yes('G3 and onActivate shows no line for it', !/const no = spoils\.activate\(/.t
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

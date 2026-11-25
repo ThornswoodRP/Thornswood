@@ -153,4 +153,4 @@ const CHARS = [{ profileId: 858917097, name: 'Bjorn', slot: 1 }];
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

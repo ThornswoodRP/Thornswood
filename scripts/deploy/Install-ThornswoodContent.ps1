@@ -69,7 +69,7 @@ function Get-PluginDescription([string]$path) {
     return ''
 }
 
-if (-not (Test-Path -LiteralPath $Esp)) { Stop-Install "The plugin to copy is not at $Esp." }
+if (-not (Test-Path -LiteralPath $Esp)) { Stop-Install "The plugin to copy is not at $Esp. It is the box's content build and is never committed (#5191): pwsh scripts\release\Get-ContentBuild.ps1 -Newest lays it." }
 if (-not (Test-Path -LiteralPath $Data -PathType Container)) { Stop-Install "There is no game Data folder at $Data." }
 
 try {

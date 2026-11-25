@@ -362,7 +362,7 @@ namespace Thornswood
                 if (issues.Count == 0) s.AppendLine("none");
                 foreach (Issue i in issues) s.AppendLine((i.Blocking ? "[blocking] " : "[note]     ") + i.Text);
             }
-            catch (Exception ex) { s.AppendLine("could not check: " + ex.Message); }
+            catch (Exception ex) { s.AppendLine("could not check: " + Failure.Why("Diag, a check for the report", ex)); }
             s.AppendLine();
 
             Section("script extender plugins");

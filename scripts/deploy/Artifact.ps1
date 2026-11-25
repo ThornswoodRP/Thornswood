@@ -475,9 +475,12 @@ function Assert-ThornswoodCommitted {
   param(
     [Parameter(Mandatory = $true)][string]$RepoDir,
     [string[]]$Paths = @(),
-    [string]$What = 'this deploy'
+    [string]$What = 'this deploy',
+    # The files of a laid content build (ContentPaths.ps1, Get-ThornswoodLaidBuild),
+    # already held to its record: they are the build's, not the commit's.
+    [Collections.IDictionary]$Laid = $null
   )
-  $dirty = @(Get-ThornswoodUncommitted $RepoDir $Paths)
+  $dirty = @(Get-ThornswoodUncommitted $RepoDir $Paths | Where-Object { -not ($Laid -and $Laid.Contains($_.Path)) })
   if (-not $dirty.Count) { return }
   $nl = [Environment]::NewLine
   $list = @($dirty | ForEach-Object { '    ' + $_.Path + '  (' + $_.How + ')' }) -join $nl
@@ -493,6 +496,15 @@ function Assert-ThornswoodCommitted {
   they are only checked. Any of either that is not committed refuses the
   build (Assert-ThornswoodCommitted). -OutDir defaults to
   out\deploys\<component>.
+
+  -Content dev|main (#5191, stage 4e): what the box's content build writes
+  (ContentPaths.ps1, Get-ThornswoodBuiltPaths: the content plugin, the
+  tables, the Last plugin's recipe) is never committed, so it comes from the
+  build laid over this checkout instead (Get-ContentBuild.ps1), held to be
+  that server's build of this commit's inputs with every file its sha256
+  (Get-ThornswoodLaidBuild). Every other file is still the commit's. The
+  record names the build, as content: "<server> <key> <the commit it was
+  built from>".
 #>
 function New-ThornswoodArtifact {
   param(
@@ -500,13 +512,28 @@ function New-ThornswoodArtifact {
     [Parameter(Mandatory = $true)][string]$RepoDir,
     [string[]]$Paths = @(),
     [string[]]$AlsoSends = @(),
-    [string]$OutDir = ''
+    [string]$OutDir = '',
+    [ValidateSet('', 'dev', 'main')][string]$Content = ''
   )
   Initialize-ThornswoodArtifactType
   Add-Type -AssemblyName System.IO.Compression
   Add-Type -AssemblyName System.IO.Compression.FileSystem
   $RepoDir = (Resolve-Path -LiteralPath $RepoDir).ProviderPath.TrimEnd('\')
-  Assert-ThornswoodCommitted -RepoDir $RepoDir -Paths (@($Paths) + @($AlsoSends)) -What ('the ' + $Component + ' deploy')
+  $laid = $null
+  $builtPaths = @()
+  if ($Content) {
+    # The caller has laid the build, so it has scripts\mods\ContentPaths.ps1
+    # loaded; a script that sends no build never loads it through here.
+    if (-not (Get-Command Get-ThornswoodLaidBuild -ErrorAction SilentlyContinue)) { throw "-Content $Content takes the content build laid over this checkout, which scripts\mods\ContentPaths.ps1 reads; dot-source it before New-ThornswoodArtifact. Nothing was built." }
+    $laid = Get-ThornswoodLaidBuild -Repo $RepoDir -Server $Content
+    $builtPaths = Get-ThornswoodBuiltPaths -Repo $RepoDir
+  }
+  if ($laid) {
+    foreach ($a in @($AlsoSends | Where-Object { $_ } | ForEach-Object { ([string]$_).Replace('\', '/').Trim('/') })) {
+      if ((Test-ThornswoodBuiltPath $builtPaths $a) -and -not $laid.Files.Contains($a)) { throw "the $Component deploy sends $a, which the content build writes, and the build laid over this checkout ($($laid.Key)) has no $a. Nothing was built." }
+    }
+  }
+  Assert-ThornswoodCommitted -RepoDir $RepoDir -Paths (@($Paths) + @($AlsoSends)) -What ('the ' + $Component + ' deploy') -Laid $(if ($laid) { $laid.Files } else { $null })
   if (-not $OutDir) {
     $where = Join-Path $PSScriptRoot '..\release\Where.ps1'
     $OutDir = Join-Path (Join-Path (& $where Out) 'deploys') $Component
@@ -520,6 +547,8 @@ function New-ThornswoodArtifact {
 
   $Paths = @($Paths | Where-Object { $_ } | ForEach-Object { ([string]$_).Replace('\', '/').Trim('/') })
   $blobs = @{}
+  # A built file's bytes, from the laid build (-Content), by path.
+  $fromBuild = @{}
   if ($Paths.Count) {
     foreach ($line in (Invoke-ThornswoodArtifactGit $RepoDir (@('ls-tree', '-r', '--full-tree', $commit, '--') + $Paths))) {
       $m = [regex]::Match($line, '^(\d{6}) (\w+) ([0-9a-f]{40})\t(.+)$')
@@ -527,19 +556,39 @@ function New-ThornswoodArtifact {
       if ($m.Groups[2].Value -ne 'blob') { continue }
       $p = $m.Groups[4].Value
       if ($p.StartsWith('"')) { throw "A path git had to quote cannot go into an artifact: $p" }
+      # A copy of a built file still in the commit is not the build.
+      if ($laid -and (Test-ThornswoodBuiltPath $builtPaths $p)) { continue }
       $blobs[$p] = $m.Groups[3].Value
     }
+    if ($laid) {
+      foreach ($n in @($laid.Files.Keys)) {
+        if (-not @($Paths | Where-Object { $n -ceq $_ -or $n.StartsWith($_ + '/') }).Count) { continue }
+        $fromBuild[$n] = [IO.File]::ReadAllBytes((Join-Path $RepoDir $n))
+        if ((Get-ThornswoodSha256Hex $fromBuild[$n]) -cne [string]$laid.Files[$n]) { throw "$n changed after the content build was laid and held. Nothing was built." }
+      }
+    }
     foreach ($want in $Paths) {
-      $hit = @($blobs.Keys | Where-Object { $_ -eq $want -or $_.StartsWith($want + '/') })
-      if (-not $hit.Count) { throw "The commit $($commit.Substring(0, 12)) has nothing at $want, so the $Component artifact would be missing it." }
+      $hit = @(@($blobs.Keys) + @($fromBuild.Keys) | Where-Object { $_ -eq $want -or $_.StartsWith($want + '/') })
+      if (-not $hit.Count) {
+        if ($laid -and (Test-ThornswoodBuiltPath $builtPaths $want)) { throw "The content build laid over this checkout ($($laid.Key)) has nothing at $want, so the $Component artifact would be missing it." }
+        throw "The commit $($commit.Substring(0, 12)) has nothing at $want, so the $Component artifact would be missing it."
+      }
     }
   }
 
-  [string[]]$names = @($blobs.Keys)
+  [string[]]$names = @(@($blobs.Keys) + @($fromBuild.Keys))
   if (-not $names.Count) { throw "The $Component artifact would be empty." }
   [Array]::Sort($names, [StringComparer]::Ordinal)
-  [string[]]$ids = @($names | ForEach-Object { $blobs[$_] })
-  $datas = [ThornswoodArtifactZip]::ReadBlobs($git, $RepoDir, $ids)
+  [string[]]$gitNames = @($names | Where-Object { $blobs.ContainsKey($_) })
+  [string[]]$ids = @($gitNames | ForEach-Object { $blobs[$_] })
+  $byName = @{}
+  if ($ids.Count) {
+    $read = [ThornswoodArtifactZip]::ReadBlobs($git, $RepoDir, $ids)
+    for ($i = 0; $i -lt $gitNames.Count; $i++) { $byName[$gitNames[$i]] = $read[$i] }
+  }
+  foreach ($n in @($fromBuild.Keys)) { $byName[$n] = $fromBuild[$n] }
+  $datas = New-Object 'byte[][]' $names.Count
+  for ($i = 0; $i -lt $names.Count; $i++) { $datas[$i] = $byName[$names[$i]] }
 
   $building = Join-Path $OutDir ('.building-' + [Guid]::NewGuid().ToString('N') + '.zip')
   [ThornswoodArtifactZip]::WriteStored($building, $names, $datas)
@@ -561,6 +610,7 @@ function New-ThornswoodArtifact {
     size      = (Get-Item -LiteralPath $zip).Length
     files     = $contents
   }
+  if ($laid) { $record['content'] = ($laid.Server + ' ' + $laid.Key + ' ' + $laid.Commit) }
   $recordPath = [IO.Path]::ChangeExtension($zip, '.json')
   Save-ThornswoodArtifactRecord $recordPath $record
 
@@ -817,12 +867,19 @@ $(Get-ThornswoodLockedFolderScript $store.Replace('/', '\'))
 New-Item -ItemType Directory -Force -Path '$($dir.Replace('/', '\'))', '$($store.Replace('/', '\'))\current' | Out-Null
 if (Test-Path -LiteralPath '$zipWin') { 'HAS ' + (Get-FileHash -LiteralPath '$zipWin' -Algorithm SHA256).Hash.ToLowerInvariant() } else { 'HAS none' }
 "@
-  $have = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
+  $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask)
+  # A store the box could not lock is never written into (#4212).
+  $lockFailed = Get-ThornswoodLockFailure $said
+  if ($lockFailed) { throw ('The box could not lock the deploy store, so nothing was sent to it: ' + $lockFailed) }
+  $have = @($said | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
   if ($have -eq ('HAS ' + $Artifact.Sha256)) {
     Write-Host ('  ' + $Artifact.Name + ' is already in the store on the box') -ForegroundColor DarkGray
   } else {
     Send-ThornswoodArtifactFile $Artifact.Zip $Target $SshArgs ($dir + '/' + $Artifact.Name)
-    $have = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
+    $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs $ask)
+    $lockFailed = Get-ThornswoodLockFailure $said
+    if ($lockFailed) { throw ('The box could not lock the deploy store, so nothing was swapped: ' + $lockFailed) }
+    $have = @($said | Where-Object { $_ -like 'HAS *' }) | Select-Object -Last 1
     if ($have -ne ('HAS ' + $Artifact.Sha256)) { throw ('The box does not hold ' + $Artifact.Name + ' as it was built (' + $have + '). Nothing was swapped.') }
     Write-Host ('  ' + $Artifact.Name + ' sent to the store on the box, ' + $Artifact.Sha256.Substring(0, 16) + ' checked there') -ForegroundColor DarkGray
   }
@@ -1023,6 +1080,8 @@ function Restore-ThornswoodServerRecord {
   )
   $at = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
   $said = @(Invoke-ThornswoodArtifactRemote $Target $SshArgs (Get-ThornswoodServerRestoreScript -Root $Root -At $at -Store $Store))
+  $lockFailed = Get-ThornswoodLockFailure $said
+  if ($lockFailed) { throw ('The box could not lock the deploy store, so the put-back was not recorded: ' + $lockFailed) }
   $r = @($said | Where-Object { "$_" -like 'SERVER RECORDED *' })
   if ($r.Count) { Write-Host ('  the box records ' + (Get-ThornswoodArtifactPart $Root) + ' as ' + ([string]$r[0]).Substring(16)) -ForegroundColor DarkGray }
   return $said

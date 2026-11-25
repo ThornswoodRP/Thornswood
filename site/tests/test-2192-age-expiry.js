@@ -126,4 +126,4 @@ yes('E2 confirming still sets the cookie, and that answers', b.ok() === true);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

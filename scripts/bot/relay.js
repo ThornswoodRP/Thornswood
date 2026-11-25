@@ -56,6 +56,9 @@ class VoiceRun {
     this.from = opts.from;
     this.dir = opts.dir;
     this.port = Number(opts.port);
+    // A port of 0 means any free one, which the service binds and says
+    // (#6050); a missing or empty one is not 0 but no port at all.
+    this.anyPort = opts.port === 0;
     this.logFile = opts.logFile || path.join(opts.dir, 'bot-pass-voice.log');
     this.log = opts.log || (() => {});
     this.ticket = crypto.randomBytes(24).toString('hex');
@@ -100,7 +103,10 @@ class VoiceRun {
   async start(ms) {
     const gone = this.missing();
     if (gone) { return gone; }
-    if (!(this.port > 0)) { return 'server-settings.json names no thornswoodVoicePort for the voice service'; }
+    // 0 asks for any free port (#6050): the service binds one and says it.
+    if (!(Number.isInteger(this.port) && this.port >= 0) || (this.port === 0 && !this.anyPort)) {
+      return 'server-settings.json names no thornswoodVoicePort for the voice service';
+    }
     fs.mkdirSync(this.dir, { recursive: true });
     for (const n of VOICE_FILES) { fs.copyFileSync(path.join(this.from, n), path.join(this.dir, n)); }
     await this.startSite();
@@ -127,10 +133,16 @@ class VoiceRun {
     this.child.stdout.on('data', take);
     this.child.stderr.on('data', take);
     this.child.on('exit', (code, signal) => { this.exited = { code, signal }; });
-    const said = new RegExp('\\[voice\\] listening on 127\\.0\\.0\\.1:' + this.port + '\\b');
+    const said = /\[voice\] listening on 127\.0\.0\.1:(\d+)\b/;
     const end = Date.now() + ms;
     for (;;) {
-      if (this.lines.some((l) => said.test(l))) { return ''; }
+      const line = this.lines.find((l) => said.test(l));
+      if (line) {
+        const got = Number(said.exec(line)[1]);
+        if (this.port === 0) { this.port = got; return ''; }
+        if (got === this.port) { return ''; }
+        return 'the voice service is listening on ' + got + ', not on ' + this.port;
+      }
       if (this.exited) {
         return 'the voice service ended (' + JSON.stringify(this.exited) + ') before it was listening' +
           (this.lines.some((l) => /EADDRINUSE/.test(l)) ? ': something else holds port ' + this.port : '');

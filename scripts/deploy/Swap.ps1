@@ -980,6 +980,8 @@ if ('$came' -eq 'True' -and (Test-Path -LiteralPath `$beside)) {
 Add-Content -LiteralPath $(& $q ($storeWin + '\history.log')) -Value (`$when + ' ' + $(& $q $part) + ' put back to ' + `$name)
 'RECORDED ' + `$name
 "@)
+  $lockFailed = Get-ThornswoodLockFailure $said
+  if ($lockFailed) { throw ('The box could not lock the deploy store, so the put-back was not recorded: ' + $lockFailed) }
   $r = @($said | Where-Object { "$_" -like 'RECORDED *' })
   if ($r.Count) { Write-Host ('  the box records ' + $part + ' as ' + ([string]$r[0]).Substring(9)) -ForegroundColor DarkGray }
   else { Write-Host ('  the put-back was not recorded in the store: ' + ($said -join ' ')) -ForegroundColor Yellow }

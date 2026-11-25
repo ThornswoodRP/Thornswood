@@ -22,8 +22,8 @@
        repository's own plugins, so a new revision or a content change
        without a rebuild turns this red
     R  the 26 recipes #2529 moved are at the woodworking bench in
-       game/data/recipes.json, and the bench tables open it for the
-       Woodwright
+       game/data/recipes.json with every Woodworker row the forge carried
+       (#3120, #6194), and the bench tables open it for the Woodwright
     S  the real property block over a pretend engine: at start every bench
        stands at its point next to its forge, turned before it is moved, so
        a game near it is sent the right angle; standing them again does
@@ -60,7 +60,7 @@ function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -216,13 +216,44 @@ const furnitureOuts = furnitureDoc.pieces.filter((p) => furnitureDoc.limits.type
 // And the Woodwright's forge rows #3120 moved to its home bench (movedFrom
 // keeps the forge their mod put them at), and the cook's wooden ladle
 // (#3162), a woodwright's, written by Add-ContentRecords.py at the same bench.
+// #3120 moves every Woodworker row its mod put at a smithing forge (the forge
+// or the Skyforge), and #5885 (#5037) the cut ones with the rest, so neither
+// keeps one: 9 people can make and the rest cut (#6194: revision 8's build
+// moved 54, 44 cut off the forge and the Skyforge's Nord Hero Bow, where the
+// table committed before that rule held 9). A temper at the sharpening wheel
+// is never seen by the server and is not moved (Build-RecipeTable.ps1).
+const FORGES = ['CraftingSmithingForge', 'CraftingSmithingSkyforge'];
 const benchMoved = atBench.filter((r) => r.movedFrom).length;
+const madeMoved = atBench.filter((r) => r.movedFrom && r.book !== 'cut').length;
+const leftAtForge = Object.keys(recipes.recipes || {}).concat(Object.keys(recipes.unowned || {}), Object.keys(recipes.refused || {}))
+  .map((k) => (recipes.recipes[k] || (recipes.unowned || {})[k] || (recipes.refused || {})[k]))
+  .filter((r) => r && FORGES.indexOf(r.benchName) >= 0 && r.owner === 'Woodworker');
 const ladles = atBench.filter((r) => r.editorId === 'ThornswoodRecipeToolLadle');
-const movedAt = atBench.length - furnitureOuts.length - benchMoved - ladles.length;
-yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, the 9 #3120 moved off the forge, one for each piece of furniture and the ladle (' +
-    atBench.length + ', ' + benchMoved + ' moved off the forge, ' + furnitureOuts.length + ' of them furniture, ' + ladles.length + ' ladle)',
-    movedAt === 26 && benchMoved === 9 && ladles.length === 1 &&
-    atBench.filter((r) => r.movedFrom).every((r) => r.movedFromName === 'CraftingSmithingForge') &&
+// #5731 adds exactly three native MISC instruments; they are new recipes,
+// not another recipe moved from a master. Keep the moved-recipe count intact.
+const INSTRUMENTS = [
+  { recipe: '1b008:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentFlute', out: 'daba7:Skyrim.esm',
+    inputs: [['6f993:Skyrim.esm', 1]] },
+  { recipe: '1b009:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentLute', out: 'dabab:Skyrim.esm',
+    inputs: [['6f993:Skyrim.esm', 2], ['800e4:Skyrim.esm', 2]] },
+  { recipe: '1b00a:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentDrum', out: 'daba9:Skyrim.esm',
+    inputs: [['6f993:Skyrim.esm', 2], ['db5d2:Skyrim.esm', 1], ['800e4:Skyrim.esm', 1]] }
+];
+const instruments = atBench.filter(r => INSTRUMENTS.some(x => x.editorId === r.editorId));
+for (const expected of INSTRUMENTS) {
+  const found = instruments.filter(r => r.editorId === expected.editorId);
+  const row = found[0];
+  yes('R0 ' + expected.editorId + ' is one owned novice Woodwright recipe for Skyrim MISC, with its exact materials',
+    found.length === 1 && row === recipes.recipes[expected.recipe] && row.plugin === 'Thornswood-Content.esp' &&
+    row.out === expected.out && row.type === 'MISC' && row.makes === 1 && row.owner === 'Woodworker' &&
+    row.half === 'Woodwright' && row.rank === 'novice' && row.book !== 'cut' && !row.movedFrom &&
+    JSON.stringify(row.inputItems.map(x => [x.item, x.count]).sort()) === JSON.stringify(expected.inputs.slice().sort()));
+}
+const movedAt = atBench.length - furnitureOuts.length - benchMoved - ladles.length - instruments.length;
+yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, every Woodworker row #3120 moved off the forges (9 people can make, the rest cut), one for each piece of furniture, the ladle and three instruments (' +
+    atBench.length + ', ' + benchMoved + ' moved off the forges, ' + madeMoved + ' not cut, ' + leftAtForge.length + ' Woodworker rows left at them, ' + furnitureOuts.length + ' of them furniture, ' + ladles.length + ' ladle)',
+    movedAt === 26 && madeMoved === 9 && leftAtForge.length === 0 && ladles.length === 1 && instruments.length === 3 &&
+    atBench.filter((r) => r.movedFrom).every((r) => FORGES.indexOf(r.movedFromName) >= 0 && r.owner === 'Woodworker') &&
     furnitureOuts.every((o) => atBench.some((r) => r.out === o)) &&
     atBench.every((r) => r.benchName === 'ThornswoodCraftingWoodworking'));
 const bbb = /const BENCH_BY_BASE = (\{.*\});/.exec(gm);
@@ -236,7 +267,7 @@ yes('R2 the bench tables know the bench: its furniture is the woodworking keywor
 // ---------------------------------------------------------------- S
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 yes('S0 the property block is in the gamemode', !!propBlock);
-if (!propBlock || !inBlock) { done(); }
+if (!propBlock || !inBlock) { done(); } else {
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-516-'));
 fs.writeFileSync(path.join(dir, 'server-settings.json'), JSON.stringify({ dataDir: 'data', privDir: 'private' }));
@@ -333,7 +364,7 @@ function makeBlock() {
 
 let W = makeBlock();
 yes('S1 the property block runs, with the benches in it', !!W && typeof W.standBenches === 'function' && typeof W.standBench === 'function');
-if (!W) { done(); }
+if (!W) { done(); } else {
 const refs = W.benchRefs();
 yes('S2 at start every bench stands, with nobody online, in its forge\'s worldspace at its point (' + placedRefs.length + ')',
     placedRefs.length === names.length && names.every((s) => {
@@ -408,3 +439,4 @@ if (fs.existsSync(path.join(data, 'Skyrim.esm'))) {
   console.log('SKIP  R3: no game at ' + data + ' (a machine with the game reads the plugins again)');
 }
 done();
+}}

@@ -53,7 +53,7 @@ function attempt(what, f) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);
@@ -72,7 +72,7 @@ const YES_BRANCH = (function () {
 })();
 yes('the property, social and trade blocks and the /yes branch are in the gamemode',
     !!prop && !!SOCIAL && !!TRADE && !!YES_BRANCH);
-if (!prop || !SOCIAL || !TRADE || !YES_BRANCH) { done(); }
+if (!prop || !SOCIAL || !TRADE || !YES_BRANCH) { done(); return; }
 
 /* One function out of the property block, by name, once. */
 function fn(name) {
@@ -120,7 +120,7 @@ const HAUL_FROM = COMPANY.terms().haulCutFrom;
 const SALE_FROM = COMPANY.terms().saleCutFrom;
 yes('the job fee is 30, and the company\'s tenth and the sale\'s cuts both start at 10 gold',
     JOB_FEE === 30 && HAUL_FROM === 10 && SALE_FROM === 10);
-if (missing.length || !fees || !ledger || !seeding || !PASSAGES || HAUL_FROM !== 10 || SALE_FROM !== 10) { done(); }
+if (missing.length || !fees || !ledger || !seeding || !PASSAGES || HAUL_FROM !== 10 || SALE_FROM !== 10) { done(); return; }
 
 const GOLD = 15;
 const SWORD = 0x12eb7;

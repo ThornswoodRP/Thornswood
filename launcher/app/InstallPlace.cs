@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -136,6 +137,74 @@ namespace Thornswood
         public const long Needed = 6L * 1024 * 1024 * 1024;
 
         /// <summary>
+        /// What Thornswood's own files need on the drive Steam keeps Skyrim
+        /// on, when they go into the Steam copy and that is not the install
+        /// folder's drive.
+        /// </summary>
+        public const long NeededOnSteam = 3L * 1024 * 1024 * 1024;
+
+        /// <summary>One drive the install writes to, and the room it needs there.</summary>
+        public sealed class Room
+        {
+            public string Drive = "";
+            public long Need;
+            /// <summary>The drive Steam keeps Skyrim on, not the install folder's.</summary>
+            public bool Steam;
+        }
+
+        /// <summary>
+        /// Every drive the install writes to and the room it needs on each:
+        /// the one rule the window's room line, its Install button and
+        /// InstallSteps all read, so what the window says is what the install
+        /// refuses (#4681). The install folder's drive needs Needed. When
+        /// Thornswood's own files go into the Steam copy (<paramref
+        /// name="intoSteam"/>: its own folder neither chosen nor made) and
+        /// Steam keeps Skyrim on another drive, that drive needs
+        /// NeededOnSteam too.
+        /// </summary>
+        public static List<Room> Rooms(string rootDrive, string steamDrive, bool intoSteam)
+        {
+            var rooms = new List<Room> { new Room { Drive = rootDrive ?? "", Need = Needed } };
+            if (intoSteam && !string.IsNullOrEmpty(steamDrive) && !SameDrive(steamDrive, rootDrive))
+                rooms.Add(new Room { Drive = steamDrive, Need = NeededOnSteam, Steam = true });
+            return rooms;
+        }
+
+        /// <summary>
+        /// Null when every drive in <paramref name="rooms"/> has the room it
+        /// needs, else the sentence that refuses the first one short of it,
+        /// with what to do. The comparison is in bytes, as read. A drive whose
+        /// room cannot be read (below 0) is not refused here; SayRoom says so.
+        /// </summary>
+        public static string Short(List<Room> rooms, Func<string, long> free, out Room room)
+        {
+            foreach (Room r in rooms)
+            {
+                long f = free(r.Drive);
+                if (f < 0 || f >= r.Need) continue;
+                room = r;
+                if (r.Steam)
+                    return "Only " + Gb(f) + " free on " + Letter(r.Drive) + ", where Steam keeps Skyrim, and Thornswood's own files need about " +
+                           Gb(r.Need) + " there. Free some room on " + Letter(r.Drive) + ", or choose Thornswood's own Skyrim folder, which keeps them in the install folder.";
+                return "Only " + Gb(f) + " free on " + Letter(r.Drive) + ", and this needs about " + Gb(r.Need) + " there. Pick another drive.";
+            }
+            room = null;
+            return null;
+        }
+
+        /// <summary>
+        /// Whether Thornswood's own Skyrim folder is already made under
+        /// <paramref name="root"/>: Root\Game, with the record the launcher
+        /// writes when it makes it. An install then writes nothing into the
+        /// Steam copy.
+        /// </summary>
+        public static bool MadeOwn(string root)
+        {
+            if (string.IsNullOrEmpty(root)) return false;
+            return Directory.Exists(Path.Combine(root, "Game")) && File.Exists(Path.Combine(root, "Profile", "OwnGame", "files.txt"));
+        }
+
+        /// <summary>
         /// The folder the window starts on: Thornswood on the drive Skyrim is
         /// on. It is the only drive this install can play from, and it is not
         /// something a person can put right with a button afterwards: it is a
@@ -217,25 +286,34 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The line about room on the drive. Under what the install needs is a
-        /// refusal in the warning colour; within two gigabytes of it is said
-        /// as close.
+        /// The line about room on the drives the install writes to
+        /// (Rooms). Whatever Short refuses is said as that refusal, in the
+        /// warning colour, so the line and Install never disagree (#4681).
+        /// Within two gigabytes of what the install folder's drive needs is
+        /// said as close.
         /// </summary>
-        public static string SayRoom(long free, out string colour)
+        public static string SayRoom(List<Room> rooms, Func<string, long> freeOn, out string colour)
         {
+            Room ignore;
+            string refused = Short(rooms, freeOn, out ignore);
+            if (refused != null) { colour = "Bad"; return refused; }
+            long free = freeOn(rooms[0].Drive);
             if (free < 0) { colour = "Warn"; return "Could not read how much room is on that drive."; }
-            if (free < Needed)
+            string steam = "";
+            for (int i = 1; i < rooms.Count; i++)
             {
-                colour = "Bad";
-                return "Only " + Gb(free) + " free there, and this needs about " + Gb(Needed) + ". Pick another drive.";
+                long s = freeOn(rooms[i].Drive);
+                steam += s < 0
+                    ? " Could not read how much room is on " + Letter(rooms[i].Drive) + ", where Steam keeps Skyrim."
+                    : " " + Gb(s) + " free on " + Letter(rooms[i].Drive) + ", where Steam keeps Skyrim, which needs about " + Gb(rooms[i].Need) + ".";
             }
-            if (free < Needed + 2L * 1024 * 1024 * 1024)
+            if (free < rooms[0].Need + 2L * 1024 * 1024 * 1024)
             {
                 colour = "Warn";
-                return Gb(free) + " free, and this needs about " + Gb(Needed) + ". That is close, so it may not fit.";
+                return Gb(free) + " free, and this needs about " + Gb(rooms[0].Need) + ". That is close, so it may not fit." + steam;
             }
             colour = "Faint";
-            return Gb(free) + " free, and this needs about " + Gb(Needed) + ".";
+            return Gb(free) + " free, and this needs about " + Gb(rooms[0].Need) + "." + steam;
         }
 
         // --------------------------------------- Thornswood's own Skyrim folder
