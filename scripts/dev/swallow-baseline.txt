@@ -386,7 +386,7 @@ game\plugins\thornswood-voice.js 6
 game\quest-transactions.js 1
 game\ui\thornswood-afk.js 1
 game\ui\thornswood-board.js 2
-game\ui\thornswood-box.js 2
+game\ui\thornswood-box.js 1
 game\ui\thornswood-bridge.js 19
 game\ui\thornswood-chat.js 17
 game\ui\thornswood-emotes.js 4

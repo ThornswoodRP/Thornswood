@@ -35,6 +35,7 @@ namespace Thornswood
         public static double Tone = 440;
         public static bool Running = true;
         public static VoiceAudio Last;
+        public static Action BeforeStart, BeforeDispose;
 
         public Action<float[]> OnFrame = delegate { };
         public Action<string, string> OnEvent = delegate { };
@@ -51,6 +52,7 @@ namespace Thornswood
 
         public void Start()
         {
+            BeforeStart?.Invoke();
             OnEvent("log", "microphone open: harness tone " + Tone + " Hz");
             OnEvent("status", "mic ready");
             if (!Running) return;
@@ -146,6 +148,7 @@ namespace Thornswood
 
         public void Dispose()
         {
+            BeforeDispose?.Invoke();
             stop = true;
             if (thread != null) thread.Join(1000);
         }

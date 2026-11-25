@@ -54,9 +54,11 @@
 # only read. It moves the pin on a local branch with Update-EnginePin.ps1,
 # commits it and hands the commit back in its log as a git bundle
 # (LogHandBack.ps1, the way engine.yml hands back its records, #3399). "push"
-# runs nothing but this repository's own scripts and git: it takes the bundle
-# out of make's log, holds it to one commit on main's head that changes only
-# a pin's paths, force pushes engine-pin/next and opens or updates the pull
+# runs nothing but this repository's own scripts and git. Both jobs use the
+# main commit checked out by look, so a later main push cannot change which
+# shallow checkout verifies the bundle. Push verifies one commit over that
+# base, checks its allowed paths and confirms main is still current, then
+# force pushes engine-pin/next and opens or updates the pull
 # request (Open-EnginePinPr.ps1). The pull request is the only way the pin
 # reaches main: Bramble merges it under the merge rule like any other, and
 # the release after every change takes it to dev and then main.
@@ -108,8 +110,10 @@ jobs:
       head: ${{ steps.look.outputs.head }}
       run: ${{ steps.look.outputs.run }}
       open: ${{ steps.look.outputs.open }}
+      base: ${{ steps.main.outputs.commit }}
     steps:
       - name: Check out main
+        id: main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -168,7 +172,7 @@ jobs:
 
       - name: The pin robot's token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.PIN_APP_CLIENT_ID }}
           private-key: ${{ secrets.PIN_APP_KEY }}
@@ -193,10 +197,10 @@ jobs:
       contents: read
       actions: read
     steps:
-      - name: Check out main
+      - name: Check out the Main base from look
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ needs.look.outputs.base }}
           persist-credentials: false
 
       # The node the front's record names (records\front-build.json,
@@ -228,13 +232,15 @@ jobs:
 
       - name: Hand the pin back in the log
         shell: pwsh
+        env:
+          PIN_BASE: ${{ needs.look.outputs.base }}
         run: |
-          # The commit as a git bundle over main's head, between two marked
+          # The commit as a git bundle over the Main base, between two marked
           # lines (LogHandBack.ps1). The mark is put together here so this
           # script's own text, which the log shows first, never holds it.
           . ./scripts/release/LogHandBack.ps1
           $f = Join-Path $env:RUNNER_TEMP 'pin.bundle'
-          git bundle create $f main..engine-pin/next
+          git bundle create $f "$env:PIN_BASE..engine-pin/next"
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::git bundle failed'; exit 1 }
           foreach ($l in @(Get-LogHandBackLines ('ENGINE' + '-PIN') ([IO.File]::ReadAllBytes($f)))) { Write-Host $l }
 
@@ -248,10 +254,10 @@ jobs:
       contents: read
       actions: read
     steps:
-      - name: Check out main
+      - name: Check out the Main base from look
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ needs.look.outputs.base }}
           persist-credentials: false
 
       - name: Take the pin out of make's log
@@ -259,6 +265,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_COMMIT: ${{ needs.look.outputs.head }}
+          PIN_BASE: ${{ needs.look.outputs.base }}
         run: |
           . ./scripts/release/LogHandBack.ps1
           $jobs = (gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/jobs?per_page=100" | ConvertFrom-Json).jobs
@@ -270,25 +277,35 @@ jobs:
           $f = Join-Path $env:RUNNER_TEMP 'pin.bundle'
           [IO.File]::WriteAllBytes($f, (Read-LogHandBack $log ('ENGINE' + '-PIN')))
           git bundle verify $f
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the bundle is not one over main''s head'; exit 1 }
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the bundle is not one over the Main base from look'; exit 1 }
           git fetch -q $f engine-pin/next:engine-pin/next
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::the bundle has no engine-pin/next'; exit 1 }
-          # Held to a pin before anything is pushed: one commit on main's
-          # head, engine/skymp at the head look found, and no path but a
-          # pin's.
+          # A bundle can only add a single engine pin over the trusted base.
           $main = "$(git rev-parse HEAD)".Trim()
+          if ($LASTEXITCODE -ne 0 -or $main -ne $env:PIN_BASE) { Write-Host '::error::the checkout does not match the Main base from look'; exit 1 }
           $parents = @("$(git rev-list --parents -n 1 engine-pin/next)".Trim() -split ' ')
           if ($parents.Count -ne 2 -or $parents[1] -ne $main) { Write-Host "::error::engine-pin/next is not one commit on main's head $main"; exit 1 }
           $gitlink = "$(@(git ls-tree engine-pin/next engine/skymp) -split '\s+' | Select-Object -Index 2)".Trim()
           if ($gitlink -ne $env:HEAD_COMMIT) { Write-Host "::error::engine-pin/next pins $gitlink, not $env:HEAD_COMMIT"; exit 1 }
           $allowed = '^(engine/skymp|records/(server-build|client-build|client-licences|front-build)\.json|records/(client|front)-licences/[^/]+|THIRD-PARTY\.md|site/data/site/credits\.md)$'
-          $bad = @(git diff --name-only main engine-pin/next | Where-Object { $_ -notmatch $allowed })
+          $bad = @(git diff --name-only $main engine-pin/next | Where-Object { $_ -notmatch $allowed })
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the pin changes could not be read'; exit 1 }
           if ($bad.Count) { Write-Host "::error::engine-pin/next changes more than a pin: $($bad -join ', ')"; exit 1 }
+
+          $currentMain = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha
+          if ($LASTEXITCODE -ne 0 -or $currentMain -notmatch '^[0-9a-f]{40}$') {
+            Write-Host '::error::the current main commit could not be read'
+            exit 1
+          }
+          if ($currentMain -ne $main) {
+            Write-Host "::error::main moved from $main to $currentMain while preparing the pin. Start a new Engine pin run on main."
+            exit 1
+          }
           git show --stat --format='%H %s' engine-pin/next
 
       - name: The pin robot's token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.PIN_APP_CLIENT_ID }}
           private-key: ${{ secrets.PIN_APP_KEY }}

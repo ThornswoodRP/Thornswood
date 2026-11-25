@@ -352,7 +352,7 @@ later(DAY + 1000);
 
 // mp.onDying is where it is asked: before the engine kills, with nothing sent.
 {
-  const onDying = slice(gm, "mp.onDying = guard('onDying', function (actorId) {", '\n});');
+  const onDying = slice(gm, "mp.onDying = guard('onDying', function (actorId, killerId) {", '\n});');
   yes('mp.onDying is in the gamemode', !!onDying);
   const asked = [], written = [];
   const ybox = {
@@ -369,7 +369,11 @@ later(DAY + 1000);
   const died = ybox.mp.onDying(NONE, VIT, 0.3);
   yes('an ordinary death is let through with nothing written', died === undefined && written.length === 1 &&
     asked.join(',') === 'ff000001,ff000002');
-  yes('mp.onDying asks nothing but Cheat Death', (onDying || '').split('__thornswood').length === 2);
+  // Going down is the second answer (#4607), asked only once Cheat Death has said no.
+  const asksFirst = (onDying || '').indexOf('cheatDeath(actorId)');
+  yes('mp.onDying asks Cheat Death first, then going down, and nothing else',
+    (onDying || '').split('__thornswood').length === 3 && asksFirst > 0 &&
+    asksFirst < (onDying || '').indexOf('goDown(actorId, killerId)'));
 }
 
 // -------------------------------------------------------- Troll's Blood --

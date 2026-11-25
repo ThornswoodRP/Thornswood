@@ -1,6 +1,8 @@
 <#
-  Check-Editions.ps1
+.SYNOPSIS
+  Does anything in the load order need the paid Anniversary upgrade?
 
+.DESCRIPTION
   Does anything in the load order need the paid Anniversary upgrade?
 
       .\scripts\mods\Check-Editions.ps1
