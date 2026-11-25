@@ -14,7 +14,8 @@
                  point, a mage's spell point, an Enchanter's staff spell
                  point. The count toward the next rank starts again at 0, as
                  it does when work raises the rank (professions.md).
-    A recipe     recipes asked by what they make, for that person. A recipe
+    A recipe     owned recipes and kept smelts asked by what they make, for that person.
+                 Unowned recipes are outside this check. A recipe
                  is stuck for one of four reasons, and the card names which:
                    - the craft gate refuses it, and says why (a rank, a half,
                      a race, a roll), which the rank tool or the person's own
@@ -45,7 +46,7 @@
   /craftstaff is a line the page sends, never one anybody is told to type:
     pick <profile>|-                     the person the card is for, or nobody
     raise <profile> <key>                one rank up in that class, half or school
-    recipe <profile> <words>             what the gate says about recipes making that
+    recipe <profile> <words>             what the gate says about owned recipes and kept smelts making that
     recipes <profile>                    hand their game the gate's list now
     give <profile> <n> <item> | <why>    give back n of an item, with the reason
 */
@@ -245,7 +246,7 @@
       var asked = words.slice(2).join(' ').trim().slice(0, ASK_MOST);
       if (!asked) { tell(pid, 'Type part of the name of what the recipe makes, then press Check.'); return true; }
       state.checks[pid] = { pid: whoPid, want: asked };
-      if (!recipeRows(asked).rows.length) { tell(pid, 'No recipe anybody owns makes anything called ' + asked + '.'); }
+      if (!recipeRows(asked).rows.length) { tell(pid, 'This check found no owned recipe or kept smelt making ' + asked + '. Unowned recipes are outside this check.'); }
       redraw(actorId);
       return true;
     }
