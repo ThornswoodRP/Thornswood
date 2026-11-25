@@ -89,7 +89,7 @@ Staff.
 | `/warn <person> <why>` | Tells them that staff have warned them, why, and that the next step is being removed from the world |
 | `/freeze <person> [why]` | Holds them where they stand, across a reconnect |
 | `/unfreeze <person>` | Lets them go |
-| `/silence <person> [minutes] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. 30 minutes unless you say, a day at most. Their name stays |
+| `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
 

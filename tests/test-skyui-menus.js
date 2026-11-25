@@ -326,18 +326,30 @@ yes('  it comes after the load order copies and before anything is published',
 
 // ------------------------------------------------------------------ this machine
 
-const dev = 'C:\\Thornswood-DevBuild';
+const whereDev = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-File',
+  path.join(REPO, 'scripts', 'release', 'Where.ps1'), 'InstallDev'], { encoding: 'utf8' });
+yes('Where.ps1 names the dev install', whereDev.status === 0 && !!whereDev.stdout.trim());
+if (whereDev.status !== 0 || !whereDev.stdout.trim()) {
+  console.log('      ' + (whereDev.error ? whereDev.error.message : whereDev.stderr));
+  done();
+}
+const dev = whereDev.stdout.trim();
+const devData = path.join(dev, 'Game', 'Data');
 const devPlugins = path.join(dev, 'Profile', 'OwnGame', 'plugins.txt');
-if (fs.existsSync(path.join(dev, 'Game', 'Data', 'SkyUI_SE.bsa')) && fs.existsSync(devPlugins)) {
-  const g = { data: path.join(dev, 'Game', 'Data'), plugins: devPlugins };
-  const always = ['Data\\Interface\\map.swf'].concat(oldScripts);
-  const r = run(g, always);
-  yes('the dev game folder, once this release deletes the old scripts, has no SkyUI mismatch (exit ' + r.code + ')', r.code === 0);
-  const now = run(g);
-  if (now.code === 2) { skipped('the dev game folder still has SkyUI 5.2\'s scripts loose until a pack with this change is applied'); }
-  else { yes('the dev game folder has no SkyUI mismatch today (exit ' + now.code + ')', now.code === 0); }
+if (fs.existsSync(dev) || process.env.THORNSWOOD_INSTALL) {
+  const archive = path.join(devData, 'SkyUI_SE.bsa');
+  yes('the dev game folder has SkyUI_SE.bsa at ' + archive, fs.existsSync(archive));
+  yes('the dev game folder has its plugin list at ' + devPlugins, fs.existsSync(devPlugins));
+  if (fs.existsSync(archive) && fs.existsSync(devPlugins)) {
+    const g = { data: devData, plugins: devPlugins };
+    const always = ['Data\\Interface\\map.swf'].concat(oldScripts);
+    const r = run(g, always);
+    yes('the dev game folder, once this release deletes the old scripts, has no SkyUI mismatch (exit ' + r.code + ')', r.code === 0);
+    const now = run(g);
+    yes('the dev game folder has no SkyUI mismatch today (exit ' + now.code + ')', now.code === 0);
+  }
 } else {
-  skipped('no dev game folder with SkyUI at ' + dev);
+  skipped('no dev install at ' + dev + '; byte fixtures above checked the menus');
 }
 
 done();
