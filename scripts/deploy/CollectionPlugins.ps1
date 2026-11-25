@@ -13,7 +13,7 @@
 
       { "version": 1,
         "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",
-        "collection": "7essxf", "revision": 8,
+        "collection": "7essxf", "revision": 11,
         "plugins": [ { "name": "3BBB.esp", "size": 20257, "sha256": "ce4f..." } ] }
 
   scripts\mods\New-CollectionPluginRecord.ps1 writes it from a folder.
