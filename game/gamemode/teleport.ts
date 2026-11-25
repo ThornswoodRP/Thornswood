@@ -817,7 +817,7 @@
   function commandParts(text) {
     var raw = String(text || '').trim();
     var head = /^\S+/.exec(raw);
-    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1')) return [head[0]];
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1' || head[0] === '/board-submit-v1')) return [head[0]];
     return raw.split(/\s+/);
   }
 
@@ -1073,6 +1073,17 @@
       var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
       if (journalWhy) toProfile(profileId, journalWhy);
       journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-submit-v1') {
+      if (!needCharacter()) return;
+      var submitPayload = savedTextPayload(cmd.text, word, 8200, 5) || savedTextPayload(cmd.text, word, 8200, 6);
+      var submitProperty = g.__thornswoodProperty;
+      if (!submitPayload || !submitProperty || !submitProperty.submitBoard) {
+        toProfile(profileId, 'That board submission is invalid or unavailable. Keep your draft.'); return;
+      }
+      submitProperty.submitBoard(submitPayload, actorId, profileId, toProfile);
       return;
     }
 
