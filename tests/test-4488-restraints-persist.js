@@ -192,6 +192,22 @@ try {
     assert.deepEqual(two.posts[0].profiles, {});
     assert.equal(two.box.mp.onThornswoodLogin({ userId: 1, profileId: PID, proof: null }), PID);
   });
+  test('expiry pruning stops voice publication if it discovers a newer private book', () => {
+    const w = fresh(), one = boot(w);
+    one.command('/silence ' + TARGET + ' 1m');
+    const before = one.posts.length;
+    w.now += 60001;
+    const replacement = JSON.parse(fs.readFileSync(w.file, 'utf8'));
+    const until = w.now + 1800000;
+    replacement.revision++;
+    replacement.silenced[TARGET] = { by: PID, until };
+    fs.writeFileSync(w.file, JSON.stringify(replacement));
+    one.box.__thornswoodStaff.pushSilenced();
+    assert.equal(one.posts.length, before, 'unverified state must not replace the voice list');
+    assert.equal(fs.readFileSync(w.file, 'utf8'), JSON.stringify(replacement));
+    one.box.__thornswoodStaff.pushSilenced();
+    assert.deepEqual(one.posts[before].profiles, { [TARGET]: until });
+  });
   for (const raw of ['[]', 'null', 'true', '{}', '{"version":1,"revision":-1,"frozen":{},"silenced":{}}']) {
     test('structured but invalid cold book stays unavailable: ' + raw, () => {
       const w = fresh(); fs.writeFileSync(w.file, raw);

@@ -543,6 +543,9 @@
     var expired = Object.keys(state.silenced).filter(function (k) { return state.silenced[k].until <= now; });
     if (expired.length) {
       saveRestraints(function (doc) { expired.forEach(function (k) { delete doc.silenced[k]; }); });
+      // Pruning can discover a changed or unreadable book. Keep voice's last
+      // confirmed list until the private authority can be read again.
+      if (!restraintsReady) { return; }
     }
     for (var k in state.silenced) {
       if (!Object.prototype.hasOwnProperty.call(state.silenced, k)) { continue; }
