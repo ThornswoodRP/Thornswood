@@ -12,6 +12,8 @@ const ledger = require('../../scripts/ops/New-AlphaMerchantLedger.js')
   .createAlphaMerchantLedger(roster, require('../data/npc-population.json'));
 const merchant = roster.merchants.find(x => x.bookHold === 'windhelm' && x.role === 'Cook');
 const placed = population.keep.find(x => x[0] === merchant.reference);
+const smith = roster.merchants.find(x => x.bookHold === 'windhelm' && x.role === 'Smith');
+const smithPlaced = population.keep.find(x => x[0] === smith.reference);
 // A valid pre-feature ledger has no food clock. Its exact food age is unknown.
 const legacyEntry = {baseId:0x669a2,count:4,name:'Venison (2 days left)'};
 ledger.entries[merchant.reference].stock.push({baseId:0x669a2,count:4,name:'Venison',entry:legacyEntry});
@@ -19,7 +21,7 @@ ledger.sha256 = require('node:crypto').createHash('sha256').update(JSON.stringif
 const w = standIn.world({ name: '4664-merchant-spoilage',
   settings: { loadOrder: population.plugins, thornswoodServer: 'dev' }, loadOrder: population.plugins,
   files: { 'private/merchant-ledger.json': ledger, 'private/merchant-ledger.initialized': '1',
-    'private/allowed.json': { profiles: [1000], accounts: { 1000: 'acct-cook' }, businessOwnerProfiles: [1000] } } });
+    'private/allowed.json': { profiles: [1000,1002], accounts: { 1000: 'acct-cook', 1002:'acct-smith' }, businessOwnerProfiles: [1000] } } });
 try {
   w.cast(catalogue);
   let writeFault = '';
@@ -29,6 +31,9 @@ try {
   const actor = w.person(0xff004664, { profileId: 1000, name: 'Maker', prof: 'cook', town: 'windhelm',
     cell: placed[2], pos, inventory: { entries: [{ baseId: GOLD, count: 300 },
       { baseId: VENISON, count: 3, name: 'Venison (2 days left)' }] } });
+  const second = w.person(0xff004665, { profileId:1002,name:'Smith customer',prof:'smith',town:'windhelm',
+    cell:smithPlaced[2],pos:[smithPlaced[3][0]+100,smithPlaced[3][1],smithPlaced[3][2]],
+    inventory:{entries:[{baseId:GOLD,count:100},{baseId:w.idOf('5ace4:Skyrim.esm'),count:1}]} });
   yes('the whole gamemode loads over the current trader roster', w.boot());
   if (w.loaded()) {
     const nativeWrite = w.mp().writePrivateEconomyLedger;
@@ -39,13 +44,14 @@ try {
       return committed;
     };
     yes('the real controller loads against the controlled native save boundary', w.reload());
-    w.arrive(actor); w.run(30000);
+    w.arrive(actor); w.arrive(second); w.run(30000);
     const trader = w.idOf(merchant.reference);
     function say(line) { w.say(actor, line); w.run(300); return w.heard(actor).slice(-1)[0]; }
     const view = () => w.prop(actor, 'thornswoodMerchantView') || {};
     const stock = () => (w.readPrivate('merchant-ledger.json').entries[merchant.reference].stock || []);
     say('/book new business Maker Kitchen');
     say('/book price Maker Kitchen Venison | 2 | 3');
+    say('/book price Maker Kitchen Iron Ingot | 2 | 3');
     w.moveTo(actor, '1691d:Skyrim.esm', [134265.1, 35842.3, -12397.5]); w.run(2000);
     const submitted = say('/book submit Maker Kitchen');
     yes('the price list is submitted through the real hold board', /^Submitted/.test(submitted));
@@ -63,8 +69,10 @@ try {
     const now = w.now();
     w.box().Date.now = () => now + 24 * 60 * 60 * 1000 + 1;
     yes('the aging interval ends outside winter', w.box().__thornswoodSeason.seasonAt(w.box().Date.now()) !== 'winter');
-    const bought = say('/merchant buy 1 @3 Venison'); w.run(2000);
-    yes('a stale open offer buys food with one day left after one real day', /waiting/.test(bought) &&
+    const boughtAt = w.heard(actor).length;
+    say('/merchant buy 1 @3 Venison'); w.run(2000);
+    yes('a stale open offer buys food with one day left after one real day',
+      w.heardSince(actor,boughtAt).some(line => /waiting|Bought 1 Venison/.test(line)) &&
       w.row(actor).inventory.entries.some(x => x.baseId === VENISON && x.count === 1 && x.name === 'Venison (1 day left)') &&
       w.count(actor, GOLD) === before - 3);
     w.box().Date.now = () => now + 2 * 24 * 60 * 60 * 1000 + 1;
@@ -122,6 +130,33 @@ try {
     yes('new verified intake remains saleable without releasing or relabeling quarantined food',
       w.count(actor,GOLD) === paidBefore-3 && stock().some(x => x.ageUnknown &&
         JSON.stringify(x.entry) === JSON.stringify(legacyEntry)) && !stock().some(x => !x.ageUnknown && x.baseId === VENISON));
+    // Two real sessions: a corrupt Cook clock must not abort delivery of a
+    // healthy Smith's receipt-backed sale in the same recovery pass.
+    const smithId = w.idOf(smith.reference), iron = w.idOf('5ace4:Skyrim.esm');
+    w.activate(smithId,second); w.run(300);
+    const healthyGold = w.count(second,GOLD);
+    w.holdSaves(true);
+    // At this four-day artificial wall-clock offset, exercise the actual
+    // authenticated controller boundary, independently of relay arrival timers.
+    const healthySale = w.box().__thornswoodMerchantTrade.command({actorId:second,profileId:1002,
+      parts:['/merchant','sell','1','@2','Iron','Ingot']});
+    yes('the healthy controller really arms a receipt-backed sale', /waiting/.test(healthySale.text));
+    const purses = w.box().__thornswoodNpcMerchants, cookState = purses.read(trader);
+    const invalid = JSON.parse(JSON.stringify(cookState)); invalid.spoilClock.at = w.box().Date.now()+86400000;
+    purses.compareAndCommit(trader,cookState.revision,invalid,()=>true);
+    const invalidBefore = JSON.stringify(purses.read(trader));
+    w.holdSaves(false);
+    let recovered, recoveryError;
+    try { recovered = w.box().__thornswoodMerchantTrade.recover(); } catch(error) { recoveryError = error; }
+    yes('one bad food clock does not abort the two-session recovery pass', !recoveryError && Array.isArray(recovered));
+    if (recovered) recovered.forEach(result => w.box().__thornswoodMerchantTrade.push(result.actorId,result.view));
+    w.run(3000);
+    yes('the affected view closes with an honest food-clock notice and unchanged state',
+      JSON.stringify(purses.read(trader)) === invalidBefore && w.prop(actor,'thornswoodMerchantView').open === false &&
+      w.heard(actor).some(line => /food clock cannot be verified/.test(line)));
+    yes('the healthy session still settles and receives its refreshed view',
+      w.count(second,iron) === 0 && w.count(second,GOLD) === healthyGold+2 &&
+      (w.prop(second,'thornswoodMerchantView').offers || []).some(x => x.name === 'Iron Ingot' && x.stock === 1));
     yes('no handler or timer throws', w.faults.length === 0 && w.threw.length === 0 && w.logged(/\] on[A-Z][A-Za-z]+ threw/).length === 0);
   }
   t.done(w);

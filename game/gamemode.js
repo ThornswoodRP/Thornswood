@@ -71004,7 +71004,20 @@ function createMerchantTrading(deps) {
         var closed=closedView(session.actorId,profileId,session);
         views.push({actorId:session.actorId,view:closed}); return;
       }
-      var state = ageStock(session.merchantId,purses.read(session.merchantId),function(){return ownsSession(session.actorId,profileId,session);});
+      var state;
+      try {
+        state = ageStock(session.merchantId,purses.read(session.merchantId),function(){return ownsSession(session.actorId,profileId,session);});
+      } catch(error) {
+        if (!active || sessions.get(profileId)!==session) return;
+        var refused = closedView(session.actorId,profileId,session);
+        refused.note = String(error.message || error);
+        views.push({actorId:session.actorId,view:refused});
+        if (typeof deps.notice === 'function' && isCurrentView(session.actorId,refused)) {
+          try { deps.notice(profileId,refused.note); }
+          catch(noticeError) { if (typeof deps.log === 'function') deps.log('Merchant food notice failed: '+noticeError); }
+        }
+        return;
+      }
       var place = state && placeOf(state.reference);
       if (state && place) {
         var view=viewFor(session.merchantId,state,place,session.actorId,profileId,session.note,{session:session,identity:session.identity});
@@ -71382,6 +71395,10 @@ function installMerchantTrading(env) {
   var trading = createMerchantTrading({
     purses: env.purses,
     spoilage: function () { return g.__thornswoodSpoilage; },
+    notice: function (profileId,line) {
+      if (typeof g.__thornswoodToProfile !== 'function') throw new Error('Merchant notice delivery is unavailable.');
+      g.__thornswoodToProfile(profileId,line);
+    },
     minted: minted,
     log:log,
     prices: {
