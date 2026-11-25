@@ -1886,6 +1886,10 @@
       // A cooked meal's help (#2682), only for a meal that went down: not
       // inside the 8 seconds, and not on a full stomach, where it sits badly.
       if (ate1.taken && !ate1.full) {
+        if (group === 'cooked' || group === 'soup' || group === 'feast') {
+          var college = g.__thornswoodCollege;
+          if (college && college.cookedMeal) { college.cookedMeal(actorId); }
+        }
         var help = mealHelpOf(baseId, group);
         // A fine dish's help lasts longer (#2906), and a feast's lasts half
         // as long as a meal's, fine or plain (#3152).
