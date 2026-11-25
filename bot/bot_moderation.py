@@ -85,6 +85,7 @@ _MOD_DID = {
     # which rank from what to what, or what was given back and why.
     'craftrank': 'raised a rank of %s',
     'craftrecipes': 'handed the newer recipe list to the game of %s',
+    'setprofession': 'changed the profession of %s',
     'craftgive': 'gave back to %s',
     # Not staff: somebody's own /stuck (#414), said as its why reads.
     'stuck': 'used /stuck',
