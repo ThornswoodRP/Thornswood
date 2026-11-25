@@ -167,7 +167,6 @@ yes('D4 a 9 gold haul keeps nothing for the company: Faendal is paid all 9 (' + 
 // ----------------------------------------------------- E. a sale out of Skyrim --
 function hex(a) { return a.toString(16); }
 function win(a) { return w.prop(a, 'thornswoodTrade') || {}; }
-function line(a, name) { const l = (win(a).pack || []).find(function (x) { return x.n === name; }); return l ? '#' + l.p : ''; }
 const funds0 = JSON.stringify(P().funds());
 say(TORSTEN, '/trade ' + hex(RALOF));
 say(RALOF, '/yes');
@@ -178,7 +177,9 @@ heardAt = w.heard(RALOF).length;
 say(TORSTEN, '/trade sale');
 yes('E2 Torsten does, and Ralof is told what it means (' + w.heardSince(RALOF, heardAt).join(' | ') + ')',
     w.heardSince(RALOF, heardAt).indexOf('Torsten is buying for the Free Skyrim Trading Company. What you put up leaves Skyrim and does not come back.') >= 0);
-say(RALOF, '/trade add ' + line(RALOF, 'Gem Ruby') + ' 1');
+const rubyLine = (win(RALOF).pack || []).find(row => row.id === w.idOf(RUBY));
+yes('E3 the seller can select the ruby by its displayed piece key', !!(rubyLine && rubyLine.p));
+if (rubyLine) { say(RALOF, '/trade add #' + rubyLine.p + ' 1'); }
 say(TORSTEN, '/trade gold 50');
 const rg = gold(RALOF), tg = gold(TORSTEN);
 heardAt = w.heard(RALOF).length;
