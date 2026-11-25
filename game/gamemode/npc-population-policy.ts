@@ -320,6 +320,14 @@ function createNpcPopulation(api,data,plugins,merchants,options) {
     // A spawn staff did not keep (#2623): removed when it dies.
     const entry=configured.get(id);
     return !!(entry && entry.rule.commanded && !entry.rule.keep);
+  },staffKillable:id=>{
+    const entry=configured.get(id);
+    if(!entry || !entry.rule || !entry.rule.row) return false;
+    // Hostile encounters and staff spawns only. Town residents, traders,
+    // transport, farms and ambient creatures are never mass-kill targets.
+    return entry.rule.commanded===true || typeof entry.rule.patrol==='string' ||
+      (entry.rule.row[6]==='enemy' &&
+        ['dungeon','wilderness','cave','bandit-camp','sewer','giant-camp'].includes(entry.rule.row[7]));
   },spawned:()=>{
     // Every creature a spawn command made that is still held here, kept or
     // not, alive or dead: what staff's /despawn chooses from (#2623).

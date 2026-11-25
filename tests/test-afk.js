@@ -243,9 +243,11 @@ function windowPage(preset) {
   const keys = [];
   function node(tag) {
     const n = { tag: tag, className: '', textContent: '', innerHTML: '', id: '', kids: {}, listeners: {} };
-    n.querySelector = function (sel) { if (!n.kids[sel]) { n.kids[sel] = node('x'); } return n.kids[sel]; };
+    n.querySelector = function (sel) { if (!n.kids[sel]) { n.kids[sel] = node('x'); n.kids[sel].parentNode = n; } return n.kids[sel]; };
     n.addEventListener = function (ev, fn) { n.listeners[ev] = fn; };
-    n.appendChild = function (c) { return c; };
+    n.appendChild = function (c) { c.parentNode = n; return c; };
+    n.focus = function () { box.document.activeElement = n; };
+    n.contains = function (other) { while (other) { if (other === n) { return true; } other = other.parentNode; } return false; };
     return n;
   }
   const win = {

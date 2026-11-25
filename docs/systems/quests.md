@@ -44,8 +44,12 @@ You may take the asked amount and the extra. You turn in the asked
 amount. The extra stays in your pack. Then the place shuts for you
 until the cooldown ends.
 
-Until the turn-in, the extra is not yours. Walking away without it
-puts the goods back and shuts the place. The cooldown does not start.
+Until the turn-in, the extra is not yours. Walking away returns the
+remaining goods up to the recorded draw and shuts the place. Spending
+some or all of that draw does not trap the open work. Missing goods start
+that work's normal cooldown, so leaving cannot refresh a spent draw.
+Giving back the whole draw, or leaving before drawing anything, starts
+no cooldown.
 You cannot take more from the place while the quest is unfinished.
 
 The rare mine is this second kind. Ebony, the gems, stalhrim, and
@@ -152,8 +156,9 @@ accepting it. Goods and payment persist through reconnects and restarts.
 The trader panel implements the four miner offers: ebony, a chosen gem,
 stalhrim, and heart stone. It shows their places, draw limits, required
 returns, progress, rank gates and personal cooldowns. Choose a gem before
-taking its work. Turn in the required goods to finish, or give back the
-whole draw to leave without a cooldown. These inventory steps require the
+taking its work. Turn in the required goods to finish, or give back what
+you still carry of the draw to leave. If anything is missing, its normal
+cooldown applies. These inventory steps require the
 native transaction that saves the quest, inventory and receipt together.
 An unfinished merchant transfer or unsaved inventory receipt holds them
 until its exact save acknowledgement; no reward is inferred from a timer.
@@ -168,7 +173,8 @@ implementation does not establish availability on either server.
 The [pearl bed](merchant-pearl-bed.md) is connected to its three selected sources, with Expert Fisher and pole rules and existing shared stock. The [seven retrievals](merchant-retrieval-work.md) connect exact specialists, source items and fixed rewards. The [mammoth ground](merchant-mammoth-work.md) now uses its three existing bodies, normal Master hunting goods and exact one-body return. The [orchard](merchant-orchard-work.md) connects its ten trees through existing Farmer claims, sowing, seasonal growth and complete harvest yields. Source implementation is not a deployment record.
 Scene gold is created when the quest is finished. It is not taken
 from a trader's purse. Walking
-away puts the goods back and does not start the cooldown. The rank on
+away returns what remains of the draw. Missing goods start its normal
+cooldown; a full return does not. The rank on
 a scarce row still applies.
 
 The four miner rows are bound to the buildings named above, by each

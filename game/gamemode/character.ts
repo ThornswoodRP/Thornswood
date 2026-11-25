@@ -1103,7 +1103,7 @@
     rules, so an old value the rules refuse is simply not carried, and the
     log says which.
   */
-  function migrate(actorId) {
+  function migrate(actorId, preview) {
     var s = P.fresh();
     var old = null;
     try { old = mp.get(actorId, 'thornswoodChargen'); } catch (e) { old = null; }
@@ -1131,17 +1131,23 @@
           leftover privilege (bard instruments, etc.) reads it, and leave
           the progression state empty so they re-pick like somebody new.
         */
-        clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
-        try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        if (!preview) {
+          clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
+          try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        }
       } else if (trade) {
         clog('migrate', actorId.toString(16), 'old trade', trade, 'has no home in the rulebook; left on the old property, nothing chosen here');
       }
     }
-    return writeState(actorId, s);
+    return preview ? s : writeState(actorId, s);
   }
 
   function stateOf(actorId) {
     return readState(actorId) || migrate(actorId);
+  }
+
+  function previewState(actorId) {
+    return readState(actorId) || migrate(actorId, true);
   }
 
   // ------------------------------------------------- gates, work, spells --
@@ -2436,7 +2442,7 @@
   }
 
   g.__thornswoodCharacter = {
-    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, writeState: writeState,
+    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
     // ReadBookEvent owns AddSpell and consuming the tome after this returns.
     // Saving eligible book/history here must not pre-add that engine spell.
     writeTomeState: function (actorId, s) {
