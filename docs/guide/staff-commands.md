@@ -30,6 +30,17 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 
 Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
 
+## Rename a character
+
+Admins only, including when renaming yourself. Playtesters and staff without the admin role cannot use either form.
+
+| Command | What it does |
+| --- | --- |
+| `/rename self <new name>` | Renames your current saved character |
+| `/rename <person> <new name>` | Renames another character who is in the world; names, unique name prefixes, form ids and profile numbers work |
+
+Names use 1 to 60 characters: Unicode letters and numbers, spaces, apostrophes, hyphens or periods, with at least one letter or number. Accents are normalized to NFC, outer spaces are trimmed and repeated spaces become one. Controls, invisible direction marks and markup are refused. Existing duplicate names remain allowed; use the character's form id or profile number when a name is ambiguous. The character, account and profile stay the same, the new name survives reconnecting, and the staff record keeps the old and new names.
+
 ## For yourself
 
 | Command | What it does |
