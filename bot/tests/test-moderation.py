@@ -346,6 +346,30 @@ try:
     yes('M16 one the game server could not do says so',
         tbf is not None and tbf.startswith('**Staff on the site:** Patrick could not take back from profile 7'))
 
+    # The testing command records the selected class as its reason and the
+    # changed character as subject, for self and admin-selected targets.
+    put(LIVE, [])
+    put(DEV, [])
+    class_records = [
+        json.dumps(dict(json.loads(row('setclass', who='Aela', why='mage')), who=1001)),
+        row('setclass', who='Bjorn', why='warrior', n=1),
+    ]
+    ticks = drive([lambda: put(DEV, class_records)])
+    yes('class changes reach the watcher with the correct self or other target and selected class',
+        ticks == [[], [
+            '**Staff on the dev server:** Aela (profile 1001) changed the class of '
+            'Aela (profile 1001): mage',
+            '**Staff on the dev server:** Aela (profile 1001) changed the class of '
+            'Bjorn (profile 2002): warrior',
+        ]])
+    class_escaped = bot.moderation_text('live', json.loads(row('setclass', who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+    yes('class change escapes both names and its reason',
+        class_escaped is not None and '@everyone' not in class_escaped
+        and '<@111111111111111111>' not in class_escaped
+        and '<@&111111111111111111>' not in class_escaped
+        and '\\[x](http://e.invalid)' in class_escaped and len(class_escaped) <= 1900)
+
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the
     # building and its hold in the why, and each reads as who did what where.
@@ -391,6 +415,31 @@ try:
     yes('M15 no em dash and never the forbidden word',
         all(chr(0x2014) not in t and ('pla' + 'yer') not in t.lower() for t in (wp, wc, wd)))
 
+    # Testing repair records the carried equipment's owner, whether the
+    # invoking character or an admin's explicitly selected other person.
+    put(LIVE, [])
+    put(DEV, [])
+    repair_records = [
+        json.dumps(dict(json.loads(row('repair', who='Aela',
+            why='restored equipment below sound to 100%')), who=1001)),
+        row('repair', who='Bjorn', why='restored equipment below sound to 100%', n=1),
+    ]
+    ticks = drive([lambda: put(DEV, repair_records)])
+    yes('testing repairs reach the watcher with the correct self or other equipment owner',
+        ticks == [[], [
+            '**Staff on the dev server:** Aela (profile 1001) repaired equipment for '
+            'Aela (profile 1001): restored equipment below sound to 100%',
+            '**Staff on the dev server:** Aela (profile 1001) repaired equipment for '
+            'Bjorn (profile 2002): restored equipment below sound to 100%',
+        ]])
+    repair_escaped = bot.moderation_text('live', json.loads(row('repair', who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+    yes('testing repair escapes both names and its reason',
+        repair_escaped is not None and '@everyone' not in repair_escaped
+        and '<@111111111111111111>' not in repair_escaped
+        and '<@&111111111111111111>' not in repair_escaped
+        and '\\[x](http://e.invalid)' in repair_escaped and len(repair_escaped) <= 1900)
+
     # M16: staff on the crafting card, the Office page of K (#3167): each
     # press comes through the staff block's record, and reads as who did what
     # to whom, with the why the gamemode writes.
@@ -411,6 +460,47 @@ try:
         and '@everyone' not in cl and '<@&111111111111111111>' not in cl)
     yes('M16 no em dash and never the forbidden word',
         all(chr(0x2014) not in t and ('pla' + 'yer') not in t.lower() for t in (cr, cg, cl)))
+
+    # Scene tools record the invoking character as both actor and subject,
+    # including automatic revocation when that character's authority ends.
+    scene_cases = (
+        ('fly', 'on', 'changed their flight mode: on'),
+        ('phase', 'Forward in the same cell.', 'used /phase: Forward in the same cell.'),
+        ('godmode', 'off', 'changed their invulnerability: off'),
+        ('invisible', 'on', 'changed their visibility: on'),
+        ('cleareffects', 'Alcohol and drug effects cleared.',
+         'used /cleareffects: Alcohol and drug effects cleared.'),
+        ('killall', 'Nearby hostile NPCs only.',
+         'used /killall: Nearby hostile NPCs only.'),
+        ('tools-off', 'The staff session or its authority ended.',
+         'ended scene tools for Aela (profile 1001): The staff session or its authority ended.'),
+    )
+    put(LIVE, [])
+    put(DEV, [])
+    scene_records = [json.dumps(dict(json.loads(row(d, who='Aela', why=why, n=i)), who=1001))
+                     for i, (d, why, _) in enumerate(scene_cases)]
+    ticks = drive([lambda: put(DEV, scene_records)])
+    yes('scene tools and automatic revocation reach the watcher with their real self target',
+        ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
+                       for _, _, words in scene_cases]])
+    no_hostiles = json.loads(row('killall', who='Aela', why='Nearby hostile NPCs only.',
+        killed=[], failed=[], limit=40))
+    no_hostiles['who'] = 1001
+    yes('a cleanup with zero eligible targets reports only that the command was used',
+        bot.moderation_text('dev', no_hostiles) ==
+        '**Staff on the dev server:** Aela (profile 1001) used /killall: Nearby hostile NPCs only.')
+    scene_source = open(os.path.join(HERE, '..', 'game', 'gamemode', 'staff-tools.ts'), encoding='utf-8').read()
+    scene_words = re.findall(r"'/([a-z]+)'", re.search(r'var WORDS = \[([^]]+)\]', scene_source).group(1))
+    scene_reports = re.findall(r"report\('/([a-z-]+)'", scene_source)
+    yes('each scene command and lifecycle report has a moderation sentence',
+        all(d in bot._MOD_DID for d in scene_words + scene_reports))
+    scene_escaped = [bot.moderation_text('live', json.loads(row(d, who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+        for d, _, _ in scene_cases]
+    yes('every scene message escapes both names and reasons without exceeding the message limit',
+        all(t and '@everyone' not in t and '<@111111111111111111>' not in t
+            and '<@&111111111111111111>' not in t and '\\[x](http://e.invalid)' in t
+            and len(t) <= 1900 for t in scene_escaped))
 
     # M9: started with the others, and sent through report_say (mentions off).
     src = inspect.getsource(bot.on_ready)

@@ -13,7 +13,9 @@
       past novice needs its Master), it hands the skill point a rank always
       hands, the count starts again at 0, the person is told the way work
       tells them, and it is in the staff log.
-    - A recipe: the card says what the craft gate says for that person,
+    - A recipe: the card explicitly covers owned recipes and kept smelts
+      only (#4867), including a real UI search through the queued server check.
+      It says what the craft gate says for that person,
       whether their game was handed the row as hidden, when that list is
       older than the gate's answer, and when the game's own recipe asks for
       something first. Hand their game the list asks the one writer of the
@@ -75,6 +77,10 @@ const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let TABLE = null;
 try { TABLE = require('../../tests/gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID'); } catch (e) { TABLE = null; }
+// The real retained smelt table, without a second list of content forms.
+const keptAt = src.indexOf('const KEPT_SMELT = {');
+const keptEnd = src.indexOf('\n};', keptAt);
+const KEPT_SMELTS = vm.runInNewContext(src.slice(keptAt, keptEnd + 3) + '\nKEPT_SMELT;');
 const OFFICE_VIEW = between('  function officeView(actorId, profileId) {', '\n  /*\n    THE JAIL RULE');
 [['the chat command block', COMMANDS], ['the staff block', STAFF], ['the staff crafting block', CRAFT],
  ['the progression block', RULES], ['placeActors', PLACE_ACTORS], ['the recipe list writer', HIDDEN],
@@ -194,7 +200,7 @@ function load(w) {
       'a3:Dawnguard.esm': { name: 'Dawnguard Heavy Armor', owner: 'Smith', half: 'Platewright', rank: 'novice', open: false },
       'b1:Skyrim.esm': { name: 'Apple Pie', owner: 'Cook', half: 'Confectioner', rank: 'novice', open: true }
     },
-    KEPT_SMELT: {},
+    KEPT_SMELT: KEPT_SMELTS,
     RECIPES_HIDDEN_PROPERTY: HIDE
   };
   vm.createContext(box);
@@ -351,7 +357,19 @@ v = view(w, STAFFER);
 yes('C3 a recipe whose own record asks for something first says so',
     v.them.check.rows.length === 1 && v.them.check.rows[0].asks === true);
 got = run(w, STAFFER, '/craftstaff recipe ' + SERA + ' goat cheese');
-yes('C4 nothing called that is said in the chat', /No recipe anybody owns makes anything called goat cheese/.test(to(got, STAFFER)));
+yes('C4 a miss names the limited owned-recipe and kept-smelt scope',
+    /no owned recipe or kept smelt making goat cheese/.test(to(got, STAFFER)) &&
+    /Unowned recipes are outside this check/.test(to(got, STAFFER)));
+const beforeCheck = JSON.stringify({ states: w.states, inv: w.inv, records: w.records, given: w.given });
+got = run(w, STAFFER, '/craftstaff recipe ' + SERA + ' silver ruby ring');
+yes('C4 an unowned recipe name is outside this check, not declared unmakeable',
+    /Unowned recipes are outside this check/.test(to(got, STAFFER)) && view(w, STAFFER).them.check.rows.length === 0);
+const kept = Object.values(KEPT_SMELTS)[0];
+got = run(w, STAFFER, '/craftstaff recipe ' + SERA + ' ' + kept.name);
+yes('C4 the canonical kept smelt still appears in the owned-scope lookup',
+    view(w, STAFFER).them.check.rows.some(function (row) { return row.name === kept.name; }));
+yes('C4 coverage feedback does not grant items, ranks or change saved character rules',
+    JSON.stringify({ states: w.states, inv: w.inv, records: w.records, given: w.given }) === beforeCheck);
 // Sera's game holds an older list: Apple Pie hidden though she may make it.
 w.props[A_SERA][HIDE] = { at: 1, files: { 'Skyrim.esm': 'a1,a2,b1', 'Dawnguard.esm': 'a3' } };
 got = run(w, STAFFER, '/craftstaff recipe ' + SERA + ' apple');
@@ -360,7 +378,9 @@ yes('C5 a list older than the gate shows as stale: she may make it and her game 
     v.them.check.rows.length === 1 && v.them.check.rows[0].may && v.them.check.rows[0].hidden && v.them.check.rows[0].stale);
 got = run(w, STAFFER, '/craftstaff recipes ' + SERA);
 yes('C6 Hand their game the list writes the gate\'s answer (' + JSON.stringify(w.props[A_SERA][HIDE].files) + ')',
-    w.props[A_SERA][HIDE].files['Skyrim.esm'] === 'a1,a2' && w.props[A_SERA][HIDE].at > 1);
+    w.props[A_SERA][HIDE].files['Skyrim.esm'].split(',').sort().join() ===
+      ['a1', 'a2'].concat(Object.keys(KEPT_SMELTS).filter(function (desc) { return desc.endsWith(':Skyrim.esm'); })
+        .map(function (desc) { return desc.split(':')[0]; })).sort().join() && w.props[A_SERA][HIDE].at > 1);
 rec = w.records[w.records.length - 1] || {};
 yes('C6 and it is in the staff log and thornswood.log as a finding',
     rec.did === 'craftrecipes' && rec.who === SERA &&
@@ -477,6 +497,24 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
         /Crafting: Bjorn Iron-Hand/.test(body.textContent) && /Platewright/.test(body.textContent) &&
         /needs a Master of it/.test(body.textContent) && /Steel Plate Armor/.test(body.textContent) &&
         /is Platewright work at advanced/.test(body.textContent));
+    yes('U3 the real card and search field name the owned-recipe scope before searching',
+        /Owned recipes and kept smelts/.test(body.textContent) &&
+        /Unowned recipes are outside this check/.test(body.textContent) &&
+        inputs()[0].placeholder === 'owned recipe output');
+    lines.length = 0;
+    inputs()[0].value = 'silver ruby ring';
+    buttons(/^Check$/)[0].onclick({});
+    const scopedLine = lines[0];
+    const scopedAnswer = run(w2, STAFFER, scopedLine);
+    show(view(w2, STAFFER));
+    yes('U3 actual UI search reaches the queued server check with the same target and words',
+        scopedLine === '/craftstaff recipe ' + BJORN + ' silver ruby ring' &&
+        /Unowned recipes are outside this check/.test(to(scopedAnswer, STAFFER)));
+    yes('U3 the returned card truthfully limits a missing match to its owned coverage',
+        /no owned recipe or kept smelt making silver ruby ring/.test(body.textContent) &&
+        /Unowned recipes are outside this check/.test(body.textContent));
+    run(w2, STAFFER, '/craftstaff recipe ' + BJORN + ' plate');
+    show(view(w2, STAFFER));
     lines.length = 0;
     const raise = buttons(/^Raise to Advanced$/);
     if (raise.length) { raise[0].onclick({}); }
@@ -497,6 +535,9 @@ yes('P3 somebody who left cannot be picked', /not in the world now/.test(to(got,
     yes('U6 Give back with no reason sends nothing and says why (' + status.textContent + ')',
         lines.length === 0 && /Say why/.test(status.textContent));
     ins[3].value = 'lost in the crash';
+    if (give) { give.onclick({}); }
+    yes('U6 a refused empty reason needs two fresh presses after correction',
+        lines.length === 0 && /Press again/.test(give.textContent));
     if (give) { give.onclick({}); }
     yes('U6 with a reason it sends the item, the count and the reason (' + lines.join(' | ') + ')',
         lines.join() === '/craftstaff give ' + BJORN + ' 2 iron ore | lost in the crash');

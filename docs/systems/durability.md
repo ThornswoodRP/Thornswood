@@ -125,6 +125,10 @@ can put a piece past a plain repair, and below Master mends to 100%
 like anybody else (#3442). The perk is not a second system on top of
 the kit.
 
+## Testing repair
+
+`/repairgear` restores carried equipment below 100% for a playtester on Dev or Main. Admins can add `for <person>` to repair another character's equipment. The testing command leaves stronger pieces at their existing condition and retains each item's other saved details. It uses one authoritative inventory and equipment update so the worn names match the pack. It is unavailable on a server without that native operation. [Staff commands](../guide/staff-commands.md#repair-equipment-for-testing) has the permissions and refusal behavior.
+
 ## Where this is
 
 In the server. A piece's condition is written on its name when it is

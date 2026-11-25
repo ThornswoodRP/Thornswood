@@ -89,7 +89,7 @@ const pieces = {
         'function qualityMargin(actorId, row)', 'function qualityOutput(actorId, row, margin)',
         // A dish named with its days left (#3163), after the other outputs.
         'function spoilingOutput(actorId)',
-        'function unfitToMake(actorId, workbenchId)', 'function rankWord(rank)', 'function aWord(name)',
+        'function recipeMetadataRefusal(desc)', 'function unfitToMake(actorId, workbenchId)', 'function rankWord(rank)', 'function aWord(name)',
         'function professionName(prof)', 'function craftAnswer(actorId, row)',
         'function toolFor(key)', 'function holdsTool(actorId, tool)', 'function toolStamps(actorId)',
         'function handTool(actorId, key)', 'function giveTool(actorId, key)', 'function toolGate(actorId, key)',

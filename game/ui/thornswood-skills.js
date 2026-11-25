@@ -640,6 +640,7 @@
   var closing = false;     // creation is over and the panel is on its way shut
   var tableGen = 0;        // bumped when a table arrives from the server, so a redraw is forced
   var drawnKey = '';       // JSON of what head, nav and body were last drawn from
+  var drawnRow = -1;       // tracked separately so an arrow only updates the rendered highlight
   var footKey = '';        // the same for the foot
   var keyName = 'K';       // SkillsKey as bound, until the front says otherwise (#1919)
   var progRows = [];       // the value half of each progress line on the page, in order
@@ -1694,7 +1695,7 @@
   function viewKey() {
     var v = null;
     if (mine) { v = {}; for (var k in mine) if (!NOT_DRAWN[k]) v[k] = mine[k]; }
-    return JSON.stringify([tableGen, sections, section, rowAt, picked, later, marked, markedStaff, v, progressShape(),
+    return JSON.stringify([tableGen, sections, section, picked, later, marked, markedStaff, v, progressShape(),
                            candidate, endArmed, dyeTarget, guideAt, section === 'tree' && pickInFlight('tree')]);
   }
 
@@ -1762,8 +1763,9 @@
     if (rowAt >= n) rowAt = n ? n - 1 : 0;
     if (rowAt < 0) rowAt = 0;
     var key = viewKey();
-    if (key !== drawnKey) {
+    if (key !== drawnKey || rowAt !== drawnRow) {
       drawnKey = key;
+      drawnRow = rowAt;
       drawHead();
       drawNav();
       drawBody();
@@ -1953,6 +1955,7 @@
   }
 
   function drawBody() {
+    resetOfficeArm();
     elBody.textContent = '';
     progRows = [];   // whatever was on the page is gone with it
     progKey = '';
@@ -2550,13 +2553,27 @@
     return card;
   }
 
-  /* A button on the Office page. With twice, the first press only says what the second does. */
+  var OFFICE_ARM_MS = 5000;
+  var officeArmed = null;
+  function resetOfficeArm() {
+    if (officeArmed) { officeArmed.button.textContent = officeArmed.text; }
+    officeArmed = null;
+  }
+
+  /* Only one Office action may await its second press, for five seconds. */
   function officeButton(text, line, twice) {
     var b = el('span', 'stop', text);
-    var armed = false;
     b.onclick = function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (twice && !armed) { armed = true; b.textContent = twice; return; }
+      var again = officeArmed && officeArmed.button === b && Date.now() < officeArmed.until;
+      resetOfficeArm();
+      if (twice && !again) {
+        var armed = { button: b, text: text, until: Date.now() + OFFICE_ARM_MS };
+        officeArmed = armed;
+        b.textContent = twice;
+        setTimeout(function () { if (officeArmed === armed) resetOfficeArm(); }, OFFICE_ARM_MS);
+        return;
+      }
       var said = typeof line === 'function' ? line() : line;
       if (said) officeSay(said);
     };
@@ -2747,12 +2764,13 @@
 
     // A recipe: what the craft gate says, and what their game was handed.
     var rc = el('div', 'card');
-    rc.appendChild(el('div', 'name', 'A recipe they cannot make'));
-    rc.appendChild(el('div', 'desc', 'Type part of the name of what it makes. The server says whether ' + who +
+    rc.appendChild(el('div', 'name', 'Owned recipes and kept smelts'));
+    rc.appendChild(el('div', 'desc', 'This check searches only profession-owned recipes and the kept smelting recipes. ' +
+      'Unowned recipes are outside this check. Type part of the name of what it makes. For a match, the server says whether ' + who +
       ' may make it, and why not, and whether their game lists it.'));
     var ask = document.createElement('input');
-    ask.setAttribute('aria-label', 'Recipe output name');
-    ask.placeholder = 'what it makes';
+    ask.setAttribute('aria-label', 'Owned recipe or kept smelt output name');
+    ask.placeholder = 'owned recipe output';
     var check = officeButton('Check', function () {
       var w = String(ask.value || '').trim();
       if (!w) { status = 'Type part of the name of what the recipe makes.'; statusKind = 'no'; drawFoot(); return ''; }
@@ -2763,7 +2781,7 @@
     var ch = them.check;
     if (ch) {
       var rows = Array.isArray(ch.rows) ? ch.rows : [];
-      if (!rows.length) rc.appendChild(el('div', 'inn', 'No recipe anybody owns makes anything called ' + String(ch.want) + '.'));
+      if (!rows.length) rc.appendChild(el('div', 'inn', 'This check found no owned recipe or kept smelt making ' + String(ch.want) + '. Unowned recipes are outside this check.'));
       var stale = false;
       rows.forEach(function (x) {
         var what = x.half ? String(x.half) + (x.rank ? ', ' + cap(x.rank) : '') : '';
@@ -4332,6 +4350,27 @@
   }
 
   // ---------------------------------------------------------------- keys --
+  function moveRow(direction) {
+    var n = countRows();
+    if (!n) return;
+    rowAt = (rowAt + n + direction) % n;
+    // Profession opens the selected card's half/school choices. Keep that
+    // canonical renderer; the other lists change only their live highlight.
+    var selector = section === 'tree' ? '.skill'
+      : (section === 'spells' || section === 'staff') ? '.spell' : '.card';
+    if (section === 'profession') {
+      var top = elBody.scrollTop;
+      draw();
+      elBody.scrollTop = top;
+    }
+    var nodes = elBody.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('at', i === rowAt);
+    // An arrow paints only the selection. The next draw still checks whether
+    // the rest of the view changed, including if a pending spend expired.
+    drawnRow = rowAt;
+    if (nodes[rowAt]) nodes[rowAt].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
   /*
     Arrow keys and Enter, because the mouse is not always where somebody left
     it and the panel is a list. Escape closes. Everything else is left alone:
@@ -4347,7 +4386,6 @@
     // Enter and the arrows included. Escape still closes. And the terms of a
     // contract (#4561), K among them: a contract may say "keep".
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
-    var n = countRows();
     if (e.key === 'Escape') { closeByHand(); e.preventDefault(); return; }
     /*
       K closes it too, as the K on the Close button says (#1919). The
@@ -4400,8 +4438,8 @@
       }
       e.preventDefault(); return;
     }
-    if (e.key === 'ArrowDown') { rowAt = n ? (rowAt + 1) % n : 0; draw(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { rowAt = n ? (rowAt + n - 1) % n : 0; draw(); e.preventDefault(); }
+    if (e.key === 'ArrowDown') { moveRow(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { moveRow(-1); e.preventDefault(); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       var i = sections.indexOf(section);
       goTo(sections[(i + (e.key === 'ArrowRight' ? 1 : sections.length - 1)) % sections.length]);
@@ -4445,6 +4483,7 @@
       if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
+      resetOfficeArm();
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)
