@@ -114,7 +114,9 @@ for (const server of ['dev', 'main']) {
   const box = w.box(), P = box.__thornswoodProgression, C = box.__thornswoodCharacter;
   const SS = box.__thornswoodStaffSpells;
   Object.values(P.SPELL_IDS).concat(Object.keys(SS.STAFF_SPELLS)).forEach(desc => w.record(desc, 'SPEL'));
-  const blessing = 'abcd:Skyrim.esm'; w.record(blessing, 'SPEL');
+  const blessing = 'abcd:Skyrim.esm';
+  const blessingBytes = new Array(36).fill(0); blessingBytes[8] = 4;
+  w.record(blessing, 'SPEL', { fields: [{ type: 'SPIT', data: blessingBytes }] });
   const spellId = name => w.idOf(P.SPELL_IDS[name]);
   const state = () => w.prop(actor, 'thornswoodCharacter');
   const snapshot = () => JSON.stringify([state(), w.spellsOf(actor)]);

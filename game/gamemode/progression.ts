@@ -971,7 +971,12 @@
     if (s.prof) { balances.spells[s.prof] = s.spells ? s.spells.points : 0; }
     if (s.prof === 'enchanter') { balances.staff.enchanter = staffPoints(s); }
     s.spellHistory = { spells: union(h.spells, s.spells && s.spells.known),
-      staffSpells: union(h.staffSpells, s.staffSpells), points: balances };
+      staffSpells: union(h.staffSpells, s.staffSpells), points: balances,
+      otherSpells: union(h.otherSpells, []) };
+    s.spellHistory.otherSpells.forEach(function (desc) {
+      var known = spellByDesc(desc);
+      if (known && s.spellHistory.spells.indexOf(known.name) < 0) { s.spellHistory.spells.push(known.name); }
+    });
     return s;
   }
 
@@ -979,6 +984,9 @@
   // active. More than two outsider candidates requires an explicit choice.
   function activeKnowledge(state, staffRank) {
     var s = captureKnowledge(state), h = s.spellHistory;
+    h.otherSpells.forEach(function (desc) {
+      if (staffRank(desc) && h.staffSpells.indexOf(desc) < 0) { h.staffSpells.push(desc); }
+    });
     var outside = (s.taught || []).concat(s.untaught || []);
     var schools = s.prof === 'mage' ? s.schools : outside.filter(function (x) { return SCHOOLS.indexOf(x) >= 0; });
     var spells = h.spells.filter(function (name) {

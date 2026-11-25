@@ -58,7 +58,9 @@ if (w.loaded()) {
   const staffDesc = Object.keys(SS.STAFF_SPELLS).find(desc => SS.rankOf(desc) === 'novice');
   w.record(staffDesc, 'SPEL');
   nearRank.taught.push('bladebinder'); nearRank.ranks.bladebinder = 'novice'; nearRank.staffSpells = [staffDesc];
-  const blessing = 'abcd:Skyrim.esm'; w.record(blessing, 'SPEL');
+  const blessing = 'abcd:Skyrim.esm';
+  const blessingBytes = new Array(36).fill(0); blessingBytes[8] = 4;
+  w.record(blessing, 'SPEL', { fields: [{ type: 'SPIT', data: blessingBytes }] });
   w.row(fourth).learnedSpells.push(w.idOf(blessing));
   C.writeState(fourth, nearRank, true);
   const climbed = w.readBook(fourth, w.idOf(book));
@@ -108,5 +110,30 @@ if (w.loaded()) {
   yes('returning to a non-mage profession preserves its earned outsider spell points', balance.spells && balance.spells.points === 1);
   balance = P.setProfessionForTesting(balance, 'mage', ['destruction', 'restoration']).state;
   yes('returning to Mage still keeps the spent balance at zero', balance.spells.points === 0);
+  function typedSpell(desc, type) {
+    const bytes = new Array(36).fill(0); bytes[8] = type;
+    w.record(desc, 'SPEL', { fields: [{ type: 'SPIT', data: bytes }] });
+  }
+  const seventh = student(6), offbook = 'abc1:Skyrim.esm', ability = 'abc2:Skyrim.esm';
+  typedSpell(offbook, 0); typedSpell(ability, 4);
+  w.row(seventh).learnedSpells = [w.idOf(offbook), w.idOf(ability)];
+  C.writeState(seventh, C.stateOf(seventh));
+  yes('authoritative refresh removes off-book ordinary spells while preserving unrelated abilities',
+    !w.spellsOf(seventh).includes(w.idOf(offbook)) && w.spellsOf(seventh).includes(w.idOf(ability)) &&
+    C.stateOf(seventh).spellHistory.otherSpells.includes(offbook));
+  const afterSwitch = P.setProfessionForTesting(C.stateOf(seventh), 'cook', 'hearthcook');
+  C.writeState(seventh, afterSwitch.state);
+  yes('off-book ordinary knowledge survives a profession change without becoming active',
+    C.stateOf(seventh).spellHistory.otherSpells.includes(offbook) && !w.spellsOf(seventh).includes(w.idOf(offbook)));
+  const eighth = student(7), unreadable = 'abc3:Skyrim.esm';
+  w.record(unreadable, 'SPEL'); w.row(eighth).learnedSpells = [w.idOf(unreadable)];
+  const unreadBefore = JSON.stringify([C.stateOf(eighth), w.spellsOf(eighth)]);
+  let unreadRefused = false;
+  try { C.writeState(eighth, C.stateOf(eighth)); } catch (_) { unreadRefused = true; }
+  yes('an unreadable unrelated spell refuses before knowledge or active membership changes',
+    unreadRefused && JSON.stringify([C.stateOf(eighth), w.spellsOf(eighth)]) === unreadBefore);
+  yes('the off-book descriptor survives restart while its native membership stays absent',
+    w.restart().loaded && w.prop(seventh, C.PROPERTY).spellHistory.otherSpells.includes(offbook) &&
+    !w.spellsOf(seventh).includes(w.idOf(offbook)) && w.spellsOf(seventh).includes(w.idOf(ability)));
 }
 w.done(); t.done();

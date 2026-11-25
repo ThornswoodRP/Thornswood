@@ -26,7 +26,22 @@
     }
     var managed = Object.keys(P.SPELL_IDS).map(function (name) { return P.SPELL_IDS[name]; })
       .concat(Object.keys(SS.STAFF_SPELLS)).map(function (desc) { return mp.getIdFromDesc(desc); });
-    var next = current.filter(function (id) { return managed.indexOf(id) < 0; });
+    var college = g.__thornswoodCollege;
+    if (!college || !college.spellKind) { throw new Error('The spell type catalogue is not running.'); }
+    var history = replacement.spellHistory.otherSpells;
+    var next = current.filter(function (id) {
+      if (managed.indexOf(id) >= 0) { return false; }
+      var kind = college.spellKind(id);
+      if (!kind || [0, 1, 2, 3, 4, 5, 10, 11].indexOf(kind.type) < 0) {
+        throw new Error('An unrelated spell type cannot be read safely.');
+      }
+      var desc = mp.getDescFromId(id);
+      if (kind.type !== 0 || (typeof INSTRUMENT_SPELL !== 'undefined' && String(INSTRUMENT_SPELL).toLowerCase() === String(desc).toLowerCase())) {
+        return true;
+      }
+      if (history.indexOf(desc) < 0) { history.push(desc); }
+      return false;
+    });
     var wanted = replacement.spells.known.map(function (name) { return P.SPELL_IDS[name]; })
       .concat(replacement.staffSpells);
     wanted.forEach(function (desc) {
