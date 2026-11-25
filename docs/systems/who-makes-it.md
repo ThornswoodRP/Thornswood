@@ -6,7 +6,7 @@ Everything in the world has a recipe except named uniques and quest items (Patri
 
 What the world hands out and who makes it both come from [Where every item comes from](lists/item-sources.md) (`game/data/item-sources.json`). A maker is a recipe in the open book (not cut and not tempering), a class that gathers the item, or the scarce work or rare seam a class works. A bottle the alchemy lab brews is a new form, not a record, so the lab is the maker of no record. The build fails when the world hands out something with no maker that `scripts/dev/Check-Makers.waiting.json` does not name with the issue that will give it one.
 
-288 items handed out. 173 have a maker. 115 have none yet.
+288 items handed out. 174 have a maker. 114 have none yet.
 
 ## Contents
 
@@ -18,6 +18,7 @@ What the world hands out and who makes it both come from [Where every item comes
   - [Asked for by a recipe](#asked-for-by-a-recipe)
   - [Dungeon and body loot](#dungeon-and-body-loot)
   - [Dungeon exclusive](#dungeon-exclusive)
+  - [Filled into a bottle of water](#filled-into-a-bottle-of-water)
 
 ## Nobody makes these yet
 
@@ -50,7 +51,6 @@ What the world hands out and who makes it both come from [Where every item comes
 | Small Antlers | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet |
 | Spider Egg | Asked for by a recipe | 4 | #4649 | an animal part no hunt gives yet |
 | Werewolf Pelt | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet; Werewolf's Bane, from Cheddar's Mashups in collection revision 5, asks for it |
-| Empty Wine Bottle | Filled into a bottle of water | 0 | #4652 | water is carried in it (NEEDS.waterItems), and nothing hands one out. |
 | Spell Tome: Bane of the Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
 | Spell Tome: Blizzard | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
 | Spell Tome: Bound Battleaxe | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
@@ -150,7 +150,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Mage | 0 | a mage has no halves. classes.md gives the Mage two schools and two starting spells, and none of it is a crafting recipe. What a mage knows is written by `scripts\dev\Build-SpellTable.ps1`. |
 | Alchemist/Blightbrewer | 0 | brews poisons in the alchemy lab's menu, which has no recipe rows |
 | Alchemist/Physicker | 12 | also brews medicine in the alchemy lab's menu, which has no recipe rows |
-| Cook/Hearthcook | 64 |  |
+| Cook/Hearthcook | 65 |  |
 | Cook/Confectioner | 12 |  |
 | Smith/Platewright | 252 |  |
 | Smith/Edgewright | 86 |  |
@@ -259,7 +259,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Sabre Cat Pelt | Asked for by a recipe | Hunter, advanced | `3ad6d:Skyrim.esm` |
 | Sabre Cat Snow Pelt | Asked for by a recipe | Hunter, expert | `3ad6e:Skyrim.esm` |
 | Sabre Cat Tooth | Asked for by a recipe | Hunter, advanced; Hunter, expert; Hunter, novice | `6bc04:Skyrim.esm` |
-| Sack of Flour | Asked for by a recipe | Cook/Hearthcook, novice | `3538:HearthFires.esm` |
+| Sack of Flour | Asked for by a recipe | Cook/Hearthcook, advanced | `3538:HearthFires.esm` |
 | Salmon Meat | Asked for by a recipe | Fisher, novice | `65c9f:Skyrim.esm` |
 | Scaly Pholiota | Asked for by a recipe | Gatherer, advanced | `6f950:Skyrim.esm` |
 | Scathecraw | Asked for by a recipe | Gatherer, novice | `17e97:Dragonborn.esm` |
@@ -365,3 +365,9 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Ancient Nord Boots | Dungeon exclusive | Smith/Platewright, advanced | `56a9d:Skyrim.esm` |
 | Ancient Nord Gauntlets | Dungeon exclusive | Smith/Platewright, advanced | `56b17:Skyrim.esm` |
 | Ancient Nord Helmet | Dungeon exclusive | Smith/Platewright, advanced | `56a9e:Skyrim.esm` |
+
+### Filled into a bottle of water
+
+| Item | Where the world has it | Who makes or gathers it | Id |
+| --- | --- | --- | --- |
+| Empty Wine Bottle | Filled into a bottle of water | Cook/Hearthcook, novice | `f2012:Skyrim.esm` |
