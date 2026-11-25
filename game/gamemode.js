@@ -59998,6 +59998,10 @@ module.exports = {
       // The number the panel names each piece by, for this trade (#1718).
       keys: {}, pieces: []
     };
+    // Public continuity for local drafts, never an ownership credential.
+    // The initial offer already minted a unique identity; later edits rotate
+    // only offerVersion, while this identity lasts exactly this conversation.
+    t.sessionId = t.offerVersion;
     open[aActor] = t; open[bActor] = t;
     trades.push(t);
     push(t);
@@ -60838,6 +60842,7 @@ module.exports = {
     var meA = t.a === actorId;
     return {
       open: true,
+      sessionId: t.sessionId,
       offerVersion: t.offerVersion,
       them: nameOf(other(t, actorId)),
       mine: shown(t, meA ? t.offerA : t.offerB),
