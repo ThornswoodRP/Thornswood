@@ -17189,16 +17189,12 @@ log('gamemode loaded:',
   // #6737: explicit testing exception to the ordinary one-class pick.
   // Preserve spent tree points, then place the current choices again through
   // the same capped allocation used at creation. No kit or rank reward.
-  function setClassForTesting(state, cls) {
-    if (!own(CLASSES, cls)) { return no('no such class'); }
-    var s = clone(state);
-    if (s.cls === cls) { return no('that is already the current class'); }
-    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+  function removePlaced(s) {
     for (var skill in s.placed) {
       if (!own(s.placed, skill)) { continue; }
       if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
           !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
-        return no('the placed skill points cannot be read');
+        return 'the placed skill points cannot be read';
       }
     }
     for (var oldSkill in s.placed) {
@@ -17207,6 +17203,15 @@ log('gamemode loaded:',
       if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
     }
     s.placed = {};
+    return null;
+  }
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
     if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
     s.cls = null;
     var picked = pickClass(s, cls);
@@ -17216,6 +17221,101 @@ log('gamemode loaded:',
     if (s.half) { place(s, 'halves', s.half); }
     for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
     return yes(s);
+  }
+
+  function captureKnowledge(state) {
+    var s = clone(state), h = s.spellHistory || {};
+    var balances = clone(h.points || {});
+    balances.spells = clone(balances.spells || {});
+    balances.staff = clone(balances.staff || {});
+    function union(a, b) {
+      var out = (a || []).slice();
+      (b || []).forEach(function (x) { if (out.indexOf(x) < 0) { out.push(x); } });
+      return out;
+    }
+    if (s.prof) { balances.spells[s.prof] = s.spells ? s.spells.points : 0; }
+    if (s.prof === 'enchanter') { balances.staff.enchanter = staffPoints(s); }
+    s.spellHistory = { spells: union(h.spells, s.spells && s.spells.known),
+      staffSpells: union(h.staffSpells, s.staffSpells), points: balances,
+      otherSpells: union(h.otherSpells, []) };
+    s.spellHistory.otherSpells.forEach(function (desc) {
+      var known = spellByDesc(desc);
+      if (known && s.spellHistory.spells.indexOf(known.name) < 0) { s.spellHistory.spells.push(known.name); }
+    });
+    return s;
+  }
+
+  // History is permanent; only the book eligible under today's choices is
+  // active. More than two outsider candidates requires an explicit choice.
+  function activeKnowledge(state, staffRank) {
+    var s = captureKnowledge(state), h = s.spellHistory;
+    h.otherSpells.forEach(function (desc) {
+      if (staffRank(desc) && h.staffSpells.indexOf(desc) < 0) { h.staffSpells.push(desc); }
+    });
+    var outside = (s.taught || []).concat(s.untaught || []);
+    var schools = s.prof === 'mage' ? s.schools : outside.filter(function (x) { return SCHOOLS.indexOf(x) >= 0; });
+    var spells = h.spells.filter(function (name) {
+      var spell = spellAt(name);
+      var rank = spell && (s.prof === 'mage' ? rankOf(s, spell.school) : 'novice');
+      return spell && schools.indexOf(spell.school) >= 0 && rankIndex(rank) >= rankIndex(spell.rank);
+    });
+    var staff = h.staffSpells.filter(function (desc) {
+      var rank = staffRank(desc);
+      var have = s.prof === 'enchanter' ? rankOf(s, STAFF_HALF) :
+        (outside.indexOf(STAFF_HALF) >= 0 ? 'novice' : null);
+      return rank && have && rankIndex(have) >= rankIndex(rank);
+    });
+    function selected(list, key, capped) {
+      if (!capped) { return { ok: true, list: list }; }
+      var choices = s.spellSelections || {};
+      if (!own(choices, key)) {
+        return list.length <= LIMITS.outsiderSpells ? { ok: true, list: list } :
+          { ok: false, why: 'choose up to ' + LIMITS.outsiderSpells + ' ' + key + ' explicitly', choices: list };
+      }
+      var chosen = choices[key];
+      if (!Array.isArray(chosen) || chosen.length > LIMITS.outsiderSpells || chosen.some(function (x, i) {
+        return list.indexOf(x) < 0 || chosen.indexOf(x) !== i;
+      })) { return { ok: false, why: 'the selected ' + key + ' are not eligible', choices: list }; }
+      return { ok: true, list: chosen.slice() };
+    }
+    var a = selected(spells, 'spells', s.prof !== 'mage');
+    if (!a.ok) { return a; }
+    var b = selected(staff, 'staffSpells', s.prof !== 'enchanter');
+    if (!b.ok) { return b; }
+    s.spells = s.spells || { points: 0, known: [] };
+    s.spells.known = a.list;
+    s.staffSpells = b.list;
+    return yes(s);
+  }
+
+  function setProfessionForTesting(state, prof, halfOrSchools) {
+    var checked = pickProfession(fresh(), prof, halfOrSchools);
+    if (!checked.ok) { return checked; }
+    var s = captureKnowledge(state);
+    if ((s.taught || []).length || Object.keys(s.masters || {}).length || (s.apprentices || []).length) {
+      return no('end the current teaching relationships on K before changing profession');
+    }
+    if (s.prof === prof && s.half === checked.state.half &&
+        JSON.stringify((s.schools || []).slice().sort()) === JSON.stringify(checked.state.schools.slice().sort())) {
+      return no('that is already the current profession and choice');
+    }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
+    halvesOf(s.prof).forEach(function (key) { delete s.ranks[key]; delete s.work[key]; });
+    s.prof = null; s.half = null; s.schools = []; s.spells = null;
+    delete s.staffPoints; delete s.staffSpells; delete s.weave;
+    if (s.cls) { place(s, 'classes', s.cls); }
+    var picked = pickProfession(s, prof, halfOrSchools);
+    if (!picked.ok) { return picked; }
+    // Each profession gets its canonical starting spell points once. Returning
+    // to it restores its last balance, including zero after spending them.
+    var balances = picked.state.spellHistory.points;
+    if (own(balances.spells, prof)) {
+      picked.state.spells = picked.state.spells || { points: 0, known: [] };
+      picked.state.spells.points = balances.spells[prof];
+    }
+    if (prof === 'enchanter' && own(balances.staff, prof)) { picked.state.staffPoints = balances.staff[prof]; }
+    return picked;
   }
 
   /**
@@ -18213,7 +18313,8 @@ log('gamemode loaded:',
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
     pickClass: pickClass, setClassForTesting: setClassForTesting,
-    pickProfession: pickProfession, teach: teach,
+    pickProfession: pickProfession, setProfessionForTesting: setProfessionForTesting,
+    captureKnowledge: captureKnowledge, activeKnowledge: activeKnowledge, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,
@@ -37556,6 +37657,7 @@ return module.exports;
     empty map after a restart costs one redraw each, which is right anyway.
   */
   var lastDrawn = {};
+  var writeResults = {};
 
   /*
     The client side script. It runs inside skymp5-client EVERY FRAME for as
@@ -37656,7 +37758,28 @@ return module.exports;
     return lastAsked;
   }
 
-  function writeState(actorId, s, redraw) {
+  function writeState(actorId, s, redraw, nativeTome) {
+    var expected = null;
+    writeResults[actorId] = false;
+    if (s.spellHistory) {
+      expected = readState(actorId);
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The atomic spell writer is not running.'); }
+      var active = knowledge.prepare(s);
+      if (!active.ok) { throw new Error('Could not prepare active knowledge: ' + active.why); }
+      if (nativeTome) {
+        var eligible = function (a, b) { return (a || []).every(function (x, i) { return b.indexOf(x) >= 0 && a.indexOf(x) === i; }); };
+        if (!eligible(s.spells && s.spells.known, active.state.spells.known) || !eligible(s.staffSpells, active.state.staffSpells)) {
+          throw new Error('The tome would grant knowledge that is not currently eligible.');
+        }
+        // Native ReadBookEvent will add only the tome's own spell. Historical
+        // extras made eligible by this study remain latent until an atomic
+        // refresh can publish them in the book and engine together.
+        active.state.spells.known = ((s.spells && s.spells.known) || []).slice();
+        active.state.staffSpells = (s.staffSpells || []).slice();
+      }
+      s = active.state;
+    }
     s.v = 1;
     // forPanel is what the client sees; the rules state is what is stored.
     // Both travel in the one property so the panel never sees a half state.
@@ -37727,13 +37850,16 @@ return module.exports;
     }
     var written = false;
     try {
-      mp.set(actorId, CHAR_PROPERTY, s);
-      written = true;
+      if (s.spellHistory && !nativeTome) {
+        written = g.__thornswoodCharacterKnowledge.commit(actorId, expected, s);
+        if (!written) { throw new Error('The character or active spells changed before the write.'); }
+      } else { mp.set(actorId, CHAR_PROPERTY, s); written = true; }
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
-      if (sending) { lastDrawn[actorId] = sig; }
+      if (written && sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
+      if (s.spellHistory || nativeTome) { throw e; }
     }
     /*
       What the menus list goes with the record, so only once it is written
@@ -37743,12 +37869,15 @@ return module.exports;
       with no end: an actor whose form is gone (a name taken off the embassy
       roll after its character went) stopped the server.
     */
+    writeResults[actorId] = written;
     if (written) {
       // Twin Souls is a second enchantment slot in the menu (#1389). It lives
       // beside the craft gate, outside this block, the way spellOn does.
-      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      try { if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); } }
+      catch (eSlots) { clog('character saved but enchantment slots could not be published for', actorId.toString(16), eSlots); }
       // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+      try { if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); } }
+      catch (eRecipes) { clog('character saved but recipe visibility could not be published for', actorId.toString(16), eRecipes); }
     }
     return s;
   }
@@ -37983,6 +38112,7 @@ return module.exports;
       try { FS.worked(actorId); } catch (eSteps) { clog('first steps threw at a piece of work:', eSteps); }
     }
     writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) { return null; }
     return raiseLines(actorId, r);
   }
 
@@ -38027,6 +38157,11 @@ return module.exports;
     had no form id for it all end up in the same place.
   */
   function grantKnown(actorId) {
+    var current = stateOf(actorId);
+    if (current.spellHistory) {
+      var active = writeState(actorId, current);
+      return writeResults[actorId] ? active.spells.known.length + active.staffSpells.length : 0;
+    }
     // Only the book is granted (#1387): what it does not list comes off
     // first, out of the book and off the character, in the college block.
     var college = g.__thornswoodCollege;
@@ -38880,6 +39015,10 @@ return module.exports;
     }
     r.state.note = null;
     var st = writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) {
+      toProfile(profileId, 'The character change could not be saved. Nothing was learned or spent.');
+      return true;
+    }
     clog(word, parts.slice(1).join(' '), 'for', actorId.toString(16), 'accepted');
 
     /*
@@ -39089,6 +39228,23 @@ return module.exports;
 
   g.__thornswoodCharacter = {
     PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
+    // ReadBookEvent owns AddSpell and consuming the tome after this returns.
+    // Saving eligible book/history here must not pre-add that engine spell.
+    writeTomeState: function (actorId, s) {
+      var next = P.clone(s);
+      // Canonical tome rules already enforce the outsider cap. A newly learned
+      // eligible spell takes its place beside the currently selected spells.
+      if (next.spellHistory && next.spellSelections) {
+        if (next.prof !== 'mage' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'spells')) {
+          next.spellSelections.spells = ((next.spells && next.spells.known) || []).slice();
+        }
+        if (next.prof !== 'enchanter' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'staffSpells')) {
+          next.spellSelections.staffSpells = (next.staffSpells || []).slice();
+        }
+      }
+      return writeState(actorId, next, false, true);
+    },
+    writeSucceeded: function (actorId) { return writeResults[actorId] === true; },
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,
@@ -41621,6 +41777,20 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     }
 
     var staffDesc = (S && S.isStaffSpell && spell.desc && S.isStaffSpell(spell.desc)) ? spell.desc : null;
+    if (s.spellHistory) {
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The retained knowledge writer is not running.'); }
+      var eligible = knowledge.prepare(s);
+      if (!eligible.ok) { throw new Error('Retained knowledge cannot be prepared: ' + eligible.why); }
+      var restoreBook = !P.knowsSpell(s, spell.name) && P.knowsSpell(eligible.state, spell.name);
+      var restoreStaff = staffDesc && !P.knowsStaff(s, staffDesc) && P.knowsStaff(eligible.state, staffDesc);
+      if (restoreBook || restoreStaff) {
+        // This is knowledge already earned, newly eligible after study. One
+        // normal atomic refresh restores it before the already-known path,
+        // so its tome and point cannot be spent for the same knowledge again.
+        s = C.writeState(actorId, eligible.state);
+      }
+    }
     var fresh = !!staffDesc && !!P.knowsStaff && !P.knowsStaff(s, staffDesc);
     var outsider = fresh && !!P.staffTaught && P.staffTaught(s);
     var enchNote = (fresh && P.isEnchanter && P.isEnchanter(s))
@@ -41634,7 +41804,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
       if (outsider) {
         var again = S.learn(P, s, staffDesc);
         if (again.ok) {
-          C.writeState(actorId, again.state);
+          C.writeTomeState(actorId, again.state);
           var gone = spendTome(actorId, bookBaseId);
           return { refused: false, line: 'You know ' + spell.name + ' already, and the tome unlocks it for staves: ' +
                    'you can bind it into a staff at a staff enchanter now.' + (gone ? ' The tome is spent.' : '') };
@@ -41659,7 +41829,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
             It is not written into their spell book, so it takes none of the
             places a Master mage's teaching gives.
           */
-          C.writeState(actorId, st.state);
+          C.writeTomeState(actorId, st.state);
           tlog(Number(actorId).toString(16), 'unlocked', spell.name, spell.desc, 'for staves from a tome');
           return { refused: false, line: 'The tome unlocks ' + spell.name + ' for staves: you can bind it into a staff ' +
                    'at a staff enchanter now. It took one of your ' + P.TABLE.limits.outsiderSpells +
@@ -41685,7 +41855,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
         staffLine = ' It is not unlocked for staves: you need ' + joinNeeds(st2.missing || [{ why: st2.why }]) + '.';
       }
     }
-    C.writeState(actorId, next);
+    C.writeTomeState(actorId, next);
     var raised = C.raiseLines ? C.raiseLines(actorId, r) : null;
     tlog(Number(actorId).toString(16), 'learned', spell.name, spell.desc, 'from a tome');
     return { refused: false, line: 'The tome teaches you ' + spell.name + ', ' + word(spell.rank) + ' ' +
@@ -43251,7 +43421,12 @@ mp.onUpdateEquipmentAttempt = guard('onUpdateEquipmentAttempt', function (actorI
 */
 mp.onReadBook = guard('onReadBook', function (actorId, bookBaseId) {
   const tomes = globalThis.__thornswoodTomes;
-  const r = tomes ? tomes.read(actorId, bookBaseId) : null;
+  let r;
+  try { r = tomes ? tomes.read(actorId, bookBaseId) : null; }
+  catch (e) {
+    log('spell tomes: reading or saving failed for ' + Number(actorId).toString(16) + ': ' + String(e));
+    r = { refused: true, line: 'The spell could not be learned safely. You keep the tome and your spell points.' };
+  }
   if (r && r.line) {
     notify(actorId, r.line);
     say(actorId, r.line);
@@ -44608,6 +44783,61 @@ function thornswoodBooks(env) {
 })();
 
 
+// Atomic active spell membership for characters with preserved spell history.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function prepare(state) {
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    if (!SS) { return { ok: false, why: 'the spell catalogue is not running' }; }
+    return P.activeKnowledge(state, SS.rankOf);
+  }
+  function commit(actorId, expected, replacement) {
+    if (typeof mp.compareAndSetActorPropertyAndSpells !== 'function') {
+      throw new Error('This engine cannot commit character progression and active spells together.');
+    }
+    if (typeof mp.getActorLearnedSpells !== 'function') { throw new Error('This engine cannot read the full learned spell snapshot.'); }
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    var runtime = mp.getActorRuntimeIdentity(actorId);
+    var identity = mp.getNpcAIState(actorId);
+    var current = mp.getActorLearnedSpells(actorId);
+    if (!Array.isArray(current) || current.length > 4096 || current.some(function (id, i) {
+      return !Number.isInteger(id) || id <= 0 || id >= 0xff000000 || current.indexOf(id) !== i;
+    })) { throw new Error('The full learned spell snapshot cannot be read safely.'); }
+    current = current.slice();
+    var managed = Object.keys(P.SPELL_IDS).map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(Object.keys(SS.STAFF_SPELLS)).map(function (desc) { return mp.getIdFromDesc(desc); });
+    var college = g.__thornswoodCollege;
+    if (!college || !college.spellKind) { throw new Error('The spell type catalogue is not running.'); }
+    var history = replacement.spellHistory.otherSpells;
+    var next = current.filter(function (id) {
+      if (managed.indexOf(id) >= 0) { return false; }
+      var kind = college.spellKind(id);
+      if (!kind || [0, 1, 2, 3, 4, 5, 10, 11].indexOf(kind.type) < 0) {
+        throw new Error('An unrelated spell type cannot be read safely.');
+      }
+      var desc = mp.getDescFromId(id);
+      if (kind.type !== 0 || (typeof INSTRUMENT_SPELL !== 'undefined' && String(INSTRUMENT_SPELL).toLowerCase() === String(desc).toLowerCase())) {
+        return true;
+      }
+      if (history.indexOf(desc) < 0) { history.push(desc); }
+      return false;
+    });
+    var wanted = replacement.spells.known.map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(replacement.staffSpells);
+    wanted.forEach(function (desc) {
+      var id = mp.getIdFromDesc(desc);
+      if (!Number.isInteger(id) || id <= 0) { throw new Error('An eligible spell has no form in this load order.'); }
+      if (next.indexOf(id) < 0) { next.push(id); }
+    });
+    return mp.compareAndSetActorPropertyAndSpells(actorId, identity.profileId, {
+      name: g.__thornswoodCharacter.PROPERTY, expected: expected, replacement: replacement,
+      expectedRuntimeIdentity: runtime, expectedLifeGeneration: identity.lifeGeneration,
+      expectedSpells: current, replacementSpells: next
+    });
+  }
+  g.__thornswoodCharacterKnowledge = { prepare: prepare, commit: commit };
+})();
 // ==== thornswood chat commands ====
 /*
   EVERY WORD THIS SERVER ANSWERS, WRITTEN DOWN ONCE.
@@ -64713,21 +64943,24 @@ module.exports = {
 
   function command(cmd, word, parts, pid, actorId) {
     var settingClass = word === '/setclass';
-    if (word !== '/rankup' && !settingClass) { return false; }
-    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : USAGE;
+    var settingProfession = word === '/setprofession';
+    if (word !== '/rankup' && !settingClass && !settingProfession) { return false; }
+    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : settingProfession ?
+      'Use /setprofession <profession> <half or school,school> [spells <names>] [staffspells <names>] [for <person>].' : USAGE;
     var staff = g.__thornswoodStaff;
     if (!staff) { return true; }
     function refuse(why) { staff.tell(pid, why); return true; }
     var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
     if (!P || !C) { return refuse('The progression tools are not running.'); }
     var args = parts.slice(1);
-    var kind = settingClass ? 'class' : String(args.shift() || '').toLowerCase();
+    var kind = settingClass ? 'class' : settingProfession ? 'profession' : String(args.shift() || '').toLowerCase();
     if (kind !== 'class' && kind !== 'profession') { return refuse(usage); }
     var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
     var targetWords = at < 0 ? [] : args.slice(at + 1);
     var choice = at < 0 ? args : args.slice(0, at);
-    if ((at >= 0 && !targetWords.length) || choice.length > (settingClass || kind === 'profession' ? 1 : 0) ||
-        (settingClass && choice.length !== 1)) {
+    if ((at >= 0 && !targetWords.length) ||
+        (!settingProfession && choice.length > (settingClass || kind === 'profession' ? 1 : 0)) ||
+        (settingClass && choice.length !== 1) || (settingProfession && choice.length < 2)) {
       return refuse(usage);
     }
     var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
@@ -64741,6 +64974,45 @@ module.exports = {
     if (denied) { return refuse(denied); }
     if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
     var s = C.stateOf(target.actorId), key;
+    if (settingProfession) {
+      var prof = String(choice[0]).toLowerCase();
+      var half = prof === 'mage' ? String(choice[1]).toLowerCase().split(',') : C.mapHalf(choice[1]);
+      var replacement = P.setProfessionForTesting(s, prof, half);
+      if (!replacement.ok) { return refuse(replacement.why); }
+      var selections = replacement.state.spellSelections || {};
+      var seen = {};
+      for (var n = 2; n < choice.length;) {
+        var label = String(choice[n++]).toLowerCase();
+        if ((label !== 'spells' && label !== 'staffspells') || seen[label]) { return refuse(usage); }
+        seen[label] = true;
+        var start = n;
+        while (n < choice.length && ['spells', 'staffspells'].indexOf(String(choice[n]).toLowerCase()) < 0) { n++; }
+        var text = choice.slice(start, n).join(' ');
+        if (!text) { return refuse(usage); }
+        var names = text.toLowerCase() === 'none' ? [] : text.split(',').map(function (x) { return x.trim(); });
+        var picked = [];
+        for (var j = 0; j < names.length; j++) {
+          var spell = label === 'spells' ? P.spellAt(names[j]) : g.__thornswoodStaffSpells.find(names[j]);
+          if (!spell) { return refuse('No known spell is named ' + names[j] + '.'); }
+          picked.push(label === 'spells' ? spell.name : spell.desc);
+        }
+        selections[label === 'spells' ? 'spells' : 'staffSpells'] = picked;
+      }
+      replacement.state.spellSelections = selections;
+      var prepared = g.__thornswoodCharacterKnowledge.prepare(replacement.state);
+      if (!prepared.ok) {
+        return refuse(prepared.why + (prepared.choices ? ': ' + prepared.choices.join(', ') + '.' : '.'));
+      }
+      try { C.writeState(target.actorId, prepared.state, true); }
+      catch (e) { return refuse('The profession change could not be saved.'); }
+      if (!C.writeSucceeded(target.actorId)) { return refuse('The profession change could not be saved.'); }
+      var name = P.TABLE.professions[prof].name;
+      staff.tell(target.pid, 'Your profession is now ' + name + ' at Novice. Your learned knowledge is kept; only eligible spells are active.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s profession to ' + name + '.'); }
+      staff.record('setprofession', pid, staff.nameOf(actorId), target.pid, target.name, name, 0,
+        { from: s.prof || null, to: prof, half: prepared.state.half, schools: prepared.state.schools });
+      return true;
+    }
     if (settingClass) {
       var cls = String(choice[0]).toLowerCase();
       var changed = P.setClassForTesting(s, cls);
@@ -64813,7 +65085,11 @@ module.exports = {
         text: 'Advance another character\'s current class or profession by one rank.' },
       { word: '/setclass', role: 'playtester', syntax: '/setclass <class>', text: 'Change your gathering class at Novice.' },
       { word: '/setclass', role: 'admin', syntax: '/setclass <class> for <person>',
-        text: 'Change another character\'s gathering class at Novice.' }] });
+        text: 'Change another character\'s gathering class at Novice.' },
+      { word: '/setprofession', role: 'playtester', syntax: '/setprofession <profession> <half or school,school>',
+        text: 'Change your profession at Novice, keeping knowledge with only eligible spells active.' },
+      { word: '/setprofession', role: 'admin', syntax: '/setprofession <profession> <half or school,school> for <person>',
+        text: 'Change another character\'s profession at Novice, keeping their knowledge.' }] });
   }
 })();
 // ==== end thornswood staff progression ====

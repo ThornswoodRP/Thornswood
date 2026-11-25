@@ -924,16 +924,12 @@
   // #6737: explicit testing exception to the ordinary one-class pick.
   // Preserve spent tree points, then place the current choices again through
   // the same capped allocation used at creation. No kit or rank reward.
-  function setClassForTesting(state, cls) {
-    if (!own(CLASSES, cls)) { return no('no such class'); }
-    var s = clone(state);
-    if (s.cls === cls) { return no('that is already the current class'); }
-    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+  function removePlaced(s) {
     for (var skill in s.placed) {
       if (!own(s.placed, skill)) { continue; }
       if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
           !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
-        return no('the placed skill points cannot be read');
+        return 'the placed skill points cannot be read';
       }
     }
     for (var oldSkill in s.placed) {
@@ -942,6 +938,15 @@
       if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
     }
     s.placed = {};
+    return null;
+  }
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
     if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
     s.cls = null;
     var picked = pickClass(s, cls);
@@ -951,6 +956,101 @@
     if (s.half) { place(s, 'halves', s.half); }
     for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
     return yes(s);
+  }
+
+  function captureKnowledge(state) {
+    var s = clone(state), h = s.spellHistory || {};
+    var balances = clone(h.points || {});
+    balances.spells = clone(balances.spells || {});
+    balances.staff = clone(balances.staff || {});
+    function union(a, b) {
+      var out = (a || []).slice();
+      (b || []).forEach(function (x) { if (out.indexOf(x) < 0) { out.push(x); } });
+      return out;
+    }
+    if (s.prof) { balances.spells[s.prof] = s.spells ? s.spells.points : 0; }
+    if (s.prof === 'enchanter') { balances.staff.enchanter = staffPoints(s); }
+    s.spellHistory = { spells: union(h.spells, s.spells && s.spells.known),
+      staffSpells: union(h.staffSpells, s.staffSpells), points: balances,
+      otherSpells: union(h.otherSpells, []) };
+    s.spellHistory.otherSpells.forEach(function (desc) {
+      var known = spellByDesc(desc);
+      if (known && s.spellHistory.spells.indexOf(known.name) < 0) { s.spellHistory.spells.push(known.name); }
+    });
+    return s;
+  }
+
+  // History is permanent; only the book eligible under today's choices is
+  // active. More than two outsider candidates requires an explicit choice.
+  function activeKnowledge(state, staffRank) {
+    var s = captureKnowledge(state), h = s.spellHistory;
+    h.otherSpells.forEach(function (desc) {
+      if (staffRank(desc) && h.staffSpells.indexOf(desc) < 0) { h.staffSpells.push(desc); }
+    });
+    var outside = (s.taught || []).concat(s.untaught || []);
+    var schools = s.prof === 'mage' ? s.schools : outside.filter(function (x) { return SCHOOLS.indexOf(x) >= 0; });
+    var spells = h.spells.filter(function (name) {
+      var spell = spellAt(name);
+      var rank = spell && (s.prof === 'mage' ? rankOf(s, spell.school) : 'novice');
+      return spell && schools.indexOf(spell.school) >= 0 && rankIndex(rank) >= rankIndex(spell.rank);
+    });
+    var staff = h.staffSpells.filter(function (desc) {
+      var rank = staffRank(desc);
+      var have = s.prof === 'enchanter' ? rankOf(s, STAFF_HALF) :
+        (outside.indexOf(STAFF_HALF) >= 0 ? 'novice' : null);
+      return rank && have && rankIndex(have) >= rankIndex(rank);
+    });
+    function selected(list, key, capped) {
+      if (!capped) { return { ok: true, list: list }; }
+      var choices = s.spellSelections || {};
+      if (!own(choices, key)) {
+        return list.length <= LIMITS.outsiderSpells ? { ok: true, list: list } :
+          { ok: false, why: 'choose up to ' + LIMITS.outsiderSpells + ' ' + key + ' explicitly', choices: list };
+      }
+      var chosen = choices[key];
+      if (!Array.isArray(chosen) || chosen.length > LIMITS.outsiderSpells || chosen.some(function (x, i) {
+        return list.indexOf(x) < 0 || chosen.indexOf(x) !== i;
+      })) { return { ok: false, why: 'the selected ' + key + ' are not eligible', choices: list }; }
+      return { ok: true, list: chosen.slice() };
+    }
+    var a = selected(spells, 'spells', s.prof !== 'mage');
+    if (!a.ok) { return a; }
+    var b = selected(staff, 'staffSpells', s.prof !== 'enchanter');
+    if (!b.ok) { return b; }
+    s.spells = s.spells || { points: 0, known: [] };
+    s.spells.known = a.list;
+    s.staffSpells = b.list;
+    return yes(s);
+  }
+
+  function setProfessionForTesting(state, prof, halfOrSchools) {
+    var checked = pickProfession(fresh(), prof, halfOrSchools);
+    if (!checked.ok) { return checked; }
+    var s = captureKnowledge(state);
+    if ((s.taught || []).length || Object.keys(s.masters || {}).length || (s.apprentices || []).length) {
+      return no('end the current teaching relationships on K before changing profession');
+    }
+    if (s.prof === prof && s.half === checked.state.half &&
+        JSON.stringify((s.schools || []).slice().sort()) === JSON.stringify(checked.state.schools.slice().sort())) {
+      return no('that is already the current profession and choice');
+    }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
+    halvesOf(s.prof).forEach(function (key) { delete s.ranks[key]; delete s.work[key]; });
+    s.prof = null; s.half = null; s.schools = []; s.spells = null;
+    delete s.staffPoints; delete s.staffSpells; delete s.weave;
+    if (s.cls) { place(s, 'classes', s.cls); }
+    var picked = pickProfession(s, prof, halfOrSchools);
+    if (!picked.ok) { return picked; }
+    // Each profession gets its canonical starting spell points once. Returning
+    // to it restores its last balance, including zero after spending them.
+    var balances = picked.state.spellHistory.points;
+    if (own(balances.spells, prof)) {
+      picked.state.spells = picked.state.spells || { points: 0, known: [] };
+      picked.state.spells.points = balances.spells[prof];
+    }
+    if (prof === 'enchanter' && own(balances.staff, prof)) { picked.state.staffPoints = balances.staff[prof]; }
+    return picked;
   }
 
   /**
@@ -1948,7 +2048,8 @@
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
     pickClass: pickClass, setClassForTesting: setClassForTesting,
-    pickProfession: pickProfession, teach: teach,
+    pickProfession: pickProfession, setProfessionForTesting: setProfessionForTesting,
+    captureKnowledge: captureKnowledge, activeKnowledge: activeKnowledge, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,
