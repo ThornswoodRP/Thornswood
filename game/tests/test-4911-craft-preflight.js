@@ -31,7 +31,8 @@ const cases = [
     prof:'tailor',half:'haberdasher',remapped:true,reason:/Advanced Haberdasher/,
     inputs:recosted['286a:Hothtrooper44_ArmorCompilation.esp'].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
   {label:'moved recipe', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
-    prof:'tailor',half:'haberdasher',remapped:true,reason:/Master Haberdasher/,
+    // Linen now has its novice supplier; Troll Fat sets this row's Advanced rung.
+    prof:'tailor',half:'haberdasher',remapped:true,reason:/Advanced Haberdasher/,
     bench:moved['231c6:Hothtrooper44_ArmorCompilation.esp'].to,
     inputs:moved['231c6:Hothtrooper44_ArmorCompilation.esp'].inputs.map(x => ({item:x[0],count:x[1]}))},
 ];

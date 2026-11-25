@@ -566,12 +566,6 @@
       "why": "Smith work with no recipe yet"
     },
     {
-      "desc": "34cd6:Skyrim.esm",
-      "name": "Linen Wrap",
-      "issue": "#4647",
-      "why": "Tailor work with no recipe yet"
-    },
-    {
       "desc": "34c5e:Skyrim.esm",
       "name": "ale",
       "issue": "#4648",
@@ -648,12 +642,6 @@
       "name": "Werewolf Pelt",
       "issue": "#4649",
       "why": "an animal part no hunt gives yet; Werewolf's Bane, from Cheddar's Mashups in collection revision 5, asks for it"
-    },
-    {
-      "desc": "f2012:Skyrim.esm",
-      "name": "Empty Wine Bottle",
-      "issue": "#4652",
-      "why": "water is carried in it (NEEDS.waterItems), and nothing hands one out."
     }
   ],
   "exempt": [

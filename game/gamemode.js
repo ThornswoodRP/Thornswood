@@ -29146,8 +29146,8 @@ module.exports = {
         /letter "Lydia Stormblade" Meet me at the Drunken Huntsman at dusk.
 
     NOBODY TYPES THESE (#1595). Patrick, 4 Oct: nothing people do is a chat
-    command. The board panel's Write a letter sends the second form, the name
-    always in double quotes, and nothing a person reads names /letter.
+    command. The current board panel sends /letter-post-v1 with separate encoded
+    strings. These older forms remain compatible; no public help names them.
 
     #1374, as docs/systems/noticeboards.md has it. A letter is a job with a
     named person at the other end, written standing at the board. The words
@@ -29159,7 +29159,28 @@ module.exports = {
     panels, Your jobs and the taking line say who it is for and from whom, and
     the log does not record them either.
   */
-  function postLetter(parts, actorId, profileId, toProfile) {
+  // Two encoded strings keep quotes and spaces out of the legacy word parser.
+  // This verb is intentionally unknown to a server that still strips names.
+  function postLetterV1(parts, actorId, profileId, toProfile) {
+    var to, words;
+    if (!Array.isArray(parts) || parts.length !== 3 || typeof parts[1] !== 'string' ||
+        typeof parts[2] !== 'string' || parts[1].length > 540 || parts[2].length > 2700) {
+      toProfile(profileId, 'That letter request is invalid. Nothing was posted or taken.'); return true;
+    }
+    try { to = decodeURIComponent(parts[1]); words = decodeURIComponent(parts[2]); }
+    catch (eLetter) {
+      toProfile(profileId, 'That letter request has invalid text. Nothing was posted or taken.'); return true;
+    }
+    // Same unsafe characters as character names; quotes and valid spaces stay.
+    // Do not run a rename normalizer or change the existing name-match policy.
+    if (!to.trim() || to.length > 60 || /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) ||
+        !words.trim() || words.length > LETTER_CHARS) {
+      toProfile(profileId, 'That letter request is invalid or too long. Nothing was posted or taken.'); return true;
+    }
+    return postLetter(parts, actorId, profileId, toProfile, {to:to,words:words});
+  }
+
+  function postLetter(parts, actorId, profileId, toProfile, written) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
@@ -29167,7 +29188,8 @@ module.exports = {
     }
     var rest = (parts && parts.length > 1) ? parts.slice(1).join(' ').trim() : '';
     var to = '', words = '';
-    if (rest.charAt(0) === '"') {
+    if (written) { to = written.to; words = written.words; }
+    else if (rest.charAt(0) === '"') {
       var shut = rest.indexOf('"', 1);
       if (shut > 1) { to = rest.slice(1, shut).trim(); words = rest.slice(shut + 1).trim(); }
     } else {
@@ -30279,6 +30301,7 @@ module.exports = {
     if (word === '/take') { return take(parts, actorId, profileId, toProfile); }
     if (word === '/dropjob') { return dropJob(parts, actorId, profileId, toProfile); }
     if (word === '/unpin') { return unpin(parts, actorId, profileId, toProfile); }
+    if (word === '/letter-post-v1') { return postLetterV1(parts, actorId, profileId, toProfile); }
     if (word === '/letter') { return postLetter(parts, actorId, profileId, toProfile); }
     if (word === '/deliver') { return deliver(parts, actorId, profileId, toProfile); }
     if (word === '/haul') { return haulCmd(parts, actorId, profileId, toProfile); }
@@ -38808,7 +38831,7 @@ return module.exports;
         word === '/rent' || word === '/sleephere' || word === '/notice' || word === '/job' ||
         word === '/board' || word === '/take' ||
         word === '/haul' || word === '/world' ||
-        word === '/letter' || word === '/deliver' ||
+        word === '/letter-post-v1' || word === '/letter' || word === '/deliver' ||
         word === '/dropjob' || word === '/unpin') {
       if (!actorId) {
         toProfile(profileId, 'The server cannot find your character right now. Give it a moment and try again.');
@@ -44997,7 +45020,7 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/ooc', '/o',
                // A letter (#1595): Write a letter on the board panel sends
                // /letter, and the look prompt's Hand over the letter sends
                // /deliver. Never typed, and not in PLAYER_WORDS either.
-               '/letter', '/deliver',
+               '/letter-post-v1', '/letter', '/deliver',
                // The company's terms card on the Office page of K, for staff
                // (#512, #2695): propose, confirm and drop. Sent by the page,
                // never typed, and so NOT in PLAYER_WORDS.
@@ -51304,11 +51327,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var at = clock && Number(clock.at) > 0 ? Number(clock.at) : now;
       var days = Math.max(0, Math.floor((now - at) / DAY_MS));
       var from = clock && Number(clock.at) > 0 ? Math.max(0, Number(clock.days) || 0) : days;
-      var turned = Math.max(0, days - from);
-      var cold = false;
-      try { cold = !!api.cold(containerId); } catch (e) { cold = false; }
-      var spoiling = cold ? 0 : turned - winterDays(at, from, days);
-      var res = aged(entries, spoiling);
+      var time = storageTime(containerId, at, from, now);
+      var res = aged(entries, time.turned);
       if (!same(res.entries, entries) && !api.setInventory(containerId, res.entries)) {
         return null;
       }
@@ -51319,9 +51339,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       }
       if (res.gone.length) {
         api.log('spoilage:', Number(containerId).toString(16), 'spoiled', JSON.stringify(res.gone), 'after',
-                spoiling, 'day(s)');
+                time.turned, 'day(s)');
       }
-      return { turned: spoiling, cold: cold, gone: res.gone };
+      return { turned: time.turned, cold: time.cold, gone: res.gone };
+    }
+
+    // Shared calculation only: the caller commits the clock with its goods.
+    // Guild shelves use the same place/season rules as a physical chest.
+    function storageTime(placeId, at, from, now) {
+      var days = Math.max(0, Math.floor((now - at) / DAY_MS));
+      var cold = false;
+      try { cold = !!api.cold(placeId); } catch (e) { cold = false; }
+      return { clock: { at: at, days: days }, cold: cold,
+        turned: cold ? 0 : Math.max(0, days - from) - winterDays(at, from, days) };
     }
 
     /*
@@ -51488,7 +51518,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return {
       DAY_MS: DAY_MS, PASS_MS: PASS_MS, GAP_MS: GAP_MS, SMOKE_PER_WOOD: SMOKE_PER_WOOD,
       lifeOf: lifeOf, leftOf: leftOf, keptOf: keptOf, bareName: bareName, ownName: ownName,
-      aged: aged, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
+      aged: aged, storageTime: storageTime, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
       inputRefusal: inputRefusal, view: view, preserve: preserve, panel: panel, mayPreserve: mayPreserve
     };
   }
@@ -70901,6 +70931,39 @@ function createNativeMerchantTransfer(mp) {
   };
 }
 
+// A proposed ledger value only; the caller commits stock and clock together.
+function agedMerchantStock(state, spoilage, merchantId, now) {
+  if (!spoilage || typeof spoilage.storageTime !== 'function' || typeof spoilage.aged !== 'function')
+    throw new Error('Merchant food aging is unavailable. Nothing moved.');
+  if (!Number.isSafeInteger(now) || now <= 0) throw new Error('The shop clock cannot be verified. Nothing moved.');
+  var next = JSON.parse(JSON.stringify(state)), clock = state.spoilClock;
+  var legacy = clock === undefined;
+  if (legacy) clock = {at:now,days:0};
+  if (!clock || typeof clock !== 'object' || Array.isArray(clock) || Object.keys(clock).length !== 2 ||
+      !Number.isSafeInteger(clock.at) || clock.at <= 0 || clock.at > now ||
+      !Number.isSafeInteger(clock.days) || clock.days < 0 || clock.days > Math.floor((now-clock.at)/spoilage.DAY_MS))
+    throw new Error('The shop food clock cannot be verified. Nothing moved.');
+  var time = spoilage.storageTime(merchantId,clock.at,clock.days,now);
+  next.stock.forEach(function (row) {
+    if (Object.prototype.hasOwnProperty.call(row,'ageUnknown') && row.ageUnknown !== true)
+      throw new Error('The shop food age cannot be verified. Nothing moved.');
+    var entry = row.entry || {baseId:row.baseId,count:row.count};
+    SETTLEMENT.inventory({entries:[entry]});
+    if (entry.baseId !== row.baseId || entry.count !== row.count)
+      throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (legacy && spoilage.lifeOf(entry.baseId) && !spoilage.keptOf(entry)) row.ageUnknown = true;
+    if (row.ageUnknown) return;
+    var changed = spoilage.aged([entry],time.turned).entries[0];
+    if (!changed || changed.count !== row.count) throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (JSON.stringify(changed) !== JSON.stringify(entry)) {
+      row.entry = changed;
+      if (changed.baseId !== row.baseId) { row.baseId = changed.baseId; row.name = changed.name; }
+    }
+  });
+  next.spoilClock = time.clock;
+  return JSON.stringify(next) === JSON.stringify(state) ? null : next;
+}
+
 function createMerchantTrading(deps) {
   var purses = deps.purses;
   var prices = deps.prices;
@@ -70914,6 +70977,14 @@ function createMerchantTrading(deps) {
   var now = deps.now || function () { return Date.now(); };
   var reach = deps.reach == null ? REACH : deps.reach;
   var sessions = new Map();
+  function ageStock(merchantId,state,caller) {
+    if (!state || state.pending || typeof deps.spoilage !== 'function') return state;
+    var next = agedMerchantStock(state,deps.spoilage(),merchantId,now());
+    if (!next) return state;
+    var committed = purses.compareAndCommit(merchantId,state.revision || 0,next,caller);
+    if (!committed) throw new Error('The trader changed. Choose the trade again. Nothing moved.');
+    return committed;
+  }
   var viewOwners = new WeakMap();
   var sessionSerial = 0;
   /*
@@ -70968,7 +71039,7 @@ function createMerchantTrading(deps) {
     entries.forEach(function (entry) {
       var key = SETTLEMENT.metadataKey(entry);
       var row = stock.find(function (held) {
-        return held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
+        return !held.ageUnknown && held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
       });
       if (row) {
         if (row.count + entry.count > MAX_GOLD) throw new Error('The shelf is full.');
@@ -70982,7 +71053,7 @@ function createMerchantTrading(deps) {
     var entries = [], left = count;
     for (var i = 0; i < stock.length && left > 0; i++) {
       var row = stock[i];
-      if (row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
+      if (row.ageUnknown || row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
       var n = Math.min(row.count, left);
       entries.push(Object.assign({}, row.entry || {baseId:row.baseId}, {count:n}));
       row.count -= n; left -= n;
@@ -71121,12 +71192,12 @@ function createMerchantTrading(deps) {
       if (buy !== null) quotedBuy = true;
       if (buy !== null && carried > 0) carriedBuy = true;
       var held = (state.stock || []).find(function (entry) {
-        return entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
+        return !entry.ageUnknown && entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
       });
       var count = 0;
       var stock = state.stock || [];
       for (var s = 0; s < stock.length; s++) {
-        if (stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
+        if (!stock[s].ageUnknown && stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
       }
       offers.push({
         name: name,
@@ -71172,7 +71243,7 @@ function createMerchantTrading(deps) {
       supply: supply,
       quests: questView(actorId,merchantId),
       note: note || (settlement.available()
-        ? ''
+        ? ((state.stock || []).some(function(row){return row.ageUnknown;}) ? 'Some older food has no verified age and is not for sale.' : '')
         : 'Buying and selling wait on the native transfer. Nothing has moved.')
     };
     var currentIdentity = viewIdentity ? sessionIdentity(world.actor(actorId)) : null;
@@ -71204,7 +71275,21 @@ function createMerchantTrading(deps) {
         var closed=closedView(session.actorId,profileId,session);
         views.push({actorId:session.actorId,view:closed}); return;
       }
-      var state = purses.read(session.merchantId), place = state && placeOf(state.reference);
+      var state;
+      try {
+        state = ageStock(session.merchantId,purses.read(session.merchantId),function(){return ownsSession(session.actorId,profileId,session);});
+      } catch(error) {
+        if (!active || sessions.get(profileId)!==session) return;
+        var refused = closedView(session.actorId,profileId,session);
+        refused.note = String(error.message || error);
+        views.push({actorId:session.actorId,view:refused});
+        if (typeof deps.notice === 'function' && isCurrentView(session.actorId,refused)) {
+          try { deps.notice(profileId,refused.note); }
+          catch(noticeError) { if (typeof deps.log === 'function') deps.log('Merchant food notice failed: '+noticeError); }
+        }
+        return;
+      }
+      var place = state && placeOf(state.reference);
       if (state && place) {
         var view=viewFor(session.merchantId,state,place,session.actorId,profileId,session.note,{session:session,identity:session.identity});
         var current = sessionIdentity(world.actor(session.actorId));
@@ -71273,7 +71358,9 @@ function createMerchantTrading(deps) {
       if (!authed(profileId, reached.human)) return fail('That request is not yours.');
       var identity=sessionIdentity(reached.human);
       if (!identity) return fail('This character is unavailable.', closedView(actorId,profileId,prior));
-      var state = purses.prepare(merchantId);
+      var state;
+      try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return active && sessions.get(profileId)===prior;}); }
+      catch(error) { return fail(String(error.message || error)); }
       if (!active || sessions.get(profileId)!==prior) return fail('This character is unavailable.');
       if (!state) return fail('That is not a guild trader.');
       var place = placeOf(state.reference);
@@ -71356,7 +71443,15 @@ function createMerchantTrading(deps) {
           released:'Your inventory changed before the turn-in. Nothing moved. Turn the work in again.'});
       }
       if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
-      var questState=purses.prepare(merchantId),questPlace=questState && placeOf(questState.reference);
+      var questState;
+      try {
+        questState = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);});
+      } catch(error) {
+        if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
+        if (typeof deps.log === 'function') deps.log('Merchant shelf refresh failed after quest: ' + error);
+        return refuseSession(text + ' The shelf could not be refreshed. Open the trader panel again.');
+      }
+      var questPlace=questState && placeOf(questState.reference);
       var questResponse=questState && questPlace ? viewFor(merchantId,questState,questPlace,actorId,profileId,text,{session:originalSession,identity:originalSession.identity}) : closedView(actorId,profileId,originalSession);
       return questResponse && isCurrentView(actorId,questResponse) ? fail(text,questResponse) : {text:'',view:null};
     }
@@ -71385,7 +71480,9 @@ function createMerchantTrading(deps) {
       var view=responseView(state,note);
       return view && isCurrentView(actorId,view) ? fail(text,view) : {text:'',view:null};
     }
-    var state = purses.prepare(merchantId);
+    var state;
+    try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);}); }
+    catch(error) { return fail(String(error.message || error)); }
     if (!state) return fail('That is not a guild trader.');
     if (state.pending) return fail('This trader has a transfer waiting.');
     var place = placeOf(state.reference);
@@ -71576,6 +71673,11 @@ function installMerchantTrading(env) {
   var minted = typeof env.minted === 'function' ? env.minted : function () { return false; };
   var trading = createMerchantTrading({
     purses: env.purses,
+    spoilage: function () { return g.__thornswoodSpoilage; },
+    notice: function (profileId,line) {
+      if (typeof g.__thornswoodToProfile !== 'function') throw new Error('Merchant notice delivery is unavailable.');
+      g.__thornswoodToProfile(profileId,line);
+    },
     minted: minted,
     log:log,
     prices: {
@@ -71744,6 +71846,7 @@ function installMerchantTrading(env) {
 }
 
 module.exports = {
+  agedMerchantStock: agedMerchantStock,
   createMerchantTrading: createMerchantTrading,
   createNativeMerchantTransfer: createNativeMerchantTransfer,
   createQuestTransactions: QUEST_TRANSFER.createQuestTransactions,

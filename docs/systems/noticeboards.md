@@ -133,6 +133,10 @@ from the board's panel: Write a letter, with who it is for and the
 words. The words are the letter, up to 300 characters, the same cap
 as `/ooc`.
 
+Quote marks in the recipient name remain part of that name when the letter
+is posted and handed over. The server keeps its existing name and first-name
+matching rules; it does not remove quotes or guess a different recipient.
+
 It costs 35 gold up front. 20 is the board fee and stays with the hold.
 15 is the courier's pay, and it is held
 the way a haul's pay is held. If the gold is not there, nothing is

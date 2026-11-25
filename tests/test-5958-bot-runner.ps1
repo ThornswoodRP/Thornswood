@@ -14,7 +14,9 @@ function Yes($what, $ok) {
     else { $script:fail++; Write-Host "FAIL $what" }
 }
 function Fixture($name, $source) { [IO.File]::WriteAllText((Join-Path $tests $name), $source) }
-function Run([string]$Executable = $Python, [int]$Seconds = 5) {
+# Leave room for a cold interpreter on a shared Windows runner. The cases
+# that verify the timeout and inherited pipes still set their own one-second bound.
+function Run([string]$Executable = $Python, [int]$Seconds = 20) {
     $script:output = & (Get-Process -Id $PID).Path -NoProfile -File $runner -Root $scratch -Python $Executable -TimeoutSeconds $Seconds 2>&1 | Out-String
     return $LASTEXITCODE
 }
@@ -36,7 +38,13 @@ print('err' * 30000, file=sys.stderr)
     Fixture 'helper.py' "raise RuntimeError('not a harness')"
     Yes 'the runner exists' (Test-Path -LiteralPath $runner)
     if (-not (Test-Path -LiteralPath $runner)) { throw 'runner missing (expected RED before implementation)' }
-    Yes 'sorted real harnesses pass; helper is not selected; private environment is supplied' ((Run) -eq 0 -and (Test-Path (Join-Path $scratch 'last-ran')))
+    $firstResult = Run
+    $firstPassed = $firstResult -eq 0 -and (Test-Path (Join-Path $scratch 'last-ran'))
+    Yes 'sorted real harnesses pass; helper is not selected; private environment is supplied' $firstPassed
+    if (-not $firstPassed) {
+        Write-Host "First fixture run exited $firstResult"
+        $output -split '\r?\n' | Where-Object { $_ -match '^(?:::error|Traceback|AssertionError|Bot harnesses:)' } | Write-Host
+    }
     Yes 'stdout and stderr details survive the runner into the job log' ($output -match 'first: ✓' -and $output -match 'stderr detail')
     $oldPath = $env:PATH
     try {

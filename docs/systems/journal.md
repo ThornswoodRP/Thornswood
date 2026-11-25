@@ -23,6 +23,19 @@ not replace newer text. If a save is refused or cannot be confirmed,
 the current page stays marked Unsaved. Keep that draft until you have
 checked or saved it; a matching live copy alone is not a save receipt.
 
+Before leaving an unsaved page for another page, book, shared book, group or
+board, the panel asks whether to Keep editing or Discard and continue. Keep
+editing returns to the draft and its cursor. Typing cancels a pending discard
+choice. A changed destination or a command that could not be sent leaves the
+draft intact. Nothing is saved or sent
+again by this choice.
+
+Closing and reopening the panel keeps the current draft in the same browser.
+Escape cancels a displayed choice first; a held repeat does not close the
+panel immediately afterwards. If the source page disappears, its unsaved text
+stays available for copying and its former Save button cannot write it back.
+The draft is not a disk save.
+
 ## Who else can read it
 
 Nobody, until you share a page. You can share with a friend, and with
