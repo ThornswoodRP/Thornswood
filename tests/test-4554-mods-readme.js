@@ -33,13 +33,10 @@ function check(desc, ok) {
     }
 }
 
-if (!fs.existsSync(README_PATH)) {
-    console.error('FAIL  scripts/mods/README.md exists');
-    process.exit(1);
-}
-check('scripts/mods/README.md exists', true);
+const readmeExists = fs.existsSync(README_PATH);
+check('scripts/mods/README.md exists', readmeExists);
 
-const readmeText = fs.readFileSync(README_PATH, 'utf8');
+const readmeText = readmeExists ? fs.readFileSync(README_PATH, 'utf8') : '';
 const lines = readmeText.split(/\r?\n/);
 
 const tableRows = lines.filter(l => l.startsWith('| ['));
@@ -77,6 +74,4 @@ const duplicates = listedScripts.filter((item, index) => listedScripts.indexOf(i
 check(`no duplicate entries in README.md${duplicates.length ? ' (duplicates: ' + duplicates.join(', ') + ')' : ''}`, duplicates.length === 0);
 
 console.log(`\n${passes} passed, ${failures} failed`);
-if (failures > 0) {
-    process.exit(1);
-}
+process.exitCode = failures > 0 ? 1 : 0;
