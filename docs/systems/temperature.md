@@ -208,6 +208,11 @@ within about two paces (220 units). The caught burn lasts 5 seconds
 unless they stay next to the person who is alight. It does not run
 through a town.
 
+People nearby see flames on the person who is burning, including when
+that person comes into view after the fire began. The flames stop when
+that fire ends. An old fire does not return after death, a disconnect,
+or a server restart.
+
 ## Water
 
 Only while swimming or wading.

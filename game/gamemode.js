@@ -55048,12 +55048,45 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     and needs no launcher release.
   */
   var BURN_PROPERTY = 'thornswoodBurn';
+  var BURN_VISUAL_PROPERTY = 'thornswoodBurnVisual';
+  // Saved actor properties from an earlier process are not a current fire.
+  // The script and each report share this gamemode registration's token.
+  var burnEpoch = String(Date.now()) + ':' + String(Math.random());
+  var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
+  var burnIdentities = {}; // actorId -> profile, current runtime and life
+
+  function burnIdentity(actorId) {
+    try {
+      var state = mp.getNpcAIState(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!state || state.isConnected !== true || state.isDead || state.isDisabled ||
+          !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
+          typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
+      return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
+    } catch (e) { nlog('could not read the burning actor identity:', e); return ''; }
+  }
+
+  function publishBurnVisual(actorId, on) {
+    try {
+      mp.set(actorId, BURN_VISUAL_PROPERTY, { on: on, epoch: burnEpoch, seq: ++burnSequence });
+    } catch (e) { nlog('could not publish the fire visual for', actorId, e); }
+  }
+
+  function clearBurning(actorId) {
+    delete burning[actorId];
+    delete burnIdentities[actorId];
+    publishBurnVisual(actorId, false);
+  }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
-    if (on) { burning[actorId] = Date.now(); }
-    else { delete burning[actorId]; }
+    var identity = on ? burnIdentity(actorId) : '';
+    if (on && identity) {
+      burning[actorId] = Date.now();
+      burnIdentities[actorId] = identity;
+      publishBurnVisual(actorId, true);
+    } else { clearBurning(actorId); }
   }
 
   /** Tell one person's client to catch fire for a while. */
@@ -55073,8 +55106,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     for (var id in burning) {
       if (!Object.prototype.hasOwnProperty.call(burning, id)) { continue; }
       // A client that stops reporting has gone, crashed or stopped burning
-      // without saying so. Two of its own beats is enough to let go.
-      if (now - burning[id] > NEEDS.burn.every * 3) { delete burning[id]; continue; }
+      // without saying so. Three server beats without a report lets go.
+      if (now - burning[id] > NEEDS.burn.every * 3 || burnIdentity(Number(id)) !== burnIdentities[id]) {
+        clearBurning(Number(id)); continue;
+      }
       alight.push(Number(id));
     }
     if (!alight.length) { return; }
@@ -55144,6 +55179,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     ].join('\n');
   }
 
+  // This is only the observer's shader. The existing owner script/plugin
+  // continues to own ignition, damage and the report that drives spreading.
+  function burnVisualScript() {
+    return [
+      '(function(){',
+      '  var st = ctx.state;',
+      '  if (!st) { return; }',
+      '  try {',
+      '    var a = ctx.sp.Actor.from(ctx.refr);',
+      '    if (!a) { return; }',
+      '    var v = ctx.value, now = Date.now();',
+      '    var current = v && v.epoch === ' + JSON.stringify(burnEpoch) + ' && v.on === true && Number.isSafeInteger(v.seq);',
+      '    if (current && (st.thornswoodBurnVisualEpoch !== v.epoch || st.thornswoodBurnVisualSeq !== v.seq)) {',
+      '      if (st.thornswoodBurnVisualEpoch !== v.epoch) { st.thornswoodBurnVisualHidden = true; }',
+      '      st.thornswoodBurnVisualEpoch = v.epoch;',
+      '      st.thornswoodBurnVisualSeq = v.seq;',
+      '      st.thornswoodBurnVisualUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '    if (!current || ctx.get("isDead") || now >= (st.thornswoodBurnVisualUntil || 0)) {',
+      '      if (st.thornswoodBurnVisualShown) {',
+      '        var ended = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '        if (ended) { ended.stop(a); }',
+      '        st.thornswoodBurnVisualShown = false;',
+      '      }',
+      '      return;',
+      '    }',
+      '    if (!a.is3DLoaded()) { st.thornswoodBurnVisualHidden = true; return; }',
+      // Heartbeats extend receipt validity. They do not stack native Play calls.
+      // Replace only when the finite shader lease ends or the body reloads.
+      '    if (!st.thornswoodBurnVisualShown || st.thornswoodBurnVisualHidden || now >= (st.thornswoodBurnShaderUntil || 0)) {',
+      '      var shader = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '      if (!shader) { return; }',
+      '      if (st.thornswoodBurnVisualShown) { shader.stop(a); }',
+      '      shader.play(a, ' + (NEEDS.burn.every * 3 / 1000) + ');',
+      '      st.thornswoodBurnVisualShown = true;',
+      '      st.thornswoodBurnVisualHidden = false;',
+      '      st.thornswoodBurnShaderUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '  } catch (e) {',
+      '    if (!st.thornswoodBurnVisualError) {',
+      '      st.thornswoodBurnVisualError = true;',
+      '      ctx.sp.printConsole("[Thornswood] remote fire visual failed: " + String(e));',
+      '    }',
+      '  }',
+      '})();'
+    ].join('\n');
+  }
+
+  mp.makeProperty(BURN_VISUAL_PROPERTY, {
+    isVisibleByOwner: false,
+    isVisibleByNeighbors: true,
+    updateOwner: '',
+    updateNeighbor: burnVisualScript()
+  });
+
   try {
     mp.makeProperty(BURN_PROPERTY, {
       isVisibleByOwner: true,
@@ -55201,7 +55291,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
     place: place, tooTiredToCraft: tooTiredToCraft, craftRefusal: craftRefusal,
-    setBurning: setBurning, catchFire: catchFire,
+    setBurning: setBurning, catchFire: catchFire, clearBurning: clearBurning,
     fresh: fresh, clamp: clamp,
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
@@ -57174,6 +57264,8 @@ module.exports = {
   */
   function died(actorId) {
     delete fires[actorId];
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
     var any = false;
     for (var i = 0; i < rec.wounds.length; i++) {
