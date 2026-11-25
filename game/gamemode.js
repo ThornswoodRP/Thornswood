@@ -25440,9 +25440,9 @@ module.exports = {
     the two generated name tables /give reads, when this file has them.
   */
   var boxNames = null;
-  function itemName(entry) {
-    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
-    var base = Number(entry && entry.baseId) || 0;
+  /** Decoded base name by its whole descriptor, or '' when unknown. Read only. */
+  function baseItemName(baseId) {
+    var base = Number(baseId) || 0;
     if (base === GOLD_ID) { return 'Gold'; }
     if (!boxNames) {
       boxNames = {};
@@ -25461,6 +25461,16 @@ module.exports = {
     var desc = '';
     try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     if (desc && Object.prototype.hasOwnProperty.call(boxNames, desc)) { return boxNames[desc]; }
+    return '';
+  }
+
+  function itemName(entry) {
+    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
+    var base = Number(entry && entry.baseId) || 0;
+    var name = baseItemName(base);
+    if (name) { return name; }
+    var desc = '';
+    try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     return desc ? 'something (' + desc + ')' : 'something';
   }
 
@@ -30348,7 +30358,7 @@ module.exports = {
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
-    itemName: itemName
+    itemName: itemName, baseItemName: baseItemName
   };
   plog('ready,', Object.keys(BUILDING_BY_DOOR).length, 'doors across',
        Object.keys(BUILDING_NAME).length, 'buildings,',
@@ -60050,10 +60060,11 @@ module.exports = {
     A name somebody can read.
 
     Skyrim.esm and the DLCs are localized. A FULL field there is not a name:
-    it is a four byte index into the strings file. String() of those bytes is
-    a row of numbers, which is what the trade list was showing. A FULL is
-    used only when it is real text. Otherwise the editor id is spaced out
-    (SteelSword becomes Steel Sword). A string index is never shown.
+    it is a four byte index into the strings file. Some indexes even look
+    printable (Hammer's is [46,74,0,0], or '.J'). Use the shared
+    decoded content names first, matched by the whole record descriptor.
+    FULL is text only when the winning plugin is proven unlocalized.
+    Unknown provenance and missing decoded names use the editor id.
   */
   function fieldText(data) {
     if (typeof data === 'string') {
@@ -60094,6 +60105,11 @@ module.exports = {
     if (Object.prototype.hasOwnProperty.call(nameCache, baseId)) { return nameCache[baseId]; }
     var label = '';
     var edid = '';
+    var names = g.__thornswoodProperty;
+    if (names && typeof names.baseItemName === 'function') {
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
+    }
     try {
       var res = mp.lookupEspmRecordById(baseId);
       var rec = res && res.record;
@@ -60103,7 +60119,7 @@ module.exports = {
         for (var i = 0; i < fields.length; i++) {
           if (!fields[i]) { continue; }
           var t = String(fields[i].type || '');
-          if (t === 'FULL' && !label) { label = fieldText(fields[i].data); }
+          if (t === 'FULL' && !label && res.isLocalized === false) { label = fieldText(fields[i].data); }
           else if (t === 'EDID' && !edid) { edid = fieldText(fields[i].data); }
         }
       }

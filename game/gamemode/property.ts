@@ -3296,9 +3296,9 @@
     the two generated name tables /give reads, when this file has them.
   */
   var boxNames = null;
-  function itemName(entry) {
-    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
-    var base = Number(entry && entry.baseId) || 0;
+  /** Decoded base name by its whole descriptor, or '' when unknown. Read only. */
+  function baseItemName(baseId) {
+    var base = Number(baseId) || 0;
     if (base === GOLD_ID) { return 'Gold'; }
     if (!boxNames) {
       boxNames = {};
@@ -3317,6 +3317,16 @@
     var desc = '';
     try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     if (desc && Object.prototype.hasOwnProperty.call(boxNames, desc)) { return boxNames[desc]; }
+    return '';
+  }
+
+  function itemName(entry) {
+    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
+    var base = Number(entry && entry.baseId) || 0;
+    var name = baseItemName(base);
+    if (name) { return name; }
+    var desc = '';
+    try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     return desc ? 'something (' + desc + ')' : 'something';
   }
 
@@ -8204,7 +8214,7 @@
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
-    itemName: itemName
+    itemName: itemName, baseItemName: baseItemName
   };
   plog('ready,', Object.keys(BUILDING_BY_DOOR).length, 'doors across',
        Object.keys(BUILDING_NAME).length, 'buildings,',
