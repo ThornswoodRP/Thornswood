@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\tests\test-2821-launcher-compiler.ps1
 
-  Issue #2821. Seventeen harnesses compiled launcher or setup code with
+  Issue #2821. Eighteen harnesses compiled launcher or setup code with
   PowerShell's Add-Type or a CSharpCodeProvider, not the compiler the build
   runs. Under Windows PowerShell 5.1 that is the in-box .NET Framework csc,
   which stops at C# 5, so a harness refused a line the build takes, and five

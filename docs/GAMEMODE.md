@@ -225,8 +225,9 @@ The rules are in progression and the three blocks after the character block.
   rank of a school, two at Master). `pickSpell` (K panel, `/pick spell`) and
   `learnFromTome` (reading a tome) ask the same three things: a point, the
   rank in the spell's school, and a spell of that school one rank down.
-  Somebody a Master mage taught (`teach`) holds `LIMITS.outsiderSpells`
-  places instead of points, and their school never leaves Novice.
+  Somebody a Master mage taught (`teach`) needs both points (earned from College
+  semesters) and a free place under `LIMITS.outsiderSpells`, and their school
+  never leaves Novice.
 - **Spell tomes** (`thornswood spell tomes`). `mp.onReadBook` asks `read`,
   which resolves the tome's spell from the records and runs `learnFromTome`;
   answering false keeps the tome and takes the spell back.
