@@ -13,6 +13,14 @@ the launchers ask it who may play (`/api/allowed`, and `/dev/api/allowed` for
 the dev server), and it answers from the Discord roles in its config.
 `public\` holds the pages and the art it serves as they are.
 
+The Sessions page uses dated UTC times for starts, ends, chat, last played
+and staff receipts. Chat downloads carry the same explicit zone. The bot's
+failed-session alerts also name UTC and the year. New launcher log records
+use invariant UTC stamps ending in `Z`; the retention reader accepts those
+and older local stamps together. Log headings distinguish UTC from older
+server or PC local stamps without an offset. An old repeated local hour
+cannot be disambiguated after the fact; its original text remains intact.
+
 Discord errors are read by their JSON code. Unknown Member (10007) can prove
 that an account is absent, and Unknown Ban (10026) can prove it is not banned.
 Other 404s remain failed lookups. A complete member list can also prove
