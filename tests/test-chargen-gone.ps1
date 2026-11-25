@@ -124,7 +124,7 @@ $sources = @($sources | Where-Object { $_.Name -notlike 'test-*' })
 $naming = @($sources | Where-Object {
     ($keepsItOut -notcontains (RepoRel $_)) -and
     ([IO.File]::ReadAllText($_.FullName)).IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
-Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($naming.Count -eq 0)
+Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($sources.Count -gt 0 -and $naming.Count -eq 0)
 foreach ($n in $naming) { Write-Host ('      still named in ' + (RepoRel $n)) }
 
 # Not $keep: the Go.ps1 block lifted below has a $keep of its own.
