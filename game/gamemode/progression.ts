@@ -921,6 +921,38 @@
     return yes(s);
   }
 
+  // #6737: explicit testing exception to the ordinary one-class pick.
+  // Preserve spent tree points, then place the current choices again through
+  // the same capped allocation used at creation. No kit or rank reward.
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    for (var skill in s.placed) {
+      if (!own(s.placed, skill)) { continue; }
+      if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
+          !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
+        return no('the placed skill points cannot be read');
+      }
+    }
+    for (var oldSkill in s.placed) {
+      if (!own(s.placed, oldSkill)) { continue; }
+      s.tree[oldSkill] -= s.placed[oldSkill];
+      if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
+    }
+    s.placed = {};
+    if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
+    s.cls = null;
+    var picked = pickClass(s, cls);
+    if (!picked.ok) { return picked; }
+    s = picked.state;
+    if (s.prof) { place(s, 'professions', s.prof); }
+    if (s.half) { place(s, 'halves', s.half); }
+    for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
+    return yes(s);
+  }
+
   /**
     One profession and one half of it, in one step, because the half is not
     a flavour. A mage picks schools instead of a half, exactly two of them.
@@ -1915,7 +1947,8 @@
   g.__thornswoodProgression = {
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
-    pickClass: pickClass, pickProfession: pickProfession, teach: teach,
+    pickClass: pickClass, setClassForTesting: setClassForTesting,
+    pickProfession: pickProfession, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,

@@ -346,6 +346,30 @@ try:
     yes('M16 one the game server could not do says so',
         tbf is not None and tbf.startswith('**Staff on the site:** Patrick could not take back from profile 7'))
 
+    # The testing command records the selected class as its reason and the
+    # changed character as subject, for self and admin-selected targets.
+    put(LIVE, [])
+    put(DEV, [])
+    class_records = [
+        json.dumps(dict(json.loads(row('setclass', who='Aela', why='mage')), who=1001)),
+        row('setclass', who='Bjorn', why='warrior', n=1),
+    ]
+    ticks = drive([lambda: put(DEV, class_records)])
+    yes('class changes reach the watcher with the correct self or other target and selected class',
+        ticks == [[], [
+            '**Staff on the dev server:** Aela (profile 1001) changed the class of '
+            'Aela (profile 1001): mage',
+            '**Staff on the dev server:** Aela (profile 1001) changed the class of '
+            'Bjorn (profile 2002): warrior',
+        ]])
+    class_escaped = bot.moderation_text('live', json.loads(row('setclass', who='@everyone',
+        byName='<@111111111111111111>', why='<@&111111111111111111> [x](http://e.invalid)')))
+    yes('class change escapes both names and its reason',
+        class_escaped is not None and '@everyone' not in class_escaped
+        and '<@111111111111111111>' not in class_escaped
+        and '<@&111111111111111111>' not in class_escaped
+        and '\\[x](http://e.invalid)' in class_escaped and len(class_escaped) <= 1900)
+
     # M14: staff at a building's door (#2551, Patrick, 17 Oct): the property
     # block's staff presses come through the staff block's record with the
     # building and its hold in the why, and each reads as who did what where.

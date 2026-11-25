@@ -17164,6 +17164,38 @@ log('gamemode loaded:',
     return yes(s);
   }
 
+  // #6737: explicit testing exception to the ordinary one-class pick.
+  // Preserve spent tree points, then place the current choices again through
+  // the same capped allocation used at creation. No kit or rank reward.
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    for (var skill in s.placed) {
+      if (!own(s.placed, skill)) { continue; }
+      if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
+          !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
+        return no('the placed skill points cannot be read');
+      }
+    }
+    for (var oldSkill in s.placed) {
+      if (!own(s.placed, oldSkill)) { continue; }
+      s.tree[oldSkill] -= s.placed[oldSkill];
+      if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
+    }
+    s.placed = {};
+    if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
+    s.cls = null;
+    var picked = pickClass(s, cls);
+    if (!picked.ok) { return picked; }
+    s = picked.state;
+    if (s.prof) { place(s, 'professions', s.prof); }
+    if (s.half) { place(s, 'halves', s.half); }
+    for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
+    return yes(s);
+  }
+
   /**
     One profession and one half of it, in one step, because the half is not
     a flavour. A mage picks schools instead of a half, exactly two of them.
@@ -18158,7 +18190,8 @@ log('gamemode loaded:',
   g.__thornswoodProgression = {
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
-    pickClass: pickClass, pickProfession: pickProfession, teach: teach,
+    pickClass: pickClass, setClassForTesting: setClassForTesting,
+    pickProfession: pickProfession, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,
@@ -64440,20 +64473,23 @@ module.exports = {
   var USAGE = 'Use /rankup class [for <person>] or /rankup profession [school] [for <person>].';
 
   function command(cmd, word, parts, pid, actorId) {
-    if (word !== '/rankup') { return false; }
+    var settingClass = word === '/setclass';
+    if (word !== '/rankup' && !settingClass) { return false; }
+    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : USAGE;
     var staff = g.__thornswoodStaff;
     if (!staff) { return true; }
     function refuse(why) { staff.tell(pid, why); return true; }
     var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
     if (!P || !C) { return refuse('The progression tools are not running.'); }
     var args = parts.slice(1);
-    var kind = String(args.shift() || '').toLowerCase();
-    if (kind !== 'class' && kind !== 'profession') { return refuse(USAGE); }
+    var kind = settingClass ? 'class' : String(args.shift() || '').toLowerCase();
+    if (kind !== 'class' && kind !== 'profession') { return refuse(usage); }
     var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
     var targetWords = at < 0 ? [] : args.slice(at + 1);
     var choice = at < 0 ? args : args.slice(0, at);
-    if ((at >= 0 && !targetWords.length) || choice.length > (kind === 'class' ? 0 : 1)) {
-      return refuse(USAGE);
+    if ((at >= 0 && !targetWords.length) || choice.length > (settingClass || kind === 'profession' ? 1 : 0) ||
+        (settingClass && choice.length !== 1)) {
+      return refuse(usage);
     }
     var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
     if (targetWords.length && !(targetWords.length === 1 && targetWords[0].toLowerCase() === 'me')) {
@@ -64466,6 +64502,19 @@ module.exports = {
     if (denied) { return refuse(denied); }
     if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
     var s = C.stateOf(target.actorId), key;
+    if (settingClass) {
+      var cls = String(choice[0]).toLowerCase();
+      var changed = P.setClassForTesting(s, cls);
+      if (!changed.ok) { return refuse(changed.why); }
+      try { C.writeState(target.actorId, changed.state, true); }
+      catch (e) { return refuse('The class change could not be saved.'); }
+      if (C.stateOf(target.actorId).cls !== cls) { return refuse('The class change could not be saved.'); }
+      staff.tell(target.pid, 'Your class is now ' + C.nameOf(cls) + ' at Novice.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s class to ' + C.nameOf(cls) + '.'); }
+      staff.record('setclass', pid, staff.nameOf(actorId), target.pid, target.name, cls, 0,
+        { from: s.cls || null, to: cls });
+      return true;
+    }
     if (kind === 'class') {
       key = s.cls;
       if (!P.has(P.TABLE.classes, key)) { return refuse('Choose a class before advancing its rank.'); }
@@ -64522,7 +64571,10 @@ module.exports = {
     tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
       syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
       { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
-        text: 'Advance another character\'s current class or profession by one rank.' }] });
+        text: 'Advance another character\'s current class or profession by one rank.' },
+      { word: '/setclass', role: 'playtester', syntax: '/setclass <class>', text: 'Change your gathering class at Novice.' },
+      { word: '/setclass', role: 'admin', syntax: '/setclass <class> for <person>',
+        text: 'Change another character\'s gathering class at Novice.' }] });
   }
 })();
 // ==== end thornswood staff progression ====
