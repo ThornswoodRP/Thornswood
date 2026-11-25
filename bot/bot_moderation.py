@@ -52,6 +52,13 @@ _MOD_DID = {
     'warn': 'warned %s',
     'give': 'gave %s',
     'spawn': 'spawned beside %s',
+    'fly': 'changed flight for %s',
+    'phase': 'moved %s forward',
+    'godmode': 'changed god mode for %s',
+    'invisible': 'changed visibility for %s',
+    'cleareffects': 'cleared alcohol and drug effects from %s',
+    'killall': 'ended nearby hostile NPCs beside %s',
+    'tools-off': 'ended scene tools for %s',
     # The creature is named in why, not in the character fields.
     'despawn': 'despawned a creature',
     'hurt': 'used /hurt on %s',
