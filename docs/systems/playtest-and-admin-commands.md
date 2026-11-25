@@ -42,6 +42,6 @@ The existing `/give`, `/spawn`, `/tp`, `/goto`, `/bring` and `/where` behavior i
 
 Write a failing behavioral regression before each change. Use the existing command transport or the whole-gamemode stand-in, and test both permitted calls and denied roles, missing proof, expired passes and wrong actor ownership.
 
-Build with `node scripts/dev/Build-Gamemode.js`, check the generated source with `node scripts/dev/Build-Gamemode.js --check`, and run each tool's focused harness plus the affected gate. Help is checked by `node game/tests/test-6731-command-help.js`. For the shared boundary use `node game/tests/test-6628-command-access.js` and `node tests/test-staff-commands.js`.
+Build with `node scripts/dev/Build-Gamemode.js`, check the generated source with `node scripts/dev/Build-Gamemode.js --check`, and run each tool's focused harness plus the affected gate. Help is checked by `node game/tests/test-scenario-command-tools.js`. For the shared boundary use `node game/tests/test-6628-command-access.js` and `node tests/test-staff-commands.js`.
 
 Every three completed issue fixes require a dev release containing those fixes. Other work continues while that release runs. Merge only after review and the exact-head checks pass; record the dev deployment result independently. Main promotion retains its separate authorization.
