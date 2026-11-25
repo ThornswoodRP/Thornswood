@@ -400,7 +400,7 @@ function needsRig() {
 
 // ===================================================== D. the Body page on K
 {
-  const ws = slice(charBlock, '  function writeState(actorId, s, redraw) {', '\n  }\n') || '';
+  const ws = slice(charBlock, '  function writeState(', '\n  }\n') || '';
   const sigAt = ws.indexOf('var sig = drawn(view);');
   const bodyAt = ws.indexOf('view.body = N.view(actorId)');
   const sendAt = ws.indexOf('if (sending) {');

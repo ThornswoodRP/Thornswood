@@ -70,6 +70,11 @@ _MOD_DID = {
     # An admin undoing a PK made by mistake (#1010, 29 September).
     'unpk': 'undid the PK of %s, so the character can be played again',
     'note': 'wrote a note on %s',
+    'docsave': 'saved page %s',
+    'inboxdismiss': 'marked inbox report not doing this: %s',
+    'inboxreopen': 'reopened inbox report %s',
+    'inboxdelete': 'deleted inbox report %s',
+    'uploaddelete': 'deleted upload %s',
     # Staff at a building's door, from the Office page of K (#2551, Patrick,
     # 17 Oct): the why names the building and its hold, and the rent set.
     'evict': 'ended the claim of %s',
@@ -103,6 +108,9 @@ _MOD_DID = {
     'setclass': 'changed the class of %s',
     'setprofession': 'changed the profession of %s',
     'repair': 'repaired equipment for %s',
+    'galleryapprove': 'accepted gallery picture %s',
+    'galleryremove': 'removed gallery picture %s',
+    'gallerydismiss': 'dismissed a report on gallery picture %s',
     # Not staff: somebody's own /stuck (#414), said as its why reads.
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).
@@ -161,9 +169,33 @@ def moderation_text(where, row):
         why = clean(row.get('why'), 600) or 'a big move of gold.'
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
+    if row['did'] == 'uploaddelete':
+        subject = clean(row.get('whoName'), 240) or 'an unnamed upload'
+        if row.get('phase') == 'metadata':
+            did = 'removed the upload listing for %s' % subject
+        else:
+            did = _MOD_DID['uploaddelete'] % subject
+        return ('**Staff on the site:** %s %s.'
+                % (person(row.get('byName'), None), did))[:1900]
+
     did = _MOD_DID[row['did']]
+    gallery_phase = row.get('phase')
+    if row['did'] == 'galleryapprove' and gallery_phase == 'updated':
+        did = 'updated gallery picture %s'
+    elif row['did'] == 'galleryremove' and isinstance(gallery_phase, str):
+        did = {
+            'approved': 'removed gallery picture %s from the public gallery',
+            'pending': 'removed gallery picture %s from the approval queue',
+            'reports': 'cleared reports while removing gallery picture %s',
+            'file': 'deleted the stored file for gallery picture %s',
+            'hidden': 'marked the stored file for gallery picture %s as removed',
+        }.get(gallery_phase, did)
     if '%s' in did:
-        did = did % person(row.get('whoName'), row.get('who'))
+        # Generated picture names exceed the character-name bound. Keep the
+        # filename distinct, escaped as typed, without treating it as a person.
+        subject = (clean(row.get('whoName'), 240) or 'an unnamed picture') if row['did'] in (
+            'galleryapprove', 'galleryremove', 'gallerydismiss') else person(row.get('whoName'), row.get('who'))
+        did = did % subject
     try:
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):

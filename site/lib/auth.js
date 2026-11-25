@@ -433,7 +433,7 @@ async function gallerySender(url, w, signIn) {
 }
 
 async function galleryStaff(url, w) {
-  if (w.dev) return { ok: true, from: 'web', discordId: w.id || '' };
+  if (w.dev) return { ok: true, from: 'web', discordId: w.id || '', name: w.name || '' };
   // Signed in, and Discord did not answer in time (#1164): say that, rather
   // than 'staff only', which would tell a Gamemaster they are not staff.
   if (w.id && w.lookupFailed && !w.admin) return { ok: false, code: 503, body: discordUnasked() };
@@ -451,7 +451,7 @@ async function galleryStaff(url, w) {
     'That Discord account is not in the Thornswood Discord.' } };
   if (!st.dev) return { ok: false, code: 403, body: { ok: false, why: 'role', error:
     'That Discord account has no staff role, so it cannot work the gallery queue.' } };
-  return { ok: true, from: 'launcher', discordId: String(t.d) };
+  return { ok: true, from: 'launcher', discordId: String(t.d), name: st.name || '' };
 }
 
 Object.assign(module.exports, { ADMIN, ADMIN_DAYS, allowed, COOKIE,
