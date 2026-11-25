@@ -73,7 +73,7 @@ Staff.
 | Command | What it does |
 | --- | --- |
 | `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
-| `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes players and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
+| `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes people and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
 
 ## Buildings, stalls and carts
 
