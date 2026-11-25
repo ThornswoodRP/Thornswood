@@ -1738,6 +1738,8 @@
       names no person goes on to the branches below, and /ooc or /roll from
       somebody staff silenced stops here.
     */
+    var commandTools = g.__thornswoodCommandTools;
+    if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
     var staffCmd = g.__thornswoodStaff;
     if (staffCmd) {
       try {

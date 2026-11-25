@@ -67,6 +67,7 @@
     "mod-settings.ts",
     "asking-staff.ts",
     "stuck.ts",
+    "command-tools.ts",
     "staff.ts",
     "take-back.ts",
     "staff-crafting.ts",
