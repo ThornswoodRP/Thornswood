@@ -51,7 +51,7 @@ hunger, thirst and the rest take off. A fortify from gear or a potion
 running on you is not in that most, because the server cannot see it.
 Waiting the 30 minutes clears it. An accepted cooked meal, soup or feast
 during that withering, followed by a new rest in a bed or bedroll, also
-clears it. The server uses the food and bed rules already in place.
+clears it (#6239). The server uses the food and bed rules already in place.
 Raw food, prepared food, burnt meals, a meal inside the eight-second meal
 window and overeating do not qualify. Chairs and standing do not count as
 bed rest. A meal from before the episode cannot clear it, and eating while
