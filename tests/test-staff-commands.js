@@ -444,6 +444,41 @@ if (COMMANDS && STAFF) {
       ['/kick', '/freeze', '/silence', '/warn', '/bring'].every(function (x) { return w.box.PLAYER_WORDS.indexOf(x) < 0; }));
 }
 
+// #4636: exercise the real command transport and staff action together.
+// A separate world keeps these cases out of the moderation-order assertions.
+console.log('\nsilence duration forms:');
+for (const [length, minutes] of [['30m', 30], ['2h', 120], ['1d', 1440],
+                                 ['1w', 1440], ['2H', 120], ['45', 45]]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const before = Date.now();
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('/silence ' + length + ' uses ' + minutes + ' minutes and retains its reason',
+      !!muted && Math.abs(muted.until - (before + minutes * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')) &&
+      JSON.parse(s.records[0].text).minutes === minutes);
+}
+for (const length of ['0', '-2h', '2hours', '1.5h', 'forever', '9'.repeat(320)]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const postsBefore = s.silencedPosts.length;
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  yes('/silence rejects invalid length ' + length.slice(0, 16) + ' without any action',
+      !s.box.__thornswoodStaffState.silenced[BJORN] && s.records.length === 0 &&
+      s.silencedPosts.length === postsBefore && to(said, BJORN).length === 0 &&
+      to(said, STAFFER).some(line => /length|duration/i.test(line)));
+}
+{
+  const s = load(world());
+  pass10(s, STAFFER);
+  const said = run(s, STAFFER, '/silence Bjorn repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('a silence with only a reason retains the default 30 minutes',
+      !!muted && Math.abs(muted.until - (Date.now() + 30 * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')));
+}
+
 // ------------------------------------------------------------------ B --
 // It was a fixed 7931, the same as test-deploy-records.js, so a build beside
 // this one on the VPS could answer it (#1703). startVoice() below.
