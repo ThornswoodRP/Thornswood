@@ -77,7 +77,8 @@ Unrelated abilities and blessings stay. This requires the matching engine
 binding; an older engine refuses rather than performing a partial change.
 
 Ordinary tome learning keeps the engine's existing book consumption path.
-Its eligible book and history save first; a failed read or save refuses the
+Its requested eligible book and history save first; a failed read or save refuses the
 tome. The native book event then grants the new spell and consumes the book.
-If that study also raises a rank, additional eligible historical spells are
-restored by the next atomic character refresh or login.
+If that study also raises a rank, additional eligible spells stay in history
+until the next atomic character refresh or login activates them in the book
+and engine together.

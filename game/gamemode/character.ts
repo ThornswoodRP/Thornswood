@@ -983,6 +983,11 @@
         if (!eligible(s.spells && s.spells.known, active.state.spells.known) || !eligible(s.staffSpells, active.state.staffSpells)) {
           throw new Error('The tome would grant knowledge that is not currently eligible.');
         }
+        // Native ReadBookEvent will add only the tome's own spell. Historical
+        // extras made eligible by this study remain latent until an atomic
+        // refresh can publish them in the book and engine together.
+        active.state.spells.known = ((s.spells && s.spells.known) || []).slice();
+        active.state.staffSpells = (s.staffSpells || []).slice();
       }
       s = active.state;
     }

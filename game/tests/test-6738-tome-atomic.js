@@ -54,14 +54,29 @@ if (w.loaded()) {
   let nearRank = P.clone(C.stateOf(fourth));
   nearRank.work.destruction = P.workNeeded(nearRank, 'destruction') - 1;
   nearRank.spellHistory.spells.push('Firebolt');
+  const SS = box.__thornswoodStaffSpells;
+  const staffDesc = Object.keys(SS.STAFF_SPELLS).find(desc => SS.rankOf(desc) === 'novice');
+  w.record(staffDesc, 'SPEL');
+  nearRank.taught.push('bladebinder'); nearRank.ranks.bladebinder = 'novice'; nearRank.staffSpells = [staffDesc];
+  const blessing = 'abcd:Skyrim.esm'; w.record(blessing, 'SPEL');
+  w.row(fourth).learnedSpells.push(w.idOf(blessing));
   C.writeState(fourth, nearRank, true);
   const climbed = w.readBook(fourth, w.idOf(book));
   yes('a canonical tome may raise rank while preserved higher-rank knowledge becomes eligible',
     climbed.allowed !== false && climbed.learned && w.count(fourth, w.idOf(book)) === 0 &&
     C.stateOf(fourth).ranks.destruction === 'advanced');
+  function membershipMatches(actor) {
+    const s = C.stateOf(actor);
+    const expected = [...new Set(s.spells.known.map(name => w.idOf(P.SPELL_IDS[name])).concat(s.staffSpells.map(w.idOf), w.idOf(blessing)))].sort((a, b) => a - b);
+    return JSON.stringify(w.spellsOf(actor).sort((a, b) => a - b)) === JSON.stringify(expected);
+  }
+  yes('immediately after the native tome event active book, staff and engine sets agree',
+    membershipMatches(fourth) && !C.stateOf(fourth).spells.known.includes('Firebolt') &&
+    C.stateOf(fourth).spellHistory.spells.includes('Firebolt'));
   C.writeState(fourth, C.stateOf(fourth));
   yes('the next atomic refresh restores additionally eligible historical knowledge',
-    w.spellsOf(fourth).includes(w.idOf(P.SPELL_IDS.Firebolt)));
+    C.stateOf(fourth).spells.known.includes('Firebolt') &&
+    w.spellsOf(fourth).includes(w.idOf(P.SPELL_IDS.Firebolt)) && membershipMatches(fourth));
   const fifth = student(4);
   let outside = P.pickProfession(P.pickClass(P.fresh(), 'miner').state, 'cook', 'hearthcook').state;
   const teacher = P.pickProfession(P.fresh(), 'mage', ['destruction', 'restoration']).state;
