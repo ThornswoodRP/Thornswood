@@ -301,16 +301,18 @@ async function handle(req, res) {
       : 'That was sent from a page on another site, so it was not done. Do it from a page on this site.' });
   }
 
-  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS and may
-  // use the last answer Discord gave (#1096). A Submit waits that same short
-  // time (#467). Every other request that is signed in, including a staff
+  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS (#1096).
+  // A Submit waits that same short time (#467). Every other signed-in request,
+  // including a staff
   // POST from the hub, waits no longer than Play (#1164).
   const pageLoad = req.method === 'GET';
   const submitDoor = req.method === 'POST' && SUBMIT_DOORS.has(route);
-  // The report form chooses whether a submit needs CAPTCHA. A stale role
-  // answer may help draw other pages, but cannot promise the POST's bypass.
+  // Only the shell and its identity/navigation answer may draw from the
+  // last good role answer. Private data and CAPTCHA eligibility need current
+  // authority; a failed/late refresh must not revive old admin/staff rights.
+  const staleShell = pageLoad && (route === '/hub' || route === '/api/hello');
   const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS,
-                      pageLoad && route !== '/api/report/form');
+                      staleShell);
 
   // ---------------------------------------------------------- member login
   if (p === '/api/login' && req.method === 'POST') {
