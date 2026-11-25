@@ -45,7 +45,8 @@ function slice(start, end) {
 }
 
 const needsBlock = slice('// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
-const onCraftSrc = slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
+const onCraftSrc = slice('function recipeMetadataRefusal(desc) {', '\n}\n') +
+  slice("mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n');
 const cutKeySrc = slice('  function cutKey(actorId, profileId, toProfile, parts) {', '\n  }\n');
 const gateSrc = slice('function unfitToMake(actorId, workbenchId) {', '\n}\n');
 yes('the needs block, the craft gate, mp.onCraft and cutKey are in the gamemode',

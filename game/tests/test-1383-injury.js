@@ -82,6 +82,7 @@ function rig() {
       const e = extra[id] || {};
       if (key === 'profileId') { return e.pid || 0; }
       if (key === 'isDead') { return !!e.dead; }
+      if (key === 'isGodMode') { return e.god === true; }
       if (key === 'worldOrCellDesc') { return e.cell || '3c:Skyrim.esm'; }
       if (key === 'baseDesc') { return e.base || ''; }
       if (key === 'inventory') { return { entries: e.worn || [] }; }
@@ -464,6 +465,21 @@ if (NEEDS_SRC && HURT_SRC && P) {
   }
 
   // ---------------------------------------------------------------- burns
+  {
+    const r = rig(), me = r.person(0x7f);
+    r.set(me, 'god', true);
+    r.H.burning(me, true);
+    r.clock.now += 5000;
+    r.H.burning(me, true);
+    r.clock.now += 1000;
+    yes('god mode prevents fire reports from writing a burn wound',
+      r.H.burning(me, false) === '' && !woundOf(r, me, 'burn'));
+    r.set(me, 'god', false);
+    r.H.burning(me, true);
+    r.clock.now += 1000;
+    yes('ordinary fire resumes without accruing protected time',
+      r.H.burning(me, false) === '' && !woundOf(r, me, 'burn'));
+  }
   {
     const r = rig();
     const me = r.person(0x80);
