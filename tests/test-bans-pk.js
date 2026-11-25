@@ -213,6 +213,7 @@ function loadStaff(opts) {
       }
     }
   };
+  if (opts && opts.staffState) g.__thornswoodStaffState = opts.staffState;
   // The door's admins, when a part wants a staff member who is not one.
   if (opts && opts.isAdmin) g.__thornswoodIsAdmin = opts.isAdmin;
   const run = new Function('mp', 'require', 'globalThis', 'console', 'URL', 'Buffer', 'log', 'guard',
@@ -703,7 +704,7 @@ async function adminRoleOnly() {
       const reason = '4637 new ' + test.local;
       staffLine(w, (test.local === 'account' ? '/banaccount' : '/ban') + ' Bjorn ' + test.length + ' ' + reason);
       const confirmed = await until(() => w.to(1001).some((line) => line.startsWith('Banned ')));
-      const local = w.api.state.banned[2002];
+      const local = w.api.state.banned[2002][test.local];
       const expected = test.winner === 'door' ? onDoor : local;
       const untilText = expected.until ? 'until ' + new Date(expected.until).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'for good';
       function matches(line) {
@@ -726,6 +727,63 @@ async function adminRoleOnly() {
     }
     await hub('unban', { id: BJORN_D });
     await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    // Two in-game commands can both be acknowledged before the door reads
+    // the new list. The effective ban still needs both local scopes then.
+    for (const accountFirst of [true, false]) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date().toISOString(), profiles: [], pk: [], bans: []
+      }));
+      w = loadStaff();
+      const commands = ['/banaccount Bjorn 30m 4637 local account', '/ban Bjorn 60m 4637 local character'];
+      if (!accountFirst) { commands.reverse(); }
+      for (const line of commands) {
+        const count = w.to(1001).length;
+        staffLine(w, line);
+        await until(() => w.to(1001).slice(count).some((reply) => reply.startsWith('Banned ')));
+      }
+      const effective = w.api.bansNow(Date.now())[2002];
+      yes('4637 two local receipts retain the account ban in either command order',
+          effective && effective.scope === 'account' && effective.why === '4637 local account');
+      const stored = (await allowed()).j.bans;
+      const account = stored.find((ban) => ban.scope === 'account' && ban.profiles.includes(2002));
+      const character = stored.find((ban) => ban.scope === 'character' && ban.profiles.includes(2002));
+      yes('4637 actual site has both scopes while the door file still has neither',
+          !!(account && character && JSON.parse(fs.readFileSync(path.join(PRIV, 'allowed.json'), 'utf8')).bans.length === 0));
+      const expiryWorld = loadStaff({ staffState: JSON.parse(JSON.stringify(w.api.state)) });
+      const afterExpiry = account && expiryWorld.api.bansNow(account.until + 1)[2002];
+      yes('4637 an expired account receipt restores the still-active local character ban',
+          afterExpiry && afterExpiry.scope === 'character' && afterExpiry.why === '4637 local character');
+      const count = w.to(1001).length;
+      staffLine(w, '/unbanaccount Bjorn');
+      await until(() => w.to(1001).slice(count).some((reply) => /account is lifted/.test(reply)));
+      const afterLift = w.api.bansNow(Date.now())[2002];
+      yes('4637 a game lift only removes its own receipt',
+          afterLift && afterLift.scope === 'character' && afterLift.why === '4637 local character');
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date(Date.now() - 60000).toISOString(), profiles: [], pk: [], bans: stored
+      }));
+      const beforeCharacterLift = w.to(1001).length;
+      staffLine(w, '/unban Bjorn');
+      await until(() => w.to(1001).slice(beforeCharacterLift).some((reply) => /character Bjorn is lifted/.test(reply)));
+      yes('4637 either local lift can be acknowledged without reviving the other stale scope',
+          !w.api.bansNow(Date.now() + 11000)[2002]);
+      const beforeReban = w.to(1001).length;
+      staffLine(w, '/ban Bjorn 60m 4637 rebanned character');
+      const rebanned = await until(() => w.to(1001).slice(beforeReban).some((reply) => reply.startsWith('Banned ')));
+      const afterReban = w.api.bansNow(Date.now())[2002];
+      yes('4637 rebanning a character keeps the older lifted account ban masked',
+          rebanned && afterReban && afterReban.scope === 'character' && afterReban.why === '4637 rebanned character');
+    }
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    const oldState = { banned: { 2002: { why: '4637 flat character', until: 0, scope: 'character' } },
+      lifted: { 2002: { at: Date.now(), scope: 'account' } } };
+    const afterReload = loadStaff({ staffState: oldState }).api.bansNow(Date.now())[2002];
+    yes('4637 a hot reload keeps the previous flat character receipt and account lift',
+        afterReload && afterReload.scope === 'character' && afterReload.why === '4637 flat character');
 
     w = loadStaff();
     staffLine(w, '/pk Sigrid fell to the dragon at Helgen');
