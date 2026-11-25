@@ -895,8 +895,9 @@ yes('/repair is a word the server answers for the key and the panel, and nobody 
       front.indexOf("'thornswood-repair.js'") !== -1 && /repair: 'thornswoodRepair'/.test(front) &&
       /'repair:opened'\) \{ T\.claimFocus\('repair', true\)/.test(front) &&
       /'repair:closed'\) \{ T\.claimFocus\('repair', false\)/.test(front));
-  yes('the panel\'s button sends the row back as /repair mend, and the server publishes the view the page reads',
-      /net\('\/repair mend ' \+ row\.base \+ ' ' \+ row\.cond \+ ' ' \+ row\.name\)/.test(panelPage) &&
+  yes('the panel\'s button sends the exact encoded row name, and the server publishes the view the page reads',
+      /encodeURIComponent\(row\.name\)/.test(panelPage) &&
+      /net\('\/repair mend-name-v1 ' \+ row\.base \+ ' ' \+ row\.cond \+ ' ' \+ encoded\)/.test(panelPage) &&
       /window\.thornswoodRepair = \{/.test(panelPage) &&
       /var PANEL_PROPERTY = 'thornswoodRepairView';/.test(block) &&
       /window\.thornswoodRepair\.setData\(d\)/.test(block));
