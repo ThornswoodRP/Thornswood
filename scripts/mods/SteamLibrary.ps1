@@ -1,6 +1,8 @@
 <#
-  SteamLibrary.ps1
+.SYNOPSIS
+  Finds the Steam copy of Skyrim Special Edition without changing any files.
 
+.DESCRIPTION
   Finds the Steam copy of Skyrim Special Edition without changing any files.
 #>
 
