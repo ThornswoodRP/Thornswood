@@ -101,6 +101,27 @@ Staff.
 | --- | --- |
 | `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
 
+## Scene tools
+
+These scene tools work for Playtesters on Dev and Main. Modes end when the
+session loses its current pass or role, or the actor's authority changes.
+They accept no other person's name. [Staff scene tools](../systems/staff-tools.md)
+describes their native dependency, lifecycle and game acceptance checks.
+
+| Command | What it does |
+| --- | --- |
+| `/fly [on\|off]` | Toggles collision-free flight for yourself. Frozen, cuffed or locked-jail movement remains refused |
+| `/phase` | Moves you 256 units forward in the same cell, unless frozen, cuffed or held in a locked jail |
+| `/godmode [on\|off]` | Toggles flight, damage protection, lethal validated attacks and paused hunger, thirst, Rest and temperature. Existing needs values resume on exit; dead characters cannot enable it |
+| `/invisible [on\|off]` | Hides or shows your rendered body and nearby/party name tags; NPC perception stays as it was |
+| `/cleareffects` | Clears your alcohol and drug effects, pending crashes, hangover and withdrawal. Existing injuries, disease and unrelated magic remain |
+
+The cleanup command requires the Admin role.
+
+| Command | What it does |
+| --- | --- |
+| `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes people and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
+
 ## Buildings, stalls and carts
 
 A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff run them at any building or stall. The cart stops and roads are staff's alone. The panels send these lines rather than anybody typing them; [docs/systems/commands.md](../systems/commands.md) names each button.

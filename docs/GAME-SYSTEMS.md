@@ -32,6 +32,9 @@ playtest tools for advancing a current class or profession and their access rule
 [Playtest and admin commands](systems/playtest-and-admin-commands.md) records
 the testing tools, role permissions and delivery checks.
 
+[Staff scene tools](systems/staff-tools.md) describes authorized self modes,
+their lifecycle and bounded administrative NPC cleanup.
+
 Decided by Patrick on 4 Oct: "can we stop with the commands, I want
 things to be buttons, it's nicer and more immersive", and "no more
 commands for things [people] do, only for dev and staff commands;

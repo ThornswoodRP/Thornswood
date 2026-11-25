@@ -99,6 +99,7 @@ _MOD_DID = {
     'invisible': 'changed their visibility',
     'cleareffects': 'used /cleareffects',
     'killall': 'used /killall',
+    'tools-off': 'ended scene tools for %s',
     'setclass': 'changed the class of %s',
     'setprofession': 'changed the profession of %s',
     'repair': 'repaired equipment for %s',
