@@ -99,6 +99,15 @@ test('phase is a fixed short server move in the same cell', () => {
   assert.deepEqual(Array.from(move.value.pos), [0,256,0]);
   assert.equal(w.records[0][0], 'phase');
 });
+
+test('unreadable movement or restraint state cannot enable collision-free movement', () => {
+  const missing = setup(); delete missing.context.__thornswoodStaffState;
+  missing.run('/fly',['on']);
+  assert.equal(missing.writes.length,0);
+  const unknown = setup(); delete unknown.rows.get(10).worldOrCellDesc;
+  unknown.run('/fly',['on']);
+  assert.equal(unknown.writes.length,0);
+});
 test('clear effects delegates to authoritative intoxication state once', () => {
   const w = setup(); w.run('/cleareffects'); assert.equal(w.cleared(), 1);
   assert.equal(w.records[0][0], 'cleareffects');

@@ -35,7 +35,12 @@
     return out;
   }
   function movementRefusal(pid, actor) {
-    if (g.__thornswoodStaffState && g.__thornswoodStaffState.frozen && g.__thornswoodStaffState.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    var state = g.__thornswoodStaffState;
+    if (!state || !state.frozen) { return 'The staff restraint state is unavailable.'; }
+    if (state.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    // The jail helper treats an unreadable cell as outside jail. Establish
+    // a readable authoritative location before asking that existing helper.
+    place(actor);
     var cuffs = g.__thornswoodCuffs, property = g.__thornswoodProperty;
     if (!cuffs || !cuffs.cuffedBy || !property || !property.lockedJailHere) { return 'The restraint checks are unavailable.'; }
     if (cuffs.cuffedBy(actor)) { return 'Your hands are cuffed.'; }
