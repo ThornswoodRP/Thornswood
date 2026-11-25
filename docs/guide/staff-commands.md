@@ -20,6 +20,16 @@ A person, wherever these say `<person>`, is their name or the start of it while 
 
 Each staff command answers you in your chat, tells the person it was done to, writes a line to `thornswood.log`, and writes a line to `for-bot\moderation.log` beside the server, which the bot says in the staff channel.
 
+## Find your commands
+
+| Command | Who | What it shows |
+| --- | --- | --- |
+| `/testhelp` | Playtesters, staff and admins | Self-only test tools, with syntax and examples, on both Dev and Main |
+| `/staffhelp` | Staff and admins | Existing staff moderation tools and the self-only test tools |
+| `/adminhelp` | Admins | Admin tools and the lower tiers |
+
+Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
+
 ## For yourself
 
 | Command | What it does |
