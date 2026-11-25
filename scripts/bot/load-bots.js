@@ -161,7 +161,7 @@ const TRADE_VIEW = 'thornswoodTrade';
 // for anything else is a trade answer.
 const QUEST_SAID = {
   'You take the work.': 'questTaken',
-  'You give back what you drew and leave the work.': 'questLeft',
+  'You give back what remains of the draw and leave the work.': 'questLeft',
   'You leave the work without payment.': 'questLeft',
   'The work is turned in.': 'questTurnedIn',
   'Choose the work in the trader panel.': 'questRefused:panel',

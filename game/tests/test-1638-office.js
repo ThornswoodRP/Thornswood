@@ -356,7 +356,7 @@ if (missing.length === 0 && VARS.every(function (v) { return !!v; })) {
     const ov = strip(lifted.officeView);
     yes('B2 the page never reads the character itself: writeState is where it is asked from, and stateOf there would ask for itself',
         !/stateOf/.test(ov));
-    const ws = slice(charBlock, '  function writeState(actorId, s, redraw) {', '\n  }\n');
+    const ws = slice(charBlock, '  function writeState(', '\n  }\n');
     yes('B3 the character block puts the page on the K panel view, with the actor and the profile',
         !!ws && /W\.officeView\(actorId, pid\)/.test(ws) && /view\.officePage = desk;/.test(ws) &&
         /if \(view && !view\.creating\)/.test(ws));
