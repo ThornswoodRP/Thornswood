@@ -52,6 +52,10 @@ for (const server of ['dev', 'main']) {
   yes(server + ': a refused engine write cannot report a successful heal',
     /could not.*confirm/i.test(ask(ADMIN, '/heal for Tester')) && !full(TESTER) && w.logged(/staff: .* heal /).length === auditBefore);
   w.box().mp.set = oldSet;
+  w.box().mp.set = function (id, key, value) { if (id === TESTER && key === 'percentages') return; return oldSet(id, key, value); };
+  yes(server + ': a silently ignored native write cannot report or audit a successful heal',
+    /could not.*confirm/i.test(ask(ADMIN, '/heal for Tester')) && !full(TESTER) && w.logged(/staff: .* heal /).length === auditBefore);
+  w.box().mp.set = oldSet;
   {
     const heal = w.box().__thornswoodHeal;
     const before = JSON.stringify(w.row(TESTER).percentages);

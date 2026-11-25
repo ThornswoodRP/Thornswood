@@ -32,7 +32,14 @@
     if (current.health === 1 && current.magicka === 1 && current.stamina === 1) {
       staff.tell(pid, target.name + ' already has full health, magicka and stamina.'); return true;
     }
-    try { mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 }); }
+    try {
+      mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
+      var confirmed = mp.get(target.actorId, 'percentages');
+      if (mp.get(target.actorId, 'isDead') !== false || !confirmed ||
+          confirmed.health !== 1 || confirmed.magicka !== 1 || confirmed.stamina !== 1) {
+        throw new Error('The native vitals write was not applied.');
+      }
+    }
     catch (e) {
       log('heal: could not confirm vitals for ' + target.actorId.toString(16) + ': ' + e);
       staff.tell(pid, 'Healing could not be confirmed. The server recorded why; try again only after the problem is checked.');
