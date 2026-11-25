@@ -25,6 +25,11 @@ function Run([string]$script, [string[]]$a) {
     $out = & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script @a 2>&1 | Out-String
     return @{ Code = $LASTEXITCODE; Out = $out }
 }
+function Has-ExitHelp([string]$script) {
+    $help = Get-Help $script -Full
+    $description = $help.Description.Text -join ' '
+    return $description -match '\bExit 0\s+when\b' -and $description -match '\bExit 1\s+when\b'
+}
 function Lines([string]$path, [string[]]$lines) { [IO.File]::WriteAllLines($path, $lines, (New-Object Text.UTF8Encoding($false))) }
 # A plugin whose TES4 header declares $masters, the way Find-MissingMasters reads
 # them: 'MAST', a UInt16 length, the name and its zero.
@@ -81,8 +86,7 @@ try {
     $r = Run $fmm @('-Data', $empty, '-Plugins', $plugins, '-NoPause')
     Yes 'a Data folder with no plugins: exit 1' ($r.Code -eq 1 -and $r.Out -match 'has no plugins in it')
 
-    $head = [IO.File]::ReadAllText($fmm)
-    Yes 'its header says when it exits 0 and when 1' ($head -match '(?s)^.{0,200}<#.*Exit 0 when.*Exit 1\s+when.*#>')
+    Yes 'Find-MissingMasters help says when it exits 0 and when 1' (Has-ExitHelp $fmm)
 
     # ---- Check-Plugins.ps1 ------------------------------------------------------
     $cp = Join-Path (Join-Path (Join-Path $Repo 'scripts') 'mods') 'Check-Plugins.ps1'
@@ -113,8 +117,7 @@ try {
     $r = CheckPlugins
     Yes 'no reference plugins.txt: exit 1' ($r.Code -eq 1)
 
-    $head = [IO.File]::ReadAllText($cp)
-    Yes 'its header says when it exits 0 and when 1' ($head -match '(?s)^(#[^\r\n]*\r?\n)*#[^\r\n]*Exit 0 when' -and $head -match '(?s)^(#[^\r\n]*\r?\n)*#[^\r\n]*Exit 1\s+(#\s*)?when')
+    Yes 'Check-Plugins help says when it exits 0 and when 1' (Has-ExitHelp $cp)
 }
 finally { Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host ''
