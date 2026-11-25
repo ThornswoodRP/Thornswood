@@ -218,8 +218,11 @@ once in the log.
   a duplicate or another explicit non-completed reason. If the issue is
   later marked completed, the bot can restore the same unchanged test task
   it archived. Revised instructions pass the same Main task checks, then get
-  a new active post; older instructions and replies stay archived. Staff
-  close a test task in Discord once it is confirmed.
+  a new active post. Older instructions and replies stay archived. A revised
+  post carries an issue number and a unique receipt. If Discord does not
+  confirm creation, the bot keeps checking for that receipt before recording
+  the post. It does not send another copy while the outcome is uncertain.
+  Staff close a test task in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one
   post per issue from its last `Test task:` comment that has `Server: Dev`
   straight under its first line, tagged Dev. That is a check only a dev can do: it

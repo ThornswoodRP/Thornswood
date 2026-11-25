@@ -7,6 +7,7 @@ Part of the bot: bot.py loads it (#5357).
 import asyncio
 import datetime
 import urllib.error
+import uuid
 
 import discord
 
@@ -105,25 +106,25 @@ async def _bot_threads(forum, me_id=None):
     return [mine[k] for k in sorted(mine)]
 
 
-async def _forum_post(forum, title, body, tags, me_id=None, *, preserve_archives=False):
+async def _forum_post(forum, title, body, tags, me_id=None):
     """A post in the forum, tagged; a post of the bot's with that exact title,
        open or closed, is handed back rather than made twice. Returns the
        thread. Closed ones count since 22 Oct: Patrick found duplicates, and
        a post closed by staff or by Discord after quiet days was not looked
-       at, so one whose record was lost was made again. preserve_archives
-       leaves retired versions untouched when revised instructions need a
-       new active post."""
+       at, so one whose record was lost was made again."""
     for th in await _bot_threads(forum, me_id):
-        if preserve_archives and getattr(th, 'archived', False):
-            continue
         if str(getattr(th, 'name', '')) == title:
             return th
-    applied = [t for t in (task_tag_of(forum, x) for x in tags) if t is not None]
-    made = await forum.create_thread(name=title, content=body,
-                                     applied_tags=applied,
-                                     allowed_mentions=discord.AllowedMentions.none(),
-                                     reason='Thornswood known issues and test tasks')
+    made = await _create_forum_post(forum, title, body, tags)
     return getattr(made, 'thread', made)
+
+
+async def _create_forum_post(forum, title, body, tags, **kwargs):
+    applied = [t for t in (task_tag_of(forum, x) for x in tags) if t is not None]
+    return await forum.create_thread(name=title, content=body, applied_tags=applied,
+                                     allowed_mentions=discord.AllowedMentions.none(),
+                                     reason='Thornswood known issues and test tasks',
+                                     **kwargs)
 
 
 def _refusal(what, forum, th, e):
@@ -177,6 +178,46 @@ async def _main_task_archive_state(forum, thread, archived):
         return False
     return (getattr(changed, 'id', None) == thread.id
             and getattr(changed, 'archived', None) is archived)
+
+
+def _matches_main_revision(forum, thread, attempt, me_id, assigned):
+    return (thread.id not in assigned and thread.parent_id == forum.id
+            and thread.owner_id == me_id and thread.name == attempt['post'][0]
+            and sorted(t.name for t in thread.applied_tags) == sorted(attempt['post'][2]))
+
+
+def _matches_main_revision_message(message, thread, key, attempt, me_id):
+    return (message.id == thread.id and message.author.id == me_id
+            and message.content == attempt['post'][1]
+            and any(embed.footer.text == _main_revision_marker(key, attempt)
+                    for embed in message.embeds))
+
+
+def _main_revision_marker(key, attempt):
+    return 'Main test task #%s · %s' % (key, attempt['token'])
+
+
+async def _find_main_revision(forum, key, attempt, me_id, assigned):
+    """Find the exact send using REST rather than gateway thread cache."""
+    found = {}
+    try:
+        active = await forum.guild.active_threads()
+        async for thread in forum.archived_threads(limit=None):
+            if _matches_main_revision(forum, thread, attempt, me_id, assigned):
+                found[thread.id] = thread
+        for thread in active:
+            if _matches_main_revision(forum, thread, attempt, me_id, assigned):
+                found[thread.id] = thread
+        matches = []
+        for thread in found.values():
+            msg = await thread.fetch_message(thread.id)
+            if _matches_main_revision_message(msg, thread, key, attempt, me_id):
+                matches.append(thread)
+    except (discord.HTTPException, discord.InvalidData, OSError, asyncio.TimeoutError):
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 async def _forum_edit(forum, tid, title, body, tags, then=None):
@@ -496,10 +537,9 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
 
     posted, edited, removed = [], [], []
 
-    async def post_new(num, issue, post, *, preserve_archives=False):
+    async def post_new(num, issue, post):
         title, body, tags = post
-        th = await _forum_post(forum, title, body, tags, me_id,
-                               preserve_archives=preserve_archives)
+        th = await _forum_post(forum, title, body, tags, me_id)
         rec[str(num)] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': _sig(*post),
                          'updated': issue.get('updated_at'), 'form': TASK_FORM}
         state['_dirty'] = True
@@ -518,8 +558,54 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
                 have.update(previous)
                 raise
 
+    def assigned_threads():
+        return {row.get('thread_id') for row in rec.values()}
+
+    def record_revision(key, thread, attempt):
+        have = rec[key]
+        previous = have.copy()
+        have.clear()
+        have.update(thread_id=thread.id, channel_id=forum.id,
+                    sig=_sig(*attempt['post']), updated=attempt['updated'], form=TASK_FORM)
+        save_transition(have, previous)
+        posted.append(int(key))
+
+    async def reconcile_revision(key):
+        have = rec[key]
+        if not me_id or have.get('channel_id') != forum.id:
+            return
+        attempt = have['revision']
+        th = await _find_main_revision(forum, key, attempt, me_id, assigned_threads())
+        if th is not None:
+            record_revision(key, th, attempt)
+
+    async def post_revision(key, issue, post):
+        if task_tag_of(forum, TASK_TAG) is None:
+            return
+        have = rec[key]
+        previous = have.copy()
+        attempt = {'token': uuid.uuid4().hex, 'post': post, 'updated': issue.get('updated_at')}
+        have['revision'] = attempt
+        save_transition(have, previous)
+        embed = discord.Embed().set_footer(text=_main_revision_marker(key, attempt))
+        try:
+            made = await _create_forum_post(forum, *post, embed=embed)
+        except (discord.HTTPException, OSError, asyncio.TimeoutError):
+            log('test tasks: revised post for #%s awaits Discord confirmation' % key)
+            return
+        th = getattr(made, 'thread', None)
+        msg = getattr(made, 'message', None)
+        if (th is not None and msg is not None
+                and _matches_main_revision(forum, th, attempt, me_id, assigned_threads())
+                and _matches_main_revision_message(msg, th, key, attempt, me_id)):
+            record_revision(key, th, attempt)
+        else:
+            log('test tasks: revised post for #%s awaits Discord confirmation' % key)
+
     async def withdraw(key):
         have = rec[key]
+        if have.get('revision'):
+            await reconcile_revision(key)
         thread = await _main_task_thread(forum, rec, key, me_id)
         if thread is None:
             return
@@ -542,6 +628,9 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         if issue.get('state') != 'closed' or issue.get('state_reason') != 'completed':
             return
         have = rec[key]
+        if have.get('revision'):
+            await reconcile_revision(key)
+            return
         thread = await _main_task_thread(forum, rec, key, me_id)
         if thread is None or getattr(thread, 'locked', None) is not False:
             return
@@ -555,7 +644,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             # archived discussion intact, including versions with this title.
             if not thread.archived and not await _main_task_archive_state(forum, thread, True):
                 return
-            await post_new(num, issue, post, preserve_archives=True)
+            await post_revision(key, issue, post)
             return
         was_archived = thread.archived
         if was_archived and not await _main_task_archive_state(forum, thread, False):
@@ -650,6 +739,8 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue            # not read this pass: the post stays as it is
         if (issue.get('state') == 'closed'
                 and (issue.get('state_reason') or 'completed') != 'completed'):
+            await withdraw(key)
+        elif issue.get('state') == 'open' and have.get('revision'):
             await withdraw(key)
         elif have.get('withdrawal'):
             await restore(key, issue)

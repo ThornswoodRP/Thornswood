@@ -127,6 +127,7 @@ class Thread(object):
         self.name = name
         self.applied_tags = tags
         self.content = content
+        self.embeds = []
         self.archived = False
         self.locked = False
         self.mention = '<#%s>' % name
@@ -148,6 +149,10 @@ class Thread(object):
         return m
 
     async def fetch_message(self, mid):
+        if mid == self.id:
+            msg = Msg(self.id, self.content, self)
+            msg.embeds = self.embeds
+            return msg
         for m in self.more:
             if m.id == mid:
                 return m
@@ -274,6 +279,10 @@ class Channel(object):
         assert 0 < len(content) <= 2000, len(content)
         th = Thread(name, applied_tags, content, self)
         self.threads.append(th)
+        if 'embed' in k:
+            th.embeds = [k['embed']]
+            msg = await th.fetch_message(th.id)
+            return type('CreatedPost', (), {'thread': th, 'message': msg})()
         return th
 
 
@@ -296,6 +305,9 @@ class Guild(object):
 
     def get_thread(self, tid):
         return self.threads.get(tid)
+
+    async def active_threads(self):
+        return [thread for thread in self.threads.values() if not thread.archived]
 
     async def fetch_channel(self, tid):
         if tid in self.threads:
@@ -2469,8 +2481,14 @@ forum, state, thread, _, _, read, g = reclosed_task('not_planned')
 COMMENTS[5515][0]['body'] = 'Test task: Try the newly completed fix\nServer: Main\n1. Try the next fix.\nIt works.'
 issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
       closed_at='2026-10-18T00:00:00Z')
+path = os.path.join(TMP, 'reclosed-state.json')
+def deny_receipt_save(value):
+    if value['tasks']['5515'].get('revision'):
+        bot._known_save(value, path)
+    else:
+        denied_save(value)
 try:
-    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=denied_save))
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=deny_receipt_save))
 except OSError:
     yes('5515: replacement accepted before receipt-save failure preserves the old archive',
         thread.archived and len(thread.more) == 1 and len(forum.threads) == 2)
@@ -2485,6 +2503,100 @@ yes('5515: restart adopts the already accepted replacement without creating a du
     result == ([5515], [], []) and len(forum.threads) == 2 and len(active) == 1
     and bot._state_read(path)['tasks']['5515']['thread_id'] == active[0].id
     and thread.archived and len(thread.more) == 1)
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+new_title = 'Try the revised fix'
+wrong = run(forum.create_thread(name=new_title, content='Unrelated older task.',
+                                 applied_tags=tag(forum, 'Main')))
+COMMENTS[5515][0]['body'] = ('Test task: %s\nServer: Main\n1. Try the replacement.\n'
+                            'It works.') % new_title
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+run(bot.test_tasks_once(forum, state, read, me_id=g.me.id))
+yes('5515 external reproduction: a same-title bot post with other instructions cannot be adopted',
+    state['tasks']['5515']['thread_id'] != wrong.id and wrong.content == 'Unrelated older task.')
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+COMMENTS[5515][0]['body'] = ('Test task: Try a delayed-cache fix\nServer: Main\n'
+                            '1. Try the replacement.\nIt works.')
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+create = forum.create_thread
+path = os.path.join(TMP, 'reclosed-state.json')
+wrong_marker = run(create(name='Try a delayed-cache fix', content='1. Try the replacement.\nIt works.',
+                          applied_tags=tag(forum, 'Main'),
+                          embed=discord.Embed().set_footer(text='Main test task #5516 · different'))).thread
+delayed = []
+
+async def accepted_missing_cache(**kwargs):
+    assert bot._state_read(path)['tasks']['5515']['revision']['token'] in kwargs['embed'].footer.text
+    created = (await create(**kwargs)).thread
+    forum.threads.remove(created)
+    delayed.append(created)
+    raise discord.Forbidden(type('R', (), {'status': 403, 'reason': 'denied'})(),
+                            'Final retry refused after HTTP accepted first send')
+
+forum.create_thread = accepted_missing_cache
+run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                        save=lambda value: bot._known_save(value, path)))
+forum.create_thread = create
+state = bot._state_read(path)
+revised = delayed[0]
+del g.threads[revised.id]
+calls = len(g.calls)
+yes('5515: an exact-title-and-body post with another issue marker cannot settle the attempt',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
+    and state['tasks']['5515']['thread_id'] == thread.id
+    and state['tasks']['5515'].get('revision') and len(g.calls) == calls)
+g.threads[revised.id] = revised
+rest_active_threads = g.active_threads
+async def unavailable_active_threads():
+    raise OSError('Discord unavailable')
+g.active_threads = unavailable_active_threads
+yes('5515: failed Discord REST reads preserve intent without resending',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([], [], [])
+    and state['tasks']['5515'].get('revision') and len(g.calls) == calls)
+g.active_threads = rest_active_threads
+yes('5515: a lost create response is reconciled through REST without another create',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([5515], [], [])
+    and state['tasks']['5515']['thread_id'] == revised.id
+    and revised not in forum.threads and wrong_marker in forum.threads
+    and thread.archived and len(g.calls) == calls)
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+COMMENTS[5515][0]['body'] = ('Test task: Try a withdrawn pending revision\nServer: Main\n'
+                            '1. Try the replacement.\nIt works.')
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+create = forum.create_thread
+delayed = []
+forum.create_thread = accepted_missing_cache
+run(bot.test_tasks_once(forum, state, read, me_id=g.me.id,
+                        save=lambda value: bot._known_save(value, path)))
+forum.create_thread = create
+issue(5515, 'Withdrew the revised fix', [], state='closed', reason='not_planned',
+      closed_at='2026-10-19T00:00:00Z')
+state = bot._state_read(path)
+yes('5515: a subsequent withdrawal reconciles and archives the accepted pending revision',
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id)) == ([5515], [], [5515])
+    and delayed[0].archived and thread.archived and len(thread.more) == 1
+    and state['tasks']['5515']['thread_id'] == delayed[0].id)
+
+
+forum, state, thread, _, _, read, g = reclosed_task('not_planned')
+COMMENTS[5515][0]['body'] = 'Test task: Try revised fix\nServer: Main\n1. Try the next fix.\nIt works.'
+issue(5515, 'Completed revised fix', [], state='closed', reason='completed',
+      closed_at='2026-10-18T00:00:00Z')
+try:
+    run(bot.test_tasks_once(forum, state, read, me_id=g.me.id, save=denied_save))
+except OSError:
+    yes('5515: failed revision-intent save prevents create',
+        forum.threads == [thread] and thread.archived and not state['tasks']['5515'].get('revision'))
+else:
+    yes('5515: failed revision-intent save prevents create', False)
 
 
 wsrc = inspect.getsource(bot.watch_known_issues)
