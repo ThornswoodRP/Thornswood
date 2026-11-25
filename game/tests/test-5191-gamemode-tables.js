@@ -203,4 +203,4 @@ for (const tool of ['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Bu
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

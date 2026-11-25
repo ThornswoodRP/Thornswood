@@ -40,7 +40,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function between(a, b) {
   const i = src.indexOf(a);
@@ -54,7 +54,7 @@ const TOMES = between('// ==== thornswood spell tomes ====', '// ==== end thorns
 const STAFF = between('// ==== thornswood staff spells ====', '// ==== end thornswood staff spells ====');
 yes('the rules, the character store, the spell tomes block and the staff spells block are in the gamemode',
     !!(RULES && CHARACTER && TOMES && STAFF));
-if (!(RULES && CHARACTER && TOMES && STAFF)) { done(); }
+if (!(RULES && CHARACTER && TOMES && STAFF)) { done(); } else {
 
 // ------------------------------------------------------------ the records --
 const IDS = {};
@@ -221,3 +221,4 @@ yes('E magic.md says a tome whose spell has no school is refused as off the book
     /Oghma Infinium/.test(magic) && /fishing mod's four cheat books/.test(magic));
 
 done();
+}

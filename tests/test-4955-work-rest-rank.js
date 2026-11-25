@@ -37,9 +37,9 @@ yes('the progression, needs and work-credit blocks are in gamemode.js', !!PROG &
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
-if (!PROG || !NEEDS || !GATE) { done(); }
+if (!PROG || !NEEDS || !GATE) { done(); return; }
 
 const ME = 0xff000001;
 

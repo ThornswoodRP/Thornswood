@@ -163,4 +163,4 @@ print(' '.join('0x%07X' % f for f in off) or 'none')
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

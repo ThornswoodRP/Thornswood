@@ -49,7 +49,7 @@ function body(text, sig) {
 const sig = 'public static string ServerDir(Config cfg)';
 const dir = body(src, sig);
 yes('SkyMp.cs has ServerDir', dir !== null);
-if (dir === null) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
+if (dir === null) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exitCode = 1; return; }
 
 // The tries array, one entry per line, comments left out.
 const arr = /string\[\]\s+tries\s*=\s*new\s+string\[\]\s*\{([\s\S]*?)\};/.exec(dir);
@@ -88,4 +88,4 @@ yes('with no server folder found, the launcher says to point Server folder in Se
   /there is no server folder here to start\. Point Server folder in Settings at the one with dist_back\\\\skymp5-server\.js in it\./.test(src));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

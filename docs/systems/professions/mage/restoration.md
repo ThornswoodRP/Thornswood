@@ -25,5 +25,5 @@ world placed is the spell.
 
 ## Where this is
 
-These 16 names are the server's book. The strain numbers on the
+The book above shows every name and whether the server has an id for it. The strain numbers on the
 potions page are the plan, and they are not in the server yet.

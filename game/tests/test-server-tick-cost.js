@@ -592,7 +592,7 @@ function finish() {
       !/^game\/tests\/test-server-tick-cost\.js\s/m.test(excluded));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 // #385, 20 Oct: process time undercounts timer work on Windows, so the

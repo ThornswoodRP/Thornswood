@@ -214,12 +214,9 @@ jobs:
       # (scripts\dev\Run-Gate.ps1, -Content says why).
       - name: Lay the newest content build
         id: content
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Newest -Keep (Join-Path $env:RUNNER_TEMP 'content-laid')
-          exit $LASTEXITCODE
+        uses: ./.github/actions/lay-content
+        with:
+          keep: ${{ runner.temp }}/content-laid
       - name: Hand the build to the shares
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
@@ -560,7 +557,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # The newest content build's list (Get-ContentBuild.ps1 -Newest).
+      # The newest content build (.github/actions/lay-content).
       actions: read
     timeout-minutes: 15
     steps:
@@ -573,12 +570,7 @@ jobs:
       # stage 4e): the plugin and table checks below read the newest a merge
       # release kept, laid as the shares lay it.
       - name: Lay the newest content build
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Newest
-          exit $LASTEXITCODE
+        uses: ./.github/actions/lay-content
 
       # The hosted image ships whatever node and python it has this month;
       # these are pinned so a check means the same thing every month.

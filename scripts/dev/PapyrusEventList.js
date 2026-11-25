@@ -589,4 +589,4 @@ module.exports = {
   stripComments: stripComments, fingerprint: fingerprint, build: build,
 };
 
-if (require.main === module) { process.exit(main(process.argv)); }
+if (require.main === module) { process.exitCode = main(process.argv); }

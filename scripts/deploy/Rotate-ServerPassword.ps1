@@ -126,7 +126,7 @@ Write-Host 'Handing it to the site...'
 # was written over the whole file, the Discord secret, the bot token, botKey
 # and the cookie secret with it. Now such a file is left as it is, nothing is
 # written, and the site is not restarted either, because the block returns.
-Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script @"
+$said = Invoke-ThornswoodSecretRemote -Target "$User@$Vps" -SshArgs $ssh -Secret $newPassword -Script @"
 `$ErrorActionPreference = 'Stop'
 `$pw = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 if (-not `$pw) { 'NOTHING ARRIVED on standard input. Nothing written, the password is unchanged.'; return }
@@ -141,8 +141,24 @@ Start-ScheduledTask -TaskName 'Thornswood Docs' -EA SilentlyContinue
 Start-Sleep -Seconds 3
 if (Get-NetTCPConnection -LocalPort 3001 -State Listen -EA SilentlyContinue) { 'site restarted' }
 else { 'SITE DID NOT COME BACK' }
-"@ | ForEach-Object { "  $_" }
+"@
 $newPassword = $null
+
+# What came back is held to the line each step says when it worked (#4210),
+# so a refusal, a throw or no answer at all is FAILED and ends 1, and "Done"
+# is said only when the password was written and the site came back on it.
+# Until then this printed whatever came back and said Done in green anyway.
+$said = @($said | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+foreach ($l in $said) { Write-Host "  $l" -ForegroundColor $(if ($l -cmatch '^[A-Z]{3,} [A-Z]') { 'Red' } else { 'Gray' }) }
+foreach ($step in @(
+    @('writing the new password into the site''s config.json', '^set serverPassword, \d+ other setting'),
+    @('starting the site again on it', '^site restarted$'))) {
+  if (-not @($said | Where-Object { $_ -match $step[1] }).Count) {
+    Write-Host ''
+    Write-Host ('  FAILED    ' + $step[0] + ' did not happen. ' + $(if ($said.Count) { 'The box said: ' + $said[-1] } else { 'The box said nothing back.' })) -ForegroundColor Red
+    exit 1
+  }
+}
 
 # The game server settings used to be written here. They are not any more.
 # There is no sPassword in server-settings.json, nothing in gamemode.js reads

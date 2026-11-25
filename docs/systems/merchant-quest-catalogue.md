@@ -297,7 +297,7 @@ Commission pay is new gold at the staff's reward prices (see "Commission
 pay" above) and is not counted in that bound.
 
 Further definitions need their own source evidence, reward/cadence review,
-bounded state, exact bindings and explicit pinned admission. Two remaining scarce-resource interactions and seven retrieval interactions are unfinished; aggregate authoring flags remain false. Existing
+bounded state, exact bindings and explicit pinned admission. All ten scarce-resource works and all seven retrievals have their bound specialists ([Appointed specialists for original work](merchant-legacy-offers.md)); aggregate authoring flags remain false. Existing
 accepted quests keep their original terms. Editing a draft or changing the
 aggregate flags does not enable another quest. Published definitions use
 stable hashes and IDs; changing an objective or reward needs a new ID.
@@ -336,7 +336,7 @@ the current protocol does not preserve. Reconnecting does not move an already
 committed cooldown. Pending saves, missing goods and native inventory/stock
 capacity refusals preserve the accepted job and its original payment.
 
-The hundred commissions add no actor, spawn, harvest, purse refill, new currency
+The 241 delivery commissions add no actor, spawn, harvest, purse refill, new currency
 or character inventory grant. Native inventory, pending-record and private
 ledger byte limits remain in force. No alpha reset is required for this slice.
 
@@ -353,7 +353,7 @@ The four published scene IDs and their full authored hashes are pinned in
 `merchant-quest-activation.json`. Published definitions are immutable; new
 deeds or rewards need new IDs while the old definitions remain available
 for accepted work. These are the four scene IDs admitted to the hot-reload bundle;
-the hundred commissions have their separate permanent publication contract above.
+the 241 delivery commissions have their separate permanent publication contract above.
 
 At acceptance, the server reserves the original reward in the same character
 property transaction as its objective and copied terms. At completion,

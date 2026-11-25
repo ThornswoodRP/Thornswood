@@ -236,5 +236,5 @@ function siteSaid(dir) {
   }
   if (fail) console.log('second site log:\n' + run2.log);
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 })();

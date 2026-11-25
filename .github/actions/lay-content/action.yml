@@ -1,0 +1,82 @@
+# THE NEWEST CONTENT BUILD, LAID OVER THE CHECKOUT (#5191 stage 4, #6359).
+#
+# The content plugin and the tables out of the load order are not committed:
+# the box builds them, and each merge release keeps the build it took as the
+# artifact content-<server> (merge-release.yml, "Keep what was taken"). Every
+# job that reads them lays the newest kept build with this action, after its
+# checkout:
+#
+#     - name: Lay the newest content build
+#       uses: ./.github/actions/lay-content
+#
+# The job needs actions: read, to list and download another run's artifact.
+#
+# Why GitHub's own download step and not the script's. Until #6359 each job
+# downloaded the build with Get-ContentBuild.ps1's single request to GitHub's
+# artifact store, an Azure storage account many of GitHub's customers share.
+# On 16 Nov 2026 that store answered two of those requests 503 "Egress is over
+# the account limit" while the gate's shares, which take their copy through
+# actions/download-artifact, never failed. So the script only names the
+# newest build here (-Find), GitHub's artifact client downloads it and holds
+# it to its digest, and the script lays it from that folder (-ArtifactDir),
+# held to its record as before. In a workflow the script refuses to download
+# a build itself.
+#
+# keep: a folder to keep the two files in (the gate's pick hands them to its
+# shares). Outputs same, key and commit as Get-ContentBuild.ps1 -Newest says
+# them.
+name: Lay the newest content build
+description: Lays the newest content build a merge release kept over the checkout.
+inputs:
+  server:
+    description: The server whose build to lay, dev or main.
+    required: false
+    default: dev
+  keep:
+    description: A folder to keep the build's two files in, or empty.
+    required: false
+    default: ''
+  github-token:
+    description: The token that lists and downloads the kept build (actions read).
+    required: false
+    default: ${{ github.token }}
+outputs:
+  same:
+    description: yes when the build is of this checkout's content inputs, no when not.
+    value: ${{ steps.lay.outputs.same }}
+  key:
+    description: The build's key.
+    value: ${{ steps.lay.outputs.key }}
+  commit:
+    description: The commit the build was made of.
+    value: ${{ steps.lay.outputs.commit }}
+runs:
+  using: composite
+  steps:
+    - name: Name the newest kept build
+      id: find
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        LAY_SERVER: ${{ inputs.server }}
+      run: |
+        ./scripts/release/Get-ContentBuild.ps1 -Newest -Find -Server $env:LAY_SERVER
+        exit $LASTEXITCODE
+    - name: Download it
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        artifact-ids: ${{ steps.find.outputs.artifact }}
+        run-id: ${{ steps.find.outputs.run }}
+        github-token: ${{ inputs.github-token }}
+        path: ${{ runner.temp }}/content-newest
+    - name: Lay it
+      id: lay
+      shell: pwsh
+      env:
+        LAY_SERVER: ${{ inputs.server }}
+        LAY_KEEP: ${{ inputs.keep }}
+      run: |
+        $from = Join-Path $env:RUNNER_TEMP 'content-newest'
+        if ($env:LAY_KEEP) { ./scripts/release/Get-ContentBuild.ps1 -Newest -Server $env:LAY_SERVER -ArtifactDir $from -Keep $env:LAY_KEEP }
+        else { ./scripts/release/Get-ContentBuild.ps1 -Newest -Server $env:LAY_SERVER -ArtifactDir $from }
+        exit $LASTEXITCODE

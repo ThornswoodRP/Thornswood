@@ -161,4 +161,4 @@ yes('the step on the box is plain ASCII, as Set-Content -Encoding ASCII writes i
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

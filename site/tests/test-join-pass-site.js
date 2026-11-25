@@ -90,7 +90,8 @@ yes('config.json is where the key lives, made by the site and never a value in t
 if (!ROUTE || !HELPERS.every(function (h) { return h.length > 10; })) {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(1);
+  process.exitCode = 1;
+  return;
 }
 
 // ------------------------------------------------------------ the shared pass
@@ -375,7 +376,7 @@ async function main() {
   try { fs.rmSync(FEEDROOT, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
-main().catch(function (e) { console.log('FAIL  threw: ' + (e && e.stack ? e.stack : e)); process.exit(1); });
+main().catch(function (e) { console.log('FAIL  threw: ' + (e && e.stack ? e.stack : e)); process.exitCode = 1; });

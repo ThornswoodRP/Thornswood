@@ -79,7 +79,7 @@ function Start-ScheduledTask {
     if ($env:TW_LOAD_WRONG) { $n-- }
     Add-Content -LiteralPath (Join-Path $Root 'server.log') ('[' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff') + '] [info] MongoDB: loaded ' + $n + ' forms')
   }
-  $p = Start-Process -FilePath $env:TW_NODE -ArgumentList '-e', ('"require(''net'').createServer((s) => s.end()).listen(' + $env:TW_RES + ', ''127.0.0.1''); setTimeout(() => process.exit(0), 60000)"') -PassThru
+  $p = Start-Process -FilePath $env:TW_NODE -ArgumentList '-e', ('"const res = require(''net'').createServer((s) => s.end()).listen(' + $env:TW_RES + ', ''127.0.0.1''); setTimeout(() => res.close(), 60000)"') -PassThru
   Add-Content -LiteralPath $env:TW_PIDS $p.Id
   Start-Sleep -Milliseconds 400
   Set-Content -LiteralPath $env:TW_UDP $env:TW_GAME
@@ -92,8 +92,8 @@ $engine = @'
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const s = JSON.parse(fs.readFileSync('server-settings.json', 'utf8').replace(/^\uFEFF/, ''));
 fs.writeFileSync('engine-saw.json', JSON.stringify(s));
-if (s.databaseDriver !== 'migration') { console.log('[error] not a migration'); process.exit(3); }
-if (fs.existsSync('engine-fails')) { console.log('[error] MigrationDatabase: databaseNew does not match the old world: 1 missing (a01)'); process.exit(1); }
+if (s.databaseDriver !== 'migration') { console.log('[error] not a migration'); process.exitCode = 3; return; }
+if (fs.existsSync('engine-fails')) { console.log('[error] MigrationDatabase: databaseNew does not match the old world: 1 missing (a01)'); process.exitCode = 1; return; }
 const forms = path.join(s.databaseOld.databaseName, 'changeForms');
 const batch = path.join(forms, '.pending-batch');
 if (fs.existsSync(batch)) {
@@ -111,10 +111,9 @@ fs.writeFileSync(plan, JSON.stringify({ op: 'apply', uri: s.databaseNew.database
 const r = cp.spawnSync(process.env.THORNSWOOD_MONGOSH, ['--nodb', '--quiet', '--file', process.env.TW_WORLDJS], { encoding: 'utf8', env: Object.assign({}, process.env, { THORNSWOOD_WORLD_PLAN: plan }) });
 fs.unlinkSync(plan);
 const done = /APPLIED\|(\d+)/.exec(r.stdout || '');
-if (!done) { console.log('[error] ' + r.stdout + r.stderr); process.exit(1); }
+if (!done) { console.log('[error] ' + r.stdout + r.stderr); process.exitCode = 1; return; }
 console.log('[info] MigrationDatabase: ' + done[1] + ' changeForms moved, and each read back the same');
 console.log('[info] The server will exit');
-process.exit(0);
 '@
 
 function Stop-Fakes {

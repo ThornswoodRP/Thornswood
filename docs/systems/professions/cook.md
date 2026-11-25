@@ -2,10 +2,8 @@
 
 Dinners and desserts.
 
-- [Hearthcook](cook/hearthcook.md) makes the meals. 112 recipes, every
-  one of them reaches the server.
-- [Confectioner](cook/confectioner.md) makes the desserts. 28 recipes,
-  every one of them reaches the server.
+- [Hearthcook](cook/hearthcook.md) makes the meals. See the [Hearthcook recipe list](../lists/cook-hearthcook.md).
+- [Confectioner](cook/confectioner.md) makes the desserts. See the [Confectioner recipe list](../lists/cook-confectioner.md).
 
 The oven is either half, from novice. The cookpot is the
 Hearthcook's, from novice, so a confectioner at the pot is making

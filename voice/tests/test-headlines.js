@@ -7,6 +7,7 @@
 //   node voice/tests/test-headlines.js
 'use strict';
 const path = require('path');
+const fs = require('fs');
 const heads = require(path.join(__dirname, '..', '..', 'voice', 'headlines.js'));
 
 let pass = 0, fail = 0;
@@ -14,6 +15,10 @@ function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what); }
 }
+
+const voiceSource = fs.readFileSync(path.join(__dirname, '..', 'voice-server.js'), 'utf8');
+yes('the voice route uses the headlines parser without a second verb table',
+    /headlines\.floatLine\(text\)/.test(voiceSource) && !/\b(?:CHAT_VERBS|CHAT_USAGE|chatVerb|chatReach)\b/.test(voiceSource));
 
 const say = heads.floatLine('hello there');
 yes('a plain line floats', say && say.kind === 'say' && say.head === 'hello there' && say.reach === 4000 && say.local === false);
@@ -67,4 +72,4 @@ yes('hiding a name does not hide the mark', heads.markVisible({ talking: true, m
 yes('turning off their text does not hide the mark', heads.markVisible({ talking: true, metres: 1, textMuted: true }));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

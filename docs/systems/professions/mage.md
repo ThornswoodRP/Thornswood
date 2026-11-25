@@ -5,8 +5,7 @@ spells. The spells do not have to be one from each school. Both from
 one school is a deep start. One from each is a wide start. You can
 also spend neither point yet. The two points stay until you do.
 
-At master you pick a third school, and you receive two more spell
-points on top of the one that every other rank gave you.
+Reaching Master opens a third school. You earn spell points in each school separately, not once for the profession.
 
 The law of casting, the College, and what is refused are
 [Magic and the College](../magic.md). This page is the profession.
@@ -26,11 +25,13 @@ Expert is Expert. Master is Master.
 | When | Points |
 | --- | --- |
 | The profession is picked | 2 |
-| Advanced | +1 |
-| Expert | +1 |
-| Master | +2, and the third school |
+| Advanced in a school | +1 |
+| Expert in a school | +1 |
+| Master in a school | +2 |
 
-A mage who climbs with no College study holds 6 points by master.
+The Master award replaces the ordinary rank award. For example, reaching
+Advanced in both starting schools earns one point from each, even without
+College study. Class ranks do not give spell points.
 Learning a spell spends one. A novice spell needs no spell below it.
 Anything higher needs a spell of that school one rank down, and needs
 your rank in that school to be at least the spell's rank.

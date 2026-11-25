@@ -50,7 +50,7 @@ Skyrim the way it was.
    marked adult, so first turn on adult content in your Nexus Mods settings,
    or Nexus shows the collection as hidden. On a free account Vortex opens
    each file's page on Nexus and you press **Slow download** there, once for
-   each file: 120 files, from 111 mods.
+   each file: 121 files, from 112 mods.
 4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
    above Settings. Your browser opens, you say yes, and it closes itself. You
    never do this again.
@@ -147,7 +147,7 @@ You arrive dressed in a plain tunic and boots in a quiet stone hall.
 The race menu opens there to make your face, with your clothes kept on as you
 change race. When you are done, the panel behind **K** opens by itself. That panel is
 where the rest is chosen: your profession and the half of it you will make your
-own, your class, and your Home, the town you start in. Those are the choices
+own, your class, and your Starting Location, the town you start in. Those are the choices
 on the [Professions](/classes) page.
 
 Only the town has to be chosen before you leave the hall. Your class and

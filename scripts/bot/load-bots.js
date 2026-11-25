@@ -474,7 +474,7 @@ class LoadBot extends Bot {
         let token = '';
         try { token = String(JSON.parse(text).token || ''); } catch (e) { token = ''; }
         if (!token) { this.fail('the voice service\'s token answer has no token: ' + text.slice(0, 120)); return; }
-        if (this.step === 'failed') { return; }
+        if (this.step === 'failed' || this.step === 'closing') { return; }
         const ws = new WebSocket('ws://127.0.0.1:' + this.voicePort + '/', ['thornswood', token]);
         this.ws = ws;
         ws.onopen = () => { this.wsSend({ t: 'join', profileId: Number(this.profileId), name: 'Load ' + this.profileId, voice: false }); };
@@ -692,23 +692,41 @@ function args(argv) {
   return o;
 }
 
+// Says why it cannot run and ends with code 2: the channel to Load-Test is
+// let go, so node ends by itself, with no call to its exit function, which
+// can hang on Node 24 (#6036).
+function refuse(why) {
+  console.log(why);
+  process.exitCode = 2;
+  if (process.connected) { process.disconnect(); }
+}
+
 function main() {
   const a = args(process.argv.slice(2));
   if (!a.root || !a.port || !process.send) {
-    console.log('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade,quest] [--moves change|beat] [--stand <0 to 1>], started by Load-Test.js with IPC');
-    process.exit(2);
+    refuse('node load-bots.js --root <server folder> --port <proxy port> [--password <p>] [--voice <voice service port>] [--play fight,host,trade,quest] [--moves change|beat] [--stand <0 to 1>], started by Load-Test.js with IPC');
+    return;
   }
   const addon = loadAddon(a.root);
   const playing = String(a.play || '').split(',').filter(Boolean);
   const moves = a.moves || 'change';
-  if (!MOVES.includes(moves)) { console.log('--moves takes ' + MOVES.join(' or ') + ', not ' + moves); process.exit(2); }
+  if (!MOVES.includes(moves)) { refuse('--moves takes ' + MOVES.join(' or ') + ', not ' + moves); return; }
   const stand = Number(a.stand) || 0;
-  if (!(stand >= 0 && stand <= 1)) { console.log('--stand is a share from 0 to 1, not ' + a.stand); process.exit(2); }
+  if (!(stand >= 0 && stand <= 1)) { refuse('--stand is a share from 0 to 1, not ' + a.stand); return; }
   const { passKey, server } = passKeyOf(a.root);
   const bots = [];
   let lone = null;
   let cpu0 = process.cpuUsage();
   let at0 = Date.now();
+  // On stop, or when Load-Test goes, every bot closes, the loop ends and the
+  // channel is let go, so nothing holds this process and node ends by itself.
+  let stopped = false;
+  const stop = () => {
+    if (stopped) { return; }
+    stopped = true;
+    for (const b of bots) { if (b.step !== 'failed') { b.step = 'closing'; } if (b.client) { b.close(); } if (b.ws) { b.ws.close(); } }
+    if (process.connected) { process.disconnect(); }
+  };
   process.on('message', (msg) => {
     if (msg && Array.isArray(msg.add)) {
       for (const id of msg.add) {
@@ -763,13 +781,11 @@ function main() {
       process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, movesSentPerBot: sentPerBot, settledSent: settled, repeatsRead: repeats, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
       cpu0 = process.cpuUsage(); at0 = now;
     }
-    if (msg && msg.stop) {
-      for (const b of bots) { if (b.step !== 'failed') { b.step = 'closing'; } if (b.client) { b.close(); } if (b.ws) { b.ws.close(); } }
-      process.exit(0);
-    }
+    if (msg && msg.stop) { stop(); }
   });
-  process.on('disconnect', () => process.exit(0));
+  process.on('disconnect', stop);
   const loop = () => {
+    if (stopped) { return; }
     const now = Date.now();
     for (const b of bots) {
       if (b.step === 'failed') { continue; }

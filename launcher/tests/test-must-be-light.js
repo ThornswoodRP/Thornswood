@@ -33,11 +33,17 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
+// The launcher's source as text with plain line feeds. A Windows checkout has
+// .cs files with CRLF (.gitattributes names no line end for them), and the
+// patterns below end a method at a line feed, so read as it was they found no
+// Verify.Run on Windows and failed the checks on its report (#4594).
+function source(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
+
 const appDir = path.join(REPO_DIR, 'launcher', 'app');
 const all = fs.readdirSync(appDir).filter(function (f) { return /\.cs$/.test(f); })
-  .map(function (f) { return { name: f, text: fs.readFileSync(path.join(appDir, f), 'utf8') }; });
-const checks = fs.readFileSync(path.join(appDir, 'Checks.cs'), 'utf8');
-const verify = fs.readFileSync(path.join(appDir, 'Verify.cs'), 'utf8');
+  .map(function (f) { return { name: f, text: source(path.join(appDir, f)) }; });
+const checks = source(path.join(appDir, 'Checks.cs'));
+const verify = source(path.join(appDir, 'Verify.cs'));
 
 // Nothing writes a flag and nothing guesses a light set any more.
 ['FlagLight', 'NotLight', 'MustBeLight'].forEach(function (n) {
@@ -85,4 +91,4 @@ yes('before the order walk, so one problem reads as one problem',
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

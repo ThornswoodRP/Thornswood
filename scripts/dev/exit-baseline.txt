@@ -1,0 +1,17 @@
+# Calls to node's exit function, per file. Read by
+# scripts/dev/Check-ProcessExit.js, which tests/test-6036-process-exit.js runs
+# on every pull request: it fails when any .js, .cjs, .mjs, .ps1 or .psm1
+# file has more calls than its line here allows (a file not listed is
+# allowed none), or fewer with its line not yet lowered.
+#
+# WHY (#6036). On Node 24 that call can deadlock with V8's background
+# compiler threads (nodejs/node#64274), and the node it was meant to end
+# never ends. A harness or a tool ends by setting process.exitCode instead,
+# and closes any server, socket, child or timer it left open, so node ends
+# by itself. game/tests and the three harnesses Tree checks runs on steps of
+# their own moved first, then every other folder of harnesses, then the tools
+# and services, so no file has a line: none may call it. The site's last net
+# for an uncaught exception ends with process.abort(), which tears nothing
+# down (site/lib/serve.js says why).
+#
+# A number here only goes down, so a line is never added back.

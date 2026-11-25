@@ -129,4 +129,4 @@ yes('an expert rack with a minute left: "' + line + '"', line === 'This one is p
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

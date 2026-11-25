@@ -71,7 +71,7 @@ function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(src, start, end) {
   const a = src.indexOf(start);

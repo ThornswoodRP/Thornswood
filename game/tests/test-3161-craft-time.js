@@ -44,7 +44,7 @@ function yes(what, cond) {
 function done() {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function slice(start, end) {
   const a = gm.indexOf(start);
@@ -56,7 +56,7 @@ function slice(start, end) {
 const WORK_SRC = slice('/*\n  HOW LONG A CRAFT TAKES AT THE BENCH (#3161).', "mp.onCraft = guard('onCraft',");
 const ACTS = /const ACTS_AS = \{([^}]*)\}/.exec(gm);
 yes('the sizing block and mp.onCraftWork are in the gamemode, before mp.onCraft', !!WORK_SRC);
-if (!WORK_SRC) { done(); }
+if (!WORK_SRC) { done(); } else {
 
 // The rows by recipe id, and the benches by base, as the fake engine knows them.
 const ids = {};
@@ -156,3 +156,4 @@ yes('6. a large craft says how long it takes and that getting up stops it; a sma
 yes('7. guard() treats onCraftWork as the person acting, as it does onCraft', !!ACTS && /\bonCraftWork: 0\b/.test(ACTS[1]));
 
 done();
+}

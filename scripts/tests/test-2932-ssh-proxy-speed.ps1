@@ -68,7 +68,7 @@ try {
 
     # The ProxyCommand that adds nothing but the pipe.
     $relay = Join-Path $tmp 'relay.js'
-    [IO.File]::WriteAllText($relay, "const s=require('net').connect(Number(process.argv[2]),'127.0.0.1');process.stdin.pipe(s);s.pipe(process.stdout);s.on('close',()=>process.exit(0));")
+    [IO.File]::WriteAllText($relay, "const s=require('net').connect(Number(process.argv[2]),'127.0.0.1');process.stdin.pipe(s);s.pipe(process.stdout);s.on('close',()=>process.stdin.destroy());")
     # The bridge, on loopback, joined to the throwaway sshd.
     $tokens = Join-Path $tmp 'tokens'; $null = New-Item -ItemType Directory -Path $tokens
     $token = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))

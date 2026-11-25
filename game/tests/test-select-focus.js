@@ -234,6 +234,7 @@ function rig(opts) {
     "const UI_URL = '" + PAGE + "';\n" +
     'let PROFILE = ' + (opts.fallback || 0) + ';\n' +
     'let menuChosenId = 0, menuChosenAt = 0, menuSaidAt = 0, menuSaidTimes = 0;\n' +
+    'let skillsCreating = ' + (opts.skillsCreating ? 'true' : 'false') + ';\n' +
     // Saying the choice again is test-menu-choice.js's business.
     'function keepSayingChoice() { }\n' +
     'function chosenOnDisk() { return false; }\n' +
@@ -524,6 +525,14 @@ if (ARBITER !== null && MENU !== null && CAP !== null && WORLD !== null) {
     yes('S4 until its own two minutes, when it is closed by name too',
         h.closes.join(',') === 'thornswoodSkills,thornswoodParty' && !h.page.panels.party);
 
+    // Unfinished creation keeps the skills panel open beyond two minutes (#6432)
+    const c = rig({ world: true, skillsCreating: true });
+    c.run(3000);
+    c.open('skills');
+    c.run(130000);
+    yes('S4 creation keeps skills claim past two minutes',
+        c.closes.length === 0 && c.page.panels.skills === true && c.api.claims.skills === true && c.browser.focused);
+
     // The wheel is capped as before, and closing it closes no panel.
     const w = rig({ world: true });
     w.run(3000);
@@ -567,4 +576,4 @@ if (ARBITER !== null && MENU !== null && CAP !== null && WORLD !== null) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

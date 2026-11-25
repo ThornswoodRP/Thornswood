@@ -40,7 +40,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 function take(start, end) {
   const i = src.indexOf(start);
@@ -64,7 +64,7 @@ const PARTS = [
 const PROPERTY = (/^var RECIPE_COUNTS_PROPERTY = '([^']+)';$/m.exec(src) || [])[1];
 const ok = BLOCK && FLOOR && PARTS.every(function (p) { return p !== null; }) && !!PROPERTY;
 yes('the generated blocks and the functions that use them are in the gamemode', !!ok);
-if (!ok) { done(); }
+if (!ok) { done(); } else {
 
 // ------------------------------------------------------------ the table --
 // The runner's Python is `python` or `py`, not `python3`; ask each in turn.
@@ -260,3 +260,4 @@ yes('F5 it runs when the gamemode loads, beside the chopping blocks', /\nholdNev
     src.indexOf('\nholdNeverCopiedOff();\n') > src.indexOf('\ndisableBlocksOff();\n'));
 
 done();
+}

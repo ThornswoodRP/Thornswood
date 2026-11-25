@@ -31,7 +31,7 @@ function yes(what, cond) {
 }
 function done() {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0;
 }
 
 const HEAD = '  /* The character choice again, after the world (afkOut, sessionEnded). again is menuAgain. */';
@@ -39,7 +39,7 @@ const TAIL = '    backToChoice({ id: me, name: \'\', ended: LOAD_REFUSED_WORDS }
 const a = front.indexOf(HEAD);
 const b = a < 0 ? -1 : front.indexOf(TAIL, a);
 yes('backToChoice and loadRefused are in thornswood-front.js where this expects them', a >= 0 && b > a);
-if (!(a >= 0 && b > a)) { done(); }
+if (!(a >= 0 && b > a)) { done(); } else {
 const lifted = front.slice(a, b + TAIL.length);
 
 function game(flag) {
@@ -109,3 +109,4 @@ yes('and the page is given the sentence, and no place in line (the path #1157 us
     /if \(menuAgain\.ended\) \{ list\.ended = String\(menuAgain\.ended\); \}\s*else if \(menuAgain\.switched\) \{[^]*?\}\);\s*\}\s*else \{ list\.away = menuAgain; \}/.test(front));
 
 done();
+}

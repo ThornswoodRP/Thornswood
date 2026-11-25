@@ -4,43 +4,20 @@ Bows, arrows, instruments, and the long weapons that are wood as much
 as metal. Spears, pikes and halberds are this half when the table
 files them here.
 
-156 recipes. 86 reach the server. 70 are the sharpening wheel and do
-not.
-
-The full table: [lists/woodworker-woodwright.md](../../lists/woodworker-woodwright.md).
-
-| Rank | Recipes |
-| --- | --- |
-| Novice | 20 |
-| Advanced | 64 |
-| Expert | 36 |
-| Master | 36 |
-
-| Kind | Recipes |
-| --- | --- |
-| Bows | 94 |
-| Arrows and bolts | 30 |
-| Battleaxes | 16 |
-| Greatswords | 4 |
-| Other goods | 3 |
-| Other weapons | 3 |
-| Swords | 2 |
-| Daggers | 2 |
-| Books | 2 |
-
-Benches: forge 75, sharpening wheel 70, Dawnguard bench 10, skyforge 1.
+The [Woodwright recipe list](../../lists/woodworker-woodwright.md)
+gives the counts by rank and shows each recipe's bench, race and whether
+it reaches the server.
 
 The Dawnguard bench is closed: this half at advanced. The skyforge is
 advanced as well, shared with the smiths. The sharpening wheel is
-this half or Edgewright, from novice, and the 70 rows on it never
-reach the server.
+this half or Edgewright, from novice, but tempering never reaches the server.
 
 A recipe has no gold price. What a piece sells for is the price a
 person posts.
 
 ## Race locks
 
-Riekling 13, Imperial 4, Khajiit 2, Orc 2.
+Read the Race column for a recipe's restriction.
 
 ## What you are handed
 
@@ -63,6 +40,5 @@ Every recipe, by rank and with its id: [woodworker-woodwright](../../lists/woodw
 
 ## Where this is
 
-The 86 rows that are not the wheel are gated. The wheel's 70 are not
-scored. Master Carver's fire is in the server. The axe wear is in the
-server.
+The server gates crafting. Tempering at the wheel is not scored.
+Master Carver's fire is in the server. The axe wear is in the server.

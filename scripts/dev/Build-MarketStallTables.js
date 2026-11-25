@@ -24,6 +24,7 @@ const CLIENT = require('./ClientTables.js');
 const root = path.join(__dirname, '../..');
 const tablePath = path.join(root, 'game/data/market-stalls.json');
 const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
+if (!opts) return;
 const tablesDir = opts['--tables'] || TABLES.DIR;
 
 const rows = JSON.parse(fs.readFileSync(tablePath, 'utf8')).stalls;
