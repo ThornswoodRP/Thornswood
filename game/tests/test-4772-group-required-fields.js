@@ -90,6 +90,23 @@ test('cleanup removes only its own description token and preserves newer externa
   assert.equal(field.getAttribute('aria-describedby'), 'existing-hint newer-hint');
   assert.equal(field.getAttribute('aria-invalid'), 'grammar'); assert.equal(field.validationMessage, 'A newer external error');
 });
+test('a newer external custom error retains the ordinary true invalid marker', () => {
+  const p = rig(), field = p.field('gline'); p.press(p.doc.querySelector('[data-g="say"]'));
+  field.setCustomValidity('A newer validation error'); field.setAttribute('aria-invalid', 'true');
+  field.value = 'Our message'; p.fire(field, 'input', '');
+  assert.equal(field.validationMessage, 'A newer validation error'); assert.equal(field.getAttribute('aria-invalid'), 'true');
+});
+test('externally cleared native validity is not replaced with an earlier custom error', () => {
+  const p = rig(), field = p.field('gline'); field.setCustomValidity('An earlier error');
+  p.press(p.doc.querySelector('[data-g="say"]')); field.setCustomValidity(''); field.setAttribute('aria-invalid', 'false');
+  field.value = 'Our message'; p.fire(field, 'input', '');
+  assert.equal(field.validationMessage, ''); assert.equal(field.getAttribute('aria-invalid'), 'false');
+});
+test('cleared native validity retires only the helper invalid marker when no replacement error survives', () => {
+  const p = rig(), field = p.field('gline'); p.press(p.doc.querySelector('[data-g="say"]'));
+  field.setCustomValidity(''); field.value = 'Our message'; p.fire(field, 'input', '');
+  assert.equal(field.validationMessage, ''); assert.equal(field.getAttribute('aria-invalid'), null);
+});
 test('a preexisting description token is not removed by this helper', () => {
   const p = rig(), field = p.field('gline'); field.setAttribute('aria-describedby', 'existing-hint ts-journal-field-reason');
   p.press(p.doc.querySelector('[data-g="say"]')); field.value = 'Our message'; p.fire(field, 'input', '');

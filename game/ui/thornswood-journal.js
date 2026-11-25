@@ -792,10 +792,11 @@
     if (!error) return;
     groupFieldError = null;
     var field = error.field;
-    if (field.validationMessage === error.reason && field.validity.customError) {
-      field.setCustomValidity(error.custom);
-    }
-    if (field.getAttribute('aria-invalid') === 'true') {
+    var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
+    var newerError = field.validity.customError && !ownsValidity;
+    if (ownsValidity) field.setCustomValidity(error.custom);
+    // A surviving replacement error also owns its ordinary true ARIA marker.
+    if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
       if (error.invalid == null) field.removeAttribute('aria-invalid');
       else field.setAttribute('aria-invalid', error.invalid);
     }
