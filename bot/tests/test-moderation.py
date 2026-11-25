@@ -200,7 +200,7 @@ try:
     yes('M8 every emitted staff record formats' + (': missing ' + ', '.join(missing) if missing else ''),
         not missing)
 
-    # Match the row shapes the five commands actually write. The despawn
+    # Match the row shapes the commands actually write. The despawn
     # target is in why, while the company's terms take the place of a name.
     cases = (
         ('despawn', '', 0, 'kept wolf ff000001', 'despawned a creature: kept wolf ff000001'),
@@ -212,13 +212,22 @@ try:
          "dropped proposed changes to the company's terms: from Aela: fee to 20"),
         ('companyconfirm', "the company's terms", 0, 'from Aela: fee to 20',
          "confirmed changes to the company's terms: from Aela: fee to 20"),
+        ('heal', 'Bjorn', 2002, 'restored health, magicka and stamina',
+         'used /heal on Bjorn (profile 2002): restored health, magicka and stamina'),
+        ('rankup', 'Bjorn', 2002, 'class hunter',
+         'advanced a rank for Bjorn (profile 2002): class hunter'),
+        ('rename', 'Bjorn', 2002, 'Renamed to Torsten.',
+         'renamed Bjorn (profile 2002): Renamed to Torsten.'),
+        ('setneeds', 'Bjorn', 2002, '', 'changed a need for Bjorn (profile 2002).'),
+        ('tpto', 'Bjorn', 2002, 'Self-only playtest teleport.',
+         'teleported to Bjorn (profile 2002) for testing: Self-only playtest teleport.'),
     )
     put(LIVE, [])
     put(DEV, [])
     records = [json.dumps(dict(json.loads(row(d, who=name, why=why, n=i)), who=pid))
                for i, (d, name, pid, why, _) in enumerate(cases)]
     ticks = drive([lambda: put(DEV, records)])
-    yes('M8 the staff watcher says all five actions with their actor and details',
+    yes('M8 the staff watcher says the actions with their actor and details',
         ticks == [[], ['**Staff on the dev server:** Aela (profile 1001) ' + words
                        for _, _, _, _, words in cases]])
     # The site is server.js over its modules in site/lib since #5357; the hub's
