@@ -61237,7 +61237,7 @@ module.exports = {
     // Invalidate first: if minting fails, the changed pile can never retain
     // an old valid approval or version. An unversioned offer cannot agree.
     t.offerVersion = '';
-    t.okA = false; t.okB = false; t.at = Date.now();
+    t.okA = false; t.okB = false;
     t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
     t.offerVersion = freshOfferVersion();
   }
@@ -61534,13 +61534,13 @@ module.exports = {
         var room = hit.c - side[k].c;
         if (room <= 0) { return 'That is all of them already.'; }
         side[k].c += Math.min(n, room);
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
     if (side.length >= TRADE.mostLines) { return 'That is as much as one side can offer.'; }
     side.push({ id: hit.id, x: hit.x, n: hit.n, c: n });
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -61556,7 +61556,7 @@ module.exports = {
              String(side[i].id) === want || side[i].id.toString(16) === want)) {
         if (n > 0 && side[i].c > n) { side[i].c -= n; }
         else { side.splice(i, 1); }
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
@@ -61572,7 +61572,7 @@ module.exports = {
     var have = holding(actorId, GOLD);
     if (want > have) { return 'You only have ' + have + '.'; }
     if (t.a === actorId) { t.goldA = want; } else { t.goldB = want; }
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -61603,7 +61603,7 @@ module.exports = {
     if (!t) { return 'You are not trading.'; }
     if (t.sale === actorId) {
       t.sale = 0;
-      unconfirm(t); push(t);
+      t.at = Date.now(); unconfirm(t); push(t);
       try { say(other(t, actorId), nameOf(actorId) + ' is not buying for the company now. It is an ordinary trade.'); }
       catch (e) { }
       return '';
@@ -61613,7 +61613,7 @@ module.exports = {
       return 'Only somebody the Free Skyrim Trading Company has taken on buys for it. It is an application, in Discord.';
     }
     t.sale = actorId;
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     try {
       say(other(t, actorId), nameOf(actorId) + ' is buying for the Free Skyrim Trading Company. ' +
           'What you put up leaves Skyrim and does not come back.');
@@ -61650,6 +61650,9 @@ module.exports = {
   function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    // The normal cleanup tick may still be waiting. An approval cannot revive
+    // a conversation whose full idle window has already elapsed.
+    if (Date.now() - t.at > TRADE.idleFor) { return 'The trade timed out.'; }
     if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
         offerVersion !== t.offerVersion) {
       refresh(actorId);
@@ -61666,6 +61669,9 @@ module.exports = {
     }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
+    // Only a newly accepted approval renews idle time. A refused final swap
+    // may invalidate approvals, but it is not activity that keeps a trade open.
+    if (!(t.okA && t.okB)) { t.at = Date.now(); }
     push(t);
     var them = other(t, actorId);
     if (!(t.okA && t.okB)) {

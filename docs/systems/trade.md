@@ -90,8 +90,11 @@ its enchantment and its charge. What stays in your pack keeps what it
 had, and so does everything the other person was already holding. A
 piece you were wearing arrives in their pack, not on them.
 
-If nobody touches it for 3 minutes, it ends. The check is every 2
-seconds.
+If neither person changes a pile or newly agrees for 3 minutes, it
+ends. A valid Agree restarts that full wait. Pressing Agree again
+after already agreeing, a refused approval, or just refreshing the
+window does not restart it. The check is every 2 seconds, and an
+approval cannot revive a trade after its wait has elapsed.
 
 A trade is a conversation. It is not saved. A restart does not
 remember the piles.
