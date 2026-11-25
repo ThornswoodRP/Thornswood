@@ -134,7 +134,7 @@ yes('the property block is in the gamemode, between its markers', prop.length > 
   const left = gone.filter(function (g) { return code.indexOf(g) !== -1; });
   yes('no handler, property or register key of the marking is left' + (left.length ? ' (' + left.join(', ') + ')' : ''),
       left.length === 0);
-  const saveText = fnText(prop, 'function save() {');
+  const saveText = fnText(prop, 'function save(');
   yes('the register is written without a boxes key', saveText.length > 0 && !/\bboxes\b/.test(saveText) &&
       /funds: funds/.test(saveText) && /dropbox: dropbox/.test(saveText));
   const viewText = fnText(prop, 'function officeView(');

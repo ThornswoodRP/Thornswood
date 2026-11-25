@@ -75,6 +75,8 @@
     (doc.pieces || []).forEach(function (r) { if (r && r.key) { rows[r.key] = r; } });
     var book = api.readRegister() || {};
     var pieces = (book && typeof book.pieces === 'object' && book.pieces) ? book.pieces : {};
+    // Pieces taken out of a pack and not yet set down, waiting on the pack's save (#4901).
+    var debits = (book && Array.isArray(book.debits)) ? book.debits : [];
     // In memory only: a piece in somebody's hands, by actor, { ref, until }.
     var carrying = {};
 
@@ -88,8 +90,9 @@
     function carryMs() { return num(limits.carryMs, 60000); }
     function turnStep() { return num(limits.turnStep, 45); }
 
+    /* Answers whether the register was written. */
     function save() {
-      api.writeRegister({ pieces: pieces });
+      return api.writeRegister({ pieces: pieces, debits: debits }) !== false;
     }
 
     function piecesIn(building) {
@@ -98,6 +101,11 @@
         if (own(pieces, k) && pieces[k] && pieces[k].building === building) { out.push(pieces[k]); }
       }
       return out;
+    }
+
+    /* Pieces for that building still waiting on a pack's save, which the cap counts too. */
+    function waitingIn(building) {
+      return debits.filter(function (d) { return d && d.data && d.data.building === building; }).length;
     }
 
     /* The building the person stands in, when it is one the property block knows. */
@@ -154,7 +162,7 @@
       var c = may ? carryOf(actorId) : null;
       return {
         b: building, n: building ? api.nameOf(building) : '', may: may,
-        p: may ? piecesIn(building).map(function (x) { return hex(x.ref); }) : [],
+        p: may ? piecesIn(building).filter(function (x) { return !!x.ref; }).map(function (x) { return hex(x.ref); }) : [],
         c: c ? hex(c.ref) : '', left: c ? Math.max(0, c.until - api.now()) : 0
       };
     }
@@ -193,9 +201,10 @@
       if (why) { return why; }
       var row = own(rows, key) ? rows[key] : null;
       if (!row || !typeOn(row.type)) { return 'That is not furniture that can be set down.'; }
+      if (!api.placementReady()) { return 'Furniture placement is unavailable just now.'; }
       if (!(api.count(actorId, row.itemDesc) > 0)) { return 'You carry no ' + row.name + '.'; }
       var cap = capOf(building);
-      if (piecesIn(building).length >= cap) {
+      if (piecesIn(building).length + waitingIn(building) >= cap) {
         return api.nameOf(building) + ' already has ' + cap + ' pieces set down, which is all it takes.';
       }
       var bad = api.baseRefusal(row);
@@ -203,25 +212,96 @@
       var pos = inFront(actorId);
       if (!pos) { return 'Could not tell where you stand. Try again.'; }
       var angle = wrap(num(api.angleOf(actorId)[2], 0) + 180);
-      if (!api.take(actorId, row.itemDesc)) { return 'Could not take the ' + row.name + ' out of your pack.'; }
-      var id = 0;
-      try {
-        id = api.place(row.base);
-        stand(id, row.base, actorId, pos, angle);
-      } catch (e) {
-        api.log('furniture: could not set down', row.key, 'in', building + ':', e);
-        if (id) { try { api.remove(id); } catch (e2) { } }
-        api.give(actorId, row.itemDesc);
-        return 'The ' + row.name + ' could not be set down. It is back in your pack.';
-      }
-      pieces[hex(id)] = { ref: id, key: row.key, base: row.base, building: building,
-                          pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), angle: angle };
-      save();
-      api.log('furniture:', api.who(actorId), 'set down a', row.name, hex(id), 'in', api.nameOf(building),
-              '(' + building + ') at', pieces[hex(id)].pos.join(','), 'turned', angle);
-      lookAll(building);
-      return '';
+      // Set down only once the pack's take is saved (#4901): landPiece.
+      var r = packs.begin(actorId, function (entries) { return api.cutOne(entries, row.itemDesc) || ('You carry no ' + row.name + '.'); },
+                          'piece', { key: row.key, building: building, angle: angle,
+                                     pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), by: api.who(actorId) });
+      if (r.why) { return r.why; }
+      return r.line && r.line !== PIECE_DOWN ? r.line : '';
     }
+
+    var PIECE_DOWN = 'It is set down.';
+
+    /*
+      A piece set down, once its item is saved out of the pack (#4901). Its
+      place was fixed when it was asked for. One that cannot be stood just
+      now stays in the register, the way standAll keeps one with nothing to
+      stand next to, and is stood at the next start: the item is out of the
+      pack for good, so the piece is never dropped.
+    */
+    function landPiece(d, landed) {
+      var w = d.data;
+      var row = own(rows, w.key) ? rows[w.key] : null;
+      var name = row ? row.name : w.key;
+      if (!landed) {
+        return { line: 'Your pack was not saved with the ' + name + ' out of it, so it was not set down.' };
+      }
+      return { name: name, piece: { ref: 0, marker: d.marker, key: w.key, base: row ? row.base : w.base,
+                                     building: w.building, pos: w.pos, angle: w.angle } };
+    }
+
+    // A paid piece is durable before it gets a reference. Bind the disabled
+    // reference before moving and enabling it in the building.
+    var pendingPaid = {};
+    function standPaidPiece(k, preferred) {
+      var piece = pieces[k];
+      pendingPaid[piece.marker] = k;
+      if (!piece.base) { return false; }
+      var anchor = preferred && api.cellOf(preferred) === piece.building ? preferred : api.anchorIn(piece.building);
+      if (!anchor) { return false; }
+      try {
+        var id = piece.ref;
+        if (!(id && api.refStands(id, piece.base) && api.placementMarker(id) === piece.marker)) {
+          id = api.stagePlacement(piece.base, piece.marker);
+        }
+        if (id !== piece.ref) {
+          if (own(pieces, hex(id)) && pieces[hex(id)].marker !== piece.marker) {
+            throw new Error('the placed reference already belongs to another registered piece');
+          }
+          var next = Object.assign({}, pieces);
+          delete next[k];
+          next[hex(id)] = Object.assign({}, piece, { ref: id });
+          if (!api.writePackRegister({ pieces: next, debits: debits })) { return false; }
+          pieces = next;
+          piece = next[hex(id)];
+          pendingPaid[piece.marker] = hex(id);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          stand(id, piece.base, anchor, piece.pos, piece.angle);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          throw new Error('the disabled furniture did not reach its registered position');
+        }
+        api.enablePlacement(id);
+        delete pendingPaid[piece.marker];
+      } catch (e) {
+        api.log('furniture: could not stand paid piece', piece.key + ':', e);
+        return false;
+      }
+      lookAll(piece.building);
+      return true;
+    }
+
+    function commitPackDebit(land, row, paid, actor) {
+      var result = land(row, paid);
+      var next = Object.assign({}, pieces);
+      var waiting = debits.filter(function (debit) { return debit !== row; });
+      var k = 'w' + row.marker;
+      if (paid) { next[k] = result.piece; }
+      if (!api.writePackRegister({ pieces: next, debits: waiting })) { return ''; }
+      pieces = next;
+      debits = waiting;
+      if (!paid) { return result.line; }
+      if (standPaidPiece(k, actor)) {
+        api.log('furniture:', row.data.by, 'set down a', result.name, 'in', api.nameOf(row.data.building));
+        return PIECE_DOWN;
+      }
+      return 'The ' + result.name + ' is kept in the register and will stand once it can be placed.';
+    }
+
+    var packs = api.packFirst(function () { return debits; }, function () {
+      return api.writePackRegister({ pieces: pieces, debits: debits });
+    }, { piece: landPiece }, commitPackDebit);
 
     /* The piece under their crosshair, when they may touch it: { piece } or { why }. */
     function reachable(actorId, refHex) {
@@ -328,6 +408,19 @@
         if (!own(pieces, k)) { continue; }
         var p = pieces[k];
         if (!p || !p.base || !p.building || !p.pos) { continue; }
+        if (p.marker) {
+          if (p.ref && api.refAt(p.ref, p.base, p.building, p.pos, p.angle) &&
+              api.placementMarker(p.ref) === p.marker && api.placementEnabled(p.ref)) {
+            kept++;
+          } else {
+            var localRef = p.ref && api.cellOf(p.ref) === p.building ? p.ref : 0;
+            if (!localRef && !api.anchorIn(p.building)) {
+              api.log('furniture: nothing to stand', p.key, k, 'next to in', p.building);
+            }
+            if (standPaidPiece(k, localRef)) { stood++; }
+          }
+          continue;
+        }
         if (api.refAt(p.ref, p.base, p.building, p.pos, p.angle)) { kept++; continue; }
         var id = api.refStands(p.ref, p.base) ? p.ref : 0;
         var anchor = (id && api.cellOf(id) === p.building) ? id : api.anchorIn(p.building);
@@ -379,6 +472,14 @@
     return {
       command: command, look: look, lineFor: lineFor, view: view, place: place, move: move,
       down: down, turn: turn, pick: pick, standAll: standAll, refusal: refusal, capOf: capOf,
+      settle: function () {
+        packs.settle();
+        for (var marker in pendingPaid) {
+          var key = pendingPaid[marker];
+          if (own(pieces, key)) { standPaidPiece(key, 0); }
+          else { delete pendingPaid[marker]; }
+        }
+      },
       pieces: function () { return pieces; }, carrying: function () { return carrying; }
     };
   }
@@ -582,15 +683,240 @@
     try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (e) { return false; }
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* One furniture item out of a list of pack entries, for packFirst: { entries, taken }, or null when none is there. */
+  function cutOne(entries, itemDesc) {
+    var baseId = idOf(itemDesc) >>> 0;
+    if (!baseId) { return null; }
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || (e.baseId >>> 0) !== baseId || !(Number(e.count) > 0)) { continue; }
+      e.count = Number(e.count) - 1;
+      if (e.count <= 0) { entries.splice(i, 1); }
+      return { entries: entries, taken: [{ baseId: baseId, count: 1 }] };
+    }
+    return null;
+  }
+
+  /* A line to a person in the world, from a piece that landed or let go after they asked. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('furniture: a take out of a pack:', err); return; }
+    if (!line) { return; }
+    var online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    for (var i = 0; i < online.length; i++) {
+      var pidHere = 0;
+      try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
+      if (pidHere !== Number(pid)) { continue; }
+      if (typeof notify === 'function') {
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+      }
+      return;
+    }
+  }
+
+  var placementField = 'thornswoodFurniturePlacement';
+  var placementRegistered = false;
+  try {
+    mp.makeProperty(placementField, {
+      isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+    });
+    placementRegistered = true;
+  } catch (err) { plog('could not register furniture placement markers:', err); }
+
   g.__thornswoodFurniture = create({
     catalog: doc,
     now: function () { return Date.now(); },
     log: plog,
     readRegister: function () { return furnitureRead.doc; },
     writeRegister: function (book) {
-      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); }
-      catch (e) { plog('furniture: could not write', registerPath() + ':', e); }
+      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); return true; }
+      catch (e) { plog('furniture: could not write', registerPath() + ':', e); return false; }
     },
+    writePackRegister: function (book) {
+      try {
+        if (furnitureRead.bad) { throw new Error('the furniture register could not be read at startup'); }
+        var file = registerPath();
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        mp.writeFileWhole(file, JSON.stringify(book, null, 1));
+        return true;
+      } catch (e) { plog('furniture: could not commit a placement:', e); return false; }
+    },
+    packFirst: function (book, keep, landers, commit) {
+      return packFirst(mp, book, keep, landers, tellPerson, 'thornswoodFurnitureDebit', commit, require('crypto').randomUUID, admitPackDebit);
+    },
+    placementReady: function () {
+      return placementRegistered && typeof mp.writeFileWhole === 'function' &&
+        typeof mp.placeDisabledFurniture === 'function';
+    },
+    placementMarker: function (id) { return mp.get(id, placementField); },
+    placementEnabled: function (id) { return mp.get(id, 'isDisabled') === false; },
+    stagePlacement: function (baseDesc, marker) {
+      return mp.placeDisabledFurniture(idOf(baseDesc) >>> 0, marker);
+    },
+    enablePlacement: function (id) { mp.set(id, 'isDisabled', false); },
+    cutOne: cutOne,
+    actorOf: function (desc) { try { return mp.getIdFromDesc(desc) >>> 0; } catch (e) { return 0; } },
     cellOf: cellOf,
     posOf: function (id) { try { return mp.get(id, 'pos') || null; } catch (e) { return null; } },
     angleOf: function (id) { try { return mp.get(id, 'angle') || null; } catch (e) { return null; } },
@@ -696,6 +1022,13 @@
   });
 
   try { g.__thornswoodFurniture.standAll(); } catch (e) { plog('furniture: standing the pieces failed:', e); }
+
+  // A piece is set down once its item is saved out of the pack (#4901): see packFirst.
+  if (g.__thornswoodFurniturePackTimer) {
+    try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
+  }
+  g.__thornswoodFurniturePackTimer = setInterval(
+    guard('furniturePackTick', g.__thornswoodFurniture.settle), 1000);
 })();
 // ==== end thornswood furniture ====
 
