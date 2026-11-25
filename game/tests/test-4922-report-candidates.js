@@ -72,9 +72,12 @@ yes('the block hands out its ask', !!(S && typeof S.ask === 'function'));
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4922-'));
 const home = process.cwd();
 
-function report(line) {
+function report(line, resetLimits = true) {
   siteReads = 0;
-  g.__thornswoodAskSeen.by = {}; g.__thornswoodAskSeen.all = [];
+  if (resetLimits) {
+    g.__thornswoodAskSeen.by = {};
+    g.__thornswoodAskSeen.all = [];
+  }
   const said = [];
   process.chdir(scratch);
   try {
@@ -132,6 +135,17 @@ if (S) {
   r = report('Lydia Stormblade shoved me');
   yes('identical full names never pick the first character by accident',
       r.staff.length === 0 && /more than one person/i.test(r.reply));
+
+  world([[11, 'Aela'], [12, 'Lydia'], [13, 'Lydia Stormblade'], [14, 'Brynjolf']]);
+  r = report('Lydia shoved me');
+  yes('a one-word character name cannot resolve a shared first name',
+      r.staff.length === 0 && /full name/i.test(r.reply));
+  yes('the ambiguous one-word name does not check delivery or consume a slot',
+      siteReads === 0 && g.__thornswoodAskSeen.all.length === 0 && Object.keys(g.__thornswoodAskSeen.by).length === 0);
+  r = report('Lydia Stormblade shoved me', false);
+  yes('the longer full name can be reported immediately to the correct staff',
+      r.staff.join(',') === '14' &&
+      r.said.some(s => s.pid === 14 && /Aela reported Lydia Stormblade: shoved me/.test(s.text)));
 }
 
 fs.rmSync(scratch, { recursive: true, force: true });

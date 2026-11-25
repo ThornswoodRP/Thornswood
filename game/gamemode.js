@@ -60877,10 +60877,13 @@ module.exports = {
   function whoAbout(words, people) {
     var line = words.join(' ').toLowerCase();
     var could = couldBe(words, people);
+    var first = String(words[0] || '').toLowerCase();
+    var same = [];
     var best = null, bestName = '', bestCount = 0;
     for (var i = 0; i < people.length; i++) {
       var n = String(people[i].name || '').toLowerCase().trim();
       if (!n) { continue; }
+      if (n.split(/\s+/, 1)[0] === first) { same.push(people[i]); }
       if ((line === n || line.indexOf(n + ' ') === 0) && n.length > bestName.length) {
         best = people[i];
         bestName = n;
@@ -60890,15 +60893,12 @@ module.exports = {
       }
     }
     if (best) {
-      if (bestCount > 1) { return { ambiguous: true }; }
+      // A one-word full name can also be another person's first name.
+      if (bestCount > 1 || (bestName === first && same.length > 1)) { return { ambiguous: true }; }
       var used = bestName.split(/\s+/).length;
       if (could.indexOf(best) < 0) { could.push(best); }
       return { name: best.name, person: best, could: could, rest: words.slice(used).join(' ').trim() };
     }
-    var first = String(words[0] || '').toLowerCase();
-    var same = people.filter(function (p) {
-      return String(p.name || '').toLowerCase().trim().split(/\s+/)[0] === first;
-    });
     if (same.length > 1 || could.length > 1) { return { ambiguous: true }; }
     if (first && same.length === 1) {
       return { name: same[0].name, person: same[0], could: could, rest: words.slice(1).join(' ').trim() };
