@@ -825,12 +825,20 @@ function chatFileName(row) {
   return 'chat-' + (row && row.profile ? row.profile : 'unknown') + '.txt';
 }
 
+/* One dated, named clock for session endpoints, chat and staff receipts.
+   UTC also distinguishes the two occurrences of a local autumn hour. */
+function sessionTime(at) {
+  if (at == null || at === '') return 'unknown';
+  var d = new Date(at);
+  return isFinite(d.getTime()) ? d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC') : 'unknown';
+}
+
 /* What they said as plain text, so it reads in a text editor rather than as
    the page's markup, and still makes sense away from the page: whose, and
    when. */
 function chatText(chat) {
   return (chat || []).map(function (l) {
-    return new Date(l.at).toLocaleString() +
+    return sessionTime(l.at) +
       // A key or a panel sent it, nobody typed it (#2251).
       (l.kind === 'command' ? (l.via === 'press' ? '  [key press]' : '  [command]') : '') +
       (l.proven ? '' : '  [unproven]') +
@@ -939,6 +947,10 @@ function downloadSessionZip(b) {
 var LOGS = {};
 
 function logFileHtml(sid, name, text) {
+  var clock = /^server-(dev|main)\.log$/.test(name)
+    ? 'Stamps ending in Z are UTC receipt times. Older stamps without an offset use the server\'s local time.'
+    : /^launcher\.log(?:\.1)?$/.test(name)
+      ? 'Stamps ending in Z are UTC. Older stamps without an offset use that PC\'s local time.' : '';
   return '<details class="logf">' +
     '<summary>' +
       '<span class="chev">&#9654;</span>' +
@@ -946,6 +958,7 @@ function logFileHtml(sid, name, text) {
       '<span class="sz">' + esc(bytesFor(text.length)) + '</span>' +
       '<button class="btn small dl" data-s="' + esc(sid) + '" data-n="' + esc(name) + '">Download</button>' +
     '</summary>' +
+    (clock ? '<div class="said">' + esc(clock) + '</div>' : '') +
     '<pre>' + esc(text) + '</pre>' +
   '</details>';
 }
@@ -1029,7 +1042,7 @@ function drawLogs(box, sid, d) {
     out += '<div class="prov">' +
       (row.looked
         ? '<b>looked at by</b> ' + esc(row.lookedBy || 'unknown') +
-          '  <b>at</b> ' + esc(row.lookedAt ? new Date(row.lookedAt).toLocaleString() : 'unknown')
+          '  <b>at</b> ' + esc(row.lookedAt ? sessionTime(row.lookedAt) : 'unknown')
         : '<b>nobody has marked this crash looked at</b>') +
       '<br><span class="said">If they have crash snapshots turned on, their launcher keeps this ' +
       'crash\'s snapshot until it is marked looked at here, two at most, and deletes it at a Play ' +
@@ -1063,7 +1076,7 @@ function drawLogs(box, sid, d) {
     */
     out += '<div class="prov">' +
       '<b>sent by</b> ' + esc(d.sent.who || 'unknown') +
-      '  <b>at</b> ' + esc(d.sent.at ? new Date(d.sent.at).toLocaleString() : 'unknown') +
+      '  <b>at</b> ' + esc(d.sent.at ? sessionTime(d.sent.at) : 'unknown') +
       '  <b>size</b> ' + esc(bytesFor(d.sent.bytes)) +
       (d.sent.resent
         ? '<br><span class="warn">A further set was sent for this session ' +
@@ -1141,7 +1154,7 @@ function drawLogs(box, sid, d) {
     chat.forEach(function (l) {
       out += '<tr' + (l.kind === 'command' ? ' class="warn"' : '') + '>' +
         '<td data-label="When"><div class="cell">' +
-          esc(new Date(l.at).toLocaleTimeString()) +
+          esc(sessionTime(l.at)) +
           (l.proven ? '' : '<div class="said"><span class="pill fail">unproven</span></div>') +
         '</div></td>' +
         '<td data-label="Said"><div class="cell">' +
@@ -1287,14 +1300,14 @@ function sessionTable(rows) {
           ) + '</div></td>' +
       '<td data-label="Started"><div class="cell">' +
         (s.start
-          ? esc(new Date(s.start).toLocaleString())
+          ? esc(sessionTime(s.start))
           : '<span class="pill left">start never seen</span>' +
             '<div class="said">the launcher was replaced or restarted while ' +
             'they were playing, so only the end reached us</div>') + '</div></td>' +
       '<td data-label="Stopped"><div class="cell">' +
         (open
           ? '<span class="pill left">no end reported</span>'
-          : esc(new Date(s.end).toLocaleString()) +
+          : esc(sessionTime(s.end)) +
             (s.why === 'update' ? '<div class="said">closed for an update</div>' : '')) +
         '</div></td>' +
       '<td data-label="For"><div class="cell">' +
@@ -1398,8 +1411,8 @@ function sessionMatches(s, q, show, chan) {
     var hay = [
       s.session, s.name, s.who, s.profile, (s.profiles || []).join(' '), s.version, s.channel,
       s.trouble, s.troubleLine, s.troubleFile,
-      s.start ? new Date(s.start).toLocaleString() : '',
-      s.end ? new Date(s.end).toLocaleString() : ''
+      s.start ? sessionTime(s.start) : '',
+      s.end ? sessionTime(s.end) : ''
     ].join(' ').toLowerCase();
     if (hay.indexOf(q.toLowerCase()) < 0) return false;
   }
@@ -1507,7 +1520,7 @@ function drawSessions() {
             '<span class="val hrs">' + (p.mins < 1 ? 'none yet' : esc(forMins(p.mins))) + '</span></span>' +
           '<span class="pf"><span class="lab">Last played</span>' +
             '<span class="val when">' +
-              (p.last ? esc(new Date(p.last).toLocaleString()) : 'never') + '</span></span>' +
+              (p.last ? esc(sessionTime(p.last)) : 'never') + '</span></span>' +
           '<span class="chev">&#9654;</span>' +
         '</summary>' +
         '<div class="pbody">' +

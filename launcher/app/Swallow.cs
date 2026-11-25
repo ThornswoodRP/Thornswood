@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -52,7 +53,7 @@ namespace Thornswood
 
         static void RetainRefused(string text, Exception error)
         {
-            byte[] bytes = utf8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") +
+            byte[] bytes = utf8.GetBytes(Stamp(DateTime.UtcNow) +
                 "  launcher.log refused: " + error.GetType().Name + ": " + error.Message +
                 Environment.NewLine + text);
             int at = 0;
@@ -82,7 +83,12 @@ namespace Thornswood
 
         public static void Line(string message)
         {
-            Text(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + message + Environment.NewLine);
+            Text(Stamp(DateTime.UtcNow) + "  " + message + Environment.NewLine);
+        }
+
+        public static string Stamp(DateTime when)
+        {
+            return when.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
         }
 
         public static void Text(string text)

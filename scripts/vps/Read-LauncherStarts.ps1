@@ -17,7 +17,7 @@
   Since #3534 the launcher writes one line to Profile\launcher.log once its
   window has drawn (Shell.cs, LogStartTime):
 
-      2026-10-27 19:04:11  Launcher start: the window was on screen 2.4 s after the launcher started, 0.8 s of it the mod check, on launcher 1.2.6.
+      2026-10-27T19:04:11Z  Launcher start: the window was on screen 2.4 s after the launcher started, 0.8 s of it the mod check, on launcher 1.2.6.
 
   The launcher already sends the last 256 KB of launcher.log to the site when
   a session ends (the privacy page, "The launcher's own log"), and the site
@@ -57,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # The launcher's words, Shell.cs LogStartTime. Change both together.
-$StartLine = '^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)  Launcher start: the window was on screen (\d+(?:\.\d+)?) s after the launcher started(?:, (\d+(?:\.\d+)?) s of it the mod check)?, on launcher ([^\s,]+?)\.\s*$'
+$StartLine = '^(\d{4}-\d\d-\d\d(?:T\d\d:\d\d:\d\dZ| \d\d:\d\d:\d\d))  Launcher start: the window was on screen (\d+(?:\.\d+)?) s after the launcher started(?:, (\d+(?:\.\d+)?) s of it the mod check)?, on launcher ([^\s,]+?)\.\s*$'
 
 # The value at a share of a sorted list, nearest rank.
 function Get-Rank([double[]]$sorted, [double]$share) {
@@ -76,6 +76,8 @@ if (-not (Test-Path -LiteralPath $Folder)) {
 $inv = [Globalization.CultureInfo]::InvariantCulture
 $until = Get-Date
 $since = $until.AddDays(-$Days)
+$untilUtc = $until.ToUniversalTime()
+$sinceUtc = $untilUtc.AddDays(-$Days)
 $seen = @{}
 $starts = New-Object System.Collections.Generic.List[object]
 $read = 0
@@ -92,11 +94,19 @@ foreach ($f in @(Get-ChildItem -LiteralPath $Folder -Filter '*.json' -File | Whe
     foreach ($line in ([string]$p.Value -split "`r?`n")) {
         $m = [regex]::Match($line, $StartLine)
         if (-not $m.Success) { continue }
-        $at = [DateTime]::ParseExact($m.Groups[1].Value, 'yyyy-MM-dd HH:mm:ss', $inv)
-        # The launcher writes its own local time; the box's window is wide
-        # enough that a few hours either way only moves a start at its edge.
-        if ($at -lt $since -or $at -gt $until.AddDays(1)) { continue }
-        $key = $who + '|' + $m.Groups[1].Value
+        $stamp = $m.Groups[1].Value
+        $at = [DateTime]::MinValue
+        if ($stamp.EndsWith('Z')) {
+            $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+            if (-not [DateTime]::TryParseExact($stamp, "yyyy-MM-dd'T'HH:mm:ss'Z'", $inv, $styles, [ref]$at)) { continue }
+            if ($at -lt $sinceUtc -or $at -gt $untilUtc.AddDays(1)) { continue }
+        } else {
+            # Older logs name only the PC's wall clock. Keep the existing
+            # comparison to the box's local window for these records.
+            if (-not [DateTime]::TryParseExact($stamp, 'yyyy-MM-dd HH:mm:ss', $inv, [Globalization.DateTimeStyles]::None, [ref]$at)) { continue }
+            if ($at -lt $since -or $at -gt $until.AddDays(1)) { continue }
+        }
+        $key = $who + '|' + $stamp
         if ($seen.ContainsKey($key)) { continue }
         $seen[$key] = $true
         $scan = $null
