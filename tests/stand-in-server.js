@@ -1249,9 +1249,14 @@ function world(opts) {
     if (row && row.profileId && !offKeys.has(actorId >>> 0)) { waiting.push({ profileId: row.profileId, text: '/afk active', proven: true }); }
   }
   w.idle = function (actorId, off) { if (off === false) { offKeys.delete(actorId >>> 0); } else { offKeys.add(actorId >>> 0); } };
-  w.say = function (actorId, text) {
+  w.say = function (actorId, text) { w.sayAll(actorId, [text]); };
+  // Several lines queued together, so the gamemode's one poll collects them
+  // and answers them at the same moment, as it does a person who sends two
+  // before the next poll. A check that compares two answers that read the
+  // clock (the needs bars) needs them read at one time (#6953).
+  w.sayAll = function (actorId, texts) {
     const row = store.get(actorId >>> 0);
-    waiting.push({ profileId: row.profileId, text: text, proven: true });
+    for (const text of texts) { waiting.push({ profileId: row.profileId, text: text, proven: true }); }
     w.run(2000);
   };
   // Integration harnesses may hand over the actual authenticated relay result,

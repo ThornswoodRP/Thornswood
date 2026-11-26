@@ -157,9 +157,16 @@ yes('E2 and nothing restarts: everybody is still on', IN.every(function (a) { re
 
 // ------------------------------------------------- F. the commands that stay --
 const needsBefore = JSON.stringify(w.prop(LYDIA, 'thornswoodNeeds'));
-const needs = said(LYDIA, '/needs');
+// Both in one poll, so both read the needs at the same moment: two polls two
+// seconds apart read bars that drained in between, and a rounded bar can
+// differ by one (#6953). The second run keeps the clock where two lines put it.
+const needsN = w.heard(LYDIA).length;
+w.sayAll(LYDIA, ['/needs', '/need']);
+const bothNeeds = w.heardSince(LYDIA, needsN);
+w.run(2000);
+const needs = bothNeeds[0] || '';
 yes('F1 /needs is the four bars as a line (' + needs + ')', /Hunger/.test(needs) && /Thirst/.test(needs) && /Rest/.test(needs) && /Temp/.test(needs));
-yes('F1 /need is the same', said(LYDIA, '/need') === needs);
+yes('F1 /need is the same, read at the same moment (' + bothNeeds.length + ' answers)', bothNeeds.length === 2 && bothNeeds[1] === needs);
 const samN = w.heard(SAM).length, tessN = w.heard(TESS).length;
 const asked = said(LYDIA, '/helpme the cart is stuck in the gate');
 const samHeard = w.heardSince(SAM, samN).join(' | ');
