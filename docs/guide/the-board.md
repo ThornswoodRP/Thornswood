@@ -124,7 +124,10 @@ How to use it:
   by hand (a fix spread over several pull requests, a pin, a change on the
   box) writes on it a comment whose first line is `Fixed by <merge commit,
   12 characters> (pull request #N).`, naming the last merge the fix needs,
-  then either its Main test task in a fenced block, or the line
+  as main has it: `git log origin/main --grep "(#N)"` finds it. A pull
+  request merged before main's history was rewritten (#3684) still names
+  its old merge on GitHub, which no release carries, and the Ship stops on
+  a line that names one (#4397's did, on 26 November 2026). Then either its Main test task in a fenced block, or the line
   `No test task: nobody would notice this fix.` The Ship reads that line as
   it reads done-on-merge's comment, from anybody, the newer of the two
   winning, and closes the issue when the release carries that merge (#3411).
