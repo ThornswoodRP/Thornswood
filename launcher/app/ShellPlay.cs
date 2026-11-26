@@ -442,6 +442,9 @@ namespace Thornswood
                 MusicDecide();
                 headerVideoDecide();
                 GalleryDecide();
+                // Before Play turns off, so the window holds no button to give
+                // the keyboard back to when the game closes (#4550).
+                if (!win.FocusOffButtons()) LogOnly("The keyboard could not be moved off Play as the game started, so a key pressed as the game closes can press it.");
                 btnPlay.IsEnabled = false;
                 btnPlay.Content = "RUNNING";
                 btnQuitGame.IsVisible = true;

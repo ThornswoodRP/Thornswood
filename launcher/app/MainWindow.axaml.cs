@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 
 namespace Thornswood
 {
@@ -46,6 +47,25 @@ namespace Thornswood
         /// when somebody can.
         /// </summary>
         public event EventHandler StateChanged;
+
+        /// <summary>
+        /// The keyboard off every button, onto the window's own frame, which
+        /// acts on no key and is no tab stop, so Tab still goes to the first
+        /// button as it does from nothing. Called as the game starts (#4550).
+        ///
+        /// Why: the window keeps the last control that had focus and gives it
+        /// back whenever the window is active again. Play had it from the
+        /// press that started the game, and when the game closes the launcher
+        /// comes back to the front (Shell.Wire), so a key still going to the
+        /// game pressed Play and started it again: on One on 26 Nov 2026 the
+        /// game closed at 21:02:04Z and Space pressed Play 0.4 s later
+        /// (Profile\launcher.log). Turning Play off for the session does not
+        /// change what the window gives back; this does.
+        /// </summary>
+        public bool FocusOffButtons()
+        {
+            return WindowFrame.Focus(NavigationMethod.Unspecified);
+        }
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
