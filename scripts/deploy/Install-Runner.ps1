@@ -1165,7 +1165,13 @@ if (`$from -and (Test-Path -LiteralPath `$d)) {
   foreach (`$f in `$open) {
     `$keep = New-Object System.Collections.Generic.List[string]
     `$in = `$false
-    foreach (`$l in [IO.File]::ReadLines(`$f.FullName)) {
+    # Get-Content, as the tail below: the listener holds its log open for
+    # writing, and a .NET line reader opened it allowing no other writer, so on the
+    # box it could not open the open log and the window came back empty
+    # (26 Nov, #6903). A log it cannot read is said, never counted as quiet.
+    `$text = @(Get-Content -LiteralPath `$f.FullName -ErrorAction SilentlyContinue -ErrorVariable readErr)
+    if (`$readErr) { 'log       ' + `$f.Name + ' COULD NOT BE READ: ' + `$readErr[0].Exception.Message; continue }
+    foreach (`$l in `$text) {
       if (`$l -match '^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)Z') { `$at = `$Matches[1]; `$in = [string]::CompareOrdinal(`$at, `$from) -ge 0 -and [string]::CompareOrdinal(`$at, `$to) -lt 0 }
       if (`$in) { `$keep.Add(`$l) }
     }

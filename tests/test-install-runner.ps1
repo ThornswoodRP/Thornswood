@@ -123,11 +123,18 @@ try {
     }
     foreach ($k in $logs.Keys) { [IO.File]::WriteAllText((Join-Path $diag $k), (($logs[$k] -join "`r`n") + "`r`n")) }
     $out = @()
-    if ($m.Success) { $out = @(& ([scriptblock]::Create(("`$d = '" + $diag + "'`n" + $m.Groups[1].Value)))) }
+    # The listener holds its newest log open for writing while it runs, and
+    # on 26 Nov the box's read of it came back empty because of that
+    # (#6903), so one log is held open the same way while it is read.
+    $held = [IO.File]::Open((Join-Path $diag 'Runner_20261122-230000-utc.log'), 'Open', 'ReadWrite', 'ReadWrite')
+    try { if ($m.Success) { $out = @(& ([scriptblock]::Create(("`$d = '" + $diag + "'`n" + $m.Groups[1].Value)))) } }
+    finally { $held.Dispose() }
     $said = $out -join "`n"
     Yes '  it reads the log open at the start and one started inside the hour, not one before or after' (
         $said -match 'Runner_20261120-153558-utc\.log, 3 lines from 2026-11-22 22:15:00Z to 2026-11-22 23:30:00Z' -and $said -match 'Runner_20261122-230000-utc\.log, 1 lines' -and
         $said -notmatch 'Runner_20261111' -and $said -notmatch 'Runner_20261123')
+    Yes '  it reads a log the listener holds open, as the tail does, and says when one cannot be read' (
+        $sent -notmatch 'IO\.File\]::ReadLines' -and $sent.Contains('COULD NOT BE READ') -and $said -match 'a listener started inside it')
     Yes '  with a stack trace kept beside its line, and nothing from outside the hour' (
         $said -match 'dropped\n  \|    at its stack\n' -and $said -match 'the last in it' -and $said -notmatch 'before the hour|after it|a stack after it')
     $bad = (& pwsh -NoProfile -File $path -Status -LogFrom 22-11-2026 -DryRunTo $dry -NoPause 2>&1) -join ' '
