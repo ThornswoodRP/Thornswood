@@ -14,8 +14,8 @@
   to type one (Patrick, 4 Oct: no chat commands for anything people do).
   Make a post sends /board-post-v1 (#4771); Take, Take down, Put it back
   and Pay the reward send /take, /board-unpin-v1, /dropjob and /job done (#1627,
-  #2554); Send a haul and Confirm send /haul (#1393); Write a letter sends
-  /letter-post-v1 (#4412).
+  #2554). Letters and new hauls use /board-submit-v1 with a private result
+  saved alongside the post; Confirm still sends /haul (#1393, #4412, #6869).
 
   setData never opens the panel. E on the board does: the server answers it
   (#2516) on thornswoodBoardOpen, which calls open(). A later setData redraws
@@ -39,6 +39,12 @@
   var root = null;
   var takedownArm = null, takedownTimer = 0, takedownHeld = '';
   var boardFieldError = null;
+  var submissionDrafts = {
+    letter: { revision: 0, values: { to: '', letter: '' } },
+    haul: { revision: 0, values: { pay: '', dest: '', haul: '' } }
+  };
+  var submissions = [], submissionOwner = null, submissionHold = null, submissionContext = 0;
+  var submissionSaid = '', olderUnconfirmed = false;
 
   /*
     WHAT MAKE A POST KEEPS. The draft is kept here as it is typed, so a
@@ -65,8 +71,7 @@
   function net(line) {
     try {
       if (window.thornswoodNet && window.thornswoodNet.say) {
-        window.thornswoodNet.say(line);
-        return true;
+        return window.thornswoodNet.say(line) === true;
       }
     } catch (e) { }
     return false;
@@ -169,6 +174,8 @@
     function editBoardField(ev) { if (boardFieldError && (!boardFieldError.field || ev.target === boardFieldError.field)) clearBoardFieldError(); }
     root.addEventListener('input', editBoardField);
     root.addEventListener('change', editBoardField);
+    root.addEventListener('input', function (ev) { rememberSubmissions(ev.target); });
+    root.addEventListener('change', function (ev) { rememberSubmissions(ev.target); });
     root.addEventListener('click', function (ev) {
       if (takedownArm && ev.target !== takedownArm.button) resetTakedown();
     }, true);
@@ -193,6 +200,120 @@
   function field(id) {
     var el = document.getElementById(id);
     return el ? String(el.value || '').trim() : '';
+  }
+
+  // The drafts stay in this page only. Input revisions also catch edit-away
+  // and edit-back; direct DOM changes are read before sends and owner pushes.
+  function rememberSubmissions(edited) {
+    if (!root) return;
+    ['letter', 'haul'].forEach(function (kind) {
+      var draft = submissionDrafts[kind], changed = false;
+      Object.keys(draft.values).forEach(function (id) {
+        var box = root.querySelector('#' + ID + '-' + id);
+        if (!box || !root.contains(box)) return;
+        var value = String(box.value || '');
+        if (draft.values[id] !== value || edited === box) changed = true;
+        draft.values[id] = value;
+      });
+      if (changed) draft.revision++;
+    });
+  }
+
+  function submissionOwnerOf(value) {
+    var envelope = value && value.boardSubmissions, owner = envelope && envelope.owner;
+    if (!owner || !Number.isSafeInteger(owner.profileId) || owner.profileId <= 0 || value.me !== owner.profileId ||
+        typeof owner.actorDesc !== 'string' || !owner.actorDesc ||
+        typeof owner.runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(owner.runtime)) return null;
+    return JSON.stringify([owner.profileId, owner.actorDesc, owner.runtime]);
+  }
+
+  function showSubmissionStatus() {
+    if (!root) return;
+    actionStatus(submissionSaid + (olderUnconfirmed ?
+      ' An earlier send is still unconfirmed. Check the board before sending it again.' : ''));
+  }
+
+  function acceptSubmissionResults(value) {
+    var owner = submissionOwnerOf(value);
+    if (owner !== submissionOwner) {
+      if (submissions.length) olderUnconfirmed = true;
+      submissions = []; submissionOwner = owner;
+    }
+    var board = value && value.board;
+    var hold = board && board.here && typeof board.hold === 'string' ? board.hold : null;
+    if (hold !== submissionHold) { submissionContext++; submissionHold = hold; }
+    var results = value && value.boardSubmissions && value.boardSubmissions.results;
+    if (!owner || !Array.isArray(results) || results.length > 32) return;
+    var accepted = 0, kept = { letter: false, haul: false }, reset = { letter: false, haul: false };
+    results.forEach(function (result) {
+      if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul') ||
+          typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.hold !== 'string') return;
+      var at = -1;
+      for (var i = 0; i < submissions.length; i++) {
+        var candidate = submissions[i];
+        if (candidate.id === result.id && candidate.kind === result.kind && candidate.hold === result.hold && candidate.owner === owner) { at = i; break; }
+      }
+      if (at < 0) return;
+      var sent = submissions.splice(at, 1)[0], draft = submissionDrafts[sent.kind];
+      accepted++;
+      if (sent.context !== submissionContext || sent.hold !== submissionHold || sent.revision !== draft.revision ||
+          sent.snapshot !== JSON.stringify(draft.values)) {
+        // A reset earlier in this result batch is not a newer form edit.
+        if (!reset[sent.kind]) kept[sent.kind] = true;
+        return;
+      }
+      reset[sent.kind] = true; kept[sent.kind] = false;
+      var reason = ID + '-' + sent.kind + '-reason';
+      if (boardFieldError && boardFieldError.token === reason) clearBoardFieldError();
+      Object.keys(draft.values).forEach(function (id) { draft.values[id] = ''; });
+      if (sent.kind === 'haul') draft.values.dest = board && board.dests && board.dests[0] ? String(board.dests[0].hold || '') : '';
+      draft.revision++;
+      Object.keys(draft.values).forEach(function (id) {
+        var box = root && root.querySelector('#' + ID + '-' + id);
+        if (box && root.contains(box)) box.value = draft.values[id];
+      });
+    });
+    if (accepted) submissionSaid = (accepted === 1 ? 'The post was saved.' : 'The posts were saved.') +
+      (kept.letter || kept.haul ? ' Your newer draft is kept.' : '');
+    showSubmissionStatus();
+  }
+
+  function sendSubmission(kind, fields) {
+    rememberSubmissions();
+    var board = data && data.board;
+    if (!board || !board.here || typeof board.hold !== 'string') return;
+    var owner = submissionOwnerOf(data);
+    if (!owner || owner !== submissionOwner) {
+      submissionSaid = 'Your character could not be checked. Nothing was sent; your draft is kept.'; showSubmissionStatus(); return;
+    }
+    var id = '', line;
+    try {
+      if (!window.crypto || !window.crypto.getRandomValues) throw new Error('no request identity');
+      var bytes = new Uint8Array(16); window.crypto.getRandomValues(bytes);
+      for (var n = 0; n < bytes.length; n++) id += ('0' + bytes[n].toString(16)).slice(-2);
+      if (submissions.some(function (sent) { return sent.id === id; })) throw new Error('request identity repeated');
+      line = '/board-submit-v1 ' + JSON.stringify([kind, id, board.hold, JSON.parse(owner)].concat(fields));
+      if (line.length > 8200) throw new Error('post too long');
+    } catch (e) {
+      submissionSaid = 'This post could not be prepared. Nothing was sent; your draft is kept.'; showSubmissionStatus(); return;
+    }
+    var draft = submissionDrafts[kind], sent = null;
+    var snapshot = JSON.stringify(draft.values);
+    // The canonical wire may be short even when discarded pay formatting
+    // is huge. Bound retained correlation data without blocking that post.
+    if (owner && owner === submissionOwner && snapshot.length <= 8200) {
+      sent = {id:id,kind:kind,hold:board.hold,owner:owner,context:submissionContext,
+        revision:draft.revision,snapshot:snapshot};
+      if (submissions.length === 16) { submissions.shift(); olderUnconfirmed = true; }
+      submissions.push(sent);
+    }
+    submissionSaid = sent ? 'Waiting for the board to confirm this post.' : 'This post is unconfirmed. Your draft is kept.';
+    showSubmissionStatus();
+    // Install the record before calling the bridge: it may deliver a real
+    // committed owner result reentrantly, even if its send later throws.
+    if (!net(line) && (!sent || submissions.indexOf(sent) >= 0)) {
+      submissionSaid = 'This post is unconfirmed. Your draft is kept.'; showSubmissionStatus();
+    }
   }
 
   // Own the exact note, description token and native error installed here.
@@ -283,8 +404,10 @@
   }
 
   function drawContents() {
+    rememberSubmissions();
     resetTakedown();
     clearBoardFieldError();
+    showSubmissionStatus();
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -312,11 +435,6 @@
   }
 
   function drawList(b, body) {
-    var keptPay = field(ID + '-pay');
-    var keptDest = field(ID + '-dest');
-    var keptHaul = field(ID + '-haul');
-    var keptTo = field(ID + '-to');
-    var keptLetter = field(ID + '-letter');
     var out = '<h3>On the board</h3>';
     var wall = b.wall || [];
     if (!wall.length) { out += '<div class="none">Nothing on it.</div>'; }
@@ -463,13 +581,16 @@
     var payBox = document.getElementById(ID + '-pay');
     var destBox = document.getElementById(ID + '-dest');
     var haulBox = document.getElementById(ID + '-haul');
-    if (payBox && keptPay) { payBox.value = keptPay; }
-    if (destBox && keptDest) { destBox.value = keptDest; }
-    if (haulBox && keptHaul) { haulBox.value = keptHaul; }
+    if (payBox) payBox.value = submissionDrafts.haul.values.pay;
+    if (destBox) {
+      destBox.value = submissionDrafts.haul.values.dest || String((b.dests && b.dests[0] && b.dests[0].hold) || '');
+      submissionDrafts.haul.values.dest = destBox.value;
+    }
+    if (haulBox) haulBox.value = submissionDrafts.haul.values.haul;
     var toBox = document.getElementById(ID + '-to');
     var letterBox = document.getElementById(ID + '-letter');
-    if (toBox && keptTo) { toBox.value = keptTo; }
-    if (letterBox && keptLetter) { letterBox.value = keptLetter; }
+    if (toBox) toBox.value = submissionDrafts.letter.values.to;
+    if (letterBox) letterBox.value = submissionDrafts.letter.values.letter;
     wire(body);
   }
 
@@ -597,10 +718,9 @@
       var words = document.getElementById(ID + '-letter').value;
       if (!needBoardField('to', to.trim(), 'Say who the letter is for.', 'letter-reason') ||
           !needBoardField('letter', words.trim(), 'Write what the letter says.', 'letter-reason')) return;
-      var letterLine;
-      try { letterLine = '/letter-post-v1 ' + encodeURIComponent(to) + ' ' + encodeURIComponent(words); }
+      try { encodeURIComponent(to); encodeURIComponent(words); }
       catch (eLetter) { showBoardReason('letter-reason', 'That letter contains invalid text. Nothing was sent; keep your draft.'); return; }
-      net(letterLine);
+      sendSubmission('letter', [to, words]);
       return;
     }
     if (verb === 'haul') {
@@ -612,7 +732,7 @@
       if (!needBoardField('pay', pay, 'Enter the haul pay in gold.', 'haul-reason') ||
           !needBoardField('dest', dest, 'Choose the haul destination.', 'haul-reason') ||
           !needBoardField('haul', what, 'Say what the haul carries.', 'haul-reason')) return;
-      net('/haul ' + pay + ' ' + dest + ' ' + what);
+      sendSubmission('haul', [pay, dest, what]);
       return;
     }
     if (verb === 'done' && n) {
@@ -726,7 +846,9 @@
     toggle: function () { if (shown) { close(); } else { open(); } },
     isOpen: function () { return shown; },
     setData: function (d) {
+      rememberSubmissions();
       data = d || null;
+      acceptSubmissionResults(data);
       var b = data && data.board;
       if (b && isFinite(Number(b.x)) && isFinite(Number(b.y)) && isFinite(Number(b.z))) {
         tell('near ' + String(b.hold || 'board') + ' ' + Number(b.x) + ' ' + Number(b.y) + ' ' + Number(b.z));

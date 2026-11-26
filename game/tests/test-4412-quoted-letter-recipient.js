@@ -15,13 +15,14 @@ for(const a of [sender,courier,recipient,wrong])w.arrive(a);w.run(30000);
 const prop=w.box().__thornswoodProperty;
 const rows=()=>w.readPrivate('property.json').notices.windhelm||[];
 function command(a,line){w.say(a,line);w.run(2200);}
-function post(to,body){const p=makePage();for(const file of ['bridge','board'])p.run(file,fs.readFileSync(path.join(root,'game/ui/thornswood-'+file+'.js'),'utf8'));
- p.win.thornswoodBoard.setData({board:prop.boardPanel(sender,1000)});p.win.thornswoodBoard.open();
+function post(to,body){const p=makePage();p.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};for(const file of ['bridge','board'])p.run(file,fs.readFileSync(path.join(root,'game/ui/thornswood-'+file+'.js'),'utf8'));
+ p.win.thornswoodBoard.setData(w.box().__thornswoodSocial.view(sender));p.win.thornswoodBoard.open();
  p.doc.getElementById('ts-board-to').value=to;p.doc.getElementById('ts-board-letter').value=body;p.doc.querySelector('[data-do="letter"]').click();
  for(const line of p.sent)command(sender,line);return p;}
 for(const [name,body]of [['Lydia "Red" Stone','SEALED-4412-QUOTED'],['Lydia Red Stone','SEALED-4412-ORDINARY']]){
  const target=name.includes('"')?recipient:wrong,prior=w.count(sender,15),p=post(name,body),row=rows().at(-1),index=rows().length;
- yes('the actual board uses a distinct encoded letter command for '+name,p.sent.length===1&&p.sent[0].startsWith('/letter-post-v1 '));
+ const sent=p.sent.length===1&&p.sent[0].startsWith('/board-submit-v1 ')?JSON.parse(p.sent[0].slice('/board-submit-v1 '.length)):null;
+ yes('the actual board uses a distinct private letter request for '+name,!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&JSON.stringify(sent[3])===JSON.stringify([1000,w.mp().getDescFromId(sender),w.mp().getActorRuntimeIdentity(sender)])&&sent[4]===name&&sent[5]===body);
  yes('posting retains the exact intended recipient '+name,row&&row.to===name&&row.text===body);
  yes('posting uses the ordinary single letter fee '+name,w.count(sender,15)===prior-35);
  command(courier,'/take '+index);
