@@ -8,6 +8,8 @@
       .\scripts\deploy\Install-Runner.ps1              install the first one, or put it right
       .\scripts\deploy\Install-Runner.ps1 -Number 3    the third, beside the others
       .\scripts\deploy\Install-Runner.ps1 -Status      what is there and whether GitHub sees it
+      .\scripts\deploy\Install-Runner.ps1 -Status -LogFrom 2026-11-22T22:15 -LogMinutes 75
+                                                    and the listener's lines from that hour
       .\scripts\deploy\Install-Runner.ps1 -Remove      take it off the box and off GitHub
       .\scripts\deploy\Install-Runner.ps1 -Lock        lock every runner on the box again,
                                                     touching no runner and no job, and
@@ -316,6 +318,11 @@ param(
   # The label build.yml asks for. Change the two together.
   [string]$Label      = 'thornswood-vps',
   [switch]$Status,
+  # With -Status: the listener's own lines from this UTC time on (yyyy-MM-ddTHH:mm),
+  # for -LogMinutes, from whichever Runner_*.log was open then, where the
+  # last 25 lines say nothing about an hour days ago (#6903).
+  [string]$LogFrom = '',
+  [ValidateRange(1, 720)][int]$LogMinutes = 60,
   [switch]$Remove,
   [switch]$Lock,
   # A pull request runner on this machine rather than the VPS (#1306).
@@ -1082,6 +1089,16 @@ if ($NetworkOnly) {
 }
 
 # ------------------------------------------------------------------ status --
+# -LogFrom as the keys the runner's own lines start with ([yyyy-MM-dd HH:mm:ssZ),
+# so the box compares text with text and needs no clock of its own.
+$logFromKey = ''; $logToKey = ''
+if ($LogFrom) {
+  if (-not $Status) { Die '-LogFrom goes with -Status. Nothing was changed.' }
+  $t = [datetime]::MinValue
+  if (-not [datetime]::TryParseExact($LogFrom, 'yyyy-MM-ddTHH:mm', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AssumeUniversal, AdjustToUniversal', [ref]$t)) { Die ('-LogFrom takes a UTC time as yyyy-MM-ddTHH:mm, not ' + $LogFrom + '. Nothing was changed.') }
+  $logFromKey = $t.ToString('yyyy-MM-dd HH:mm:ss')
+  $logToKey = $t.AddMinutes($LogMinutes).ToString('yyyy-MM-dd HH:mm:ss')
+}
 if ($Status) {
   Head 'On the VPS'
   Remote ($lockLib + $watcherLib + @"
@@ -1132,7 +1149,30 @@ else { 'priority  no watcher task; the service starts the runner at normal' }
 # lines name none, so they come with this runner's processes above to read
 # them by. The runner masks every secret it logs.
 `$d = '$Root\_diag'
-if (Test-Path -LiteralPath `$d) {
+`$from = '$logFromKey'; `$to = '$logToKey'
+if (`$from -and (Test-Path -LiteralPath `$d)) {
+  # -LogFrom: each log is named for the UTC time its listener started
+  # (Runner_yyyyMMdd-HHmmss-utc.log), so the ones open in the window are
+  # the last that started before it and any that started inside it. A
+  # line without a time of its own (a stack trace) goes with the line
+  # before it.
+  `$all = @(Get-ChildItem -LiteralPath `$d -File -Filter 'Runner_*.log' | Sort-Object Name)
+  `$key = { param(`$f) if (`$f.Name -match '^Runner_(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)-utc') { `$Matches[1] + '-' + `$Matches[2] + '-' + `$Matches[3] + ' ' + `$Matches[4] + ':' + `$Matches[5] + ':' + `$Matches[6] } else { '' } }
+  `$before = @(`$all | Where-Object { `$k = & `$key `$_; `$k -and [string]::CompareOrdinal(`$k, `$from) -le 0 } | Select-Object -Last 1)
+  `$inside = @(`$all | Where-Object { `$k = & `$key `$_; `$k -and [string]::CompareOrdinal(`$k, `$from) -gt 0 -and [string]::CompareOrdinal(`$k, `$to) -lt 0 })
+  `$open = @(`$before + `$inside)
+  if (-not `$open.Count) { 'log       no Runner_*.log in ' + `$d + ' was open from ' + `$from + 'Z (the oldest kept is ' + `$(if (`$all.Count) { `$all[0].Name } else { 'none' }) + ')' }
+  foreach (`$f in `$open) {
+    `$keep = New-Object System.Collections.Generic.List[string]
+    `$in = `$false
+    foreach (`$l in [IO.File]::ReadLines(`$f.FullName)) {
+      if (`$l -match '^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)Z') { `$at = `$Matches[1]; `$in = [string]::CompareOrdinal(`$at, `$from) -ge 0 -and [string]::CompareOrdinal(`$at, `$to) -lt 0 }
+      if (`$in) { `$keep.Add(`$l) }
+    }
+    'log       ' + `$f.Name + ', ' + `$keep.Count + ' lines from ' + `$from + 'Z to ' + `$to + 'Z' + `$(if (`$keep.Count -gt 800) { ', the first 800:' } else { ':' })
+    `$keep | Select-Object -First 800 | ForEach-Object { '  | ' + `$_ }
+  }
+} elseif (Test-Path -LiteralPath `$d) {
   `$logs = @(Get-ChildItem -LiteralPath `$d -File -Filter 'Runner_*.log' | Sort-Object Name | Select-Object -Last 3)
   if (`$logs.Count) {
     foreach (`$f in `$logs) {
