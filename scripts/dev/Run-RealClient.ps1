@@ -584,6 +584,8 @@ try {
                 'step' { Say ('step ' + $o.i + ' ' + $o.do + ': ' + ($(if ($o.ok) { 'pass' } else { 'FAIL' })) + ' in ' + $o.ms + ' ms ' + $o.note) }
                 'menu' { Say ('menu ' + $o.name + ($(if ($o.open) { ' opened' } else { ' closed' }))) }
                 'start' { Say "The plugin took the run ($($o.steps) steps)" }
+                'task' { Say ('test task #' + $o.task + ': ' + ($(if ($o.ok) { 'passed' } else { 'FAILED at step ' + $o.step + ', ' + $o.note }))) }
+                'furniture' { Say ($(if ($o.enter) { 'sat down at ' } else { 'got up from ' }) + $o.ref + ($(if ($o.bed) { ' (a bed)' } else { '' }))) }
                 'done' { $result = $(if ($o.ok) { 'passed' } else { 'failed' }); $note = "$($o.passed) of $($o.steps) steps passed. $($o.note)" }
                 'ask' {
                     $proc = Get-GameProcess

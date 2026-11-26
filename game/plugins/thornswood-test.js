@@ -34,6 +34,9 @@
 //   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
 //   {"do":"wait","for":"crosshair","what":"bed"}
 //   {"do":"wait","for":"time","ms":1500}   a pause, so a shot catches a message
+//   {"do":"wait","for":"running","ms":10000}  the world kept running that long
+// Any step may carry "task": <issue>; a failing one ends that test task and
+// the run goes on with the next.
 //   {"do":"end"}
 // Each takes "timeout" in milliseconds (30000 when not given). The run stops
 // at the first step that fails, after a screenshot named fail-<step>, and
@@ -164,7 +167,17 @@ function faceBed() {
   pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
   return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
 }
+let lastUpdateAt = 0;
+const updateTimes = [];
+function updatesSince(t) {
+  let n = 0;
+  for (let i = updateTimes.length - 1; i >= 0 && updateTimes[i] >= t; i--) { n++; }
+  return n;
+}
 sp.on('update', function () {
+  lastUpdateAt = Date.now();
+  updateTimes.push(lastUpdateAt);
+  if (updateTimes.length > 2000) { updateTimes.splice(0, updateTimes.length - 2000); }
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
@@ -247,8 +260,14 @@ let waitingAsk = 0;    // the ask this step waits on
 let pageId = '';       // the page question this step waits on
 let pageAskedAt = 0;
 let failing = false;   // the fail screenshot is being taken
+let failNote = '';     // what the failing step said
 let finished = false;
 let passed = 0;
+// Test tasks (#5197): steps that carry "task": <issue> belong to that test
+// task. One that fails ends its task, not the run: the run goes on at the
+// first step of the next task, so one list checks many tasks and each has its
+// own "task" results line, passed or failed.
+const failedTasks = [];
 let inventoryKey = null;
 
 // Windows acknowledging a press and Skyrim routing it are two observations.
@@ -274,6 +293,7 @@ function pass(note) {
 function fail(note) {
   write({ t: 'step', i: at, do: steps[at].do, ok: false, ms: Date.now() - stepAt, note: note || '' });
   log('step', at, 'failed:', note);
+  failNote = String(note || '');
   failing = true;
   waitingAsk = ask('shot', 'fail-' + at);
   stepAt = Date.now();
@@ -294,12 +314,36 @@ function skipOn(note) {
     next();
   }
 }
+function taskOf(i) {
+  const s = steps[i];
+  return s && s.task !== undefined ? String(s.task) : '';
+}
 function next() {
+  const task = taskOf(at);
   at++;
+  if (task && taskOf(at) !== task && failedTasks.indexOf(task) < 0) { write({ t: 'task', task: task, ok: true }); }
   prevAt = stepAt;
   stepAt = Date.now();
   waitingAsk = 0;
   pageId = '';
+}
+// The failing step of a task has had its screenshot: the task is failed and
+// the run goes on at the next task's first step.
+function failTask() {
+  const task = taskOf(at);
+  failedTasks.push(task);
+  write({ t: 'task', task: task, ok: false, step: at, note: failNote });
+  failing = false;
+  while (at < steps.length && taskOf(at) === task) { at++; }
+  prevAt = stepAt;
+  stepAt = Date.now();
+  waitingAsk = 0;
+  pageId = '';
+  faceAsked = '';
+  faceDone = null;
+}
+function tasksNote() {
+  return failedTasks.length ? 'test task(s) failed: ' + failedTasks.map(function (t) { return '#' + t; }).join(', ') : '';
 }
 function end(ok, note) {
   finished = true;
@@ -320,10 +364,12 @@ sp.on('tick', function () {
   const now = Date.now();
 
   if (failing) {
-    if (acked(waitingAsk) || now - stepAt > TIMEOUT) { end(false, 'step ' + at + ' failed'); }
+    if (acked(waitingAsk) || now - stepAt > TIMEOUT) {
+      if (taskOf(at)) { failTask(); } else { end(false, ['step ' + at + ' failed', tasksNote()].filter(Boolean).join('; ')); }
+    }
     return;
   }
-  if (at >= steps.length) { end(true); return; }
+  if (at >= steps.length) { end(failedTasks.length === 0, tasksNote()); return; }
 
   const s = steps[at] || {};
   const limit = Number(s.timeout) || TIMEOUT;
@@ -343,6 +389,13 @@ sp.on('tick', function () {
         if (inWorld) { pass(); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+      } else if (s.for === 'running') {
+        // The world runs while a menu is up: update, which the game sends
+        // only while it is not paused, kept coming for ms with no gap of a
+        // second (#6408, #6428).
+        if (lastUpdateAt && now - lastUpdateAt >= 1000) { fail('the game sent no update for ' + (now - lastUpdateAt) + ' ms, so the world stood still'); return; }
+        if (now - stepAt >= (Number(s.ms) || 0)) { pass(updatesSince(stepAt) + ' updates in ' + (now - stepAt) + ' ms'); return; }
+        return;
       } else if (s.for === 'time') {
         if (now - stepAt >= (Number(s.ms) || 0)) { pass(); return; }
         return;
@@ -419,7 +472,7 @@ sp.on('tick', function () {
     case 'end':
       write({ t: 'step', i: at, do: 'end', ok: true, ms: 0, note: '' });
       passed++;
-      end(true);
+      end(failedTasks.length === 0, tasksNote());
       return;
     default:
       fail('no such step: ' + s.do);

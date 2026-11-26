@@ -119,8 +119,17 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
 | `{"do":"face","what":"bed"}` | the character stands 90 units out from the nearest bed in its cell, on the side it was on, turned to the bed and looking a little down, as somebody walks up to use one. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell fails the step. |
 | `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
 | `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
+
+Any step may carry `"task": <issue>`, the test task it checks. A failing
+step of a task takes its `fail-<step>` screenshot and ends that task only:
+the run goes on at the next task's first step. Each task gets one results
+line, `{"t":"task","task":"6408","ok":true}`, or with `ok` false the step
+and why, and the run ends failed naming every failed task.
+`tests\real-client\test-tasks.json` is the list of test tasks one character
+checks alone; run it with `-Steps tests\real-client\test-tasks.json`.
 
 Sitting down and getting up are results lines of their own,
 `{"t":"furniture","enter":true,"bed":true,"ref":"..."}`, the character's
