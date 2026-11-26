@@ -300,10 +300,11 @@ if (block && RECIPES && ADMIN_ITEMS) {
       const told = [];
       const claims = {};
       const fn = new Function('globalThis', 'here', 'holderOf', 'nameOf', 'mp', 'groundHere', 'claims', 'save', 'pushAll',
-        'giveDeed', 'plog', 'lapseDays', 'mayHold', 'jailOfBuilding', 'HOLD_TOWN', 'issueMaster', 'masterHandedLine', claimSrc + '\nreturn claim;');
+        'giveDeed', 'plog', 'lapseDays', 'mayHold', 'jailOfBuilding', 'HOLD_TOWN', 'issueMaster', 'masterHandedLine',
+        'var deedCut = 0;\n' + claimSrc + '\nreturn claim;');
       const claim = fn({ __thornswoodEmbassy: E }, function () { return building; }, function () { return null; },
         function (b) { return b; }, { get: function () { return { name: 'Bjorn' }; } }, function () { return null; },
-        claims, function () { }, function () { }, function () { return true; }, function () { }, function () { return 14; },
+        claims, function () { return true; }, function () { }, function () { return true; }, function () { }, function () { return 14; },
         function () { return true; }, function () { return null; }, {},
         // The master key handed with the deed (#2254) is test-2254-master-key.js's; 0 here, none cut.
         function () { return 0; }, function () { return ''; });
@@ -314,7 +315,7 @@ if (block && RECIPES && ADMIN_ITEMS) {
     yes('B2 /claim at the embassy answers that it is held', !atEmbassy.claims[EMBASSY] && atEmbassy.told === E.CLAIM_REFUSED &&
         /held by the Ambassador's office/.test(atEmbassy.told));
     const atHouse = claimAt(HOUSE);
-    yes('B2 and any other door is claimed as before', !!atHouse.claims[HOUSE]);
+    yes('B2 and another door can be claimed with a numbered deed', atHouse.claims[HOUSE]?.deed === 1);
 
     function evictAt(building, held) {
       const told = [];
@@ -344,26 +345,30 @@ if (block && RECIPES && ADMIN_ITEMS) {
     const evHouse = evictAt(HOUSE, { by: 9, name: 'Somebody' });
     yes('B3 and still ends a claim anywhere else', !evHouse.claims[HOUSE]);
 
-    function deedAt(building) {
+    function deedAt(building, held) {
       const claims = {};
-      const said = [];
+      if (held) { claims[building] = held; }
       const fn = new Function('globalThis', 'buildingOf', 'g', 'mp', 'DOOR_PROPERTY', 'plog', 'push', 'holderOf', 'holdsDeed',
         'groundHere', 'claims', 'save', 'pushAll', 'nameOf', 'notify', 'say', 'refrIdOfDoor',
         // Anybody may hold this building; a jail is #502's, in test-502-jail-rules.js.
-        'mayHold', 'issueMaster', 'masterHandedLine', touchedSrc + '\nreturn openedDoor;');
+        'mayHold', 'issueMaster', 'masterHandedLine', 'recordWord', 'WORD_SAID', touchedSrc + '\nreturn openedDoor;');
       const touched = fn({ __thornswoodEmbassy: E }, function () { return building; }, {},
         { get: function (id, p) { return p === 'profileId' ? 50 : { name: 'Thief' }; }, set: function () { } },
-        'thornswoodDoor', function () { }, function () { }, function () { return null; }, function () { return true; },
-        function () { return null; }, claims, function () { }, function () { }, function (b) { return b; },
-        function (a, l) { said.push(l); }, function (a, l) { said.push(l); }, function () { return 0; },
+        'thornswoodDoor', function () { }, function () { }, function () { return claims[building] || null; }, function () { return true; },
+        function () { return null; }, claims, function () { return true; }, function () { }, function (b) { return b; },
+        function () { }, function () { }, function () { return 0; },
         function () { return true; },
-        // No master key cut here (#2254); test-2254-master-key.js has them.
-        function () { return 0; }, function () { return ''; });
+        // Master keys and the runner's notice are covered by their own harnesses.
+        function () { return 0; }, function () { return ''; }, function () { return 'queued'; }, {});
       touched(0x14, 'door');
       return claims;
     }
     yes('B4 a deed presented at the embassy door takes nothing', !deedAt(EMBASSY)[EMBASSY]);
-    yes('B4 and a deed at any other door is still the title', !!deedAt(HOUSE)[HOUSE]);
+    const held = { by: 9, name: 'Somebody', deed: 42 };
+    yes('B4 a deed at the embassy leaves even a preexisting claim alone', deedAt(EMBASSY, held)[EMBASSY] === held);
+    const transferred = deedAt(HOUSE, held)[HOUSE];
+    yes('B4 an active deed at another door still transfers its claim', transferred?.by === 50 && transferred.deed === held.deed);
+    yes('B4 an old deed cannot restore an ended claim', !deedAt(HOUSE)[HOUSE]);
 
     // The line the lock key reads at the door just opened (#1637).
     function lineAt(building, held) {
