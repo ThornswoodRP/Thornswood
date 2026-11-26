@@ -165,9 +165,13 @@ $patchCollection = Join-Path $T 'patch-collection.json'
 $patchPayload = Join-Path $T 'patch-payload.json'
 
 function Test-CollectionPatchOutput {
-    Put $ptJson '[{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"},{"patch":true,"fileId":"811029","path":"Second.esp","crc":"DEADBEEF"}]'
+    # A patched entry carries the list of files it installs (#6888), given
+    # in the same run ahead of the patch.
+    Put $ptJson ('[{"replicate":true,"modId":"47618","fileId":"191234","hashes":[{"path":"FishingInSkyrim.esp","md5":"' + ('1' * 32) + '"}]},' +
+        '{"replicate":true,"modId":"192001","fileId":"811029","hashes":[{"path":"Second.esp","md5":"' + ('2' * 32) + '"},{"path":"Thornswood-Content.esp","md5":"' + ('3' * 32) + '"}]},' +
+        '{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"},{"patch":true,"fileId":"811029","path":"Second.esp","crc":"DEADBEEF"}]')
     $said = NodeSaid $js $cj $ptJson $patchCollection $patchPayload
-    Yes 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('A Fishing Mod, ' + $E + "dition`tpatch`t`tFishingInSkyrim.esp CRC-32 0A1B2C3D|Thornswood Content`tpatch`t`tSecond.esp CRC-32 DEADBEEF"))
+    Yes 'nexus-collection.js gives two entries their file lists, adds a patch to an entry with none and to one that has one, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('A Fishing Mod, ' + $E + "dition`treplicate`tits own installer`t1 file hash|Thornswood Content`treplicate`tits own installer`t2 file hashes|A Fishing Mod, " + $E + "dition`tpatch`t`tFishingInSkyrim.esp CRC-32 0A1B2C3D|Thornswood Content`tpatch`t`tSecond.esp CRC-32 DEADBEEF"))
 }
 
 # The code-page regression uses the same fixture and output assertion as the
@@ -548,12 +552,14 @@ foreach ($case in @(
 # archive's copy, after the entry's source.
 Test-CollectionPatchOutput
 $o1 = $patchCollection; $o2 = $patchPayload
-& $node.Source -e "(()=>{const fs=require('fs');const m=require(process.argv[4]);const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const f=b.mods[2],c=b.mods[0];if(Object.keys(f).join()!=='name,version,optional,domainName,source,patches,author,details,phase'){process.exitCode=2;return};if(Object.keys(f.patches).join()!=='FishingInSkyrim.esp'||f.patches['FishingInSkyrim.esp']!=='0A1B2C3D'){process.exitCode=3;return};if(Object.keys(c.patches).join()!=='Thornswood-Content.esp,Second.esp'||c.patches['Second.esp']!=='DEADBEEF'){process.exitCode=4;return};const pay=fs.readFileSync(process.argv[3],'utf8');delete f.patches;delete c.patches['Second.esp'];process.exitCode=JSON.stringify(a)===JSON.stringify(b)&&pay===JSON.stringify(m.payloadOf(a))?0:1})()" $cj $o1 $o2 $js
-Yes 'patches goes after the source as Vortex writes it, the payload does not change, and nothing else does' ($LASTEXITCODE -eq 0)
+& $node.Source -e "(()=>{const fs=require('fs');const m=require(process.argv[4]);const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const f=b.mods[2],c=b.mods[0];if(Object.keys(f).join()!=='name,version,optional,domainName,source,hashes,patches,author,details,phase'||Object.keys(c).join()!=='name,version,optional,domainName,source,hashes,patches,author,details,phase'){process.exitCode=2;return};if(Object.keys(f.patches).join()!=='FishingInSkyrim.esp'||f.patches['FishingInSkyrim.esp']!=='0A1B2C3D'){process.exitCode=3;return};if(Object.keys(c.patches).join()!=='Thornswood-Content.esp,Second.esp'||c.patches['Second.esp']!=='DEADBEEF'){process.exitCode=4;return};const pay=fs.readFileSync(process.argv[3],'utf8');delete f.patches;delete f.hashes;delete c.hashes;delete c.patches['Second.esp'];process.exitCode=JSON.stringify(a)===JSON.stringify(b)&&pay===JSON.stringify(m.payloadOf(a))?0:1})()" $cj $o1 $o2 $js
+Yes 'hashes goes after the source and patches after hashes as Vortex writes them, the payload does not change, and nothing else does' ($LASTEXITCODE -eq 0)
 foreach ($case in @(
         @('{"patch":true,"fileId":"811029","path":"thornswood-content.esp","crc":"0A1B2C3D"}', 'a file the entry already patches'),
         @('{"patch":true,"fileId":"5555","path":"x.esp","crc":"0A1B2C3D"}', 'a file no entry installs'),
-        @('{"patch":true,"fileId":"191234","path":"x.esp","crc":"0a1b2c3d"}', 'a CRC-32 that is not upper case hex'))) {
+        @('{"patch":true,"fileId":"191234","path":"x.esp","crc":"0a1b2c3d"}', 'a CRC-32 that is not upper case hex'),
+        @('{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"}', 'an entry with no list of the files it installs (#6888)'),
+        @(('{"replicate":true,"modId":"47618","fileId":"191234","hashes":[{"path":"Other.esp","md5":"' + ('1' * 32) + '"}]},{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"}'), 'a file the entry''s list does not name'))) {
     Put $ptJson ('[' + $case[0] + ']')
     Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
     $null = & $node.Source $js $cj $ptJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>$null
@@ -1091,18 +1097,26 @@ Remove-Item -LiteralPath $script:plugRec
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
 YesR '  and with no plugin record at all' ($r.Code -eq 1 -and $r.Out -match 'there is no collection-plugins record at') $r
 PlugRec 3
+# #6888: a patch on an entry with no list of the files it installs is
+# refused, because Vortex would take a copy somebody already had as the
+# collection's and never patch it; -Replicate gives the entry its list.
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
+YesR '#6888 -SetLight on an entry with no list of its files is refused, naming -Replicate, before anything is downloaded' ($r.Code -eq 1 -and $r.Out -match 'carries no list of the files it installs' -and $r.Out -match '-Replicate 47618' -and @(Since $n0 | Where-Object { $_.path -eq '/cdn/file/191234' }).Count -eq 0) $r
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Replicate', '47618', '-Layout', $lay, '-WhatIf')
 $got = @(Since $n0)
 $crcM = [regex]::Match($r.Out, 'patch: FishingInSkyrim\.esp CRC-32 ([0-9A-F]{8})')
 $builtL = Join-Path $T 'scratch\nexus-revision-7essxf\out\collection_4.7z'
-YesR '-SetLight -WhatIf downloads the archive the layout names, patches the plugin, builds collection_4.7z and writes nothing' ($r.Code -eq 0 -and $crcM.Success -and $r.Out -match 'flags 0x00000001 -> 0x00000201' -and $r.Out -match 'and 2 more for the light flags' -and @($got | Where-Object { $_.path -eq '/v3/games/skyrimspecialedition/mod-file-versions/191234/download-link' -and $_.key -eq 'right' }).Count -eq 1 -and @($got | Where-Object { $_.path -eq '/cdn/file/191234' -and $_.key -eq 'none' }).Count -eq 1 -and (Test-Path -LiteralPath $builtL) -and @(Writes $got).Count -eq 0) $r
+YesR '-SetLight -Replicate -WhatIf downloads the archive the layout names, lists its files, patches the plugin, builds collection_4.7z and writes nothing' ($r.Code -eq 0 -and $crcM.Success -and $r.Out -match 'flags 0x00000001 -> 0x00000201' -and $r.Out -match 'and 2 more for the light flags' -and $r.Out -match 'file 191234: 2 files, by its basic installer' -and @($got | Where-Object { $_.path -eq '/v3/games/skyrimspecialedition/mod-file-versions/191234/download-link' -and $_.key -eq 'right' }).Count -eq 2 -and @($got | Where-Object { $_.path -eq '/cdn/file/191234' -and $_.key -eq 'none' }).Count -eq 2 -and (Test-Path -LiteralPath $builtL) -and @(Writes $got).Count -eq 0) $r
 $xl = Join-Path $T 'unpacked-light'
 & $sz x -y ('-o' + $xl) $builtL | Out-Null
 $want = Join-Path $fishMod 'FishingInSkyrim.esp'
 $crcHas = [regex]::Match((& $sz h -scrcCRC32 $want | Out-String), 'CRC32\s+for data:\s+([0-9A-F]{8})').Groups[1].Value
-& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===191234);process.exitCode=e&&e.patches&&e.patches['FishingInSkyrim.esp']===process.argv[2]&&Object.keys(e.patches).length===1?0:1" (Join-Path $xl 'collection.json') $crcHas
-Yes 'its entry patches the plugin under the CRC-32 of the archive''s copy' ($LASTEXITCODE -eq 0 -and $crcM.Groups[1].Value -eq $crcHas)
+$md5Fish = (Get-FileHash -LiteralPath $want -Algorithm MD5).Hash.ToLowerInvariant()
+$md5Light = (Get-FileHash -LiteralPath (Join-Path $fishMod 'Fish-Light.esp') -Algorithm MD5).Hash.ToLowerInvariant()
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===191234);process.exitCode=e&&e.patches&&e.patches['FishingInSkyrim.esp']===process.argv[2]&&Object.keys(e.patches).length===1&&JSON.stringify(e.hashes)===JSON.stringify([{path:'Fish-Light.esp',md5:process.argv[4]},{path:'FishingInSkyrim.esp',md5:process.argv[3]}])&&Object.keys(e).indexOf('hashes')===Object.keys(e).indexOf('source')+1?0:1" (Join-Path $xl 'collection.json') $crcHas $md5Fish $md5Light
+Yes 'its entry lists the files its installer puts in its folder, each with the archive copy''s md5, and patches the plugin under the CRC-32 of the archive''s copy' ($LASTEXITCODE -eq 0 -and $crcM.Groups[1].Value -eq $crcHas)
 # Read back the way Install-NexusRevision.ps1 applies it, with NexusLayout.cs.
 $diffPath = Join-Path $xl ('patches\A Fishing Mod, ' + $E + 'dition\FishingInSkyrim.esp.diff')
 $applied = Join-Path $fl 'applied.esp'
@@ -1125,13 +1139,37 @@ $onlyFlag = $ab.Length -eq $wb.Length -and [BitConverter]::ToUInt32($ab, 8) -eq 
 for ($i = 0; $onlyFlag -and $i -lt $wb.Length; $i++) { if (($i -lt 8 -or $i -gt 11) -and $ab[$i] -ne $wb[$i]) { $onlyFlag = $false } }
 Yes 'the patch, applied as Install-NexusRevision.ps1 applies it, gives the plugin with the light flag and nothing else changed' $onlyFlag
 foreach ($case in @(
-        @(@('-SetLight', 'Fish-Light.esp', '-Layout', $lay), 'is already light in A Fishing Mod', 'a plugin the archive already has light'),
+        @(@('-SetLight', 'Fish-Light.esp', '-Replicate', '47618', '-Layout', $lay), 'is already light in A Fishing Mod', 'a plugin the archive already has light'),
         @(@('-ClearLight', 'Nowhere.esp', '-Layout', $lay), 'puts no Nowhere\.esp in Data', 'a plugin the layout does not place'),
         @(@('-SetLight', 'FishingInSkyrim.esp'), 'need -Layout', 'no -Layout'),
         @(@('-SetLight', 'Fish.esl', '-Layout', $lay), 'is not a plugin file name', 'an .esl'),
         @(@('-SetLight', 'FishingInSkyrim.esp', '-ClearLight', 'FishingInSkyrim.esp', '-Layout', $lay), 'is named more than once', 'one plugin both set and cleared'))) {
     $r = Run 'New-NexusRevision.ps1' (@('-From', $lightBase) + $case[0] + @('-WhatIf'))
     YesR ('-SetLight or -ClearLight on ' + $case[2] + ' is refused') ($r.Code -eq 1 -and $r.Out -match $case[1]) $r
+}
+# #6888: -Replicate alone gives the entry its list and changes nothing else,
+# as the collection-record publisher checks a draft (--check-replicate).
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-Replicate', '47618', '-WhatIf')
+$repAfter = Join-Path $T 'replicate-after'; $repBefore = Join-Path $T 'replicate-before'
+& $sz x -y ('-o' + $repAfter) $builtL | Out-Null
+& $sz x -y ('-o' + $repBefore) $lightBase | Out-Null
+$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '47618' 2>&1) -join ' '
+YesR '#6888 -Replicate -WhatIf builds a revision that only lists the entry''s files, which --check-replicate passes, and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'replicate: its own installer -> 2 file hashes' -and $LASTEXITCODE -eq 0 -and $checked -match 'only the named entries' -and @(Writes @(Since $n0)).Count -eq 0) $r
+$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '192762' 2>&1) -join ' '
+Yes '  and --check-replicate naming another mod stops' ($LASTEXITCODE -eq 1 -and $checked -match 'more than the file hashes|carried file hashes|no one entry|have no file hashes')
+foreach ($case in @(
+    @(@('-Replicate', '999'), 'no one entry', 'an absent mod'),
+    @(@('-Replicate', '0'), 'distinct positive', 'zero'),
+    @(@('-Replicate', '47618,47618'), 'distinct positive', 'duplicate targets'),
+    @(@('-Replicate', '1111'), 'already carries the list', 'an entry that has its list'),
+    @(@('-Replicate', '47618', '-RefreshTag', '192762'), 'repairs identities alone', 'a tag repair'),
+    @(@('-Replicate', '47618', '-Remove', '47618'), 'named in -Replicate and in', 'a mod also taken out'),
+    @(@('-Replicate', '47618', '-Publish', '3'), 'takes no', 'publishing'),
+    @(@('-Replicate', '47618', '-Discard', '3'), 'takes no', 'discarding'))) {
+    $n0 = Count
+    $r = Run 'New-NexusRevision.ps1' (@('-From', $lightBase) + $case[0] + @('-WhatIf'))
+    YesR ('#6888 -Replicate rejects ' + $case[2] + ' before writing') ($r.Code -eq 1 -and $r.Out -match $case[1] -and @(Writes @(Since $n0)).Count -eq 0) $r
 }
 Layout '00000000000000000000000000000000'
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
