@@ -86,6 +86,12 @@ refused('invalid inserted branch refuses', lambda: M.insert_inventory_actions(BO
 back = b'\x06\x99\x02\x00\xfa\xff'
 grown = M.apply(back, M.insert_inventory_actions(back, 1, b'\x06'))
 yes('backward branch still targets the original first action', struct.unpack_from('<h', grown, 5)[0] + 7 == 0)
+forward = b'\x99\x02\x00\x01\0\x06'
+grown = M.apply(forward, M.insert_inventory_actions(forward, 5, b'\x06'))
+yes('forward branch crosses the insertion to the original end', struct.unpack_from('<h', grown, 3)[0] + 5 == len(grown))
+entry = b'\x99\x02\x00\0\0\x06'
+grown = M.apply(entry, M.insert_inventory_actions(entry, 5, b'\x06'))
+yes('a branch to the insertion evaluates its new first action', struct.unpack_from('<h', grown, 3)[0] + 5 == 5)
 refused('a relocated branch exceeding int16 refuses', lambda: M.insert_inventory_actions(b'\x99\x02\x00\x01\0\x06', 5, b'\x06' * 32768))
 print(str(passed)+' passed, '+str(failed)+' failed')
 raise SystemExit(1 if failed else 0)
