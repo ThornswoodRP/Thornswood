@@ -192,6 +192,10 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // The mold key: a blank pressed into the door under the
                // crosshair. Sent by the plugin, not typed; see moldHere.
                '/moldhere',
+               // The door under the crosshair, asked about so the lock key's
+               // line is up outside a building too (#6980). Sent by the
+               // plugin, never typed; see lookedAtDoor.
+               '/doorlook',
                // A holder letting the person under the crosshair sleep there,
                // or the property page ending a guest's night (#1603). Sent by
                // the plugin and the K panel, never typed; see sleepHere.
