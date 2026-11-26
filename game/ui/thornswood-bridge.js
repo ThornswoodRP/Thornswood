@@ -92,16 +92,6 @@
     dialog.setAttribute('tabindex', '-1');
     dialog.focus({preventScroll:true});
   }
-  function controlKey(control) {
-    if (control.id) return 'id:' + control.id;
-    var named = control.getAttribute('data-focus-key');
-    if (named) return 'key:' + named;
-    var attrs = control.getAttributeNames().filter(function (attr) {
-      return /^data-/.test(attr) || attr === 'href' || attr === 'name' || attr === 'type';
-    }).sort().map(function (attr) { return [attr, control.getAttribute(attr)]; });
-    return JSON.stringify([control.tagName, attrs, control.textContent.trim()]);
-  }
-
   // Called once by each panel's closed-to-open boundary, after its real draw.
   // This declares a dialog, not a new modal or focus-trapping policy.
   window.thornswoodDialog = {
@@ -121,32 +111,112 @@
       // An empty panel still announces its title; no invented action is added.
       focusDialog(dialog);
     },
-    redraw: function (root, draw) {
+    /*
+      AN UPDATE CHANGES WHAT CHANGED (#4475). A panel used to put each server
+      update in with innerHTML, which threw away every control and drew new
+      ones: the field being typed in went, so focus fell to the page and the
+      text went back to what the server last said, every second or so. patch
+      puts the same markup in by changing the nodes already there instead.
+      A control that is still drawn stays the same element, so its focus,
+      what was typed in it, its selection and its scroll stay too. That is
+      the browser's own rule for a field somebody has edited: a new value
+      attribute no longer changes what it shows.
+
+      Children are matched by a key where they have one (an id, a
+      data-focus-key or a data-row-key, and an option by its value) and
+      otherwise by their place and kind. A control only matches one that
+      does the same thing (the same data-, name and type attributes), so a
+      focused button is never left meaning another row's action; when the
+      focused control is gone, focus goes to its dialog.
+
+      subject names what the controls are for: a trade, a trader's session,
+      a journal page. When it changes, nothing typed for the last one may
+      show for this one, so the markup goes in whole as new controls.
+    */
+    patch: function (host, html, subject) {
+      if (!host) return;
       var active = document.activeElement;
-      var dialog = active && active.closest('[role="dialog"]');
-      if (!root || !dialog || !root.contains(dialog) || active === dialog) { draw(); return; }
-      var key = controlKey(active);
-      var start = active.selectionStart, end = active.selectionEnd, direction = active.selectionDirection;
-      draw();
-      // A replacement is safe only when this redraw removed focus itself.
-      var now = document.activeElement;
-      if (dialog.contains(active) || (now && now !== active && now !== document.body)) return;
-      var matches = Array.prototype.filter.call(dialog.querySelectorAll(DIALOG_CONTROL), function (node) {
-        return available(node, dialog) && controlKey(node) === key;
-      });
-      if (matches.length === 1) {
-        var next = matches[0];
-        next.focus({preventScroll:true});
-        if (document.activeElement === next) {
-          if (typeof start === 'number' && typeof next.setSelectionRange === 'function') {
-            next.setSelectionRange(start, end, direction);
-          }
-          return;
-        }
+      var had = !!active && active !== host && host.contains(active);
+      var about = subject == null ? '' : String(subject);
+      if (host.thornswoodSubject !== about) {
+        host.thornswoodSubject = about;
+        host.innerHTML = html;
+      } else {
+        var model = document.createElement(host.tagName || 'div');
+        model.innerHTML = html;
+        patchChildren(host, model);
       }
-      focusDialog(dialog);
+      if (!had || host.contains(active)) return;
+      var dialog = host.closest('[role="dialog"]');
+      var now = document.activeElement;
+      if (dialog && (!now || now === active || now === document.body || !now.parentNode)) focusDialog(dialog);
     }
   };
+
+  var CONTROL_TAGS = ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A'];
+  function keyOf(node) {
+    if (!node || node.nodeType !== 1) return '';
+    if (node.id) return '#' + node.id;
+    var key = node.getAttribute('data-focus-key') || node.getAttribute('data-row-key');
+    if (key) return '=' + key;
+    if (node.tagName === 'OPTION' && node.hasAttribute('value')) return '?' + node.getAttribute('value');
+    return '';
+  }
+  function doesWhat(control) {
+    return control.getAttributeNames().filter(function (attr) {
+      return /^data-/.test(attr) || attr === 'name' || attr === 'type' || attr === 'href';
+    }).sort().map(function (attr) { return attr + '=' + control.getAttribute(attr); }).join(' ');
+  }
+  function alike(was, next) {
+    if (was.nodeType !== next.nodeType) return false;
+    if (was.nodeType !== 1) return true;
+    if (was.tagName !== next.tagName || keyOf(was) !== keyOf(next)) return false;
+    // Keyed, it is the same node by its key. A control is otherwise the same
+    // control by what it does, and anything else by its class, so a status
+    // line put in at the top is not mistaken for the row of fields below it.
+    if (keyOf(was)) return true;
+    if (CONTROL_TAGS.indexOf(was.tagName) !== -1) return doesWhat(was) === doesWhat(next);
+    return (was.getAttribute('class') || '') === (next.getAttribute('class') || '');
+  }
+  function patchAttributes(was, next) {
+    var names = next.getAttributeNames(), i;
+    for (i = 0; i < names.length; i++) {
+      var value = next.getAttribute(names[i]);
+      if (was.getAttribute(names[i]) !== value) was.setAttribute(names[i], value);
+    }
+    var old = was.getAttributeNames();
+    for (i = 0; i < old.length; i++) if (!next.hasAttribute(old[i])) was.removeAttribute(old[i]);
+  }
+  function patchChildren(host, model) {
+    var keyed = {}, keep = [], i, node;
+    var kids = Array.prototype.slice.call(host.childNodes);
+    for (i = 0; i < kids.length; i++) { var k = keyOf(kids[i]); if (k && !keyed[k]) keyed[k] = kids[i]; }
+    var cursor = host.firstChild;
+    var wanted = Array.prototype.slice.call(model.childNodes);
+    for (i = 0; i < wanted.length; i++) {
+      var next = wanted[i], key = keyOf(next), match = null;
+      if (key) {
+        if (keyed[key] && alike(keyed[key], next)) match = keyed[key];
+        delete keyed[key];
+      } else {
+        for (node = cursor; node; node = node.nextSibling) {
+          if (!keyOf(node) && keep.indexOf(node) === -1 && alike(node, next)) { match = node; break; }
+        }
+      }
+      if (match) {
+        if (match === cursor) cursor = cursor.nextSibling;
+        else host.insertBefore(match, cursor);
+        if (match.nodeType === 1) { patchAttributes(match, next); patchChildren(match, next); }
+        else if (match.nodeValue !== next.nodeValue) match.nodeValue = next.nodeValue;
+        keep.push(match);
+      } else {
+        host.insertBefore(next, cursor);
+        keep.push(next);
+      }
+    }
+    kids = Array.prototype.slice.call(host.childNodes);
+    for (i = 0; i < kids.length; i++) if (keep.indexOf(kids[i]) === -1) host.removeChild(kids[i]);
+  }
 
   var sp = (window.skyrimPlatform = window.skyrimPlatform || {});
 

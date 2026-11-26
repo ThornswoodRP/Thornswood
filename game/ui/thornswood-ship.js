@@ -172,7 +172,8 @@
     }
   }
 
-  function line(inner) { return '<div class="line">' + inner + '</div>'; }
+  // A key keeps a line's count box the same element across an update (#4475).
+  function line(inner, key) { return '<div class="line"' + (key ? ' data-row-key="' + esc(key) + '"' : '') + '>' + inner + '</div>'; }
   function btn(text, attrs) { return '<button ' + attrs + '>' + esc(text) + '</button>'; }
   function say(text, l) { return btn(text, 'data-act="say" data-line="' + esc(l) + '"'); }
   function options(list, valueOf, textOf, selected) {
@@ -197,7 +198,7 @@
           out += '<input id="' + cid + '" type="number" min="1" max="' + esc(l.count) + '" step="1" value="' + esc(l.count) + '" aria-label="Count">';
           out += btn(act[1], 'data-act="' + act[0] + '" data-hold="' + hid + '" data-line="' + esc(l.line) + '" data-count="' + cid + '"');
         }
-        b += line(out);
+        b += line(out, 'cargo:' + h.id + ':' + l.line);
       });
       if (h.canLoad && (data.pack || []).length && (data.people || []).length) {
         b += line('<select id="' + ID + '-piece-' + hid + '" aria-label="What to load">' +
@@ -283,12 +284,12 @@
         (data.crate && data.crate.here && !data.crate.dockOf ? say('Its crate is the one I opened', w + 'draft crate ' + p.key) : '') +
         say('Remove', w + 'draft unport ' + p.key));
     });
-    draft.routes.forEach(function (r, i) {
-      var cid = ID + '-m-' + i;
+    draft.routes.forEach(function (r) {
+      var cid = ID + '-m-' + r.from + '-' + r.to;
       b += line('<span class="nm">' + esc(r.from) + ' to ' + esc(r.to) + '</span>' +
-        '<input id="' + cid + '" type="number" min="1" max="10080" step="1" value="' + esc(r.minutes) + '" aria-label="Minutes">' +
-        btn('Set minutes', 'data-act="minutes" data-key="' + esc(r.from + ' ' + r.to) + '" data-count="' + cid + '"') +
-        say('Remove', w + 'draft unroute ' + r.from + ' ' + r.to));
+        '<input id="' + esc(cid) + '" type="number" min="1" max="10080" step="1" value="' + esc(r.minutes) + '" aria-label="Minutes">' +
+        btn('Set minutes', 'data-act="minutes" data-key="' + esc(r.from + ' ' + r.to) + '" data-count="' + esc(cid) + '"') +
+        say('Remove', w + 'draft unroute ' + r.from + ' ' + r.to), 'route:' + r.from + ' ' + r.to);
     });
     if (!isCart()) {
       b += line('<span class="nm">Days cargo waits at the dock before the drop box</span>' +
@@ -337,9 +338,10 @@
       b += '<h3>' + cid + ', ' + esc(c.used) + ' of ' + esc(c.max) + ' lines</h3>';
       (c.lines || []).forEach(function (l) {
         var text = esc(l.count) + ' ' + esc(l.item) + ', for ' + esc(l.forName);
-        if (l.canCollect) { b += line(countLine(text, 'collect', c.id, l)); }
-        else if (l.canReturn) { b += line(countLine(text, 'return', c.id, l)); }
-        else { b += line('<span class="nm">' + text + '</span>'); }
+        var lineKey = 'cargo:' + c.id + ':' + l.line;
+        if (l.canCollect) { b += line(countLine(text, 'collect', c.id, l), lineKey); }
+        else if (l.canReturn) { b += line(countLine(text, 'return', c.id, l), lineKey); }
+        else { b += line('<span class="nm">' + text + '</span>', lineKey); }
       });
       if (c.others) { b += '<p class="note">' + esc(c.others) + ' more line(s) on it for other people.</p>'; }
       if (c.canLoad && (data.pack || []).length && (data.people || []).length) {
@@ -375,7 +377,7 @@
       ' to ' + esc(data.road && data.road.to) + '. Whatever you take is written down as taken by you.</p>';
     var lines = data.lines || [];
     if (!lines.length) { b += '<p class="note">Nothing is left on it.</p>'; }
-    lines.forEach(function (l) { b += line(countLine(esc(l.count) + ' ' + esc(l.item), 'take', data.cart, l)); });
+    lines.forEach(function (l) { b += line(countLine(esc(l.count) + ' ' + esc(l.item), 'take', data.cart, l), 'cargo:' + data.cart + ':' + l.line); });
     return b;
   }
 
@@ -389,8 +391,11 @@
       data.mode === 'raid' ? 'A cart on the road' :
       data.mode === 'stop' ? ((data.stop && data.stop.name) || 'The cart stop') :
       ((data.port && data.port.name) || 'The dock');
-    root.querySelector('#' + ID + '-body').innerHTML = data.mode === 'staff' ? drawStaff() :
+    var html = data.mode === 'staff' ? drawStaff() :
       data.mode === 'stop' ? drawStop() : data.mode === 'raid' ? drawRaid() : drawDock();
+    // In place, so a count being typed and its focus outlast the update (#4475).
+    var host = root.querySelector('#' + ID + '-body');
+    if (window.thornswoodDialog) window.thornswoodDialog.patch(host, html, JSON.stringify([data.mode, data.port && data.port.name, data.stop && data.stop.name, data.cart])); else host.innerHTML = html;
     if (!was) {
       if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
       tell('opened');

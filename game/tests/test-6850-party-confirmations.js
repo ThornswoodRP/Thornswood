@@ -24,8 +24,9 @@ for(const[verb,line]of actions){
 }
 for(const[verb]of actions){
  const p=rig(),b=p.button(verb);b.click();p.advance(5000);b.click();yes(verb+' expires after five seconds',p.sent.length===0);
- const stale=b.onclick;p.feed();stale.call(b);yes(verb+' redraw retires detached handlers',p.sent.length===0);
- const fresh=p.button(verb);fresh.click();p.api.close();p.api.open();p.button(verb).click();yes(verb+' close retires the arm',p.sent.length===0);
+ p.advance(5000);b.click();p.feed();b.click();yes(verb+' an owner update between the presses retires the arm',p.sent.length===0);
+ // The button is kept through the update (#4475); that press was a fresh first one.
+ p.feed();const fresh=p.button(verb);fresh.click();p.api.close();p.api.open();p.button(verb).click();yes(verb+' close retires the arm',p.sent.length===0);
 }
 for(const[verb,line]of actions){
  const p=rig(),b=p.button(verb);p.key(b,'Enter');const held=p.key(b,'Enter',true);
@@ -48,7 +49,10 @@ for(const change of [p=>p.state.partyIntent.version='c'.repeat(48),p=>p.state.pa
 }
 {
  const p=rig(),b=p.button('kick');b.click();p.button('mute').click();b.click();yes('a different action cancels the arm',p.sent.length===1&&p.sent[0]==='/mute 1001');
- const q=rig(),c=q.button('kick');c.click();q.api.setWhere([]);c.onclick.call(c);yes('position redraw retires the arm',q.sent.length===0);
+ // Where people are is the strip's alone (#4475): a move leaves the panel and its confirmation as they were.
+ const q=rig(),c=q.button('kick');c.click();q.api.setWhere([{p:1001,x:1,y:2,z:3,cell:1}]);
+ yes('a position update leaves the panel and its armed button alone',q.doc.querySelector('[data-do="kick"]')===c&&/again/i.test(c.textContent));
+ c.click();yes('the second press after a position update still sends the kick once',q.sent.length===1&&q.sent[0]==='/party-action-v1 kick '+id+' '+version+' 1001');
 }
 {
  const p=rig(),b=p.button('drop');let calls=0;p.win.thornswoodNet.say=()=>{calls++;return false;};b.click();b.click();

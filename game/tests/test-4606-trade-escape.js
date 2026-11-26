@@ -44,7 +44,8 @@ for(const name of ['gold','find']){
   };
   input.oninput.call(input);
   const current=p.field('find');
-  yes('typing a search keeps focus on the replacement live field',p.doc.activeElement===current&&current!==input);
+  // The field is kept through the redraw rather than replaced (#4475).
+  yes('typing a search keeps focus on the same live field',p.doc.activeElement===current&&current===input);
   yes('search redraw preserves the edit cursor and selection',current.selectionStart===2&&current.selectionEnd===3);
   p.escape(p.doc.activeElement);
   yes('Escape immediately after typing search only leaves the field',p.sent.length===0&&p.api.isOpen()&&p.doc.activeElement!==current);

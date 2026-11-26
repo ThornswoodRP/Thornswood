@@ -114,7 +114,7 @@
         'Retrieve one item. Reward '+quest.gold+' gold. Return to the named specialist. Rests for '+quest.hours+' hours.':quest.kind==='kill' ? 'Defeat '+quest.count+' at this place. Reward '+quest.gold+' gold. '+
         (quest.exactMerchant?'Return to this specialist.':'Return to a guild trader in this hold.')+' Returns after '+quest.hours+' hours.' :
         'Draw up to '+quest.holds+', return '+quest.ask+' to finish, and keep the rest. Returns after '+quest.hours+' hours.';
-      body += '<div class="line"><div class="quest-copy"><strong>' + esc(quest.name) + '</strong>' +
+      body += '<div class="line" data-row-key="quest:' + esc(quest.id) + '"><div class="quest-copy"><strong>' + esc(quest.name) + '</strong>' +
         '<p>' + esc(location) + '</p><p>'+esc(terms)+'</p>'+(quest.check?'<p>'+esc(quest.check)+'</p>':'')+'<p>' + esc(status) + '</p>'+
         (quest.recovery ? '<p>Leave this older work before taking it again. Its progress could not be verified.</p>' : '')+'</div>';
       if (quest.state === 'open') {
@@ -142,7 +142,7 @@
       var row = rows[i];
       if (!Number.isInteger(row.maxSell) || row.maxSell < 1) continue;
       saleCount++;
-      body += tradeLine(row, 'sell', i, row.maxSell);
+      body += tradeLine(row, 'sell', row.maxSell);
     }
     if (!saleCount) body += '<p class="note" role="status">' + esc(data.sellReason || 'This trader cannot buy anything from your pack right now.') + '</p>';
     body += '<h3>Buy from their shelf</h3>';
@@ -151,18 +151,19 @@
       var shelf = rows[j];
       if (!Number.isInteger(shelf.sell) || shelf.sell < 0 || !(shelf.stock > 0)) continue;
       shelfCount++;
-      body += tradeLine(shelf, 'buy', j, Math.min(shelf.stock, 100000));
+      body += tradeLine(shelf, 'buy', Math.min(shelf.stock, 100000));
     }
     if (!shelfCount) body += '<p class="note">This trader has no goods for sale.</p>';
     var supply = data.supply || [];
     for (var s = 0; s < supply.length; s++) {
       if (!supply[s].ready) continue;
-      body += '<div class="line"><span class="nm">Supply ' + esc(supply[s].count) + ' ' + esc(supply[s].name) +
+      body += '<div class="line" data-row-key="supply:' + esc(supply[s].name) + '"><span class="nm">Supply ' + esc(supply[s].count) + ' ' + esc(supply[s].name) +
         ' for ' + esc(supply[s].pay) + '</span>' +
         '<button data-verb="supply" data-name="' + esc(supply[s].name) + '" data-price="' + supply[s].unit + '"' + (data.canTrade ? '' : ' disabled') + '>Turn in</button></div>';
     }
     var host = root.querySelector('#' + ID + '-body');
-    host.innerHTML = body;
+    // In place, so a count being typed and its focus outlast the update (#4475).
+    if (window.thornswoodDialog) window.thornswoodDialog.patch(host, body, data.sessionId || 'legacy'); else host.innerHTML = body;
     var buttons = host.querySelectorAll('button');
     for (var b = 0; b < buttons.length; b++) {
       buttons[b].onclick = function (ev) {
@@ -203,10 +204,15 @@
     if (!was && window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
-  function tradeLine(row, verb, index, maximum) {
-    var countId = ID + '-' + verb + '-' + index;
+  // A line is known by what it sells, not where it is in the list, so a
+  // count typed into it stays with that item when the list changes (#4475).
+  function named(name) {
+    return String(name).replace(/[^A-Za-z0-9]/g, function (c) { return '_' + c.charCodeAt(0).toString(16); });
+  }
+  function tradeLine(row, verb, maximum) {
+    var countId = ID + '-' + verb + '-' + named(row.name);
     var selling = verb === 'sell';
-    return '<div class="line"><span class="nm">' + esc(row.name) + '</span>' +
+    return '<div class="line" data-row-key="' + verb + ':' + esc(row.name) + '"><span class="nm">' + esc(row.name) + '</span>' +
       '<span>' + esc(selling ? row.buy : row.sell) + ' gold each</span>' +
       '<span>' + (selling ? 'Pack ' + esc(row.carried) : 'Shelf ' + esc(row.stock)) + '</span>' +
       '<label for="' + countId + '">Count</label><input id="' + countId + '" type="number" min="1" max="' + maximum + '" step="1" value="1" aria-label="' +
