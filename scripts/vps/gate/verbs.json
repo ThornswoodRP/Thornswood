@@ -169,7 +169,6 @@
       "fixed": [],
       "params": {
         "SeedDocs": "switch",
-        "Boards": "switch",
         "Site": "switch",
         "Wait": "^[0-9]{1,4}$",
         "PutBack": "switch"

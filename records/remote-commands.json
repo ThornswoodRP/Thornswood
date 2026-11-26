@@ -358,15 +358,6 @@
                   {
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
                       "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$boardOut = @(Remote @\"",
-                      "does":  "replaces or seeds the named boards in the live data\\board.json from the repo copy, with node, keeping board.json.bak",
-                      "class":  "stage",
-                      "reason":  "writes a file the deploy owns inside the site root; no task, ACL or firewall change"
-                  },
-                  {
-                      "script":  "scripts/deploy/Deploy-Docs.ps1",
-                      "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",
                       "anchor":  "Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script ((Get-ThornswoodDocsPasswordSetHead $PasswordFile) + $setTail) |",
                       "does":  "writes the site password into config.json from the file",

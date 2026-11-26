@@ -192,9 +192,8 @@ and the cookie secret, and is never in the repo. `.\scripts\deploy\Deploy-Docs.p
 sends only the changed `server.js`, `lib\` and `public\` files and stops the
 site only when one of them changed, and `-Site` also sends the public pages. A
 plain deploy never overwrites a
-document somebody has typed into on the site; `-Boards`, `-Docs` and
-`-SeedDocs` do, after a `.bak` of each. `-Board active` replaces that one board
-inside the live `board.json` and leaves every other board as typed. The
+document somebody has typed into on the site; `-Docs` and
+`-SeedDocs` do, after a `.bak` of each. The
 public Known Issues page (`/known`) and the roadmap (`/roadmap`) are not
 boards: the bot writes both from the issue board into `data\from-bot\lists.json`,
 which the site makes and reads (#3140; bot/README.md, "The site's known

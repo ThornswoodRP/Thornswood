@@ -1,6 +1,6 @@
 # test-docs-backup.ps1
 #
-# Deploy-Docs.ps1 -Docs, -Boards and -SeedDocs overwrite documents people type
+# Deploy-Docs.ps1 -Docs and -SeedDocs overwrite documents people type
 # into on the site, and each one promises a .bak beside every document first.
 # On 24 September a -Docs known,help run printed "backed up 0 document(s)":
 # the backup's Get-ChildItem used -Include on a bare folder, which matches
