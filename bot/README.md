@@ -634,6 +634,12 @@ unless `-Posts` is given, so a routine run does not touch existing messages. To
 rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
 lore,factions -Posts`, issue #3656). It deletes what the bot wrote last time
 rather than adding a second copy, so the rules never end up posted twice.
+From a session with no box key, a cloud thread included, the deploy gate runs
+it on the box (#6874):
+
+```
+pwsh scripts/vps/Box-Run.ps1 -Line 'Setup-Discord -Posts'
+```
 
 `Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
 it asks for nothing: the build runs on the VPS with the token the running bot
