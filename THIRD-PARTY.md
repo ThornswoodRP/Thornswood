@@ -799,7 +799,7 @@ full text.
 
 Thornswood publishes this itself, as its own mod: Nexus Mods mod 192762,
 https://www.nexusmods.com/skyrimspecialedition/mods/192762, by EvilPatrick06.
-Revision 11, the newest published revision of the collection (`7essxf`) and
+Revision 12, the newest published revision of the collection (`7essxf`) and
 the one `records\collection.json` follows, carries version 1.0.1, file
 823485, uploaded on 20 October, and it is not optional. Revision 3 was the
 first to carry that file, and none since has moved it
