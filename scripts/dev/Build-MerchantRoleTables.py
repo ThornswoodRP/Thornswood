@@ -128,6 +128,9 @@ def derive(recipes, harvests, hunts, items, cuts, records):
         evidence.setdefault(item, set()).add(role + ':' + source)
 
     wearables = set()
+    # Imported recipe ingredients remain tradable, but woodworking collection
+    # jobs request only woodworking goods or directly produced resources.
+    woodworking_stock = {row['out'] for row in rows.values() if row['owner'] == 'Woodworker'}
     for key, row in rows.items():
         if row.get('race') == 'riekling' and row['name'] not in cuts['rieklingKept']:
             raise ValueError('Unapproved Riekling company item: ' + row['name'])
@@ -138,7 +141,8 @@ def derive(recipes, harvests, hunts, items, cuts, records):
             if ingredient['item'].lower() == 'f:skyrim.esm':
                 continue  # A crafting fee is not a good the trader buys or supplies.
             add(row['owner'], ingredient['item'], 'recipe:' + key + ':input:' + str(index),
-                supply=True, expected=ingredient.get('type'))
+                supply=(row['owner'] != 'Woodworker' or ingredient['item'] in woodworking_stock or
+                        ingredient.get('producedBy') == 'woodworker'), expected=ingredient.get('type'))
     for item, source in resources(harvests, hunts, items):
         row = record_of(records, item)
         if row['type'] == 'INGR':

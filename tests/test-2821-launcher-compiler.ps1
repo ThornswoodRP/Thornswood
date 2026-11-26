@@ -231,12 +231,15 @@ else {
     # too, unless the project says not to.
     $versioned = '[assembly: System.Reflection.AssemblyFileVersion("2.8.2.1")] namespace Ts2821V { public static class P { public static int Main() { System.Console.WriteLine(System.Diagnostics.FileVersionInfo.GetVersionInfo(typeof(P).Assembly.Location).FileVersion); return 0; } } }'
     $said = ''
+    Write-Host 'LAUNCHER_COMPILER_STAGE version-default-expected-refusal'
     try { $null = Build-LauncherCode -Exe -Source $versioned } catch { $said = $_.Exception.Message }
     $exeV = $null
+    Write-Host 'LAUNCHER_COMPILER_STAGE version-GenerateAssemblyInfo-false'
     try { $exeV = Build-LauncherCode -Exe -Source $versioned -Property @{ GenerateAssemblyInfo = 'false' } } catch { Write-Host ('      ' + $_.Exception.Message) }
     Yes '-Property reaches the project: GenerateAssemblyInfo false lets a program carry its own version, which is refused without it' ($said -match 'CS0579' -and $exeV -and ((@(Invoke-LauncherExe $exeV) -join '') -eq '2.8.2.1'))
 
     $whole = $null
+    Write-Host 'LAUNCHER_COMPILER_STAGE whole-launcher-assembly'
     try { $whole = Add-LauncherAssembly } catch { Write-Host ('      ' + $_.Exception.Message) }
     Yes 'Add-LauncherAssembly builds launcher\app\Thornswood.csproj and gives back Thornswood, loaded' ($whole -and $whole.GetName().Name -eq 'Thornswood' -and $whole.GetType('Thornswood.Updater') -and $whole.GetType('Thornswood.Paths'))
     if ($whole) {

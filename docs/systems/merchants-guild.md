@@ -134,6 +134,10 @@ trader's shelf. An empty purse refuses a buy. An empty shelf refuses a
 sale. A supply turn-in is five of an item at that same buy price, paid
 from the same purse. Each character waits six hours after its completed
 supply before that trader offers the same supply again.
+Woodworker collection supplies accept woodworking stock, such as firewood
+and the instruments their recipes use. Imported ingots, leather and other
+trades' materials remain available for ordinary buying and selling, but do
+not count as woodworking collection turn-ins.
 Scene quests and guild commissions are not paid from the purse.
 
 The person must be the authenticated character and within 400 of that
