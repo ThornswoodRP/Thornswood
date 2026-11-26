@@ -909,6 +909,11 @@ issue where the card did.
   acc8ce8 put it.** (dec_ir6kQf5iqY7kKfP8lN39Ug, dec_PYrv5xUa2LixUT43Bwl_Zg)
   2 Nov 2026,
   [#5357](https://github.com/ThornswoodRP/Thornswood/issues/5357#issuecomment-6586544129).
+- **The bot looks once through its own report and staff-action copies in the
+  staff channel posted before they were linked, links each one whose source
+  record still exists, and deletes each one whose record is already gone.**
+  (dec_imjwBIMBoc1w7JwvFph14A) 26 Nov 2026,
+  [#7025](https://github.com/ThornswoodRP/Thornswood/issues/7025#issuecomment-7205034500).
 
 ### Test tasks and testing
 
