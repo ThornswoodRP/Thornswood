@@ -26,6 +26,11 @@ const id='6869'.repeat(8),wire=p=>'/board-submit-v1 '+JSON.stringify(p);
  for(const line of ['/board-submit-v1'+JSON.stringify(['letter',id,'windhelm','Lydia','SEALED-6869-NO-DELIMITER']),'/BOARD-SUBMIT-V1 '+JSON.stringify(['letter',id,'windhelm','Lydia','SEALED-6869-CASE']),'/board-submit-v1\t'+JSON.stringify(['letter',id,'windhelm','Lydia','SEALED-6869-TAB'])]){
   loud.ws.send(JSON.stringify({t:'chat',text:line,press:false}));yes('malformed private opcode delimiter/case cannot enter queue or log',(await commands()).length===0);
  }
+ for(const suffix of ['x','_'])for(const press of [true,false]){
+  const line='/board-submit-v1'+suffix+' '+JSON.stringify(['letter',id,'windhelm','Lydia','SEALED-6869-SUFFIX']);
+  const before=quiet.chat.length;loud.ws.send(JSON.stringify({t:'chat',text:line,press}));const got=await commands();await h.settle(quiet);
+  yes('reserved private stem with word suffix is refused before queue/speech '+suffix+' '+press,got.length===0&&quiet.chat.length===before);
+ }
  await h.shut(loud);loud=null;await h.shut(quiet);quiet=null;h.server().kill();await h.closed();
  const logs=fs.existsSync(h.chatDir)?fs.readdirSync(h.chatDir).filter(n=>n.endsWith('.jsonl')).map(n=>fs.readFileSync(path.join(h.chatDir,n),'utf8')).join(''):'';
  yes('actual process and chat logs contain no letter body cargo or request ID',!logs.includes('SEALED-6869')&&!logs.includes('PRIVATE-6869')&&!logs.includes(id)&&!h.log().includes('SEALED-6869')&&!h.log().includes('PRIVATE-6869')&&!h.log().includes(id));

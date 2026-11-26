@@ -537,7 +537,7 @@ function pluginReport(text) {
    command. Every "/line" still goes to the game server: this decides the log
    and nothing else. */
 function commandLogText(me, text, press) {
-  if (/^\/board-submit-v1\b/i.test(text)) return '/board-submit-v1 [private board submission]';
+  if (/^\/board-submit-v1/i.test(text)) return '/board-submit-v1 [private board submission]';
   if (/^\/board-unpin-v1(?:\s|$)/i.test(text)) return '/board-unpin-v1 [private board action]';
   if (/^\/party-action-v1(?:\s|$)/i.test(text)) return '/party-action-v1 [private party action]';
   if (/^\/journal-write-v1(?:\s|$)/i.test(text)) return '/journal-write-v1 [private page]';
@@ -3131,7 +3131,7 @@ server.on('upgrade', (req, socket, head) => {
           text:'That page command has an invalid prefix. It was not sent; keep your unsaved draft.'});
         return;
       }
-      if (/^\s*\/board-submit-v1\b/i.test(rawCommand) &&
+      if (/^\s*\/board-submit-v1/i.test(rawCommand) &&
           (rawCommand.indexOf('/board-submit-v1 ') !== 0 || rawCommand.length > COMMAND_CHARS)) {
         ws.send({t:'chat',from:0,profileId:0,name:'Thornswood',at:Date.now(),
           text:'That board submission is invalid or too long. It was not sent; keep your draft.'});
