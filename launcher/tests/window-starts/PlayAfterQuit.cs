@@ -76,11 +76,11 @@ namespace Thornswood.Tests
             // The call is where the game starts, before Play turns off: once
             // Play is off the window has already let go of it and nothing
             // moves what it gives back.
-            string play = File.ReadAllText(Path.Combine(repo, "launcher", "app", "ShellPlay.cs"));
+            string play = File.ReadAllText(Path.Join(repo, "launcher", "app", "ShellPlay.cs"));
             Check("ShellPlay moves the keyboard off the buttons as the game starts, before it turns Play off", () =>
                 Regex.IsMatch(play, @"playing = true;[\s\S]{0,400}?win\.FocusOffButtons\(\)[\s\S]{0,300}?btnPlay\.IsEnabled = false;") ? null
                     : "no win.FocusOffButtons() between playing = true and btnPlay.IsEnabled = false in launcher\\app\\ShellPlay.cs");
-            string wire = File.ReadAllText(Path.Combine(repo, "launcher", "app", "Shell.cs"));
+            string wire = File.ReadAllText(Path.Join(repo, "launcher", "app", "Shell.cs"));
             Check("and the window still comes back to the front when the game closes, which this stands in for", () =>
                 Regex.IsMatch(wire, @"win\.WindowState = WindowState\.Normal;\s*win\.Activate\(\);") ? null
                     : "launcher\\app\\Shell.cs no longer restores and activates the window when the game closes; this harness should follow it");
