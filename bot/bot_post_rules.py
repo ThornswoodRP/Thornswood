@@ -3,6 +3,7 @@ The rules every forum post is held to before it goes up.
 
 Part of the bot: bot.py loads it (#5357).
 """
+import asyncio
 import json
 import re
 import urllib.request
@@ -204,6 +205,43 @@ POST_PLACES = {'dev': 'in #dev-test-tasks', 'main': 'in #test-tasks',
                'known': 'in #known-issues', 'roadmap': "on the site's roadmap"}
 
 
+def _refusal_due(state, channel, num, problems):
+    """(key, sig) of the refusal still to be said for this post, or None:
+       none when the post breaks no rule (an earlier refusal is forgotten)
+       or when these same rules were said already."""
+    seen = state.setdefault('refused', {})
+    key = '%s:%s' % (channel, num)
+    if not problems:
+        if seen.pop(key, None) is not None:
+            state['_dirty'] = True
+        return None
+    sig = '\n'.join(problems)
+    if seen.get(key) == sig:
+        return None
+    return key, sig
+
+
+def _refusal_text(channel, problems):
+    return ('The bot did not post this issue %s, because the post breaks '
+            'these rules (%s):\n\n%s'
+            '\n\nFix the comment and the bot tries again on its next pass.'
+            % (POST_PLACES.get(channel, 'in #' + channel),
+               'bot/README.md, "The site\'s known issues and roadmap"'
+               if channel == 'roadmap'
+               else 'docs/guide/the-board.md, "Test tasks and known issues"',
+               '\n'.join('- ' + p for p in problems)))
+
+
+def _refusal_said(state, key, sig):
+    state['refused'][key] = sig
+    state['_dirty'] = True
+
+
+def _refusal_unsaid(channel, num, e):
+    log('refused %s post for #%s, and could not comment, so it is said '
+        'again on the next pass: %s' % (channel, num, e))
+
+
 def refuse(state, channel, num, problems, say=None):
     """Remembers that the post for issue num in channel breaks problems and
        comments that on the issue once (again only when the rules broken
@@ -214,35 +252,49 @@ def refuse(state, channel, num, problems, say=None):
        remembered when the comment failed too, so a refusal GitHub would not
        take was never said again and nobody learned the post was held back.
        Now a failed one is logged and left unremembered, and the next pass,
-       which reads the issue again anyway, says it again."""
+       which reads the issue again anyway, says it again.
+
+       The comment waits on GitHub, so this is for code off the bot's loop:
+       roadmap_once, which the bot runs in an executor. The forum passes,
+       which run on the loop, use refuse_off_loop (#4490)."""
     if not POST_RULES:
         return False
-    seen = state.setdefault('refused', {})
-    key = '%s:%s' % (channel, num)
-    if not problems:
-        if seen.pop(key, None) is not None:
-            state['_dirty'] = True
-        return False
-    sig = '\n'.join(problems)
-    if seen.get(key) == sig:
-        return True
-    text = ('The bot did not post this issue %s, because the post breaks '
-            'these rules (%s):\n\n%s'
-            '\n\nFix the comment and the bot tries again on its next pass.'
-            % (POST_PLACES.get(channel, 'in #' + channel),
-               'bot/README.md, "The site\'s known issues and roadmap"'
-               if channel == 'roadmap'
-               else 'docs/guide/the-board.md, "Test tasks and known issues"',
-               '\n'.join('- ' + p for p in problems)))
-    try:
-        (say or github_say)(num, text)
-    except Exception as e:
-        log('refused %s post for #%s, and could not comment, so it is said '
-            'again on the next pass: %s' % (channel, num, e))
-        return True
-    seen[key] = sig
-    state['_dirty'] = True
-    return True
+    due = _refusal_due(state, channel, num, problems)
+    if due is not None:
+        try:
+            (say or github_say)(num, _refusal_text(channel, problems))
+        except Exception as e:
+            _refusal_unsaid(channel, num, e)
+            return True
+        _refusal_said(state, *due)
+    return bool(problems)
+
+
+async def refuse_off_loop(state, channel, num, problems, say=None):
+    """refuse() for the forum passes, which run on the bot's event loop
+       (#4490). The comment is a call to GitHub that can wait 20 seconds
+       (github_say). Made on the loop, it held up the heartbeat, the buttons
+       and the slash commands for as long, and a click that waits over 3
+       seconds fails in Discord. Here it runs in an executor, as the roadmap
+       pass's always has.
+
+       Returns (held, settled). held is what refuse() returns: True when the
+       caller does not post. settled is False only when a comment was due
+       and GitHub did not take it. The caller then must not mark the issue
+       read at this update time: a comment that failed does not move it, so
+       the next pass would skip the issue and never say it again."""
+    if not POST_RULES:
+        return False, True
+    due = _refusal_due(state, channel, num, problems)
+    if due is not None:
+        try:
+            await asyncio.get_running_loop().run_in_executor(
+                None, say or github_say, num, _refusal_text(channel, problems))
+        except Exception as e:
+            _refusal_unsaid(channel, num, e)
+            return True, False
+        _refusal_said(state, *due)
+    return bool(problems), True
 
 
 def latest_main_release(get):
