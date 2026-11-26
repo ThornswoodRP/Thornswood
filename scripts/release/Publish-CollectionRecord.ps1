@@ -219,9 +219,7 @@ if ($cs.Rule.Count) {
     $params.Rule = Join-Path $Work 'rule.json'
     [IO.File]::WriteAllText($params.Rule, (ConvertTo-Json -InputObject @($cs.Rule | ForEach-Object { [ordered]@{ name = $_.name; after = @($_.after) } }) -Depth 4), $utf8)
 }
-if ($cs.SetLight -and $cs.SetLight.Count) { $params.SetLight = [string[]]@($cs.SetLight) }
-if ($cs.ClearLight -and $cs.ClearLight.Count) { $params.ClearLight = [string[]]@($cs.ClearLight) }
-if (-not $cs.Move.Count -and -not $cs.Add.Count -and -not $cs.Answers.Count -and -not $cs.SetLight.Count -and -not $cs.ClearLight.Count) { Say '  none' }
+if (-not $cs.Move.Count -and -not $cs.Add.Count -and -not $cs.Answers.Count) { Say '  none' }
 
 if ($WhatIf) {
     Head 'What it would draft'
