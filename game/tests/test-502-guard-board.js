@@ -173,37 +173,30 @@ standAt(GUARD_R, 'riften');
 yes('B2 and at Riften\'s board, to Riften\'s guard', panel(GUARD_R).guard === true);
 standAt(GUARD_R, 'whiterun');
 
-/* The real board page, in a stand-in document, drawing what the server sent. */
-function drawn(view) {
-  function el() {
-    return { innerHTML: '', className: '', style: {}, children: [], value: '',
-             appendChild: function (c) { this.children.push(c); return c; },
-             addEventListener: function () { },
-             querySelector: function (q) {
-               if (!this._q) { this._q = {}; }
-               if (!this._q[q]) { this._q[q] = el(); }
-               return this._q[q];
-             },
-             querySelectorAll: function () { return []; },
-             getAttribute: function () { return null; } };
-  }
-  const doc = { head: el(), body: el(), createElement: function () { return el(); },
-                getElementById: function () { return null; }, addEventListener: function () { } };
-  const windowEvents = {};
-  const win = { skyrimPlatform: { sendMessage: function () { } },
-    addEventListener: function (name, fn) { (windowEvents[name] || (windowEvents[name] = [])).push(fn); } };
-  vm.runInNewContext(page, { window: win, document: doc, console: console, isFinite: isFinite, JSON: JSON });
-  win.thornswoodBoard.setData({ board: view });
-  win.thornswoodBoard.open();
-  return doc.body.children[0] ? doc.body.children[0].querySelector('.body').innerHTML : '';
+/* The complete board and bridge, drawing the actual server view on mounted nodes. */
+function drawn(view, profileId) {
+  const p = require('../../tests/fixtures/panel-page')();
+  p.run('bridge', read(path.join(REPO_DIR, 'game/ui/thornswood-bridge.js')));
+  p.run('board', page);
+  p.win.thornswoodBoard.setData({ me: profileId, board: view });
+  p.win.thornswoodBoard.open();
+  const root = p.doc.getElementById('ts-board');
+  const buttons = root.querySelectorAll('[data-do="unpin"]');
+  const button = buttons[0];
+  const ev = p.fire(button, 'click', '');
+  if (!ev.defaultPrevented && button.onclick) button.onclick.call(button, ev);
+  yes('mounted Take down controls need a fresh confirming press for profile ' + profileId,
+    buttons.length > 0 && buttons.every(b => root.contains(b) && typeof b.onclick === 'function') &&
+    p.sent.length === 0 && /again/i.test(button.textContent));
+  return root.querySelector('.body').innerHTML;
 }
 let html = '';
-try { html = drawn(pW); } catch (e) { console.log('      threw: ' + e); }
+try { html = drawn(pW, GUARD_W.pid); } catch (e) { console.log('      threw: ' + e); }
 const downs = (html.match(/data-do="unpin"/g) || []).length;
 yes('B3 the board page draws Take down on every post for the guard (' + downs + ' of ' + pW.wall.length + ')',
     pW.wall.length === 5 && downs === 5);
 let htmlA = '';
-try { htmlA = drawn(pA); } catch (e) { console.log('      threw: ' + e); }
+try { htmlA = drawn(pA, ALICE.pid); } catch (e) { console.log('      threw: ' + e); }
 const downsA = (htmlA.match(/data-do="unpin"/g) || []).length;
 yes('B4 and for anybody else only on what is theirs to take down (' + downsA + ' for Alice)', downsA === 3);
 
