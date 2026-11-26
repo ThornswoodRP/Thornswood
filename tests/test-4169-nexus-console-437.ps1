@@ -25,7 +25,7 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
 }
 
-$check = 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each'
+$check = 'nexus-collection.js gives two entries their file lists, adds a patch to an entry with none and to one that has one, and says each'
 $child = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); 'CODEPAGE ' + [Console]::OutputEncoding.CodePage; & '" + $Nexus.Replace("'", "''") + "' -ConsoleEncodingOnly; exit " + '$LASTEXITCODE'
 $ErrorActionPreference = 'Continue'
 $out = & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $child 2>&1 | Out-String
