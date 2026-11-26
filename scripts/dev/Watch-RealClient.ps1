@@ -26,7 +26,12 @@
 
   The run is made from the Deployment's own commit, in a worktree of its own
   that goes afterwards, so its steps are the ones that build's plugin knows.
-  Every look is one line in temp\real-client\watch.log.
+  Every look is one line in temp\real-client\watch.log of the clone.
+
+  The task runs this script from worktrees\real-client-watcher, a worktree
+  -Install makes and every look first moves to origin/main, so a look is
+  always today's rule and never the copy in the shared clone, which other
+  work moves and may leave days behind. -Uninstall takes it off again.
 
   Windows only.
 #>
@@ -62,15 +67,35 @@ function Get-WatchVerdict($deployment, [string[]]$started, [bool]$gameOpen, [boo
 if ($MyInvocation.InvocationName -eq '.') { return }
 if (-not $IsWindows) { throw 'Watch-RealClient.ps1 starts the real game, so it runs on Windows only.' }
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+# The clone every worktree hangs off, also when this copy runs from the
+# watcher's own worktree: the folder that holds git's shared directory.
+$here = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$common = git -C $here rev-parse --git-common-dir
+if ($LASTEXITCODE -ne 0) { throw "$here is not in a git clone" }
+$repoRoot = Split-Path -Parent ([IO.Path]::GetFullPath([IO.Path]::Combine($here, $common)))
+$watcher = Join-Path $repoRoot 'worktrees\real-client-watcher'
 
 if ($Install -or $Uninstall) {
     $have = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if ($have) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false; Write-Host "Took off the task '$taskName'." }
-    if ($Uninstall) { return }
+    if ($Uninstall) {
+        if (Test-Path -LiteralPath $watcher) {
+            git -C $repoRoot worktree remove --force $watcher
+            if ($LASTEXITCODE -eq 0) { Write-Host "Took off the worktree $watcher." } else { Write-Host "Could not take off the worktree $watcher; git said why above." }
+        }
+        return
+    }
+    if (-not (Test-Path -LiteralPath $watcher)) {
+        git -C $repoRoot fetch -q origin main
+        if ($LASTEXITCODE -ne 0) { throw 'Could not fetch origin main' }
+        git -C $repoRoot worktree add -q --detach $watcher origin/main
+        if ($LASTEXITCODE -ne 0) { throw "Could not make the worktree $watcher" }
+        Write-Host "Made the worktree $watcher at origin/main; every look moves it to origin/main first."
+    }
     $pwsh = (Get-Command pwsh).Source
-    $taskArgs = '-NoProfile -NonInteractive -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Watch-RealClient.ps1') + '"'
-    if ($Root) { $taskArgs += ' -Root "' + $Root + '"' }
+    $look = "git -C '$watcher' fetch -q origin main; git -C '$watcher' checkout -q --detach origin/main; & '" + (Join-Path $watcher 'scripts\dev\Watch-RealClient.ps1') + "'"
+    if ($Root) { $look += " -Root '$Root'" }
+    $taskArgs = '-NoProfile -NonInteractive -WindowStyle Hidden -Command "' + $look + '"'
     $action = New-ScheduledTaskAction -Execute $pwsh -Argument $taskArgs -WorkingDirectory $repoRoot
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
     # As the person signed in, only while they are: the game needs their
@@ -79,7 +104,7 @@ if ($Install -or $Uninstall) {
     $principal = New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 45) -StartWhenAvailable
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
-    Write-Host "Made the task '$taskName': every five minutes, as $who while signed in, it looks once and runs the real game check when a new dev release has not had one."
+    Write-Host "Made the task '$taskName': every five minutes, as $who while signed in, it moves $watcher to origin/main, looks once and runs the real game check when a new dev release has not had one."
     return
 }
 
