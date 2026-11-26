@@ -24218,7 +24218,9 @@ module.exports = {
       '    try {',
       '      globalThis.__thornswoodPropertyOwn = v.own || [];',
       '      if (typeof globalThis.__thornswoodOwnCells === "function") { globalThis.__thornswoodOwnCells(v.own || []); }',
-      '    } catch (e) { }',
+      // The plugin's hook is guard()ed and logs its own failure; this only
+      // keeps the doors above locked if the hand over itself throws.
+      '    } catch (e) { /* the doors above are already done */ }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
