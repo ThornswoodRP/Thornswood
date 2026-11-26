@@ -1088,6 +1088,12 @@ warning if that session ran some other Skyrim), and `Shell.cs:2648 Verify.Run`
 on a pool thread. A game closed for an update then fetches and installs it
 (`Shell.cs:2684 CheckUpdatesBackground`).
 
+The window then comes back to the front (`win.Activate`) with the keyboard
+on its frame rather than on Play: the game's start moved it there
+(`MainWindow.FocusOffButtons`), because the window gives the keyboard back
+to the last control that had it, and a key still going to the game pressed
+Play and started it again (#4550, `launcher\tests\test-4550-play-after-quit.ps1`).
+
 ### Closing the launcher
 
 `Shell.cs:2493 win.Closing` asks first when a game is still running, then

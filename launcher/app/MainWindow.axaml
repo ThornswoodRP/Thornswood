@@ -489,7 +489,11 @@
        snaps it to the screen's edges; its buttons are marked as ours, so
        they still take the click. A maximised window is fitted to the screen
        by Windows itself, so nothing hangs past the edge to pull in. -->
-  <Border x:Name="WindowFrame" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Bg}">
+  <!-- Focusable and no tab stop: where the keyboard rests while the game
+       runs, so the window comes back after it with no button to press
+       (#4550, FocusOffButtons in MainWindow.axaml.cs). -->
+  <Border x:Name="WindowFrame" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Bg}"
+          Focusable="True" IsTabStop="False">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="46"/>
