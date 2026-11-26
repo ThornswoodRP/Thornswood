@@ -117,7 +117,16 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
+| `{"do":"face","what":"bed"}` | the character stands 90 units out from the nearest bed in its cell, on the side it was on, turned to the bed and looking a little down, as somebody walks up to use one. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell fails the step. |
+| `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
+
+Sitting down and getting up are results lines of their own,
+`{"t":"furniture","enter":true,"bed":true,"ref":"..."}`, the character's
+only, so a run says whether it lay down in a bed (#6712). The list goes to
+the Bannered Mare with `/tp bannered`, sent once from a page step, which the
+run's account may run because it is on the dev list.
 
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
