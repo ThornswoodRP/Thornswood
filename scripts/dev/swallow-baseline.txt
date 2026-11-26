@@ -162,7 +162,7 @@
 # and Online.AskPort write it), the in play update check's hand back to the
 # window, and the install and removal paths in Updater.cs. 173 are left,
 # below. Each is later work on its own path; converting one lowers its line.
-AutoJoin.cs 3
+AutoJoin.cs 2
 Chars.cs 7
 Checks.cs 19
 ClientRuntime.cs 1

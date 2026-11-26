@@ -2,7 +2,6 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -283,7 +282,5 @@ namespace Thornswood
         {
             return MD5.HashData(Encoding.UTF8.GetBytes(user + ":" + realm + ":" + pass));
         }
-
-        public static bool IsV4(IPEndPoint ep) { return ep != null && ep.AddressFamily == AddressFamily.InterNetwork; }
     }
 }
