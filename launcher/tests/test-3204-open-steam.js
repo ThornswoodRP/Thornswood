@@ -105,7 +105,7 @@ yes('the two second tick redraws the rows when Steam\'s answer differs from what
     /if \(!playing\)\s*\{\s*if \(Checks\.SteamStillRunning\(\) != steamShown\) DrawStatus\(\);[^{}]*?return;\s*\}/.test(tick));
 
 // ============================================== D. Checks
-const all = lift(checksCs, 'public static List<Check> All(Config cfg)');
+const all = lift(checksCs, 'public static List<Check> All(Config cfg, int collectionRevision = -1)');
 yes('the Steam row is named by Checks.SteamRow', !!all && all.includes('new Check(SteamRow, steam,'));
 yes('SteamRow is "Steam"', /public const string SteamRow = "Steam";/.test(checksCs));
 const still = lift(checksCs, 'public static bool SteamStillRunning()');

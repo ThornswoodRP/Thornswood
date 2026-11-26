@@ -255,7 +255,7 @@ namespace TsTest264
   }
 
   # ---- how the launcher uses it ---------------------------------------------
-  $all = LiftAfter $checksSrc 'public static List<Check> All(Config cfg)'
+  $all = LiftAfter $checksSrc 'public static List<Check> All(Config cfg, int collectionRevision = -1)'
   # The game the row reads: Paths.Game, or before a folder chosen at install is made the Steam copy it is made from (#1226).
   Yes 'Checks.All adds the Address Library row, told whether the build is right' `
       ($all -and $all.Contains('l.Add(AddressLibraryRow(game, bytes == cfg.ExpectedExeBytes));') -and $all.Contains('string game = Paths.OwnFirst ? Paths.SteamCopy : Paths.Game;'))
