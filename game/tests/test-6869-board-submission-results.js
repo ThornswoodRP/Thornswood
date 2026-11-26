@@ -45,6 +45,12 @@ try{
   yes('saved intent or live inventory debit does not publish posted result',doc().debits.some(x=>x.data?.made?.boardSubmission?.id===id(3))&&rows().length===beforeDelay&&!result(id(3)));
   w.holdSaves(false);w.run(4000);
   yes('ordinary save acknowledgement lands and then projects exactly its result',rows().length===beforeDelay+1&&!!result(id(3)));
+  for(const [n,to,body]of [[12,'Lydia','bad\ud800text'],[13,'Lydia','bad\udc00text'],[14,'bad\ud800name','Body'],[15,'bad\udc00name','Body']]){
+   const unicodeDoc=JSON.stringify(doc()),unicodeGold=w.count(a,15);send(letter(n,'windhelm',to,body));
+   yes('forced JSON unpaired UTF16 refuses before ledger debit or receipt '+n,JSON.stringify(doc())===unicodeDoc&&w.count(a,15)===unicodeGold&&!result(id(n)));
+  }
+  const unicodeGold=w.count(a,15);send(letter(18,'windhelm','Lydia "Red" Stone','Good \ud83d\ude00\nSecond line'));
+  yes('well-formed emoji newline quotes and spaces retain canonical posting',rows().at(-1)?.text==='Good \ud83d\ude00\nSecond line'&&rows().at(-1)?.to==='Lydia "Red" Stone'&&w.count(a,15)===unicodeGold-35&&!!result(id(18)));
   const saved=JSON.stringify(doc()),funds=doc().funds.windhelm,priorGold=w.count(a,15);
   const bad=[[],letter(4).slice(0,4),[...letter(4),'extra'],['job',id(4),'windhelm','A','B'],letter(4).map((x,i)=>i===1?'bad':x),letter(4).map((x,i)=>i===2?'unknown':x),letter(4).map((x,i)=>i===3?3:x),letter(4,'windhelm','A'.repeat(61)),letter(4,'windhelm','Lydia','B'.repeat(301)),letter(4,'windhelm','Bad\nName'),haul(4,'windhelm','1.5'),haul(4,'windhelm','15 whiterun forged'),haul(4,'windhelm','9007199254740992'),haul(4,'windhelm','15','windhelm'),haul(4,'windhelm','15','whiterun','   ')];
   for(const p of bad){send(p);yes('invalid private payload never changes notice ledger or pack '+JSON.stringify(p).slice(0,70),JSON.stringify(doc())===saved&&w.count(a,15)===priorGold);}

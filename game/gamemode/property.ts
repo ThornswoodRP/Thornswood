@@ -6898,8 +6898,12 @@
   }
 
   function validLetterText(to, words) {
-    return typeof to === 'string' && typeof words === 'string' && !!to.trim() && to.length <= 60 &&
-      !/[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) && !!words.trim() && words.length <= LETTER_CHARS;
+    if (typeof to !== 'string' || typeof words !== 'string' || !to.trim() || to.length > 60 ||
+        /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) || !words.trim() || words.length > LETTER_CHARS) return false;
+    // JSON can carry an escaped lone surrogate that the older URI decoder
+    // rejected. Keep both private entry points on that same text boundary.
+    try { encodeURIComponent(to); encodeURIComponent(words); return true; }
+    catch (e) { return false; }
   }
 
   // One private UI boundary. The request ID correlates a saved posting only;

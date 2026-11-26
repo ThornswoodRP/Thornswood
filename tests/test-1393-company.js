@@ -717,7 +717,7 @@ attempt('the board panel', function () {
 
   const page = read('game/ui/thornswood-board.js');
   yes('B8 the panel sends the haul and the confirm, and draws both lists',
-      page.indexOf("net('/haul ' + pay + ' ' + dest + ' ' + what)") !== -1 &&
+      page.indexOf("sendSubmission('haul', [pay, dest, what])") !== -1 &&
       page.indexOf("net('/haul done ' + from + ' ' + n)") !== -1 &&
       /b\.dests/.test(page) && /b\.arrivals/.test(page) && /Send a haul/.test(page) && /Confirm/.test(page) &&
       /row\.haul && b\.steward/.test(page));
