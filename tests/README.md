@@ -164,8 +164,9 @@ node game/tests/test-npc-shared-native.js <built addon .node> <installed record 
 The compiled seasoning check reads the locally built
 `game/content/Thornswood-Content.esp` and `game/content/Thornswood-Last.esp`,
 with `game/data/recipes.json` and `game/data/last-plugin.json` generated from
-the same source and load order. Run it after the normal content compiler
-has built both plugins:
+the same source and load order. The normal compiler reads the installed
+master plugins without changing them. Run it after the normal content
+compiler has built both plugins:
 
 ```
 python tests/test-4610-compiled-records.py
