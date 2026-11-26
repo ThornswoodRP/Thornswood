@@ -2559,18 +2559,36 @@ async def post(channel, text, found):
     # nobody. Only a post that needs more messages than it has sends any.
     words = _oldest_first([m for m in old_posts
                            if getattr(m, 'type', None) != discord.MessageType.pins_add])
-    changed = False
+    # The messages it needs beyond those it has are sent first, before any
+    # word changes, so a send Discord refuses leaves the old words whole
+    # and the run goes on to the next channel (#4493); what did go is taken
+    # back, since it would say the words twice (#2736).
+    sent = []
     doing = ''
+    try:
+        for i, c in enumerate(chunks[len(words):], len(words) + 1):
+            doing = 'post %d of %d could not be sent' % (i, len(chunks))
+            sent.append(await channel.send(c))
+    except discord.HTTPException as e:
+        failed.append('#%s was not rewritten: %s (%s); its old words stay'
+                      % (channel.name, doing, refused(e)))
+        for m in sent:
+            try:
+                await m.delete()
+            except discord.NotFound:
+                pass  # gone already, which is what this wanted
+            except discord.HTTPException as e2:
+                failed.append('#%s: message %s it sent could not be taken back (%s); '
+                              'its old words stay; remove it before publishing again'
+                              % (channel.name, m.id, refused(e2)))
+        return
+    changed = bool(sent)
     try:
         for i, (m, c) in enumerate(zip(words, chunks), 1):
             if (m.content or '') != c:
                 doing = 'post %d of %d could not be edited' % (i, len(chunks))
                 await m.edit(content=c)
                 changed = True
-        for i, c in enumerate(chunks[len(words):], len(words) + 1):
-            doing = 'post %d of %d could not be sent' % (i, len(chunks))
-            words.append(await channel.send(c))
-            changed = True
         for m in words[len(chunks):]:
             doing = 'a post it no longer needs could not be taken down'
             try:
@@ -2578,7 +2596,7 @@ async def post(channel, text, found):
             except discord.NotFound:
                 pass  # gone already, which is what this wanted
             changed = True
-        words = words[:len(chunks)]
+        words = words[:len(chunks)] + sent
         # The first post is pinned, and every part of a discussion guide.
         for i, m in enumerate(words if prefix else words[:1], 1):
             if not getattr(m, 'pinned', False):

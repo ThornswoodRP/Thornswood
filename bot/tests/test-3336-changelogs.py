@@ -328,8 +328,8 @@ ch.log[:] = []
 long_text = '\n\n'.join(['x' * 1500, 'y' * 1500])
 run(B.post(ch, long_text, {}))
 mine = [m.content for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components]
-yes('words that need more posts: the first is edited and only the extra one is sent',
-    mine == ['x' * 1500, 'y' * 1500] and [x[0] for x in ch.log if x[0] in ('send', 'edit')] == ['edit', 'send'])
+yes('words that need more posts: only the extra one is sent, before the first is edited',
+    mine == ['x' * 1500, 'y' * 1500] and [x[0] for x in ch.log if x[0] in ('send', 'edit')] == ['send', 'edit'])
 yes('  and the buttons are sent again under it and the old ones taken down',
     ch.msgs[-1].components and len([m for m in ch.msgs if m.components]) == 1
     and ('send buttons', '**Pings**') in ch.log)
