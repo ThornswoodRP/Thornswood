@@ -1,7 +1,7 @@
 <#
   Run-RealClient.ps1
 
-      pwsh scripts\dev\Run-RealClient.ps1 [-Root <install>] [-Steps tests\real-client\dev-release.json] [-InstallPlugin] [-Publish]
+      pwsh scripts\dev\Run-RealClient.ps1 [-Root <install>] [-Steps tests\real-client\dev-release.json] [-Publish]
 
   Starts the real launcher and the real game on this PC, presses Play the way
   a person does, and walks the game through a list of steps with the test
@@ -49,9 +49,6 @@ param(
     [string]$Out = '',
     [int]$Minutes = 20,
     [int]$PlayMinutes = 15,
-    # Copy this repository's thornswood-test.js into the game first, for a
-    # build released before the plugin was in a pack.
-    [switch]$InstallPlugin,
     [switch]$Publish,
     [string]$Repo = 'ThornswoodRP/Thornswood'
 )
@@ -190,14 +187,27 @@ if ($running.Count -gt 0) {
     throw ('Already running, so this run would take over somebody''s session: ' + (($running | ForEach-Object { $_.ProcessName + ' ' + $_.Id }) -join ', '))
 }
 
-if ($InstallPlugin) {
-    $src = Join-Path $repoRoot 'game\plugins\thornswood-test.js'
-    Copy-Item -LiteralPath $src -Destination (Join-Path $platform 'Plugins\thornswood-test.js') -Force
-    Say 'Copied this repository''s thornswood-test.js into the game.'
-}
+# The plugin the game runs is the build's own: the launcher keeps its
+# build's Data\Platform files and puts them back before every Play, so a copy
+# laid in by hand never reaches the game (26 Nov: the run's own copy was
+# put back before Play, and the run took that for a failure of its steps).
+# The steps are this checkout's, so the run says when the two differ.
 if (-not (Test-Path -LiteralPath (Join-Path $platform 'Plugins\thornswood-test.js'))) {
-    throw 'The game has no Data\Platform\Plugins\thornswood-test.js: the build predates it. Run with -InstallPlugin.'
+    throw 'The game has no Data\Platform\Plugins\thornswood-test.js: the build in place predates it.'
 }
+function Get-PluginMismatch {
+    $inGame = Join-Path $platform 'Plugins\thornswood-test.js'
+    $ours = Join-Path $repoRoot 'game\plugins\thornswood-test.js'
+    $a = (Get-FileHash -LiteralPath $inGame -Algorithm SHA256).Hash.ToLowerInvariant()
+    $b = (Get-FileHash -LiteralPath $ours -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($a -eq $b) { return '' }
+    $sq = Join-Path (Split-Path $launcherExe) 'sq.version'
+    $ver = ''
+    if (Test-Path -LiteralPath $sq) { $m = [regex]::Match([IO.File]::ReadAllText($sq), '<version>\s*([^<\s]+)\s*</version>'); if ($m.Success) { $ver = $m.Groups[1].Value } }
+    'the game runs the thornswood-test.js of the build in place' + $(if ($ver) { " ($ver)" } else { '' }) + ', ' + $a.Substring(0, 12) +
+        ', not this checkout''s, ' + $b.Substring(0, 12) + ': run from the commit of that build, so its steps are the ones its plugin knows'
+}
+$pluginOff = ''
 
 # ---------------------------------------------------------------- Windows --
 Add-Type -AssemblyName System.Drawing
@@ -447,7 +457,14 @@ try {
     while ($true) {
         if ((Get-Date) -gt $deadline) { $result = 'timeout'; $note = "no end in $Minutes minutes"; break }
         $proc = Get-GameProcess
-        if ($proc) { if (-not $sawGame) { Say "The game is up, process $($proc.Id)" }; $sawGame = $true }
+        if ($proc) {
+            if (-not $sawGame) {
+                Say "The game is up, process $($proc.Id)"
+                $pluginOff = Get-PluginMismatch
+                if ($pluginOff) { Say ('Note: ' + $pluginOff + '.') }
+            }
+            $sawGame = $true
+        }
         elseif ($sawGame) { $result = 'crashed'; $note = 'the game closed before the run ended'; break }
 
         $lines = @(Read-NewResultLines)
@@ -509,6 +526,7 @@ if (Test-Path -LiteralPath $launcherLog) {
     } finally { $fs.Dispose() }
 }
 
+if ($pluginOff) { $note = ($note + ' (' + $pluginOff + ')').Trim() }
 $summary = @(
     "# Real game run $runId",
     '',
