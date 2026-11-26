@@ -77,14 +77,15 @@
       chosen so the first version would be felt at the end of a long evening
       rather than the end of an hour. An evening is not how anybody plays
       this: a session is two hours and nothing ever moved far enough to
-      matter. So food empties in two hours and twenty four minutes, drink in
-      an hour and twelve, and rest in eight hours, which is a meter that is
-      still about sleeping rather than about eating.
+      matter. That made food empty in two hours and twenty four minutes,
+      drink in an hour and twelve, and rest in eight hours.
 
-      The proportions are Blade's and are untouched: drink goes twice as fast
-      as food, and rest is over three times food.
+      The approved tuning for #6481 cuts only the base food and drink drain
+      by 20%: food now empties in three hours and drink in an hour and a half.
+      Drink still goes twice as fast as food. Rest keeps its eight-hour clock,
+      and the cold multipliers stay the same.
     */
-    drain: { food: 2.5 * 100 / 6, drink: 2.5 * 100 / 3, rest: 2.5 * 100 / 20 },
+    drain: { food: 2 * 100 / 6, drink: 2 * 100 / 3, rest: 2.5 * 100 / 20 },
 
     /*
       TEMPERATURE, AND IT IS THE ONE METER THAT IS NOT A CLOCK.

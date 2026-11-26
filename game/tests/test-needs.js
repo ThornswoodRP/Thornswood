@@ -8,10 +8,9 @@
 // somebody plays it. It checks that they are what the pitch asked for and that
 // the machinery around them does what it says.
 //
-// The three shapes from the pitch, which are the only claims here that are not
-// mine to change freely:
+// The pitch and the approved #6481 tuning keep these constraints:
 //   - drink goes twice as fast as food
-//   - rest is over three times the food meter
+//   - rest keeps its eight-hour clock when #6481 slows food and drink
 //   - low anything costs you, and low rest costs you everything
 //
 // It drives the REAL block out of gamemode.js over a fake mp and a fake clock,
@@ -96,24 +95,15 @@ if (block !== null && smoke) {
   const HOUR = 3600000;
   const ME = 0xff000001;
 
-  // S1: the three rates are the shape the pitch asked for.
+  // S1: #6481 slows only food and drink by 20%; rest keeps its old clock.
   {
     const r = rig();
     const d = r.NEEDS.drain;
     yes('S1 drink goes exactly twice as fast as food',
         Math.abs(d.drink / d.food - 2) < 1e-9);
-    yes('S1 rest is more than three times the food meter',
-        (100 / d.rest) / (100 / d.food) > 3);
-    /*
-      TWO AND A HALF TIMES FASTER, and this check used to hold the old shape
-      down: it wanted four hours or more. Patrick, 23 September, after playing
-      with it: "I think the food, water, and rest go down wayyyyy to slowly
-      like it needs to go down 2.5x this speed". A session is two hours and
-      nothing ever moved far enough to matter. Food is two hours and twenty
-      four minutes now.
-    */
-    yes('S1 and food empties inside a long session rather than an evening',
-        (100 / d.food) > 2 && (100 / d.food) < 3);
+    yes('S1 rest still empties in eight hours', Math.abs(100 / d.rest - 8) < 1e-9);
+    yes('S1 food empties in three hours', Math.abs(100 / d.food - 3) < 1e-9);
+    yes('S1 drink empties in an hour and a half', Math.abs(100 / d.drink - 1.5) < 1e-9);
   }
 
   // S2: a meter empties on the clock, and stops at nothing. Settled once
