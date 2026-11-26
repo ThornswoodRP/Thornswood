@@ -52141,9 +52141,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return out;
     }
 
-    /* Pieces for that building still waiting on a pack's save, which the cap counts too. */
+    /* Pieces for that building still waiting on a pack's save to be set down, which the cap counts too. */
     function waitingIn(building) {
-      return debits.filter(function (d) { return d && d.data && d.data.building === building; }).length;
+      return debits.filter(function (d) { return d && d.kind === 'piece' && d.data && d.data.building === building; }).length;
     }
 
     /* The building the person stands in, when it is one the property block knows. */
@@ -52324,6 +52324,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var result = land(row, paid);
       var next = Object.assign({}, pieces);
       var waiting = debits.filter(function (debit) { return debit !== row; });
+      if (row.kind === 'pickup') {
+        // Not saved into the pack: the piece is the register's again, where it still stands.
+        if (!paid) { next[row.data.k] = result.piece; }
+        if (!api.writePackRegister({ pieces: next, debits: waiting })) { return ''; }
+        pieces = next;
+        debits = waiting;
+        if (paid) { takeUp(result.piece, result.name, row.data.by); }
+        lookAll(result.piece.building);
+        return result.line;
+      }
       var k = 'w' + row.marker;
       if (paid) { next[k] = result.piece; }
       if (!api.writePackRegister({ pieces: next, debits: waiting })) { return ''; }
@@ -52339,7 +52349,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
     var packs = api.packFirst(function () { return debits; }, function () {
       return api.writePackRegister({ pieces: pieces, debits: debits });
-    }, { piece: landPiece }, commitPackDebit);
+    }, { piece: landPiece, pickup: landPickup }, commitPackDebit);
 
     /* The piece under their crosshair, when they may touch it: { piece } or { why }. */
     function reachable(actorId, refHex) {
@@ -52404,6 +52414,24 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return '';
     }
 
+    /*
+      PICKED UP, REGISTER FIRST (#7016). The item used to go into the pack with
+      a plain inventory write, and the piece came off the register after. The
+      engine saves the pack with the character, later, and the register is
+      written now, so a register write that failed, or a server that stopped
+      between the two, left the item in the saved pack and the piece still in
+      the register, to be picked up again. And a piece that would not come up
+      had its item taken back out of the pack.
+
+      Now the piece leaves the register in the same write as the debit that
+      puts its item in the pack, through packFirst (#4901): the register no
+      longer holds it before the pack is written, so it cannot be picked up
+      twice whenever the register is written. Once the engine says the pack
+      was saved with the item (landPickup, landed), the piece comes out of
+      the world. A pack that was not saved with it lands nothing, the piece
+      is the register's again, where it still stands, and nothing was handed
+      over to take back.
+    */
     function pick(actorId, refHex) {
       var r = reachable(actorId, refHex);
       if (r.why) { return r.why; }
@@ -52413,25 +52441,36 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var other = carrierOf(p.ref);
       if (other && other !== actorId) { return 'Somebody else has that piece in their hands.'; }
       if (row.type === 'CONT' && !api.containerEmpty(p.ref)) { return 'Empty the ' + row.name + ' first.'; }
-      // The item goes into the pack before the piece leaves the world, so a
-      // pack that will not take it leaves the piece standing, never lost.
-      if (!api.give(actorId, row.itemDesc)) {
-        api.log('furniture: could not hand', api.who(actorId), 'the', row.name, 'for', hex(p.ref) + '; it stays standing');
-        return 'Your pack would not take the ' + row.name + ', so it stays where it is.';
-      }
-      try { api.remove(p.ref); } catch (e) {
-        api.log('furniture: could not take up', hex(p.ref) + ':', e);
-        if (!api.take(actorId, row.itemDesc)) {
-          api.log('furniture: and could not take the', row.name, 'back from', api.who(actorId));
-        }
-        return 'It would not come up.';
-      }
-      delete pieces[hex(p.ref)];
+      var k = hex(p.ref);
+      var held = pieces;
+      pieces = Object.assign({}, held);
+      delete pieces[k];
+      var b = packs.begin(actorId, function (entries) { return api.putOne(entries, row.itemDesc) || ('Your pack would not take the ' + row.name + ', so it stays where it is.'); },
+                          'pickup', { k: k, piece: p, by: api.who(actorId) });
+      if (b.why) { pieces = held; return b.why; }
       if (carrying[actorId] && carrying[actorId].ref === p.ref) { delete carrying[actorId]; }
-      save();
-      api.log('furniture:', api.who(actorId), 'picked up the', row.name, hex(p.ref), 'in', p.building);
       lookAll(p.building);
-      return '';
+      return b.line || '';
+    }
+
+    /* A piece picked up, once the pack is saved with its item, or not (#7016). */
+    function landPickup(d, landed) {
+      var p = d.data.piece;
+      var row = own(rows, p.key) ? rows[p.key] : null;
+      var name = row ? row.name : p.key;
+      if (!landed) {
+        return { piece: p, name: name, line: 'Your pack was not saved with the ' + name + ' in it, so it stays where it is.' };
+      }
+      return { piece: p, name: name, line: '' };
+    }
+
+    /* Out of the world, once nothing holds it but the pack it went into. */
+    function takeUp(p, name, by) {
+      try { api.remove(p.ref); } catch (e) {
+        api.log('furniture: the', name, hex(p.ref), 'is in', by + '\'s pack and off the register, and would not leave the world:', e);
+        return;
+      }
+      api.log('furniture:', by, 'picked up the', name, hex(p.ref), 'in', p.building);
     }
 
     /*
@@ -52689,38 +52728,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
   function prop() { return g.__thornswoodProperty || null; }
 
-  /* One furniture item off the pack, to set its piece down. Never adds. */
-  function takeOne(actorId, itemDesc) {
-    var baseId = idOf(itemDesc) >>> 0;
-    var entries = entriesOf(actorId);
-    if (!baseId || !entries) { return false; }
-    for (var i = 0; i < entries.length; i++) {
-      var e = entries[i];
-      if (!e || (e.baseId >>> 0) !== baseId || !(Number(e.count) > 0)) { continue; }
-      var copy = JSON.parse(JSON.stringify(e));
-      copy.count = Number(e.count) - 1;
-      if (copy.count > 0) { entries[i] = copy; } else { entries.splice(i, 1); }
-      try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (err) { return false; }
-    }
-    return false;
-  }
-
-  /* One furniture item back into the pack, for a piece picked up. Never gold. */
-  function giveOne(actorId, itemDesc) {
-    var baseId = idOf(itemDesc) >>> 0;
-    var entries = entriesOf(actorId);
-    if (!baseId || !entries) { return false; }
-    var merged = false;
-    for (var i = 0; i < entries.length && !merged; i++) {
-      if (entries[i] && (entries[i].baseId >>> 0) === baseId && plain(entries[i])) {
-        entries[i] = { baseId: baseId, count: (Number(entries[i].count) || 0) + 1 };
-        merged = true;
-      }
-    }
-    if (!merged) { entries.push({ baseId: baseId, count: 1 }); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (e) { return false; }
-  }
-
   function admitPackDebit(actor, change) {
     var merchants = g.__thornswoodMerchantTrade;
     return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
@@ -52896,6 +52903,20 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return null;
   }
 
+  /* One furniture item into a list of pack entries, for a piece picked up through packFirst (#7016): { entries, taken }, or null. Never gold. */
+  function putOne(entries, itemDesc) {
+    var baseId = idOf(itemDesc) >>> 0;
+    if (!baseId || baseId === 0xF) { return null; }
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && (entries[i].baseId >>> 0) === baseId && plain(entries[i])) {
+        entries[i] = { baseId: baseId, count: (Number(entries[i].count) || 0) + 1 };
+        return { entries: entries, taken: [] };
+      }
+    }
+    entries.push({ baseId: baseId, count: 1 });
+    return { entries: entries, taken: [] };
+  }
+
   /* A line to a person in the world, from a piece that landed or let go after they asked. */
   function tellPerson(pid, line, err) {
     if (err) { plog('furniture: a take out of a pack:', err); return; }
@@ -52957,6 +52978,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     },
     enablePlacement: function (id) { mp.set(id, 'isDisabled', false); },
     cutOne: cutOne,
+    putOne: putOne,
     actorOf: function (desc) { try { return mp.getIdFromDesc(desc) >>> 0; } catch (e) { return 0; } },
     cellOf: cellOf,
     posOf: function (id) { try { return mp.get(id, 'pos') || null; } catch (e) { return null; } },
@@ -52989,8 +53011,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       (entriesOf(actorId) || []).forEach(function (e) { if (e && (e.baseId >>> 0) === baseId) { n += Number(e.count) || 0; } });
       return n;
     },
-    take: takeOne,
-    give: giveOne,
     /*
       The base is there and of the kind its row says, and a container base
       neither respawns nor brings contents of its own, so setting one down

@@ -524,4 +524,84 @@ for (const failure of ['before', 'after']) {
       stoolsKept(dir) === 1 && e.writes === 1);
 }
 
+/*
+  A piece picked up (#7016): it leaves the register in the same write as the
+  debit that adds its item to the pack, and leaves the world once the pack
+  is saved with it. Each case starts from a stool set down and landed, with
+  one stool left in the pack.
+*/
+function standingStool(dir, e) {
+  const W = bootFurniture(dir, e);
+  place(dir, W);
+  e.savePack(ALICE.a);
+  settleF(dir, W);
+  return W;
+}
+function pickStool(dir, W) {
+  let said = '';
+  inDir(dir, function () { said = W.command(ALICE.a, ['pick', Object.keys(W.pieces())[0]]); });
+  return said;
+}
+{
+  const dir = folder(), e = engine();
+  const W = standingStool(dir, e);
+  const said = pickStool(dir, W);
+  const offRegister = stoolsKept(dir) === 0, inLive = e.count(ALICE.a, STOOL) === 2;
+  e.restart();
+  const W2 = bootFurniture(dir, e);
+  settleF(dir, W2);
+  yes('5 a stool picked up: it is off the register before the pack is saved, and in the live pack ("' + said + '")',
+      offRegister && inLive);
+  yes('5 a stool picked up: a restart before the pack is saved finds it standing and in the register, once, and not in the pack (pack ' +
+      e.count(ALICE.a, STOOL) + ' of 2, register ' + stoolsKept(dir) + ', standing ' + Object.keys(e.refs).length + ')',
+      e.count(ALICE.a, STOOL) === 1 && stoolsKept(dir) === 1 && Object.keys(e.refs).length === 1);
+  let again = '';
+  inDir(dir, function () { again = W2.command(ALICE.a, ['pick', Object.keys(W2.pieces())[0]]); });
+  e.savePack(ALICE.a);
+  settleF(dir, W2);
+  yes('5 and it can then be picked up once (' + again + ')',
+      e.count(ALICE.a, STOOL) === 2 && stoolsKept(dir) === 0 && Object.keys(e.refs).length === 0);
+}
+{
+  const dir = folder(), e = engine();
+  const W = standingStool(dir, e);
+  pickStool(dir, W);
+  e.savePack(ALICE.a);
+  e.restart();
+  const W2 = bootFurniture(dir, e);
+  settleF(dir, W2);
+  settleF(dir, W2);
+  const W3 = bootFurniture(dir, e);
+  settleF(dir, W3);
+  yes('6 a stool picked up: a restart after the pack is saved finds it in the pack, once, and not in the register or the world (pack ' +
+      e.count(ALICE.a, STOOL) + ' of 2, register ' + stoolsKept(dir) + ', standing ' + Object.keys(e.refs).length + ')',
+      e.count(ALICE.a, STOOL) === 2 && stoolsKept(dir) === 0 && Object.keys(e.refs).length === 0);
+}
+{
+  const dir = folder(), e = engine();
+  const W = standingStool(dir, e);
+  const writes = e.writes, plain = e.plain;
+  pickStool(dir, W);
+  settleF(dir, W);
+  const standingBefore = Object.keys(e.refs).length;
+  e.savePack(ALICE.a);
+  settleF(dir, W);
+  settleF(dir, W);
+  yes('7 a stool picked up: it stands until the pack is saved with it, then leaves the world, once (' + standingBefore + ' standing before)',
+      standingBefore === 1 && Object.keys(e.refs).length === 0 && stoolsKept(dir) === 0 && e.count(ALICE.a, STOOL) === 2);
+  yes('7 a stool picked up: the pack was written once, with a receipt, never a plain write',
+      e.writes === writes + 1 && e.plain === plain);
+}
+{
+  const dir = folder(), e = engine();
+  const W = standingStool(dir, e);
+  const writes = e.writes;
+  e.refuseRegister = 'furniture.json';
+  const said = pickStool(dir, W);
+  e.refuseRegister = '';
+  yes('8 a stool picked up while the register cannot be written: nothing goes in the pack and it stays standing ("' + said + '")',
+      /could not write/.test(said) && e.writes === writes && e.count(ALICE.a, STOOL) === 1 &&
+      stoolsKept(dir) === 1 && Object.keys(e.refs).length === 1 && Object.keys(W.pieces()).length === 1);
+}
+
 done();
