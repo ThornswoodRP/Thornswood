@@ -69,6 +69,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `report-posts.json`, `moderation-posts.json` | bot | bot | Message and channel IDs keyed by source fingerprints, so only linked copies go when their source records go | none |
 | `trouble-posts.json`, `news-said.json`, `restarts-said.json`, `staff-notices.json`, `problems-filed.json` | bot | bot | Low: what it has posted already, so nothing posts twice | none |
 | `channel-setup.json`, `known-issues.json` | bot | bot | Low | none |
+| `rules-carried.json` | bot, when it sends its Member reaction message in `#rules` again under the rules (#6891) | bot | Medium: who reacted to the old message, counted as reacted until they react on the new one or take it off | never read on a guess: an unreadable file leaves Member as it is |
 | `bot.env.json` | Install-Bot | bot | Medium; holds a secret and is never in the repository | none |
 | `Thornswood-Admin/for-bot/github-token.json`, `Thornswood-Admin/for-site/github-token.json` | the box admin service (`scripts\vps\admin\admin.js`), every half hour (#5184) | bot (issues for #known-issues and Report a problem), site (its GitHub reads) | High: a GitHub token, never in the repository | each reader takes the token only while it has not ended |
 | `deletion-requests.json` (the site's data, the bot's data, each voice service) | Delete-Person.ps1 | site, bot and voice at their next start, which apply it and delete it (#2758) | High: a person's data leaving | none |

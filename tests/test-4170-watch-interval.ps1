@@ -52,11 +52,17 @@ Yes ('1. the watch step checks every 5 minutes for 55 minutes in one run (' + $w
 $timeout = [regex]::Match($wf, '(?m)^    timeout-minutes: (\d+)\s*$')
 Yes '   and the job has the time for it, and no more than an hour and a little' ($timeout.Success -and [int]$timeout.Groups[1].Value -ge 58 -and [int]$timeout.Groups[1].Value -le 65)
 $next = [regex]::Match($wf, '(?s)\n      - name: Start the next run\n(.*?)(?=\n      - name: |\z)')
-Yes '   then it starts the next run of itself, after it kept what it remembers' ($next.Success -and $wf.IndexOf('- name: Keep what it remembers') -ge 0 -and $wf.IndexOf('- name: Keep what it remembers') -lt $next.Index)
+# #6896: the next run is asked for before the watch, so a run that hangs or
+# hits its time limit still leaves it waiting; the concurrency group holds it
+# until this run ends, and what this run saw is kept however it ends.
+$watchAt = $wf.IndexOf("`n      - name: Watch`n")
+$keep = [regex]::Match($wf, '(?s)\n      - name: Keep what it remembers\n(.*?)(?=\n      - name: |\z)')
+Yes '   it asks for the next run of itself before it watches (#6896)' ($next.Success -and $watchAt -gt $next.Index)
+Yes '   and keeps what it remembers however the watch ended, a time limit included' ($keep.Success -and $keep.Groups[1].Value -match 'if: \$\{\{ always\(\) && !inputs\.test \}\}')
 $n = $next.Groups[1].Value
 Yes '   with gh workflow run on main, the run''s own token, nothing pasted into the script' (
   $n -match 'gh workflow run watch-outside\.yml --ref main' -and $n -match 'GH_TOKEN: \$\{\{ github\.token \}\}' -and $n -notmatch '\$\{\{ (inputs|github\.event)')
-Yes '   unless it was a test post or somebody cancelled the run' ($n -match 'if: \$\{\{ !cancelled\(\) && !inputs\.test \}\}')
+Yes '   unless it was a test post' ($n -match 'if: \$\{\{ !inputs\.test \}\}' -and $n -notmatch 'cancelled\(\)')
 Yes '   and the job may start a workflow (actions: write), still reading the repository and the Deployments only' (
   $wf -match '(?m)^  actions: write\s*$|(?m)^      actions: write\s*$' -and $wf -match 'contents: read' -and $wf -match 'deployments: read' -and $wf -notmatch 'contents: write')
 Yes '   one run at a time, never cancelling the one running, so the next waits for this one' ($wf -match '(?m)^  group: watch-outside\s*$' -and $wf -match '(?m)^  cancel-in-progress: false\s*$')
@@ -139,6 +145,21 @@ try {
     Yes '4. the site down on two passes: one message' ((Posted '*is down*') -eq 1)
     Yes '   saying how long before it the check before it was, measured' ($down -match 'The check before this one was about 5 minutes earlier')
     Yes '   and promising no cadence' ($down -notmatch 'about every')
+
+    # ---- 5. a run that never ended names its check (#6896) ------------------------
+    function Invoke-Check($S, $c) { if ($c.Name -eq 'site') { throw 'the run ends here' }; return (Ok 'fine') }
+    $threw = $false
+    try { $null = Invoke-Watch $S $P -Remember 6>$null } catch { $threw = $true }
+    $left = ('' + (Get-Content -LiteralPath $P.Asking -TotalCount 1 -EA SilentlyContinue))
+    Yes ('5. a pass that stops while asking leaves which check behind (' + $left + ')') ($threw -and $left -like 'site|*')
+    function Invoke-Check($S, $c) { return (Ok 'fine') }
+    $script:lastTry = $script:clock
+    $null = Invoke-WatchFor $S $P 5 6>$null
+    $log = [IO.File]::ReadAllText($P.Log)
+    Yes '   the next run says once that the run before it stopped while asking that check' (([regex]::Matches($log, 'stopped while asking site, which it started at ')).Count -eq 1)
+    Yes '   and a pass that answers leaves nothing behind' (-not (Test-Path -LiteralPath $P.Asking))
+    $null = Invoke-WatchFor $S $P 5 6>$null
+    Yes '   so the run after that says nothing about it' (([regex]::Matches([IO.File]::ReadAllText($P.Log), 'stopped while asking')).Count -eq 1)
   }
   $src = [IO.File]::ReadAllText($ScriptPath)
   Yes '   no message in the script promises "about every" so many minutes' ($src -notmatch "about every ' \+")

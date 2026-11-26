@@ -14,11 +14,56 @@ function Yes($what, $ok) {
     else { $script:fail++; Write-Host "FAIL $what" }
 }
 function Fixture($name, $source) { [IO.File]::WriteAllText((Join-Path $tests $name), $source) }
-# Leave room for a cold interpreter on a shared Windows runner. The cases
-# that verify the timeout and inherited pipes still set their own one-second bound.
+# Ordinary fixtures allow a cold interpreter. The separate uninstrumented
+# timeout case still bounds startup; ownership cases control their ready point.
 function Run([string]$Executable = $Python, [int]$Seconds = 20) {
     $script:output = & (Get-Process -Id $PID).Path -NoProfile -File $runner -Root $scratch -Python $Executable -TimeoutSeconds $Seconds 2>&1 | Out-String
     return $LASTEXITCODE
+}
+# Pause only the test clock at the real runner's timeout seam. Python, its
+# bootstrap, job ownership, timeout and cleanup all remain the real code.
+$readyRunner = Join-Path $scratch 'run-after-ready.ps1'
+[IO.File]::WriteAllText($readyRunner, @'
+param($Runner, $Root, $Python, $Ready, $Result, [switch]$ExitedParent)
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile($Runner, [ref]$tokens, [ref]$errors)
+$seams = @($ast.FindAll({ param($node)
+    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+    $node.Extent.Text -ceq '$timedOut = -not $process.WaitForExit($TimeoutSeconds * 1000)'
+}, $true))
+if ($errors.Count -or $seams.Count -ne 1) { throw 'expected exactly one unchanged timeout seam' }
+$global:fixtureReady = @{ Path = $Ready; ExitedParent = [bool]$ExitedParent; Observed = $false; Stamp = 0L; Wait = 0.0 }
+$global:fixtureBreakpoint = Set-PSBreakpoint -Script $Runner -Line $seams[0].Extent.StartLineNumber -Action {
+    $setup = [Diagnostics.Stopwatch]::StartNew()
+    while ((-not [IO.File]::Exists($global:fixtureReady.Path) -or ($global:fixtureReady.ExitedParent -and -not $process.HasExited)) -and $setup.Elapsed.TotalSeconds -lt 20) {
+        Start-Sleep -Milliseconds 10
+    }
+    $global:fixtureReady.Wait = $setup.Elapsed.TotalSeconds
+    $global:fixtureReady.Observed = [IO.File]::Exists($global:fixtureReady.Path) -and (-not $global:fixtureReady.ExitedParent -or $process.HasExited)
+    $global:fixtureReady.Stamp = [Diagnostics.Stopwatch]::GetTimestamp()
+    Remove-PSBreakpoint -Breakpoint $global:fixtureBreakpoint
+}
+try {
+    & $Runner -Root $Root -Python $Python -TimeoutSeconds 1
+    $code = $LASTEXITCODE
+} finally {
+    Remove-PSBreakpoint -Breakpoint $global:fixtureBreakpoint -ErrorAction SilentlyContinue
+    $elapsed = if ($global:fixtureReady.Stamp) { [Diagnostics.Stopwatch]::GetElapsedTime($global:fixtureReady.Stamp).TotalSeconds } else { -1 }
+    [IO.File]::WriteAllText($Result, (@{ ready = $global:fixtureReady.Observed; wait = $global:fixtureReady.Wait; elapsed = $elapsed } | ConvertTo-Json))
+}
+exit $code
+'@)
+function RunReady([string]$Ready, [string]$Executable = $Python, [switch]$ExitedParent) {
+    $resultPath = Join-Path $scratch ('ready-result-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $script:output = & (Get-Process -Id $PID).Path -NoProfile -File $readyRunner -Runner $runner -Root $scratch -Python $Executable -Ready (Join-Path $scratch $Ready) -Result $resultPath -ExitedParent:$ExitedParent 2>&1 | Out-String
+    $code = $LASTEXITCODE
+    $result = if ([IO.File]::Exists($resultPath)) { [IO.File]::ReadAllText($resultPath) | ConvertFrom-Json } else { $null }
+    $readyOkay = $result -and $result.ready -and $result.wait -lt 20 -and $result.elapsed -ge 0
+    Yes "fixture $Ready publishes readiness within its separate 20-second setup bound" $readyOkay
+    if (-not $readyOkay) { throw "fixture readiness failed: $output" }
+    $script:activeSeconds = $result.elapsed
+    return $code
 }
 try {
     Fixture 'test-a.py' @'
@@ -59,32 +104,39 @@ print('err' * 30000, file=sys.stderr)
     Remove-Item -LiteralPath (Join-Path $scratch 'last-ran')
     Yes 'a failed harness makes the runner fail while the remaining harness still runs' ((Run) -ne 0 -and (Test-Path (Join-Path $scratch 'last-ran')) -and $output -match 'test-a.py.*exit 7')
     Yes 'missing Python fails closed' ((Run -Executable (Join-Path $scratch 'missing-python.exe')) -ne 0)
+    # A cold harness may time out before executing any fixture code. This
+    # actual, uninstrumented run must still fail and continue the suite.
+    Fixture 'test-a.py' "import time; time.sleep(30)"
+    Fixture 'test-z.py' "import pathlib; pathlib.Path('after-cold-timeout').write_text('yes')"
+    Yes 'the uninstrumented one-second deadline also bounds delayed startup and continues' ((Run -Seconds 1) -ne 0 -and (Test-Path (Join-Path $scratch 'after-cold-timeout')) -and $output -match 'timed out')
     # The timed-out harness starts a child which would leave a marker if it
     # survived. Verify termination of the actual descendant, not only a log.
     Fixture 'test-a.py' @'
 import pathlib, subprocess, sys, time
-p = subprocess.Popen([sys.executable, '-c', "import pathlib,time; time.sleep(4); pathlib.Path('child-survived').write_text('bad')"])
-pathlib.Path('child-pid').write_text(str(p.pid))
-time.sleep(30)
+time.sleep(2) # deliberately exceed the old startup race
+p = subprocess.Popen([sys.executable, '-c', "import pathlib,time; time.sleep(60); pathlib.Path('child-survived').write_text('bad')"])
+pathlib.Path('child-pid.pending').write_text(str(p.pid))
+pathlib.Path('child-pid.pending').replace('child-pid')
+time.sleep(60)
 '@
     Fixture 'test-z.py' "import pathlib; pathlib.Path('after-timeout').write_text('yes')"
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    Yes 'timeout fails and continues the suite' ((Run -Seconds 1) -ne 0 -and (Test-Path (Join-Path $scratch 'after-timeout')) -and $output -match 'timed out')
+    Yes 'timeout fails and continues the suite' ((RunReady -Ready 'child-pid') -ne 0 -and (Test-Path (Join-Path $scratch 'after-timeout')) -and $output -match 'timed out')
     $childId = [int][IO.File]::ReadAllText((Join-Path $scratch 'child-pid'))
-    Yes 'timeout kills the owned child process as well as the harness' (-not (Get-Process -Id $childId -ErrorAction SilentlyContinue) -and $timer.Elapsed.TotalSeconds -lt 15)
+    Yes 'timeout kills the owned child process as well as the harness' (-not (Get-Process -Id $childId -ErrorAction SilentlyContinue) -and $activeSeconds -lt 15)
     Fixture 'test-a.py' @'
-import pathlib, subprocess, sys
-p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
-pathlib.Path('pipe-child-pid').write_text(str(p.pid))
+import pathlib, subprocess, sys, time
+time.sleep(2)
+p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+pathlib.Path('pipe-child-pid.pending').write_text(str(p.pid))
+pathlib.Path('pipe-child-pid.pending').replace('pipe-child-pid')
 '@
     # Use the real interpreter for the exited-parent case so a venv
     # redirector's own exit cleanup cannot mask the ownership regression.
     $basePython = & $Python -c 'import sys; print(sys._base_executable)'
     if ($LASTEXITCODE -ne 0) { throw 'could not resolve the base Python interpreter' }
     try {
-        $timer.Restart()
-        $pipeResult = Run -Executable $basePython.Trim() -Seconds 1
-        $pipeOkay = $pipeResult -ne 0 -and $timer.Elapsed.TotalSeconds -lt 15 -and $output -match 'descendants outlived'
+        $pipeResult = RunReady -Ready 'pipe-child-pid' -Executable $basePython.Trim() -ExitedParent
+        $pipeOkay = $pipeResult -ne 0 -and $activeSeconds -lt 15 -and $output -match 'descendants outlived'
         Yes 'an exited harness retaining child output pipes fails within its bound' $pipeOkay
         if (-not $pipeOkay) { Write-Host $output }
         $pipeChildId = [int][IO.File]::ReadAllText((Join-Path $scratch 'pipe-child-pid'))
@@ -92,23 +144,29 @@ pathlib.Path('pipe-child-pid').write_text(str(p.pid))
     } finally {
         # This fixture deliberately leaves a known child after its parent
         # exits, to exercise the pipe boundary. Clean up only that owned PID.
-        $pipeChildId = [int][IO.File]::ReadAllText((Join-Path $scratch 'pipe-child-pid'))
-        $child = Get-Process -Id $pipeChildId -ErrorAction SilentlyContinue
-        if ($child) { $child.Kill($true); $child.WaitForExit(); $child.Dispose() }
+        if ([IO.File]::Exists((Join-Path $scratch 'pipe-child-pid'))) {
+            $pipeChildId = [int][IO.File]::ReadAllText((Join-Path $scratch 'pipe-child-pid'))
+            $child = Get-Process -Id $pipeChildId -ErrorAction SilentlyContinue
+            if ($child) { $child.Kill($true); $child.WaitForExit(); $child.Dispose() }
+        }
     }
     Fixture 'test-a.py' @'
-import pathlib, subprocess, sys
-p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-pathlib.Path('closed-child-pid').write_text(str(p.pid))
+import pathlib, subprocess, sys, time
+time.sleep(2)
+p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+pathlib.Path('closed-child-pid.pending').write_text(str(p.pid))
+pathlib.Path('closed-child-pid.pending').replace('closed-child-pid')
 '@
     try {
-        Yes 'an exited harness cannot leave descendants even after closing their output pipes' ((Run -Executable $basePython.Trim()) -ne 0 -and $output -match 'descendants outlived')
+        Yes 'an exited harness cannot leave descendants even after closing their output pipes' ((RunReady -Ready 'closed-child-pid' -Executable $basePython.Trim() -ExitedParent) -ne 0 -and $activeSeconds -lt 15 -and $output -match 'descendants outlived')
         $closedId = [int][IO.File]::ReadAllText((Join-Path $scratch 'closed-child-pid'))
         Yes 'closed-output orphan is gone before fixture cleanup' (-not (Get-Process -Id $closedId -ErrorAction SilentlyContinue))
     } finally {
-        $closedId = [int][IO.File]::ReadAllText((Join-Path $scratch 'closed-child-pid'))
-        $child = Get-Process -Id $closedId -ErrorAction SilentlyContinue
-        if ($child) { $child.Kill($true); $child.WaitForExit(); $child.Dispose() }
+        if ([IO.File]::Exists((Join-Path $scratch 'closed-child-pid'))) {
+            $closedId = [int][IO.File]::ReadAllText((Join-Path $scratch 'closed-child-pid'))
+            $child = Get-Process -Id $closedId -ErrorAction SilentlyContinue
+            if ($child) { $child.Kill($true); $child.WaitForExit(); $child.Dispose() }
+        }
     }
     Fixture 'test-a.py' "import pathlib; pathlib.Path('unowned-test-ran').write_text('bad')"
     $bootstrap = Join-Path (Split-Path $runner) 'bot-harness-bootstrap.py'
