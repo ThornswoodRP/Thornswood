@@ -879,18 +879,25 @@ WELCOME_MODT = bytes.fromhex('020000000400000000000000332e656964647300b5139f095e
                              'cd6472c964647300b5139f09f4c8a2a364647300b5139f09')
 WELCOME_BOUNDS = (-9, -11, -1, 9, 11, 2)
 WELCOME_ART = 0x00080A4A
+# THE WELCOME LETTER'S WORDS (#5972). They said the pack held sixteen writs
+# and then ten passages, and that the writ decided what a character owned on
+# the first morning. The writs left the plugin on 21 September, nothing hands
+# out the passages since the town is chosen on the creation panel (#2622,
+# above), and the starter kits went on 20 September: a new character starts
+# in plain clothes (character-creation.ts, giveShift), picks a town on the
+# panel that opens by itself or on K, and may pick a class and a profession
+# there or later in the world. Death still takes them to the nearest temple.
 WELCOME_WORDS = (
     '<p align="center"><font size="34">Before You Go</font></p><br><br>[pagebreak]<br><br>'
     'You are somewhere that is not anywhere, and you will not be here long.<br><br>'
-    'Two things remain. In your pack are sixteen writs. Read one, or pick from the menu that comes up on '
-    'its own, and whichever you choose is the trade you begin with. The gear comes with it.<br><br>'
-    'Then ten passages take the writs\' place. Read one of those and you wake in that town\'s inn, with a '
-    'bed and a road and no further ceremony.<br><br>'
-    'You can only choose one of each. Take your time over both.<br><br>[pagebreak]<br><br>'
-    'A word on the trades. None of them locks anything: a miner may learn smithing and a mage may swing '
-    'an axe. The writ decides what you own on the first morning, not what you are.<br><br>'
-    'A word on the towns. Death returns you to the nearest temple, not to the one you choose here, so '
-    'choose for the neighbours rather than for safety.<br><br>'
+    'You go out in plain clothes, with nothing else in your pack. What you own after today, '
+    'you earn.<br><br>'
+    'The panel that opens on its own, or on K, asks where you will start. Choose a town and you '
+    'arrive there, with a road and no further ceremony.<br><br>'
+    'It asks for your class and your profession as well. Choose them now, or later in the '
+    'world.<br><br>[pagebreak]<br><br>'
+    'A word on the towns. Death returns you to the nearest temple, not to the town you choose '
+    'here, so choose for the neighbours rather than for safety.<br><br>'
     'That is everything. Go on.')
 
 
