@@ -310,6 +310,12 @@ try {
     # had none.
     $beforeCol = Join-Path $root 'col-before\collection.json'
     Collection $beforeCol @( @{ name = 'alpha.esp'; before = @('beta.esp') } )
+    # The same rules with each name written as an object with a name field,
+    # which the Nexus layout reader reads by that field (#4515).
+    $objectAfter = Join-Path $root 'col-object-after\collection.json'
+    Collection $objectAfter @( @{ name = 'beta.esp'; after = @(@{ name = 'alpha.esp' }) } )
+    $objectBefore = Join-Path $root 'col-object-before\collection.json'
+    Collection $objectBefore @( @{ name = 'alpha.esp'; before = @(@{ name = 'beta.esp' }) } )
     $ab = Join-Path $root 'lists\ab.txt'
     PluginList $ab @('*Alpha.esp', '*Beta.esp')
     $ba = Join-Path $root 'lists\ba.txt'
@@ -393,6 +399,8 @@ try {
     Collection $cheddar5 ($chain5 + @(@{ name = 'cheddars_mashups.esl'; after = @('immersive weapons.esp', 'hothtrooper44_armorcompilation.esp', 'zia_complete pack.esp') }))
     $cheddar6 = Join-Path $root 'col-cheddar6\collection.json'
     Collection $cheddar6 ($chain5 + @(@{ name = 'cheddars_mashups.esl'; after = @('racecompatibility.esm') }))
+    $cheddarObject = Join-Path $root 'col-cheddar-object\collection.json'
+    Collection $cheddarObject ($chain5 + @(@{ name = 'cheddars_mashups.esl'; after = @(@{ name = 'immersive weapons.esp' }) }))
     $masterLoop = Join-Path $root 'col-master-loop\collection.json'
     Collection $masterLoop ($chain5 + @(@{ name = 'patch.esp'; after = @('zia_complete pack.esp') }, @{ name = 'zia_complete pack.esp'; after = @('patch.esp') }))
     $rev5List = Join-Path $root 'lists\rev5.txt'
@@ -500,6 +508,14 @@ try {
     Yes 'a "before" rule is read and holds (exit 0)' ($r.Code -eq 0)
     $r = Run @('-Collection', $beforeCol, '-List', $ba, '-Data', $data)
     Yes 'and a list that breaks it fails (exit 1)' ($r.Code -eq 1)
+    $r = Run @('-Collection', $objectAfter, '-List', $ab, '-Data', $data)
+    Yes 'an "after" name written as an object is read by its name field and holds (exit 0)' ($r.Code -eq 0 -and -not (Has $r.Out '@{'))
+    $r = Run @('-Collection', $objectAfter, '-List', $ba, '-Data', $data)
+    Yes 'and a list that breaks it fails on the real plugin names (exit 1)' ($r.Code -eq 1 -and -not (Has $r.Out '@{') -and -not (Has $r.Out 'no rule names it'))
+    $r = Run @('-Collection', $objectBefore, '-List', $ab, '-Data', $data)
+    Yes 'a "before" name written as an object is read by its name field and holds (exit 0)' ($r.Code -eq 0 -and -not (Has $r.Out '@{'))
+    $r = Run @('-Collection', $objectBefore, '-List', $ba, '-Data', $data)
+    Yes 'and a list that breaks it fails on the real plugin names (exit 1)' ($r.Code -eq 1 -and -not (Has $r.Out '@{') -and -not (Has $r.Out 'no rule names it'))
 
     $r = Run @('-Collection', $col5, '-List', $ghost, '-Data', $data)
     Yes 'an enabled plugin that is not in Data is said so' (Has $r.Out 'not in the Data folder and are counted as full: Ghost.esp')
@@ -524,6 +540,9 @@ try {
     $r = Run @('-Collection', $cheddar6, '-List', $rev6List, '-Data', $data5)
     Yes 'the fix, cheddars_mashups.esl after RaceCompatibility.esm, holds (exit 0)' ($r.Code -eq 0)
     Yes 'and says no rule goes round' (Has $r.Out 'yes   no rule goes round in a circle with the order the game sets')
+    $r = Run @('-Collection', $cheddarObject, '-List', $rev5List, '-Data', $data5)
+    Yes 'the loop check reads an object-form "after" name too, and names the loop (exit 1)' `
+        ($r.Code -eq 1 -and (Has $r.Out 'cheddars_mashups.esl --> Immersive Weapons.esp --> cheddars_mashups.esl'))
     $r = Run @('-Collection', $masterLoop, '-List', $patchList, '-Data', $data5)
     Yes 'a plugin ruled to load before a plugin that names it as a master fails (exit 1)' ($r.Code -eq 1)
     Yes 'and says the header sets the other way' (Has $r.Out 'Patch.esp names ZIA_Complete Pack.esp as a master')
