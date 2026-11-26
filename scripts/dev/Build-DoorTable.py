@@ -66,6 +66,7 @@ import sys
 import bsa
 import gamemode_tables
 import own_plugins
+import riftweald
 
 COMPRESSED = 0x00040000
 MASTERS = own_plugins.MASTERS
@@ -289,6 +290,9 @@ def main():
     with open(args.policy, encoding='utf-8') as fh:
         policy = json.load(fh)
     gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
+    if riftweald.policy_refs(policy):
+        riftweald.table_check(placed)
+        del placed[riftweald.DOOR]['lock']
     opened = []
     for g in gates:
         row = placed.get(g)

@@ -1,5 +1,11 @@
 # The test harnesses
 
+Run `python tests/riftweald-unlock-cases.py` for the exact Riftweald door and
+bolt record controls. It uses synthetic plugins, the real record writer and
+reader, and the real door-table builder; no installed game or native build is
+needed. The real content build must separately pass the strict winning-record
+guards before this change can be accepted for release.
+
 ## What they are
 
 Every `test-*.js` and `test-*.ps1` here checks one thing the scripts, the
