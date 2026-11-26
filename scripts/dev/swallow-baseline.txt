@@ -355,7 +355,7 @@ game\gamemode\needs.ts 21
 game\gamemode\npc-server-runtime.ts 2
 game\gamemode\property.ts 43
 game\gamemode\scripted-activators.ts 8
-game\gamemode\season.ts 6
+game\gamemode\season.ts 5
 game\gamemode\server-manifest.ts 1
 game\gamemode\small-helpers.ts 5
 game\gamemode\social.ts 19

@@ -12,6 +12,11 @@ fs.writeFileSync(gm, "'use strict';\n" + 'globalThis.__test6790Properties = {};\
   'mp.makeProperty = function(name, options) {\n' +
   '  globalThis.__test6790Properties[name] = options;\n' +
   '  return __test6790MakeProperty.apply(this, arguments);\n' +
+  '};\n' +
+  'var __test6790Set = mp.set;\n' +
+  'mp.set = function(actor, name, value) {\n' +
+  '  if (name === "thornswoodSky" && globalThis.__testSkyWrite) { globalThis.__testSkyWrite(actor, value); }\n' +
+  '  return __test6790Set.apply(this, arguments);\n' +
   '};\n' + source);
 let w, finished = false;
 try {
@@ -88,6 +93,39 @@ try {
     w.leave(a); w.arrive(a); w.run(30000); report(a);
     const arrival = owner(); arrival.run();
     yes('a fresh arrival context applies the persisted unexpired shared value', value(a).id === originalSky && arrival.forces() === 1 && S.ensureRoll(S.climateOf(a, { place: 'outdoors', high: 0 }), w.now()).until === deadline);
+
+    // A native publication can also fail before the owner sees the value.
+    const indoor = { place: 'indoors' }, outdoor = { place: 'outdoors' };
+    const logStart = w.log.length;
+    let rejectActor = a, refuse = true, writes = 0;
+    box.__testSkyWrite = (actor, desired) => {
+      if (actor !== rejectActor) { return; }
+      writes++;
+      if (refuse) { throw Error('native sky publication refused ' + desired.id); }
+    };
+    S.skyAdjust(a, indoor);
+    yes('a refused indoor release leaves the previously published sky', writes === 1 && value(a).id === originalSky);
+    refuse = false;
+    S.skyAdjust(a, indoor);
+    S.skyAdjust(a, indoor);
+    yes('the next ordinary indoor update publishes the release once', writes === 2 && value(a).id === 0);
+
+    S.skyAdjust(b, indoor);
+    rejectActor = b;
+    writes = 0;
+    refuse = true;
+    S.skyAdjust(b, outdoor);
+    yes('a refused outdoor publication leaves the indoor value', writes === 1 && value(b).id === 0);
+    refuse = false;
+    S.skyAdjust(b, outdoor);
+    S.skyAdjust(b, outdoor);
+    yes('the next ordinary outdoor update publishes the same sky once', writes === 2 && value(b).id === originalSky);
+    yes('a refused publication does not reroll or replace the shared sky', S.ensureRoll(S.climateOf(a, outdoor), w.now()).until === deadline);
+    const refusedWrites = w.log.slice(logStart).filter(line => line.includes('could not publish shared sky'));
+    yes('both refused writes log the actor, sky and engine error, with no extra lines on success',
+      refusedWrites.length === 2 &&
+      refusedWrites[0].includes('0x' + a.toString(16) + ' for sky 0x0: native sky publication refused 0') &&
+      refusedWrites[1].includes('0x' + b.toString(16) + ' for sky 0x' + originalSky.toString(16) + ': native sky publication refused ' + originalSky));
   }
   t.done(w);
   finished = true;
