@@ -751,6 +751,18 @@ foreach ($x in $placed) {
 $bytesAll = ($placed | Measure-Object -Property Size -Sum).Sum
 Say ('  ' + ([double]$bytesAll / 1GB).ToString('N2') + ' GB in all')
 
+# A mod's folder in the modlist (mods\<name>), from its name. Windows makes
+# no file or folder whose name is a device name (CON, PRN, AUX, NUL, COM1 to
+# COM9, LPT1 to LPT9), in any case and with any extension after it (#6342),
+# so such a name takes the same "Mod <file id>" as a name that strips to
+# nothing.
+function Get-ModlistFolderName([string]$Name, $FileId) {
+  $nm = (($Name -replace '[<>:"/\\|?*\x00-\x1f]', '') -replace '[. ]+$', '').Trim()
+  if ($nm -match '^(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]) *(\..*)?$') { $nm = '' }
+  if (-not $nm) { $nm = 'Mod ' + $FileId }
+  return $nm
+}
+
 # The record, the same whether it goes beside a layout or alone (-Record).
 # Paths sort by ordinal ignoring case and every line ends in CRLF, so One and
 # a cloud session write the same bytes for the same layout, and files.txt's
@@ -884,8 +896,7 @@ if ($Record) {
     $folders = @{}; $taken = @{}
     foreach ($plan in $plans) {
       $e = $plan.Entry
-      $nm = (($e.Name -replace '[<>:"/\\|?*\x00-\x1f]', '') -replace '[. ]+$', '').Trim()
-      if (-not $nm) { $nm = 'Mod ' + $e.FileId }
+      $nm = Get-ModlistFolderName $e.Name $e.FileId
       if ($taken.ContainsKey($nm.ToLowerInvariant())) { $nm = $nm + ' (' + $e.FileId + ')' }
       $taken[$nm.ToLowerInvariant()] = $true
       $folders[$e.Index] = $nm
