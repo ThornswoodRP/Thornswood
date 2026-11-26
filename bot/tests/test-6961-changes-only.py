@@ -56,6 +56,11 @@ PASS = []
 FAIL = []
 
 
+def read_json(path):
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
 def yes(what, cond):
     (PASS if cond else FAIL).append(what)
     print(('PASS  ' if cond else 'FAIL  ') + what)
@@ -322,7 +327,7 @@ try:
     yes('  the hand overwrite on #general-chat stays', member in gc.ow)
     yes('  Member stays in its own group', member.hoist is True)
     yes('  the record moves on to the plan', os.path.exists(RECORD)
-        and all(json.load(open(RECORD, encoding='utf-8'))[k] == state[k] for k in B.STATE_PARTS))
+        and all(read_json(RECORD)[k] == state[k] for k in B.STATE_PARTS))
 
     # ---- 5 ----------------------------------------------------------------
     del lore.ow[lead_dev]
@@ -342,7 +347,7 @@ try:
     old = copy.deepcopy(state)
     del old['places']['Out of Character/travelers-questions']
     old['order']['Out of Character'].remove('travelers-questions')
-    out = run(g, old)
+    run(g, old)
     made = [c for c in g.calls if c[0] == 'create_text_channel']
     yes('a channel new to the plan is made', [c[1] for c in made] == ['travelers-questions'])
     now = [c.name for c in sorted((c for c in g.channels
@@ -393,7 +398,7 @@ try:
     p = subprocess.run([sys.executable, SCRIPT], env=dict(env, DISCORD_RECORD_NOW='1',
                                                           DISCORD_COMMIT='abc123'),
                        capture_output=True, text=True, encoding='utf-8')
-    rec = json.load(open(RECORD, encoding='utf-8')) if os.path.exists(RECORD) else {}
+    rec = read_json(RECORD) if os.path.exists(RECORD) else {}
     yes('-Record writes this plan as the record',
         p.returncode == 0 and all(rec.get(k) == s1[k] for k in B.STATE_PARTS)
         and rec.get('commit') == 'abc123')

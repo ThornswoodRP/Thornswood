@@ -160,6 +160,13 @@ class Guild(object):
     async def edit_onboarding(self, **kw):
         WRITES.append(('edit_onboarding',))
 
+    def audit_logs(self, **kw):
+        # Discord's audit log, empty here (#6961).
+        async def none():
+            return
+            yield
+        return none()
+
 
 def build():
     """A guild exactly as the plan has it."""

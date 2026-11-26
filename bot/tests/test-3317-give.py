@@ -146,6 +146,13 @@ class Guild(object):
         CALLS.append(('edit_onboarding', kw.get('enabled')))
         self.onboarding_enabled = kw.get('enabled')
 
+    def audit_logs(self, **kw):
+        # Discord's audit log, empty here (#6961).
+        async def none():
+            return
+            yield
+        return none()
+
 
 def give(g, pairs, check=False):
     B.GIVE = pairs

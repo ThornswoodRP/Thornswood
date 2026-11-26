@@ -21,15 +21,16 @@ try {
     Set-Content -LiteralPath (Join-Path $bot 'news-webhook.txt') -Value 'offline stand-in'
     Set-Content -LiteralPath (Join-Path $ops 'Discord-Hook.ps1') -Value 'Write-Host "HOOK STUB"; exit 0'
     $fixture = Join-Path $deploy 'fixture.ps1'
-    Set-Content -LiteralPath $fixture -Value ('param($code, [switch]$Check, [switch]$Audit)' + "`n" + '$Here = $PSScriptRoot; $gives = @()' + "`n" + $tail)
+    Set-Content -LiteralPath $fixture -Value ('param($code, [switch]$Check, [switch]$Audit, [switch]$Whole)' + "`n" + '$Here = $PSScriptRoot; $gives = @()' + "`n" + $tail)
     foreach ($case in @(
         @{ Name = 'failed build'; Args = @(7); Code = 7; Hook = $false; Error = $true },
         @{ Name = 'failed audit'; Args = @(7, '-Audit'); Code = 7; Hook = $false; Error = $true },
-        @{ Name = 'successful build'; Args = @(0); Code = 0; Hook = $true; Error = $false },
+        @{ Name = 'successful whole build'; Args = @(0, '-Whole'); Code = 0; Hook = $true; Error = $false },
+        @{ Name = 'successful change run, no webhook (#6961)'; Args = @(0); Code = 0; Hook = $false; Error = $false },
         @{ Name = 'successful audit'; Args = @(0, '-Audit'); Code = 0; Hook = $false; Error = $false },
         @{ Name = 'failed check'; Args = @(7, '-Check'); Code = 7; Hook = $false; Error = $true }
     )) {
-        $params = @{code = $case.Args[0]; Audit = ($case.Args -contains '-Audit'); Check = ($case.Args -contains '-Check')}
+        $params = @{code = $case.Args[0]; Audit = ($case.Args -contains '-Audit'); Check = ($case.Args -contains '-Check'); Whole = ($case.Args -contains '-Whole')}
         $log = (& $fixture @params 6>&1 | Out-String)
         $rc = $LASTEXITCODE
         if ($rc -ne $case.Code -or ($log -match 'HOOK STUB') -ne $case.Hook -or
