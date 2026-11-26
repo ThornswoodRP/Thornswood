@@ -2317,7 +2317,9 @@ def doc_post_of_mine(message, me_id):
        and the "pinned a message" line Discord adds for them. Never the
        "started a thread" line of the Changelog thread: until 23 Oct this
        took every message of the bot's, that line with them, so each -Posts
-       run after the first took the changelog out of sight (#3336)."""
+       run after the first took the changelog out of sight (#3336). Since
+       the post's last line links the thread, keep_under takes that line
+       away itself (26 Nov 2026)."""
     if getattr(getattr(message, 'author', None), 'id', None) != me_id:
         return False
     # The bot's message in #rules that people react to for Member
@@ -2333,6 +2335,109 @@ def doc_post_of_mine(message, me_id):
     kind = getattr(message, 'type', None)
     return kind in (discord.MessageType.default, discord.MessageType.reply,
                     discord.MessageType.pins_add)
+
+
+# The last line of a post that links its Changelog thread (doc_with_footer).
+CHANGELOG_LINK = re.compile(r'in the Changelog thread, <#\d+>\.\*$')
+
+
+def _oldest_first(messages):
+    """Messages in the order they were sent. By id when every one has one;
+       otherwise the order found, reversed, since history reads newest first."""
+    if messages and all(isinstance(getattr(m, 'id', None), int) for m in messages):
+        return sorted(messages, key=lambda m: m.id)
+    return list(reversed(messages))
+
+
+async def kept_out_of_place(channel, last, me_id, linked):
+    """What the bot keeps in a doc channel that does not sit under its words,
+       as (message, what) pairs, newest first: 'thread line' for the
+       "started a thread" line of its Changelog thread when the words link
+       the thread (they are the way in, and the line sat on top of every
+       post, Patrick, 26 Nov 2026), 'buttons' for a panel of the bot's above
+       the last of its words, and 'gate' for the Member reaction message
+       above them. Reads only."""
+    out = []
+    below = True
+    async for m in channel.history(limit=50):
+        if last is not None and (m is last or getattr(m, 'id', object()) == getattr(last, 'id', None)):
+            below = False
+            continue
+        if getattr(getattr(m, 'author', None), 'id', None) != me_id:
+            continue
+        kind = getattr(m, 'type', None)
+        if kind is discord.MessageType.thread_created and linked and m.content == CHANGELOG:
+            out.append((m, 'thread line'))
+        elif below or last is None:
+            continue
+        elif (getattr(m, 'content', '') or '').startswith(RULES_GATE_FIRST_LINE):
+            out.append((m, 'gate'))
+        elif getattr(m, 'components', None):
+            out.append((m, 'buttons'))
+    return out
+
+
+async def kept_drift(channel, me_id):
+    """For the audit: what the bot keeps in a doc channel that is not under
+       its words (kept_out_of_place), as lines. Reads only."""
+    last, linked = None, False
+    try:
+        async for m in channel.history(limit=50):
+            if (doc_post_of_mine(m, me_id)
+                    and getattr(m, 'type', None) != discord.MessageType.pins_add):
+                if last is None:
+                    last = m
+                if CHANGELOG_LINK.search((m.content or '').strip()):
+                    linked = True
+        found = await kept_out_of_place(channel, last, me_id, linked)
+    except discord.HTTPException as e:
+        return ['what the bot keeps there could not be read (%s)' % refused(e)]
+    said = {'thread line': 'its Changelog thread\'s "started a thread" line is '
+                           'in the channel; -Posts takes it away, the post links the thread',
+            'buttons': 'its buttons sit above its words; -Posts puts them under',
+            'gate': 'the Member reaction message sits above its words; sending it '
+                    'again would take every reaction off it'}
+    return [said[what] for _, what in found]
+
+
+async def keep_under(channel, last, linked):
+    """Puts what the bot keeps in a doc channel under its words: the
+       Changelog thread's line is taken away, since the post's last line
+       links the thread, and a panel of buttons above the words is sent again
+       under them, the same words and buttons, and the old one taken down.
+       The bot answers a button by its id wherever the message is
+       (bot_core.py add_view), so the buttons work the moment they are in.
+       The Member reaction message is never sent again: the reactions on it
+       are the record of who accepted the rules (bot_rules_gate.py), and a
+       new message would have none, so it is said and left."""
+    me_id = getattr(getattr(client, 'user', None), 'id', None)
+    if me_id is None:
+        return
+    try:
+        found = await kept_out_of_place(channel, last, me_id, linked)
+    except discord.HTTPException as e:
+        failed.append('#%s: what the bot keeps there could not be read (%s)'
+                      % (channel.name, refused(e)))
+        return
+    for m, what in reversed(found):
+        try:
+            if what == 'thread line':
+                await m.delete()
+                say('took', '#%s: the "started a thread" line, the post links '
+                    'its Changelog' % channel.name)
+            elif what == 'buttons':
+                await channel.send(m.content, view=discord.ui.View.from_message(m, timeout=None))
+                await m.delete()
+                say('moved', '#%s: its buttons, under the words' % channel.name)
+            else:
+                say('left alone', '#%s: the Member reaction message sits above the '
+                    'words; sending it again would take every reaction off it'
+                    % channel.name)
+        except discord.NotFound:
+            pass  # gone already
+        except discord.HTTPException as e:
+            failed.append('#%s: its %s could not be put under the words (%s)'
+                          % (channel.name, what, refused(e)))
 
 
 async def post(channel, text, found):
@@ -2423,12 +2528,9 @@ async def post(channel, text, found):
                 and (not prefix or (m.content.split('\n', 1)[0] == prefix
                      and guide_owner(m.content) == owner)))
 
-    # The old posts are found first and taken down last, once every new one
-    # is in (#4493). Until then they went first, and a send Discord refused
-    # left the channel empty or half written and ended the run before the
-    # channels after it. A channel whose old posts cannot be read is left as
-    # it is and named under "did not manage" (#2736): writing beside them is
-    # how a channel came to say its rules twice.
+    # The old posts are found first. A channel whose old posts cannot be
+    # read is left as it is and named under "did not manage" (#2736):
+    # writing beside them is how a channel came to say its rules twice.
     try:
         old_posts = [m async for m in channel.history(limit=50) if managed(m)]
         if prefix:
@@ -2443,59 +2545,50 @@ async def post(channel, text, found):
                       % (channel.name, refused(e)))
         return
 
-    sent = []
+    # Its words are edited where they stand, and a post whose words are
+    # already these is asked nothing (Patrick, 26 Nov 2026, after a -Posts
+    # run: "we dont need to rebuild the discord every fucking time we do a
+    # discord change", then "post rewrites"). Until then every run deleted
+    # each post and sent it again, changed or not, so all 15 channels showed
+    # new messages for 4 changed posts, and each post went under what the
+    # bot keeps in its channel: the Changelog thread's line, the Member
+    # reaction message in #rules and the ping buttons in #welcome, which
+    # belong under the words. An edit keeps a post where it is and tells
+    # nobody. Only a post that needs more messages than it has sends any.
+    words = _oldest_first([m for m in old_posts
+                           if getattr(m, 'type', None) != discord.MessageType.pins_add])
+    changed = False
+    doing = ''
     try:
-        for i, c in enumerate(chunks, 1):
+        for i, (m, c) in enumerate(zip(words, chunks), 1):
+            if (m.content or '') != c:
+                doing = 'post %d of %d could not be edited' % (i, len(chunks))
+                await m.edit(content=c)
+                changed = True
+        for i, c in enumerate(chunks[len(words):], len(words) + 1):
             doing = 'post %d of %d could not be sent' % (i, len(chunks))
-            sent.append(await channel.send(c))
-        if prefix:
-            for i, m in enumerate(sent, 1):
-                doing = 'post %d of %d could not be pinned' % (i, len(sent))
-                await m.pin()
-    except discord.HTTPException as e:
-        failed.append('#%s was not rewritten: %s (%s); '
-                      'its old words stay' % (channel.name, doing, refused(e)))
-        # The part that did go would sit under the old words and say them
-        # twice over (#2736), so it comes back out.
-        for m in sent:
+            words.append(await channel.send(c))
+            changed = True
+        for m in words[len(chunks):]:
+            doing = 'a post it no longer needs could not be taken down'
             try:
                 await m.delete()
             except discord.NotFound:
                 pass  # gone already, which is what this wanted
-            except discord.HTTPException as e2:
-                pin_state = 'not pinned'
-                if prefix:
-                    try:
-                        await m.unpin()
-                        pin_state = 'not pinned'
-                    except discord.NotFound:
-                        continue
-                    except discord.HTTPException:
-                        pin_state = 'pin status unknown'
-                failed.append('#%s: replacement message %s could not be taken back '
-                              '(%s; %s). Its old words stay; remove this replacement '
-                              'before publishing again.'
-                              % (channel.name, m.id, refused(e2), pin_state))
+            changed = True
+        words = words[:len(chunks)]
+        # The first post is pinned, and every part of a discussion guide.
+        for i, m in enumerate(words if prefix else words[:1], 1):
+            if not getattr(m, 'pinned', False):
+                doing = 'post %d of %d could not be pinned' % (i, len(words))
+                await m.pin()
+    except discord.HTTPException as e:
+        failed.append('#%s: %s (%s); its posts are part old, part new until the '
+                      'next -Posts' % (channel.name, doing, refused(e)))
         return
-
-    for old in old_posts:
-        try:
-            await old.delete()
-        except discord.NotFound:
-            pass  # gone already, which is what this wanted
-        except discord.HTTPException as e:
-            failed.append('#%s: its new words are in, but its old posts could not all be '
-                          'removed, so it says them twice until the next -Posts (%s)'
-                          % (channel.name, refused(e)))
-            break
-
-    first = sent[0] if sent else None
-    if first and not prefix:
-        try:
-            await first.pin()
-        except discord.HTTPException as e:
-            failed.append('#%s: its first post could not be pinned (%s)' % (channel.name, refused(e)))
-    say('wrote', '#' + channel.name)
+    await keep_under(channel, words[-1] if words else None,
+                     CHANGELOG_LINK.search(text.strip()) is not None)
+    say('wrote' if changed else 'same', '#' + channel.name)
 
 
 async def write_posts(posts, found):
@@ -3693,6 +3786,9 @@ async def audit(guild):
     print('\n  Changelogs', flush=True)
     for ch, key in docs:
         for d in await changelog_drift(ch, key, getattr(me, "id", None)):
+            off('#%s, %s' % (ch.name, d))
+        # What the bot keeps there sits under the words (26 Nov 2026).
+        for d in await kept_drift(ch, getattr(me, "id", None)):
             off('#%s, %s' % (ch.name, d))
 
     # The sidebar's order (#3317, keep_order).

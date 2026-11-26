@@ -14,9 +14,10 @@ the rest. "Don't make it a button."
 
 The bot keeps one message of its own in #rules, GATE_TEXT, and reacts to it
 with MARK so there is something to press. It is a message apart from the
-rules' own words, which Build-Discord.py -Posts deletes and writes again: a
-reaction on those would go with them. Build-Discord.py leaves any message of
-the bot's that starts with GATE_FIRST_LINE (doc_post_of_mine).
+rules' own words, which Build-Discord.py -Posts edits and takes down when
+they need fewer messages: a reaction on those could go with them.
+Build-Discord.py never edits, sends again or takes down a message of the
+bot's that starts with GATE_FIRST_LINE (doc_post_of_mine, keep_under).
 
 Member follows the reaction. Adding MARK gives Member and taking it off takes
 Member off, and each is sent to the site's record of who accepted the rules

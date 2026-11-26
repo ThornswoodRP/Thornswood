@@ -10,8 +10,9 @@ took the only way into the Changelog thread out of the channel.
 
 What this checks, with Build-Discord.py imported for real under another name
 and each channel and thread a stand-in that records what was asked of it:
-  1. post() replaces the bot's words and its "pinned a message" lines, and
-     leaves its "started a thread" line and everybody else's messages;
+  1. post() edits the bot's words where they stand and leaves everybody
+     else's messages; it keeps the "started a thread" line while the words
+     do not link the thread;
   2. keep_changelog makes the thread once (locked, a week before Discord
      archives it), finds it again open or archived, adds only missing lines,
      and hands it back; the post then ends on a link to it;
@@ -29,7 +30,16 @@ and each channel and thread a stand-in that records what was asked of it:
      opened before the deletes, other people's messages stay, and the audit
      says a thread with lines content.py no longer has;
   7. check_docs refuses a change line or live words with an issue number or
-     a team member's name, and a channel name is not a number.
+     a team member's name, and a channel name is not a number;
+  8. a -Posts run changes only what changed (Patrick, 26 Nov 2026: "we dont
+     need to rebuild the discord every fucking time we do a discord change",
+     "post rewrites"): a post already right is asked nothing, a changed one is
+     edited where it is and nothing is sent, a post that needs more messages
+     sends only the extra and one that needs fewer takes the rest down; what
+     the bot keeps there goes under the words: the "started a thread" line
+     goes once the post links the thread, a panel of buttons above the words
+     is sent again under them, and the Member reaction message is left where
+     it is and said; the audit says each of those.
 
 Never connects to anything.
 """
@@ -68,9 +78,14 @@ T = discord.MessageType
 
 
 class Msg(object):
-    def __init__(self, ch, author, content, kind=T.default):
+    def __init__(self, ch, author, content, kind=T.default, components=None):
         self.ch, self.author, self.content, self.type = ch, types.SimpleNamespace(id=author), content, kind
         self.pinned = False
+        self.components = components or []
+
+    async def edit(self, content=None, **kw):
+        self.ch.log.append(('edit', content))
+        self.content = content
 
     async def delete(self):
         self.ch.log.append(('delete', self.content))
@@ -123,9 +138,9 @@ class Channel(object):
         for t in self.archived:
             yield t
 
-    async def send(self, text):
-        self.log.append(('send', text))
-        m = Msg(self, BOT, text)
+    async def send(self, text, view=None):
+        self.log.append(('send', text) if view is None else ('send buttons', text))
+        m = Msg(self, BOT, text, components=['buttons'] if view is not None else None)
         self.msgs.append(m)
         return m
 
@@ -148,8 +163,11 @@ ch.msgs = [Msg(ch, BOT, 'old rules'), Msg(ch, BOT, '', T.pins_add), Msg(ch, BOT,
 B.failed = []
 run(B.post(ch, 'new rules', {}))
 kinds = [(m.type, m.content) for m in ch.msgs]
-yes('post() replaced the bot\'s words and its pin line', (T.default, 'old rules') not in kinds and (T.pins_add, '') not in kinds and (T.default, 'new rules') in kinds)
-yes('and left the "started a thread" line and other people\'s messages', (T.thread_created, 'Changelog') in kinds and (T.default, 'somebody else') in kinds)
+yes('post() edited the bot\'s words where they stand, and sent nothing',
+    kinds[0] == (T.default, 'new rules') and (T.default, 'old rules') not in kinds
+    and not [x for x in ch.log if x[0] in ('send', 'delete')])
+yes('and left the "started a thread" line, as the words do not link the thread, and other people\'s messages',
+    (T.thread_created, 'Changelog') in kinds and (T.default, 'somebody else') in kinds)
 yes('doc_post_of_mine takes only the bot\'s words and pin lines',
     B.doc_post_of_mine(Msg(ch, BOT, 'x'), BOT) and B.doc_post_of_mine(Msg(ch, BOT, '', T.pins_add), BOT)
     and not B.doc_post_of_mine(Msg(ch, BOT, 'Changelog', T.thread_created), BOT) and not B.doc_post_of_mine(Msg(ch, 77, 'x'), BOT))
@@ -271,6 +289,69 @@ finally:
     B.C.DOCS['FACTIONS'] = saved
 yes('a channel name such as #test-findings is not a number', B.C.not_public('Bugs go in #test-findings.') == [])
 yes('and check_docs finds nothing in the docs as they are', B.check_docs() == [])
+
+# ---- 8. only what changed, and what the bot keeps goes under the words
+B.discord.ui.View.from_message = staticmethod(lambda m, timeout=None: ('view of', m.content))
+ch = Channel('welcome')
+t = Thread(950, 'Changelog', ch.log)
+text = B.doc_with_footer('WELCOME', t)
+ch.msgs = [Msg(ch, BOT, 'Changelog', T.thread_created), Msg(ch, BOT, '**Pings**', components=['buttons']),
+           Msg(ch, 77, 'somebody else')]
+B.failed = []
+run(B.post(ch, text, {}))
+order = [(m.type, m.content) for m in ch.msgs]
+yes('a first post sends its words, then the buttons go under them and the thread line goes',
+    order[0] == (T.default, 'somebody else') and order[-1] == (T.default, '**Pings**')
+    and ch.msgs[-1].components and (T.thread_created, 'Changelog') not in order
+    and not B.failed)
+n = len([m for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components])
+ch.log[:] = []
+run(B.post(ch, text, {}))
+yes('a post already right is asked nothing: no edit, no send, no delete', ch.log == [])
+yes('  and the audit says nothing of what the bot keeps there', run(B.kept_drift(ch, BOT)) == [])
+first = [m for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components][0]
+first.content = 'an older wording'
+run(B.post(ch, text, {}))
+yes('a changed post is edited where it is, and nothing is sent or taken down',
+    [x[0] for x in ch.log] == ['edit'] and first.content != 'an older wording')
+yes('  and the buttons stay under the words', ch.msgs[-1].components)
+words = [m for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components]
+ch.msgs.remove(words[-1])
+ch.msgs.insert(0, words[-1])  # an older extra post the words no longer need
+ch.msgs.append(Msg(ch, BOT, 'an extra post'))
+ch.log[:] = []
+run(B.post(ch, 'short words', {}))
+mine = [m.content for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components]
+yes('words that need fewer posts: the first is edited and the rest taken down',
+    mine == ['short words'] and not [x for x in ch.log if x[0] == 'send'])
+ch.log[:] = []
+long_text = '\n\n'.join(['x' * 1500, 'y' * 1500])
+run(B.post(ch, long_text, {}))
+mine = [m.content for m in ch.msgs if m.author.id == BOT and m.type == T.default and not m.components]
+yes('words that need more posts: the first is edited and only the extra one is sent',
+    mine == ['x' * 1500, 'y' * 1500] and [x[0] for x in ch.log if x[0] in ('send', 'edit')] == ['edit', 'send'])
+yes('  and the buttons are sent again under it and the old ones taken down',
+    ch.msgs[-1].components and len([m for m in ch.msgs if m.components]) == 1
+    and ('send buttons', '**Pings**') in ch.log)
+
+rules = Channel('rules')
+gate = Msg(rules, BOT, B.RULES_GATE_FIRST_LINE + '\n\nReact here.')
+rules.msgs = [Msg(rules, BOT, 'Changelog', T.thread_created), gate]
+B.failed = []
+rt = Thread(951, 'Changelog', rules.log)
+run(B.post(rules, B.doc_with_footer('RULES', rt), {}))
+yes('the Member reaction message is never sent again or taken down',
+    gate in rules.msgs and not [x for x in rules.log if x[1:] == (gate.content,)])
+d = run(B.kept_drift(rules, BOT))
+yes('  and the audit says it sits above the words', d == [
+    'the Member reaction message sits above its words; sending it again would take every reaction off it'])
+ch = Channel('faq')
+ch.msgs = [Msg(ch, BOT, 'Changelog', T.thread_created), Msg(ch, BOT, '**Pings**', components=['buttons']),
+           Msg(ch, BOT, B.doc_with_footer('FAQ', Thread(952, 'Changelog', ch.log)))]
+d = run(B.kept_drift(ch, BOT))
+yes('the audit says a thread line and buttons above the words, each with what -Posts does',
+    len(d) == 2 and any('"started a thread" line' in x and '-Posts takes it away' in x for x in d)
+    and any('buttons sit above its words; -Posts puts them under' in x for x in d))
 
 print('')
 print('%d passed, %d failed' % (passed, failed))

@@ -632,8 +632,17 @@ Then the person picks a hold.
 again, and the posts are rewritten in place. A plain run leaves the posts alone
 unless `-Posts` is given, so a routine run does not touch existing messages. To
 rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
-lore,factions -Posts`, issue #3656). It deletes what the bot wrote last time
-rather than adding a second copy, so the rules never end up posted twice.
+lore,factions -Posts`, issue #3656). Each post is edited where it stands,
+and a post whose words have not changed is left alone, so a run shows new
+messages nowhere and moves nothing (26 Nov 2026: until then every run
+deleted all 15 posts and sent them again, and each went under what the bot
+keeps in its channel). Only a post that needs more messages than it has
+sends any. What the bot keeps in a doc channel goes under the words: the
+"started a thread" line of its Changelog thread is taken away, since the
+post's last line links the thread, and the ping buttons in `#welcome` are
+sent again under the words. The Member reaction message in `#rules` is
+never sent again, because the reactions on it are the record of who
+accepted the rules; the run and the audit say where it sits.
 From a session with no box key, a cloud thread included, the deploy gate runs
 it on the box (#6874):
 
