@@ -114,6 +114,7 @@ function game(opts) {
     // A frame: time moves on by ms, then update and tick, as the game sends them.
     frame: function (ms) { now += ms || 16; fire('update'); fire('tick'); },
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
+    button: function (ev) { fire('buttonEvent', ev); },
     page: function () { fire('browserMessage', { arguments: [].slice.call(arguments) }); },
     // The runner's half: answer every ask so far.
     ack: function (reply) {
@@ -137,6 +138,56 @@ function game(opts) {
   const g = game({ dev: false, steps: [{ do: 'end' }] });
   yes('no dev answer on disk: the plugin hooks nothing, even with a run file there', Object.keys(g.handlers).length === 0);
   yes('and leaves the file alone', !!g.files[RUN] && !g.files[OUT]);
+}
+
+// Inventory input receipts contain only the scripted key and bounded state.
+{
+  const g = game({ steps: [
+    { do: 'key', code: 23, inventoryTrace: true },
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: false },
+    { do: 'shot', name: 'inventory-closed' },
+    { do: 'key', code: 23 },
+    { do: 'end' }
+  ] });
+  const receipts = () => g.lines().filter(l => l.t === 'inventory-key');
+  const event = { device: 0, code: 23, isDown: true, isUp: false, userEventName: 'Quick Inventory' };
+  g.button(event);
+  yes('an inventory trace is idle before the runner is asked', receipts().length === 0);
+  g.menu('InventoryMenu', true);
+  g.frame();
+  g.button({ ...event, code: 36 });
+  g.button({ ...event, device: 2 });
+  g.button({ ...event, isRepeating: true });
+  g.button({ ...event, isHeld: true });
+  g.button({ ...event, userEventName: '' });
+  g.button(event);
+  g.ack();
+  g.frame(300);
+  g.menu('InventoryMenu', false);
+  g.frame();
+  g.button({ ...event, isDown: false, isUp: true, userEventName: 'ignored event name' });
+  const got = receipts();
+  yes('records one physical down and later up even after the release wait has already passed',
+    got.length === 2 && got[0].phase === 'down' && got[1].phase === 'up' && got.every(l => l.i === 0) && got[0].inventoryOpen && !got[1].inventoryOpen);
+  yes('receipts distinguish no action and another action without storing raw action values',
+    got.length === 2 && got[0].action === 'none' && got[1].action === 'other' && !JSON.stringify(got).includes('ignored event name'));
+  g.frame();
+  g.ack();
+  g.frame(300);
+  g.frame();
+  g.button(event);
+  yes('an untraced key step retires the inventory probe', receipts().length === 2);
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 23, inventoryTrace: true }, { do: 'end' }] });
+  const event = { device: 0, code: 23, isDown: true, userEventName: 'Quick Inventory' };
+  g.frame();
+  g.button(event);
+  g.frame(6000);
+  g.button({ ...event, isDown: false, isUp: true });
+  const receipts = g.lines().filter(l => l.t === 'inventory-key');
+  yes('a named Inventory action is reported and releases past the trace deadline are ignored',
+    receipts.length === 1 && receipts[0].action === 'inventory');
 }
 
 // --------------------------------------------------------- a whole run ----

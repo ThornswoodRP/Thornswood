@@ -67,6 +67,7 @@ const OUT = 'Data/Platform/thornswood-test-results.jsonl';
 const ACK = 'Data/Platform/thornswood-test-ack.txt';
 const DEV = '../Profile/dev-allowed.txt';
 const TIMEOUT = 30000;
+const INVENTORY_TRACE_MS = 5000;
 
 function log() {
   try { sp.printConsole('[test] ' + Array.prototype.slice.call(arguments).join(' ')); } catch (e) { }
@@ -248,6 +249,22 @@ let pageAskedAt = 0;
 let failing = false;   // the fail screenshot is being taken
 let finished = false;
 let passed = 0;
+let inventoryKey = null;
+
+// Windows acknowledging a press and Skyrim routing it are two observations.
+// Only explicitly traced script steps can log their own requested key.
+if (steps.some(s => s && s.do === 'key' && s.inventoryTrace === true)) {
+  sp.on('buttonEvent', function (e) {
+    if (finished || failing || !inventoryKey || Date.now() > inventoryKey.until ||
+        !e || e.device !== 0 || e.code !== inventoryKey.code || e.isRepeating || e.isHeld) return;
+    const phase = e.isDown && !e.isUp ? 'down' : e.isUp && !e.isDown ? 'up' : '';
+    if (!phase || inventoryKey[phase]) return;
+    inventoryKey[phase] = true;
+    const action = e.userEventName === 'Quick Inventory' ? 'inventory' : e.userEventName ? 'other' : 'none';
+    write({ t: 'inventory-key', i: inventoryKey.i, phase: phase, action: action,
+      inventoryOpen: !!openMenus['InventoryMenu'] });
+  });
+}
 
 function pass(note) {
   write({ t: 'step', i: at, do: steps[at].do, ok: true, ms: Date.now() - stepAt, note: note || '' });
@@ -380,7 +397,15 @@ sp.on('tick', function () {
     }
     case 'shot':
     case 'key': {
-      if (!waitingAsk) { waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code)); return; }
+      if (!waitingAsk) {
+        if (s.do === 'key') {
+          inventoryKey = s.inventoryTrace === true
+            ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
+            : null;
+        }
+        waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code));
+        return;
+      }
       const reply = readAck(waitingAsk);
       if (reply) {
         if (s.do === 'key' && reply.ok !== true) {
