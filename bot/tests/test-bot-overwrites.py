@@ -85,7 +85,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'staffbump', 'open', 'openread', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'staffbump', 'open', 'openread', 'chatread', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
