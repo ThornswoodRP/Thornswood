@@ -67,8 +67,12 @@ Yes 'Play takes the hold in a try of its own' ($holdAt -ge 0)
 $holdCatch = if ($holdAt -ge 0) { Member $play.Substring($holdAt + 'try { holding = Hold.Take(PresenceLog); }'.Length) 'catch' } else { '' }
 $hold = [regex]::Match($holdCatch, '^catch \(Exception (\w+)\)')
 $holdBody = $holdCatch
-Yes '  and its catch writes a line to the log, not only a swallowed note' ($holdBody -match '\bLog\(')
-Yes '  saying the game files are not held this session' ($holdBody -match 'game files are not held this session')
+# The hold runs off the window's thread (#4628), so its catch keeps the
+# reason and the line goes to the log once the wait is back on the window.
+$why = [regex]::Match($holdBody, '\b(\w+) = Failure\.Why\(')
+$said = if ($why.Success) { [regex]::Match($play, '\bif \(' + $why.Groups[1].Value + ' != null\)\s*Log\((?<line>[^;]*)\);') } else { $null }
+Yes '  and its catch keeps a reason that goes to the log, not only a swallowed note' (($null -ne $said) -and $said.Success -and $said.Groups['line'].Value.Contains($why.Groups[1].Value))
+Yes '  saying the game files are not held this session' (($null -ne $said) -and $said.Groups['line'].Value -match 'game files are not held this session')
 Yes '  with the reason' ($holdBody -match ('Failure\.Why\("Shell\.Play, Hold\.Take", ' + $(if ($hold.Success) { $hold.Groups[1].Value } else { 'ex' }) + '\)'))
 
 # ---- 2. every catch in Play names what it guards -----------------------------------

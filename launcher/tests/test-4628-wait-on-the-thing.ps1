@@ -50,6 +50,12 @@
        game was still there, fails 4a and 4b.
 
   Read only apart from the builds under out\harness, which git ignores.
+
+    5. Play's file steps (Keep.Restore, Keep.LeaveNote, Hold.Take and
+       Swap.Apply) each sit inside an awaited OffThread and nowhere outside
+       one, so the window keeps drawing while they work the disk. Read from
+       ShellPlay.cs. Teeth: Play's steps as main had them, on the window's
+       thread, fail all four, and Swap.Apply alone left out fails alone.
 #>
 [CmdletBinding()]
 param([string]$AppDir)
@@ -99,6 +105,69 @@ function Count-Lines([string[]]$lines) {
         elseif ($l -like 'FAIL  *') { $script:fail++; Write-Host $l }
     }
 }
+
+# ---- 5. Play's file steps run off the window's thread --------------------------
+# Keep.Restore, Keep.LeaveNote, Hold.Take and Swap.Apply copy, move and open
+# the game's files. Called straight from PlayAsync they ran on the window's
+# thread, so the window stopped drawing until the disk was done with them.
+# Each has to sit inside an awaited OffThread(delegate { ... }) and nowhere
+# outside one. Read from the file, so it runs on every machine.
+$shellPlay = [IO.File]::ReadAllText((Join-Path $AppDir 'ShellPlay.cs'), [Text.Encoding]::UTF8)
+$play = Body $shellPlay 'static async Task PlayAsync()'
+Yes '5. ShellPlay.cs has PlayAsync' ($play.Length -gt 0)
+function AllOffThread([string]$src, [string]$call) {
+    $starts = [System.Collections.Generic.List[int]]::new()
+    $ends = [System.Collections.Generic.List[int]]::new()
+    $mark = 'await OffThread(delegate'
+    $at = $src.IndexOf($mark)
+    while ($at -ge 0) {
+        $span = Body $src.Substring($at) $mark
+        if ($span.Length -eq 0) { break }
+        $starts.Add($at); $ends.Add($at + $span.Length)
+        $at = $src.IndexOf($mark, $at + $span.Length)
+    }
+    $seen = 0
+    $at = $src.IndexOf($call)
+    while ($at -ge 0) {
+        $seen++
+        $inside = $false
+        for ($k = 0; $k -lt $starts.Count; $k++) { if ($at -gt $starts[$k] -and $at -lt $ends[$k]) { $inside = $true } }
+        if (-not $inside) { return $false }
+        $at = $src.IndexOf($call, $at + $call.Length)
+    }
+    return $seen -gt 0
+}
+$fileSteps = @('Keep.Restore()', 'Keep.LeaveNote()', 'Hold.Take(', 'Swap.Apply()')
+foreach ($st in $fileSteps) {
+    Yes "5. Play runs $st off the window's thread, inside an awaited OffThread" (AllOffThread $play $st)
+}
+
+# Teeth: Play's steps as they were on main before this, straight on the
+# window's thread, and the same with only Swap.Apply left out of the wait.
+$onWindow = @'
+                string kept = Keep.Restore();
+                if (kept != null) Log(kept);
+                Keep.LeaveNote();
+                int holding = 0;
+                try { holding = Hold.Take(PresenceLog); }
+                catch (Exception ex) { Log(ex.Message); }
+                Log("Pointing Skyrim settings and saves at this build.");
+                Swap.Apply();
+'@
+$caught = @($fileSteps | Where-Object { -not (AllOffThread $onWindow $_) }).Count
+Yes "5. teeth: the steps called on the window's thread fail all four ($caught of 4)" ($caught -eq 4)
+$oneOut = @'
+                await OffThread(delegate
+                {
+                    kept = Keep.Restore();
+                    Keep.LeaveNote();
+                    holding = Hold.Take(PresenceLog);
+                });
+                Swap.Apply();
+'@
+Yes "5. teeth: Swap.Apply left on the window's thread fails, the three inside the wait pass" (
+    -not (AllOffThread $oneOut 'Swap.Apply()') -and (AllOffThread $oneOut 'Keep.Restore()') -and
+    (AllOffThread $oneOut 'Keep.LeaveNote()') -and (AllOffThread $oneOut 'Hold.Take('))
 
 Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
 if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
