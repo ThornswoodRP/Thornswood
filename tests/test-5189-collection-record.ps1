@@ -324,6 +324,12 @@ try {
     Yes 'S14 the record writes a mod''s choices on its line, and they read back the same' ($t5 -match '"choices": \{ "type": "fomod", "options": \[\{ "name": "Options", "groups": \[\{ "name": "Add-ons", "choices": \[\{ "name": "Dawnguard", "idx": 0 \}\] \}\] \}\] \}' -and (ConvertTo-CollectionRecordText ($t5 | ConvertFrom-Json)) -ceq $t5 -and -not @(Get-CollectionRecordShapeProblems ($t5 | ConvertFrom-Json)).Count) (@(Get-CollectionRecordShapeProblems ($t5 | ConvertFrom-Json)) -join ' | ')
     $bad = $t5.Replace('"idx": 0', '"idx": -1')
     Yes 'S15 choices not shaped as Vortex writes them are refused' (@(Get-CollectionRecordShapeProblems ($bad | ConvertFrom-Json) | Where-Object { $_ -match 'mod 5 file 50: a choice in group "Add-ons"' }).Count -eq 1)
+    $rec6 = [pscustomobject]@{
+        mods = @($pubJson.mods | ForEach-Object { [pscustomobject]@{ modId = $_.source.modId; fileId = $_.source.fileId; name = $_.name; plugins = @('B.esp') } })
+        plugins = @([pscustomobject]@{ name = 'B.esp'; light = $true; after = @('A.esm') })
+    }
+    $cs6 = Get-CollectionChangeSet $rec6 $pubJson
+    Yes 'S16 a kept file whose plugin is flagged light in the record but unpatched in the collection asks for SetLight' (@($cs6.SetLight).Count -eq 1 -and $cs6.SetLight[0] -eq 'B.esp' -and -not $cs6.Empty -and (@(Format-CollectionChangeSet $cs6) -join "`n") -match 'set light flag on B\.esp') ((@(Format-CollectionChangeSet $cs6)) -join ' | ')
 
     # ---------------------------------------------------------------- L ----
     # A plugin file with a TES4 header: flags (0x1 master, 0x200 light) and a

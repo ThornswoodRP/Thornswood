@@ -93,15 +93,23 @@ log('run', runId, 'with', steps.length, 'steps');
 // ---------------------------------------------------------- what we see ----
 // Menus from their events, which come at the main menu too, where update
 // (and so any call into the game) does not run yet.
+// When each menu last opened and last closed, as well as which are open
+// now: steps run on tick, and tick does not come while a loading screen is
+// up, so a Loading Menu that opened and closed between two ticks was never
+// seen open (16 Nov: the trip from the hall to Whiterun, about a second).
 const openMenus = {};
+const menuOpenedAt = {};
+const menuClosedAt = {};
 sp.on('menuOpen', function (e) {
   const name = String((e && e.name) || '');
   openMenus[name] = true;
+  menuOpenedAt[name] = Date.now();
   write({ t: 'menu', name: name, open: true });
 });
 sp.on('menuClose', function (e) {
   const name = String((e && e.name) || '');
   delete openMenus[name];
+  menuClosedAt[name] = Date.now();
   write({ t: 'menu', name: name, open: false });
 });
 
@@ -238,8 +246,13 @@ sp.on('tick', function () {
   switch (s.do) {
     case 'wait': {
       if (s.for === 'menu') {
+        // Open (or shut) now, or it opened (or closed) since the step before
+        // this one started, as a message counts for the wait after a key.
         const want = s.open !== false;
-        if (!!openMenus[String(s.menu)] === want) { pass(); return; }
+        const name = String(s.menu);
+        const since = want ? menuOpenedAt[name] : menuClosedAt[name];
+        if (!!openMenus[name] === want) { pass(); return; }
+        if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
       } else if (s.for === 'message') {
