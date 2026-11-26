@@ -162,6 +162,7 @@ function boot(dir, eng) {
     'var claims = {};',
     // The master key counter save() writes beside the claims (#2254).
     'var masterCut = 0;',
+    'var deedCut = 0;',
     // The holders' word save() writes beside them (#2680).
     'var wordBook = { list: [] };',
     // Rent still owed by somebody who no longer holds the place (#3893), written with them.
