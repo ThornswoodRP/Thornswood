@@ -36,7 +36,10 @@ already placed answers `placed`, and the shot and the trip are skipped.
 ## On your machine
 
 On a PC with an install whose Profile holds `dev-allowed.txt`, the launcher
-and the game closed, from the repository folder:
+and the game closed, and the PC signed in and not on the lock screen (the
+game reads keys only while its window is in front, and behind the lock
+screen no window is, so a locked PC stops the run before the launcher
+starts), from the repository folder:
 
 ```
 pwsh scripts\dev\Run-RealClient.ps1
@@ -94,7 +97,6 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
-| `{"do":"key","code":36,"via":"game"}` | The same key tapped inside the game with SKSE's `Input.tapKey`, on the next update, with nothing asked of Windows. Windows gives the keyboard to nothing behind the lock screen, and One sits locked with nobody at it, so the dev release run sends its keys this way (26 Nov). The step after it must show the key worked. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
 | `{"do":"end"}` | always; the runner closes the game. |
 
