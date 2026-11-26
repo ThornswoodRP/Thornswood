@@ -731,8 +731,7 @@ foreach ($l in $lights) {
   if ($l.Name -notmatch '^[^\\/:*?"<>|]+\.es[mp]$') { Die ($l.Name + ' is not a plugin file name (.esm or .esp): an .esl is light by its name, with no flag to set.') }
   if (@($lights | Where-Object { $_.Name -ieq $l.Name }).Count -gt 1) { Die ($l.Name + ' is named more than once in -SetLight and -ClearLight.') }
 }
-if ($lights.Count) {
-  if (-not $Layout) { Die '-SetLight and -ClearLight need -Layout, the Install-NexusRevision.ps1 -Record folder of the revision this starts from.' }
+if ($lights.Count -and $Layout) {
   foreach ($f in 'layout.json', 'files.txt') { if (-not (Test-Path -LiteralPath (Join-Path $Layout $f) -PathType Leaf)) { Die ('There is no ' + $f + ' in ' + $Layout + ', so it is not an Install-NexusRevision.ps1 -Record folder.') } }
 }
 # The revision this starts from: the latest published, or the waiting draft
@@ -942,15 +941,26 @@ $staged = Join-Path $scratch 'light'
 $lightPaths = @()
 if ($lights.Count) {
   Head 'The light flags'
-  if (-not $isArchive) { Die ('-SetLight and -ClearLight hold -Layout to the archive it was laid out from, and -From is a folder.') }
-  $lay = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText((Join-Path $Layout 'layout.json'))) (Join-Path $Layout 'layout.json') }
-  $fromMd5 = (Get-FileHash -LiteralPath $From -Algorithm MD5).Hash.ToLowerInvariant()
-  if ([int]$lay.collection.revision -ne $BaseRevision -or [string]$lay.collection.archiveMd5 -ne $fromMd5) { Die ($Layout + ' is the layout of revision ' + $lay.collection.revision + ' (archive md5 ' + $lay.collection.archiveMd5 + '), not of revision ' + $BaseRevision + ' as downloaded (md5 ' + $fromMd5 + '). Lay this revision out with Install-NexusRevision.ps1 -Record first.') }
   $placedBy = @{}
-  foreach ($line in [IO.File]::ReadAllLines((Join-Path $Layout 'files.txt'))) {
-    if ($line.StartsWith('#')) { continue }
-    $c = $line.Split("`t")
-    if ($c.Count -eq 4) { $placedBy[$c[3].ToLowerInvariant()] = [pscustomobject]@{ Sha256 = $c[0]; Size = [long]$c[1]; FileId = $c[2] } }
+  if ($Layout) {
+    if (-not $isArchive) { Die ('-SetLight and -ClearLight hold -Layout to the archive it was laid out from, and -From is a folder.') }
+    $lay = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText((Join-Path $Layout 'layout.json'))) (Join-Path $Layout 'layout.json') }
+    $fromMd5 = (Get-FileHash -LiteralPath $From -Algorithm MD5).Hash.ToLowerInvariant()
+    if ([int]$lay.collection.revision -ne $BaseRevision -or [string]$lay.collection.archiveMd5 -ne $fromMd5) { Die ($Layout + ' is the layout of revision ' + $lay.collection.revision + ' (archive md5 ' + $lay.collection.archiveMd5 + '), not of revision ' + $BaseRevision + ' as downloaded (md5 ' + $fromMd5 + '). Lay this revision out with Install-NexusRevision.ps1 -Record first.') }
+    foreach ($line in [IO.File]::ReadAllLines((Join-Path $Layout 'files.txt'))) {
+      if ($line.StartsWith('#')) { continue }
+      $c = $line.Split("`t")
+      if ($c.Count -eq 4) { $placedBy[$c[3].ToLowerInvariant()] = [pscustomobject]@{ Sha256 = $c[0]; Size = [long]$c[1]; FileId = $c[2] } }
+    }
+  } else {
+    $recordFile = Join-Path $Here '..\..\records\collection.json'
+    if (-not (Test-Path -LiteralPath $recordFile)) { Die '-SetLight and -ClearLight need -Layout, or records\collection.json.' }
+    $rec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($recordFile)) $recordFile }
+    foreach ($l in $lights) {
+      $hitMod = @($rec.mods | Where-Object { @($_.plugins) -contains $l.Name }) | Select-Object -First 1
+      if (-not $hitMod) { Die ('records\collection.json names no mod that installs ' + $l.Name + '.') }
+      $placedBy[('data\' + $l.Name).ToLowerInvariant()] = [pscustomobject]@{ Sha256 = ''; Size = 0L; FileId = [string]$hitMod.fileId }
+    }
   }
   $onOne = @{}
   # The record is held to its shape and to the revision this starts from
@@ -989,8 +999,12 @@ if ($lights.Count) {
       [IO.File]::Delete($got.Path)
       $unpacked[$fid] = $x
     }
-    $src = @(Get-ChildItem -LiteralPath $unpacked[$fid] -Recurse -File | Where-Object { $_.Length -eq $row.Size -and (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -eq $row.Sha256 }) | Select-Object -First 1
-    if (-not $src) { Die ($e.name + '''s archive holds no file with the bytes revision ' + $BaseRevision + ' puts in Data as ' + $l.Name + ' (sha256 ' + $row.Sha256 + ').') }
+    $src = if ($row.Sha256) {
+      @(Get-ChildItem -LiteralPath $unpacked[$fid] -Recurse -File | Where-Object { $_.Length -eq $row.Size -and (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -eq $row.Sha256 }) | Select-Object -First 1
+    } else {
+      @(Get-ChildItem -LiteralPath $unpacked[$fid] -Recurse -File | Where-Object { $_.Name -ieq $l.Name }) | Select-Object -First 1
+    }
+    if (-not $src) { Die ($e.name + '''s archive holds no file with the bytes revision ' + $BaseRevision + ' puts in Data as ' + $l.Name + $(if ($row.Sha256) { ' (sha256 ' + $row.Sha256 + ')' } else { '' }) + '.') }
     $old = [IO.File]::ReadAllBytes($src.FullName)
     if ($old.Length -lt 12 -or [Text.Encoding]::ASCII.GetString($old, 0, 4) -ne 'TES4') { Die ($l.Name + ' in ' + $e.name + ' has no TES4 header, so it is not a plugin.') }
     $flags = [BitConverter]::ToUInt32($old, 8)
