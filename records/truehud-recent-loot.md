@@ -15,10 +15,15 @@ collection, the load order or what ships.
   727e051f5b1935c2981e858d8145752a3e688675, the newest on its default branch
   when read. The repository has no tags or releases, so nothing there names
   1.1.10.
-- Not cross-checked against the package. The Nexus download needs a sign-in,
-  and nothing here signs in. So every value below is what the source at that
-  commit falls back to, and has not been confirmed against the INI the
-  1.1.10 archive carries.
+- Not read from the package yet. Every value below is what the source at
+  that commit falls back to. The mod also ships
+  `Data/MCM/Config/TrueHUD/settings.ini`, which overrides those fallbacks,
+  so the values in effect are the ones in that INI, and they have not been
+  read. Its repository does not carry it (no .ini at that commit). The only
+  copy is in file 798218, and no Nexus-Run verb returns an INI's values from
+  a file yet (#6993). When that read lands, its values and the INI's sha256
+  go in a column beside the fallbacks. The INI itself never goes in the
+  repository.
 
 ## Where it reads the settings
 
@@ -36,7 +41,9 @@ what ships (`Test-ShipOneMachine` in `scripts/release/Ship-Rules.ps1`).
 ## The keys
 
 The General section switches the widget on. Every other key is in the
-RecentLoot section. Each value is the compiled fallback in `src/Settings.h`.
+RecentLoot section. Each value is the compiled fallback in `src/Settings.h`,
+which applies only where the shipped `settings.ini` leaves a key out. The
+shipped column waits on #6993.
 
 | Section | Key | Fallback | What it does |
 | --- | --- | --- | --- |

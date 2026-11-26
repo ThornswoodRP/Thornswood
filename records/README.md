@@ -283,8 +283,9 @@ folder here is named below, under the heading it belongs to.
   session with a 403, so they are read in a browser on One.
 - `truehud-recent-loot.md`: where TrueHUD reads its recent loot settings,
   each key with the source's fallback value, and what the mod's page lets
-  Thornswood do with its files (#6019). The values are from the source, not
-  yet checked against the Nexus archive. No script reads it.
+  Thornswood do with its files (#6019). The values are the source's
+  fallbacks; the shipped settings.ini that overrides them is not read yet
+  (#6993). No script reads it.
 - `collection-dropped.json`: the plugins a server may stop loading when it
   moves to the revision `collection-plugins.json` names, because that
   revision takes them out, each with why every form it added can go from a
