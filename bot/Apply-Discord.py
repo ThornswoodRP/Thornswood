@@ -699,8 +699,13 @@ PLAN = [
    dict(kind='text',  name='game-rules',  key='GAMERULES', mode='read',
         topic='How roleplay works here. Nine rules, and what we let slide.',
         post=True, was=(('Thornswood', 'game-rules'), ('In Character', 'game-rules'))),
+   # Loremasters post the world's own documents here as well, a Jarl's
+   # writ and the like (#6962, Patrick, 26 Nov 2026: "I would have to make
+   # you a lore master since that is technically lore"). Everybody else
+   # reads, and the council posts the words above them.
    dict(kind='text',  name='lore',        key='LORE',     mode='read',
         topic='4E 252. What happened and who you can be.', post=True,
+        extra_roles=('Loremaster',),
         was=(('In Character', 'lore'),)),
    # The sixteen factions, lore/factions.md as Patrick approved it on 22 Oct
    # (#3317), with its changelog like the rest.
