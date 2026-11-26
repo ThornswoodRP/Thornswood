@@ -229,7 +229,8 @@ the GPL-3.0-or-later, and so is this file.
 value to weight** show no gold value on Thornswood, because an item here has
 no gold price. **SkyUI's journal** has no saving, loading, Skyrim help or
 Creation Club on its System page, because Thornswood keeps your character on
-the server and has its own help. They are the work of the SkyUI Team, the
+the server and has its own help. **SkyUI's inventory** closes with its mapped
+key. These menus are the work of the SkyUI Team, the
 SkyHUD Team and Ahzaab, moreHUD's author. Thornswood ships none of those
 files: the launcher makes them on your computer from your own copy of each
 mod.

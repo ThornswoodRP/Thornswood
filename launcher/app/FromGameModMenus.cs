@@ -217,7 +217,27 @@ namespace Thornswood
             },
         };
 
+        public static readonly MenuRecipe SkyUIInventory = new MenuRecipe
+        {
+            Mod = "SkyUI",
+            Archive = "SkyUI_SE.bsa",
+            Source = "interface\\inventorymenu.swf",
+            SourceSize = 70488,
+            SourceSha256 = "9225ed93e1589e69f6d5305299e8e6847aaaea1323a3c39ba88360803c3d49a6",
+            Path = "Data\\Interface\\inventorymenu.swf",
+            Size = 70566,
+            Sha256 = "054d84ec4cca967233eeb075e5660f046826509d1bc74e066a1245064341d7e1",
+            Edits = new[]
+            {
+                new MenuEdit(4, 4, "f83b0400"),
+                new MenuEdit(165453, 4, "441e0000"),
+                new MenuEdit(168584, 2, "6402"),
+                new MenuEdit(168708, 2, "e201"),
+                new MenuEdit(168789, 0, "4c9d0200d500960200040296090000636f6e74726f6c004e96110000517569636b20496e76656e746f727900494c129d0200a60096020004029607000076616c7565004e960900006b6579446f776e0049104c129d02008100960200040196100000696e76656e746f72794c69737473004e960a00006974656d4c697374004e960e000064697361626c65496e707574004e12104c129d02003f00960200040196100000696e76656e746f72794c69737473004e960e000063617465676f72794c697374004e960e000064697361626c65496e707574004e121011"),
+            },
+        };
+
         /// <summary>Every mod menu FromGame makes, in this order.</summary>
-        public static readonly MenuRecipe[] Mods = { SkyUIConfig, SkyUIItemCard, SkyHUDMenu, MoreHUDInfo, MoreHUDInfoExported, SkyUIJournal };
+        public static readonly MenuRecipe[] Mods = { SkyUIConfig, SkyUIItemCard, SkyHUDMenu, MoreHUDInfo, MoreHUDInfoExported, SkyUIJournal, SkyUIInventory };
     }
 }

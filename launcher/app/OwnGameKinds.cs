@@ -443,6 +443,7 @@ namespace Thornswood
             "Data\\Interface\\exported\\AHZHudInfo.swf",
             // SkyUI's journal with no saving, loading, help or Creation Club (#3127).
             "Data\\Interface\\quest_journal.swf",
+            "Data\\Interface\\inventorymenu.swf",
             // Made from the person's own plugins by the release's recipe (#2791).
             LastPlugin.File,
         };

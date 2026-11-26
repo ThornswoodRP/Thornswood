@@ -12,6 +12,7 @@ mods (#3113, #3127), the way it makes the main menu from the game's (#2827).
     Data\\Interface\\AHZHudInfo.swf            moreHUD's HUD widget, and its
     Data\\Interface\\exported\\AHZHudInfo.swf  copy under exported
     Data\\Interface\\quest_journal.swf         SkyUI's journal (#3127)
+    Data\\Interface\\inventorymenu.swf         SkyUI's mapped inventory close (#6721)
 
 WHY
 
@@ -382,6 +383,107 @@ def edit_journal(plain):
 VALUE_COLUMNS = ('valueColumn', 'valueWeightColumn', 'alchValueColumn', 'alchValueWeightColumn')
 
 
+def _avm1_actions(body):
+    """Flat action records in the supported handler, including branch targets."""
+    records, at = [], 0
+    while at < len(body):
+        op = body[at]
+        if op >= 0x80 and at + 3 > len(body):
+            raise SystemExit('STOP. Inventory input has a truncated action header.')
+        size = struct.unpack_from('<H', body, at + 1)[0] if op >= 0x80 else 0
+        data = at + (3 if op >= 0x80 else 1)
+        end = data + size
+        if end > len(body) or op in (0x8e, 0x9b, 0x94):
+            raise SystemExit('STOP. Inventory input has an unsupported action extent.')
+        if op in (0x99, 0x9d) and size != 2:
+            raise SystemExit('STOP. Inventory input has an invalid branch.')
+        records.append((at, op, data, end))
+        at = end
+    boundaries = {r[0] for r in records} | {len(body)}
+    for at, op, data, end in records:
+        if op in (0x99, 0x9d) and end + struct.unpack_from('<h', body, data)[0] not in boundaries:
+            raise SystemExit('STOP. Inventory branch is not at an action boundary.')
+    return records
+
+
+def insert_inventory_actions(body, offset, extra):
+    """Insert a predicate and rebase every existing Jump/If crossing it."""
+    records = _avm1_actions(body)
+    _avm1_actions(extra)
+    boundaries = {r[0] for r in records} | {len(body)}
+    if offset not in boundaries:
+        raise SystemExit('STOP. Inventory edit is not at an action boundary.')
+    edits = [(offset, 0, extra.hex())]
+    for at, op, data, end in records:
+        if op not in (0x99, 0x9d):
+            continue
+        old = struct.unpack_from('<h', body, data)[0]
+        target = end + old
+        # A branch to the old predicate must also evaluate its added OR arm.
+        target += len(extra) if target > offset else 0
+        end += len(extra) if at >= offset else 0
+        distance = target - end
+        if not -32768 <= distance <= 32767:
+            raise SystemExit('STOP. Inventory branch exceeds its signed width.')
+        if distance != old:
+            edits.append((data, 2, struct.pack('<h', distance).hex()))
+    edits.sort()
+    _avm1_actions(apply(body, edits))
+    return edits
+
+
+def inventory_close_predicate():
+    """OR the existing Tab predicate with a fresh, unblocked mapped control."""
+    def push(value):
+        return b'\x96' + struct.pack('<H', len(value)) + value
+    def string(value):
+        return push(b'\0' + value.encode('utf8') + b'\0')
+    def member(register, *names):
+        value = push(bytes((4, register)))
+        for name in names:
+            value += string(name) + b'\x4e'  # GetMember
+        return value
+    checks = [member(2, 'control') + string('Quick Inventory') + b'\x49']
+    # Shared.GlobalFunc.IsKeyPressed also accepts keyHold. The new shortcut
+    # must not close from a repeat of the key that just opened the menu.
+    checks.append(member(2, 'value') + string('keyDown') + b'\x49')
+    for name in ('itemList', 'categoryList'):
+        checks.append(member(1, 'inventoryLists', name, 'disableInput') + b'\x12')
+    value, branches = bytearray(checks[0]), []
+    for check in checks[1:]:
+        # Keep the current boolean, but skip later properties when false.
+        value += b'\x4c\x12\x9d\x02\x00\x00\x00'  # Duplicate, Not, If
+        branches.append(len(value) - 2)
+        value += check + b'\x10'  # And
+    finish = len(value)
+    value += b'\x11'  # Or, retaining the existing Tab/Shift-Tab result
+    for data in branches:
+        struct.pack_into('<h', value, data, finish - (data + 2))
+    # Native Tab/Shift-Tab must not read any new input or movie properties.
+    return b'\x4c\x9d\x02\x00' + struct.pack('<h', len(value)) + value
+
+
+def edit_inventory(plain):
+    # SkyUI Community 6.11 SE, Nexus file749043. The launcher also checks the
+    # compressed source hash; this builder refuses a different original movie.
+    if hashlib.sha256(plain).hexdigest() != '2f1b1a41b675d726dfd7a3f3eb8de9335b0ae5bf8c78757198ca1e2cabd309ab':
+        raise SystemExit('STOP. Inventory menu is not the supported SkyUI 6.11 SE original.')
+    start, size, predicate = 168586, 393, 203
+    body = plain[start:start + size]
+    if body[predicate:predicate + 2] != b'\x12\x9d':
+        raise SystemExit('STOP. Inventory close predicate is missing.')
+    extra = inventory_close_predicate()
+    edits = [(start + at, remove, insert) for at, remove, insert in insert_inventory_actions(body, predicate, extra)]
+    container = [t for t in tags(plain, header_end(plain), len(plain), 'inventory menu') if t[1] == 165451]
+    if len(container) != 1 or container[0][0] != 59 or container[0][2] - container[0][1] != 6:
+        raise SystemExit('STOP. Inventory input tag is not the supported long DoInitAction.')
+    tag_size = container[0][3] - container[0][2]
+    edits += [(4, 4, struct.pack('<I', len(plain) + len(extra)).hex()),
+              (165453, 4, struct.pack('<I', tag_size + len(extra)).hex()),
+              (start - 2, 2, struct.pack('<H', size + len(extra)).hex())]
+    return sorted(edits), 'mapped inventory key uses its normal fade and close, after child input and without held repeats'
+
+
 def edit_config(text):
     """Each views line that names a value column, without it."""
     edits, at = [], 0
@@ -418,6 +520,7 @@ MENUS = [
     ('MoreHUDInfo', 'moreHUD', 'AHZmoreHUD.bsa', 'interface\\ahzhudinfo.swf', 'Data\\Interface\\AHZHudInfo.swf', edit_morehud, 'movie'),
     ('MoreHUDInfoExported', 'moreHUD', 'AHZmoreHUD.bsa', 'interface\\exported\\ahzhudinfo.swf', 'Data\\Interface\\exported\\AHZHudInfo.swf', edit_morehud, 'movie'),
     ('SkyUIJournal', 'SkyUI', 'SkyUI_SE.bsa', 'interface\\quest_journal.swf', 'Data\\Interface\\quest_journal.swf', edit_journal, 'movie'),
+    ('SkyUIInventory', 'SkyUI', 'SkyUI_SE.bsa', 'interface\\inventorymenu.swf', 'Data\\Interface\\inventorymenu.swf', edit_inventory, 'movie'),
 ]
 
 
