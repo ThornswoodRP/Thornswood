@@ -431,11 +431,14 @@ try {
     }
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
-            if (-not $launcher.HasExited) {
-                $launcher.Refresh()
-                Say ('At the end, the launcher''s windows: ' + (Get-LauncherWindows $launcher.Id))
-                if ($launcher.MainWindowHandle -ne [IntPtr]::Zero) {
-                    $how = [ThornswoodRealClient.Win]::Shot($launcher.MainWindowHandle, (Join-Path $Out 'launcher-no-play.png'))
+            # A fresh read of the process, not a refresh of the one followed:
+            # tests\test-real-client-restart-grace.ps1 runs this loop's start,
+            # up to its first refresh, against doubles.
+            $now = Get-Process -Id $launcher.Id -ErrorAction SilentlyContinue
+            if ($now) {
+                Say ('At the end, the launcher''s windows: ' + (Get-LauncherWindows $now.Id))
+                if ($now.MainWindowHandle -ne [IntPtr]::Zero) {
+                    $how = [ThornswoodRealClient.Win]::Shot($now.MainWindowHandle, (Join-Path $Out 'launcher-no-play.png'))
                     Say "shot launcher-no-play ($how)"
                 }
             }
