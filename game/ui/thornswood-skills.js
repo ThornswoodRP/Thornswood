@@ -639,7 +639,7 @@
   var wasCreating = false;
   var closing = false;     // creation is over and the panel is on its way shut
   var tableGen = 0;        // bumped when a table arrives from the server, so a redraw is forced
-  var drawnKey = '';       // JSON of what head, nav and body were last drawn from
+  var drawnKey = '';       // JSON of what head and nav were last drawn from; pageKey is the body's
   var drawnRow = -1;       // tracked separately so an arrow only updates the rendered highlight
   var footKey = '';        // the same for the foot
   var keyName = 'K';       // SkillsKey as bound, until the front says otherwise (#1919)
@@ -1693,6 +1693,24 @@
                 of the above the first time a caught-up count arrived.
   */
   var NOT_DRAWN = { note: true, progress: true, work: true };
+  /*
+    What the open page is drawn from, where that is less than all of the
+    view (#4475). The body was rebuilt whenever anything in the view moved,
+    the Body page's meters among them, which come new with every write, so
+    the rent being typed on the Office page and the terms being written on
+    Contracts went with it, focus and all. These two pages have fields to type in and read one part of the
+    view each, so they are rebuilt only when that part moves. Every other
+    page is keyed on the whole view, as before.
+  */
+  var PAGE_READS = { office: ['officePage'], contracts: ['contracts'] };
+  var drawnPage = '';
+  function pageKey(key) {
+    var reads = PAGE_READS[section];
+    if (!reads || creating()) return key + '|' + rowAt;
+    var v = {};
+    reads.forEach(function (k) { v[k] = mine ? mine[k] : null; });
+    return JSON.stringify([tableGen, section, v, section === 'contracts' ? contractWith : null]);
+  }
   function viewKey() {
     var v = null;
     if (mine) { v = {}; for (var k in mine) if (!NOT_DRAWN[k]) v[k] = mine[k]; }
@@ -1769,7 +1787,8 @@
       drawnRow = rowAt;
       drawHead();
       drawNav();
-      drawBody();
+      var page = pageKey(key);
+      if (page !== drawnPage) { drawnPage = page; drawBody(); }
     }
     drawProgress();
     drawFoot();

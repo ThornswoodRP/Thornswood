@@ -72,7 +72,11 @@ the focused control is gone, focus goes to the dialog. `subject` names what
 the controls are for (a trade, a trader's session, a journal page, a hold's
 box); when it changes the markup goes in whole, so nothing typed for the last
 one shows for this one. A panel that decides what a field holds (the trade's
-gold after a send) sets that field's value itself after the patch. The character section rows and
+gold after a send) sets that field's value itself after the patch. The K
+panel builds its pages itself and rebuilds the open one only when what that
+page is drawn from moves: the Office and Contracts pages, which have fields
+to type in, are keyed on their own part of the view (`PAGE_READS` in
+`thornswood-skills.js`). The character section rows and
 maneuvers use native buttons so Enter and Space activate the same actions as
 clicking. Repeated keydown does not trigger another action. The away prompt
 keeps its separate alert-dialog and focus-restoration behavior.

@@ -123,6 +123,33 @@ const trader = { open: true, sessionId: 'm1', trader: 'Smith', place: 'Whiterun'
   yes('P: positions moving redraw the strip and leave the panel as it was', writes === 0 && body.childNodes[0] === first && p.doc.querySelector('[data-do="kick"]') === kick);
 }
 
+// ------------------------------------------------------ the K panel --
+{
+  const p = makePage();
+  p.run('bridge', ui('bridge'));
+  p.run('skills', ui('skills'));
+  const api = p.win.thornswoodSkills;
+  const door = name => ({ name, by: 'Aldis', hold: 'whiterun', where: 'Whiterun', ours: true, rent: { amount: 5, every: 7, owed: 0 } });
+  let hunger = 10, at = door('Breezehome');
+  const feed = () => api.setData(null, { panel: { 'class': 'hunter', profession: 'smith', half: 'edgewright', ranks: {}, tree: {}, points: 0,
+    body: { hunger: hunger++ }, officePage: { steward: true, offices: [], door: at } } });
+  api.open();
+  feed();
+  const office = p.doc.querySelectorAll('.navrow').find(n => /^Office/.test(n.textContent));
+  if (office) office.onclick();
+  const rent = () => p.doc.querySelectorAll('input').find(n => n.getAttribute('aria-label') === 'Weekly rent in gold') || null;
+  const field = rent();
+  yes('K: the Office page has the rent box', !!field);
+  if (field) {
+    field.focus(); field.value = '12';
+    feed();
+    yes('K: the rent being typed is kept, focused, when the Body page\'s meters move', rent() === field && field.value === '12' && p.doc.activeElement === field);
+    at = door('Jorrvaskr');
+    feed();
+    yes('K: another building\'s door draws a new rent box', !!rent() && rent() !== field);
+  }
+}
+
 // ------------------------------------------------------ the shared code --
 {
   const files = fs.readdirSync(path.join(root, 'game/ui')).filter(f => /^thornswood-.*\.js$/.test(f));
