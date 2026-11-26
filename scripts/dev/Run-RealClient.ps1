@@ -61,7 +61,8 @@ $where = Join-Path $repoRoot 'scripts\release\Where.ps1'
 if (-not $Root) { $Root = & $where Install }
 $Root = $Root.TrimEnd('\')
 if (-not $Steps) { $Steps = Join-Path $repoRoot 'tests\real-client\dev-release.json' }
-$runId = (Get-Date).ToString('yyyyMMdd-HHmmss')
+$runStarted = Get-Date
+$runId = $runStarted.ToString('yyyyMMdd-HHmmss')
 if (-not $Out) { $Out = Join-Path $repoRoot ('temp\real-client\' + $runId) }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 
@@ -671,6 +672,26 @@ if (Test-Path -LiteralPath $launcherLog) {
         $sr = New-Object IO.StreamReader($fs)
         [IO.File]::WriteAllText((Join-Path $Out 'launcher.log'), $sr.ReadToEnd())
     } finally { $fs.Dispose() }
+}
+# The game's own logs (skyrim-platform.log, which carries the plugins' Trace
+# lines, and the Thornswood logs beside it) are written over at the next game
+# start, so a run that kept only the launcher's lost them to whoever played
+# next (26 Nov: #6619 needed a run's "Owner outfit" lines and none were left).
+# Those this run's game wrote are kept, under game\. The game writes them in
+# the install's own My Games, or in Windows' when the install plays the
+# collection's game (the launcher's Files.SkseLogDir).
+$mine = @(foreach ($skseLogs in @((Join-Path $Root 'Profile\MyGames\SKSE'), (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'My Games\Skyrim Special Edition\SKSE'))) {
+    if (Test-Path -LiteralPath $skseLogs) { Get-ChildItem -LiteralPath $skseLogs -Filter '*.log' -File | Where-Object { $_.LastWriteTime -ge $runStarted } }
+})
+$mine = @($mine | Sort-Object Name -Unique)
+if ($mine.Count) {
+    $gameOut = Join-Path $Out 'game'
+    New-Item -ItemType Directory -Force -Path $gameOut | Out-Null
+    foreach ($f in $mine) {
+        $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite')
+        try { $sr = New-Object IO.StreamReader($fs); [IO.File]::WriteAllText((Join-Path $gameOut $f.Name), $sr.ReadToEnd()) } finally { $fs.Dispose() }
+    }
+    Say ('Kept the game''s logs: ' + (($mine | ForEach-Object { $_.Name }) -join ', ') + '.')
 }
 
 if ($pluginOff) { $note = ($note + ' (' + $pluginOff + ')').Trim() }

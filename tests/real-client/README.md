@@ -46,8 +46,10 @@ pwsh scripts\dev\Run-RealClient.ps1
 ```
 
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
-`results.jsonl`, the launcher's log for the run and a `.png` for each
-screenshot. `-Root` names another install (the default is
+`results.jsonl`, the launcher's log for the run, a `.png` for each
+screenshot, and under `game\` the game's own logs that the run's game wrote
+(`skyrim-platform.log` with the plugins' Trace lines, and the Thornswood
+logs beside it), which the next game start writes over. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
 setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the
@@ -94,7 +96,10 @@ run once, pass or fail. The task runs the script from
 `worktrees\real-client-watcher`, which `-Install` makes and each look moves
 to origin/main first, so it never runs a stale copy from the shared clone.
 Every look is a line in `temp\real-client\watch.log` of the clone;
-`-Uninstall` takes the task and that worktree off.
+`-Uninstall` takes the task and that worktree off. To run the newest
+Deployment at once, without the ten idle minutes, run
+`pwsh worktrees\real-client-watcher\scripts\dev\Watch-RealClient.ps1 -Now -Root C:\Thornswood`
+from the clone and keep off the keyboard and mouse while it runs.
 
 ## How a step is written
 

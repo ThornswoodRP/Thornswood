@@ -792,6 +792,28 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
+// The inventory is closed with a second I, the way Patrick wants it to
+// close (26 Nov): the run checks that it does, rather than going round it
+// with Tab or Escape.
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const shut = list.findIndex(function (x) { return x.do === 'wait' && x.menu === 'InventoryMenu' && x.open === false; });
+  yes('the key before the inventory close wait is a second I (23)', shut > 0 && list[shut - 1].do === 'key' && list[shut - 1].code === 23);
+}
+
+// The game's own logs are kept with the run, since the next game start
+// writes over them (26 Nov: #6619's "Owner outfit" lines were gone).
+{
+  const RUN = read(path.join('scripts', 'dev', 'Run-RealClient.ps1')) || '';
+  yes('the run keeps the SKSE logs its game wrote, under game\\',
+      /\$runStarted = Get-Date/.test(RUN) && /'Profile\\MyGames\\SKSE'/.test(RUN) &&
+      /Filter '\*\.log' -File \| Where-Object \{ \$_\.LastWriteTime -ge \$runStarted \}/.test(RUN) &&
+      /Join-Path \$Out 'game'/.test(RUN));
+  yes('  read while the game may still hold them, as launcher.log is', /\[IO\.File\]::Open\(\$f\.FullName, 'Open', 'Read', 'ReadWrite'\)/.test(RUN));
+  yes('  and kept before the summary is written, so they go up with the run', RUN.indexOf("Join-Path $Out 'game'") > 0 && RUN.indexOf("Join-Path $Out 'game'") < RUN.indexOf("Compress-Archive"));
+}
+
 // The watcher starts a run by itself after a dev release (#5197's Done when:
 // nobody at the PC), once per Deployment, and never over somebody's game,
 // on a locked PC, or while somebody is using it.
@@ -809,6 +831,7 @@ foreach ($scan in @(1,23,36)) {
       /-Command "' \+ \$look/.test(WATCH));
   yes('its worktrees and temp hang off the clone, found through git\'s shared directory',
       /rev-parse --git-common-dir/.test(WATCH) && /\$repoRoot = Split-Path -Parent/.test(WATCH));
+  yes('-Now runs at once when asked, skipping only the idle wait', /\[switch\]\$Now/.test(WATCH) && /if \(\$Now\) \{ \$IdleMinutes = 0 \}/.test(WATCH));
   yes('-Uninstall takes the watcher\'s worktree off too', /if \(\$Uninstall\) \{[\s\S]*?worktree remove --force \$watcher/.test(WATCH));
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
   if (ver.status === 0) {

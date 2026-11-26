@@ -175,7 +175,8 @@
     },
     {
       "do": "key",
-      "code": 23
+      "code": 23,
+      "why": "a second I closes the inventory, as Patrick wants; on 26 Nov it did not yet (Tab and Escape did), and a fix for that is in hand, so this step fails until it lands"
     },
     {
       "do": "wait",
