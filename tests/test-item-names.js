@@ -252,9 +252,9 @@ function give(p, baseDesc, n, name) {
   pack(p).push(e);
 }
 function entriesOf(p, baseDesc) { return pack(p).filter(function (e) { return e.baseId === idOf(baseDesc); }); }
-const DEED_NAME = 'Deed to Honeyside, Windhelm', MOLD_NAME = 'Key mold for Honeyside, Windhelm', KEY_NAME = 'Key to Honeyside, Windhelm';
+const DEED_NAME = 'Deed to Honeyside, Windhelm (deed 1)', MOLD_NAME = 'Key mold for Honeyside, Windhelm', KEY_NAME = 'Key to Honeyside, Windhelm';
 yes('N0 the labels the block publishes are the three names on the issues, with the hold (#3899)',
-    W.deedLabel(HOME) === DEED_NAME && W.moldLabel(HOME) === MOLD_NAME && W.keyLabel(HOME) === KEY_NAME);
+    W.deedLabel(HOME, 1) === DEED_NAME && W.moldLabel(HOME) === MOLD_NAME && W.keyLabel(HOME) === KEY_NAME);
 
 open(ALICE, DOOR_OUT);
 {

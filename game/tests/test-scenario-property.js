@@ -186,6 +186,33 @@ yes('F2 Unlock: the register says open', claimOnDisk().locked === false);
 w.activate(INSIDE, CORVIN);
 yes('F2 and the door opens for Corvin', w.activate(FRONT, CORVIN).opened && !shutFor(CORVIN));
 
+// ---------------------------------------------------------- G. ended deed --
+const afterRestart = w.box().__thornswoodProperty;
+const firstDeed = w.row(BRENNA).inventory.entries.find(function (e) { return e.baseId === DEED; });
+afterRestart.claims()[HOUSE].touched = w.now() - 15 * 24 * 60 * 60 * 1000;
+yes('G1 an unused claim lapses while its former holder keeps the old deed',
+    !afterRestart.holderOf(HOUSE) && deedIn(BRENNA) === 1);
+w.activate(FRONT, BRENNA);
+yes('G1 opening an unclaimed door with an ended deed leaves it unclaimed', !claimOnDisk());
+
+// Independent of the result above, establish an unclaimed house for G2.
+const returningClaim = afterRestart.claims()[HOUSE];
+if (returningClaim) {
+  returningClaim.touched = w.now() - 15 * 24 * 60 * 60 * 1000;
+  afterRestart.holderOf(HOUSE);
+}
+w.activate(FRONT, CORVIN);
+w.say(CORVIN, '/claim');
+w.say(CORVIN, '/lock');
+yes('G2 another person can claim and lock after the lapse',
+    claimOnDisk()?.by === 1002 && claimOnDisk().locked && deedIn(CORVIN) === 1);
+yes('G2 the ended deed cannot open a new holder\'s locked door', !w.activate(FRONT, BRENNA).allowed);
+yes('G2 trying the ended deed leaves the new claim in place and the paper in the pack',
+    claimOnDisk()?.by === 1002 && w.row(BRENNA).inventory.entries.some(e => e.name === firstDeed.name));
+const newDeed = w.row(CORVIN).inventory.entries.find((e) => e.baseId === DEED);
+yes('G2 the server persisted a new deed number after restart and lapse',
+    claimOnDisk()?.deed > c.deed && newDeed?.name !== firstDeed.name);
+
 // ------------------------------------------------------------- Z. clean --
 yes('Z no handler threw and nothing the engine would refuse was done (' + w.faults.slice(0, 3).join(' | ') + ')', w.faults.length === 0);
 yes('Z no timer threw (' + w.threw.slice(0, 2).join(' | ') + ')', w.threw.length === 0);

@@ -251,7 +251,7 @@ r = word(JARL_W, '/claim');
 yes('C7 and claims it, and gets its deed: "' + r.mine.slice(0, 60) + '"',
     !!claimOf(JAIL) && claimOf(JAIL).by === JARL_W.pid && /^You claim Dragonsreach Dungeon\./.test(r.mine));
 // The deed passes to somebody else's pack and is presented at the door.
-const deed = refs[JARL_W.a].inventory.entries.filter(function (e) { return e.name === 'Deed to Dragonsreach Dungeon, Whiterun'; })[0];
+const deed = refs[JARL_W.a].inventory.entries.find(function (e) { return e.name === 'Deed to Dragonsreach Dungeon, Whiterun (deed 1)'; });
 yes('C8 the deed is in the Jarl\'s pack', !!deed);
 if (deed) {
   refs[PRISONER.a].inventory.entries.push(JSON.parse(JSON.stringify(deed)));

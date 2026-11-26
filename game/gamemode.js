@@ -22621,6 +22621,7 @@ module.exports = {
           Number(c.master.no) > 0) {
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
+      if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
 
       out[k] = row;
       kept++;
@@ -22634,7 +22635,7 @@ module.exports = {
     try {
       var text = JSON.stringify({ claims: claims, arrears: arrears,
         funds: funds, notices: notices, boards: boards, steps: steps,
-        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+        masters: masterCut, deedCut: deedCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
       if (durable === true) {
         if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
         var file = registerPath();
@@ -22651,11 +22652,21 @@ module.exports = {
   }
 
   var claims = load();
+  var deedCut = loadDeedCut();
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
   // Read with the rest, before anything can save, so no write leaves them out (#4901).
   var debits = loadDebits();
+
+  function loadDeedCut() {
+    var saved = registerRead.doc && registerRead.doc.deedCut;
+    var top = Number.isSafeInteger(saved) && saved > 0 ? saved : 0;
+    for (var building of Object.keys(claims)) {
+      top = Math.max(top, claims[building].deed || 0);
+    }
+    return top;
+  }
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -23693,6 +23704,7 @@ module.exports = {
       claims[building] = { by: mine, name: who2, at: now2, touched: now2,
                            locked: held ? !!held.locked : false,
                            ground: keepGround };
+      if (held && held.deed) { claims[building].deed = held.deed; }
       if (keepRent) { claims[building].rent = keepRent; }
       save();
       pushAll();
@@ -23887,6 +23899,8 @@ module.exports = {
     two, because then neither of them says which house it is.
   */
   function giveDeed(actorId, building) {
+    var held = holderOf(building);
+    if (!held) { return false; }
     var baseId = idOf(DEED);
     if (!baseId) {
       plog('no deed record in this load order, so nothing was handed over');
@@ -23895,7 +23909,7 @@ module.exports = {
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { inv = null; }
     var entries = (inv && inv.entries) || [];
-    entries.push({ baseId: baseId, count: 1, name: deedLabel(building) });
+    entries.push({ baseId: baseId, count: 1, name: deedLabel(building, held.deed) });
     try {
       mp.set(actorId, 'inventory', { entries: entries });
     } catch (e) {
@@ -23984,9 +23998,21 @@ module.exports = {
       outside an inn's landing.
     */
     var ground = groundHere(actorId);
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
     claims[building] = { by: profileId, name: who, at: now, touched: now,
-                         locked: false, ground: ground };
-    save();
+                         locked: false, ground: ground, deed: deed };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save your claim. Ask staff to check it.');
+      return true;
+    }
     // A new claim is not locked, so nothing anybody sees changes yet. The push
     // is here anyway because the claim is the moment the building stops being
     // nobody's, and a view that is right from the first second costs one write.
@@ -24261,11 +24287,16 @@ module.exports = {
 
   function keyLabel(building) { return 'Key to ' + placeOf(building); }
   function moldLabel(building) { return 'Key mold for ' + placeOf(building); }
-  function deedLabel(building) { return 'Deed to ' + placeOf(building); }
+  // A transfer keeps the deed number. Lapse and eviction end its use. Old
+  // unnumbered deeds still work for a claim issued before numbers were added.
+  function deedLabel(building, deed) { return 'Deed to ' + placeOf(building) + (deed ? ' (deed ' + deed + ')' : ''); }
 
   function holdsKey(actorId, building) { return holdsNamed(actorId, KEY, keyLabel(building)); }
   function holdsMold(actorId, building) { return holdsNamed(actorId, MOLD, moldLabel(building)); }
-  function holdsDeed(actorId, building) { return holdsNamed(actorId, DEED, deedLabel(building)); }
+  function holdsDeed(actorId, building) {
+    var held = holderOf(building);
+    return !!held && holdsNamed(actorId, DEED, deedLabel(building, held.deed));
+  }
 
   /** A named item into the pack, never stacked. See giveDeed for why. */
   function giveNamed(actorId, baseDesc, label) {
