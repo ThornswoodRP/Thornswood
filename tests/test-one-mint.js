@@ -426,6 +426,22 @@ for (const at of Object.keys(WRITERS)) {
     /e\.count -= amount;/.test(goldCut) && !/\+=|\+ amount/.test(goldCut) &&
     /e\.count = Number\(e\.count\) - 1;/.test(cutOne) && !/\+=|\+ 1/.test(cutOne) &&
     /Number\(it\.baseId\) === GOLD_ID[^\n]*\n\s*return 'Your pack changed\. Nothing was put in the box\.'/.test(code));
+  /*
+    THE ONE CUT THAT PUTS SOMETHING IN (#4560): a parcel handed over. It
+    pushes the one stack its notice holds, which landParcel took off the
+    sender's pack, and takes nothing; the notice comes down in the same
+    landing, so the stack is handed over once.
+  */
+  const hand = lift('  function handParcel(', '\n  }\n') || '';
+  const handLand = lift('  function landParcelHand(row, landed) {', '\n  }\n') || '';
+  const parcelLand = lift('  function landParcel(row, landed) {', '\n  }\n') || '';
+  yes('a parcel\'s hand over puts in only the stack its notice holds, which a saved pack gave up, and the notice comes down with it',
+    /var give = JSON\.parse\(JSON\.stringify\(p\.entry\)\);\s*\n\s*give\.count = Number\(p\.count\);/.test(hand) &&
+    /entries\.push\(give\);\s*\n\s*return \{ entries: entries, taken: \[\] \};/.test(hand) &&
+    (hand.match(/entries\.push\(/g) || []).length === 1 &&
+    /var kept = JSON\.parse\(JSON\.stringify\(row\.taken\[1\] \|\| \{\}\)\);/.test(parcelLand) &&
+    /made\.parcel = \{ entry: kept, count: count, what: what \};/.test(parcelLand) &&
+    /if \(!right \|\| n\.delivered\)/.test(handLand) && /n\.down = n\.delivered;/.test(handLand));
   yes('merchant credit comes from durable finite stock or its debited purse, checked by the settlement and trading regressions',
     /nextPurse = npcBuys \? state\.purse - gold : state\.purse \+ gold/.test(code) &&
     /credit = gold > 0 \? \[\{baseId:GOLD_BASE,count:gold\}\] : \[\]/.test(code) &&
@@ -539,13 +555,16 @@ for (const at of Object.keys(WRITERS)) {
     cuts.push(mc[1].trim());
   }
   yes('takeGold\'s one caller passes a ride\'s fare', callers.join(',') === 'price');
-  yes('goldCut\'s four callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
-      'LETTER_PAY, a haul\'s cost, the company\'s haul fee and the pay, and gold put in the drop box',
-      cuts.slice().sort().join(',') === 'cost,cost,cost,n' &&
+  // A parcel's cost (#4560): LETTER_FEE and the pay the sender names, never under PARCEL_PAY_MIN.
+  yes('goldCut\'s five callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
+      'LETTER_PAY, a parcel\'s cost, LETTER_FEE and its pay, a haul\'s cost, the company\'s haul fee and the pay, and gold put in the drop box',
+      cuts.slice().sort().join(',') === 'cost,cost,cost,cost,n' &&
       /var n = Math\.floor\(Number\(amount\)\);\s*\n\s*if \(!\(n > 0\)/.test(code) &&
       /\bvar fee = isJob \? JOB_FEE : NOTICE_FEE;\s*\n\s*var cost = fee \+ reward;/.test(code) &&
       /reward = \/\^\\d\+\$\/\.test\(first\) \? Number\(first\) : 0;\s*\n\s*if \(!\(reward > 0\)/.test(code) &&
       /\bvar cost = LETTER_FEE \+ LETTER_PAY;/.test(code) &&
+      /if \(!Number\.isSafeInteger\(pay\) \|\| pay < PARCEL_PAY_MIN\) \{/.test(code) && /\bvar PARCEL_PAY_MIN = 15;/.test(code) &&
+      /\bvar cost = LETTER_FEE \+ pay;/.test(code) &&
       /\bvar fee = co\.haulFee\(\);\s*\n\s*var cost = fee \+ pay;/.test(code));
   const fares = ['FARE_FERRY', 'FARE_CARRIAGE_IN_HOLD', 'FARE_CARRIAGE', 'FARE_CROSSING'].map(function (n) {
     const m = new RegExp('\\bvar ' + n + ' = (\\d+);').exec(code);
