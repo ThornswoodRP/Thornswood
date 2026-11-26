@@ -259,6 +259,7 @@ async function allowed(table, over) {
     pkProfiles: function () { return []; },
     // The hold offices (#2551); none here. test-2551-hold-offices.js runs them.
     officesForDoor: async function () { return []; },
+    chars: require('../site/lib/characters'),
     sendJson: null
   });
 }
@@ -415,7 +416,8 @@ const PID = 1893288986;
   {
     const OLD_SPARE = 555, NEW_SPARE = 556, NEXT_SPARE = 557;
     const home = {};
-    home[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [PID, 42, OLD_SPARE] };
+    home[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [PID, 42, OLD_SPARE],
+               chars: [{ id: PID, slot: 1 }, { id: 42, slot: 2 }], spare: OLD_SPARE };
     let table = clone(home);
     const answers = [];
     async function checkInAll(ids) {
@@ -461,6 +463,10 @@ const PID = 1893288986;
     yes('and hands back nothing about the first account\'s characters',
         r && !r.obj.rows['42'] && !r.obj.rows[String(PID)]);
 
+    // What /api/play/characters wrote meanwhile (test-play-characters.js runs
+    // it): B picked its spare, which became a character, and the next spare
+    // was minted. The door lets in what the lists hold (#6906).
+    Object.assign(table[B], { chars: [{ id: NEW_SPARE, slot: 1 }], spare: NEXT_SPARE });
     const banA = {};
     banA[A] = { banned: true };
     const door = await allowed(table, banA);
@@ -583,7 +589,8 @@ const PID = 1893288986;
     linked.json to get them back.
   */
   const changer = {};
-  changer[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [700, 701, 900] };
+  changer[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [700, 701, 900],
+                 chars: [{ id: 700, slot: 1 }, { id: 701, slot: 2 }], spare: 900 };
   // One Play by B the launcher's way: Door.Check with 700, the id played
   // last, then Prepare mints B its own spare 901, then every known id.
   async function playAsB(start, world) {

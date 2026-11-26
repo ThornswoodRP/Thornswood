@@ -59,8 +59,8 @@ const SPAN = 2000000000;
 // a reboot, and under a minute is a launch that never got in.
 const LEAST_SECONDS = 60;
 const MOST_SECONDS = 86400;
-// What an account keeps besides its characters and spare on the door's list
-// of checked in ids, the eight most recent, as /api/play/join always cut it.
+// What an account keeps among the ids it holds besides its characters and
+// spares: the eight it checked in most recently, as /api/play/join always cut it.
 const OTHER_IDS = 8;
 
 function num(n) { const v = Number(n); return isFinite(v) && v > 0 && Math.floor(v) === v ? v : 0; }
@@ -177,9 +177,12 @@ function tidySlots(chars, allowance) {
 }
 
 /*
-  The door's list for an account: every id it has as a character or a spare
-  on either server, and the eight other ids it checked in most recently, in the order it had
-  them. A character never falls off it however many spares came and went.
+  The ids an account holds (profiles), which /api/play/owns and the join
+  route read to say whose an id is: every id it has as a character or a
+  spare on either server, and the eight other ids it checked in most
+  recently, in the order it had them. A character never falls off it however
+  many spares came and went. The game's doors read the lists themselves
+  (doorIds, #6906), not this.
 */
 function keepProfiles(profiles, row) {
   const own = new Set();
@@ -198,11 +201,33 @@ function keepProfiles(profiles, row) {
 }
 
 /*
+  The ids one server's door lets in for an account (#6906): the characters
+  on that server's list and its spare, the id New character makes next. Not
+  the account's whole profiles list, which is every id it ever checked in on
+  either server and is about who owns an id, not which world it is in: the
+  door read that, so main let in a dev character and dev a main one, and the
+  launcher's pick made a second character under the id in the other world.
+  Read only; a row from linked.json as it is, not made whole.
+*/
+function doorIds(row, srv) {
+  const r = (row && typeof row === 'object') ? row : {};
+  const l = serverKey(srv) === 'dev' ? ((r.dev && typeof r.dev === 'object' && !Array.isArray(r.dev)) ? r.dev : {}) : r;
+  const out = [];
+  for (const c of (Array.isArray(l.chars) ? l.chars : [])) {
+    const id = c ? num(c.id) : 0;
+    if (id && out.indexOf(id) < 0) out.push(id);
+  }
+  const spare = num(l.spare);
+  if (spare && out.indexOf(spare) < 0) out.push(spare);
+  return out;
+}
+
+/*
   One server's list for the account made right before it is answered or
   written: the dead out of their slots, any an admin brought back into a free
   one, the slots tidied to the allowance when the site knows it, a spare
-  minted when there is none, and every character and spare of both servers on
-  the door's list. how is { slots, pk(id), revived(id), rand }. Returns lines
+  minted when there is none, and every character and spare of both servers
+  among the ids the account holds. how is { slots, pk(id), revived(id), rand }. Returns lines
   for the launcher's log.
 */
 function settle(linked, d, srv, how) {
@@ -288,6 +313,34 @@ function forget(linked, d, srv, pid) {
   return null;
 }
 
+/*
+  An id the join route hands from an account that has left the Discord to
+  the account that checked in with it (/api/play/join, hasLeft): the
+  character moves with it on whichever server's list holds it, into the
+  lowest free slot, so the door, which reads the lists (#6906), lets it in
+  on the new account's standing as it did when the door read profiles. Both
+  rows as linked.json holds them; returns whether anything moved.
+*/
+function takeOver(from, to, pid) {
+  const id = num(pid);
+  if (!id || !from || typeof from !== 'object' || !to || typeof to !== 'object') return false;
+  let moved = false;
+  for (const srv of ['main', 'dev']) {
+    if (srv === 'dev' && (!from.dev || typeof from.dev !== 'object' || Array.isArray(from.dev))) continue;
+    const a = whole(listOf(from, srv));
+    const at = a.chars.findIndex((c) => c.id === id);
+    if (at < 0) continue;
+    const c = a.chars.splice(at, 1)[0];
+    if (srv === 'dev' && (!to.dev || typeof to.dev !== 'object' || Array.isArray(to.dev))) to.dev = {};
+    const b = whole(listOf(to, srv));
+    if (!b.chars.some((x) => x.id === id)) {
+      b.chars.push({ id, slot: c.slot === DEAD ? DEAD : nextSlot(b.chars), played: c.played, seconds: c.seconds });
+    }
+    moved = true;
+  }
+  return moved;
+}
+
 /* What the launcher is told about one server: its characters in slot order, then the dead. */
 function answer(linked, d, srv, slots) {
   const list = listOf(rowOf(linked, d), srv);
@@ -297,4 +350,4 @@ function answer(linked, d, srv, slots) {
            chars: live.concat(dead).map((c) => ({ id: c.id, slot: c.slot, played: c.played, seconds: c.seconds })) };
 }
 
-module.exports = { accountKey, answer, choose, DEAD, forget, keepProfiles, mintId, played, rowOf, serverKey, settle, tidySlots };
+module.exports = { accountKey, answer, choose, DEAD, doorIds, forget, keepProfiles, mintId, played, rowOf, serverKey, settle, takeOver, tidySlots };

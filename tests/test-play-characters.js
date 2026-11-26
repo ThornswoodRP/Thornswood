@@ -10,9 +10,9 @@
 // the way test-play-join.js runs /api/play/join. Then reads the launcher:
 // Chars.cs asks the route and writes no list of its own.
 //
-// And each game server's list apart from the other's (#6904): main's and
-// dev's characters are two worlds, and nothing on one list is read for the
-// other.
+// And each game server's list apart from the other's (#6904), and each door
+// reading only its own (#6906): main's and dev's characters are two worlds,
+// and nothing on one list is read for the other.
 //
 // Read only. Nothing here touches linked.json.
 const fs = require('fs');
@@ -144,6 +144,20 @@ const none = { slots: 2, pk: () => false, revived: () => false };
       chars.played(linked, '101', 'main', onMain, 600, 5000) === null && a.chars[0].seconds === 600);
   yes('the door holds the characters and spares of both servers',
       [onMain, a.spare, a.dev.spare].every((n) => a.profiles.indexOf(n) >= 0));
+  // Each door lets in its own server's characters and spare, never the
+  // account's whole profiles list (#6906).
+  yes('main\'s door ids are main\'s characters and spare alone',
+      chars.doorIds(a, 'main').slice().sort().join() === [onMain, a.spare].sort().join());
+  yes('dev\'s door ids are dev\'s spare alone once its character is binned', chars.doorIds(a, 'dev').join() === String(a.dev.spare));
+  yes('a row with no lists lets nothing in, whatever it checked in', chars.doorIds({ profiles: [5, 6] }, 'main').length === 0 &&
+      chars.doorIds({ profiles: [5, 6] }, 'dev').length === 0 && chars.doorIds(undefined, 'main').length === 0);
+  const leaver = { profiles: [70, 71], chars: [{ id: 70, slot: 1 }], dev: { chars: [{ id: 71, slot: 1 }] } };
+  const newer = { profiles: [], chars: [{ id: 80, slot: 1 }] };
+  yes('an id taken over from an account that left moves on the list that holds it',
+      chars.takeOver(leaver, newer, 70) && chars.takeOver(leaver, newer, 71) &&
+      chars.doorIds(newer, 'main').join() === '80,70' && chars.doorIds(newer, 'dev').join() === '71' &&
+      chars.doorIds(leaver, 'main').length === 0 && chars.doorIds(leaver, 'dev').length === 0);
+  yes('and an id on no list moves nothing', chars.takeOver(leaver, newer, 99) === false);
   let n = 0;
   const taken = { '102': { id: '102', chars: [{ id: 1000, slot: 1 }], spare: 1001, dev: { chars: [{ id: 1002, slot: 1 }], retired: [1003], spare: 1004 } } };
   yes('an id is never minted that either server of any account uses', chars.mintId(taken, () => n++) === 1005);

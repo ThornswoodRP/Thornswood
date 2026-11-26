@@ -171,7 +171,7 @@ function siteWith(opts) {
     const S = siteWith({
       members: { A: { name: 'Ann', roles: ['Jarl of Whiterun'] }, B: { name: 'Bo', roles: ['Guard of Whiterun'] },
                  C: { name: 'Cy', roles: [] } },
-      linked: { A: { profiles: [11, 12] }, B: { profiles: [21] }, C: { profiles: [31] } }
+      linked: { A: { profiles: [11, 12], chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] }, B: { profiles: [21], chars: [{ id: 21, slot: 1 }] }, C: { profiles: [31], chars: [{ id: 31, slot: 1 }] } }
     });
     const answers = new Map([['A', { roles: ['Jarl of Whiterun'] }], ['B', { roles: ['Guard of Whiterun'] }],
                              ['C', { roles: [] }]]);
@@ -192,7 +192,7 @@ function siteWith(opts) {
       members: { A: { name: 'Ann', roles: ['Jarl of Whiterun', 'Guard of Riften'] },
                  B: { name: 'Bo', roles: ['Jarl of Whiterun'] },
                  Z: { name: 'Zed', roles: ['Jarl of Riften'] } },
-      linked: { A: { profiles: [11] }, B: { profiles: [21, 22] }, Z: { profiles: [91] } }
+      linked: { A: { profiles: [11], chars: [{ id: 11, slot: 1 }] }, B: { profiles: [21, 22], chars: [{ id: 21, slot: 1 }, { id: 22, slot: 2 }] }, Z: { profiles: [91], chars: [{ id: 91, slot: 1 }] } }
     });
     const answers = new Map([['A', { roles: ['Jarl of Whiterun', 'Guard of Riften'] }], ['B', { roles: ['Jarl of Whiterun'] }],
                              ['Z', { roles: ['Jarl of Riften'] }]]);
@@ -220,7 +220,7 @@ function siteWith(opts) {
     // A second holder who never played still counts, from the member list.
     const S = siteWith({
       members: { A: { name: 'Ann', roles: ['Jarl of Whiterun'] }, N: { name: 'New', roles: ['Jarl of Whiterun'] } },
-      linked: { A: { profiles: [11] } }
+      linked: { A: { profiles: [11], chars: [{ id: 11, slot: 1 }] } }
     });
     const out = { offices: {}, people: [{ id: 'A', profiles: [11] }] };
     const clash = await S.officesForDoor(out, new Map([['A', { roles: ['Jarl of Whiterun'] }]]), S.env.linked);
@@ -228,7 +228,7 @@ function siteWith(opts) {
   }
   {
     // No member list (the intent off): the accounts the door asked about.
-    const S = siteWith({ members: null, linked: { A: { profiles: [11] }, B: { profiles: [21] } } });
+    const S = siteWith({ members: null, linked: { A: { profiles: [11], chars: [{ id: 11, slot: 1 }] }, B: { profiles: [21], chars: [{ id: 21, slot: 1 }] } } });
     const answers = new Map([['A', { roles: ['Jarl of Whiterun'], name: 'Ann' }], ['B', { roles: ['Jarl of Whiterun'], name: 'Bo' }]]);
     const out = { offices: {}, people: [{ id: 'A', profiles: [11] }, { id: 'B', profiles: [21] }] };
     const clash = await S.officesForDoor(out, answers, S.env.linked);
@@ -243,7 +243,7 @@ function siteWith(opts) {
         roles: roles,
         members: { J: { name: 'Balgruuf', roles: ['Jarl of Whiterun'] }, P: { name: 'Proventus', roles: [] },
                    O: { name: 'Other', roles: [] } },
-        linked: { J: { profiles: [11] }, P: { profiles: [21, 22] }, X: { profiles: [31] } }
+        linked: { J: { profiles: [11], chars: [{ id: 11, slot: 1 }] }, P: { profiles: [21, 22], chars: [{ id: 21, slot: 1 }, { id: 22, slot: 2 }] }, X: { profiles: [31], chars: [{ id: 31, slot: 1 }] } }
       }, extra || {}));
     };
     const ask = function (S, o) {
@@ -320,17 +320,18 @@ function siteWith(opts) {
       let sent = null;
       const S = siteWith({ members: null, linked: linked });
       const f = new Function('route', 'devDoor', 'req', 'res', 'cfg', 'url', 'sameSecret', 'sendJson', 'jsonFile', 'LINKED',
-        'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles', 'officesForDoor',
+        'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles', 'officesForDoor', 'chars',
         'return (async function () {\n' + allowed + '\n})();');
       await f('/api/allowed', false, { method: 'GET', headers: { 'x-thornswood-key': 'k' } }, {}, { botKey: 'k' }, null,
         function (a, b) { return a === b; }, function (r, c, b) { sent = JSON.parse(JSON.stringify(b)); },
         function () { return linked; }, 'linked.json', null, new Set(),
         async function (ids) { return new Map(ids.map(function (id) { return [id, standings[id]]; })); },
         function () { const b = (extra && extra.bans) || []; if (extra && extra.broken) { b.broken = true; } return b; },
-        function () { return (extra && extra.pk) || []; }, S.officesForDoor);
+        function () { return (extra && extra.pk) || []; }, S.officesForDoor,
+        require('../site/lib/characters'));
       return sent;
     };
-    const linked = { A: { profiles: [11] }, B: { profiles: [21] } };
+    const linked = { A: { profiles: [11], chars: [{ id: 11, slot: 1 }] }, B: { profiles: [21], chars: [{ id: 21, slot: 1 }] } };
     const st = { A: { play: true, roles: ['Playtester', 'Jarl of Whiterun'], name: 'Ann' },
                  B: { play: true, roles: ['Playtester', 'Guard of Whiterun'], name: 'Bo' } };
     let out = await run(linked, st);

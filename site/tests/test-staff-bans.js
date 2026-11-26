@@ -78,9 +78,9 @@ fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
 }, null, 2));
 const DATA = path.join(dir, 'data');
 fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003] },
-  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003], chars: [{ id: 2002, slot: 1 }, { id: 2003, slot: 2 }] },
+  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003], chars: [{ id: 3003, slot: 1 }] }
 }));
 const readData = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); } catch (e) { return d; } };
 

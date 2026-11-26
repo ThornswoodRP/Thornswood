@@ -113,11 +113,11 @@ fs.mkdirSync(path.join(dir, 'feed', 'version'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'feed', 'version', '00000001.json'), JSON.stringify({ launcherVersion: '1.1.200', minLauncher: '1.1.200' }));
 const DATA = path.join(dir, 'data');
 fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003] },
-  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002] },
-  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002], chars: [{ id: 1002, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003], chars: [{ id: 2002, slot: 1 }, { id: 2003, slot: 2 }] },
+  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002], chars: [{ id: 4001, slot: 1 }, { id: 4002, slot: 2 }] },
+  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003], chars: [{ id: 3003, slot: 1 }] }
 }));
 // who is every server's rows merged, which staff pages name a profile by;
 // books.main is the live server's own, which its launchers' menus read (#6904).
@@ -327,10 +327,10 @@ async function adminRoleOnly() {
   }, null, 2));
   const D2 = path.join(d2, 'data');
   fs.writeFileSync(path.join(D2, 'linked.json'), JSON.stringify({
-    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001] },
-    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002] },
-    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103] },
-    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203] }
+    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001], chars: [{ id: 8001, slot: 1 }] },
+    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002], chars: [{ id: 8002, slot: 1 }] },
+    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103], chars: [{ id: 8101, slot: 1 }, { id: 8102, slot: 2 }, { id: 8103, slot: 3 }] },
+    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203], chars: [{ id: 8201, slot: 1 }, { id: 8202, slot: 2 }, { id: 8203, slot: 3 }] }
   }));
   const ROWS2 = {
     8101: { name: 'Tova One' }, 8102: { name: 'Tova Two' }, 8103: { name: 'Tova Dead' },

@@ -2254,6 +2254,9 @@ async function handle(req, res) {
         // rule above keeps working for the account that has it now.
         for (const d of gone) {
           linked[d].profiles = linked[d].profiles.filter((n) => Number(n) !== pid);
+          // And off its character list onto the caller's (#6906), since the
+          // game's door lets in what the lists hold.
+          chars.takeOver(linked[d], was, pid);
           console.log('[thornswood-docs] join moved profile ' + pid + ' to Discord ' + t.d +
                       ' from Discord ' + d + ', which has left the Thornswood Discord');
         }
@@ -2772,13 +2775,15 @@ async function handle(req, res) {
     const seenDevRole = new Set();
     const seenCompany = new Set();
     const seenFailed = new Set();
-    const hasProfiles = (d) => (Array.isArray((linked[d] || {}).profiles) ? linked[d].profiles : [])
-      .map(Number).some((n) => n > 0);
+    /* Each door lets in only its own server's characters (#6906): the ids on
+       that server's list in linked.json and its spare, never the account's
+       whole profiles list, which holds the ids it checked in on both. */
+    const doorSrv = devDoor ? 'dev' : 'main';
+    const hasProfiles = (d) => chars.doorIds(linked[d], doorSrv).length > 0;
     const answers = await standingsForDoor(Object.keys(linked).filter(hasProfiles));
     for (const d of Object.keys(linked)) {
       const row = linked[d] || {};
-      const profiles = (Array.isArray(row.profiles) ? row.profiles : [])
-        .map(Number).filter((n) => n > 0);
+      const profiles = chars.doorIds(row, doorSrv);
       if (!profiles.length) continue;
       const st = answers.get(d) || { lookupFailed: 'not asked' };
       if (st.lookupFailed) {
