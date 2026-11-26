@@ -91,7 +91,10 @@ function game(opts) {
     printConsole: function () { },
     getPlatformVersion: function () { return 'test'; },
     browser: { executeJavaScript: function (src) { pageRuns.push(src); } },
-    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } }
+    Game: {
+      getPlayer: function () { return world.pc || { getParentCell: function () { return world.cell; } }; },
+      getCurrentCrosshairRef: function () { return world.crosshair || null; }
+    }
   };
   const FakeDate = { now: function () { return now; }, parse: Date.parse };
   const sandbox = {
@@ -107,7 +110,7 @@ function game(opts) {
     return String(files[OUT] || '').split('\n').filter(Boolean).map(function (l) { return JSON.parse(l); });
   }
   return {
-    files: files, handlers: handlers, world: world, pageRuns: pageRuns, lines: lines,
+    files: files, handlers: handlers, world: world, pageRuns: pageRuns, lines: lines, box: sandbox, fire: fire,
     // A frame: time moves on by ms, then update and tick, as the game sends them.
     frame: function (ms) { now += ms || 16; fire('update'); fire('tick'); },
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
@@ -790,6 +793,82 @@ foreach ($scan in @(1,23,36)) {
     if (!/GOT \[Windows/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// Facing a bed (#6712): the step stands the character 90 units out from
+// the nearest bed in the cell, on its side, turned to it; the crosshair wait
+// sees it; a pause waits its time; lying down is a results line.
+{
+  function ref(id, name, x, y, bed) {
+    return {
+      bed: bed, getFormID: function () { return id; },
+      getBaseObject: function () { return { getName: function () { return name; } }; },
+      getPositionX: function () { return x; }, getPositionY: function () { return y; }, getPositionZ: function () { return 64; }
+    };
+  }
+  const chair = ref(0x101, 'Chair', 10, 10, false);
+  const far = ref(0x102, 'Bed', 1000, 1000, true);
+  const near = ref(0x103, 'Bed', 300, 0, true);
+  const refs = [chair, far, near];
+  const g = game({ steps: [
+    { do: 'face', what: 'bed' },
+    { do: 'wait', for: 'crosshair', what: 'bed', timeout: 2000 },
+    { do: 'wait', for: 'time', ms: 1500 },
+    { do: 'end' }
+  ] });
+  g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
+  const cell = { getNumRefs: function (t) { return t === 40 ? refs.length : 0; }, getNthRef: function (i) { return refs[i]; } };
+  const at = { x: 0, y: 0, angle: null };
+  g.world.cell = cell;
+  g.world.pc = {
+    getParentCell: function () { return cell; },
+    getPositionX: function () { return at.x; }, getPositionY: function () { return at.y; },
+    setPosition: function (x, y) { at.x = x; at.y = y; },
+    setAngle: function (x, y, z) { at.angle = [x, y, z]; }
+  };
+  for (let i = 0; i < 5; i++) { g.frame(16); }
+  const steps = function () { return g.lines().filter(function (l) { return l.t === 'step'; }); };
+  const faced = steps()[0];
+  yes('face bed passes and names the nearest bed', !!faced && faced.ok && /before bed 103 "Bed", 2 bed\(s\) in the cell, it was 300 units off/.test(faced.note));
+  yes('  and stands 90 units out on the side the character was on', Math.round(at.x) === 210 && Math.round(at.y) === 0);
+  yes('  turned to the bed, heading east (90), looking a little down', !!at.angle && Math.round(at.angle[2]) === 90 && at.angle[0] > 0);
+  yes('the crosshair wait holds while no bed is under it', steps().length === 1);
+  g.world.crosshair = near;
+  g.frame(16); g.frame(16);
+  yes('  and passes once one is', steps().length === 2 && steps()[1].ok && /bed 103/.test(steps()[1].note));
+  g.frame(1000);
+  yes('a pause has not passed before its time', steps().length === 2);
+  g.frame(600); g.frame(16);
+  yes('  and passes after it', steps().length >= 3 && steps()[2].ok);
+  g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x14; } }, target: near });
+  g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x999; } }, target: near });
+  const sat = g.lines().filter(function (l) { return l.t === 'furniture'; });
+  yes('lying down in a bed is a results line, the character\'s own only', sat.length === 1 && sat[0].enter === true && sat[0].bed === true && /103/.test(sat[0].ref));
+}
+{
+  const g = game({ steps: [{ do: 'face', what: 'bed' }, { do: 'end' }] });
+  g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
+  const cell = { getNumRefs: function () { return 0; }, getNthRef: function () { return null; } };
+  g.world.cell = cell;
+  g.world.pc = { getParentCell: function () { return cell; }, getPositionX: function () { return 0; }, getPositionY: function () { return 0; } };
+  for (let i = 0; i < 4; i++) { g.frame(16); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('face bed in a cell with no bed fails and says so', st.length && st[0].ok === false && /no bed among the 0 furniture/.test(st[0].note));
+}
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const tp = list.filter(function (x) { return x.do === 'page' && /\/tp bannered/.test(x.js || ''); });
+  yes('the bed steps go to an inn with one /tp, sent once though a page step is asked again every half second',
+      tp.length === 1 && /if\(window\.__tsBedTp\)\{return 'sent';\}/.test(tp[0].js) && /window\.__tsBedTp=1/.test(tp[0].js) &&
+      /    say: function \(text, how\)/.test(read(path.join('game', 'ui', 'thornswood-chat.js'))));
+  const face = list.findIndex(function (x) { return x.do === 'face'; });
+  yes('  then face a bed, wait for its prompt and use it with E', face > 0 && list[face + 1].for === 'crosshair' && list.slice(face, face + 4).some(function (x) { return x.do === 'key' && x.code === 18; }));
+  yes('  and press T in the same room', list.slice(face).some(function (x) { return x.do === 'key' && x.code === 20; }));
+}
+{
+  const FRONT_SRC = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  yes('front shares its bed rule as Thornswood.isBedRef, the one the face step uses', /T\.isBedRef = isBedRef;/.test(FRONT_SRC) && /T\.isBedRef\(ref\)/.test(PLUGIN));
 }
 
 // The inventory is closed with a second I, the way Patrick wants it to

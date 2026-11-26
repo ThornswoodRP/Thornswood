@@ -31,6 +31,9 @@
 //   {"do":"page","js":"<an expression>"}   true, a number or a word passes
 //   {"do":"shot","name":"journal-open"}
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
+//   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
+//   {"do":"wait","for":"crosshair","what":"bed"}
+//   {"do":"wait","for":"time","ms":1500}   a pause, so a shot catches a message
 //   {"do":"end"}
 // Each takes "timeout" in milliseconds (30000 when not given). The run stops
 // at the first step that fails, after a screenshot named fail-<step>, and
@@ -114,11 +117,77 @@ sp.on('menuClose', function (e) {
 });
 
 // In the world: read on update, which only runs once there is a game.
+// The steps run on tick, where a call into the game is refused ("can't be
+// called in this context"), so what a step needs from the game is read or
+// done here and left for the step to pick up.
 let inWorld = false;
+let crosshairBed = '';     // the bed under the crosshair now, or ''
+let faceAsked = '';        // what a face step wants stood before
+let faceDone = null;       // { ok, note } once the update has done it
+function isBed(ref) {
+  const T = globalThis.Thornswood;
+  return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
+}
+function refName(ref) {
+  let id = 0, name = '';
+  try { id = ref.getFormID(); } catch (e) { }
+  try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { }
+  return (id >>> 0).toString(16) + (name ? ' "' + name + '"' : '');
+}
+// Stand 90 units out from the nearest bed in the cell, on the side the
+// person is on, turned to it and looking a little down, as somebody walks
+// up to a bed to use it. 40 is kFurniture.
+function faceBed() {
+  const pc = sp.Game.getPlayer();
+  const cell = pc ? pc.getParentCell() : null;
+  if (!cell) { return { ok: false, note: 'not in a cell' }; }
+  const T = globalThis.Thornswood;
+  if (!T || typeof T.isBedRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
+  const px = pc.getPositionX(), py = pc.getPositionY();
+  let best = null, bestD = Infinity, beds = 0;
+  const n = cell.getNumRefs(40);
+  for (let i = 0; i < n; i++) {
+    const ref = cell.getNthRef(i, 40);
+    if (!ref || !isBed(ref)) { continue; }
+    beds++;
+    const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py);
+    if (d < bestD) { bestD = d; best = ref; }
+  }
+  if (!best) { return { ok: false, note: 'no bed among the ' + n + ' furniture in this cell' }; }
+  const bx = best.getPositionX(), by = best.getPositionY(), bz = best.getPositionZ();
+  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
+  const sx = bx + dx / len * 90, sy = by + dy / len * 90;
+  pc.setPosition(sx, sy, bz);
+  // Papyrus angles are degrees. Heading 0 is north (+y), turning clockwise;
+  // a positive x looks down.
+  pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
+  return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
+}
 sp.on('update', function () {
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
+  crosshairBed = '';
+  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { }
+  if (faceAsked && !faceDone) {
+    try { faceDone = faceAsked === 'bed' ? faceBed() : { ok: false, note: 'cannot face a ' + faceAsked }; }
+    catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
+  }
+});
+
+// Sitting down and getting up, the character's own only, as results lines:
+// whether somebody lay down in a bed is what #6712 asks.
+sp.on('furnitureEnter', function (e) {
+  try {
+    if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    write({ t: 'furniture', enter: true, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
+  } catch (err) { }
+});
+sp.on('furnitureExit', function (e) {
+  try {
+    if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    write({ t: 'furniture', enter: false, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
+  } catch (err) { }
 });
 
 // Every message the page sends, kept with when it came, so a step can look
@@ -255,6 +324,11 @@ sp.on('tick', function () {
         if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
+      } else if (s.for === 'crosshair') {
+        if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+      } else if (s.for === 'time') {
+        if (now - stepAt >= (Number(s.ms) || 0)) { pass(); return; }
+        return;
       } else if (s.for === 'message') {
         const want = Array.isArray(s.match) ? s.match : [];
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -266,7 +340,7 @@ sp.on('tick', function () {
         return;
       }
       if (late) {
-        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world');
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : 'the world');
         if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
       }
       return;
@@ -291,6 +365,17 @@ sp.on('tick', function () {
           JSON.stringify(pageId) + ',"!"+e);}catch(e2){}}';
         try { sp.browser.executeJavaScript(src); } catch (e) { fail('executeJavaScript threw: ' + e); }
       }
+      return;
+    }
+    case 'face': {
+      if (!faceAsked) { faceAsked = String(s.what || ''); faceDone = null; return; }
+      if (faceDone) {
+        const done = faceDone;
+        faceAsked = ''; faceDone = null;
+        if (done.ok) { pass(done.note); } else { fail(done.note); }
+        return;
+      }
+      if (late) { faceAsked = ''; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
       return;
     }
     case 'shot':

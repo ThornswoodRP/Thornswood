@@ -3352,6 +3352,9 @@
     block is nothing and is answered with nothing (chopping has its own
     watcher below). This side only says which of the two it saw.
   */
+  // The scripted real game run (thornswood-test.js) finds a bed to face with
+  // the same rule as above, so a bed it tests is a bed this plugin clears.
+  T.isBedRef = isBedRef;
   let restSent = false;
   /* #843: chairs/benches leave controls off with no menu. ownTheCharacter,
      holdSprintGate and holdNpcClear refuse to fight that state when
