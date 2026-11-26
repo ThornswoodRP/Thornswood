@@ -341,8 +341,6 @@ const WRITERS = {
   'spoils/purse': [1, 'THE MINT: forty gold, once per character'],
   'trade/moveById': [2, 'moves a pile from one pack to the other, one write each (section 4)'],
   'trade/saleById': [2, 'a company sale (#1393): the things out of the seller\'s pack and out of the world with the seller\'s share in, and the price less the worker\'s cut out of the worker\'s pack, which is never less than the share; one write each (section 4)'],
-  'furniture/takeOne': [1, 'takes one furniture item off a pack to set its piece down; it never adds (#2679)'],
-  'furniture/giveOne': [1, 'hands back one furniture item, a MISC out of game/data/furniture.json, for a piece picked up; never gold (#2679, test-2679-furniture.js)'],
   'durability/writePack': [1, 'writes back a pack or chest it has just read: a stack renamed for its condition, or a kit or a broken piece taken away. No base is added and no count grows (test-1384-condition.js)'],
   'spoilage/writeInventory': [1, 'writes back a pack or chest it has just read: food renamed for its days left or its salting or smoking, food that went off turned into as many Spoiled Food (19100:Thornswood-Content.esp, never gold) named for it, and the Salt Pile or Firewood a cook used. A preserved stack is split off the stack it came from, so no count grows (#3163, test-3163-spoilage.js)'],
   'farming/compost': [2, 'one Spoiled Food taken off the pack it has just read to work into a plot, and that same pack put back as it was when the plot will not take the write; it never adds (#3526, test-3526-compost.js)'],
@@ -426,6 +424,18 @@ for (const at of Object.keys(WRITERS)) {
     /e\.count -= amount;/.test(goldCut) && !/\+=|\+ amount/.test(goldCut) &&
     /e\.count = Number\(e\.count\) - 1;/.test(cutOne) && !/\+=|\+ 1/.test(cutOne) &&
     /Number\(it\.baseId\) === GOLD_ID[^\n]*\n\s*return 'Your pack changed\. Nothing was put in the box\.'/.test(code));
+  /*
+    And furniture's putOne gives (#7016): one item for a piece picked up,
+    which pick hands packFirst only after the piece is off the register in
+    the same write as the debit, and never gold.
+  */
+  const putOne = lift('  function putOne(entries, itemDesc) {', '\n  }\n') || '';
+  const pickFn = lift('    function pick(actorId, refHex) {', '\n    }\n') || '';
+  yes('furniture\'s putOne adds one item and refuses gold, and pick hands it to packFirst after taking the piece off the register',
+    /baseId === 0xF\) \{ return null; \}/.test(putOne) && (putOne.match(/\+ 1|\.push\(/g) || []).length === 2 &&
+    /count: 1 \}\);/.test(putOne) && /taken: \[\]/.test(putOne) &&
+    pickFn.indexOf('delete pieces[k];') > 0 && pickFn.indexOf('delete pieces[k];') < pickFn.indexOf("packs.begin(actorId, function (entries) { return api.putOne(entries, row.itemDesc)") &&
+    (code.match(/api\.putOne\(/g) || []).length === 1);
   yes('merchant credit comes from durable finite stock or its debited purse, checked by the settlement and trading regressions',
     /nextPurse = npcBuys \? state\.purse - gold : state\.purse \+ gold/.test(code) &&
     /credit = gold > 0 \? \[\{baseId:GOLD_BASE,count:gold\}\] : \[\]/.test(code) &&
