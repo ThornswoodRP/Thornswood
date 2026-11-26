@@ -274,7 +274,14 @@ sp.on('tick', function () {
     case 'page': {
       // Asked again every half second until the answer passes, because the
       // thing asked about (a panel drawn, a button there) may come later.
-      if (pageId && answerPasses(pageAnswers[pageId])) { pass(pageAnswers[pageId]); return; }
+      // With "skipIf" and "skip": n, the answer skipIf names says what the
+      // next n steps deal with is not here (a character the server has
+      // already placed needs no Starting Location), so they are passed over.
+      if (pageId && answerPasses(pageAnswers[pageId])) {
+        if (Number(s.skip) > 0 && s.skipIf !== undefined && pageAnswers[pageId] === String(s.skipIf)) { skipOn('the page said ' + pageAnswers[pageId]); }
+        else { pass(pageAnswers[pageId]); }
+        return;
+      }
       if (late) { fail('the page said ' + JSON.stringify(pageId ? pageAnswers[pageId] : undefined) + ' to ' + String(s.js).slice(0, 200)); return; }
       if (!pageId || now - pageAskedAt >= 500) {
         pageId = runId + '-' + at + '-' + now;
