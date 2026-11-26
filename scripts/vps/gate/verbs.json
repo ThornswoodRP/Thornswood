@@ -1353,7 +1353,9 @@
         "Number": "^[1-9][0-9]?$",
         "Status": "switch",
         "Lock": "switch",
-        "NetworkOnly": "switch"
+        "NetworkOnly": "switch",
+        "LogFrom": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]$",
+        "LogMinutes": "^[1-9][0-9]{0,2}$"
       }
     },
     "Install-Mongo": {

@@ -188,6 +188,9 @@ Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -Network
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
     (Words 'Install-Runner -Repo x/y') -eq 'REFUSED' -and (Words 'Install-Runner -RunnerName x') -eq 'REFUSED' -and (Words 'Install-Runner -Root C:/x') -eq 'REFUSED' -and
     (Words 'Install-Runner -Number 100') -eq 'REFUSED' -and (Words 'Install-Runner -AllowHost x') -eq 'REFUSED')
+Yes '  and -Status reads an hour of a runner''s log by its UTC time, written one way only (#6903)' (
+    (Words 'Install-Runner -Number 2 -Status -LogFrom 2026-11-22T22:15 -LogMinutes 75') -eq '-FromGate|-AllowHost|pypi.org,files.pythonhosted.org,registry.npmjs.org|-NoPause|-Number|2|-Status|-LogFrom|2026-11-22T22:15|-LogMinutes|75' -and
+    (Words 'Install-Runner -Status -LogFrom 22/11/2026') -eq 'REFUSED' -and (Words 'Install-Runner -Status -LogFrom C:/x') -eq 'REFUSED' -and (Words 'Install-Runner -Status -LogMinutes 0') -eq 'REFUSED')
 Yes '  the runners'' way out is gone from the gate, since it came off the box (#5577)' (
     (Words 'Install-RunnerEgress') -eq 'REFUSED' -and (Words 'Install-RunnerEgress -Status') -eq 'REFUSED' -and (Words 'Remove-RunnerEgress') -eq 'REFUSED')
 $rk = Text 'scripts/vps/Renew-BoxKey.ps1'
