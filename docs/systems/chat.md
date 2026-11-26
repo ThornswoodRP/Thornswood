@@ -3,6 +3,10 @@
 What you type. Enter opens the box. A line that starts with `/` is a
 command. A line that does not is speech.
 
+While disconnected, chat keeps the newest 20 waiting lines. If another
+line removes the oldest one, a warning says it was removed and the new
+one is queued. It does not repeat the contents of either line.
+
 How a line is said, out of character, and the dice are typed, and the
 help names them. There are no buttons for them on the chat box.
 Decided by Patrick on 4 Oct (#1639): "Allow those commands and don't

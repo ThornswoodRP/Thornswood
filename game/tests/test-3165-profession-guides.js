@@ -150,7 +150,7 @@ yes('B6 a Tailor\'s Troll Fat names kinds of troll and no troll with a name of i
 const sentPage = [];
 const saidLines = [];
 function node(tag) {
-  const n = { tag: tag, children: [], style: {}, className: '', _text: '', id: '', onclick: null, title: '' };
+  const n = { tag: tag, tagName: tag.toUpperCase(), children: [], style: {}, className: '', _text: '', id: '', onclick: null, title: '' };
   Object.defineProperty(n, 'textContent', {
     get: function () { return n._text + n.children.map(function (c) { return c.textContent; }).join(''); },
     set: function (v) { n._text = String(v); n.children = []; }

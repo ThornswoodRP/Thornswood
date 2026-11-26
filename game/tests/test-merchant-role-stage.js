@@ -4,6 +4,7 @@ const root=path.join(__dirname,'..','..'),read=name=>JSON.parse(fs.readFileSync(
 const copy=value=>JSON.parse(JSON.stringify(value));
 const {prepareMerchantRoleStage}=require('../../game/merchant-role-stage');
 const roster=read('merchant-roster'),currentCatalog=read('merchant-traders'),roleDoc=read('merchant-role-tables'),tables=roleDoc.tables;
+const foodGroups=read('food-groups');
 const source=require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(root,'game/gamemode.js'),'utf8')),context={};vm.createContext(context);
 assert.ok(!source.slice(source.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),source.indexOf('// MERCHANT TRADING BUNDLE END'))
   .includes('"f:Skyrim.esm"'),'unused currency evidence must not enter a role bundle');
@@ -71,6 +72,7 @@ const bundleContext={require:createRequire(path.join(root,'game/merchant-trading
 vm.createContext(bundleContext);
 vm.runInContext(source.slice(source.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),source.indexOf('// MERCHANT TRADING BUNDLE END'))+
   '\nglobalThis.bundle=MERCHANT_TRADING;',bundleContext);
+vm.runInContext(source.slice(source.indexOf('// ==== thornswood spoilage ===='),source.indexOf('// ==== end thornswood spoilage ====')),bundleContext);
 const fixtureContext={require:createRequire(path.join(__dirname,'test-merchant-trading.js')),console,__dirname};
 vm.createContext(fixtureContext);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'test-merchant-trading.js'),'utf8').split('const roleMarket=')[0],fixtureContext);
@@ -104,7 +106,16 @@ for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
   const trading=bundleContext.bundle.installMerchantTrading({mp:native,g,purses,catalog:prepared.catalog,
     roleTables:prepared.roleTables,timers:{setTimeout:()=>1,clearTimeout(){}}});
   const command=(...parts)=>trading.command({actorId:10,profileId:7,parts:['/merchant',...parts]});
-  const view=command(merchantId.toString(16)).view;
+  const purseBeforeOpen=purses.read(merchantId),unavailable=command(merchantId.toString(16));
+  assert.equal(unavailable.view,null);
+  assert.match(unavailable.text,/Merchant food aging is unavailable/);
+  assert.deepEqual(purses.read(merchantId),purseBeforeOpen,'missing spoilage must not advance the private stock clock');
+  g.__thornswoodSpoilage=bundleContext.__thornswoodSpoilageCreate({table:foodGroups.spoil,
+    descOf:native.getDescFromId,idOf:id,groupOfDesc:desc=>foodGroups.items[desc],plainOfFine:()=>'',
+    cold:()=>false,winterAt:()=>false,log(){}});
+  const opened=command(merchantId.toString(16));
+  const view=opened.view;
+  assert.ok(view,`${merchant.role} opens a merchant view: ${opened.text}`);
   assert.equal(view.trader,merchant.role);assert.deepEqual(copy(view.offers.map(row=>row.name)),[names.get(allowed)]);
   assert.equal(view.supply.length,1);
   assert.match(command('sell','1',names.get(forbidden)).text,/does not buy/);

@@ -33,8 +33,9 @@ function yes(what, cond) {
 
 const num = function (re, src) { const m = re.exec(src); return m ? Number(m[1]) : NaN; };
 const pageChars = num(/pageChars: (\d+),/, gm);
-const titleCut = num(/page\.title = String\(title \|\| 'Page'\)\.slice\(0, (\d+)\);/, gm);
+const titleCut = num(/String\(title \|\| 'Page'\)\.slice\(0, (\d+)\);/, gm);
 const commandChars = num(/const COMMAND_CHARS = (\d+);/, voice);
+const journalChars = num(/const JOURNAL_COMMAND_CHARS = (\d+);/, voice);
 const panelPage = num(/var PAGE_CHARS = (\d+);/, journal);
 const panelTitle = num(/var TITLE_CHARS = (\d+);/, journal);
 
@@ -43,7 +44,7 @@ yes('the numbers are all found (page ' + pageChars + ', title ' + titleCut + ', 
 yes('the panel holds a page to the server\'s pageChars', panelPage === pageChars);
 yes('the panel holds a title to the server\'s title cut', panelTitle === titleCut);
 yes('the text box and the title box carry those maxlengths',
-    /'-text" maxlength="' \+ PAGE_CHARS \+ '"/.test(journal) && /'-ptitle" maxlength="' \+ TITLE_CHARS \+ '"/.test(journal));
+    /'-text"[^>]*maxlength="' \+ PAGE_CHARS \+ '"/.test(journal) && /'-ptitle"[^>]*maxlength="' \+ TITLE_CHARS \+ '"/.test(journal));
 
 // The longest line Save can send: the ids the server makes, the longest title, a page of all newlines.
 const jid = 'j' + (Math.pow(36, 9) - 1).toString(36) + (999).toString(36);
@@ -52,21 +53,14 @@ const worst = '/journal page ' + jid + ' ' + pid + ' ' + 'T'.repeat(titleCut) + 
 yes('the longest page line (' + worst.length + ') fits a command on the chat socket (' + commandChars + ')',
     worst.length <= commandChars);
 
-// The real cut in the chat handler.
-const cutLines = /(const long = pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\);\s*const text = [^\n]+)/.exec(voice);
-// The cut reads the line through pageText (#4206), so it runs with the real one.
-const pageTextFn = (/function pageText\(v\) \{[\s\S]*?\r?\n\}/.exec(voice) || [''])[0];
-yes('the chat handler\'s cut is found', !!cutLines && !!pageTextFn);
-if (cutLines && pageTextFn) {
-  const run = function (line) {
-    const box = { msg: { text: line }, COMMAND_CHARS: commandChars, SAID_CHARS: 400,
-                  headlines: { floatLine: function (l) { return /^\/(me|do|w|s|ooc)\b/.test(l); } }, out: null };
-    vm.runInNewContext(pageTextFn + '\n' + cutLines[1] + '\nout = text;', box);
-    return box.out;
-  };
-  yes('that longest page line goes through the socket whole', run(worst) === worst);
-  yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
-}
+// Execute the actual handler, including the new private-command refusals.
+const run = require('./fixtures/chat-relay-cut')(voice);
+yes('the chat handler cut is found', typeof run === 'function');
+yes('that longest page line goes through the socket whole', run(worst) === worst);
+yes('a line said to the room still keeps 400', run('x'.repeat(5000)).length === 400);
+const escaped = '/journal-write-v1 ' + JSON.stringify([jid,pid,'\0'.repeat(titleCut),'\0'.repeat(pageChars)]);
+yes('the exact codec also carries the worst JSON escapes without cutting',run(escaped)===escaped&&escaped.length<=journalChars);
+yes('the exact codec refuses an oversized request rather than cutting it',run('/journal-write-v1 '+'x'.repeat(journalChars))===null);
 
 // The real writePage.
 const wp = /(function writePage\([\s\S]*?\n  \})\n/.exec(gm);
@@ -79,7 +73,8 @@ if (wp) {
     SOCIAL: { pageChars: pageChars, mostPages: 60 },
     stateOf: function () { return state; },
     findJournal: function (s, id) { return s.journals.filter(function (j) { return j.id === id; })[0] || null; },
-    write: function () { writes++; }
+    tickMemo:null,
+    write: function (actor, next) { writes++; state.journals=JSON.parse(JSON.stringify(next.journals));return true; }
   };
   vm.runInNewContext(wp[1] + '\nthis.writePage = writePage;', box);
   const full = 'a\n'.repeat(pageChars / 2);

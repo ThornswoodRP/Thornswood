@@ -248,6 +248,8 @@ function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', style: {},
     id: '', className: '', textContent: '', value: '', onclick: null,
+    listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     setAttribute(n, value) { this.attrs[n] = String(value); },
@@ -273,6 +275,8 @@ function makeEl(tag) {
   return e;
 }
 function matcher(sel) {
+  const cls = /^\.([\w-]+)$/.exec(sel);
+  if (cls) return function (el) { return el.className.split(/\s+/).indexOf(cls[1]) !== -1; };
   const m = /^([a-z0-9]*)(?:#([\w-]+))?(?:\[([\w-]+)\])?$/i.exec(sel);
   if (!m) { throw new Error('the stand-in page cannot read the selector ' + sel); }
   return function (el) {
@@ -319,6 +323,12 @@ function load(src, initial) {
   return pg;
 }
 function key(pg, k) { pg.keys.keydown({ key: k, preventDefault() { } }); }
+
+const selectorControl = makeEl('div');
+selectorControl.innerHTML = '<div class="card ask"></div><div class="asking"></div>';
+yes('the fixture class selector matches whole class names, not prefixes',
+    selectorControl.querySelectorAll('.ask').length === 1 &&
+    selectorControl.querySelector('.ask').className === 'card ask' && !selectorControl.querySelector('.missing'));
 
 // =================================================================== C. the page
 let allText = '';

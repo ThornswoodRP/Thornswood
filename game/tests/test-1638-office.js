@@ -356,7 +356,7 @@ if (missing.length === 0 && VARS.every(function (v) { return !!v; })) {
     const ov = strip(lifted.officeView);
     yes('B2 the page never reads the character itself: writeState is where it is asked from, and stateOf there would ask for itself',
         !/stateOf/.test(ov));
-    const ws = slice(charBlock, '  function writeState(actorId, s, redraw) {', '\n  }\n');
+    const ws = slice(charBlock, '  function writeState(', '\n  }\n');
     yes('B3 the character block puts the page on the K panel view, with the actor and the profile',
         !!ws && /W\.officeView\(actorId, pid\)/.test(ws) && /view\.officePage = desk;/.test(ws) &&
         /if \(view && !view\.creating\)/.test(ws));
@@ -717,6 +717,9 @@ if (missing.length === 0 && VARS.every(function (v) { return !!v; })) {
   const lines = [];     // what the page sent the server through the chat line
   function node(tag) {
     const n = { tag: tag, children: [], style: {}, className: '', _text: '', id: '', onclick: null, title: '' };
+    const attrs = {};
+    n.setAttribute = function (name, value) { attrs[name] = String(value); };
+    n.getAttribute = function (name) { return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null; };
     Object.defineProperty(n, 'textContent', {
       get: function () { return n._text + n.children.map(function (c) { return c.textContent; }).join(''); },
       set: function (v) { n._text = String(v); n.children = []; }

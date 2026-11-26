@@ -35,6 +35,14 @@
   // Counts typed into a row, kept across a redraw so a server push does not
   // wipe the box while somebody is still deciding how many to offer.
   var typed = {};
+  var goldDraft = null;
+  var sessionId = '';
+
+  function resetDrafts() {
+    typed = {}; goldDraft = null; filter = ''; cat = '';
+    var active = document.activeElement;
+    if (root && active && root.contains(active) && active.blur) active.blur();
+  }
 
   function tell(what) {
     try { window.skyrimPlatform.sendMessage('thornswood-front', 'trade:' + what); }
@@ -44,8 +52,7 @@
   function net(line) {
     try {
       if (window.thornswoodNet && window.thornswoodNet.say) {
-        window.thornswoodNet.say(line);
-        return true;
+        return window.thornswoodNet.say(line) !== false;
       }
     } catch (e) { }
     return false;
@@ -157,7 +164,6 @@
     root.querySelector('#' + ID + '-cancel').onclick = function () { net('/trade cancel'); };
     // A sale out of Skyrim (#1393): only a company worker sees it.
     root.querySelector('#' + ID + '-sale').onclick = function () { net('/trade sale'); };
-    root.querySelector('#' + ID + '-ok').onclick = function () { net('/trade ok'); };
     /*
       Escape outside an editing field WALKS AWAY rather than hiding the panel.
       A trade you cannot see is a trade you have forgotten you are in, holding
@@ -186,6 +192,45 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // Text and double-quoted HTML attributes have different escaping rules.
+  function attr(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+  function editing() {
+    var field = document.activeElement;
+    if (!field || !root.contains(field) || field.tagName !== 'INPUT') return null;
+    return { id: field.id, side: field.getAttribute('data-side'), piece: field.getAttribute('data-for'),
+      start: field.selectionStart, end: field.selectionEnd, direction: field.selectionDirection };
+  }
+
+  function restoreEditing(saved) {
+    if (!saved) return;
+    var field = null;
+    if (saved.id === ID + '-gold' || saved.id === ID + '-find') field = root.querySelector('#' + saved.id);
+    else {
+      var fields = root.querySelectorAll('input[data-for]');
+      for (var i = 0; i < fields.length; i++) {
+        if (fields[i].getAttribute('data-side') === saved.side && fields[i].getAttribute('data-for') === saved.piece) {
+          field = fields[i]; break;
+        }
+      }
+    }
+    if (!field) return;
+    field.focus({ preventScroll: true });
+    if (typeof saved.start === 'number' && typeof saved.end === 'number' && field.setSelectionRange) {
+      field.setSelectionRange(saved.start, saved.end, saved.direction);
+    }
+  }
+
+  function submitGold(value) {
+    var draft = goldDraft, sentSession = sessionId;
+    if (net('/trade gold ' + value)) {
+      // This is local delivery acceptance, not a server receipt. Subsequent
+      // authoritative views own submitted text; unrelated views keep unsent text.
+      if (sessionId === sentSession && goldDraft === draft) goldDraft = null;
+      if (shown) draw();
+    }
+  }
+
   /*
     WHAT A BUTTON ASKS FOR, #1718. Each line is one piece (a key to one
     house, a sword at its own condition, an enchanted dagger), and the
@@ -205,14 +250,17 @@
   */
   function saleLine(s) {
     if (!s) { return ''; }
-    var split = s.cut
+    var split = s.available !== true
+      ? (s.price ? 'The company payout is unavailable. Read the trade again before agreeing.'
+                 : (s.mine ? 'Put the price up as gold.' : 'No price is up yet.'))
+      : (s.cut || s.gone)
       ? (s.mine
         ? 'Of ' + s.price + ' gold, ' + esc(data.them) + ' receives ' + s.seller + ', ' + s.cut +
           ' stays with you for handling it, and ' + s.gone + ' leaves the world.'
         : 'Of ' + s.price + ' gold, you receive ' + s.seller + ', ' + s.cut + ' is ' + esc(s.worker) +
           '\'s for handling it, and ' + s.gone + ' leaves the world.')
       : (s.price
-        ? 'Under 10 gold nothing is cut: the whole ' + s.price + ' goes to ' + (s.mine ? esc(data.them) : 'you') + '.'
+        ? 'Nothing is cut: the whole ' + s.price + ' goes to ' + (s.mine ? esc(data.them) : 'you') + '.'
         : (s.mine ? 'Put the price up as gold.' : 'No price is up yet.'));
     return '<div class="sale">' + (s.mine
       ? 'You are buying for the Free Skyrim Trading Company. What ' + esc(data.them) +
@@ -223,6 +271,7 @@
 
   function draw() {
     if (!root || !data) { return; }
+    var saved = editing();
     root.querySelector('#' + ID + '-title').textContent = data.sale
       ? (data.sale.mine ? 'Buying for the company from ' + (data.them || 'somebody')
                         : 'Selling out of Skyrim to ' + (data.them || 'somebody'))
@@ -243,10 +292,10 @@
     kinds.sort();
     if (cat && kinds.indexOf(cat) < 0) { cat = ''; }
     var ph = '<h3>Your pack</h3>' +
-             '<input id="' + ID + '-find" placeholder="Find by name" value="' + esc(filter) + '">';
+             '<input id="' + ID + '-find" aria-label="Find by name" placeholder="Find by name" value="' + attr(filter) + '">';
     ph += '<div class="chips"><button data-cat=""' + (cat ? '' : ' class="on"') + '>All</button>';
     for (var c = 0; c < kinds.length; c++) {
-      ph += '<button data-cat="' + esc(kinds[c]) + '"' + (cat === kinds[c] ? ' class="on"' : '') + '>' +
+      ph += '<button data-cat="' + attr(kinds[c]) + '"' + (cat === kinds[c] ? ' class="on"' : '') + '>' +
             esc(kinds[c]) + '</button>';
     }
     ph += '</div>';
@@ -256,8 +305,10 @@
         String(it.k || '').toLowerCase().indexOf(low) !== -1;
     });
     if (!items.length) {
-      ph += '<div class="none">' + (low || cat ? 'Nothing in that category.' : 'You are carrying nothing.') + '</div>';
+      ph += '<div class="none">' + (low ? 'No matches. Try a different name or choose All.'
+        : cat ? 'Nothing in that category.' : 'You are carrying nothing.') + '</div>';
     } else {
+      if (items.length > 200) ph += '<div class="none">Showing 200 of ' + items.length + ' matches. Use Find or a category to narrow the list.</div>';
       var grouped = {};
       var order = [];
       for (var i = 0; i < items.length && i < 200; i++) {
@@ -270,11 +321,11 @@
         var rows = grouped[order[g]];
         for (var r = 0; r < rows.length; r++) {
           var it = rows[r];
-          var itRef = esc(ref(it));
+          var itRef = attr(ref(it));
           var addKey = 'add:' + ref(it);
           ph += '<div class="line"><div class="top"><span class="nm">' + esc(it.n) + '</span>' +
                 '<span class="c">' + it.c + '</span></div><div class="acts">' +
-                '<input class="qty" data-side="add" data-for="' + itRef + '" placeholder="How many" value="' + esc(typed[addKey] || '') + '">' +
+                '<input class="qty" data-side="add" data-for="' + itRef + '" aria-label="Count to offer" placeholder="How many" value="' + attr(typed[addKey] || '') + '">' +
                 '<button data-qty="' + itRef + '">Add</button>' +
                 '<button data-add="' + itRef + '" data-n="1">Add 1</button>' +
                 (it.c >= 5 ? '<button data-add="' + itRef + '" data-n="5">Add 5</button>' : '') +
@@ -292,17 +343,17 @@
     if (!(data.mine || []).length) { mh += '<div class="none">Nothing yet.</div>'; }
     for (var j = 0; j < (data.mine || []).length; j++) {
       var mineRow = data.mine[j];
-      var mineRef = esc(ref(mineRow));
+      var mineRef = attr(ref(mineRow));
       var remKey = 'rem:' + ref(mineRow);
       mh += '<div class="line"><div class="top"><span class="nm">' + esc(mineRow.n) + '</span>' +
             '<span class="c">' + mineRow.c + '</span></div><div class="acts">' +
-            '<input class="qty" data-side="rem" data-for="' + mineRef + '" placeholder="How many" value="' + esc(typed[remKey] || '') + '">' +
+            '<input class="qty" data-side="rem" data-for="' + mineRef + '" aria-label="Count to take back" placeholder="How many" value="' + attr(typed[remKey] || '') + '">' +
             '<button data-take="' + mineRef + '">Take</button>' +
             (mineRow.c > 1 ? '<button data-rem="' + mineRef + '" data-n="1">Take 1</button>' : '') +
             '<button data-rem="' + mineRef + '">Take back</button></div></div>';
     }
     mh += '<div class="gold"><span>Gold</span>' +
-          '<input id="' + ID + '-gold" value="' + (data.myGold || 0) + '">' +
+          '<input id="' + ID + '-gold" aria-label="Gold to offer" value="' + attr(goldDraft === null ? (data.myGold || 0) : goldDraft) + '">' +
           '<button data-do="gold">Set</button>' +
           '<button data-do="goldall">All</button>' +
           '<button data-do="goldclear">None</button></div>';
@@ -321,13 +372,22 @@
     }
     theirs.innerHTML = th;
 
+    var offerVersion = data.offerVersion;
+    var versioned = typeof offerVersion === 'string' && /^[0-9a-f]{48}$/.test(offerVersion);
     root.querySelector('#' + ID + '-state').textContent =
-      data.iAgreed && data.theyAgreed ? 'Swapping...'
+      !versioned ? 'Waiting for a current trade offer.'
+      : data.iAgreed && data.theyAgreed ? 'Swapping...'
       : (data.iAgreed ? 'Waiting for ' + data.them + '.'
                       : 'Changing either side takes both agreements back.');
     var okBtn = root.querySelector('#' + ID + '-ok');
     okBtn.className = data.iAgreed ? 'off' : 'go';
     okBtn.textContent = data.iAgreed ? 'Agreed' : 'Agree';
+    var payoutAvailable = !data.sale || data.sale.available === true;
+    okBtn.disabled = !versioned || !payoutAvailable || !!data.iAgreed;
+    // Capture this draw, rather than reading whichever data arrives after a
+    // click. The server checks it again before recording any agreement.
+    var canAgree = versioned && payoutAvailable && !data.iAgreed;
+    okBtn.onclick = function () { if (canAgree) { net('/trade agree ' + offerVersion); } };
 
     var find = root.querySelector('#' + ID + '-find');
     if (find) {
@@ -349,6 +409,8 @@
       chips[ci].onclick = function () { cat = this.getAttribute('data-cat') || ''; draw(); };
     }
     wire(pack); wire(mine);
+    root.querySelector('#' + ID + '-gold').oninput = function () { goldDraft = this.value; };
+    restoreEditing(saved);
   }
 
   function readQty(where, name) {
@@ -390,15 +452,17 @@
         }
         var act = this.getAttribute('data-do');
         var g = root.querySelector('#' + ID + '-gold');
-        if (act === 'gold') { net('/trade gold ' + (g ? g.value : '0')); }
+        if (act === 'gold') { submitGold(g ? g.value : '0'); }
         else if (act === 'goldall') {
           var all = (data && data.heldGold) || 0;
           if (g) { g.value = String(all); }
-          net('/trade gold ' + all);
+          goldDraft = String(all);
+          submitGold(all);
         }
         else if (act === 'goldclear') {
           if (g) { g.value = '0'; }
-          net('/trade gold 0');
+          goldDraft = '0';
+          submitGold(0);
         }
       };
     }
@@ -410,14 +474,14 @@
     shown = true;
     root.className = 'on';
     draw();
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 
   function close() {
+    resetDrafts(); sessionId = '';
     if (!shown) { return; }
     shown = false;
-    filter = '';
-    cat = '';
     if (root) { root.className = ''; }
     tell('closed');
   }
@@ -435,6 +499,9 @@
     setData: function (d) {
       data = d || null;
       if (!data || !data.open) { close(); return; }
+      var nextSession = typeof data.sessionId === 'string' && /^[0-9a-f]{48}$/.test(data.sessionId) ? data.sessionId : '';
+      if (!nextSession || nextSession !== sessionId) resetDrafts();
+      sessionId = nextSession;
       if (!shown) { open(); } else { draw(); }
     }
   };

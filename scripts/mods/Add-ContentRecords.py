@@ -258,10 +258,10 @@ rack, so all three are named in records/recipe-owners.json (RECIPE_OWNER
 in scripts/dev/Build-RecipeTable.ps1), the same as the key mold. The rank is the
 dearest input, which is novice for all three.
 
-The Sewing Kit was offered as linen wrap and leather strips. Linen wrap is
-supplied by no class in this world (game/data/recipes.json says suppliedBy
-null for it, measured 4 October), so a Haberdasher could never get one.
-Tundra cotton is a gatherer's at novice and is already on the crude pole.
+The Sewing Kit uses tundra cotton directly with leather strips. It was
+offered as linen wrap when nobody made that material. Linen now has its own
+loom recipe; the kit keeps its original cotton recipe. Tundra cotton is a
+gatherer's at novice and is already on the crude pole.
 The tanning rack, not the loom, because the loom's keyword is a mod's record
 (MCE_CraftingLoom, 6ce000:Update.esm) and these recipes name only Skyrim.esm.
 
@@ -487,6 +487,7 @@ CONTENTS = (
     (r'(MISC ThornswoodMisc(Pole\w+|FishTrap)|FLOR ThornswoodFish\w+|COBJ ThornswoodRecipe(Pole\w+|FishTrap))$',
      'own', 'fishing'),
     (r'(MISC ThornswoodMisc|COBJ ThornswoodRecipe)(Weapon|Armor|Sewing)Kit$', 'own', 'repair kits'),
+    (r'COBJ ThornswoodRecipeLinenWrap$', 'own', 'linen'),
     # The treatments and the Physicker's potion recipes (#3470) are one word,
     # because the description has 512 bytes and a row of its own ran over.
     (r'(MISC ThornswoodMisc|COBJ ThornswoodRecipe)(Bandage|Splint|Poultice|Remedy)$|COBJ ThornswoodRecipePotion\w+$',
@@ -496,10 +497,10 @@ CONTENTS = (
     # feasts and brews (#3152) share one row, which keeps the description
     # under its 512.
     (r'(ALCH ThornswoodFood|COBJ ThornswoodRecipe)(Tea|Feast|Brew)\w+$|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled)$'
-     r'|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
+     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
     (r'IMAD Thornswood(Drunk|High|Hangover|Withdrawal)Imod$', 'own', 'the screen looks'),
-    (r'BOOK ThornswoodPassage\w+$', 'own', 'starting town passages'),
+    (r'BOOK ThornswoodPassage\w+$', 'own', 'town passages'),
     (r'BOOK ThornswoodWelcome$', 'own', 'welcome letter'),
     (r'COBJ (DLC[12])?Recipe(Weapon\w+Bow|Arrow\w+|TechBolt\w+)$', 'bethesda',
      'bows, arrows and bolts to the woodworking bench'),
@@ -635,6 +636,14 @@ RECIPE_BANDAGE = 0x50154C4
 RECIPE_SPLINT = 0x50154C5
 RECIPE_POULTICE = 0x50154C6
 RECIPE_REMEDY = 0x50154C7
+# Leave C8 for the linen recipe (#4647). Decanting discards the milk;
+# it does not drink it or grant its effects (#4652).
+RECIPE_EMPTY_BOTTLE = 0x50154C9
+MILK_JUG = 0x03003534                         # HearthFires.esm, fourth master
+EMPTY_WINE_BOTTLE = 0x000F2012                # the existing water-bottle container
+
+# Linen uses the nearby bandage's one-cotton loom pattern (#4647).
+RECIPE_LINEN_WRAP = 0x50154C8
 
 # THE PHYSICKER'S POTIONS (#3470). Patrick, 26 Oct 2026, A+B on the report
 # page: the dungeon pile pays ingredients instead of Skyrim's ten potion
@@ -737,6 +746,7 @@ WOODWORKER_MASTER_RECIPES = (
 
 LEATHER_STRIPS = 0x000800E4
 TUNDRA_COTTON = 0x0003F7F8
+LINEN_WRAP = 0x00034CD6
 STEEL_INGOT = 0x0005ACE5
 REFINED_MOONSTONE = 0x0005AD9F
 HISTCARP = 0x000106E18
@@ -1923,12 +1933,15 @@ def thornswood_records(clam, scrap):
         stick(POULTICE, 'ThornswoodMiscPoultice', 'Poultice', POULTICE_VALUE, POULTICE_WEIGHT),
         stick(REMEDY, 'ThornswoodMiscRemedy', "Physicker's Remedy", REMEDY_VALUE, REMEDY_WEIGHT),
         cobj(RECIPE_BANDAGE, 'ThornswoodRecipeBandage', [(TUNDRA_COTTON, 1)], BANDAGE, LOOM_KEYWORD),
+        cobj(RECIPE_LINEN_WRAP, 'ThornswoodRecipeLinenWrap', [(TUNDRA_COTTON, 1)], LINEN_WRAP, LOOM_KEYWORD),
         cobj(RECIPE_SPLINT, 'ThornswoodRecipeSplint', [(FIREWOOD, 1), (LEATHER_STRIPS, 1)],
              SPLINT, KILN_KEYWORD),
         cobj(RECIPE_POULTICE, 'ThornswoodRecipePoultice', [(TUNDRA_COTTON, 1), (GARLIC, 1)],
              POULTICE, ALCHEMY_KEYWORD),
         cobj(RECIPE_REMEDY, 'ThornswoodRecipeRemedy', [(MUDCRAB_CHITIN, 1), (BLUE_MOUNTAIN_FLOWER, 1)],
              REMEDY, ALCHEMY_KEYWORD),
+        cobj(RECIPE_EMPTY_BOTTLE, 'ThornswoodRecipeEmptyBottleFromMilk', [(MILK_JUG, 1)],
+             EMPTY_WINE_BOTTLE, COOKPOT_KEYWORD),
     ] + [
         cobj(fid, edid, [(globals()[name], 1) for name in inputs], potion, ALCHEMY_KEYWORD)
         for fid, edid, potion, inputs in POTION_RECIPES

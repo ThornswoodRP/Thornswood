@@ -30,6 +30,14 @@ Each staff command answers you in your chat, tells the person it was done to, wr
 
 Each list requires the proven chat connection, a current launcher pass and your character in the world. New tool entries appear when their implementation is running on the server. [Playtest and admin commands](../systems/playtest-and-admin-commands.md) records the agreed capabilities and permissions.
 
+## Repair equipment for testing
+
+Playtesters, staff and admins can use `/repairgear` on themselves on both Dev and Main. Admins can use `/repairgear for <person>` on somebody else. A playtester may also name their own character unambiguously.
+
+The command restores every carried weapon, armour piece and garment below 100% to sound condition. Pieces above 100% keep their condition. Jewellery and tools keep their ordinary rules. Custom names, tempering, enchantments, charges, poisons, counts and ownership remain with each piece; no repair kits are spent. The worn record and pack change together, and the action is recorded.
+
+The command requires the server's equipment repair support. If the equipment changed while the repair was being prepared, it refuses rather than guessing which piece was meant. If the server cannot confirm a repair, staff should check that problem before repeating the command.
+
 ## Set needs for testing
 
 Playtesters, staff and admins can use `/setneeds <hunger|thirst|rest|temperature> <value>` on themselves on both Dev and Main. Admins can add `for <person>` to change another character. An unambiguous explicit self target also works for a playtester.
@@ -43,6 +51,7 @@ The other needs first account for their elapsed time. The selected value is then
 | Command | What it does |
 | --- | --- |
 | `/setneeds` | Set your own hunger, thirst, rest or temperature. Admins may name another character. |
+| `/repairgear` | Repair your carried gear. Admins may name another character. |
 | `/tp` | Lists the towns you can name |
 | `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
@@ -92,6 +101,27 @@ Staff.
 | --- | --- |
 | `/despawn` | Takes the creature a spawn command made that is nearest you, within about 20 m in your cell, out of the world for good, kept or not, alive or dead. Never a creature or person the world put there (#2623) |
 
+## Scene tools
+
+These scene tools work for Playtesters on Dev and Main. Modes end when the
+session loses its current pass or role, or the actor's authority changes.
+They accept no other person's name. [Staff scene tools](../systems/staff-tools.md)
+describes their native dependency, lifecycle and game acceptance checks.
+
+| Command | What it does |
+| --- | --- |
+| `/fly [on\|off]` | Toggles collision-free flight for yourself. Frozen, cuffed or locked-jail movement remains refused |
+| `/phase` | Moves you 256 units forward in the same cell, unless frozen, cuffed or held in a locked jail |
+| `/godmode [on\|off]` | Toggles flight, damage protection, lethal validated attacks and paused hunger, thirst, Rest and temperature. Existing needs values resume on exit; dead characters cannot enable it |
+| `/invisible [on\|off]` | Hides or shows your rendered body and nearby/party name tags; NPC perception stays as it was |
+| `/cleareffects` | Clears your alcohol and drug effects, pending crashes, hangover and withdrawal. Existing injuries, disease and unrelated magic remain |
+
+The cleanup command requires the Admin role.
+
+| Command | What it does |
+| --- | --- |
+| `/killall` (admin only) | Ends up to 40 ordinary hostile encounters or hostile staff spawns within about 20 m in the same cell. Excludes people and protected, essential, unique, town or unreadable actors. Reports counts and logs target IDs for staff. |
+
 ## Buildings, stalls and carts
 
 A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff run them at any building or stall. The cart stops and roads are staff's alone. The panels send these lines rather than anybody typing them; [docs/systems/commands.md](../systems/commands.md) names each button.
@@ -116,7 +146,7 @@ Staff.
 
 | Command | What it does |
 | --- | --- |
-| `/craftstaff pick`, `raise`, `recipe`, `recipes`, `give` | The crafting card on the Office page of K (#3167): picks somebody in the world, raises one of their ranks one step, says why a recipe is stuck for them, and gives back an item with a count and a reason. Never on yourself for `raise` and `give`. Sent by the card's buttons, never typed |
+| `/craftstaff pick`, `raise`, `recipe`, `recipes`, `give` | The crafting card on the Office page of K (#3167): picks somebody in the world, raises one of their ranks one step, checks why an owned recipe or kept smelt is stuck for them (unowned recipes are outside the check), and gives back an item with a count and a reason. Never on yourself for `raise` and `give`. Sent by the card's buttons, never typed |
 
 ## Keeping order
 
@@ -125,11 +155,17 @@ Staff.
 | Command | What it does |
 | --- | --- |
 | `/warn <person> <why>` | Tells them that staff have warned them, why, and that the next step is being removed from the world |
-| `/freeze <person> [why]` | Holds them where they stand, across a reconnect |
+| `/freeze <person> [why]` | Holds them where they stand, across reconnects, reloads and server restarts |
 | `/unfreeze <person>` | Lets them go |
 | `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
+
+Freezes and timed silences are saved before a command reports success. A restart does not renew a silence: its original deadline still applies. A profile number works for `/unfreeze` and `/unsilence` while that person is offline; you cannot release your own restraint.
+
+Moving a frozen character with `/bring` or `/tp` saves the new frozen position. If a move or its save cannot be confirmed, staff are told it may already have happened. Only that character's session is ended and its next login is refused until staff repair the storage problem and explicitly `/unfreeze <profile>`. The server does not retry the move or return them to the old position.
+
+The private `staff-restraints.json` is the control authority. An unreadable or invalid book refuses new logins and restraint changes; a reload keeps the last validated controls for people already online. Repair that book rather than replacing it with an empty file. Normal character resets keep profile controls. Person deletion removes the target's active controls; a world wipe clears frozen positions while retaining timed silences. Opaque wipe receipts stay in the same book to prevent an unacknowledged old wipe from clearing a newer freeze. Historical moderation records are unchanged.
 
 ## Rename a character
 
@@ -144,7 +180,7 @@ Names use 1 to 60 characters: Unicode letters and numbers, spaces, apostrophes, 
 
 ## Bans, PKs and notes
 
-Staff, apart from `/unpk`. These are kept on the site, on the staff pages at https://thornswood.net/hub, and a ban ends the session at once.
+Staff, apart from `/unpk`. These are kept on the site, on the staff pages at https://thornswood.net/hub, and a ban ends the session at once. A ban lifted there stops counting in the game once the door has fetched and read a newer ban list.
 
 | Command | What it does |
 | --- | --- |
@@ -155,6 +191,8 @@ Staff, apart from `/unpk`. These are kept on the site, on the staff pages at htt
 | `/pk <person> <why>` | The character dies for good. It is kept for staff, the account can make a new one, and nobody but you and its owner is told |
 | `/unpk <person or character> <why>` | Admins only. Undoes a PK made by mistake: a profile number, the start of the dead character's name, or its owner. It comes back into a free slot on the account; with none free, the site says so and nothing changes. The PK stays on the record with your reason |
 | `/note <person> <text>` | Keeps a note against them, for staff to read on the site |
+
+When several bans apply, the message uses an account ban first. Among bans of the same kind, it uses the longest one, with forever lasting longest.
 
 ## Wounds for a scene
 

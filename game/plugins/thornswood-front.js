@@ -4358,18 +4358,47 @@
 
   /**
    * One slice of a walk of `cell`. `w` is { t, i, n, walked, out } and holds
-   * where the walk has got to, between frames. Every lit reference whose base
+   * where the walk has got to, between frames; optional water holds numeric
+   * pending reference identity. Every lit reference whose base
    * is one of `want` goes into w.out as [x, y, z]; nothing in here moves, so
    * the finished list is kept by the caller. Stops once FIRE_SLICE_MS has
    * gone since `began`, the start of the slice, which the caller may already
    * have spent some of. Given no `began` it starts the clock itself and
    * takes at least one reference. True once the walk is finished.
    */
-  function walkCellSlice(cell, w, want, onThrew, began) {
+  function walkCellSlice(cell, w, want, onThrew, began, waters) {
     const from = began || sliceNow();
     // A slice of our own always gets something done; a shared one that is
     // already spent does nothing, and the next frame's slice is all walk.
     let took = began ? 1 : 0;
+    // Water needs four more native reads than a fire. Capture it separately
+    // from discovery so a late reference cannot overrun the shared slice.
+    // Only numeric identity/index crosses frames; every wrapper is reacquired.
+    if (w.water) {
+      // Leave room for this indivisible current-frame snapshot. A caller
+      // that used half the shared budget leaves water for the next slice.
+      if (began && sliceNow() - from >= FIRE_SLICE_MS / 2) { return false; }
+      const pending = w.water;
+      delete w.water;
+      try {
+        const r = cell.getNthRef(pending.i, CELL_TYPES[pending.t]);
+        const b = r ? r.getBaseObject() : null;
+        if (!r || r.getFormID() !== pending.ref || !b || b.getFormID() !== pending.base) {
+          throw new Error('placed water reference changed during its cell walk');
+        }
+        if (!r.isDisabled()) {
+          const point = [r.getPositionX(), r.getPositionY(), r.getPositionZ(), pending.base,
+                         r.getScale(), r.getAngleX(), r.getAngleY(), r.getAngleZ()];
+          if (!point.every(Number.isFinite) || point[4] <= 0) {
+            throw new Error('placed water has an invalid reference transform');
+          }
+          w.out.push(point);
+        }
+      } catch (e) {
+        if (onThrew) { onThrew(e); }
+      }
+      return false;
+    }
     while (w.t < CELL_TYPES.length) {
       if (took > 0 && sliceNow() - from >= FIRE_SLICE_MS) { return false; }
       if (w.n < 0) {
@@ -4389,7 +4418,16 @@
           const r = cell.getNthRef(i, CELL_TYPES[w.t]);
           if (!r) { continue; }
           const b = r.getBaseObject();
-          if (!b || !want[b.getFormID()]) { continue; }
+          const baseId = b ? b.getFormID() : 0;
+          if (!b || !want[baseId]) { continue; }
+          if (waters && waters[baseId]) {
+            const refId = r.getFormID();
+            if (!Number.isSafeInteger(refId) || refId <= 0) {
+              throw new Error('placed water has no readable reference identity');
+            }
+            w.water = { t: w.t, i: i, ref: refId, base: baseId };
+            return false;
+          }
           // A fire somebody has switched off is still a placed reference.
           // The toggled ones are the reason this asks rather than trusting
           // the base.
@@ -4660,8 +4698,8 @@
     [plugin, local id, x1, y1, x2, y2]: an ACTI with a WNAM and its OBND
     footprint, in the client table PLACED_WATERS, which
     scripts\dev\Build-WaterTable.js writes from the load order (clientTable,
-    below). The footprint is taken unrotated and
-    unscaled, which is exact for the square WaterNNN planes Bethesda places.
+    below). Bounds stay local to the base; each reference supplies its own
+    scale and Euler angles for the actual footprint and surface (#4604).
   */
   // FireFXShader, 0001b212 in Skyrim.esm, read out of the EFSH records. This
   // is the engine's own "this thing is burning", the one fire damage uses.
@@ -4722,7 +4760,7 @@
   /*
     The placed waters of PLACED_WATERS, by runtime id: id -> [x1, y1, x2, y2].
     Resolved once, the way the fire bases are, by the walk's own slice.
-    waterHere is the walk's list of them in this cell, [x, y, z, id] each.
+    waterHere keeps [x, y, z, id, scale, angleX, angleY, angleZ] numeric snapshots.
   */
   let waterBox = null;
   let waterHere = null;
@@ -4812,16 +4850,38 @@
    * its surface above the feet and under WADE_DEEP over them.
    */
   function placedWaterAt(px, py, pz, waters, deepest) {
+    if (![px, py, pz, deepest].every(Number.isFinite) || deepest <= 0) { return null; }
     let best = null;
     for (let i = 0; i < waters.length; i++) {
       const w = waters[i];
+      if (!Array.isArray(w) || w.length !== 8 || !w.every(Number.isFinite) || w[4] <= 0) { continue; }
       const box = waterBox && waterBox[w[3]];
-      if (!box) { continue; }
-      if (px < w[0] + box[0] || px > w[0] + box[2] ||
-          py < w[1] + box[1] || py > w[1] + box[3]) { continue; }
-      const deep = w[2] - pz;
+      if (!box || box.length !== 4 || !box.every(Number.isFinite) ||
+          box[0] >= box[2] || box[1] >= box[3]) { continue; }
+      // Pinned CommonLib b93280e8 NiMatrix3::SetEulerAnglesXYZ, row-dot
+      // multiplication. Papyrus supplies degrees; positive yaw turns +X to -Y.
+      const ax = (w[5] % 360) * Math.PI / 180;
+      const ay = (w[6] % 360) * Math.PI / 180;
+      const az = (w[7] % 360) * Math.PI / 180;
+      const sx = Math.sin(ax), cx = Math.cos(ax), sy = Math.sin(ay), cy = Math.cos(ay);
+      const sz = Math.sin(az), cz = Math.cos(az);
+      const ux = cy * cz, uy = sx * sy * cz - cx * sz, uz = cx * sy * cz + sx * sz;
+      const vx = cy * sz, vy = sx * sy * sz + cx * cz, vz = cx * sy * sz - sx * cz;
+      const nx = -sy, ny = sx * cy, nz = cx * cy;
+      // A near-vertical plane has no stable water height under these feet.
+      if (Math.abs(nz) < 0.000001) { continue; }
+      const dx = px - w[0], dy = py - w[1];
+      const dz = -(nx * dx + ny * dy) / nz;
+      const top = w[2] + dz;
+      const deep = top - pz;
+      // Intersect the vertical world line FIRST, then inverse-transform that
+      // surface point. Inverse-transforming feet would shift a tilted edge.
+      const x = (ux * dx + uy * dy + uz * dz) / w[4];
+      const y = (vx * dx + vy * dy + vz * dz) / w[4];
+      if (![top, deep, x, y].every(Number.isFinite) ||
+          x < box[0] || x > box[2] || y < box[1] || y > box[3]) { continue; }
       if (deep > 0 && deep < deepest && (!best || deep < best.deep)) {
-        best = { id: w[3], top: w[2], deep: deep };
+        best = { id: w[3], top: top, deep: deep };
       }
     }
     return best;
@@ -4977,7 +5037,7 @@
     const done = walkCellSlice(cell, w, walkWant, function (e) {
       fireThrew++;
       if (!fireWhy) { fireWhy = String((e && e.message) || e); }
-    }, began);
+    }, began, waterBox);
     fireWalked = w.walked;
     if (!done) { return; }
 

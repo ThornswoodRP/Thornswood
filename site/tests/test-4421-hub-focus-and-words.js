@@ -147,7 +147,9 @@ const matches = (e, sel) => sel.split(',').some((s) => matchOne(e, s));
 const said = { confirm: [], alert: [] };
 let answer = () => null; // the scripted site: (path, opts) => { status, body } or 'down'
 const calls = [];
+let renderFrames = new Map(), nextFrame = 0;
 function makeHub() {
+  renderFrames = new Map();
   const body = HTML.slice(HTML.indexOf('<body>') + 6, HTML.indexOf('</body>'));
   doc = node('#document', {});
   doc.body = node('body', {});
@@ -169,6 +171,8 @@ function makeHub() {
     confirm: (t) => { said.confirm.push(String(t)); return true; },
     alert: (t) => { said.alert.push(String(t)); },
     setTimeout: pageTimeout, clearTimeout,
+    requestAnimationFrame: (fn) => { renderFrames.set(++nextFrame, fn); return nextFrame; },
+    cancelAnimationFrame: (id) => renderFrames.delete(id),
     fetch: (p, opts) => {
       calls.push([p, opts || {}]);
       if (p === '/api/hello') return new Promise(() => {});
@@ -185,7 +189,14 @@ function makeHub() {
   vm.runInContext(HUB, sandbox, { filename: 'hub.js' });
   return sandbox;
 }
-async function settle() { for (let i = 0; i < 12; i++) await new Promise((r) => setImmediate(r)); }
+async function settle() {
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setImmediate(r));
+    // A frame's newly queued callback belongs to the next render turn.
+    const ready = Array.from(renderFrames.values()); renderFrames.clear();
+    ready.forEach((fn) => fn());
+  }
+}
 /* A live region the redraw does not replace: in the document, outside #page. */
 function spoken() {
   const page = doc.getElementById('page');

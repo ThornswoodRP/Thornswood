@@ -19,12 +19,14 @@ function makePage() {
         c.parentNode = this; this.children.push(c); return c;
       },
       removeChild(c) {
-        const i = this.children.indexOf(c);
-        if (i >= 0) { this.children.splice(i, 1); c.parentNode = null; }
+        const list = this.children.indexOf(c) >= 0 ? this.children : this.kids;
+        const i = list.indexOf(c);
+        if (i >= 0) { list.splice(i, 1); c.parentNode = null; }
         return c;
       },
       insertBefore(c) { return this.appendChild(c); },
       getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
+      getAttributeNames() { return Object.keys(this.attrs); },
       setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'id') { this.id = v; } if (k === 'class') { this.className = v; } },
       removeAttribute(k) { delete this.attrs[k]; },
       hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
@@ -88,7 +90,7 @@ function makePage() {
       set(h) {
         this._html = String(h);
         this._text = '';
-        this.children.forEach(function (c) { c.parentNode = null; });
+        this.childNodes.forEach(function (c) { c.parentNode = null; });
         this.children = [];
         const self = this;
         this.kids = parse(this._html);
@@ -118,8 +120,15 @@ function makePage() {
     const out = [];
     const open = [];
     const tag = /<(\/?)([a-z0-9]+)((?:\s+[a-z-]+(?:="[^"]*")?)*)\s*(\/?)>/gi;
-    let m;
+    let m, end = 0;
+    function words(text) {
+      if (!text) return;
+      const n = Node('#text'); n.nodeType = 3; n.textContent = unesc(text);
+      const up = open[open.length - 1];
+      if (up) { n.parentNode = up; up.kids.push(n); } else out.push(n);
+    }
     while ((m = tag.exec(html))) {
+      words(html.slice(end, m.index)); end = tag.lastIndex;
       const name = m[2].toLowerCase();
       if (m[1]) {
         for (let i = open.length - 1; i >= 0; i--) {
@@ -137,6 +146,7 @@ function makePage() {
       if (up) { el.parentNode = up; up.kids.push(el); } else { out.push(el); }
       if (!m[4] && VOID.indexOf(name) < 0) { open.push(el); }
     }
+    words(html.slice(end));
     return out;
   }
 

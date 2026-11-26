@@ -7,6 +7,7 @@ Part of the bot: bot.py loads it (#5357).
 import asyncio
 import datetime
 import urllib.error
+import uuid
 
 import discord
 
@@ -114,12 +115,16 @@ async def _forum_post(forum, title, body, tags, me_id=None):
     for th in await _bot_threads(forum, me_id):
         if str(getattr(th, 'name', '')) == title:
             return th
-    applied = [t for t in (task_tag_of(forum, x) for x in tags) if t is not None]
-    made = await forum.create_thread(name=title, content=body,
-                                     applied_tags=applied,
-                                     allowed_mentions=discord.AllowedMentions.none(),
-                                     reason='Thornswood known issues and test tasks')
+    made = await _create_forum_post(forum, title, body, tags)
     return getattr(made, 'thread', made)
+
+
+async def _create_forum_post(forum, title, body, tags, **kwargs):
+    applied = [t for t in (task_tag_of(forum, x) for x in tags) if t is not None]
+    return await forum.create_thread(name=title, content=body, applied_tags=applied,
+                                     allowed_mentions=discord.AllowedMentions.none(),
+                                     reason='Thornswood known issues and test tasks',
+                                     **kwargs)
 
 
 def _refusal(what, forum, th, e):
@@ -141,6 +146,78 @@ async def _forum_drop(forum, tid):
         except discord.HTTPException as e:
             log(_refusal('remove', forum, th, e))
             raise
+
+
+async def _main_task_thread(forum, records, key, me_id):
+    """Resolve receipts for automatic withdrawal against current Discord data."""
+    receipt = records[key]
+    tid = receipt.get('thread_id')
+    title = receipt.get('sig', '').partition('\n')[0]
+    if (not me_id or type(tid) is not int or tid <= 0 or not title
+            or receipt.get('channel_id') != forum.id
+            or any(row.get('thread_id') == tid for k, row in records.items() if k != key)):
+        return None
+    try:
+        thread = await forum.guild.fetch_channel(tid)
+    except (discord.HTTPException, discord.InvalidData):
+        return None
+    if (thread.id == tid and getattr(thread, 'parent_id', None) == forum.id
+            and getattr(thread, 'owner_id', None) == me_id and thread.name == title
+            and isinstance(getattr(thread, 'archived', None), bool)):
+        return thread
+    return None
+
+
+async def _main_task_archive_state(forum, thread, archived):
+    try:
+        changed = await thread.edit(archived=archived)
+    except discord.HTTPException as exc:
+        log(_refusal('archive' if archived else 'unarchive', forum, thread, exc))
+        # Even a refusal may be the final attempt after a successful edit
+        # whose response was lost. The next pass reads Discord again.
+        return False
+    return (getattr(changed, 'id', None) == thread.id
+            and getattr(changed, 'archived', None) is archived)
+
+
+def _matches_main_revision(forum, thread, attempt, me_id, assigned):
+    return (thread.id not in assigned and thread.parent_id == forum.id
+            and thread.owner_id == me_id and thread.name == attempt['post'][0]
+            and sorted(t.name for t in thread.applied_tags) == sorted(attempt['post'][2]))
+
+
+def _matches_main_revision_message(message, thread, key, attempt, me_id):
+    return (message.id == thread.id and message.author.id == me_id
+            and message.content == attempt['post'][1]
+            and any(embed.footer.text == _main_revision_marker(key, attempt)
+                    for embed in message.embeds))
+
+
+def _main_revision_marker(key, attempt):
+    return 'Main test task #%s · %s' % (key, attempt['token'])
+
+
+async def _find_main_revision(forum, key, attempt, me_id, assigned):
+    """Find the exact send using REST rather than gateway thread cache."""
+    found = {}
+    try:
+        active = await forum.guild.active_threads()
+        async for thread in forum.archived_threads(limit=None):
+            if _matches_main_revision(forum, thread, attempt, me_id, assigned):
+                found[thread.id] = thread
+        for thread in active:
+            if _matches_main_revision(forum, thread, attempt, me_id, assigned):
+                found[thread.id] = thread
+        matches = []
+        for thread in found.values():
+            msg = await thread.fetch_message(thread.id)
+            if _matches_main_revision_message(msg, thread, key, attempt, me_id):
+                matches.append(thread)
+    except (discord.HTTPException, discord.InvalidData, OSError, asyncio.TimeoutError):
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 async def _forum_edit(forum, tid, title, body, tags, then=None):
@@ -410,8 +487,11 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     from before this began floods in), or when its latest "Test task:"
     comment was written after since. Every post is tagged Main (TASK_TAG).
     A rewritten comment edits the post, and so does a record made with an
-    older form of the post (TASK_FORM), once; an issue that is reopened
-    loses it. An issue whose last test task says Server: Dev, from the day
+    older form of the post (TASK_FORM), once. An issue that is reopened
+    loses its active post. An explicit non-completed closure archives a
+    verified post and keeps its history for a subsequent completed fix.
+    An issue whose last test task
+    says Server: Dev, from the day
     #dev-test-tasks began (state['dev_since']), gets no post here: it is
     in #dev-test-tasks. Returns the issue numbers posted, edited and removed.
     """
@@ -456,11 +536,136 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             state['_dirty'] = True
 
     posted, edited, removed = [], [], []
+
+    async def post_new(num, issue, post):
+        title, body, tags = post
+        th = await _forum_post(forum, title, body, tags, me_id)
+        rec[str(num)] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': _sig(*post),
+                         'updated': issue.get('updated_at'), 'form': TASK_FORM}
+        state['_dirty'] = True
+        if save:
+            save(state)
+        posted.append(num)
+
+    def save_transition(have, previous):
+        state['_dirty'] = True
+        if save:
+            try:
+                save(state)
+            except OSError:
+                # A later pass must reconcile the old durable receipt.
+                have.clear()
+                have.update(previous)
+                raise
+
+    def assigned_threads():
+        return {row.get('thread_id') for row in rec.values()}
+
+    def record_revision(key, thread, attempt):
+        have = rec[key]
+        previous = have.copy()
+        have.clear()
+        have.update(thread_id=thread.id, channel_id=forum.id,
+                    sig=_sig(*attempt['post']), updated=attempt['updated'], form=TASK_FORM)
+        save_transition(have, previous)
+        posted.append(int(key))
+
+    async def reconcile_revision(key):
+        have = rec[key]
+        if not me_id or have.get('channel_id') != forum.id:
+            return
+        attempt = have['revision']
+        th = await _find_main_revision(forum, key, attempt, me_id, assigned_threads())
+        if th is not None:
+            record_revision(key, th, attempt)
+
+    async def post_revision(key, issue, post):
+        if task_tag_of(forum, TASK_TAG) is None:
+            return
+        have = rec[key]
+        previous = have.copy()
+        attempt = {'token': uuid.uuid4().hex, 'post': post, 'updated': issue.get('updated_at')}
+        have['revision'] = attempt
+        save_transition(have, previous)
+        embed = discord.Embed().set_footer(text=_main_revision_marker(key, attempt))
+        try:
+            made = await _create_forum_post(forum, *post, embed=embed)
+        except (discord.HTTPException, OSError, asyncio.TimeoutError):
+            log('test tasks: revised post for #%s awaits Discord confirmation' % key)
+            return
+        th = getattr(made, 'thread', None)
+        msg = getattr(made, 'message', None)
+        if (th is not None and msg is not None
+                and _matches_main_revision(forum, th, attempt, me_id, assigned_threads())
+                and _matches_main_revision_message(msg, th, key, attempt, me_id)):
+            record_revision(key, th, attempt)
+        else:
+            log('test tasks: revised post for #%s awaits Discord confirmation' % key)
+
+    async def withdraw(key):
+        have = rec[key]
+        if have.get('revision'):
+            await reconcile_revision(key)
+        thread = await _main_task_thread(forum, rec, key, me_id)
+        if thread is None:
+            return
+        if thread.archived:
+            if have.get('withdrawal') != 'pending':
+                return  # staff or Discord had already archived the post
+        else:
+            # Persist the intent before Discord changes, so a restart can
+            # distinguish a bot withdrawal from an unrelated archive.
+            previous = have.copy()
+            have['withdrawal'] = 'pending'
+            save_transition(have, previous)
+            if not await _main_task_archive_state(forum, thread, True):
+                return
+        have['withdrawal'] = 'archived'
+        state['_dirty'] = True
+        removed.append(int(key))
+
+    async def restore(key, issue):
+        if issue.get('state') != 'closed' or issue.get('state_reason') != 'completed':
+            return
+        have = rec[key]
+        if have.get('revision'):
+            await reconcile_revision(key)
+            return
+        thread = await _main_task_thread(forum, rec, key, me_id)
+        if thread is None or getattr(thread, 'locked', None) is not False:
+            return
+        num = int(key)
+        comments = await loop.run_in_executor(None, github_comments, num, get)
+        post = task_post_of(issue, comments, dev_since)
+        if post is None or await broken(num, issue, comments, post):
+            return
+        if _sig(*post) != have['sig']:
+            # Revised instructions need a new active post. Keep every earlier
+            # archived discussion intact, including versions with this title.
+            if not thread.archived and not await _main_task_archive_state(forum, thread, True):
+                return
+            await post_revision(key, issue, post)
+            return
+        was_archived = thread.archived
+        if was_archived and not await _main_task_archive_state(forum, thread, False):
+            return
+        previous = have.copy()
+        have.pop('withdrawal')
+        have.update(updated=issue.get('updated_at'), form=TASK_FORM)
+        save_transition(have, previous)
+        if was_archived:
+            edited.append(num)
+
     for num in sorted(closed):
         key = str(num)
         issue = closed[num]
         have = rec.get(key)
         if (issue.get('state_reason') or 'completed') != 'completed':
+            if have:
+                await withdraw(key)
+            continue
+        if have and have.get('withdrawal'):
+            await restore(key, issue)
             continue
         if (have and have.get('updated') == issue.get('updated_at')
                 and have.get('form') == TASK_FORM):
@@ -512,21 +717,15 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             have.update(sig=sig, updated=issue.get('updated_at'), form=TASK_FORM)
             state['_dirty'] = True
             continue
-        th = await _forum_post(forum, title, body, tags, me_id)
-        rec[key] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': sig,
-                    'updated': issue.get('updated_at'), 'form': TASK_FORM}
-        state['_dirty'] = True
-        if save:
-            save(state)
-        posted.append(num)
+        await post_new(num, issue, post)
     for key, have in list(rec.items()):
         if int(key) in closed:
             continue
         try:
             issue = await loop.run_in_executor(None, github_issue, int(key), get)
         except urllib.error.HTTPError as e:
-            if e.code not in (404, 410):
-                continue        # not read this pass: the post stays as it is
+            if e.code not in (404, 410) or have.get('withdrawal'):
+                continue    # preserve the post when its issue is unknown
             # Deleted: it is in no list any more, so only this read finds it.
             try:
                 await _forum_drop(forum, have['thread_id'])
@@ -538,7 +737,14 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         except Exception:
             continue            # not read this pass: the post stays as it is
-        if str(issue.get('state')) == 'open':
+        if (issue.get('state') == 'closed'
+                and (issue.get('state_reason') or 'completed') != 'completed'):
+            await withdraw(key)
+        elif issue.get('state') == 'open' and have.get('revision'):
+            await withdraw(key)
+        elif have.get('withdrawal'):
+            await restore(key, issue)
+        elif issue.get('state') == 'open':
             try:
                 await _forum_drop(forum, have['thread_id'])
             except discord.HTTPException:

@@ -398,7 +398,7 @@ if (social && trade && branch) {
   // Every string in the gamemode that says /party is the bare word the
   // handler compares against: no line tells anybody to type it.
   const lits = (code(gm).match(/'[^'\n]*\/party[^'\n]*'/g) || []).filter(function (l, i, all) {
-    return all.indexOf(l) === i;
+    return all.indexOf(l) === i && l !== "'/party-action-v1'";
   });
   yes('W3 no line the gamemode says names /party' +
       (lits.length > 1 || (lits.length === 1 && lits[0] !== "'/party'") ? ' (' + lits.join(', ') + ')' : ''),
@@ -415,8 +415,9 @@ if (social && trade && branch) {
   const p = code(panel);
   yes('P1 the P panel sends Leave, Disband, Kick, Lead and Ask as the lines the server answers',
       /verb === 'leave'\) \{ net\('\/party leave'\); \}/.test(p) &&
-      /verb === 'disband'\) \{ net\('\/party disband'\); \}/.test(p) &&
-      /verb === 'kick'\) \{ net\('\/party kick ' \+ who\); \}/.test(p) &&
+      /verb === 'disband' \|\| verb === 'kick' \|\| verb === 'drop'/.test(p) &&
+      /confirmDestructive\(this, verb, who\)/.test(p) &&
+      /line: '\/party-action-v1 ' \+ verb \+ ' ' \+ intent.id \+ ' ' \+ intent.version/.test(p) &&
       /verb === 'lead'\) \{ net\('\/party lead ' \+ who\); \}/.test(p) &&
       /verb === 'ask'\) \{ net\('\/party ' \+ who\); \}/.test(p));
   yes('P2 Kick, Lead and Disband are drawn for the leader only',

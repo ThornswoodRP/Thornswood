@@ -180,8 +180,11 @@ spec.loader.exec_module(P)
 
 def catalogue(data, pol, with_last):
     names = MASTERS + (['Thornswood-Last.esp'] if with_last else [])
+    habitats = pol + '.habitats.json'
+    with open(habitats, 'w', encoding='utf-8') as source:
+        json.dump({'version':1,'places':[]}, source)
     try:
-        return P.build([os.path.join(data, n) for n in names], None, pol), ''
+        return P.build([os.path.join(data, n) for n in names], None, pol, habitats), ''
     except SystemExit as stop:
         return None, str(stop)
 

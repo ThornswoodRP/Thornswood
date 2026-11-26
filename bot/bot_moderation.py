@@ -10,8 +10,8 @@ import traceback
 
 from bot_core import DATA_DIR, TROUBLE_FILE, _int_env, _state_write, as_typed, client, log
 from bot_offices import office_text
-from bot_reports import (copy_key, copy_state, forget_copies, remember_copy,
-    report_say, source_key)
+from bot_reports import (copy_key, copy_state, forget_copies,
+    copy_notice, reconcile_copies, report_say, send_copy, source_key)
 
 MODERATION_POSTS = os.path.join(DATA_DIR, 'moderation-posts.json')
 
@@ -70,6 +70,11 @@ _MOD_DID = {
     # An admin undoing a PK made by mistake (#1010, 29 September).
     'unpk': 'undid the PK of %s, so the character can be played again',
     'note': 'wrote a note on %s',
+    'docsave': 'saved page %s',
+    'inboxdismiss': 'marked inbox report not doing this: %s',
+    'inboxreopen': 'reopened inbox report %s',
+    'inboxdelete': 'deleted inbox report %s',
+    'uploaddelete': 'deleted upload %s',
     # Staff at a building's door, from the Office page of K (#2551, Patrick,
     # 17 Oct): the why names the building and its hold, and the rent set.
     'evict': 'ended the claim of %s',
@@ -99,9 +104,13 @@ _MOD_DID = {
     'invisible': 'changed their visibility',
     'cleareffects': 'used /cleareffects',
     'killall': 'used /killall',
+    'tools-off': 'ended scene tools for %s',
     'setclass': 'changed the class of %s',
     'setprofession': 'changed the profession of %s',
     'repair': 'repaired equipment for %s',
+    'galleryapprove': 'accepted gallery picture %s',
+    'galleryremove': 'removed gallery picture %s',
+    'gallerydismiss': 'dismissed a report on gallery picture %s',
     # Not staff: somebody's own /stuck (#414), said as its why reads.
     'stuck': 'used /stuck',
     # Not staff either: the server took somebody idle out of the world (#1142).
@@ -160,9 +169,33 @@ def moderation_text(where, row):
         why = clean(row.get('why'), 600) or 'a big move of gold.'
         return ('**Gold flagged on the %s server:** %s' % (where, why))[:1900]
 
+    if row['did'] == 'uploaddelete':
+        subject = clean(row.get('whoName'), 240) or 'an unnamed upload'
+        if row.get('phase') == 'metadata':
+            did = 'removed the upload listing for %s' % subject
+        else:
+            did = _MOD_DID['uploaddelete'] % subject
+        return ('**Staff on the site:** %s %s.'
+                % (person(row.get('byName'), None), did))[:1900]
+
     did = _MOD_DID[row['did']]
+    gallery_phase = row.get('phase')
+    if row['did'] == 'galleryapprove' and gallery_phase == 'updated':
+        did = 'updated gallery picture %s'
+    elif row['did'] == 'galleryremove' and isinstance(gallery_phase, str):
+        did = {
+            'approved': 'removed gallery picture %s from the public gallery',
+            'pending': 'removed gallery picture %s from the approval queue',
+            'reports': 'cleared reports while removing gallery picture %s',
+            'file': 'deleted the stored file for gallery picture %s',
+            'hidden': 'marked the stored file for gallery picture %s as removed',
+        }.get(gallery_phase, did)
     if '%s' in did:
-        did = did % person(row.get('whoName'), row.get('who'))
+        # Generated picture names exceed the character-name bound. Keep the
+        # filename distinct, escaped as typed, without treating it as a person.
+        subject = (clean(row.get('whoName'), 240) or 'an unnamed picture') if row['did'] in (
+            'galleryapprove', 'galleryremove', 'gallerydismiss') else person(row.get('whoName'), row.get('who'))
+        did = did % subject
     try:
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):
@@ -191,8 +224,21 @@ def _moderation_lines(path):
         return [], '', False
     except Exception as e:
         return None, '%s: %s' % (type(e).__name__, e), False
-    parts = data.decode('utf-8-sig', errors='replace').split('\n')
-    return [p.rstrip('\r') for p in parts[:-1] if p.strip()], '', not parts[-1]
+    try:
+        parts = data.decode('utf-8-sig').split('\n')
+    except UnicodeDecodeError as e:
+        return None, 'UnicodeDecodeError: %s' % e, False
+    lines = [p.rstrip('\r') for p in parts[:-1] if p.strip()]
+    complete, why = not parts[-1], ''
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            record = None
+        if not isinstance(record, dict):
+            complete, why = False, 'InvalidLineError: a complete line is not a JSON object'
+            break
+    return lines, why, complete
 
 
 def _moderation_unreadable(unread, where, path, why):
@@ -204,9 +250,10 @@ def _moderation_unreadable(unread, where, path, why):
     """
     if why and unread.get(where) != why:
         unread[where] = why
-        log('moderation: cannot read %s (%s), so staff actions on %s are not '
-            'said in the staff channel until it can be. Install-Bot.ps1 gives '
-            'the bot\'s account read on that folder.'
+        log('moderation: cannot read %s completely (%s), so source expiry on %s '
+            'cannot be proved. Repair corrupt input or read access before '
+            'private-copy cleanup can resume. Install-Bot.ps1 gives the bot\'s '
+            'account read on that folder.'
             % (path, why, 'the site' if where == 'site' else 'the %s server' % where))
     elif not why and where in unread:
         del unread[where]
@@ -214,22 +261,14 @@ def _moderation_unreadable(unread, where, path, why):
 
 
 async def watch_moderation():
-    """
-    Say each new staff action from the game in the staff channel, once.
+    """Deliver retained unacknowledged actions using durable copy receipts.
 
-    The lines already in each file when this starts are treated as said, as in
-    watch_trouble, or every restart of the bot would repeat the history. A
-    file that cannot be read is skipped for that look rather than read as
-    empty, and said in bot.log. Nothing in here may end the loop.
+    Pending uncertain sends are reconciled before newer actions from that
+    source. Unreadable/incomplete input never proves a private copy expired.
     """
     await client.wait_until_ready()
     loop = asyncio.get_running_loop()
-    seen = {}
     unread = {}
-    for where, path in MODERATION_LOGS:
-        lines, why, _ = await loop.run_in_executor(None, _moderation_lines, path)
-        seen[where] = set(lines) if lines is not None else None
-        _moderation_unreadable(unread, where, path, why)
     log('moderation: reading %s every %ds'
         % (', '.join(p for _, p in MODERATION_LOGS), MODERATION_EVERY))
 
@@ -242,38 +281,42 @@ async def watch_moderation():
                 if lines is None:
                     continue
                 source = source_key(where, path)
-                if complete and state is not None:
-                    present = {copy_key(line) for line in lines}
-                    if await forget_copies(state, source, present, client):
+                if state is not None:
+                    if await reconcile_copies(state, source, client):
                         _state_write(MODERATION_POSTS, state)
-                if seen.get(where) is None:
-                    seen[where] = set(lines)
-                    continue
-                new = [l for l in lines if l not in seen[where]]
-                seen[where].update(new)
+                    if complete and await forget_copies(state, source,
+                                                       {copy_key(line) for line in lines}, client):
+                        _state_write(MODERATION_POSTS, state)
+                posts = state.get(source, {}) if state is not None else {}
                 texts = []
-                for l in new:
+                for line in dict.fromkeys(lines):
+                    if copy_key(line) in posts:
+                        continue
                     try:
-                        text = moderation_text(where, json.loads(l))
+                        text = moderation_text(where, json.loads(line))
                     except ValueError:
                         text = None
                     if text:
-                        texts.append((l, text))
-                if texts and (state is None or len(texts) > MODERATION_AT_ONCE):
-                    await report_say(
-                        '**%d staff action%s on %s** since the last look. '
-                        'See %s on the VPS for details.'
-                        % (len(texts), '' if len(texts) == 1 else 's',
-                           'the site' if where == 'site' else 'the %s server' % where,
-                           path))
-                elif state is not None:
-                    for line, text in texts:
-                        key = copy_key(line)
-                        if key not in state.get(source, {}):
-                            msg = await report_say(text)
-                            if msg is not None:
-                                remember_copy(state, source, key, msg)
-                                _state_write(MODERATION_POSTS, state)
+                        texts.append((line, text))
+                if state is None:
+                    if texts and copy_notice((source, 'corrupt', len(texts)),
+                                             'moderation: receipt index unreadable; private copies are paused.'):
+                        await report_say('**%d staff action%s remain on %s.** Staff copies are '
+                                         'paused because their saved receipts cannot be read.'
+                                         % (len(texts), '' if len(texts) == 1 else 's', where))
+                elif not any('attempt' in post for post in posts.values()):
+                    if len(texts) > MODERATION_AT_ONCE:
+                        await send_copy(MODERATION_POSTS, state, source,
+                                        [copy_key(line) for line, _ in texts],
+                                        '**%d staff action%s on %s** since the last look. '
+                                        'See %s on the VPS for details.'
+                                        % (len(texts), '' if len(texts) == 1 else 's',
+                                           'the site' if where == 'site' else 'the %s server' % where, path), client)
+                    else:
+                        for line, text in texts:
+                            if not await send_copy(MODERATION_POSTS, state, source,
+                                                   [copy_key(line)], text, client):
+                                break
         except Exception:
             log('moderation: the check itself failed, carrying on:\n'
                 + traceback.format_exc())

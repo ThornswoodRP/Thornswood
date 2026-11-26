@@ -111,11 +111,11 @@ const discord = http.createServer((req, res) => {
   // The bulk list is refused, as with the members intent off, so every
   // account is its own lookup and MODE decides it.
   if (/\/members\?limit=/.test(u)) return out(403, { message: 'Missing Access' });
-  if (/\/bans\//.test(u)) return out(404, { message: 'Unknown Ban' });
+  if (/\/bans\//.test(u)) return out(404, { code: 10026, message: 'Unknown Ban' });
   const id = u.slice(u.lastIndexOf('/') + 1);
   const m = MEMBERS[id];
   const answer = () => {
-    if (!m) return out(404, { message: 'Unknown Member' });
+    if (!m) return out(404, { code: 10007, message: 'Unknown Member' });
     return out(200, { user: { id, username: 'u' + id, global_name: 'Visitor ' + id }, nick: null,
                       roles: m === 'play' ? ['r1'] : [] });
   };
@@ -481,8 +481,8 @@ function pageChecks() {
     r = await ask('GET', '/api/gallery/who', null, { as: '714' });
     yes('a signed in page load, Discord silent, a minute on: /api/gallery/who answers when the site\'s wait runs out (' + r.ms + ' ms)',
         r.status === 200 && waitedOut(r));
-    yes('  with the last answer Discord gave for them, so they can still send',
-        r.j.signed === true && r.j.canSubmit === true && r.j.asked === true);
+    yes('  with identity still signed in but eligibility unknown, without reviving old roles (#4381)',
+        r.j.signed === true && r.j.canSubmit === false && r.j.asked === false && r.j.staff === false && r.j.admin === false);
     r = await ask('POST', '/api/report', { title: 'person stale', about: 'Brynjolf', kind: 'report' }, { as: '714' });
     yes('  a Submit still does not act on an old answer: about a person is 503 when the site\'s wait runs out (' + r.ms + ' ms)',
         r.status === 503 && waitedOut(r) && /could not ask Discord/.test(r.j.error));

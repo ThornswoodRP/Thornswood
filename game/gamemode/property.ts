@@ -292,13 +292,19 @@
     return out;
   }
 
-  function save() {
+  function save(durable) {
     try {
-      var dir = require('path').dirname(registerPath());
-      storeWrite(registerPath(),
-        JSON.stringify({ claims: claims, arrears: arrears,
-                        funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1), registerRead);
+      var text = JSON.stringify({ claims: claims, arrears: arrears,
+        funds: funds, notices: notices, boards: boards, steps: steps,
+        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+      if (durable === true) {
+        if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
+        var file = registerPath();
+        require('fs').mkdirSync(require('path').dirname(file), { recursive: true });
+        mp.writeFileWhole(file, text);
+      } else {
+        storeWrite(registerPath(), text, registerRead);
+      }
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -310,6 +316,8 @@
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
+  // Read with the rest, before anything can save, so no write leaves them out (#4901).
+  var debits = loadDebits();
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -1941,6 +1949,115 @@
     return true;
   }
 
+  // The blank and named mold may belong to different people. Every write
+  // compares the actual inventory and receipt; a publication exception is
+  // classified by readback, never assumed to mean the write was refused.
+  function handMold(actorId, profileId, owner, building) {
+    var merchants = globalThis.__thornswoodMerchantTrade;
+    var untouched = 'The mold could not be handed over. Your blank was not spent.';
+    var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
+    var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
+      'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
+        !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
+      return {ok:false,why:untouched};
+    }
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    function identity(s) {
+      return Number(mp.get(s.actor, 'profileId')) === s.profile &&
+        mp.getActorRuntimeIdentity(s.actor) === s.runtime;
+    }
+    function read(actor) {
+      var profile = Number(mp.get(actor, 'profileId')), runtime = mp.getActorRuntimeIdentity(actor);
+      var desc = mp.getDescFromId(actor), receipt = mp.getInventoryReceipt(actor);
+      var inventory = mp.get(actor, 'inventory');
+      if (!Number.isSafeInteger(profile) || profile <= 0 || typeof runtime !== 'string' ||
+          !/^[1-9][0-9]{0,19}$/.test(runtime) || typeof desc !== 'string' || !desc ||
+          typeof receipt !== 'string' || mp.validateInventoryTransaction(inventory) !== true) {
+        throw new Error('Mold inventory is unavailable');
+      }
+      var old = JSON.parse(receipt), sequence = old === null ? 1 : old.sequence + 1;
+      if (old !== null && (!old || Object.keys(old).length !== 3 || old.actor !== desc ||
+          old.profile !== profile || !Number.isSafeInteger(old.sequence) || old.sequence < 1) ||
+          !Number.isSafeInteger(sequence)) { throw new Error('Mold receipt is unavailable'); }
+      var s = {actor:actor,profile:profile,runtime:runtime,desc:desc,receipt:receipt,sequence:sequence,
+        inventory:JSON.parse(JSON.stringify(inventory))};
+      if (!identity(s)) { throw new Error('Mold actor changed'); }
+      return s;
+    }
+    function matches(s) {
+      return identity(s) && mp.getInventoryReceipt(s.actor) === s.receipt &&
+        same(mp.get(s.actor, 'inventory'), s.inventory);
+    }
+    function replace(s, next, alive) {
+      try {
+        if (!alive() || !matches(s) || mp.validateInventoryTransaction(next) !== true) {
+          return {state:'unknown'};
+        }
+        try {
+          mp.compareAndSetInventory(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile);
+        } catch (e) {
+          plog('mold inventory write needs readback for', s.actor.toString(16));
+        }
+        var committed = Object.assign({}, s, {inventory:next,sequence:s.sequence+1,
+          receipt:JSON.stringify({actor:s.desc,profile:s.profile,sequence:s.sequence})});
+        if (alive() && matches(committed)) { return {state:'committed',snapshot:committed}; }
+        if (alive() && matches(s)) { return {state:'unchanged'}; }
+      } catch (e) { /* Unknown writes are never replayed or compensated. */ }
+      return {state:'unknown'};
+    }
+    try {
+      var entered = false;
+      function handover(human, alive, recipient) {
+        entered = true;
+        var source, target, debit, named;
+        try {
+          source = read(actorId);
+          target = self ? source : read(owner.actorId);
+          if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
+              target.profile !== owner.profileId ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
+              mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
+              mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
+            return {ok:false,why:untouched};
+          }
+          debit = blankMoldAfter(source.inventory);
+          if (!debit) { return {ok:false,why:untouched}; }
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
+          named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
+          if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
+            return {ok:false,why:untouched};
+          }
+        } catch (e) { return {ok:false,why:untouched}; }
+        if (self) {
+          var converted = replace(source, named, alive);
+          return converted.state === 'committed' ? {ok:true} :
+            {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
+              uncertain:converted.state === 'unknown'};
+        }
+        var taken = replace(source, debit, alive);
+        if (taken.state !== 'committed') {
+          return {ok:false,why:taken.state === 'unchanged' ? untouched : unknown,
+            uncertain:taken.state === 'unknown'};
+        }
+        var handed = replace(target, named, alive);
+        if (handed.state === 'committed') { return {ok:true}; }
+        if (handed.state !== 'unchanged') { return {ok:false,why:unknown,uncertain:true}; }
+        var restored = replace(taken.snapshot, source.inventory, alive);
+        return restored.state === 'committed' ?
+          {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
+          {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
+            uncertain:restored.state === 'unknown'};
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
+      return entered ? result : {ok:false,why:untouched};
+    } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
+  }
+
   /*
     May this person walk through that building's doors.
 
@@ -2213,13 +2330,17 @@
       over by hand, which is the point: the switch is the plugin.
     */
     if (blankMoldsExist()) {
-      if (!takeBlankMold(actorId)) {
+      if (!carriesBlankMold(actorId)) {
         toProfile(profileId, 'You are carrying no blank key mold. Forge one at a forge, one iron ' +
                              'ingot, then bring it back to this door.');
         return true;
       }
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
+      var stamped = handMold(actorId, profileId, owner, building);
+      if (!stamped.ok) {
+        toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
+        return true;
+      }
+    } else if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
       toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
       return true;
     }
@@ -2347,13 +2468,9 @@
                            'from that one.');
       return true;
     }
-    if (!takeBlankMold(actorId)) {
-      toProfile(profileId, 'You are carrying no blank key mold. A smith forges one at a forge ' +
-                           'out of one iron ingot.');
-      return true;
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
-      toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
+    var stamped = handMold(actorId, profileId, owner, building);
+    if (!stamped.ok) {
+      toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
       return true;
     }
     plog('a mold for', nameOf(building), 'was pressed at the door for', held.name);
@@ -2742,17 +2859,26 @@
     if (!baseId) { return false; }
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { return false; }
-    var entries = (inv && inv.entries) || [];
+    var next = blankMoldAfter(inv);
+    if (!next) { return false; }
+    try { mp.set(actorId, 'inventory', next); } catch (e2) { return false; }
+    return true;
+  }
+
+  /** A replacement which spends one blank, retaining every other entry. */
+  function blankMoldAfter(inv) {
+    var baseId = idOf(MOLD);
+    if (!baseId || !inv || !Array.isArray(inv.entries)) { return null; }
+    var next = JSON.parse(JSON.stringify(inv)), entries = next.entries;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (!e || !(e.count > 0) || e.baseId !== baseId) { continue; }
       if (e.name) { continue; }
       if (e.count > 1) { e.count = e.count - 1; }
       else { entries.splice(i, 1); }
-      try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return false; }
-      return true;
+      return next;
     }
-    return false;
+    return null;
   }
 
   /** The building whose mold is in this pack, or null. One at a time is enough. */
@@ -3296,9 +3422,9 @@
     the two generated name tables /give reads, when this file has them.
   */
   var boxNames = null;
-  function itemName(entry) {
-    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
-    var base = Number(entry && entry.baseId) || 0;
+  /** Decoded base name by its whole descriptor, or '' when unknown. Read only. */
+  function baseItemName(baseId) {
+    var base = Number(baseId) || 0;
     if (base === GOLD_ID) { return 'Gold'; }
     if (!boxNames) {
       boxNames = {};
@@ -3317,6 +3443,16 @@
     var desc = '';
     try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     if (desc && Object.prototype.hasOwnProperty.call(boxNames, desc)) { return boxNames[desc]; }
+    return '';
+  }
+
+  function itemName(entry) {
+    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
+    var base = Number(entry && entry.baseId) || 0;
+    var name = baseItemName(base);
+    if (name) { return name; }
+    var desc = '';
+    try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     return desc ? 'something (' + desc + ')' : 'something';
   }
 
@@ -3421,7 +3557,20 @@
   function boxPutGold(hold, actorId, profileId, amount) {
     var n = Math.floor(Number(amount));
     if (!(n > 0) || String(n) !== String(amount).trim()) { return 'Say how much gold, as a whole number.'; }
-    if (!takeGold(actorId, n)) { return 'You do not have ' + n + ' gold in one purse.'; }
+    // Into the register only once the pack's take is saved (#4901): landBoxGold.
+    var r = packs.begin(actorId, goldCut(n, 'You do not have ' + n + ' gold in one purse.'), 'box-gold',
+                        { hold: hold, n: n, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || ('The ' + n + ' gold goes in the box once your pack is saved, in a moment.');
+  }
+
+  /* Gold in, once its take out of the pack is saved (#4901). Answers the line for whoever put it in. */
+  function landBoxGold(row, landed) {
+    var hold = row.data.hold, n = row.data.n, who = row.data.who;
+    var profileId = row.human.profileId;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + n + ' gold out of it, so it is still in your pack and not in the box.';
+    }
     var owed = rentOwedBy(profileId);
     var left = n;
     var rent = [];
@@ -3442,7 +3591,6 @@
                                : { building: owed[i].building, amount: take });
     }
     var d = dropboxOf(hold);
-    var who = characterName(actorId);
     var item = { n: d.next++, by: profileId, name: who, kind: 'gold', baseId: GOLD_ID, count: n,
                  what: 'Gold', at: Date.now() };
     if (rent.length) { item.rent = rent; }
@@ -3450,7 +3598,6 @@
     var paid = n - left;
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: 'Gold', count: n, note: paid ? paid + ' of it rent' : '' });
-    save();
     plog(who, '(profile ' + profileId + ') put', n, 'gold in', hold + '\'s drop box', paid ? '(' + paid + ' of it rent)' : '');
     return 'You put ' + n + ' gold in the box.' + (paid ? ' ' + paid + ' of it pays your rent.' : '');
   }
@@ -3473,20 +3620,40 @@
     if (e.worn || e.wornLeft) { return 'Take it off first.'; }
     var n = Math.floor(Number(count));
     if (!(n > 0) || n > (Number(e.count) || 0)) { return 'You do not have that many.'; }
-    var kept = JSON.parse(JSON.stringify(e));
-    delete kept.count; delete kept.worn; delete kept.wornLeft;
-    e.count = (Number(e.count) || 0) - n;
-    if (e.count <= 0) { entries.splice(at, 1); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return 'Your pack could not be written.'; }
-    var d = dropboxOf(hold);
-    var who = characterName(actorId);
+    // Into the register only once the pack's take is saved (#4901): landBoxLeft.
+    var r = packs.begin(actorId, function (list) {
+      var it = list[at];
+      if (!it || Number(it.baseId) === GOLD_ID || it.worn || it.wornLeft || n > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was put in the box.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = n;
+      it.count = (Number(it.count) || 0) - n;
+      if (it.count <= 0) { list.splice(at, 1); }
+      return { entries: list, taken: [kept] };
+    }, 'box-left', { hold: hold, to: to, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || 'It goes in the box for ' + to + ' once your pack is saved, in a moment.';
+  }
+
+  /* Something left for somebody, once its take out of the pack is saved (#4901). */
+  function landBoxLeft(row, landed) {
+    var hold = row.data.hold, to = row.data.to, who = row.data.who;
+    var profileId = row.human.profileId;
+    var kept = JSON.parse(JSON.stringify(row.taken[0] || {}));
+    var n = Number(kept.count) || 0;
+    delete kept.count;
     var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with ' + what + ' out of it, so it is still in your pack and not in the box.';
+    }
+    var d = dropboxOf(hold);
     var item = { n: d.next++, by: profileId, name: who, kind: 'left', baseId: Number(kept.baseId),
                  count: n, what: what, entry: kept, forName: to, at: Date.now() };
     d.items.push(item);
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: what, count: n, forName: to });
-    save();
     plog(who, '(profile ' + profileId + ') left', n, what, 'for', to, 'in', hold + '\'s drop box');
     return 'You left ' + (n > 1 ? n + ' ' : '') + what + ' in the box for ' + to + '.';
   }
@@ -5694,6 +5861,239 @@
     return false;
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* A whole count of gold out of one stack, the way takeGold takes it: { entries, taken } or the refusal. */
+  function goldCut(amount, refusal) {
+    return function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        if (e && e.baseId === GOLD_ID && (Number(e.count) || 0) >= amount) {
+          e.count -= amount;
+          if (e.count <= 0) { entries.splice(i, 1); }
+          return { entries: entries, taken: [{ baseId: GOLD_ID, count: amount }] };
+        }
+      }
+      return refusal;
+    };
+  }
+
+  /* The debits the register holds: takes armed and not yet landed or let go (#4901). */
+  function loadDebits() {
+    var raw = registerRead.doc;
+    var list = (raw && Array.isArray(raw.debits)) ? raw.debits : [];
+    if (list.length) { plog('read', list.length, 'take(s) out of a pack waiting on its save'); }
+    return list;
+  }
+
+  /* A line to a person in the world, from a debit that landed or let go without them asking. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('a take out of a pack:', err); return; }
+    var to = onlineActorOf(Number(pid));
+    if (!to || !line) { return; }
+    try { notify(to, line); } catch (e) { plog('could not show', Number(to).toString(16), 'a line:', e); }
+    try { say(to, line); } catch (e2) { plog('could not say a line to', Number(to).toString(16) + ':', e2); }
+    refreshPanel(to);
+  }
+
+  function commitPackDebit(land, row, paid) {
+    var original = { claims: claims, arrears: arrears, funds: funds, notices: notices,
+                     dropbox: dropbox, debits: debits };
+    var draft = JSON.parse(JSON.stringify(original));
+    claims = draft.claims;
+    arrears = draft.arrears;
+    funds = draft.funds;
+    notices = draft.notices;
+    dropbox = draft.dropbox;
+    debits = debits.filter(function (debit) { return debit !== row; });
+    var committed = false;
+    try {
+      var line = land(JSON.parse(JSON.stringify(row)), paid);
+      committed = save(true);
+      return committed ? line : '';
+    } finally {
+      if (!committed) {
+        claims = original.claims;
+        arrears = original.arrears;
+        funds = original.funds;
+        notices = original.notices;
+        dropbox = original.dropbox;
+        debits = original.debits;
+      }
+    }
+  }
+
+  var packs = packFirst(mp, function () { return debits; }, function () { return save(true); }, {
+    'box-gold': landBoxGold,
+    'box-left': landBoxLeft,
+    'post': landPost,
+    'letter': landLetter,
+    'haul': landHaul
+  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, require('crypto').randomUUID, admitPackDebit);
+
+  if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
+  g.__thornswoodPackTimer = setInterval(
+    guard('packTick', packs.settle), 1000);
+
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
 
@@ -5795,7 +6195,19 @@
     };
   }
 
-  function post(parts, actorId, profileId, toProfile, isJob) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
+    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+        (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
+      toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
+      return true;
+    }
+    // Same authoritative location, size, fee, reward and pack-first landing.
+    // Only the legacy command boundary unescapes or normalizes text.
+    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
+                kind === 'job', {title:title,body:body,hold:expectedHold});
+  }
+
+  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
     /*
       AT THE BOARD, because that is what makes it a board rather than a
       command. It is the same rule as claiming at a door: the place is the
@@ -5805,6 +6217,10 @@
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -5825,9 +6241,9 @@
       }
       from = 2;
     }
-    var words = postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
+    var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
     var what = isJob ? 'the job' : 'the notice';
-    if (!words.title) {
+    if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
     }
@@ -5836,7 +6252,7 @@
                 words.title.length + '. Nothing was taken.');
       return true;
     }
-    if (!words.body) {
+    if (!words.body.trim()) {
       toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
                                  : 'Say what the notice says. Nothing was taken.');
       return true;
@@ -5848,11 +6264,12 @@
     }
     var fee = isJob ? JOB_FEE : NOTICE_FEE;
     var cost = fee + reward;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, isJob
-        ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
-          ' reward, and you do not have it. Nothing was taken.'
-        : 'That costs ' + fee + ' gold and you do not have it.');
+    var short = isJob
+      ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
+        ' reward, and you do not have it. Nothing was taken.'
+      : 'That costs ' + fee + ' gold and you do not have it.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -5860,24 +6277,38 @@
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-
-    if (!notices[hold]) { notices[hold] = []; }
     var made = { by: profileId, name: who, title: words.title, text: words.body, at: Date.now(),
                  job: !!isJob, taken: 0 };
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    // On the board only once the pack's take is saved (#4901): landPost.
+    var r = packs.begin(actorId, goldCut(cost, short),
+      'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
+    toProfile(profileId, r.why || r.line ||
+      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A notice or a job onto its board, once its fee is saved out of the pack (#4901). */
+  function landPost(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
+    var isJob = !!made.job;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
+             (isJob ? 'job' : 'notice') + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', words.title);
-    toProfile(profileId, isJob
+    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
         'Then it goes to whoever took it.'
-      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.');
-    refreshPanel(actorId);
-    return true;
+      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.';
   }
 
   /*
@@ -6249,10 +6680,17 @@
     return n;
   }
 
-  function unpin(parts, actorId, profileId, toProfile) {
+  function unpin(parts, actorId, profileId, toProfile, expected) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at the board you put it on.');
+      return true;
+    }
+    // Resolve the board once. New page intents bind this captured board and
+    // its original creation before any authority, refund or haul operation.
+    if (expected && (!Object.prototype.hasOwnProperty.call(boards, expected.hold) || expected.hold !== hold)) {
+      toProfile(profileId, 'The board changed. Review the current board and press again.');
+      refreshPanel(actorId);
       return true;
     }
     var list = notices[hold] || [];
@@ -6262,6 +6700,11 @@
       return true;
     }
     var n = list[at];
+    if (expected && (!n || !Number.isSafeInteger(n.at) || n.at < 0 || n.at !== expected.at)) {
+      toProfile(profileId, 'That post changed. Review the current board and press again.');
+      refreshPanel(actorId);
+      return true;
+    }
     if (n.down) {
       toProfile(profileId, 'That one is already down.');
       return true;
@@ -6384,8 +6827,8 @@
         /letter "Lydia Stormblade" Meet me at the Drunken Huntsman at dusk.
 
     NOBODY TYPES THESE (#1595). Patrick, 4 Oct: nothing people do is a chat
-    command. The board panel's Write a letter sends the second form, the name
-    always in double quotes, and nothing a person reads names /letter.
+    command. The current board panel sends /letter-post-v1 with separate encoded
+    strings. These older forms remain compatible; no public help names them.
 
     #1374, as docs/systems/noticeboards.md has it. A letter is a job with a
     named person at the other end, written standing at the board. The words
@@ -6397,7 +6840,28 @@
     panels, Your jobs and the taking line say who it is for and from whom, and
     the log does not record them either.
   */
-  function postLetter(parts, actorId, profileId, toProfile) {
+  // Two encoded strings keep quotes and spaces out of the legacy word parser.
+  // This verb is intentionally unknown to a server that still strips names.
+  function postLetterV1(parts, actorId, profileId, toProfile) {
+    var to, words;
+    if (!Array.isArray(parts) || parts.length !== 3 || typeof parts[1] !== 'string' ||
+        typeof parts[2] !== 'string' || parts[1].length > 540 || parts[2].length > 2700) {
+      toProfile(profileId, 'That letter request is invalid. Nothing was posted or taken.'); return true;
+    }
+    try { to = decodeURIComponent(parts[1]); words = decodeURIComponent(parts[2]); }
+    catch (eLetter) {
+      toProfile(profileId, 'That letter request has invalid text. Nothing was posted or taken.'); return true;
+    }
+    // Same unsafe characters as character names; quotes and valid spaces stay.
+    // Do not run a rename normalizer or change the existing name-match policy.
+    if (!to.trim() || to.length > 60 || /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) ||
+        !words.trim() || words.length > LETTER_CHARS) {
+      toProfile(profileId, 'That letter request is invalid or too long. Nothing was posted or taken.'); return true;
+    }
+    return postLetter(parts, actorId, profileId, toProfile, {to:to,words:words});
+  }
+
+  function postLetter(parts, actorId, profileId, toProfile, written) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
@@ -6405,7 +6869,8 @@
     }
     var rest = (parts && parts.length > 1) ? parts.slice(1).join(' ').trim() : '';
     var to = '', words = '';
-    if (rest.charAt(0) === '"') {
+    if (written) { to = written.to; words = written.words; }
+    else if (rest.charAt(0) === '"') {
       var shut = rest.indexOf('"', 1);
       if (shut > 1) { to = rest.slice(1, shut).trim(); words = rest.slice(shut + 1).trim(); }
     } else {
@@ -6427,26 +6892,37 @@
       return true;
     }
     var cost = LETTER_FEE + LETTER_PAY;
-    if (!takeGold(actorId, cost)) {
-      toProfile(profileId, 'A letter costs ' + cost + ' gold and you do not have it.');
-      return true;
-    }
     var who = 'somebody';
     try {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
-    notices[hold].push({ by: profileId, name: who, text: words, at: Date.now(),
-                         job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 });
-    funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, 'posted a letter for', to, 'in', hold, 'for', cost, 'gold');
-    toProfile(profileId, 'Your letter for ' + to + ' is on the board in ' + hold + '. That cost ' + cost +
-              ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
-              ' held for whoever carries it.');
-    refreshPanel(actorId);
+    var made = { by: profileId, name: who, text: words, at: Date.now(),
+                 job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
+    // On the board only once the pack's take is saved (#4901): landLetter.
+    var r = packs.begin(actorId, goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.'),
+                        'letter', { hold: hold, made: made, cost: cost });
+    toProfile(profileId, r.why || r.line ||
+      ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /* A letter onto its board, once its cost is saved out of the pack (#4901). The words stay out of the log. */
+  function landLetter(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the letter for ' +
+             made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a letter for', made.to, 'in', hold, 'for', cost, 'gold');
+    return 'Your letter for ' + made.to + ' is on the board in ' + hold + '. That cost ' + cost +
+           ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
+           ' held for whoever carries it.';
   }
 
   /*
@@ -6714,9 +7190,10 @@
     }
     var fee = co.haulFee();
     var cost = fee + pay;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
-                ' pay, and you do not have it. Nothing was taken.');
+    var short = 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
+                ' pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -6724,23 +7201,40 @@
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
     // The haul carries the cut it was posted under, so a change of terms never re-prices it.
-    notices[hold].push(co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
-                                      job: true, haul: true, dest: dest, pay: pay, taken: 0 }));
-    // deposit saves the notice with the coin, so the two cannot part.
-    if (!deposit(hold, cost, 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held')) {
-      notices[hold].pop();
-      payOut(actorId, cost);
-      toProfile(profileId, 'That did not work. Nothing was taken.');
-      return true;
-    }
-    plog(who, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
-    toProfile(profileId, 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
-              notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
-              pay + ' pay, held until it is confirmed at ' + dest + '.');
-    refreshPanel(actorId);
+    var made = co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
+                              job: true, haul: true, dest: dest, pay: pay, taken: 0 });
+    // On the board only once the pack's take is saved (#4901): landHaul.
+    var r = packs.begin(actorId, goldCut(cost, short), 'haul',
+                        { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
+    toProfile(profileId, r.why || r.line ||
+      ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /*
+    A haul onto its board, once its cost is saved out of the pack (#4901).
+    The coin is counted on the hold's ledger in the same write as the notice
+    (the debit's landing), so the two cannot part, and nothing is ever handed
+    back: the pack's take is saved before any of it is counted.
+  */
+  function landHaul(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    var fee = row.data.fee, pay = row.data.pay, dest = row.data.dest;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the haul to ' +
+             dest + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(cost, 'gold onto', hold + '\'s ledger:', 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held');
+    plog(made.name, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
+    return 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
+           notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
+           pay + ' pay, held until it is confirmed at ' + dest + '.';
   }
 
   function confirmHaul(parts, actorId, profileId, toProfile) {
@@ -7488,6 +7982,7 @@
     if (word === '/take') { return take(parts, actorId, profileId, toProfile); }
     if (word === '/dropjob') { return dropJob(parts, actorId, profileId, toProfile); }
     if (word === '/unpin') { return unpin(parts, actorId, profileId, toProfile); }
+    if (word === '/letter-post-v1') { return postLetterV1(parts, actorId, profileId, toProfile); }
     if (word === '/letter') { return postLetter(parts, actorId, profileId, toProfile); }
     if (word === '/deliver') { return deliver(parts, actorId, profileId, toProfile); }
     if (word === '/haul') { return haulCmd(parts, actorId, profileId, toProfile); }
@@ -8186,17 +8681,17 @@
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
-    deposit: deposit, takeGold: takeGold, LEDGER_HOLDS: LEDGER_HOLDS,
+    deposit: deposit, takeGold: takeGold, settlePacks: packs.settle, LEDGER_HOLDS: LEDGER_HOLDS,
     withdraw: withdraw, mayWithdraw: mayWithdraw, heldOn: heldOn,
     haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany,
     holdStanding: holdStanding,
     rentDue: rentDue, funds: function () { return funds; },
     // Rent still owed on a place by somebody who no longer holds it (#3893).
     arrears: function () { return arrears; },
-    notices: function () { return notices; }, takedown: takedown,
+    notices: function () { return notices; }, takedown: takedown, unpin: unpin,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
-    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel,
+    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,
@@ -8204,7 +8699,7 @@
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
-    itemName: itemName
+    itemName: itemName, baseItemName: baseItemName
   };
   plog('ready,', Object.keys(BUILDING_BY_DOOR).length, 'doors across',
        Object.keys(BUILDING_NAME).length, 'buildings,',

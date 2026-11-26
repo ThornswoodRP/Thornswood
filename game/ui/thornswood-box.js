@@ -103,7 +103,8 @@
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);padding:8px 10px;margin:10px 0}',
     '#' + ID + ' input{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(0,0,0,.25);',
-    '  border:1px solid rgba(198,170,109,.30);padding:6px 8px;outline:none}',
+    '  border:1px solid rgba(198,170,109,.30);padding:6px 8px}',
+    '#' + ID + ' input:focus,#' + ID + ' select:focus{outline:2px solid #e9d19b;outline-offset:2px}',
     '#' + ID + ' input.n{width:90px}',
     '#' + ID + ' input.who{flex:1;min-width:160px}',
     '#' + ID + ' select{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(11,10,8,.94);',
@@ -147,6 +148,11 @@
   }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     if (!root) { return; }
     var keptGold = field(ID + '-gold');
     var keptFor = field(ID + '-for');
@@ -171,14 +177,14 @@
       var r = rows[i];
       out += '<div class="row"><span class="nm">' + rowLine(r, officer) + '</span><span class="tools">';
       if (r.count > 1) {
-        out += '<input class="n" id="' + ID + '-take-' + esc(r.n) + '" placeholder="all">';
+        out += '<input class="n" id="' + ID + '-take-' + esc(r.n) + '" aria-label="Count to take" placeholder="all">';
       }
       out += '<button data-do="take" data-n="' + esc(r.n) + '">' + (r.mine ? 'Take back' : 'Take') + '</button>';
       out += '</span></div>';
     }
 
     out += '<h3>Put in gold</h3>';
-    out += '<div class="line"><input class="n" id="' + ID + '-gold" placeholder="gold">' +
+    out += '<div class="line"><input class="n" id="' + ID + '-gold" aria-label="Gold to put in" placeholder="gold">' +
       '<button class="go" data-do="gold"' + (goldPending ? ' disabled aria-busy="true"' : '') + '>' +
       (goldPending ? 'Putting in...' : 'Put in') + '</button></div>';
     if (goldNotice) { out += '<div class="note" role="status" aria-live="polite">' + esc(goldNotice) + '</div>'; }
@@ -196,8 +202,8 @@
           (pack[p].count > 1 ? ' (' + esc(pack[p].count) + ')' : '') + '</option>';
       }
       out += '<div class="line"><select id="' + ID + '-slot">' + opts + '</select>' +
-        '<input class="n" id="' + ID + '-count" placeholder="1">' +
-        '<input class="who" id="' + ID + '-for" placeholder="who it is for"></div>';
+        '<input class="n" id="' + ID + '-count" aria-label="Count to leave" placeholder="1">' +
+        '<input class="who" id="' + ID + '-for" aria-label="Recipient" placeholder="who it is for"></div>';
       out += '<div class="line"><button class="go" data-do="leave">Leave it</button></div>';
       out += '<div class="note">For a delivery somebody was not here to take: it waits in the box, ' +
         'and the hold\'s steward hands it out.</div>';
@@ -286,6 +292,7 @@
     shown = true;
     root.className = 'on';
     draw();
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 

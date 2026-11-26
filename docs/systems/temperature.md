@@ -223,6 +223,17 @@ weather.
 Standing in the coals deals about 7 health a second. That is the flame,
 not the meter. You can read Burning and also be on fire.
 
+Being on fire supplies the same 34 warmth as a normal fire at your feet,
+even after you leave the coals or catch fire from someone else. It uses the
+stronger of that heat and a nearby fire, rather than adding both. The target
+changes with the fire; the reading still follows the half-gap curve above.
+When the fire ends, its warmth ends too. A delayed reading counts only the
+time that fire was active. Time logged out gains no warmth from it.
+
+The Body page names a fire on you separately from a nearby fire and its
+distance. Its current reading, target and worn pieces are the server's
+snapshot when K opens or you press Read again.
+
 Fire spreads. Someone burning sets alight anyone in the same cell
 within about two paces (220 units). The caught burn lasts 5 seconds
 unless they stay next to the person who is alight. It does not run
@@ -235,7 +246,11 @@ or a server restart.
 
 ## Water
 
-Only while swimming or wading.
+Only while swimming or wading. Wading follows a placed water plane's actual
+rotation and scale. Its surface must be above the feet and less than 70 game
+units above them; standing beside its transformed edge or above its surface
+is dry. A reference whose current transform cannot be read supplies no guessed
+water footprint.
 
 | Class | On top of the water place |
 | --- | --- |

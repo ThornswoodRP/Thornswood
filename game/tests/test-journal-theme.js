@@ -59,9 +59,15 @@ function unesc(s) {
 }
 function makeEl(tag) {
   const e = {
-    tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '',
+    tagName: String(tag).toUpperCase(), attrs: {}, kids: [], children: [], html: '', parentNode: null, style: {}, listeners: [],
     id: '', className: '', textContent: '', value: '', onclick: null,
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parentNode = this; this.children.push(c); return c; },
+    addEventListener(type, fn, options) { this.listeners.push({type,fn,capture:options===true||!!(options&&options.capture)}); },
+    removeEventListener(type, fn) { this.listeners = this.listeners.filter(l => l.type !== type || l.fn !== fn); },
+    setAttribute(n, value) { this.attrs[n] = String(value); },
+    removeAttribute(n) { delete this.attrs[n]; },
+    contains(node) { while (node) { if (node === this) return true; node = node.parentNode; } return false; },
+    focus() { doc.activeElement = this; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });
@@ -78,7 +84,7 @@ function makeEl(tag) {
   };
   Object.defineProperty(e, 'innerHTML', {
     get() { return this.html; },
-    set(h) { this.html = h; this.kids = parse(h); }
+    set(h) { this.html = h; this.kids.forEach(c => { c.parentNode = null; }); this.kids = parse(h); this.kids.forEach(c => { c.parentNode = this; }); }
   });
   return e;
 }
@@ -86,7 +92,7 @@ function matcher(sel) {
   const m = /^([a-z0-9]*)(?:#([\w-]+))?(?:\[([\w-]+)\])?$/i.exec(sel);
   if (!m) { throw new Error('the stand-in page cannot read the selector ' + sel); }
   return function (el) {
-    if (m[1] && el.tagName !== m[1].toLowerCase()) { return false; }
+    if (m[1] && el.tagName.toLowerCase() !== m[1].toLowerCase()) { return false; }
     if (m[2] && el.attrs.id !== m[2]) { return false; }
     if (m[3] && !Object.prototype.hasOwnProperty.call(el.attrs, m[3])) { return false; }
     return true;
@@ -103,8 +109,8 @@ function parse(html) {
     while ((a = attr.exec(m[2]))) { el.attrs[a[1]] = a[2] == null ? '' : unesc(a[2]); }
     el.id = el.attrs.id || '';
     el.className = el.attrs['class'] || '';
-    if (el.tagName === 'input') { el.value = el.attrs.value || ''; }
-    if (el.tagName === 'textarea') {
+    if (el.tagName === 'INPUT') { el.value = el.attrs.value || ''; }
+    if (el.tagName === 'TEXTAREA') {
       const shut = html.indexOf('</textarea>', tag.lastIndex);
       el.value = unesc(html.slice(tag.lastIndex, shut));
     }
@@ -280,7 +286,7 @@ yes('the K panel\'s stylesheet was read out of thornswood-skills.js', !!K['#ts-s
 
 // ------------------------------------------------- and it does what it did
 {
-  J.setData({
+  const view = {
     journals: [
       { id: 'b1', title: 'Road notes', pages: [
         { id: 'p1', title: 'Day one', text: 'Left <Riverwood> at dawn.' },
@@ -289,7 +295,8 @@ yes('the K panel\'s stylesheet was read out of thornswood-skills.js', !!K['#ts-s
     ],
     shared: [{ title: 'Maps', from: 'Sera', whole: true, pages: [{ title: 'North', text: 'Snow.' }] }],
     friends: [{ name: 'Sera' }, { name: 'Bjorn' }]
-  });
+  };
+  J.setData(view);
   J.open();
   yes('opening shows the panel and tells the plugin', root.className === 'on' &&
       told.indexOf('thornswood-front journal:opened') >= 0);
@@ -334,7 +341,13 @@ yes('the K panel\'s stylesheet was read out of thornswood-skills.js', !!K['#ts-s
   root.querySelector('#ts-journal-ptitle').value = 'Day one';
   root.querySelector('#ts-journal-text').value = 'one\ntwo';
   press('save');
-  yes('Save sends the page on one line', sent[sent.length - 1] === '/journal page b1 p1 Day one :: one\\ntwo');
+  yes('Save sends the page on one line', sent[sent.length - 1] ===
+      '/journal-write-v1 ' + JSON.stringify(['b1', 'p1', 'Day one', 'one\ntwo']) && sent[sent.length - 1].indexOf('\n') < 0);
+  // Current saves keep the local draft until a matching owner receipt. The
+  // later navigation assertions exercise a saved page, not discard approval.
+  view.journals[0].pages[0].text = 'one\ntwo';
+  view.journalSave = {status:'saved',journalId:'b1',pageId:'p1',title:'Day one',text:'one\ntwo'};
+  J.setData(view);
   root.querySelector('#ts-journal-who').value = 'Bjorn';
   press('sharepage');
   yes('sharing one page names it and the friend', sent[sent.length - 1] === '/journal share b1 p1 Bjorn');

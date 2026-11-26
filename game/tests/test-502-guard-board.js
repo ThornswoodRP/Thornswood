@@ -189,7 +189,9 @@ function drawn(view) {
   }
   const doc = { head: el(), body: el(), createElement: function () { return el(); },
                 getElementById: function () { return null; }, addEventListener: function () { } };
-  const win = { skyrimPlatform: { sendMessage: function () { } } };
+  const windowEvents = {};
+  const win = { skyrimPlatform: { sendMessage: function () { } },
+    addEventListener: function (name, fn) { (windowEvents[name] || (windowEvents[name] = [])).push(fn); } };
   vm.runInNewContext(page, { window: win, document: doc, console: console, isFinite: isFinite, JSON: JSON });
   win.thornswoodBoard.setData({ board: view });
   win.thornswoodBoard.open();

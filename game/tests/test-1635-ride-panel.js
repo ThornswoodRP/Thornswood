@@ -82,6 +82,12 @@ function rig() {
   const views = [];
   const made = {};
   const mp = {
+    getNpcAIState: function (id) {
+      const f = forms[id];
+      if (!f) throw new Error('no actor ' + id);
+      return { profileId: f.pid || -1, isHuman: f.pid > 0, isDead: !!f.isDead, lifeGeneration: 0 };
+    },
+    getActorRuntimeIdentity: function (id) { return String(id); },
     getIdFromDesc: function () { return 0; },
     makeProperty: function (name, opts) { made[name] = opts; },
     get: function (id, key) {
@@ -105,6 +111,7 @@ function rig() {
   const L = ledger(mp);
   const box = { mp: mp, console: { log: function () { } }, Date: { now: function () { return clock; } } };
   box.globalThis = box;
+  box.__thornswoodStaffState = { frozen: {} };
   box.__thornswoodProperty = { takeGold: L.takeGold, deposit: L.deposit, boxFare: L.boxFare };
   vm.runInNewContext(block, box);
   return { forms: forms, views: views, made: made, L: L, C: box.__thornswoodCarriages };
@@ -113,6 +120,7 @@ function rig() {
 const ME = 0x14, PID = 9, DRIVER = 0xff000a10;
 function person(r, at, coins, dx) {
   r.forms[ME] = { cell: at.world, pos: [at.pos[0] + (dx || 0), at.pos[1], at.pos[2]],
+    pid: PID,
     inv: coins ? [{ baseId: GOLD, count: coins }] : [] };
   return r.forms[ME];
 }
@@ -313,10 +321,10 @@ function pageRig() {
   let buttons = [];
   function ridesDrawn() {
     buttons = [];
-    const re = /<button class="go" data-n="(\d+)">Ride<\/button>/g;
+    const re = /<button class="go" data-focus-key="([^"]+)" data-n="(\d+)">Ride<\/button>/g;
     let m;
     while ((m = re.exec(body.innerHTML))) {
-      const n = m[1];
+      const n = m[2];
       buttons.push({ disabled: false, onclick: null, getAttribute: function () { return n; } });
     }
     return buttons;
@@ -366,7 +374,7 @@ function pageRig() {
     P.root().className === 'on');
   yes('the title is the driver, his line and his stop', /^Bjorlam <span class="sub">the carriage from Whiterun<\/span>$/.test(P.h2.innerHTML));
   yes('each stop is a row with its fare and a Ride button', P.rides().length === 2 &&
-    /Solitude<\/span><span class="fare">20 gold<\/span><button class="go" data-n="0">Ride<\/button>/.test(P.body.innerHTML) &&
+    /Solitude<\/span><span class="fare">20 gold<\/span><button class="go" data-focus-key="Solitude" data-n="0">Ride<\/button>/.test(P.body.innerHTML) &&
     /Riverwood<\/span><span class="fare">10 gold<\/span>/.test(P.body.innerHTML));
   yes('and it says where the fare goes and what a short pack means',
     /The fare goes into Whiterun's drop box\. If the gold is not in your pack, you do not move and nothing is taken\./.test(P.body.innerHTML));

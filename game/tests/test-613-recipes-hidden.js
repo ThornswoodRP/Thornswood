@@ -63,7 +63,7 @@ const GATE_PARTS = [
   take('function professionName(prof) {'),
   take('function aWord(name) {'),
   take('function rankWord(rank) {'),
-  take('function onCraftRoll(actorId, roll) {')
+  take('function onCraftRoll(')
 ];
 const HIDE_PARTS = [
   take('function recipesHiddenScript() {'),
@@ -382,9 +382,13 @@ const COOK = person(0xff000205, 0x13746, 'cook', 'hearthcook');
 
 // ------------------------------------------------- D. where it is asked from --
 {
-  const writeState = between('  function writeState(actorId, s, redraw) {', '\n  }\n');
+  const writeState = between('  function writeState(', '\n  }\n') || '';
+  const nativeSave = writeState.indexOf('written = g.__thornswoodCharacterKnowledge.commit(actorId, expected, s);');
+  const propertySave = writeState.indexOf('mp.set(actorId, CHAR_PROPERTY, s); written = true;');
+  const saved = writeState.indexOf('if (written) {', Math.max(nativeSave, propertySave));
+  const publish = writeState.indexOf('handRecipesHidden(actorId)', saved);
   yes('D1: writeState hands the list after the character is written',
-      !!writeState && writeState.indexOf("mp.set(actorId, CHAR_PROPERTY, s)") < writeState.indexOf('handRecipesHidden(actorId)'));
+      nativeSave >= 0 && propertySave >= 0 && saved > Math.max(nativeSave, propertySave) && publish > saved);
   const spawn = between('        if (typeof spellOn === \'function\' && spellOn(actorId, staff[j], true)) { put++; }', '    return n;\n  }\n');
   yes('D2: and so does a spawn, which starts from a game whose records list every recipe',
       !!spawn && /handRecipesHidden\(actorId\)/.test(spawn));

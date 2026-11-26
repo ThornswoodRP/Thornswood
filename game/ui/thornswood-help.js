@@ -330,7 +330,7 @@
       '<p>Say what went wrong and what you were doing. It goes on the board for the ' +
       'developers, with where you are standing and the logs of this game, which are ' +
       'sent when you close it.</p>' +
-      '<textarea id="' + ID + '-ptext" maxlength="' + PROBLEM_MAX + '">' + esc(problemDraft) + '</textarea>' +
+      '<textarea id="' + ID + '-ptext" aria-label="Problem report" maxlength="' + PROBLEM_MAX + '">' + esc(problemDraft) + '</textarea>' +
       '<div class="row"><button class="go" id="' + ID + '-psend">Send</button>' +
       '<span id="' + ID + '-psaid"></span></div>' +
       '</div>';
@@ -360,6 +360,7 @@
     if (shown) { return; }
     shown = true;
     root.className = 'on';
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 

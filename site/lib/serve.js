@@ -301,13 +301,18 @@ async function handle(req, res) {
       : 'That was sent from a page on another site, so it was not done. Do it from a page on this site.' });
   }
 
-  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS and may
-  // use the last answer Discord gave (#1096). A Submit waits that same short
-  // time (#467). Every other request that is signed in, including a staff
+  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS (#1096).
+  // A Submit waits that same short time (#467). Every other signed-in request,
+  // including a staff
   // POST from the hub, waits no longer than Play (#1164).
   const pageLoad = req.method === 'GET';
   const submitDoor = req.method === 'POST' && SUBMIT_DOORS.has(route);
-  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS, pageLoad);
+  // Only the shell and its identity/navigation answer may draw from the
+  // last good role answer. Private data and CAPTCHA eligibility need current
+  // authority; a failed/late refresh must not revive old admin/staff rights.
+  const staleShell = pageLoad && (route === '/hub' || route === '/api/hello');
+  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS,
+                      staleShell);
 
   // ---------------------------------------------------------- member login
   if (p === '/api/login' && req.method === 'POST') {
@@ -750,9 +755,10 @@ async function handle(req, res) {
      time, five an hour from one place, and the inbox is capped so it cannot
      be used to fill the disk. See thornswood report limits above. */
   // What the report page needs to draw the form: the Turnstile site key, or
-  // nothing when the check is off (#3216). Public, like the key itself.
+  // nothing when the check is off or current hub authority already proves
+  // access (#4347). The same proof is checked again when the form submits.
   if (route === '/api/report/form' && req.method === 'GET') {
-    return sendJson(res, 200, { turnstile: turnstileOn() ? cfg.turnstileSiteKey : '' });
+    return sendJson(res, 200, { turnstile: turnstileOn() && !w.member && !w.dev ? cfg.turnstileSiteKey : '' });
   }
 
   if (route === '/api/report' && req.method === 'POST') {
@@ -778,7 +784,9 @@ async function handle(req, res) {
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
-    if (turnstileOn()) {
+    // who() has already proved current member/staff access. The public form
+    // omits its widget for that proof; all other senders still need a pass.
+    if (turnstileOn() && !w.member && !w.dev) {
       const ts = await turnstilePasses(o.turnstile, requestAddr(req));
       if (ts === 'unasked') {
         return sendJson(res, 503, { error: 'Cloudflare did not answer the check that you are a person, so nothing was sent. Try again in a minute.' });
@@ -1560,12 +1568,17 @@ async function handle(req, res) {
     if (!w.admin) return sendJson(res, 403, { error: 'admins only' });
     const file = path.join(UP, rm[1]);
     if (!file.startsWith(UP + path.sep)) return sendJson(res, 400, { error: 'no' });
+    const existed = fs.existsSync(file);
     // A delete that fails is said, not answered ok (#2352, #2354), and the
     // file's note stays so the uploads list still shows what is on disk.
     const gone = deleteUpload(rm[1]);
     if (!gone.ok) return sendJson(res, 500, { ok: false, name: rm[1], fileKept: true, code: gone.code,
                                               error: 'The file could not be deleted (' + gone.code + '). It is still on the site.' });
+    // The file is gone even if the later metadata save is refused.
+    if (existed) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'file' });
     const meta = jsonFile(UPMETA, {});
+    const hadNote = Object.prototype.hasOwnProperty.call(meta, rm[1]);
     delete meta[rm[1]];
     // Said, not answered ok (#4379). Asking again finishes it: a file that is
     // already gone is no failure to deleteUpload.
@@ -1573,6 +1586,8 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: rm[1], fileDeleted: true,
         error: 'The file was deleted, but the site could not take it off the uploads list. Try again in a minute.' });
     }
+    if (!existed && hadNote) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'metadata' });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1775,6 +1790,8 @@ async function handle(req, res) {
 
     const gallery = jsonFile(GALLERY, []);
     const already = gallery.find((g) => String(g.name) === name);
+    const changed = !already || already.url !== '/shot/' + name ||
+      (by && already.by !== by) || (srcset && already.srcset !== srcset);
     if (already) {
       already.url = '/shot/' + name;
       if (by) already.by = by;
@@ -1796,6 +1813,9 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: name, approved: false,
         error: 'The site could not put that on the gallery, so it is still waiting. Try again in a minute.' });
     }
+    // The public entry is committed even if queue cleanup below is refused.
+    if (changed) modLog({ did: 'galleryapprove', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: name, phase: already ? 'updated' : 'approved' });
 
     const left = pending.filter((x) => String(x.name) !== name);
     if (left.length !== pending.length && !putJson(GPENDING, left)) {
@@ -1847,6 +1867,13 @@ async function handle(req, res) {
        that no longer has the name is left alone. The file is not touched
        until all three are saved, so a gallery that would not save is never
        left showing a picture whose file is gone. */
+    let recorded = false;
+    const recordRemoval = (phase) => {
+      if (recorded) return;
+      recorded = true;
+      modLog({ did: 'galleryremove', byId: gs.discordId, byName: gs.name || gs.discordId,
+        whoName: name, phase: phase });
+    };
     const notSaved = (file) => {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'remove-write-failed', file: file }));
       return sendJson(res, 500, { ok: false, name: name,
@@ -1856,18 +1883,20 @@ async function handle(req, res) {
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
+    if (removedGal) recordRemoval('approved');
 
     const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
     if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
+    if (removedPend) recordRemoval('pending');
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
-    const reports = jsonFile(GREPORTS, []);
+    const reports = jsonFile(GREPORTS, fs.existsSync(GREPORTS) ? null : []);
+    if (!Array.isArray(reports)) return notSaved('the reports');
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
-    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
 
     /*
       The file (#2352, option C). Deleted, unless the submission had an open
@@ -1893,33 +1922,51 @@ async function handle(req, res) {
       fileDeleted: false
     };
     const file = path.join(UP, name);
-    if (file.startsWith(UP + path.sep) && fs.existsSync(file)) {
-      const now = Date.now();
-      const hold = itsReports.length > 0;
-      const gone = hold ? { ok: false, code: '' } : deleteUpload(name);
-      const meta = jsonFile(UPMETA, {});
+    const hasFile = file.startsWith(UP + path.sep) && fs.existsSync(file);
+    const now = Date.now();
+    const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
+    const noteNotSaved = () => {
+      retentionSay('gallery', { event: 'note-write-failed', file: name });
+      answer.ok = false;
+      answer.fileKept = !answer.fileDeleted;
+      answer.error = 'Taken off the gallery, but the site could not record that, so ' +
+                     (answer.fileDeleted ? 'its note is still listed.' : 'its file is still on the site. Try again.');
+      return sendJson(res, 500, answer);
+    };
+    if (!savedMeta || typeof savedMeta !== 'object' || Array.isArray(savedMeta)) return noteNotSaved();
+    const meta = new Map(Object.entries(savedMeta));
+    const oldNote = meta.get(name) || {};
+    const wasRemoved = Number(oldNote.removed) > 0;
+    let heldUntil = Number(oldNote.heldUntil) || 0;
+    if (hasFile && itsReports.length && !heldUntil) {
+      heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
+      meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now,
+        heldUntil: heldUntil, heldReports: itsReports.slice(-20) });
+      // The only copy of these reports stays in the open list until their
+      // retention receipt is saved beside the file.
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      recordRemoval('hidden');
+    }
+    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
+    if (kept.length !== reports.length) recordRemoval('reports');
+
+    if (hasFile && heldUntil > now) {
+      answer.heldForReport = true;
+      answer.heldUntil = heldUntil;
+      return sendJson(res, 200, answer);
+    }
+    if (hasFile) {
+      const gone = deleteUpload(name);
       if (gone.ok) {
-        delete meta[name];
+        meta.delete(name);
         answer.fileDeleted = true;
+        recordRemoval('file');
       } else {
-        meta[name] = Object.assign({}, meta[name] || {}, { removed: now });
-        if (hold) {
-          meta[name].heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
-          meta[name].heldReports = itsReports.slice(-20);
-          answer.heldForReport = true;
-          answer.heldUntil = meta[name].heldUntil;
-        }
+        meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now });
       }
-      if (!putJson(UPMETA, meta)) {
-        // Unmarked, a kept file would still be served at /up/<name>.
-        retentionSay('gallery', { event: 'note-write-failed', file: name });
-        answer.ok = false;
-        answer.fileKept = !gone.ok;
-        answer.error = 'Taken off the gallery, but the site could not record that, so ' +
-                       (gone.ok ? 'its note is still listed.' : 'its file can still be opened by staff. Try again.');
-        return sendJson(res, 500, answer);
-      }
-      if (!hold && !gone.ok) {
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      if (!wasRemoved) recordRemoval('hidden');
+      if (!gone.ok) {
         answer.ok = false;
         answer.fileKept = true;
         answer.code = gone.code;
@@ -2005,6 +2052,7 @@ async function handle(req, res) {
     const id = String(o.id || '');
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
+    const dismissed = reports.find((r) => String(r.id) === id);
     const left = reports.filter((r) => String(r.id) !== id);
     // Said, not answered ok (#4379): the report would come back on the next
     // load of the list.
@@ -2012,6 +2060,8 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, id: id, error: 'The site could not save that, so the report is still listed. Try again in a minute.' });
     }
+    if (dismissed) modLog({ did: 'gallerydismiss', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: String(dismissed.name || '') });
     return sendJson(res, 200, { ok: true, id: id, removed: reports.length - left.length });
   }
 
@@ -2044,7 +2094,8 @@ async function handle(req, res) {
       Could not ask Discord is not the same answer as not in the Discord.
 
       standing() leaves inGuild false on every failed lookup and sets
-      lookupFailed to say why, because only a 404 means "not in the server".
+      lookupFailed to say why: only Unknown Member (10007), or proven absence
+      from a complete member list, means "not in the server".
       This door tested inGuild alone, so a rate limit or a Discord outage came
       back as 403 why 'guild', and the launcher writes a 'guild' down as a
       remembered no, which erased the 72 hour grace it keeps for exactly the
@@ -3395,6 +3446,7 @@ async function handle(req, res) {
           message: 'Somebody saved this page after you opened it, so yours was not saved.' });
       }
       if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
+      if (text !== now) modLog({ did: 'docsave', byId: w.id, byName: w.name || w.id, whoName: md[1] });
       return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
@@ -3573,9 +3625,13 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'gone', inbox: list,
           message: 'That one is no longer in the inbox. It was deleted, aged out, or taken out by a deletion request.' });
       }
+      const priorState = list[at].state;
       if (act === 'delete') list.splice(at, 1);
       else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
       if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
+      if (act === 'delete' || priorState !== list[at].state) {
+        modLog({ did: 'inbox' + act, byId: w.id, byName: w.name || w.id, whoName: id });
+      }
       return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }
 

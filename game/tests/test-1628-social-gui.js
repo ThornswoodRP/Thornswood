@@ -157,7 +157,7 @@ function world() {
     return new Function(
       'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
-      'JSON', 'isFinite', 'parseInt',
+      'JSON', 'isFinite', 'parseInt', 'require',
       require('../../tests/fixtures/ordinary-quest-items') + block)(
       g, mp, { now: function () { return clock.now; } },
       { log: function () { } },
@@ -165,7 +165,7 @@ function world() {
       function (n, f) { return f; },
       function (id, line) { said.push({ to: id, line: line }); },
       function (id, line) { said.push({ to: id, line: line }); },
-      Math, Number, String, Object, Array, JSON, isFinite, parseInt);
+      Math, Number, String, Object, Array, JSON, isFinite, parseInt, require);
   }
   run(social);
   run(trade);
@@ -330,12 +330,20 @@ if (social && trade && commands) {
   const cache = {};
   function element(tag) {
     const el = {
-      tagName: tag, id: '', className: '', children: [], textContent: '', innerHTML: '',
+      tagName: tag, id: '', className: '', children: [], textContent: '', parentNode: null,
       style: { cssText: '', display: '' },
-      appendChild: function (c) { el.children.push(c); return c; },
+      appendChild: function (c) { el.children.push(c); c.parentNode = el; return c; },
+      contains: function (target) {
+        for (var at = target; at; at = at.parentNode) { if (at === el) return true; }
+        return false;
+      },
       addEventListener: function () { }, removeEventListener: function () { },
       setAttribute: function () { },
-      querySelector: function (sel) { return cache[sel] || (cache[sel] = element('div')); },
+      querySelector: function (sel) {
+        const found = cache[sel] || (cache[sel] = element('div'));
+        found.parentNode = el;
+        return found;
+      },
       querySelectorAll: function (sel) {
         if (sel !== 'button[data-do]') { return []; }
         // The same objects until the html changes, so a press finds the
@@ -348,17 +356,32 @@ if (social && trade && commands) {
           const attrs = {};
           m[1].replace(/([a-z-]+)="([^"]*)"/g, function (all, k, v) { attrs[k] = v; return all; });
           if (!attrs['data-do']) { continue; }
-          out.push({ label: m[2], attrs: attrs, getAttribute: function (k) { return this.attrs[k] || null; } });
+          out.push({ label: m[2], attrs: attrs, parentNode: el, getAttribute: function (k) { return this.attrs[k] || null; } });
         }
         el.found = { html: el.innerHTML, list: out };
         return out;
       },
       classList: { add: function () { }, remove: function () { }, toggle: function () { } }
     };
+    Object.defineProperty(el, 'innerHTML', {
+      get: function () { return el.html || ''; },
+      set: function (html) {
+        if (el.found) el.found.list.forEach(function (button) { button.parentNode = null; });
+        el.found = null;
+        el.html = String(html);
+      }
+    });
     return el;
   }
+  const containment = element('div'), current = element('button'), outside = element('button');
+  containment.appendChild(current);
+  const contained = containment.contains(current);
+  current.parentNode = null;
+  yes('P fixture contains only current descendants, excluding detached and outside controls',
+      contained && !containment.contains(current) && !containment.contains(outside));
   const sent = [];
   const window = {
+    listeners: {}, addEventListener: function (type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     thornswoodNet: { say: function (line) { sent.push(line); return true; } },
     skyrimPlatform: { sendMessage: function () { } }
   };

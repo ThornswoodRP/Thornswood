@@ -92,7 +92,8 @@ assert.deepEqual(f.calls,[1,2]);
 
 f=fixture();s=f.make();
 let guarded=false;
-assert.equal(s.withInventoryMutation(10,(human,alive)=>{
+assert.equal(s.withInventoryMutation(10,function(human,alive){
+  assert.equal(arguments.length,2,'the existing single-participant callback keeps its two arguments');
   guarded=true;assert.equal(human.profileId,7);assert.equal(alive(),true);
   assert.equal(s.begin(f.offer()).accepted,false,'a quest mutation owns the synchronous admission lease');
   s.shutdown();assert.equal(alive(),false,'reload revokes the held lease');
@@ -102,6 +103,54 @@ assert.equal(guarded,true);assert.deepEqual(f.calls,[]);
 f=fixture();s=f.make();s.begin(f.offer());guarded=false;
 assert.equal(s.withInventoryMutation(10,()=>{guarded=true;}).ok,false);
 assert.equal(guarded,false,'an unresolved merchant reservation prevents quest inventory work');
+
+// A holder's merchant ledger can reserve the next receipt while the live
+// and saved receipts still agree, in either phase of its transfer.
+for (const phase of ['debit', 'credit', 'clear']) {
+  const pair = fixture();
+  const cas = pair.transfer.cas;
+  const paired = pair.make();
+  if (phase === 'credit') {
+    pair.transfer.cas = (id, expected, receipt, next, sequence, profile) =>
+      sequence === 2 ? false : cas(id, expected, receipt, next, sequence, profile);
+    paired.begin(pair.offer()); pair.save(); paired.tick();
+  } else if (phase === 'debit') {
+    const saved = pair.purses.compareAndCommit;
+    pair.purses.compareAndCommit = (...args) => {
+      const result = saved(...args);
+      paired.shutdown();
+      return result;
+    };
+    paired.begin(pair.offer());
+    pair.purses.compareAndCommit = saved;
+  }
+  const service = phase === 'debit' ? pair.make() : paired;
+  const identify = pair.transfer.identity;
+  pair.transfer.identity = id => id === 20 ? {desc:'14',profileId:8} : identify(id);
+  assert.equal(pair.transfer.receipt(10),pair.transfer.saved(10));
+  assert.equal(pair.states.get(1).pending?.phase || 'clear', phase);
+  const before = copy(pair.states.get(1));
+  let entered = false, lease;
+  const result = service.withPairedInventoryMutation(20,10,(human,alive,recipient)=>{
+    entered=true; lease=alive;
+    assert.deepEqual(human,{desc:'14',profileId:8});
+    assert.deepEqual(recipient,{desc:'10',profileId:7});
+    assert.equal(service.canInventoryMutation(10),false,'the paired callback owns the serialized lease');
+    return {ok:true};
+  });
+  assert.equal(result.ok,phase==='clear');
+  assert.equal(entered,phase==='clear',phase+' recipient admission');
+  if (phase !== 'clear') {
+    assert.equal(service.withPairedInventoryMutation(10,20,()=>assert.fail('reserved supplier admitted')).ok,false);
+  }
+  if (lease) assert.equal(lease(),false,'paired lease expires on return');
+  assert.deepEqual(pair.states.get(1),before,'admission alone leaves the merchant intent unchanged');
+  for (const invalid of [undefined, null, 0, 20, 30]) {
+    assert.equal(service.withPairedInventoryMutation(20,invalid,()=>assert.fail('invalid recipient admitted')).ok,false);
+  }
+  pair.transfer.identity = () => ({desc:'14',profileId:8});
+  assert.equal(service.withPairedInventoryMutation(20,10,()=>assert.fail('duplicate identity admitted')).ok,false);
+}
 f=fixture();s=f.make();let heldLease;
 assert.equal(s.withInventoryMutation(10,(human,alive)=>{heldLease=alive;return {ok:true};}).ok,true);
 assert.equal(heldLease(),false,'a returned synchronous lease has expired');

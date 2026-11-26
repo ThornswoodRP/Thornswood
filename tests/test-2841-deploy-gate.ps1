@@ -99,6 +99,9 @@ Yes 'an enum value outside its list is refused' ((Words 'Deploy-DevGamemode -Npc
 # nothing else, never the folder it reads.
 Yes 'Read-LauncherStarts takes -Days, a number, and nothing else' ((Words 'Read-LauncherStarts -Days 7') -eq '-Days|7' -and (Words 'Read-LauncherStarts') -eq '' -and
     (Words 'Read-LauncherStarts -Days week') -eq 'REFUSED' -and (Words 'Read-LauncherStarts -Folder x') -eq 'REFUSED')
+# Where the cursor came up (#6200): the same, a number of days and nothing else.
+Yes 'Read-CursorLines takes -Days, a number, and nothing else' ((Words 'Read-CursorLines -Days 7') -eq '-Days|7' -and (Words 'Read-CursorLines') -eq '' -and
+    (Words 'Read-CursorLines -Days week') -eq 'REFUSED' -and (Words 'Read-CursorLines -Folder x') -eq 'REFUSED')
 # The box's read only checks, which only One could run before (the cloud
 # reaches neither game port nor the box's shell): each takes nothing a caller
 # could steer, and Check-ProdParity sends its facts and report back.
@@ -127,8 +130,12 @@ Yes 'Rehearse-Restore takes -Which and a profile id in digits, never another bac
     (Words 'Rehearse-Restore -ProfileId 1 -Root x') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Rehearse-Restore -ProfileId 1' -Verbs $verbs).Out -eq '-Out')
 Yes 'Set-InboundRules takes -Check and -Own, never another box, user, record or known_hosts' ((Words 'Set-InboundRules -Own -Check') -eq '-NoPause|-Own|-Check' -and
     (Words 'Set-InboundRules -Vps x') -eq 'REFUSED' -and (Words 'Set-InboundRules -Record x') -eq 'REFUSED' -and (Words 'Set-InboundRules -KnownHosts x') -eq 'REFUSED')
-Yes 'Setup-Discord runs on the box and only audits or checks: -Prune, -Posts, -Give and another guild wait for Patrick' ((Words 'Setup-Discord -Audit') -eq '-OnBox|-Audit' -and
-    (Words 'Setup-Discord -Prune') -eq 'REFUSED' -and (Words 'Setup-Discord -Posts') -eq 'REFUSED' -and (Words 'Setup-Discord -Give x') -eq 'REFUSED' -and (Words 'Setup-Discord -Guild 1') -eq 'REFUSED')
+# -Posts rewrites the read only posts from content.py (Patrick, 26 Nov 2026,
+# page card q-6874-discord-posts-gate, A: the posts follow the repository
+# without a hand step, #6874).
+Yes 'Setup-Discord runs on the box and builds, audits, checks or rewrites the posts: -Prune, -Give and another guild wait for Patrick' ((Words 'Setup-Discord -Audit') -eq '-OnBox|-Audit' -and
+    (Words 'Setup-Discord -Posts') -eq '-OnBox|-Posts' -and
+    (Words 'Setup-Discord -Prune') -eq 'REFUSED' -and (Words 'Setup-Discord -Give x') -eq 'REFUSED' -and (Words 'Setup-Discord -Guild 1') -eq 'REFUSED')
 # The last box scripts a person ran from One with its ssh key (#2862, 1 Nov):
 # the nightly backup's install (#5168 waited on it), a deletion request, and
 # four reads. None takes a host, user, folder, task or passphrase file.

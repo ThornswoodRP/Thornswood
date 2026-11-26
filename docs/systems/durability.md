@@ -5,6 +5,9 @@ not the grindstone and it is not the armour table.
 
 Three kits. Smiths and tailors make them.
 
+The repair panel keeps an enchanted piece's exact name, including repeated
+spaces or spaces at either end, when choosing the piece to mend.
+
 | Kit | Who makes it | What it repairs |
 | --- | --- | --- |
 | Weapon Kit | Edgewright | Weapons |
@@ -41,10 +44,10 @@ tanning rack burns nothing.
 | Armor Kit | 1 Poor Charcoal |
 | Sewing Kit | Nothing |
 
-The Sewing Kit was first offered as linen wrap and leather strips.
-No class supplies linen wrap, so tundra cotton, a gatherer's, takes
-its place. The tanning rack, because the loom comes from a mod and
-these recipes use only Skyrim's own records.
+The Sewing Kit recipe was settled when linen wrap had no maker, so it uses
+the gatherer's tundra cotton directly. The Haberdasher can now also make
+linen wrap from cotton at the loom. The kit uses the tanning rack and
+Skyrim's own records.
 
 ## Using a kit
 
@@ -124,6 +127,10 @@ The 120% repair is that idea now: a smith at Master in the right half
 can put a piece past a plain repair, and below Master mends to 100%
 like anybody else (#3442). The perk is not a second system on top of
 the kit.
+
+## Testing repair
+
+`/repairgear` restores carried equipment below 100% for a playtester on Dev or Main. Admins can add `for <person>` to repair another character's equipment. The testing command leaves stronger pieces at their existing condition and retains each item's other saved details. It uses one authoritative inventory and equipment update so the worn names match the pack. It is unavailable on a server without that native operation. [Staff commands](../guide/staff-commands.md#repair-equipment-for-testing) has the permissions and refusal behavior.
 
 ## Where this is
 

@@ -328,7 +328,7 @@ function send(p, text) {
       /mine && mine\.property/.test(reader) && !/DATA/.test(reader));
   yes('E2 and nothing in the page reads them out of its own table',
       !/DATA\s*(?:&&\s*DATA)?\.property\b/.test(strip(ui)));
-  const writer = between(gm, '  function writeState(actorId, s, redraw) {', '\n  }\n') || '';
+  const writer = between(gm, '  function writeState(', '\n  }\n') || '';
   yes('E3 writeState is where the server puts them, on the view', /view\.property = held;/.test(writer));
 }
 

@@ -7,20 +7,26 @@
   var USAGE = 'Use /rankup class [for <person>] or /rankup profession [school] [for <person>].';
 
   function command(cmd, word, parts, pid, actorId) {
-    if (word !== '/rankup') { return false; }
+    var settingClass = word === '/setclass';
+    var settingProfession = word === '/setprofession';
+    if (word !== '/rankup' && !settingClass && !settingProfession) { return false; }
+    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : settingProfession ?
+      'Use /setprofession <profession> <half or school,school> [spells <names>] [staffspells <names>] [for <person>].' : USAGE;
     var staff = g.__thornswoodStaff;
     if (!staff) { return true; }
     function refuse(why) { staff.tell(pid, why); return true; }
     var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
     if (!P || !C) { return refuse('The progression tools are not running.'); }
     var args = parts.slice(1);
-    var kind = String(args.shift() || '').toLowerCase();
-    if (kind !== 'class' && kind !== 'profession') { return refuse(USAGE); }
+    var kind = settingClass ? 'class' : settingProfession ? 'profession' : String(args.shift() || '').toLowerCase();
+    if (kind !== 'class' && kind !== 'profession') { return refuse(usage); }
     var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
     var targetWords = at < 0 ? [] : args.slice(at + 1);
     var choice = at < 0 ? args : args.slice(0, at);
-    if ((at >= 0 && !targetWords.length) || choice.length > (kind === 'class' ? 0 : 1)) {
-      return refuse(USAGE);
+    if ((at >= 0 && !targetWords.length) ||
+        (!settingProfession && choice.length > (settingClass || kind === 'profession' ? 1 : 0)) ||
+        (settingClass && choice.length !== 1) || (settingProfession && choice.length < 2)) {
+      return refuse(usage);
     }
     var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
     if (targetWords.length && !(targetWords.length === 1 && targetWords[0].toLowerCase() === 'me')) {
@@ -33,6 +39,58 @@
     if (denied) { return refuse(denied); }
     if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
     var s = C.stateOf(target.actorId), key;
+    if (settingProfession) {
+      var prof = String(choice[0]).toLowerCase();
+      var half = prof === 'mage' ? String(choice[1]).toLowerCase().split(',') : C.mapHalf(choice[1]);
+      var replacement = P.setProfessionForTesting(s, prof, half);
+      if (!replacement.ok) { return refuse(replacement.why); }
+      var selections = replacement.state.spellSelections || {};
+      var seen = {};
+      for (var n = 2; n < choice.length;) {
+        var label = String(choice[n++]).toLowerCase();
+        if ((label !== 'spells' && label !== 'staffspells') || seen[label]) { return refuse(usage); }
+        seen[label] = true;
+        var start = n;
+        while (n < choice.length && ['spells', 'staffspells'].indexOf(String(choice[n]).toLowerCase()) < 0) { n++; }
+        var text = choice.slice(start, n).join(' ');
+        if (!text) { return refuse(usage); }
+        var names = text.toLowerCase() === 'none' ? [] : text.split(',').map(function (x) { return x.trim(); });
+        var picked = [];
+        for (var j = 0; j < names.length; j++) {
+          var spell = label === 'spells' ? P.spellAt(names[j]) : g.__thornswoodStaffSpells.find(names[j]);
+          if (!spell) { return refuse('No known spell is named ' + names[j] + '.'); }
+          picked.push(label === 'spells' ? spell.name : spell.desc);
+        }
+        selections[label === 'spells' ? 'spells' : 'staffSpells'] = picked;
+      }
+      replacement.state.spellSelections = selections;
+      var prepared = g.__thornswoodCharacterKnowledge.prepare(replacement.state);
+      if (!prepared.ok) {
+        return refuse(prepared.why + (prepared.choices ? ': ' + prepared.choices.join(', ') + '.' : '.'));
+      }
+      try { C.writeState(target.actorId, prepared.state, true); }
+      catch (e) { return refuse('The profession change could not be saved.'); }
+      if (!C.writeSucceeded(target.actorId)) { return refuse('The profession change could not be saved.'); }
+      var name = P.TABLE.professions[prof].name;
+      staff.tell(target.pid, 'Your profession is now ' + name + ' at Novice. Your learned knowledge is kept; only eligible spells are active.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s profession to ' + name + '.'); }
+      staff.record('setprofession', pid, staff.nameOf(actorId), target.pid, target.name, name, 0,
+        { from: s.prof || null, to: prof, half: prepared.state.half, schools: prepared.state.schools });
+      return true;
+    }
+    if (settingClass) {
+      var cls = String(choice[0]).toLowerCase();
+      var changed = P.setClassForTesting(s, cls);
+      if (!changed.ok) { return refuse(changed.why); }
+      try { C.writeState(target.actorId, changed.state, true); }
+      catch (e) { return refuse('The class change could not be saved.'); }
+      if (C.stateOf(target.actorId).cls !== cls) { return refuse('The class change could not be saved.'); }
+      staff.tell(target.pid, 'Your class is now ' + C.nameOf(cls) + ' at Novice.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s class to ' + C.nameOf(cls) + '.'); }
+      staff.record('setclass', pid, staff.nameOf(actorId), target.pid, target.name, cls, 0,
+        { from: s.cls || null, to: cls });
+      return true;
+    }
     if (kind === 'class') {
       key = s.cls;
       if (!P.has(P.TABLE.classes, key)) { return refuse('Choose a class before advancing its rank.'); }
@@ -89,7 +147,14 @@
     tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
       syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
       { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
-        text: 'Advance another character\'s current class or profession by one rank.' }] });
+        text: 'Advance another character\'s current class or profession by one rank.' },
+      { word: '/setclass', role: 'playtester', syntax: '/setclass <class>', text: 'Change your gathering class at Novice.' },
+      { word: '/setclass', role: 'admin', syntax: '/setclass <class> for <person>',
+        text: 'Change another character\'s gathering class at Novice.' },
+      { word: '/setprofession', role: 'playtester', syntax: '/setprofession <profession> <half or school,school>',
+        text: 'Change your profession at Novice, keeping knowledge with only eligible spells active.' },
+      { word: '/setprofession', role: 'admin', syntax: '/setprofession <profession> <half or school,school> for <person>',
+        text: 'Change another character\'s profession at Novice, keeping their knowledge.' }] });
   }
 })();
 // ==== end thornswood staff progression ====

@@ -12,10 +12,10 @@
   window.thornswoodNet.say. There is no second protocol. The labels are
   words. The lines are how the panel talks to the server, and nobody is told
   to type one (Patrick, 4 Oct: no chat commands for anything people do).
-  Make a post sends /notice and /job (#2554); Take, Take down, Put it back
-  and Pay the reward send /take, /unpin, /dropjob and /job done (#1627,
+  Make a post sends /board-post-v1 (#4771); Take, Take down, Put it back
+  and Pay the reward send /take, /board-unpin-v1, /dropjob and /job done (#1627,
   #2554); Send a haul and Confirm send /haul (#1393); Write a letter sends
-  /letter (#1595).
+  /letter-post-v1 (#4412).
 
   setData never opens the panel. E on the board does: the server answers it
   (#2516) on thornswoodBoardOpen, which calls open(). A later setData redraws
@@ -37,6 +37,8 @@
   var data = null;
   var shown = false;
   var root = null;
+  var takedownArm = null, takedownTimer = 0, takedownHeld = '';
+  var boardFieldError = null;
 
   /*
     WHAT MAKE A POST KEEPS. The draft is kept here as it is typed, so a
@@ -91,19 +93,6 @@
   }
 
   /*
-    THE LINE IS ONE LINE (#2554), as the journal's pages are: the server
-    splits the title from the body at the first ::, so a newline in the body
-    goes over as a backslash and n, a backslash as two, and a colon in the
-    title as a backslash and a colon. postWords in the gamemode puts them back.
-  */
-  function slashBody(s) {
-    return String(s).replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n');
-  }
-  function slashTitle(s) {
-    return String(s).replace(/\\/g, '\\\\').replace(/:/g, '\\:');
-  }
-
-  /*
     THE LOOK IS THE PARTY PANEL'S, which is the K panel's. Every colour
     below is one that panel already uses. No :hover and no transitions.
   */
@@ -140,6 +129,8 @@
     '#' + ID + ' button{font-family:inherit;font-style:normal;font-weight:normal;cursor:pointer;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
+    '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
+    '#' + ID + ' .action-status{flex:1;min-width:0;overflow-wrap:anywhere;color:#e9d19b}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
@@ -170,9 +161,30 @@
     // the posts above it scroll (#2554).
     root.innerHTML =
       '<div class="panel"><h2>Notice board</h2><div class="body"></div>' +
-      '<div class="foot"><button class="go make" data-do="compose">Make a post</button>' +
+      '<div class="foot"><span class="action-status" id="' + ID + '-action-status" role="status" aria-live="polite"></span>' +
+      '<button class="go make" data-do="compose">Make a post</button>' +
       '<button class="shut" data-do="close">Close</button></div></div>';
     document.body.appendChild(root);
+    root.addEventListener('input', resetTakedown);
+    function editBoardField(ev) { if (boardFieldError && (!boardFieldError.field || ev.target === boardFieldError.field)) clearBoardFieldError(); }
+    root.addEventListener('input', editBoardField);
+    root.addEventListener('change', editBoardField);
+    root.addEventListener('click', function (ev) {
+      if (takedownArm && ev.target !== takedownArm.button) resetTakedown();
+    }, true);
+    root.addEventListener('keydown', function (ev) {
+      if (!shown || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      if (takedownHeld) { ev.preventDefault(); ev.stopPropagation(); return; }
+      var b = ev.target;
+      if (!b || b.tagName !== 'BUTTON' || b.getAttribute('data-do') !== 'unpin') return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.repeat) return;
+      takedownHeld = ev.key; b.click();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (ev.key === takedownHeld) { takedownHeld = ''; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', function () { takedownHeld = ''; resetTakedown(); });
     root.addEventListener('click', function (e) {
       if (e.target === root) { close(); }
     });
@@ -181,6 +193,61 @@
   function field(id) {
     var el = document.getElementById(id);
     return el ? String(el.value || '').trim() : '';
+  }
+
+  // Own the exact note, description token and native error installed here.
+  // Replaced notes, newer messages and other validation owners survive cleanup.
+  function clearBoardFieldError() {
+    var error = boardFieldError;
+    if (!error) return;
+    boardFieldError = null;
+    var field = error.field;
+    if (field) {
+      var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
+      var newerError = field.validity.customError && !ownsValidity;
+      if (ownsValidity) field.setCustomValidity(error.custom);
+      if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
+        if (error.invalid == null) field.removeAttribute('aria-invalid');
+        else field.setAttribute('aria-invalid', error.invalid);
+      }
+      var currentNote = root.querySelector('#' + error.token);
+      if (error.added && (!currentNote || (currentNote === error.note && error.note.textContent === error.reason))) {
+        var now = field.getAttribute('aria-describedby');
+        var remaining = now === error.installed ? error.described :
+          String(now || '').split(/\s+/).filter(function (id) { return id && id !== error.token; }).join(' ');
+        if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
+        else field.setAttribute('aria-describedby', remaining);
+      }
+    }
+    if (error.note.textContent === error.reason) {
+      error.note.textContent = ''; error.note.style.display = 'none';
+    }
+  }
+
+  function showBoardReason(noteId, reason) {
+    var note = root.querySelector('#' + ID + '-' + noteId);
+    if (!note || !root.contains(note)) return null;
+    boardFieldError = {field:null,reason:reason,note:note,token:note.id};
+    note.textContent = reason; note.style.display = 'block';
+    return boardFieldError;
+  }
+
+  function needBoardField(id, value, reason, noteId) {
+    var field = root.querySelector('#' + ID + '-' + id);
+    if (!field || !root.contains(field)) return false;
+    if (value) return true;
+    var error = showBoardReason(noteId, reason);
+    if (!error) return false;
+    var described = field.getAttribute('aria-describedby');
+    var added = String(described || '').split(/\s+/).indexOf(error.token) < 0;
+    var installed = added ? (described ? described + ' ' : '') + error.token : described;
+    error.field = field; error.custom = field.validity.customError ? field.validationMessage : '';
+    error.invalid = field.getAttribute('aria-invalid'); error.described = described;
+    error.added = added; error.installed = installed;
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', installed);
+    field.setCustomValidity(reason); field.focus(); field.reportValidity();
+    return false;
   }
 
   /* The newest number on the wall: what a post sent now will be above. */
@@ -193,10 +260,16 @@
 
   function isUp(b) {
     if (!pending) { return false; }
+    if (pending.hold !== b.hold || draft.title !== pending.title || draft.body !== pending.body ||
+        draft.kind !== pending.kind || (pending.kind === 'job' && Number(draft.reward) !== pending.reward)) return false;
     var wall = (b && b.wall) || [];
     for (var i = 0; i < wall.length; i++) {
       var r = wall[i];
-      if (r.mine && !r.letter && !r.haul && r.title === pending.title && Number(r.n) > pending.top) { return true; }
+      // Match the complete published text, not merely a newer same-title row.
+      // An older accepted post must not erase what is being written now.
+      if (r.mine && !r.letter && !r.haul && r.title === pending.title && r.text === pending.body &&
+          !!r.job === (pending.kind === 'job') && (!r.job || Number(r.reward) === pending.reward) &&
+          Number(r.n) > pending.top) { return true; }
     }
     return false;
   }
@@ -205,6 +278,13 @@
   function plain(row) { return !row.letter && !row.haul; }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
+    resetTakedown();
+    clearBoardFieldError();
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -325,14 +405,15 @@
     }
     /*
       A LETTER (#1595, docs/systems/noticeboards.md): who it is for and the
-      words, up to 300 characters, which was /letter. The name goes over in
-      double quotes so a name of several words stays one name. The name is
+      words, up to 300 characters. The name and words use separate URI tokens;
+      quotes and spaces remain part of the same recipient name. The name is
       held to 60, the same as a post's title.
     */
     out += '<h3>Write a letter</h3>';
-    out += '<div class="line"><input id="' + ID + '-to" maxlength="60" placeholder="who it is for"></div>';
-    out += '<div class="line"><input id="' + ID + '-letter" maxlength="300" placeholder="the letter">' +
+    out += '<div class="line"><input id="' + ID + '-to" aria-label="Letter recipient" maxlength="60" placeholder="who it is for"></div>';
+    out += '<div class="line"><input id="' + ID + '-letter" aria-label="Letter text" maxlength="300" placeholder="the letter">' +
       '<button class="go" data-do="letter">Post the letter</button></div>';
+    out += '<div class="said" id="' + ID + '-letter-reason" role="status" aria-live="polite" style="display:none"></div>';
     out += '<div class="note">35 gold: 20 for the board, and 15 held for whoever carries it, paid to them ' +
       'when they hand it over. Up to 300 characters. Only the person it is for reads it. ' +
       'Taken down before then, the 15 comes back to you.</div>';
@@ -344,14 +425,15 @@
     var dests = b.dests || [];
     if (dests.length) {
       out += '<h3>Send a haul</h3>';
-      out += '<div class="line"><input class="pay" id="' + ID + '-pay" placeholder="pay">' +
+      out += '<div class="line"><input class="pay" id="' + ID + '-pay" aria-label="Haul pay in gold" placeholder="pay">' +
         '<select id="' + ID + '-dest">';
       for (var d = 0; d < dests.length; d++) {
         out += '<option value="' + esc(dests[d].hold) + '">' + esc(dests[d].where) + '</option>';
       }
       out += '</select></div>';
-      out += '<div class="line"><input id="' + ID + '-haul" placeholder="what it carries">' +
+      out += '<div class="line"><input id="' + ID + '-haul" aria-label="Haul cargo" placeholder="what it carries">' +
         '<button class="go" data-do="haul">Send a haul</button></div>';
+      out += '<div class="said" id="' + ID + '-haul-reason" role="status" aria-live="polite" style="display:none"></div>';
       out += '<div class="note">30 gold for the board, and the pay, both held with this hold. ' +
         'At the town it goes to, you or a steward confirm it on that board, and the hauler is paid. ' +
         'The company keeps a tenth of the pay, and nothing under 10. Handed back or taken down ' +
@@ -417,11 +499,11 @@
       '<h3>Make a post</h3>' +
       '<div class="line"><button data-do="kind" data-kind="notice" id="' + ID + '-k-notice">Notice</button>' +
       '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button></div>' +
-      '<div class="line"><input id="' + ID + '-title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
-      '<div class="line"><textarea id="' + ID + '-text" maxlength="' + BODY_CHARS +
+      '<div class="line"><input id="' + ID + '-title" aria-label="Post title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
+      '<div class="line"><textarea id="' + ID + '-text" aria-label="Post text" maxlength="' + BODY_CHARS +
       '" placeholder="what it says"></textarea></div>' +
       '<div class="line" id="' + ID + '-rewardline"><input class="pay" id="' + ID +
-      '-reward" placeholder="reward"><span class="note">gold, for whoever does the job</span></div>' +
+      '-reward" aria-label="Job reward in gold" placeholder="reward"><span class="note">gold, for whoever does the job</span></div>' +
       '<div class="note">The title is up to ' + TITLE_CHARS + ' characters and what it says up to ' +
       BODY_CHARS + '.</div>' +
       '<div class="note" id="' + ID + '-cost"></div>' +
@@ -470,24 +552,23 @@
   function send() {
     var b = data && data.board;
     if (!b || !b.here) { return; }
-    var title = draft.title.replace(/\s+/g, ' ').trim();
-    var text = draft.body.trim();
-    if (!title) { say('Give it a title.'); return; }
+    var title = draft.title;
+    var text = draft.body;
+    if (!title.trim()) { say('Give it a title.'); return; }
     if (title.length > TITLE_CHARS) { say('A title is up to ' + TITLE_CHARS + ' characters.'); return; }
-    if (!text) { say('Write what it says.'); return; }
+    if (!text.trim()) { say('Write what it says.'); return; }
     if (text.length > BODY_CHARS) { say('What it says is up to ' + BODY_CHARS + ' characters.'); return; }
-    var line;
+    var rewardValue = 0;
     if (draft.kind === 'job') {
       var reward = draft.reward.trim();
       if (!/^\d+$/.test(reward) || !(Number(reward) > 0)) {
         say('A job\'s reward is a whole number of gold, above nothing.');
         return;
       }
-      line = '/job ' + Number(reward) + ' ' + slashTitle(title) + ' :: ' + slashBody(text);
-    } else {
-      line = '/notice ' + slashTitle(title) + ' :: ' + slashBody(text);
+      rewardValue = Number(reward);
     }
-    pending = { title: title, top: topN(b) };
+    var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text, b.hold]);
+    pending = {hold:b.hold,title:title,body:text,kind:draft.kind,reward:rewardValue,top:topN(b)};
     say('Putting it up. If it cannot go up, the chat says why.');
     net(line);
   }
@@ -510,16 +591,28 @@
       return;
     }
     if (verb === 'letter') {
-      var to = field(ID + '-to').replace(/"/g, '').replace(/\s+/g, ' ').trim();
-      var words = field(ID + '-letter');
-      if (to && words) { net('/letter "' + to + '" ' + words); }
+      if (!shown || !root.contains(this)) return;
+      clearBoardFieldError();
+      var to = document.getElementById(ID + '-to').value;
+      var words = document.getElementById(ID + '-letter').value;
+      if (!needBoardField('to', to.trim(), 'Say who the letter is for.', 'letter-reason') ||
+          !needBoardField('letter', words.trim(), 'Write what the letter says.', 'letter-reason')) return;
+      var letterLine;
+      try { letterLine = '/letter-post-v1 ' + encodeURIComponent(to) + ' ' + encodeURIComponent(words); }
+      catch (eLetter) { showBoardReason('letter-reason', 'That letter contains invalid text. Nothing was sent; keep your draft.'); return; }
+      net(letterLine);
       return;
     }
     if (verb === 'haul') {
+      if (!shown || !root.contains(this)) return;
+      clearBoardFieldError();
       var pay = field(ID + '-pay').replace(/[^0-9]/g, '');
       var dest = field(ID + '-dest');
       var what = field(ID + '-haul');
-      if (pay && dest && what) { net('/haul ' + pay + ' ' + dest + ' ' + what); }
+      if (!needBoardField('pay', pay, 'Enter the haul pay in gold.', 'haul-reason') ||
+          !needBoardField('dest', dest, 'Choose the haul destination.', 'haul-reason') ||
+          !needBoardField('haul', what, 'Say what the haul carries.', 'haul-reason')) return;
+      net('/haul ' + pay + ' ' + dest + ' ' + what);
       return;
     }
     if (verb === 'done' && n) {
@@ -529,7 +622,7 @@
     }
     if (verb === 'take' && n) { net('/take ' + n); return; }
     if (verb === 'paid' && n) { net('/job done ' + n); return; }
-    if (verb === 'unpin' && n) { net('/unpin ' + n); return; }
+    if (verb === 'unpin' && n) { confirmTakedown(this, n); return; }
     if (verb === 'drop' && n) { net('/dropjob ' + n); return; }
     if (verb === 'submit') {
       var id = this.getAttribute('data-id');
@@ -544,11 +637,64 @@
     root.className = 'on';
     formDrawn = false;
     draw();
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
+  }
+
+  function resetTakedown() {
+    if (takedownArm) {
+      takedownArm.button.textContent = takedownArm.text;
+      takedownArm.button.removeAttribute('data-confirm');
+    }
+    takedownArm = null;
+    if (takedownTimer) clearTimeout(takedownTimer);
+    takedownTimer = 0;
+  }
+
+  function actionStatus(text) {
+    var el = root.querySelector('#' + ID + '-action-status');
+    if (el) el.textContent = text;
+  }
+
+  function takedownTarget(n) {
+    var b = data && data.board;
+    if (!data || !Number.isSafeInteger(data.me) || data.me <= 0 || !b || !b.here || typeof b.hold !== 'string') return null;
+    var wall = b.wall || [];
+    for (var i = 0; i < wall.length; i++) {
+      var row = wall[i];
+      if (String(row.n) !== n) continue;
+      if (!Number.isSafeInteger(row.n) || row.n <= 0 || !Number.isSafeInteger(row.at) || row.at < 0 ||
+          !((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard)) return null;
+      return { me: data.me, hold: b.hold, here: b.here, guard: !!b.guard, steward: !!b.steward, row: row,
+        line: '/board-unpin-v1 ' + JSON.stringify([b.hold, row.n, row.at]),
+        words: (row.letter ? 'letter #' + row.n : row.haul ? 'haul #' + row.n : '"' + row.title + '"') + ' from ' + (b.where || b.hold) };
+    }
+    return null;
+  }
+
+  function confirmTakedown(button, n) {
+    if (!shown || !root.contains(button)) return;
+    var target = takedownTarget(n);
+    if (!target) { resetTakedown(); actionStatus('That post is unavailable. Review the current board.'); return; }
+    var snapshot = JSON.stringify(target);
+    var again = takedownArm && takedownArm.button === button && takedownArm.snapshot === snapshot && Date.now() < takedownArm.until;
+    resetTakedown(); actionStatus('');
+    if (again) {
+      var uncertain = 'Delivery not confirmed. Check the current board before trying again.';
+      try { if (window.thornswoodNet && window.thornswoodNet.say && window.thornswoodNet.say(target.line) === true) return; }
+      catch (e) { actionStatus(uncertain); return; }
+      actionStatus(uncertain);
+      return;
+    }
+    var armed = { button: button, text: button.textContent, snapshot: snapshot, until: Date.now() + 5000 };
+    takedownArm = armed; button.setAttribute('data-confirm', ''); button.textContent = 'Press again to take down ' + target.words;
+    takedownTimer = setTimeout(function () { if (takedownArm === armed) resetTakedown(); }, 5000);
   }
 
   function close() {
     if (!shown) { return; }
+    resetTakedown(); takedownHeld = '';
+    clearBoardFieldError();
     shown = false;
     if (root) { root.className = ''; }
     tell('closed');
@@ -556,7 +702,10 @@
 
   document.addEventListener('keydown', function (ev) {
     if (!shown) { return; }
-    if (ev.key === 'Escape') { close(); }
+    if (ev.key === 'Escape') {
+      ev.preventDefault(); if (ev.repeat) return;
+      if (takedownArm) resetTakedown(); else close();
+    }
   });
 
   var foot = null;

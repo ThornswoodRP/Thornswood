@@ -141,8 +141,7 @@
 
   function write(actorId, s) {
     s.at = Date.now();
-    if (tickMemo) { tickMemo['s' + actorId] = s; }
-    try { mp.set(actorId, SOCIAL_PROPERTY, s); return true; }
+    try { mp.set(actorId, SOCIAL_PROPERTY, s); if (tickMemo) { tickMemo['s' + actorId] = s; } return true; }
     catch (e) { return false; }
   }
 
@@ -187,7 +186,11 @@
   function online() {
     return memo('online', function () {
       var all = [];
-      try { all = mp.get(0, 'onlinePlayers') || []; } catch (e) { return []; }
+      try { all = mp.get(0, 'onlinePlayers'); } catch (e) { return []; }
+      // Raw membership also proves disconnects for private save outcomes.
+      // Keep it only for this pass, before hiding faces still being created.
+      if (tickMemo && Array.isArray(all)) tickMemo.onlineRaw = all;
+      all = all || [];
       var chargen = g.__thornswoodChargen;
       if (!chargen || !chargen.hasStoredAppearance) { return all; }
       var out = [];
@@ -309,7 +312,9 @@
       // prompt's Tend their wounds.
       var care = false;
       try { care = !!(g.__thornswoodHurt && g.__thornswoodHurt.careOf && g.__thornswoodHurt.careOf(id)); } catch (eCare) { care = false; }
-      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care });
+      var tools = g.__thornswoodStaffTools;
+      var invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
+      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care, invisible: invisible });
     }
 
     var reach = SOCIAL.nearReach * SOCIAL.nearReach;
@@ -348,7 +353,7 @@
           p: them.pid,
           f: s.friends[them.pid] ? 1 : 0,
           m: s.muted[them.pid] ? 1 : 0,
-          h: (s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
+          h: (them.invisible || s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
           y: (party && party.members.indexOf(them.pid) !== -1) ? 1 : 0,
           s: (beds && beds.mark) ? beds.mark(me.pid, them.pid, me.cell) : 0
         };
@@ -447,6 +452,8 @@
           p: mp.get(id, 'pos') || [0, 0, 0],
           c: String(mp.get(id, 'worldOrCellDesc') || '')
         };
+        var tools = g.__thornswoodStaffTools;
+        at[profileOf(id)].invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
       } catch (e) { }
     }
 
@@ -464,7 +471,7 @@
           if (!row) { continue; }             // in the party and not online
           list.push({ a: row.a, n: row.n, p: row.p, c: row.c,
                       l: pid === p.leader ? 1 : 0,
-                      h: (viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
+                      h: (row.invisible || viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
         }
       }
 
@@ -741,6 +748,17 @@
   var inParty = {};      // pid -> partyId
   var nextParty = 1;
 
+  // Public only to party owners. These bind an intent, never grant authority.
+  // Retire the UI capability on entropy failure; ordinary party play continues.
+  function rotatePartyIntent(p, creating) {
+    p.intentVersion = '';
+    try {
+      var crypto = require('crypto');
+      if (creating) p.intentId = crypto.randomBytes(24).toString('hex');
+      p.intentVersion = crypto.randomBytes(24).toString('hex');
+    } catch (e) { slog('party confirmation is unavailable'); }
+  }
+
   function partyOf(pid) {
     var id = inParty[pid];
     if (!id) { return null; }
@@ -754,12 +772,14 @@
     if (!p) {
       var id = 'p' + (nextParty++);
       p = { leader: leaderPid, members: [leaderPid], at: Date.now() };
+      rotatePartyIntent(p, true);
       parties[id] = p;
       inParty[leaderPid] = id;
     }
     if (p.members.length >= SOCIAL.mostParty) { return 'That party is full.'; }
     if (p.members.indexOf(pid) !== -1) { return 'They are already with you.'; }
     leaveParty(pid);
+    rotatePartyIntent(p, false);
     p.members.push(pid);
     inParty[pid] = inParty[leaderPid];
     return '';
@@ -770,6 +790,7 @@
     if (!p) { return false; }
     var id = inParty[pid];
     var at = p.members.indexOf(pid);
+    rotatePartyIntent(p, false);
     if (at !== -1) { p.members.splice(at, 1); }
     delete inParty[pid];
     if (p.leader === pid) { p.leader = p.members[0] || 0; }
@@ -829,6 +850,7 @@
     if (p.leader !== leaderPid) { return 'Only the leader can do that.'; }
     if (p.members.indexOf(whoPid) === -1) { return 'They are not in your party.'; }
     if (p.leader === whoPid) { return 'They already lead this party.'; }
+    rotatePartyIntent(p, false);
     p.leader = whoPid;
     pushMembers(p.members.slice());
     return '';
@@ -844,6 +866,23 @@
     delete parties[id];
     pushMembers(left);
     return '';
+  }
+
+  function partyIntent(p) {
+    return p && /^[a-f0-9]{48}$/.test(p.intentId || '') && /^[a-f0-9]{48}$/.test(p.intentVersion || '')
+      ? { id: p.intentId, version: p.intentVersion } : null;
+  }
+
+  function confirmPartyAction(pid, action, id, version, whoPid) {
+    var p = partyOf(pid);
+    var current = partyIntent(p);
+    if (!current || current.id !== id || current.version !== version) {
+      return 'The party changed. Review the current party and press again.';
+    }
+    // The canonical operations still enforce leader and exact membership.
+    if (action === 'disband') return disbandParty(pid);
+    if (action === 'kick') return kickParty(pid, whoPid);
+    return 'That party action is not available.';
   }
 
   /*
@@ -923,8 +962,34 @@
     return null;
   }
 
-  function writePage(actorId, journalId, pageId, title, text) {
-    var s = stateOf(actorId);
+  // Kept through a gamemode reload, never persisted. One result per online
+  // actor, fenced to the owner/runtime so recycled form ids expose no prose.
+  var journalSaves = g.__thornswoodJournalSaveState || (g.__thornswoodJournalSaveState = {});
+  function journalSaveState(actorId, create) {
+    var profile, runtime;
+    try { profile = profileOf(actorId); runtime = mp.getActorRuntimeIdentity(actorId); } catch (e) { return null; }
+    if (!Number.isSafeInteger(profile) || !(profile > 0) || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+    var state = journalSaves[actorId];
+    if (state && (state.profile !== profile || state.runtime !== runtime)) { delete journalSaves[actorId]; state = null; }
+    if (!state && create) state = journalSaves[actorId] = {profile:profile,runtime:runtime,uncertain:false,result:null};
+    return state;
+  }
+  function writePageExact(actorId, journalId, pageId, title, text) {
+    if (typeof title !== 'string' || typeof text !== 'string' || title.length > 60 || text.length > SOCIAL.pageChars) {
+      return 'That page is too long or invalid. Nothing was saved.';
+    }
+    return writePage(actorId, journalId, pageId, title, text, true);
+  }
+
+  function writePage(actorId, journalId, pageId, title, text, exact) {
+    var resultState = exact ? journalSaveState(actorId, true) : null;
+    if (exact && !resultState) return 'The page save cannot be confirmed right now. Keep your unsaved draft.';
+    // Prepare on a clone: a refused property write must not mutate the cached
+    // page and publish it as an authoritative successful save.
+    var current = exact ? readNow(actorId) : stateOf(actorId);
+    if (!current) return 'That journal cannot be read right now. Your draft has not been saved.';
+    var s = JSON.parse(JSON.stringify(current));
+    var previous = JSON.stringify(s);
     var j = findJournal(s, journalId);
     if (!j) { return 'No such journal.'; }
     /*
@@ -947,10 +1012,34 @@
       page = { id: 'p' + Date.now().toString(36) + j.pages.length, shared: {} };
       j.pages.push(page);
     }
-    page.title = String(title || 'Page').slice(0, 60);
+    page.title = exact ? title : String(title || 'Page').slice(0, 60);
     page.text = body;
     page.at = Date.now();
-    write(actorId, s);
+    var ok = write(actorId, s);
+    var status = ok ? 'saved' : 'refused';
+    var digest = '';
+    if (ok && resultState) {
+      try { digest = require('crypto').createHash('sha256').update(JSON.stringify(s)).digest('hex'); }
+      catch (eDigest) { status = 'uncertain'; }
+      // An identical-value setter queues nothing. Only our prior successful
+      // queue of this exact full snapshot can qualify that no-op as accepted.
+      if (JSON.stringify(s) === previous && (!digest || resultState.confirmedDigest !== digest)) status = 'uncertain';
+    }
+    if (!ok) {
+      if (tickMemo) delete tickMemo['s' + actorId];
+      // The native setter may apply before RequestSave/publication throws.
+      // Readback only classifies live state, never proves queued persistence.
+      try { if (JSON.stringify(mp.get(actorId, SOCIAL_PROPERTY)) !== previous) status = 'uncertain'; }
+      catch (eReadback) { status = 'uncertain'; }
+    }
+    if (resultState) {
+      if (status === 'uncertain') resultState.uncertain = true;
+      else if (status === 'saved') { resultState.uncertain = false; resultState.confirmedDigest = digest; }
+      resultState.result = {journalId:journalId,pageId:page.id,title:page.title,text:body,status:status};
+    }
+    if (!ok || status === 'uncertain') return status === 'uncertain'
+      ? 'The page save could not be confirmed. Keep the unsaved draft and check it before trying again.'
+      : 'That page could not be saved. Your draft has not been saved.';
     return '';
   }
 
@@ -964,6 +1053,14 @@
       }
     }
     return false;
+  }
+
+  function pushJournalSave(actorId) {
+    // A failed input read must not call stateOf's first-use initializer.
+    var current = readNow(actorId);
+    if (!current) return;
+    if (tickMemo) tickMemo['s' + actorId] = current;
+    push(actorId);
   }
 
   /*
@@ -1154,8 +1251,10 @@
     var offerNow = standingOffer(mine);
     return {
       me: mine,
+      journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
+      partyIntent: partyIntent(p),
       near: near,
       hidden: hidden,
       together: partyNear(actorId),
@@ -1259,6 +1358,12 @@
     try { partyTick(); } catch (e) { slog('party tick:', e); }
     try { pushTextMutes(); } catch (e) { slog('text mute:', e); }
     var all = online();
+    // The public list can fail or omit a face still loading. Only a successful
+    // raw online read retires outcomes; an unknown read is not a disconnect.
+    var saveOnline = tickMemo && tickMemo.onlineRaw;
+    if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
+      if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
+    }
     for (var i = 0; i < all.length; i++) {
       try { push(all[i]); } catch (e) { }
     }
@@ -1322,8 +1427,9 @@
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
+    confirmPartyAction: confirmPartyAction,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
-    newJournal: newJournal, writePage: writePage, dropJournal: dropJournal,
+    newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
     partyTick: partyTick, PARTY_PROPERTY: PARTY_PROPERTY

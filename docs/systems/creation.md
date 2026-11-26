@@ -2,6 +2,11 @@
 
 A new character is made in the game, not in the launcher.
 
+With the game in front, Enter or Space opens the sealed scroll. Tab and
+Shift Tab move between its checkbox and Continue; Space ticks the box and
+Enter on Continue opens the character list. Arrow keys or 1-9 choose a
+slot, and Enter plays it.
+
 The game loads to its main menu. An empty slot starts a character. They
 arrive in a quiet stone hall and the race menu opens. That menu is the
 face, the race, and nothing else about the life they will lead. The ten

@@ -74,21 +74,21 @@ const PIECES = {
   storeRead: 'function storeRead(file, what) {',
   storeWrite: 'function storeWrite(file, text, read) {',
   loadPart: 'function loadPart(key, fallback) {',
-  save: 'function save() {',
+  save: 'function save(durable) {',
   takeGold: 'function takeGold(actorId, amount) {',
   // A job's reward comes back to its poster on a take down (#2554).
   payOut: 'function payOut(actorId, amount) {',
   payHeld: 'function payHeld(hold, n, actorId) {',
   // The line a post arrives on: a title and a body (#2554).
   postWords: 'function postWords(line) {',
-  post: 'function post(parts, actorId, profileId, toProfile, isJob) {',
+  post: 'function post(parts, actorId, profileId, toProfile, isJob, exactWords) {',
   board: 'function board(parts, actorId, profileId, toProfile) {',
   // What the wall shows, on the board's panel and on J (#1627).
   wallOf: 'function wallOf(hold, profileId) {',
   take: 'function take(parts, actorId, profileId, toProfile) {',
   dropJob: 'function dropJob(parts, actorId, profileId, toProfile) {',
   takedown: 'function takedown(hold, at, byWhom) {',
-  unpin: 'function unpin(parts, actorId, profileId, toProfile) {',
+  unpin: 'function unpin(parts, actorId, profileId, toProfile, expected) {',
   // Every board word ends by asking the social block to draw the panel
   // again (#1374). The real one, against a social block that keeps a list.
   refreshPanel: 'function refreshPanel(actorId) {'
@@ -134,6 +134,10 @@ function engine(startGold) {
           return { entries: (packs[actor] || []).map(function (e) { return Object.assign({}, e); }) };
         }
         if (key === 'appearance') { return { name: names[actor] }; }
+        if (key === 'profileId') {
+          const who = [ALICE, BOB, CYRUS].filter(function (p) { return p.actor === actor; })[0];
+          return who ? who.pid : 0;
+        }
         return null;
       },
       set: function (actor, key, v) {
@@ -184,6 +188,8 @@ function boot(dir, eng) {
     'var g = { __thornswoodSocial: { push: function (actorId, now) { pushed.push(actorId); } } };'
   ];
   for (const k in lifted) { body.push(lifted[k]); }
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(require('./fixtures/pack-first').pieces(prop));
   body.push('return { post: post, board: board, take: take, dropJob: dropJob, wallOf: wallOf, ' +
             'unpin: unpin, takedown: takedown, save: save, ' +
             'notices: function () { return notices; }, ' +
@@ -192,7 +198,7 @@ function boot(dir, eng) {
   const fn = new Function('require', 'registerPath', 'mp', 'plog', 'boardHere', 'pushed',
                           body.join('\n'));
   const api = fn(require, function () { return path.join(dir, 'property.json'); },
-                 eng.mp, function () { }, eng.boardHere, pushed);
+                 require('./fixtures/pack-first').receipts(eng.mp), function () { }, eng.boardHere, pushed);
   api.pushed = pushed;
 
   /* Say something at the board as somebody, and hear what they are told. */

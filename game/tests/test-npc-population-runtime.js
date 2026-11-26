@@ -52,6 +52,21 @@ assert.ok(next.configure(dynamicId,{...state,pos:[190,20,30]}),
   'A restored NPC inside its accepted home leash remains enrolled after moving');
 console.log('NPC population runtime checks passed');
 
+// Broad cleanup can only consider admitted encounter actors. Native identity,
+// safety flags and current hostility are checked separately at the write.
+for (const [role,habitat,wanted] of [
+  ['enemy','wilderness',true],['enemy','dungeon',true],['enemy','bandit-camp',true],
+  ['enemy','city',false],['enemy','interior',false],['enemy',undefined,false],
+  ['animal','wilderness',false],['trader','city',false]
+]) {
+  const t=fixture();t.data.keep[0][6]=role;t.data.keep[0][7]=habitat;
+  const policy=context.createNpcPopulation(t.api,t.data,['Skyrim.esm']);
+  assert.ok(policy.configure(1,state));
+  assert.equal(policy.staffKillable(1),wanted,role+' '+habitat);
+  assert.equal(policy.staffKillable(999),false,'An unknown actor is excluded');
+}
+console.log('Administrative encounter selection checks passed');
+
 const freed=fixture();
 assert.ok(freed.policy.configure(0xff000021,state));
 assert.ok(freed.policy.configure(0xff000022,state));

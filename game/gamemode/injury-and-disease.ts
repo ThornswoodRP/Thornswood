@@ -568,7 +568,7 @@
       sitting, 20 an hour"), with no roof and not indoors. Or an hour at spent
       cold. Each clock starts again once it has caught.
     */
-    if (n && N) {
+    if (n && N && !(N.ignoresNeeds && N.ignoresNeeds(actorId))) {
       var open = n.resting === 'sit' && !n.roof && !!n.place && n.place !== 'indoors';
       if (open) {
         if (!rec.ground) { rec.ground = now; changed = true; }
@@ -586,6 +586,9 @@
           rec.cold = now; changed = true;
         }
       } else if (rec.cold) { rec.cold = 0; changed = true; }
+    } else if (n && N && N.ignoresNeeds && N.ignoresNeeds(actorId)) {
+      // God mode cannot accrue an hour of cold exposure for a later tick.
+      if (rec.ground || rec.cold) { rec.ground = 0; rec.cold = 0; changed = true; }
     }
 
     /*
@@ -781,6 +784,7 @@
   if (!g.__thornswoodHurtFires) { g.__thornswoodHurtFires = {}; }
   var fires = g.__thornswoodHurtFires;
   var FIRE_GAP_MS = 6000;  // the needs block lets go of a silent client after three of its beats
+  function clearFireExposure(actorId) { delete fires[actorId]; }
 
   /*
     A FIRE NOBODY PUT OUT STILL BURNT (#2260). The burn used to be written
@@ -790,6 +794,10 @@
     hurt tick for somebody who never came back to send one.
   */
   function burning(actorId, on, now) {
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.ignoresNeeds && needs.ignoresNeeds(actorId)) {
+      clearFireExposure(actorId); return '';
+    }
     now = now || Date.now();
     var f = has(fires, actorId) ? fires[actorId] : null;
     if (on) {
@@ -2133,6 +2141,7 @@
     read: read, write: write, step: step, tick: tick, bleedTick: bleedTick, bleedRate: bleedRate,
     stageOf: stageOf, lines: lines, chanceFor: chanceFor,
     forNeeds: forNeeds, burntWear: burntWear, wound: wound, burning: burning, settleQuietFires: settleQuietFires,
+    clearFireExposure: clearFireExposure,
     healed: healed, cast: cast, hit: hit, swallowed: swallowed, rite: rite,
     exposed: exposed, craftRefusal: craftRefusal, died: died, scarOf: scarOf, staff: staff,
     DOWN: DOWN, DOWN_PROPERTY: DOWN_PROPERTY, goDown: goDown, standUp: standUp, wake: wake,
