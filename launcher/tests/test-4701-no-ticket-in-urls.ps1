@@ -14,7 +14,9 @@
   Now the launcher asks the site for a one-time code (hand=code), reads only
   the code and the nonce from the answer, and trades the code for the sign-in
   over a POST to /api/launcher/exchange. Every gallery call carries the
-  sign-in in "Authorization: Ticket <sign-in>".
+  sign-in in "Authorization: Bearer <sign-in>", the scheme the site already
+  uses, and a 400 {"why":"code"} from the exchange (a code spent, run out or
+  lost to a site restart) asks the person to sign in again.
 
   The first half reads launcher\app and runs anywhere. The second compiles the
   real launcher (tests\Launcher-Csc.ps1) and needs the .NET SDK: it builds the
@@ -68,6 +70,9 @@ Yes 'Connect reads no sign-in out of the address' ($connect.Length -gt 0 -and $c
 Yes '  and CodeFrom reads only the nonce and the code' ($codeFrom.Length -gt 0 -and
     @([regex]::Matches($codeFrom, 'q\["(\w+)"\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ',' -eq 'code,nonce')
 Yes '  and the code is traded for it over Exchange' ($connect -match 'Exchange\(code, nonce, out gotTicket')
+Yes '  and a spent or lost code (400 why code) asks to sign in again, not a broken site' (
+    $exchange -match 'status == 400 && Field\(reply, "why"\) == "code"' -and $exchange -match 'sign in again')
+Yes 'the sign-in goes under the standard Bearer scheme' ($discord -match 'public const string TicketScheme = "Bearer";')
 # Nothing that reaches a log, a page or a message box is built from the code or
 # the sign-in: not in Connect, CodeFrom or Exchange.
 $said = foreach ($body in @($connect, $codeFrom, $exchange)) {
@@ -110,7 +115,7 @@ try {
 
     $req = $dt.GetMethod('Signed').Invoke($null, @([Net.Http.HttpMethod]::Get, $up))
     $auth = @($req.Headers.GetValues('Authorization'))
-    Yes 'a signed request carries the sign-in in Authorization: Ticket' ($auth.Count -eq 1 -and $auth[0] -ceq ('Ticket ' + $T))
+    Yes 'a signed request carries the sign-in in Authorization: Bearer' ($auth.Count -eq 1 -and $auth[0] -ceq ('Bearer ' + $T))
     Yes '  and not in its address' (-not $req.RequestUri.AbsoluteUri.Contains($T))
     $req.Dispose()
 

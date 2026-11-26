@@ -584,6 +584,16 @@ namespace Thornswood
                 why = "thornswood.net took the sign-in code but sent no sign-in back.";
                 return false;
             }
+            // A code is held in the site's memory for 60 seconds and spent on
+            // its first ask, so a restart inside that window, a second ask or
+            // a slow browser all answer 400 {"why":"code"}. That is not a
+            // broken site: the person signs in again (#4701, agreed with the
+            // site on 26 Nov).
+            if (status == 400 && Field(reply, "why") == "code")
+            {
+                why = "That sign-in ran out before it finished. Press Connect Discord to sign in again.";
+                return false;
+            }
             why = status == 0
                 ? "Could not reach thornswood.net to finish the sign-in."
                 : "thornswood.net would not take the sign-in code (it answered " + status + ").";
@@ -1416,9 +1426,11 @@ namespace Thornswood
 
         /// <summary>
         /// The scheme the site's gallery doors read the sign-in under:
-        /// "Authorization: Ticket &lt;the sign-in&gt;" (#4701).
+        /// "Authorization: Bearer &lt;the sign-in&gt;" (#4701). The standard
+        /// scheme, the one the site already sends, and the one anything that
+        /// hides the header from a log knows to hide.
         /// </summary>
-        public const string TicketScheme = "Ticket";
+        public const string TicketScheme = "Bearer";
 
         /// <summary>
         /// A request to the site carrying this copy's sign-in in its
